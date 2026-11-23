@@ -86,20 +86,51 @@ It writes `dist/payers-claims-demo-0.2.0.zip`.
 
 ## Installing it on a local Nuxeo
 
-The local Nuxeo is the Docker container `nuxeo`, on port 8080. The package depends on
-`nuxeo-agentic-ui` 2026.0.2 (`package/package.xml`), which serves its layouts: install that first.
+The local Nuxeo is the Docker container `nuxeo`, on port 8080. Run on 23 November 2026 against
+Nuxeo 2025.10.18, as below.
+
+**1. `nuxeo-agentic-ui` first.** This package depends on it (`package/package.xml`), and it serves
+the layouts. A server registered with Nuxeo Connect installs it from the Marketplace. Otherwise
+build it from this repository, writing a version into its `package.xml` first, as
+`build-marketplace.yml` does: its source says `@VERSION@`, and nothing in the Maven build replaces
+it.
+
+```bash
+sed -i.orig 's/version="@VERSION@"/version="2026.0.2-'"$(date +%Y%m%d%H%M%S)"'-BUILD-local"/' nuxeo-agentic-ui-package/src/main/resources/package.xml
+```
+
+```bash
+mvn -pl nuxeo-agentic-core,nuxeo-agentic-ui-package package -DskipTests
+```
+
+```bash
+mv nuxeo-agentic-ui-package/src/main/resources/package.xml.orig nuxeo-agentic-ui-package/src/main/resources/package.xml
+```
+
+**2. Both packages into the container,** then a one-off script that installs them when it next
+starts. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's
+main process, so stopping it stops the container. The image runs every `.sh` file in
+`/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
+
+```bash
+docker cp nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-2026.0.2-SNAPSHOT.zip nuxeo:/tmp/nuxeo-agentic-ui.zip
+```
 
 ```bash
 docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker exec nuxeo nuxeoctl mp-install /tmp/payers-claims-demo-0.2.0.zip --accept=true
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-ui.zip /tmp/payers-claims-demo-0.2.0.zip --accept=true > /var/log/nuxeo/payers-kit-install.log 2>&1 || echo "payers kit: install failed, see /var/log/nuxeo/payers-kit-install.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-install.sh && chmod 755 /tmp/zz-payers-kit-install.sh
 ```
 
 ```bash
-docker restart nuxeo
+docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
 ```
+
+**3. Check it.** `/var/log/nuxeo/payers-kit-install.log` in the container lists both packages
+installed, and the server log's `Component Loading Status` has nothing pending or missing.
+`/nuxeo/agentic-ui-config/layouts.json` lists the four `view` layouts.
 
 **Before removing it, or replacing its stand-in model,** delete the seeded workspace,
 `/default-domain/workspaces/payers-demo`, and empty it from the trash. A document whose type is
@@ -148,7 +179,8 @@ the member, and masking it there is decision I.
   is labelled from its name, `billedAmount` as "Billed amount".
 - **Phase 1's kit has more:** three queues and a home for two groups. This version has one queue
   and no home.
-- **Not run against a server yet:** the install and the seed, against a real Nuxeo.
-  `node business-apps/packages/payers-claims-demo/demo/seed.selftest.mjs` checks the seed's logic
-  against a stand-in for the REST API it calls, written from what that API is documented to do,
-  so it proves the script, not the server. CI does not run it.
+- **Not seen in the app yet:** the install and the seed have run on a local Nuxeo, and the server
+  serves the four layouts, but the record pages themselves have not been looked at in a browser.
+- **The seed's controls are not in CI:**
+  `node business-apps/packages/payers-claims-demo/demo/seed.selftest.mjs` checks its logic against
+  a stand-in for the REST API it calls, so it proves the script, not the server.
