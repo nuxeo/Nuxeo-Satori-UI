@@ -26,7 +26,17 @@ export interface LayoutServerDiagnostic {
 export interface LayoutIndex {
   readonly entries: readonly LayoutIndexEntry[];
   readonly diagnostics: readonly LayoutServerDiagnostic[];
+  /**
+   * The languages a business app's labels are served in, at `labels/<lang>.json`
+   * (app-definition-v2.md, section 7). The app asks for a language's labels only when it is
+   * listed, so that where none are served, as on today's servers, nothing is asked for and nothing
+   * fails.
+   */
+  readonly labelLanguages: readonly string[];
 }
+
+/** A language tag as the platform names its catalogues: `en`, or one with a region, `pt-BR`. */
+export const LABEL_LANGUAGE_PATTERN = /^[a-z]{2,3}(?:-[A-Z]{2})?$/;
 
 export interface LayoutFileField {
   readonly field: string;
@@ -84,6 +94,10 @@ export function readLayoutIndex(raw: unknown): LayoutIndex | Invalid {
       code: optionalText(entry['code']) ?? '',
       message: optionalText(entry['message']) ?? '',
     })),
+    labelLanguages: (Array.isArray(raw['labels']) ? raw['labels'] : []).filter(
+      (lang: unknown): lang is string =>
+        typeof lang === 'string' && LABEL_LANGUAGE_PATTERN.test(lang),
+    ),
   };
 }
 

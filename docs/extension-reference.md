@@ -469,7 +469,9 @@ they are not interchangeable.
 | Replace a translation key   | `labels["nav.item.collections"]` (Layer 0)  | Your text wherever that key resolves, the same in every language.         |
 
 The manifest's `labels` map is not keyed by language: `AppTranslateLoader` layers the same map
-over every language's catalogue. Per-language wording is not configurable today.
+over every language's catalogue. Per-language wording comes from a business app's own labels files,
+one per language (`docs/business-apps/app-definition-v2.md`, section 7), which sit below the
+manifest's `labels` and above the platform's catalogue.
 
 **Setting `label` disables the key for that entry**, deliberately and by design: a manifest
 literal is an instruction to show exactly that string, so it must win. If you set both, `label`

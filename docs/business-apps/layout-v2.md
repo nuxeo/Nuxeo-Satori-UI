@@ -74,14 +74,14 @@ A file has `cards` or `tabs`, never both.
 
 ### Cards
 
-| Key                 | Meaning                                                                |
-| ------------------- | ---------------------------------------------------------------------- |
-| `id`                | Required, unique in the file: 1 to 64 letters, digits, `.`, `_` or `-` |
-| `label`, `labelKey` | Its heading, as a literal or a translation key, as in version 1        |
-| `span`              | How many columns it takes, up to `columns`. Default 1                  |
-| `visibleWhen`       | A rule (section 5). The card shows only while it passes                |
-| `fields`            | Its fields (below)                                                     |
-| `related`           | Or a list of related records (section 7), in `view` mode only          |
+| Key                 | Meaning                                                                                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | Required, unique in the file: 1 to 64 letters, digits, `.`, `_` or `-`                                                                                                                                        |
+| `label`, `labelKey` | Its heading, as a literal or a translation key, as in version 1. A key with no text, in the reader's language or the fallback one, shows the card's `id`, made readable; a card with neither shows no heading |
+| `span`              | How many columns it takes, up to `columns`. Default 1                                                                                                                                                         |
+| `visibleWhen`       | A rule (section 5). The card shows only while it passes                                                                                                                                                       |
+| `fields`            | Its fields (below)                                                                                                                                                                                            |
+| `related`           | Or a list of related records (section 7), in `view` mode only                                                                                                                                                 |
 
 In `metadata`, `edit` and `create` modes, cards show as the sections of the panel or the form.
 
