@@ -252,8 +252,13 @@ export interface SlotContribution {
   readonly uses: readonly number[];
   /** Set by `disabled`: Web UI's slot then shows nothing of it (`nuxeo-slots.js`, `_render`). */
   readonly disabled: boolean;
-  /** Its `priority`, 0 when left out: a later contribution of the same name wins at the same or a higher one. */
+  /**
+   * Its `priority`, as Polymer reads a Number attribute, 0 when left out or not a number: a later
+   * contribution of the same name wins at the same or a higher one.
+   */
   readonly priority: number;
+  /** Its `order` as Polymer reads it, which may not be whole; `null` when left out or not a number. */
+  readonly orderValue: number | null;
   /** False when it holds no template: it then only changes another of its name, as `disabled` does. */
   readonly hasTemplate: boolean;
 }
@@ -597,7 +602,12 @@ export function inventory(pkg: StudioPackage): Inventory {
       null,
   }));
 
-  const slotContributions: SlotContribution[] = ofKind('slot-contributions').flatMap((path) =>
+  // The custom bundle, which Studio's own bundle imports first, may hold contributions too: one
+  // that disables or outranks a button of the bundle is where a project's hand-written changes go.
+  const slotContributions: SlotContribution[] = [
+    ...ofKind('custom-bundle'),
+    ...ofKind('slot-contributions'),
+  ].flatMap((path) =>
     elementsOf(webUi(path).document)
       .filter((element) => element.localName === 'nuxeo-slot-content')
       .map((element) => {
@@ -637,7 +647,8 @@ export function inventory(pkg: StudioPackage): Inventory {
             .map((part) => useAt.get(part)?.index)
             .filter((index): index is number => index !== undefined),
           disabled: element.hasAttribute('disabled'),
-          priority: numberOf(element.getAttribute('priority')) ?? 0,
+          priority: polymerNumber(element.getAttribute('priority')) ?? 0,
+          orderValue: polymerNumber(element.getAttribute('order')),
           hasTemplate: Array.from(element.children).some((child) => child.localName === 'template'),
         };
       }),
@@ -875,8 +886,11 @@ function bindingPattern(binding: string): RegExp {
     : new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
 }
 
-function numberOf(text: string | null): number | null {
-  return text !== null && /^-?\d+$/.test(text.trim()) ? Number(text) : null;
+/** A Number attribute as Polymer deserialises it, `Number(value)`, or `null` when it is no number. */
+function polymerNumber(text: string | null): number | null {
+  if (text === null || text.trim() === '') return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
 }
 
 /**

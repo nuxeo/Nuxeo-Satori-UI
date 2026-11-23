@@ -180,15 +180,24 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     recordedAllowList(conversion),
   )) {
     const written = actionList.find((action) => isRecord(action) && action['id'] === id);
-    if (written !== undefined && placedAt(written) !== owner.order)
+    // Named as its button is: the button Web UI's slot keeps, not one it left out.
+    if (isRecord(written))
+      compare(
+        `actions.json: ${id}`,
+        web(own(owner.attributes, 'label') ?? null),
+        shown(written, null, null),
+      );
+    const want = Number.isInteger(owner.order) ? owner.order : null;
+    if (written !== undefined && placedAt(written) !== want)
       findings.push(
-        `actions.json: ${id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${owner.contribution.name}" at ${owner.order ?? 'none'}`,
+        `actions.json: ${id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${owner.contribution.name}" at ${owner.order}`,
       );
   }
   const registry = slotRegistry(inventory);
   for (const entry of menuEntries(inventory, catalogue)) {
     const written = listItem(conversion.app['navigation.json'], 'entries', entry.id);
-    const want = registry.kept.get(entry.item)?.order ?? null;
+    const order = registry.kept.get(entry.item)?.order;
+    const want = order !== undefined && Number.isInteger(order) ? order : null;
     if (written !== undefined && placedAt(written) !== want)
       findings.push(
         `navigation.json: ${entry.id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${entry.item.name}" at ${want ?? 'none'}`,

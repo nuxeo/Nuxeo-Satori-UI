@@ -1106,10 +1106,11 @@ describe('what the review of the home and the menu found', () => {
           files[bundle],
       },
     });
+    // In Web UI's order: claimsSearch at 1 before archivedSearch at 2, whatever the file's order.
     expect(input.conversion.app['navigation.json']).toMatchObject({
       entries: [
-        { id: 'archivedsearch', label: 'Archived', queue: 'archived' },
         { id: 'claimssearch', label: 'Claims', queue: 'claims' },
+        { id: 'archivedsearch', label: 'Archived', queue: 'archived' },
       ],
     });
     expect(input.conversion.app['queues/archived.json']).toMatchObject({ label: 'Archived' });

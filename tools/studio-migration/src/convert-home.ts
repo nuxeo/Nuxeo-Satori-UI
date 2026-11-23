@@ -170,7 +170,7 @@ export function menuDecisions(
     }
     const queue = queueIdOf(path);
     // Its order as Web UI's slot keeps it, a later contribution of its name included.
-    const order = registry.kept.get(item)?.order ?? null;
+    const order = registry.kept.get(item)?.order;
     const symbol = iconOf(own(icon.attributes, 'icon'));
     entries.push({
       item,
@@ -181,13 +181,17 @@ export function menuDecisions(
         id,
         ...labelOf(own(icon.attributes, 'label') ?? null),
         ...(symbol !== null ? { icon: symbol } : {}),
-        ...(order !== null ? { order } : {}),
+        // An order is a whole number in an app definition; one that is not is kept by the place.
+        ...(order !== undefined && Number.isInteger(order) ? { order } : {}),
         queue,
         ...(guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
       },
       guard,
     });
   }
+  // In Web UI's order, which places equals as its slots do.
+  const rank = (entry: MenuEntry): number => registry.kept.get(entry.item)?.rank ?? 0;
+  entries.sort((a, b) => rank(a) - rank(b));
   return { entries, skipped };
 }
 

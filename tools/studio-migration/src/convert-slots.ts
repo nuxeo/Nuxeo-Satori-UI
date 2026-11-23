@@ -100,8 +100,10 @@ export interface ActionOwner {
   readonly slot: 'toolbar' | 'bulk-actions';
   /** The rule of the conditions it sits in, for its `visibleWhen`; `null` for none. */
   readonly rule: Rule | null;
-  /** Its order as Web UI's slot registers it, a later contribution of its name included. */
-  readonly order: number | null;
+  /** Its order as Web UI's slot registers it, a later contribution of its name included: 0 when left out. */
+  readonly order: number;
+  /** Its place among what its slot shows, as Web UI orders them. */
+  readonly rank: number;
 }
 
 /**
@@ -163,6 +165,7 @@ export function actionOwners(
         slot: entry.slot,
         rule: guard.rule,
         order: kept.order,
+        rank: kept.rank,
       });
   }
   return owners;
@@ -241,13 +244,14 @@ export function convertSlots(context: ConvertContext): void {
       }
       const label = labelOf(own(action.attributes, 'label') ?? null);
       // Its order as Web UI's slot keeps it, a later contribution of its name included.
-      const order = owners.get(actionId)?.order ?? null;
+      const owner = owners.get(actionId);
       const icon = iconOf(own(action.attributes, 'icon'));
       actions.push({
         id: actionId,
         ...(Object.keys(label).length > 0 ? label : { label: contribution.name || actionId }),
         ...(icon !== null ? { icon } : {}),
-        ...(order !== null ? { order } : {}),
+        // An order is a whole number in an app definition; one that is not is kept by the place.
+        ...(owner && Number.isInteger(owner.order) ? { order: owner.order } : {}),
         ...(entry.slot === 'bulk-actions' ? { on: ['bulk'] } : {}),
         ...(guard.rule !== null ? { visibleWhen: guard.rule } : {}),
         operation: action.operation,
@@ -310,6 +314,10 @@ export function convertSlots(context: ConvertContext): void {
           : `Its target, ${entry.slot ?? entry.layer0}, is converted in a later phase`,
     });
   }
+  // In Web UI's order, which places equals as its slots do.
+  const rank = (action: Record<string, unknown>): number =>
+    owners.get(String(action['id']))?.rank ?? 0;
+  actions.sort((a, b) => rank(a) - rank(b));
   if (actions.length > 0) context.files['actions.json'] = { version: 2, actions };
   if (entries.length > 0) {
     context.files['navigation.json'] = { version: 2, entries: entries.map((e) => e.entry) };

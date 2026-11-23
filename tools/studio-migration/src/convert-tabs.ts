@@ -108,9 +108,8 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
   // What Web UI's slots do not show, or show through another contribution, is no tab of its own.
   for (const [contribution, decision] of [...items.dropped, ...pagesKept.dropped])
     skip(contribution, decision);
-  for (const { contribution: item, order: written } of items.kept) {
-    // An order left out is 0 in Web UI's slot.
-    const order = written ?? 0;
+  // In Web UI's order: an order left out is 0, and equals keep their places.
+  for (const { contribution: item, order } of items.kept) {
     const pageItem = item.parts.find((part) => part.element === 'nuxeo-page-item');
     if (!pageItem) {
       skip(item, {

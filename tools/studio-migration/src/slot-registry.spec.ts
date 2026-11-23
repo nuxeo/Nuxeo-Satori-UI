@@ -6,7 +6,7 @@ import { MUTATIONS, MutationError } from './mutations';
 import { slotRegistry } from './slot-registry';
 import { readStudioPackage } from './studio-package';
 import { m2CorpusFiles } from './testing/m2-corpus';
-import { syntheticPackage } from './testing/synthetic-package';
+import { syntheticBundleFiles, syntheticPackage } from './testing/synthetic-package';
 
 const UI = 'web/nuxeo.war/ui';
 const SLOTS = `${UI}/nuxeo-Acme-Claims-slots-bundle.html`;
@@ -47,14 +47,15 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
   const input = prepare();
 
   it('writes only the buttons Web UI shows, each as its slot keeps it', () => {
+    // In Web UI's order: by order, equals in their places.
     expect(actions(input.conversion)).toEqual([
+      // At the order a later contribution of its name, with no template, gives it.
+      ['acme-claims.settleClaim', 5, { comment: 'Settled' }],
       ['acme-claims.approveClaim', 10, { comment: 'Approved in Web UI' }],
       // The later of two of a name, at the same priority.
       ['acme-claims.reopenClaim', 41, { comment: 'Reopened' }],
       // The earlier of two of a name, at a higher priority.
       ['acme-claims.escalateClaim', 50, { comment: 'Escalated' }],
-      // At the order a later contribution of its name, with no template, gives it.
-      ['acme-claims.settleClaim', 5, { comment: 'Settled' }],
     ]);
   });
 
@@ -112,6 +113,7 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
       disabled: false,
       priority: 0,
       hasTemplate: true,
+      orderValue: extra.order ?? null,
       ...extra,
     });
     const a = contribution('a', 'DOCUMENT_ACTIONS');
@@ -170,7 +172,7 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
       'navigation.json: "oldsearch" opens a list no menu entry of the package opens',
     ]);
     expect(findings('change-action-order')).toEqual([
-      `actions.json: acme-claims.approveClaim is at order 1010, where Web UI's slot places "approveClaim" at 10`,
+      `actions.json: acme-claims.settleClaim is at order 1005, where Web UI's slot places "settleClaim" at 5`,
     ]);
   });
 
@@ -217,3 +219,138 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
     ).toMatchObject({ outcome: 'pending', note: expect.stringContaining('opens no queue') });
   });
 });
+
+describe("the review's cases of Web UI's slot registration", () => {
+  const button = (name: string, comment: string, extra = '') =>
+    `<nuxeo-slot-content name="${name}" slot="DOCUMENT_ACTIONS"${extra}><template><nuxeo-operation-button label="${name}" operation="Claim.Approve" input="[[document]]" params='{"comment": "${comment}"}'></nuxeo-operation-button></template></nuxeo-slot-content>`;
+  const only = (markup: string, more: Record<string, string> = {}) =>
+    prepare({ [SLOTS]: markup, ...more });
+  const ids = (input: HarnessInput) =>
+    actions(input.conversion)
+      .map(([id]) => id)
+      .filter((id) => id !== 'acme-claims.approveClaim');
+
+  it('registers a contribution with no template too, so its priority outranks a later one', () => {
+    const outranked = only(
+      `<nuxeo-slot-content name="lockIt" slot="DOCUMENT_ACTIONS" priority="5"></nuxeo-slot-content>${button('lockIt', 'x')}`,
+    );
+    expect(ids(outranked)).toEqual([]);
+    expect(entry(outranked.conversion, 2)?.note).toContain('has a higher priority');
+  });
+
+  it('reads the custom bundle, which may disable a button of the bundle', () => {
+    const custom = `${UI}/nuxeo-Acme-Claims-custom-bundle.html`;
+    const hidden = only('', {
+      [custom]:
+        '<nuxeo-slot-content name="approveClaim" slot="DOCUMENT_ACTIONS" priority="1" disabled></nuxeo-slot-content>',
+    });
+    expect(actions(hidden.conversion).map(([id]) => id)).not.toContain('acme-claims.approveClaim');
+    expect(
+      hidden.conversion.report.constructs.find(
+        (construct) => construct.id === `slot-contribution:${UI}/nuxeo-Acme-Claims-bundle.html#1`,
+      ),
+    ).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringContaining('has a higher priority'),
+    });
+    expect(run(hidden, 1)?.status).toBe('pass');
+  });
+
+  it('registers a contribution into each slot it names, and follows a change that moves it', () => {
+    const disabled = only(
+      `${button('lockIt', 'x')}<nuxeo-slot-content name="lockIt" slot="DOCUMENT_ACTIONS,RESULTS_SELECTION_ACTIONS" disabled></nuxeo-slot-content>`,
+    );
+    expect(ids(disabled)).toEqual([]);
+    expect(entry(disabled.conversion, 1)?.note).toContain('moves it to the slots');
+    const replaced = only(
+      `${button('lockIt', 'first')}${button('lockIt', 'second').replace('slot="DOCUMENT_ACTIONS"', 'slot="DOCUMENT_ACTIONS,RESULTS_SELECTION_ACTIONS"')}`,
+    );
+    expect(ids(replaced)).toEqual([]);
+    expect(entry(replaced.conversion, 1)?.note).toContain('replaces it');
+    expect(entry(replaced.conversion, 2)?.note).toBe('Its slot is not in the catalogue');
+  });
+
+  it("places equals as Web UI's slot does, a replacement in the place of what it replaces", () => {
+    const ties = only(button('a', 'first') + button('b', 'b') + button('a', 'second'));
+    expect(ids(ties)).toEqual(['acme-claims.a', 'acme-claims.b']);
+    expect(actions(ties.conversion).find(([id]) => id === 'acme-claims.a')?.[2]).toEqual({
+      comment: 'second',
+    });
+  });
+
+  it("reads priority and order as Polymer's numbers, and writes Web UI's default order", () => {
+    const fractional = only(
+      button('a', 'first', ' priority="2.5"') + button('a', 'second', ' priority="1"'),
+    );
+    expect(actions(fractional.conversion).find(([id]) => id === 'acme-claims.a')).toEqual([
+      'acme-claims.a',
+      0,
+      { comment: 'first' },
+    ]);
+    expect(run(fractional, 6)?.findings).toEqual([]);
+  });
+
+  it("holds an action's label to the button Web UI keeps", () => {
+    const relabelled = {
+      ...input0(),
+      conversion: (() => {
+        const base = input0().conversion;
+        const file = JSON.parse(JSON.stringify(base.app['actions.json'])) as {
+          actions: Record<string, unknown>[];
+        };
+        file.actions[0]['label'] = 'Something else';
+        return { ...base, app: { ...base.app, 'actions.json': file } };
+      })(),
+    };
+    expect(run(relabelled, 6)?.findings).toEqual([
+      'actions.json: acme-claims.settleClaim: the app shows "Something else", where Web UI shows "Settle"',
+    ]);
+  });
+
+  it('holds a menu entry to the one Web UI keeps, under its rule or none', () => {
+    const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+    const unconditional = prepare({
+      [SLOTS]:
+        '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_ITEMS" order="1"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-slot-content>',
+      [bundle]: m1Bundle()
+        .replace(
+          '<template><nuxeo-menu-icon name="claimssearch"',
+          '<template><nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-menu-icon name="claimssearch"',
+        )
+        .replace(
+          'icon="icons:search"></nuxeo-menu-icon></template>',
+          'icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
+        ),
+    });
+    // The later one, in no condition, replaces the guarded one: its entry carries no rule.
+    expect(unconditional.conversion.app['navigation.json']).toMatchObject({
+      entries: [{ id: 'claimssearch' }],
+    });
+    expect(
+      (unconditional.conversion.app['navigation.json'] as { entries: Record<string, unknown>[] })
+        .entries[0],
+    ).not.toHaveProperty('visibleWhen');
+    expect(run(unconditional, 5)?.findings).toEqual([]);
+    const page = prepare({
+      [SLOTS]:
+        '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_PAGES"><template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template></nuxeo-slot-content>',
+      [bundle]: m1Bundle().replace(
+        '<template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template>',
+        '<template><nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template></nuxeo-filter></template>',
+      ),
+    });
+    expect(run(page, 5)?.findings).toEqual([]);
+  });
+});
+
+/** The made-up package's own bundle, as M1 wrote it. */
+function m1Bundle(): string {
+  return syntheticBundleFiles()[`${UI}/nuxeo-Acme-Claims-bundle.html`];
+}
+
+/** The corpus, prepared once for the tests that only read it. */
+let prepared: HarnessInput | undefined;
+function input0(): HarnessInput {
+  prepared ??= prepare();
+  return prepared;
+}
