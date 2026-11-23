@@ -649,7 +649,7 @@ describe('the checks on task forms, tabs and layout blocks', () => {
 
   it("fails when a task form's rule sits on a field of no condition", () => {
     const slipped = edit(input, 'tasks/ClaimReview.AssessClaim.layout.json', (file) => {
-      file.cards[0].fields[2].visibleWhen = 'app.rules.canWrite';
+      file.cards[0].fields[2].visibleWhen = 'app.rules.isLocked';
       return file;
     });
     expect(run(slipped, 5)?.findings).toEqual([
@@ -657,11 +657,22 @@ describe('the checks on task forms, tabs and layout blocks', () => {
     ]);
     // Only a field read-only always is the display mode's; any other rule is a condition's.
     const ruled = edit(input, 'tasks/ClaimReview.AssessClaim.layout.json', (file) => {
-      file.cards[0].fields[4].readOnlyWhen = 'app.rules.canWrite';
+      file.cards[0].fields[4].readOnlyWhen = 'app.rules.isLocked';
       return file;
     });
     expect(run(ruled, 5)?.findings).toEqual([
       'tasks/ClaimReview.AssessClaim.layout.json: cards.0.fields.4.readOnlyWhen holds a rule that no condition of the package gives',
+    ]);
+    // A permission rule in a task form, whichever file its condition is in, never passes in Web UI.
+    const permission = edit(input, 'tasks/ClaimReview.AssessClaim.layout.json', (file) => {
+      file.cards[0].fields[0].visibleWhen = {
+        type: 'core.every',
+        parameters: ['app.rules.canWrite'],
+      };
+      return file;
+    });
+    expect(run(permission, 5)?.findings).toEqual([
+      "tasks/ClaimReview.AssessClaim.layout.json: cards.0.fields.0.visibleWhen reads a permission, which Web UI's task page does not fetch, so Web UI never shows what it guards there",
     ]);
   });
 
@@ -831,5 +842,72 @@ describe("tabs as Web UI's slots register them", () => {
     expect(note(preview, 1)?.note).toContain(
       "the view layout of Policy shows only the document's preview",
     );
+  });
+
+  it('reports a permission test of a block a task layout uses, and a required field of the record', () => {
+    const task = prepare({
+      [`${UI}/acme-blocks/acme-secure.html`]: `<dom-module id="acme-secure"><template>
+<nuxeo-filter document="[[document]]" permission="Write, WriteProperties"><template><div role="widget"><label>Terms</label><div>[[document.properties.po:terms]]</div></div></template></nuxeo-filter>
+<div role="widget"><label>Holder</label><div>[[document.properties.po:holder]]</div></div>
+</template><script>Polymer({ is: 'acme-secure', behaviors: [Nuxeo.LayoutBehavior] });</script></dom-module>`,
+      [TASK]: `<dom-module id="nuxeo-assessclaim-layout"><template>
+<acme-secure document="[[document]]"></acme-secure>
+<nuxeo-input role="widget" label="Title" value="{{document.properties.dc:title}}" required></nuxeo-input>
+</template></dom-module>`,
+    });
+    expect(task.conversion.app['tasks/ClaimReview.AssessClaim.layout.json']).toEqual({
+      version: 2,
+      cards: [
+        { id: 'acme-secure', fields: [{ field: 'po:holder', label: 'Holder' }] },
+        { id: 'fields', fields: [{ field: 'dc:title', label: 'Title' }] },
+      ],
+    });
+    expect(entry(task.conversion, `block-field:${TASK}#1.1`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringContaining('without its permissions'),
+    });
+    expect(entry(task.conversion, `task-field:${TASK}#1`)).toMatchObject({
+      outcome: 'reported',
+      to: 'tasks/ClaimReview.AssessClaim.layout.json',
+      note: expect.stringContaining('Written without its required flag'),
+    });
+    expect(run(task, 2)?.status).toBe('pass');
+    expect(run(task, 10)?.status).toBe('pass');
+    // Its rule written after all fails check 5, though the block's condition decides it.
+    const ruled = edit(task, 'tasks/ClaimReview.AssessClaim.layout.json', (file) => {
+      file.cards[0].fields.unshift({
+        field: 'po:terms',
+        label: 'Terms',
+        visibleWhen: 'app.rules.canWrite',
+      });
+      return file;
+    });
+    expect(run(ruled, 5)?.findings).toEqual([
+      "tasks/ClaimReview.AssessClaim.layout.json: cards.0.fields.0.visibleWhen reads a permission, which Web UI's task page does not fetch, so Web UI never shows what it guards there",
+    ]);
+  });
+
+  it('reads an edit only from an input bound two ways to the path itself', () => {
+    const bound = prepare({
+      [TASK]: `<dom-module id="nuxeo-assessclaim-layout"><template>
+<nuxeo-user-tag role="widget" label="Reviewer" user="{{task.variables.reviewer}}"></nuxeo-user-tag>
+<nuxeo-date role="widget" label="Follow up" datetime="{{task.variables.followUp}}"></nuxeo-date>
+<nuxeo-input role="widget" label="Notes" value="{{task.variables.notes}}" readonly></nuxeo-input>
+<nuxeo-input role="widget" label="Decision" value="{{format(task.variables.decision)}}"></nuxeo-input>
+<input role="widget" value="{{task.variables.override::input}}">
+</template></dom-module>`,
+    });
+    expect(
+      bound.inventory.taskLayouts.find((t) => t.path === TASK)?.fields.map((f) => f.edits),
+    ).toEqual([false, false, false, false, true]);
+    const edit1 = `${UI}/document/policy/nuxeo-policy-edit-layout.html`;
+    const native = prepare({
+      [edit1]: `<dom-module id="nuxeo-policy-edit-layout"><template>
+<input role="widget" value="{{document.properties.po:holder::input}}">
+</template><script>Polymer({ is: 'nuxeo-policy-edit-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
+    });
+    expect(entry(native.conversion, `layout-field:${edit1}#1`)).toMatchObject({
+      outcome: 'converted',
+    });
   });
 });

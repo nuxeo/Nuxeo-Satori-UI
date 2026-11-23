@@ -828,14 +828,42 @@ function fieldsOf(
     });
 }
 
-/** True when an element, or what it holds, binds `binding` in a two-way `{{…}}` binding. */
+/** Web UI's elements that show a value and change none, whatever binds it. */
+const DISPLAY_ELEMENTS: ReadonlySet<string> = new Set([
+  'nuxeo-date',
+  'nuxeo-user-tag',
+  'nuxeo-tag',
+]);
+/** The native elements a person types or chooses in. */
+const NATIVE_INPUTS: ReadonlySet<string> = new Set(['input', 'textarea', 'select']);
+
+/**
+ * True when an element, or what it holds, edits `binding`: an input, not read-only nor disabled,
+ * that binds exactly that path two ways, `{{path}}` or `{{path::event}}`. Polymer binds a computed
+ * or negated `{{…}}` one way, and an element that only shows a value writes nothing back.
+ */
 function editsBinding(field: Element, binding: string): boolean {
-  const pattern = bindingPattern(binding);
-  return [field, ...elementsOf(field)].some((element) =>
-    Array.from(element.attributes).some((attribute) =>
-      [...attribute.value.matchAll(/\{\{([^}]*)\}\}/g)].some(([, inner]) => pattern.test(inner)),
-    ),
-  );
+  const exact = bindingPath(binding);
+  return [field, ...elementsOf(field)].some((element) => {
+    const name = element.localName;
+    const input = name.includes('-') ? !DISPLAY_ELEMENTS.has(name) : NATIVE_INPUTS.has(name);
+    if (!input || element.hasAttribute('readonly') || element.hasAttribute('disabled'))
+      return false;
+    return Array.from(element.attributes).some((attribute) =>
+      [...attribute.value.matchAll(/\{\{([^}]*)\}\}/g)].some(([, inner]) => exact.test(inner)),
+    );
+  });
+}
+
+/** A binding's whole content when it names `binding` alone: the path, then any `::event`. */
+function bindingPath(binding: string): RegExp {
+  const variable = binding.startsWith(VARIABLE) ? binding.slice(VARIABLE.length) : null;
+  const escaped = (variable ?? binding).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const path =
+    variable !== null
+      ? `task\\.variables\\.${escaped}`
+      : `(?:document\\.properties|params)\\.${escaped}`;
+  return new RegExp(`^\\s*${path}(?:::[\\w-]+)?\\s*$`);
 }
 
 /** What names a binding in Web UI's markup: `task.variables.<name>`, or a property or parameter. */

@@ -33,6 +33,7 @@ import {
 export { blockFieldId, blockOf, blockUseId, layoutCards } from './blocks';
 export type { LayoutSource, PlacedField, PlannedCard } from './blocks';
 import { LAYOUT_VERSION, labelOf, layoutPath } from './app-files';
+import { TASK_PERMISSIONS, readsPermissions } from './conditions';
 import { carry, guardOfSet, type Guard } from './guards';
 import { ALWAYS, VERSION_ONE_WIDGETS, fieldWidget } from './widgets';
 import { tabDecisions, type TabPlan } from './convert-tabs';
@@ -204,6 +205,9 @@ export function planFields(
       // Every condition it sits in or holds: a wrapper's own, and any around its binding.
       guard = guardOfSet(inventory, placedField.conditionsIn, field.conditions);
       if (guard.kind !== 'rule') return { kind: 'skip', outcome: guard.kind, note: guard.note };
+      // A block's condition is the block file's, which knows nothing of the task layout using it.
+      if (options.task && readsPermissions(guard.rule))
+        return { kind: 'skip', outcome: 'reported', note: TASK_PERMISSIONS };
     }
     const choice = fieldWidget(catalogue, field.element, field.attributes);
     if (choice === null)
@@ -214,7 +218,9 @@ export function planFields(
       };
     seen.add(binding);
     if (mode === 'metadata' && PANEL_ROWS.has(binding)) return { kind: 'panel', binding };
-    const required = options.form && field.required;
+    // A task form requires only its variables: the record's own properties show read-only there.
+    const record = options.task === true && !binding.startsWith('var:');
+    const required = options.form && field.required && !record;
     // In a form, a field Web UI only shows, bound one way, is read-only. A task form shows the
     // record's own properties read-only whatever its file says, so only a variable needs it.
     const readOnly = options.form && !field.edits && !(options.task && !binding.startsWith('var:'));
@@ -238,6 +244,11 @@ export function planFields(
           ]
         : []),
       // Version 1 cannot make a field read-only: written, so that its value stays in the form.
+      ...(record && field.required
+        ? [
+            `Written without its required flag: Web UI requires ${binding} before the step's buttons, and a task form requires only the step's variables, showing the record's own properties read-only (app-definition-v2.md, section 6)`,
+          ]
+        : []),
       ...(version === 1 && readOnly
         ? [
             `Written editable: Web UI's ${field.element} only shows ${binding}, binding it one way, and version 1 cannot make a field read-only (extension-reference.md, section 9b)`,

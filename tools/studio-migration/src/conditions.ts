@@ -75,11 +75,18 @@ const PERMISSION_RULES: readonly (readonly [readonly string[], string])[] = [
   [['WriteSecurity', 'Everything'], 'app.rules.canManagePermissions'],
 ];
 
+/**
+ * Why a permission test means nothing in a task layout, or in a block one uses: Web UI's task page
+ * fetches the task's target without its permissions.
+ */
+export const TASK_PERMISSIONS =
+  "It tests a permission of the document, which Web UI's task page fetches as the task's target without its permissions (nuxeo-app.js, fetch-task: targetDocumentIds), so the test never passes there: a mistake to fix, not to copy";
+
 /** The registered rules that read the record's permissions. */
 const PERMISSION_RULE_IDS = new Set(PERMISSION_RULES.map(([, rule]) => rule));
 
 /** True when a rule, or one it joins, reads the record's permissions. */
-function readsPermissions(rule: unknown): boolean {
+export function readsPermissions(rule: unknown): boolean {
   if (typeof rule === 'string') return PERMISSION_RULE_IDS.has(rule);
   if (typeof rule !== 'object' || rule === null) return false;
   const { type, parameters } = rule as { type?: unknown; parameters?: unknown };
@@ -124,7 +131,7 @@ export function decideCondition(condition: Condition): ConditionDecision {
   if (condition.permissionsInScope === false && readsPermissions(decision.rule))
     return {
       kind: 'reported',
-      note: "It tests a permission of the document, which Web UI's task page fetches as the task's target without its permissions (nuxeo-app.js, fetch-task: targetDocumentIds), so the test never passes there: a mistake to fix, not to copy",
+      note: TASK_PERMISSIONS,
     };
   const rows = tableSize([condition], decision.rule);
   return rows > MAX_ROWS

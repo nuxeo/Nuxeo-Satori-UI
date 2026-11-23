@@ -23,7 +23,7 @@ import { isRecord } from '@agentic-ui/shared/app-definition';
 import { actionIdOf, appIdOf, homeQueueId, placed, queuePath, searchQueueId } from './app-files';
 import { fieldOf, listColumns, rulesIn } from './app-walk';
 import { layoutCards } from './blocks';
-import { chainTable, decideCondition, describeSituation } from './conditions';
+import { chainTable, decideCondition, describeSituation, readsPermissions } from './conditions';
 import { guardOfSet, menuGuard, type Guard } from './guards';
 import { recordedAllowList } from './convert';
 import { homeCards, menuEntries, menuEntryId } from './convert-home';
@@ -48,6 +48,14 @@ export function checkConditions({
       // A form's field Web UI only shows is read-only always: no condition gives that, and
       // check 2 holds it to Web UI's element.
       if (at.endsWith('.readOnlyWhen') && rule === ALWAYS) continue;
+      // Web UI's task page fetches the task's target without its permissions: no permission
+      // test passes on a task layout, nor in a block it uses, whatever file the test is in.
+      if (path.startsWith('tasks/') && readsPermissions(rule)) {
+        findings.push(
+          `${path}: ${at} reads a permission, which Web UI's task page does not fetch, so Web UI never shows what it guards there`,
+        );
+        continue;
+      }
       const guard = guardFor(inventory, catalogue, pkg, conversion, path, file, at);
       if (!guard || guard.kind !== 'rule' || guard.conditions.length === 0) {
         findings.push(`${path}: ${at} holds a rule that no condition of the package gives`);

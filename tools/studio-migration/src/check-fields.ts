@@ -123,7 +123,12 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
           `${path}: ${binding} is editable, though Web UI's ${field.element} only shows it, and the report does not say so`,
         );
       const required = isRecord(match.entry) && match.entry['required'] === true;
-      if (options.form && required !== field.required)
+      // A task form can require only its variables; the report says when Web UI required more.
+      if (options.form && record && field.required && !excused(id))
+        findings.push(
+          `${path}${where}: ${binding} is required in Web UI, which a task form cannot say of the record's property, and the report does not say so`,
+        );
+      if (options.form && !record && required !== field.required)
         findings.push(
           `${path}${where}: ${binding} is ${required ? '' : 'not '}required, but Web UI's is ${field.required ? '' : 'not '}required`,
         );
