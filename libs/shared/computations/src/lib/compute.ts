@@ -51,6 +51,24 @@ export function compute(
   }
 }
 
+/**
+ * One value as a layout writes it, evaluated as a computation's parameter is: a literal as written,
+ * a property through `context.value`, or a computation, at level 1. It is what a check across
+ * fields compares (`checks.ts`). Like `compute`, it never throws.
+ */
+export function evaluateValue(
+  value: unknown,
+  context: ComputationContext,
+  evaluators: Readonly<Record<string, ComputationEvaluator>> = PACKAGED_COMPUTATION_EVALUATORS,
+): ComputationResult {
+  try {
+    return resolve(value, context, evaluators, 0);
+  } catch (error) {
+    // A context whose `value` throws: what a computation or an evaluator throws is caught in `run`.
+    return refuse(`the value could not be read: ${messageOf(error)}`);
+  }
+}
+
 /** One computation, at `level`: the top one of a field is at level 1. */
 function run(
   computation: unknown,
@@ -139,7 +157,7 @@ function property(field: string, context: ComputationContext): ComputationResult
  * never throws. `instanceof` throws for a revoked proxy and `message` can be a getter that throws,
  * so a value that cannot be read is named by a constant, as is an Error whose message is no text.
  */
-function messageOf(error: unknown): string {
+export function messageOf(error: unknown): string {
   try {
     if (!(error instanceof Error)) return quote(error);
     const message: unknown = error.message;

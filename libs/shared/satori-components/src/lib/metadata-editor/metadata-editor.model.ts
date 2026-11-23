@@ -34,6 +34,16 @@ export interface NxsEditorField {
   readonly definition: NxsEditorFieldType;
   /** A text field taking several lines. Its value is kept as typed rather than trimmed. */
   readonly multiline?: boolean;
+  /** How many lines a multi-line field shows. 2 when absent. */
+  readonly rows?: number;
+  /**
+   * Shown, not edited: the field keeps the value `values` gives it, is never checked and is never
+   * sent. A field that turns read-only while the form is open goes back to that value, so what it
+   * shows is what the document holds.
+   */
+  readonly readOnly?: boolean;
+  /** What a read-only field shows, already formatted. Without it, the editor's own text of the value. */
+  readonly readOnlyText?: string;
 }
 
 /** A group of fields under one heading, or one tab when the editor shows tabs. */

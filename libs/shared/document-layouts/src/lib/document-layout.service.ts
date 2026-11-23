@@ -51,6 +51,13 @@ import {
   readDocumentType,
   readSchemaResponse,
 } from './resolve-layout';
+import { type FormLayoutFile, readFormLayout } from './form-layout/form-layout';
+import {
+  FORM_INPUTS_SHOWN_AS_VERSION_1,
+  formFacetSchemasToRead,
+  resolveFormLayout,
+  type ResolvedFormLayout,
+} from './form-layout/resolve-form-layout';
 import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
 import {
   ResolvedRecordLayout,
@@ -147,20 +154,27 @@ export function principalName(kind: 'user' | 'group', raw: unknown): string | nu
   return name === '' ? null : name;
 }
 
-/** Why the record page left a field out, as the console says it. */
+/** Why a version 2 page or form left a field out, as the console says it. */
 function skippedMessage(
   type: string,
   field: SkippedRecordField,
   unread: ReadonlyMap<string, string>,
+  mode = 'view',
 ): string {
   if (field.reason === 'widget-type') {
-    return `${type}/view layout: ${field.place} left out: the widget "${field.widget}" does not show ${field.xpath}, a ${field.type} property`;
+    return `${type}/${mode} layout: ${field.place} left out: the widget "${field.widget}" does not show ${field.xpath}, a ${field.type} property`;
   }
   const schema = unread.get(prefixOfXpath(field.xpath));
   return schema
-    ? `${type}/view layout: ${field.place} left out: ${field.xpath} is in schema ${schema}, which was not read`
-    : `${type}/view layout: ${field.place} left out: ${field.xpath} is not on the ${type} type or this document's facets`;
+    ? `${type}/${mode} layout: ${field.place} left out: ${field.xpath} is in schema ${schema}, which was not read`
+    : `${type}/${mode} layout: ${field.place} left out: ${field.xpath} is not on the ${type} type or this document's facets`;
 }
+
+/** A contributed file in force: version 1, in any mode, or version 2 in a form mode. */
+type ContributedFile = LayoutFile | FormLayoutFile;
+
+const isVersion2 = (file: ContributedFile | null): file is FormLayoutFile =>
+  file !== null && 'version' in file && file.version === 2;
 
 /**
  * Resolves the layout a document shows in a mode, from its type and its own schemas.
@@ -192,7 +206,7 @@ export class DocumentLayoutService {
   private readonly slots = inject(ExtensionSlotRegistry);
 
   private index$: Observable<LayoutIndex> | null = null;
-  private readonly files = new Map<string, Observable<LayoutFile | null>>();
+  private readonly files = new Map<string, Observable<ContributedFile | null>>();
   private readonly recordFiles = new Map<string, Observable<RecordLayoutFile | null>>();
   private readonly types = new Map<string, Observable<DocumentTypeDefinition | null>>();
   private readonly schemas = new Map<string, Observable<DocumentTypeSchema | null>>();
@@ -401,8 +415,56 @@ export class DocumentLayoutService {
   ): Observable<ResolvedLayout | null> {
     return combineLatest([this.documentType(type), this.contributed(type, mode)]).pipe(
       switchMap(([definition, file]) =>
-        definition ? this.resolve(definition, mode, file, documentSchemas) : of(null),
+        definition
+          ? this.resolve(definition, mode, isVersion2(file) ? null : file, documentSchemas)
+          : of(null),
       ),
+    );
+  }
+
+  /**
+   * The edit or create form of a document type: its contributed file, of version 1 or 2, resolved
+   * against the type and the document's own schemas, or the generated layout when it has none or
+   * its file is refused. `null` when the type's schemas cannot be read. Never errors.
+   *
+   * A version 2 file is drawn by `lib-document-layout-form` as layout-v2.md says: cards, a widget
+   * as each field's input, fields required or read-only by rule, and checks across fields.
+   */
+  formLayoutFor(
+    type: string,
+    mode: 'edit' | 'create',
+    documentSchemas: readonly DocumentSchemaRef[] = [],
+  ): Observable<ResolvedLayout | ResolvedFormLayout | null> {
+    return combineLatest([this.documentType(type), this.contributed(type, mode)]).pipe(
+      switchMap(([definition, file]): Observable<ResolvedLayout | ResolvedFormLayout | null> => {
+        if (!definition) return of(null);
+        if (!isVersion2(file)) return this.resolve(definition, mode, file, documentSchemas);
+        return this.resolveForm(definition, mode, file, documentSchemas);
+      }),
+    );
+  }
+
+  /** A version 2 form file for one document: its facet schemas read, its fields held to them. */
+  private resolveForm(
+    definition: DocumentTypeDefinition,
+    mode: 'edit' | 'create',
+    file: FormLayoutFile,
+    documentSchemas: readonly DocumentSchemaRef[],
+  ): Observable<ResolvedFormLayout> {
+    const wanted = formFacetSchemasToRead(definition, documentSchemas, file);
+    const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
+      ? forkJoin(wanted.map(({ name }) => this.schema(name)))
+      : of([]);
+    return reads.pipe(
+      map((read) => {
+        const facets = read.filter((schema): schema is DocumentTypeSchema => schema !== null);
+        const unread = new Map(
+          wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
+        );
+        const { layout, skipped } = resolveFormLayout(definition, file, facets);
+        for (const field of skipped) warn(skippedMessage(definition.name, field, unread, mode));
+        return layout;
+      }),
     );
   }
 
@@ -573,7 +635,7 @@ export class DocumentLayoutService {
     return cached;
   }
 
-  private contributed(type: string, mode: LayoutMode): Observable<LayoutFile | null> {
+  private contributed(type: string, mode: LayoutMode): Observable<ContributedFile | null> {
     const key = `${type}/${mode}`;
     let cached = this.files.get(key);
     if (!cached) {
@@ -614,7 +676,12 @@ export class DocumentLayoutService {
     return this.index$;
   }
 
-  private fetchFile(type: string, mode: LayoutMode): Observable<LayoutFile | null> {
+  /**
+   * A file of version 1, or in the edit and create modes of version 2 too. A `metadata` file of
+   * version 2 is still refused, and the generated panel shows (layout-v2.md, section 11). Rules
+   * are checked against this build's registry here, once per session, as for a `view` file.
+   */
+  private fetchFile(type: string, mode: LayoutMode): Observable<ContributedFile | null> {
     const url = layoutFileUrl(this.bootstrapUrl, type, mode);
     return this.http.get<unknown>(url).pipe(
       timeout(LAYOUT_LOAD_TIMEOUT_MS),
@@ -624,6 +691,8 @@ export class DocumentLayoutService {
           warn(`${type}/${mode} layout from ${url} ignored: ${envelope.invalid}`);
           return null;
         }
+        if (mode !== 'metadata' && envelope.content['version'] === 2)
+          return this.formFile(type, mode, url, envelope.content);
         const file = readLayoutFile(envelope.content);
         if ('invalid' in file) {
           warn(
@@ -639,5 +708,37 @@ export class DocumentLayoutService {
         return of(null);
       }),
     );
+  }
+
+  /** A version 2 edit or create file, read as the form draws it; `null`, and the generated form, when refused. */
+  private formFile(
+    type: string,
+    mode: 'edit' | 'create',
+    url: string,
+    content: Record<string, unknown>,
+  ): FormLayoutFile | null {
+    const file = readFormLayout(content, mode, { rules: this.rules.registeredRuleIds() });
+    if ('invalid' in file) {
+      warn(
+        `${type}/${mode} layout from ${url} refused, showing the generated form: ${file.invalid}`,
+      );
+      return null;
+    }
+    for (const problem of file.problems) warn(`${type}/${mode} layout: ${problem}`);
+    const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
+    for (const field of cards.flatMap((card) => card.fields)) {
+      // A computed field is never edited, so only a property's input can differ.
+      const instead =
+        field.kind === 'property' &&
+        field.widget !== null &&
+        Object.hasOwn(FORM_INPUTS_SHOWN_AS_VERSION_1, field.widget)
+          ? FORM_INPUTS_SHOWN_AS_VERSION_1[field.widget]
+          : undefined;
+      if (instead)
+        warn(
+          `${type}/${mode} layout: ${field.place}: the widget "${field.widget}" is edited as ${instead} in this build`,
+        );
+    }
+    return file;
   }
 }

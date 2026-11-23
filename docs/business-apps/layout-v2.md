@@ -449,9 +449,10 @@ convenience. Masking it for real, so that the API does not return it either, is 
 ## 10. What the Studio migration writes
 
 The converter of M1 writes version 2 for `view`. For `metadata`, `edit` and `create` it writes
-version 1, which the app renders in those modes, while version 2 there is still refused (section
-11): a field whose widget version 1 cannot name is written as its schema type shows it, and
-reported. The [migration document](studio-migration.md), section 3, lists what each Web UI element
+version 1, which the app renders in those modes: a field whose widget version 1 cannot name is
+written as its schema type shows it, and reported. The app draws `edit` and `create` files of
+version 2 too, and still refuses `metadata` ones (section 11); the converter does not write them
+yet. The [migration document](studio-migration.md), section 3, lists what each Web UI element
 becomes. In version 2's terms:
 
 | Web UI element                            | Becomes                                                          |
@@ -477,7 +478,38 @@ becomes. In version 2's terms:
   ([package-pipeline.md](package-pipeline.md)), and so does the Studio migration's harness, check
   10, on every package M1 converts.
 - **What the app draws so far.** A `view` file draws the record page, `RecordPageComponent` in
-  `libs/shared/document-layouts`, loaded as section 8 says.
+  `libs/shared/document-layouts`, loaded as section 8 says. An `edit` or `create` file draws the
+  Edit and Create forms, `lib-document-layout-form` in the same library, loaded as section 8 says
+  too, through the design system's metadata editor:
+  - **its cards are the form's sections,** under their headings, or its tabs are tabs. The form
+    has one level of headings, so in a tab the cards' fields follow one another, and a card's
+    heading there is not drawn;
+  - **it draws only the fields the file lists.** The Dublin Core fields a version 1 form puts
+    first are not added, so a file that wants a title lists `dc:title`;
+  - **each field's input is the one its property's type picks,** as in version 1, with what its
+    widget adds: a `vocabulary`'s `directory`, a `long-text`'s `rows`, a text area for `long-text`
+    and `rich-text`, and a `currency`'s code beside the label. A field whose widget does not show
+    its property's type is left out, as on the record page;
+  - **`required` and `readOnlyWhen`** make a field required, or read-only, while their rule
+    passes; `"required": true` makes it required whenever it is editable. A rule reads the values being entered over the record's,
+    so a field shown, required or read-only by another field's value follows it as it is typed or
+    chosen. In a create form the record is the one being created, in its folder;
+  - **a read-only field** shows the value the record holds, through its widget as the record page
+    shows it, and is not sent. One that turns read-only while the form is open goes back to that
+    value. It is never required, and its checks are not run: there is nothing to correct;
+  - **a field hidden by its rule** is not sent, and starts from the record's value again when it
+    shows;
+  - **a computed field** shows its result read-only, worked out from the values being entered;
+  - **a failed check stops the save,** with its `label` or `labelKey` beside the field, or else a
+    message naming the field and its bound: "Allowed amount cannot be more than Billed amount."
+    `core.notBefore` compares days, read as the computations read dates, so an end on the start's
+    day passes; `core.atMost` compares numbers. A check passes when either value is empty, which is
+    `required`'s to refuse. One that cannot compare its values, a date against a text, does not
+    stop the save, and the console says why: a check is a help, and the server still decides;
+  - **the server's messages** go on the fields they name, as in version 1;
+  - **a field the form cannot answer is left out:** a rule this build does not register, in
+    `visibleWhen`, `required`, `readOnlyWhen` or a computation a check compares with, as on the
+    record page, so that a field is never required, or editable, by accident.
 - **A card of related records** draws its list with `RecordListComponent`, in the same library,
   through the design system's document list:
   - the page provider is asked for one page at a time through `PageProviderService`, with each
@@ -545,8 +577,12 @@ becomes. In version 2's terms:
   - **a rule nested more than 32 levels deep** leaves its tab, card, field or row action out: the rule
     registry answers no deeper, and past that it passes any rule not declared security-relevant,
     whatever the rule says;
-  - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
-    layout shows.
+  - **a form's inputs are its properties' types':** `rich-text` is edited as its HTML, in a text
+    area; `user`, `group` and `document-link` as the stored id; `status-badge` as a text field, not
+    a select; `address` and `table` with every subfield, not only the parts or columns the file
+    names; `image` and `file-list` read-only, as version 1 shows a file. The console says so for
+    each such field. The rich text editor, the pickers, the select and the uploads come later;
+  - **`metadata` files of version 2** are still refused, and the generated panel shows.
 
   Three more are what the server records, measured on Nuxeo 2025, and the console does not say them:
   - **a transition is audited with the state it reached only.** The state it left is read from the

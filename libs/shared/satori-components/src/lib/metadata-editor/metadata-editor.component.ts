@@ -208,9 +208,23 @@ export class NxsMetadataEditorComponent {
   readonly headingLevel = input<NxsHeadingLevel>(3);
   /** The tab strip's accessible name in tabs display. Empty uses the default. */
   readonly tabsLabel = input('');
+  /**
+   * Messages from the host's own checks, by xpath, already translated: a check that compares one
+   * field with another, say. A field the form edits is invalid while it has one, and the form
+   * cannot be saved until the host gives a set without it. A message for a field the form does not
+   * edit, read-only or not listed, holds nothing up: there is nothing there to correct. The
+   * schema's own checks still come first.
+   */
+  readonly fieldErrors = input<Readonly<Record<string, string>>>({});
 
   /** Every value passes its field's constraints, or not. Emitted when that changes. */
   readonly validChange = output<boolean>();
+  /**
+   * Every editable value in the form, by xpath, as `properties()` gives them: emitted when one
+   * changes and when the set of fields does, for a host whose rules or checks read what is being
+   * entered. Not emitted again for the same values.
+   */
+  readonly valuesChange = output<NxsEditorValues>();
 
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
@@ -237,8 +251,11 @@ export class NxsMetadataEditorComponent {
       readonly definition: NxsEditorFieldType;
       readonly shape: string;
       readonly checks: ValidatorFn | null;
+      readonly readOnly: boolean;
     }
   >();
+  /** The JSON of the values `valuesChange` last gave, so that the same values are not given twice. */
+  private emittedValues: string | null = null;
   /** Never shown: stands in for a control of an unexpected shape so a binding never throws. */
   private readonly detached = new FormControl();
   private readonly detachedList = new FormArray<AbstractControl>([]);
@@ -266,29 +283,60 @@ export class NxsMetadataEditorComponent {
   });
 
   /**
-   * Dublin Core, each field taking the `required` flag and the constraints of the sections' listing
-   * of it — a layout file that lists `dc:nature` as required makes Nature required.
+   * Each xpath the sections list read-only, with the text the first listing that gives one shows:
+   * a field listed more than once is one control, read-only when any listing says so.
+   */
+  private readonly listedReadOnly = computed(() => {
+    const readOnly = new Map<string, Pick<NxsEditorField, 'readOnly' | 'readOnlyText'>>();
+    for (const field of this.sections().flatMap((section) => section.fields)) {
+      if (field.readOnly !== true) continue;
+      const seen = readOnly.get(field.xpath);
+      readOnly.set(field.xpath, {
+        readOnly: true,
+        readOnlyText: seen?.readOnlyText ?? field.readOnlyText,
+      });
+    }
+    return readOnly;
+  });
+
+  /**
+   * Dublin Core, each field taking the `required` flag, the constraints and the read-only flag of
+   * the sections' listing of it — a layout file that lists `dc:nature` as required makes Nature
+   * required.
    */
   protected readonly standardFields = computed<readonly EditorField[]>(() => {
     if (!this.dublinCore()) return [];
     const listed = this.listedDefinitions();
+    const readOnly = this.listedReadOnly();
     return DUBLIN_CORE.map((field) => {
       const own = listed.get(field.xpath);
-      if (!own?.required && !own?.constraints) return field;
-      return { ...field, definition: mergeChecks(field.definition, own) };
+      const locked = readOnly.get(field.xpath);
+      const checked =
+        own?.required || own?.constraints
+          ? { ...field, definition: mergeChecks(field.definition, own) }
+          : field;
+      return locked ? { ...checked, ...locked } : checked;
     });
   });
 
-  /** The sections, each field with its merged definition, so every listing shows the same checks. */
+  /**
+   * The sections, each field with its merged definition and read-only flag, so every listing
+   * shows the same checks.
+   */
   protected readonly typeSections = computed<readonly NxsEditorSection[]>(() => {
     const skip = this.dublinCore() ? DUBLIN_CORE_XPATHS : new Set<string>();
     const listed = this.listedDefinitions();
+    const readOnly = this.listedReadOnly();
     return this.sections()
       .map((section) => ({
         ...section,
         fields: section.fields
           .filter((field) => !skip.has(field.xpath))
-          .map((field) => ({ ...field, definition: listed.get(field.xpath) ?? field.definition })),
+          .map((field) => ({
+            ...field,
+            definition: listed.get(field.xpath) ?? field.definition,
+            ...readOnly.get(field.xpath),
+          })),
       }))
       .filter((section) => section.fields.length > 0);
   });
@@ -324,9 +372,16 @@ export class NxsMetadataEditorComponent {
       const disabled = this.disabled();
       untracked(() => this.applyDisabled(disabled));
     });
+    effect(() => {
+      this.fieldErrors();
+      untracked(() => this.revalidate());
+    });
     this.form.statusChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.statusChanged());
+    this.form.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.emitValues());
   }
 
   /**
@@ -338,7 +393,9 @@ export class NxsMetadataEditorComponent {
     this.form.updateValueAndValidity();
     this.submitted.set(true);
     this.invalidCount.set(this.countInvalid());
-    if (this.form.valid) return true;
+    // Every field read-only disables the whole form, which is then neither valid nor invalid:
+    // there is nothing to correct. While saving, it is disabled too, and not yet saved.
+    if (this.form.valid || (this.form.disabled && !untracked(this.disabled))) return true;
     this.revealFirstInvalid();
     return false;
   }
@@ -361,7 +418,8 @@ export class NxsMetadataEditorComponent {
     const unplaced: string[] = [];
     for (const [xpath, message] of Object.entries(errors)) {
       const control = this.form.controls[xpath];
-      if (!control) {
+      // A read-only field shows no error, so its message would be lost on it.
+      if (!control || this.isReadOnly(xpath)) {
         unplaced.push(message);
         continue;
       }
@@ -375,10 +433,6 @@ export class NxsMetadataEditorComponent {
     if (this.form.disabled) this.revealOnEnable = true;
     else if (this.form.invalid) this.revealFirstInvalid();
     return unplaced;
-  }
-
-  protected kindOf(definition: NxsEditorFieldType, depth: number): FieldKind {
-    return fieldKind(definition, depth);
   }
 
   protected controlFor(field: EditorField): AbstractControl | null {
@@ -417,7 +471,7 @@ export class NxsMetadataEditorComponent {
 
   /** The message for an error, naming the field so it reads on its own in the error summary's wake. */
   protected errorText(error: FieldError, label: string): string {
-    if (error.key === 'server') {
+    if (error.key === 'server' || error.key === 'check') {
       const message = error.params['message'];
       return typeof message === 'string' ? message : '';
     }
@@ -427,6 +481,18 @@ export class NxsMetadataEditorComponent {
 
   protected isRequired(definition: NxsEditorFieldType): boolean {
     return definition.required === true;
+  }
+
+  /** What the field's control shows: `read-only` for a field listed read-only, whatever its type. */
+  protected kindFor(field: EditorField, depth: number): FieldKind {
+    return depth === 0 && field.readOnly === true
+      ? 'read-only'
+      : fieldKind(field.definition, depth);
+  }
+
+  /** An error the editor's own date and vocabulary controls do not show themselves. */
+  protected passedOn(error: FieldError | null): boolean {
+    return error?.key === 'server' || error?.key === 'check';
   }
 
   protected inputType(definition: NxsEditorFieldType): 'number' | 'text' {
@@ -524,32 +590,88 @@ export class NxsMetadataEditorComponent {
       const existing = this.form.controls[field.xpath];
       const built = this.builtDefinitions.get(field.xpath);
       const shape = JSON.stringify(field.definition);
-      if (existing && built?.shape === shape) continue;
-      if (existing && built && structureOf(built.definition) === structureOf(field.definition)) {
-        const checks = buildControl(field.definition, null, this.dateAdapter).validator;
+      const readOnly = field.readOnly === true;
+      // Turning read-only, or editable again, starts the field over from the document's value:
+      // a read-only field shows what the document holds, and never sends what was typed before.
+      const sameAccess = built?.readOnly === readOnly;
+      if (existing && sameAccess && built?.shape === shape) continue;
+      if (
+        existing &&
+        built &&
+        sameAccess &&
+        structureOf(built.definition) === structureOf(field.definition)
+      ) {
+        const checks = readOnly
+          ? null
+          : buildControl(field.definition, null, this.dateAdapter).validator;
         if (built.checks) existing.removeValidators(built.checks);
         if (checks) existing.addValidators(checks);
         existing.updateValueAndValidity({ emitEvent: false });
-        this.builtDefinitions.set(field.xpath, { definition: field.definition, shape, checks });
+        this.builtDefinitions.set(field.xpath, {
+          definition: field.definition,
+          shape,
+          checks,
+          readOnly,
+        });
         continue;
       }
       const value =
-        existing && built
+        existing && built && sameAccess
           ? propertyValue(built.definition, existing, this.dateAdapter, 0, field.multiline === true)
           : values[field.xpath];
-      const control = buildControl(field.definition, value, this.dateAdapter);
+      // A read-only field holds the value as the document does, for its text; nothing checks it.
+      const control = readOnly
+        ? new FormControl<unknown>({ value, disabled: true })
+        : buildControl(field.definition, value, this.dateAdapter);
       const checks = control.validator;
-      control.addValidators(this.heldServerMessage(field.xpath));
-      if (existing?.dirty) control.markAsDirty();
-      if (existing?.touched) control.markAsTouched();
+      control.addValidators([this.heldServerMessage(field.xpath), this.heldCheck(field.xpath)]);
+      if (sameAccess && existing?.dirty) control.markAsDirty();
+      if (sameAccess && existing?.touched) control.markAsTouched();
       control.updateValueAndValidity({ emitEvent: false });
       if (existing) this.form.setControl(field.xpath, control, { emitEvent: false });
       else this.form.addControl(field.xpath, control, { emitEvent: false });
-      this.builtDefinitions.set(field.xpath, { definition: field.definition, shape, checks });
+      this.builtDefinitions.set(field.xpath, {
+        definition: field.definition,
+        shape,
+        checks,
+        readOnly,
+      });
     }
     this.applyDisabled(untracked(this.disabled));
     this.structure.update((value) => value + 1);
     this.statusChanged();
+    this.emitValues();
+  }
+
+  /** Whether the field at `xpath` is shown rather than edited: listed read-only, or of a kind the editor cannot edit. */
+  private isReadOnly(xpath: string): boolean {
+    const field = untracked(this.fields).find((candidate) => candidate.xpath === xpath);
+    return !!field && this.kindFor(field, 0) === 'read-only';
+  }
+
+  /** The host's message for the field, while it gives one. */
+  private heldCheck(xpath: string): ValidatorFn {
+    return () => {
+      const message = untracked(this.fieldErrors)[xpath];
+      return typeof message === 'string' && message !== '' ? { check: message } : null;
+    };
+  }
+
+  /** The host's checks changed: every field is checked again, and the form's state follows. */
+  private revalidate(): void {
+    for (const control of Object.values(this.form.controls))
+      control.updateValueAndValidity({ onlySelf: true, emitEvent: false });
+    this.form.updateValueAndValidity({ emitEvent: false });
+    this.statusChanged();
+  }
+
+  /** Gives the host the values, unless they are the ones it was last given. */
+  private emitValues(): void {
+    const values = this.properties();
+    const json = JSON.stringify(values);
+    if (json === this.emittedValues) return;
+    this.emittedValues = json;
+    this.valuesChange.emit(values);
   }
 
   private applyDisabled(disabled: boolean): void {
@@ -560,7 +682,9 @@ export class NxsMetadataEditorComponent {
     this.form.enable({ emitEvent: false });
     for (const field of untracked(this.fields)) {
       const control = this.form.controls[field.xpath];
-      if (control) this.lockReadOnly(field.definition, control, 0);
+      if (!control) continue;
+      if (field.readOnly === true) control.disable({ emitEvent: false });
+      else this.lockReadOnly(field.definition, control, 0);
     }
     this.statusChanged();
     if (this.revealOnEnable) {
@@ -609,7 +733,7 @@ export class NxsMetadataEditorComponent {
     const out: Record<string, unknown> = {};
     for (const field of untracked(this.fields)) {
       const control = this.form.controls[field.xpath];
-      if (!control || fieldKind(field.definition) === 'read-only' || !include(control)) continue;
+      if (!control || this.kindFor(field, 0) === 'read-only' || !include(control)) continue;
       out[field.xpath] = propertyValue(
         field.definition,
         control,

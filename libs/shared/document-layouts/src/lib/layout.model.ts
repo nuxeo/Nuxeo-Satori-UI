@@ -9,8 +9,9 @@
 
 /**
  * The modes a version 1 file is rendered in: `metadata` read-only in the Properties panel, `edit`
- * and `create` as forms. `view` is layout version 2 only, the record page, and has its own reader
- * in `record-page/`; a `documentView` entry still takes the View tab before it.
+ * and `create` as forms. An `edit` or `create` file may be version 2 too, read in `form-layout/`;
+ * a `metadata` one may not. `view` is layout version 2 only, the record page, and has its own
+ * reader in `record-page/`; a `documentView` entry still takes the View tab before it.
  */
 export type LayoutMode = 'metadata' | 'edit' | 'create';
 
