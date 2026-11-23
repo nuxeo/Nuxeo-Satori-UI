@@ -16,8 +16,9 @@ output.
 
 ```bash
 node -e "require.resolve('@playwright/test')" 2>/dev/null && echo available || echo missing
-# if missing (deliberately untracked, so CI installs stay unaffected):
-npm install --no-save @playwright/test && npx playwright install chromium
+# if missing (deliberately untracked, so CI installs stay unaffected). One command, because a
+# later --no-save install removes an earlier one; the axe pair is pinned (scripts/beta-harness/axe-engine.mjs):
+npm install --no-save @playwright/test @axe-core/playwright@4.14.0 axe-core@4.14.1 && npx playwright install chromium
 
 export NUXEO_USER=<user> NUXEO_PASS=<password>   # required — there is no default
 npm run beta:backend     # start nuxeo + nuxeo-opensearch, wait for the REST API
@@ -29,6 +30,12 @@ and so does `beta:evidence` for any steps file that needs them, before a browser
 environment, not the code. A steps file that needs no backend says so with
 `export const skipHttpCredentials = true` and runs without them;
 `git grep -l skipHttpCredentials scripts/beta-harness/steps` lists which do.
+
+**`phase-6-a11y` refuses any axe engine but the pinned one**, also with exit 2 and before it
+scans: an engine moved by an unpinned install changed the published WCAG verdict with no commit.
+Reinstall with the line above. Every `beta:evidence` manifest records `playwright`,
+`axeCorePlaywright` and `axeCore` under `environment`; quote them with any accessibility verdict.
+a11y-scout pins 4.13.0, so its preflight refuses this install, and this one refuses its install.
 
 **Check the backend before diagnosing selector failures.** A stopped container
 produces a dozen scattered "selector not visible" reds that read exactly like

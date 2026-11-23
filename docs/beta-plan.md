@@ -432,9 +432,11 @@ Step 3 was re-measured on 2026-11-23 and is **not met**, and this time the cause
 control. With the rail collapsed, those initials are all the control shows, and they are not a
 word of its accessible name. A newer axe-core reports that as a WCAG 2.5.3 failure on every
 screen. The older engine behind the 2026-10-22 pass did not run the rule, so the defect was not
-measured until the `--no-save` install, which pins no version, moved on. The diagnosis and the
+measured until the `--no-save` install, which pinned no version, moved on. The diagnosis and the
 two control runs are recorded in `.ai/state/phases.json` and in
-[the accessibility standard](accessibility.md#the-2026-11-23-measurement).
+[the accessibility standard](accessibility.md#the-2026-11-23-measurement). The capture now pins
+the engine that record ran, axe-core 4.14.1, and refuses any other, so a later verdict cannot move
+without a commit.
 
 A green `npm run beta:coverage` does not close this, and that is worth being explicit about: the
 gate's exit condition is the **ratchet**, not the target. A shortfall against 90% is reported and

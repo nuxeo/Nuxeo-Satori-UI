@@ -93,7 +93,8 @@ jobs:
   #
   # Until then it is run locally:
   #
-  #   npm install --no-save @playwright/test @axe-core/playwright
+  #   npm install --no-save @playwright/test @axe-core/playwright@4.14.0 axe-core@4.14.1
+  #     (pinned in scripts/beta-harness/axe-engine.mjs; phase-6-a11y refuses any other engine)
   #   export NUXEO_USER=<user> NUXEO_PASS=<password>   # required, no default (NXSAT-649)
   #   npm run beta:backend && npx nx serve nuxeo-ui
   #   npm run beta:evidence -- phase-6-a11y

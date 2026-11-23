@@ -40,7 +40,8 @@ warning rather than failing the story. CI's Storybook interaction runner
 stories the panel's axe pass found violations in — a count, never a failure. Treat what it shows as a
 cross-check: triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
 its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
-difference between the two is not an engine difference.
+difference between Storybook and a11y-scout is not an engine difference. The runtime layer is pinned
+to 4.14.1 (gap 8), so a difference between Storybook and the runtime layer can be one.
 
 **Not an accessibility verdict either: the dialog layout check.** The same runner fails a
 `Dialogs/` story whose preview is not laid out as MatDialog lays the dialog out in the application,
@@ -336,8 +337,9 @@ speech-input user who says what they see therefore does not name the control. Th
 `aria-hidden`, which hides it from a screen reader but not from sight, and 2.5.3 concerns what
 is visible.
 
-**What fixing it would show.** It would clear this capture's axe checks, and nothing more: the
-Health 404 would still fail the run.
+**What fixing it would show.** It would clear this capture's axe checks, and nothing more. The
+Health 404 failed this record too. The check's ignore list now names it (below), so with that
+fix the capture can pass in the local environment it documents.
 [Storybook observations](#storybook-observations--triaged-2026-10-15) above records failures
 under the same tags in states the capture does not reach, among them the viewer placeholder for
 a File without a main file. [What nothing covers](#what-nothing-covers) lists what no layer
@@ -359,15 +361,33 @@ arrived, so it measured neither this rule nor the control as it is now. The two 
 the evidence of record, under `agentic-ui-evidence/a11y-engine-diagnostic-2026-11-23/`, so they
 are never mistaken for it.
 
-**The engine is not pinned.** `a11y/versions.mjs` pins axe for a11y-scout, and Storybook's lock
-resolves 4.13.0. `phase-6-a11y` installs whatever `--no-save` resolves, and its manifest does not
-record the version. That is how the verdict changed without a commit, and it is gap 8 below.
+**The engine was not pinned, and now is.** `a11y/versions.mjs` pins axe for a11y-scout, and
+Storybook's lock resolves 4.13.0, but `phase-6-a11y` installed whatever `--no-save` resolved and
+its manifest did not record the version. That is how the verdict changed without a commit (gap 8
+below). Its prerequisites now install `@axe-core/playwright@4.14.0` and `axe-core@4.14.1`, the
+pair this record ran, as `scripts/beta-harness/axe-engine.mjs` pins them. The engine is named as
+well as the wrapper because the wrapper accepts any `~4.14.0` engine, and the registry published
+4.14.0 on 2026-10-05 and 4.14.1 on 2026-11-16. The capture's first step refuses any other pair
+with exit 2, each scan fails unless axe reports that it ran 4.14.1, and every `beta:evidence` manifest records
+`playwright`, `axeCorePlaywright` and `axeCore` under `environment`. a11y-scout and its
+diagnostics stay on 4.13.0, so one `node_modules` holds one layer's install at a time, and
+`axe-differential.mjs` no longer runs phase-6's engine. Each guard was seen to fail on purpose:
+
+| Control                                                                                            | Result                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The real steps, on 4.14.0 under the same wrapper                                                   | Refused at step 1 with exit 2: `axe-core is 4.14.0, pinned 4.14.1`                                                                                       |
+| The real steps, on a11y-scout's install (4.13.0 for both)                                          | Refused at step 1 with exit 2, naming both packages                                                                                                      |
+| A scan that must have run 4.13.0, on 4.14.1                                                        | That check fails and names the engine axe reports. The same scan with the pin, and with no engine named, passes                                          |
+| The installed-version lookup, in five throwaway trees, two with an engine nested under the wrapper | Agrees in all five with what the wrapper's own import loads. Reading the root copy instead disagrees in both nested trees, and passes one it must refuse |
 
 **What else the run shows.** The September `button-name` failures on browse (2026-09-15 and
 2026-09-16) do not reproduce under either engine. The Health 404 is the configuration service's
 optional layout index, which the local dev server does not serve. The layout service falls back to
-generated layouts by design. The check's ignore list names the sibling `bootstrap.json` and
-`manifest.json`, but not this file.
+generated layouts by design. The check's ignore list named the sibling `bootstrap.json` and
+`manifest.json`, but not this file. It now names it, for the 404 only, with the verification beside
+the entry. A 500 on the index, the same file under the production base href, or a per-type layout
+file still fails the check. Run through the list before and after the entry, this record's own
+eleven console errors fail Health and then pass it.
 
 ## The disagreement — resolved 2026-09-11, against phase-6
 
@@ -871,7 +891,7 @@ should be closed:
 | 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                                                                                                                                                                                                                                                                                                |
 | 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half                                                                                                                                                                                                                                                                                   |
 | 7   | Three untriaged text uses of `--mat-sys-outline`, in states no harness renders                       | **Open** — `tasks-page.component.scss:312` (`.graph-empty`, 0.82rem), `:569` (`.dropdown-id`, 0.72rem) and `kd-citation-dialog.scss:129` (`.__mime`, 11px). Found by token search under `NXSAT-647`, not by a scan; each needs its background measured in the state that renders it before it is called a violation. `:281` was checked and is an 18px icon, so 1.4.11's 3:1 applies and it is correct |
-| 8   | phase-6's axe engine is not pinned, and its manifest does not record the version                     | **Open**, found 2026-11-23. The `--no-save` install moved from 4.13.0 to 4.14.x, which brought `label-content-name-mismatch` under the WCAG tags and changed the verdict without a commit. See [The 2026-11-23 measurement](#the-2026-11-23-measurement)                                                                                                                                               |
+| 8   | phase-6's axe engine is not pinned, and its manifest does not record the version                     | **Closed** 2026-11-23. The `--no-save` install had moved from 4.13.0 to 4.14.x and changed the verdict without a commit. `axe-core` 4.14.1 and `@axe-core/playwright` 4.14.0 are now pinned in `scripts/beta-harness/axe-engine.mjs`, the capture refuses any other pair, each scan checks the engine that ran, and manifests record it. See [The 2026-11-23 measurement](#the-2026-11-23-measurement) |
 
 Do not describe accessibility as standardised until rows 2 and 5 are closed. Rows 3 and 4
 depend on triage and are expected to take longer.

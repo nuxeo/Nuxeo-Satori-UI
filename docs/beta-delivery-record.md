@@ -385,7 +385,8 @@ step that scanned that library's surface alone. The library and its route were r
 step 3 was in question from 2026-09-23, and on 2026-11-23 the bar is **not met**:
 `phase-6-a11y/2026-11-23T08-09-11` fails one WCAG 2.5.3 rule on one control, on every screen (the
 WCAG row of "Still open", above). Before quoting a later verdict, re-run `phase-6-a11y` and
-record the axe-core version.
+quote the axe-core version its manifest records (`environment.axeCore`). The capture is pinned to
+4.14.1 and refuses any other.
 
 The number that matters more than the fixes: the previous capture scanned **three** surfaces and
 ratcheted **four** rule ids. Widening it to fifteen cases found **seven** rule classes and **77**
