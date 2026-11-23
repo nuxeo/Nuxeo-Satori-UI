@@ -753,7 +753,9 @@ by the rules' library, so it would match nothing, and the layout validator refus
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
 when you navigate away, so all of them answer `false` everywhere else — with one
 exception: browse's row menu (section 10a) resolves its own slot with each row's
-document in focus, for that slot only. In particular the two
+document in focus, for that slot only. `app.rules.fieldIn` with a literal first
+parameter is not a rule about the document: it reads none, so it answers the same on
+every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
 columns by type, because a list has no single focused document. An earlier
 version of this document described the first five as functional with no caveat

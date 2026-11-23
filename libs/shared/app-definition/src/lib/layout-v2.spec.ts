@@ -315,6 +315,37 @@ describe('the validator finds', () => {
     ).toEqual([]);
   });
 
+  it('fieldIn given the numbers and booleans its evaluator compares, and nothing else', () => {
+    const fieldIn = (...values: unknown[]) =>
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: {
+            type: 'app.rules.fieldIn',
+            parameters: [{ field: 'a:amount' }, ...values],
+          },
+        }),
+      );
+    expect(fieldIn(5000, 2.5, true, false, 'denied')).toEqual([]);
+    expect([...fieldIn({ field: 'a:other' }), ...fieldIn(null), ...fieldIn('')]).toEqual(
+      [0, 1, 2].map(
+        () =>
+          'cards[0].fields[0].visibleWhen.parameters[1]: the rule "app.rules.fieldIn" takes a text, a number or a boolean here [parameter]',
+      ),
+    );
+    // The names the other two compare are still texts.
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: { type: 'app.rules.inGroup', parameters: [5000] },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.inGroup" takes a text here [parameter]',
+    ]);
+  });
+
   it('isNotBusy given the operations it waits for, as the reference writes it', () => {
     expect(
       messages(
