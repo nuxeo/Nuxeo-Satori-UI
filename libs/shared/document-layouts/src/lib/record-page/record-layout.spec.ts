@@ -461,6 +461,48 @@ describe('readRecordLayout', () => {
       ).toEqual(['note']);
     });
 
+    /**
+     * A column this build does not draw has no rule evaluated, so its rule, however unknown or
+     * deep, cannot show it: the table stays, and only that column goes.
+     */
+    it('keeps a table whose undrawn column names a rule this build cannot answer', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:lines',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'line:code',
+                    {
+                      id: 'n',
+                      visibleWhen: { type: 'app.rules.inGroup', parameters: ['g'] },
+                      computed: { type: 'core.count', parameters: [{ field: 'x:y' }] },
+                    },
+                    {
+                      field: 'line:items',
+                      widget: 'table',
+                      visibleWhen: nest(MAX_RULE_LEVELS + 1, 'app.rules.canWrite'),
+                      parameters: { columns: ['item:a'] },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields.map((field) => field.place)).toEqual(['cards[0].fields[0]']);
+      expect(file.problems).toEqual([
+        'cards[0].fields[0].parameters.columns[1] is a computed column, which this build does not draw yet; that column left out',
+        'cards[0].fields[0].parameters.columns[2] is a table inside a table, which this build does not draw yet; that column left out',
+      ]);
+    });
+
     it('a card of related records, which this build does not draw yet', () => {
       const file = read({
         version: 2,

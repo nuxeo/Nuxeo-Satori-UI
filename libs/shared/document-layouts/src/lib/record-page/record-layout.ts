@@ -263,10 +263,11 @@ export function readRecordLayout(
       return false;
     }
     // A table's columns may each have a rule too, and one the page cannot answer would show its
-    // column to everyone: the whole table is left out rather than drawn without it. The columns
-    // of a table inside a column are not checked: that column is never drawn (`notDrawnColumn`),
-    // so no rule in it is ever evaluated.
+    // column to everyone: the whole table is left out rather than drawn without it. A column this
+    // build does not draw (`notDrawnColumn`) is not checked, nor anything inside it: no rule of
+    // its is ever evaluated, and leaving the table out for it would lose the columns that show.
     for (const [index, column] of tableColumnEntries(entry).entries()) {
+      if (notDrawnColumn(column)) continue;
       const inColumn = isRecord(column) ? refusedRule(column['visibleWhen'], isRuleKnown) : null;
       if (inColumn) {
         problems.push(`${place}.parameters.columns[${index}] ${inColumn}; ${place} left out`);
