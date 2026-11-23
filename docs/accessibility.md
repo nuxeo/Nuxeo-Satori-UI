@@ -379,8 +379,8 @@ display name. That name contains what the control shows on either rail. Its sour
 span. The upstream directive builds its own `aria-label` and its tooltip from the label's
 `innerText`, which skips hidden text, so both are still the display name.
 
-`phase-6-a11y/2026-11-23T17-24-58` was captured on the fix's branch at `be4be35cd`, which is `main`
-at `645e3c485` plus the fix. It used the same `--no-save` install, with axe-core 4.14.1. It is
+`phase-6-a11y/2026-11-23T18-44-35` was captured on the fix's branch at `594ea9551`, which is `main`
+at `89d3095f8` plus the fix. It used the same `--no-save` install, with axe-core 4.14.1. It is
 **`FAIL`, 34 of 35**. **All 14 axe checks pass**, and no rule reported a violation at any impact.
 The one failing check is Health, and none of its errors is an accessibility finding:
 
@@ -389,6 +389,10 @@ The one failing check is Health, and none of its errors is an accessibility find
 | 1      | `HTTP 404 /agentic-ui-config/layouts.json`, as in the record above                                                                                 | **environment**                           |
 | 51     | `HTTP 404` on the thumbnails of 23 documents seeded into the local repository that day, after the first capture, as custom types with no thumbnail | **environment**: test data                |
 | 1      | `HTTP 404 /nuxeo/agentic-ui/`, the unexplained request that keeps Phases 1 and 2 open (NXSAT-660)                                                  | **open** elsewhere, and not accessibility |
+
+The first capture after the fix, `phase-6-a11y/2026-11-23T17-24-58` at `be4be35cd`, gave the same
+result. It ran before `main` brought in two heading-selector fixes on document detail (#658),
+which is why the record is the later run.
 
 WCAG 2.1 AA is still **not met**. The fix clears this capture's axe checks and nothing more, as
 [What fixing it would show](#the-2026-11-23-measurement) says.

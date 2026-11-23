@@ -320,7 +320,7 @@ every surface. With the rail collapsed it shows only the avatar initials NXSAT-6
 optional configuration file the local server does not serve, which is an environment condition.
 
 **Fixed the same day, and AA is still not met.** The shell now names the control with
-`aria-labelledby`: the initials, then the display name. `phase-6-a11y/2026-11-23T17-24-58`,
+`aria-labelledby`: the initials, then the display name. `phase-6-a11y/2026-11-23T18-44-35`,
 with axe-core 4.14.1, passes all 14 axe checks. It is 34 of 35 because Health still fails, on
 404s from the local environment and its test data. Clearing the capture is not conformance:
 failures are recorded in states the capture does not reach, and the capture scans only the

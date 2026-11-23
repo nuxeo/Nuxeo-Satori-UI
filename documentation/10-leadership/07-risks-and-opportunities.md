@@ -51,7 +51,7 @@ said what they saw did not reach the control. The fifteenth was a 404 from the l
 not an accessibility finding. The September `button-name` failures do not reproduce.
 
 **The defect was fixed the same day, and the risk stays open.** The control's accessible name now
-starts with the initials it shows. The re-run, `phase-6-a11y/2026-11-23T17-24-58`, passes all 14
+starts with the initials it shows. The re-run, `phase-6-a11y/2026-11-23T18-44-35`, passes all 14
 axe checks. Its one failure is the Health check, on 404s from the local environment and its test
 data. That clears the capture, not the risk: `docs/accessibility.md` records failures in states
 the capture does not reach.
