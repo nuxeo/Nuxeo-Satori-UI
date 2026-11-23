@@ -1520,6 +1520,32 @@
       "empty": "No records"
     },
     "sections": "Property sections",
+    "timeline": {
+      "all": "All events",
+      "empty": "Nothing recorded yet",
+      "event": {
+        "documentCheckedIn": "Version saved",
+        "documentCreated": "Created",
+        "documentLocked": "Locked",
+        "documentModified": "Modified",
+        "documentMoved": "Moved",
+        "documentPublished": "Published",
+        "documentRestored": "Version restored",
+        "documentSecurityUpdated": "Permissions changed",
+        "documentTrashed": "Moved to the trash",
+        "documentUnlocked": "Unlocked",
+        "documentUntrashed": "Restored from the trash",
+        "lifecycle_transition_event": "State changed"
+      },
+      "failed": "The history could not be loaded",
+      "filter": "Show",
+      "loading": "Loading the history",
+      "more": "Show more",
+      "more-failed": "The next entries could not be loaded. Try Show more again.",
+      "no-match": "Nothing of this kind recorded",
+      "reached": "State changed to {{to}}",
+      "transition": "State changed from {{from}} to {{to}}"
+    },
     "yes": "Yes"
   },
   "drawer": {

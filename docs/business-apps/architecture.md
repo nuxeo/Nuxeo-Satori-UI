@@ -386,7 +386,7 @@ An app definition is one configuration package. Version 2 of its layout:
 app.json                             id, name, version, platform range, groups, address, modules, branding
 navigation.json                      menu entries and their rules
 home.json                            home cards per group
-layouts/<Type>/<mode>.layout.json    version 2: cards, widgets, computations, related records
+layouts/<Type>/<mode>.layout.json    version 2: cards, widgets, computations, related records, timeline, comments
 queues/<id>.json                     page provider, columns, facets, row and bulk actions, rules
 actions.json                         lifecycle buttons and allow-listed operations with parameters
 tasks/<workflow>.<node>.layout.json  the task form of each workflow step
