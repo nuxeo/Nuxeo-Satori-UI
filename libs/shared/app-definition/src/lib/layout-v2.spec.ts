@@ -291,6 +291,72 @@ describe('the validator finds', () => {
     );
   });
 
+  it("fieldIn given a computation to compare, which the rules' library never evaluates", () => {
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: {
+            type: 'app.rules.fieldIn',
+            parameters: [{ computed: { type: 'core.template', parameters: ['x'] } }, 'x'],
+          },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.fieldIn" takes a property or a literal here, not a computation [parameter]',
+    ]);
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: { type: 'app.rules.fieldIn', parameters: [{ field: 'a:status' }, 'denied'] },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('fieldIn given the numbers and booleans its evaluator compares, and nothing else', () => {
+    const fieldIn = (...values: unknown[]) =>
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: {
+            type: 'app.rules.fieldIn',
+            parameters: [{ field: 'a:amount' }, ...values],
+          },
+        }),
+      );
+    expect(fieldIn(5000, 2.5, true, false, 'denied')).toEqual([]);
+    expect([...fieldIn({ field: 'a:other' }), ...fieldIn(null), ...fieldIn('')]).toEqual(
+      [0, 1, 2].map(
+        () =>
+          'cards[0].fields[0].visibleWhen.parameters[1]: the rule "app.rules.fieldIn" takes a text, a number or a boolean here [parameter]',
+      ),
+    );
+    // The names the other two compare are still texts.
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: { type: 'app.rules.inGroup', parameters: [5000] },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.inGroup" takes a text here [parameter]',
+    ]);
+  });
+
+  it('isNotBusy given the operations it waits for, as the reference writes it', () => {
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: { type: 'app.rules.isNotBusy', parameters: ['trash'] },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it('a computed field shown as rich text, which would make its text markup', () => {
     expect(
       messages(

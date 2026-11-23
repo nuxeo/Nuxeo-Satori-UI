@@ -23,6 +23,8 @@ export class ExtensionRuleContextService {
   readonly selectionCount = signal(0);
   readonly username = signal<string | null>(null);
   readonly isAdministrator = signal(false);
+  /** The signed-in user's groups, for `app.rules.inGroup`. */
+  readonly groups = signal<readonly string[]>([]);
   readonly url = signal('');
   /**
    * Interface state published by whichever surface is in focus. See
@@ -38,7 +40,11 @@ export class ExtensionRuleContextService {
     document: this.document(),
     selection: this.selection(),
     selectionCount: this.selectionCount(),
-    user: { username: this.username(), isAdministrator: this.isAdministrator() },
+    user: {
+      username: this.username(),
+      isAdministrator: this.isAdministrator(),
+      groups: this.groups(),
+    },
     url: this.url(),
     flags: this.flags(),
   }));

@@ -116,6 +116,7 @@ export {
 export {
   NUXEO_POWERUSERS_GROUP,
   isPowerUserFromGroups,
+  readAllGroupsFromMe,
   readGroupsFromMe,
 } from './lib/auth/user-groups.util';
 export type { NuxeoSamlLoginEndpoint } from './lib/saml-login.config';

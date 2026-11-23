@@ -80,8 +80,8 @@ install and no transpiler.
   - 21 widgets, each with its parameters, which are checked, and the property types it takes,
     which are recorded for phase 1 to check;
   - the 6 computations and the 2 checks, with their signatures;
-  - the rules, row actions and bulk actions the platform registers today, and the 3 rules version
-    2 proposes;
+  - the rules, row actions and bulk actions the platform registers, version 2's three rules
+    among them;
   - the domain modules, of which there are none yet;
   - `withRegistered`, which adds a customer's own rules and actions, registered in Layer 2 code,
     and modules.
@@ -107,8 +107,6 @@ install and no transpiler.
 - **The extension reference.** The rules, row actions and bulk actions must be exactly those
   `docs/extension-reference.md` documents. They live in `libs/shared/extensions`, which needs
   Angular, so they are listed here too, and this test is what keeps the lists one.
-- **The proposed rules.** The three new rules must not be documented yet. Once phase 1 implements
-  one and documents it, the test fails until it moves into `APP_RULES`.
 - **Version 1's image rules.** The copy in `image-source.ts` must be the same text as
   `describeLogoSrcForm` in `libs/shared/app-config/src/lib/bootstrap-config.ts`, so that a
   correction there fails here until it is copied.
