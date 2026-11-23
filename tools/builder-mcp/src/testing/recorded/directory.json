@@ -64,22 +64,6 @@
       },
       {
         "entity-type": "directory",
-        "name": "inverse_predicates",
-        "schema": "vocabulary",
-        "idField": "id",
-        "readOnly": false,
-        "parent": null
-      },
-      {
-        "entity-type": "directory",
-        "name": "predicates",
-        "schema": "vocabulary",
-        "idField": "id",
-        "readOnly": false,
-        "parent": null
-      },
-      {
-        "entity-type": "directory",
         "name": "WorkflowType",
         "schema": "vocabulary",
         "idField": "id",
@@ -95,5 +79,6 @@
         "parent": null
       }
     ]
-  }
+  },
+  "trimmed": "entries: 9 of 11 kept: continent, country, language, nature, topic, subtopic, l10ncoverage, l10nsubjects, WorkflowType"
 }

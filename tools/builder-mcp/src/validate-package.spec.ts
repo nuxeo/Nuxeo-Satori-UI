@@ -9,6 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -18,7 +19,9 @@ import {
   platformVersion,
   runNode,
   validatePackage,
+  within,
 } from './validate-package.ts';
+import { HAS_UNZIP } from './testing/unzip.ts';
 
 const DEMO = join(REPO_ROOT, 'business-apps', 'packages', 'payers-claims-demo');
 const scratch = mkdtempSync(join(tmpdir(), 'builder-mcp-spec-'));
@@ -54,7 +57,7 @@ const SCRATCH = { roots: [REPO_ROOT, scratch] };
 
 const LAYOUT = join('bundle', 'agentic-ui-config', 'layouts', 'Claim', 'view.layout.json');
 
-describe('validatePackage', () => {
+describe.skipIf(!HAS_UNZIP)('validatePackage (the pipeline needs unzip)', () => {
   it('passes the demo package, as CI does, writing nothing into it', async () => {
     const root = demoWith('sound');
     const before = everyFile(root);
@@ -172,8 +175,8 @@ describe('what validatePackage may read', () => {
     const root = demoWith('outside');
     // The default root is the repository, and the scratch copy is not in it.
     await expect(validatePackage({ directory: root })).rejects.toThrow('outside the repository');
-    const secret = join(scratch, 'secret.txt');
-    writeFileSync(secret, 'not JSON, and not for the agent');
+    const secret = join(scratch, 'secret.json');
+    writeFileSync(secret, '{ "not": "for the agent" }');
     await expect(
       validatePackage({
         directory: 'business-apps/packages/payers-claims-demo',
@@ -182,16 +185,64 @@ describe('what validatePackage may read', () => {
     ).rejects.toThrow(/^allowList: .* is outside the repository, and is not read\.$/);
   });
 
-  it('follows a link before deciding, so a link inside cannot reach out', async () => {
+  it('answers the same for a path outside whether or not it exists', () => {
+    const roots = [REPO_ROOT];
+    const there = within(join(scratch, 'secret.json'), roots);
+    const missing = within(join(scratch, 'no-such-file.json'), roots);
+    expect(there).toEqual({
+      problem: `${join(scratch, 'secret.json')} is outside the repository, and is not read.`,
+    });
+    expect(missing).toEqual({
+      problem: `${join(scratch, 'no-such-file.json')} is outside the repository, and is not read.`,
+    });
+  });
+
+  it('refuses a hidden folder or file, which version control keeps out', () => {
+    for (const path of [
+      '.git/config',
+      '.claude/launch.json',
+      'business-apps/packages/.hidden/x.json',
+    ])
+      expect(within(path, [REPO_ROOT]), path).toEqual({
+        problem: `${path} is a hidden folder or file, or is in one, and is not read.`,
+      });
+  });
+
+  it('follows no link: in the path to a file, or anywhere in the package', async () => {
     const inside = join(scratch, 'inside');
     mkdirSync(inside, { recursive: true });
     const outsideFile = join(scratch, 'outside.json');
     writeFileSync(outsideFile, '{}');
     const link = join(inside, 'link.json');
     if (!existsSync(link)) symlinkSync(outsideFile, link);
+    expect(within(link, [inside])).toEqual({
+      problem: `${link} goes through a link, which is not followed.`,
+    });
+    const linkedFolder = join(inside, 'linked');
+    if (!existsSync(linkedFolder)) symlinkSync(scratch, linkedFolder);
+    expect(within(join(linkedFolder, 'outside.json'), [inside])).toEqual({
+      problem: `${join(linkedFolder, 'outside.json')} goes through a link, which is not followed.`,
+    });
+    // A package whose own file is a link: the validator would read wherever it points.
+    const root = demoWith('linked-actions', (copy) => {
+      const actions = join(copy, 'bundle', 'agentic-ui-config', 'actions.json');
+      rmSync(actions);
+      symlinkSync(outsideFile, actions);
+    });
+    await expect(validatePackage({ directory: root }, SCRATCH)).rejects.toThrow(
+      'holds a link, bundle/agentic-ui-config/actions.json, which is not followed',
+    );
+  });
+
+  it('takes an allow-list or a registered file only as a JSON file', async () => {
+    const text = join(scratch, 'allow-list.txt');
+    writeFileSync(text, 'operations');
     await expect(
-      validatePackage({ directory: inside, allowList: link }, { roots: [inside] }),
-    ).rejects.toThrow(/^allowList: .* is outside the repository/);
+      validatePackage({ directory: demoWith('text-allow-list'), allowList: text }, SCRATCH),
+    ).rejects.toThrow('allowList: ');
+    await expect(
+      validatePackage({ directory: demoWith('text-allow-list-2'), registered: text }, SCRATCH),
+    ).rejects.toThrow('is not a JSON file');
   });
 });
 
@@ -236,5 +287,32 @@ describe('the pipeline process', () => {
       expect(existsSync(marker)).toBe(false);
     },
     10_000,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'is stopped with the server: a signal to the server stops what it started',
+    async () => {
+      const marker = join(scratch, 'outlived-the-server');
+      const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 1500)`;
+      const pipeline = `require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setTimeout(() => {}, 60000);`;
+      const module = new URL('./validate-package.ts', import.meta.url).href;
+      // A server that starts a pipeline and says so, then is sent SIGTERM.
+      const server = spawn(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import { runNode } from ${JSON.stringify(module)}; runNode(['-e', ${JSON.stringify(pipeline)}], 60000); setTimeout(() => process.stdout.write('started'), 300);`,
+        ],
+        { stdio: ['ignore', 'pipe', 'inherit'] },
+      );
+      await new Promise<void>((done) => server.stdout.once('data', () => done()));
+      const ended = new Promise((done) => server.once('close', done));
+      server.kill('SIGTERM');
+      await ended;
+      await new Promise((done) => setTimeout(done, 2500));
+      expect(existsSync(marker)).toBe(false);
+    },
+    15_000,
   );
 });

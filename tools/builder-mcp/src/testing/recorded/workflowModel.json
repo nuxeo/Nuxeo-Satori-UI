@@ -43,5 +43,6 @@
         "graphResource": "http://localhost:8080/nuxeo/api/v1/workflowModel/SerialDocumentReview/graph"
       }
     ]
-  }
+  },
+  "trimmed": "entries: 2 of 2 kept: SerialDocumentReview, ParallelDocumentReview"
 }

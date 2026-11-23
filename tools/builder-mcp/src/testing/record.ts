@@ -22,34 +22,13 @@ import { isRecord } from '../shapes.ts';
 import { listVocabularies, readVocabulary } from '../vocabularies.ts';
 import { describeWorkflow, listWorkflows } from '../workflows.ts';
 import {
+  KEPT,
   RECORDED,
   RecordingReads,
   fileNameOf,
   holdingSecrets,
   type Recording,
 } from './recordings.ts';
-
-/** What the tests read, and so what the recordings keep. */
-export const KEPT = {
-  types: [
-    'Document',
-    'Folder',
-    'File',
-    'Note',
-    'Workspace',
-    'Domain',
-    'DocumentRoute',
-    'RouteNode',
-  ],
-  operations: [
-    'Document.Create',
-    'Document.Update',
-    'Document.FetchByProperty',
-    'Repository.Query',
-  ],
-  pageProviders: ['default_search', 'advanced_document_content', 'tree_children'],
-  workflows: ['SerialDocumentReview', 'ParallelDocumentReview'],
-};
 
 interface Scenario {
   readonly tool: string;
@@ -230,7 +209,9 @@ function trim(
     const operations = (Array.isArray(body['operations']) ? body['operations'] : []).filter(
       (entry) => isRecord(entry) && KEPT.operations.includes(String(entry['id'])),
     );
-    const chains = (Array.isArray(body['chains']) ? body['chains'] : []).slice(0, 2);
+    const chains = (Array.isArray(body['chains']) ? body['chains'] : []).filter(
+      (entry) => isRecord(entry) && KEPT.chains.includes(String(entry['id'])),
+    );
     return {
       ...recording,
       body: { ...body, operations, chains },
@@ -239,15 +220,24 @@ function trim(
   }
   if (path === '/management/page-providers' && Array.isArray(body)) {
     const kept = body.filter(
-      (entry) =>
-        isRecord(entry) &&
-        (KEPT.pageProviders.includes(String(entry['name'])) ||
-          /^(default|document|tree|advanced)_/.test(String(entry['name']))),
+      (entry) => isRecord(entry) && KEPT.pageProviders.includes(String(entry['name'])),
     );
     return {
       ...recording,
       body: kept,
-      trimmed: `${kept.length} of ${body.length} kept: the default_, document_, tree_ and advanced_ ones`,
+      trimmed: `${kept.length} of ${body.length} kept: ${KEPT.pageProviders.join(', ')}`,
+    };
+  }
+  if ((path === '/workflowModel' || path === '/directory') && isRecord(body)) {
+    // A list of the server's own: only the stock entries the tests name are kept, whatever else
+    // the server holds.
+    const names = path === '/workflowModel' ? KEPT.workflows : KEPT.vocabularies;
+    const all = Array.isArray(body['entries']) ? body['entries'] : [];
+    const kept = all.filter((entry) => isRecord(entry) && names.includes(String(entry['name'])));
+    return {
+      ...recording,
+      body: { ...body, entries: kept },
+      trimmed: `entries: ${kept.length} of ${all.length} kept: ${names.join(', ')}`,
     };
   }
   if ((path.startsWith('/id/') || path.startsWith('/path/')) && isRecord(body)) {
@@ -272,7 +262,10 @@ function trim(
   return recording;
 }
 
-/** The facets and schemas the kept types use, and every workflow variables facet and schema. */
+/**
+ * The facets and schemas the kept types use, and the variables facets the kept workflows' own
+ * documents name: no other workflow's facets are kept, whoever's they are.
+ */
 function usedNames(recordings: ReadonlyMap<string, Recording>): {
   facets: Set<string>;
   schemas: Set<string>;
@@ -280,28 +273,33 @@ function usedNames(recordings: ReadonlyMap<string, Recording>): {
   const facets = new Set<string>();
   const schemas = new Set<string>();
   for (const recording of recordings.values()) {
-    if (recording.request.path !== '/config/types' || !isRecord(recording.body)) continue;
-    const doctypes = recording.body['doctypes'];
-    if (!isRecord(doctypes)) continue;
-    for (const name of KEPT.types) {
-      const type = doctypes[name];
-      if (!isRecord(type)) continue;
-      for (const facet of Array.isArray(type['facets']) ? type['facets'] : [])
-        facets.add(String(facet));
-      for (const schema of Array.isArray(type['schemas']) ? type['schemas'] : [])
-        schemas.add(String(schema));
+    const { path } = recording.request;
+    const body = recording.body;
+    if (path === '/config/types' && isRecord(body) && isRecord(body['doctypes'])) {
+      for (const name of KEPT.types) {
+        const type = body['doctypes'][name];
+        if (!isRecord(type)) continue;
+        for (const facet of Array.isArray(type['facets']) ? type['facets'] : [])
+          facets.add(String(facet));
+        for (const schema of Array.isArray(type['schemas']) ? type['schemas'] : [])
+          schemas.add(String(schema));
+      }
+    }
+    // Only the kept workflows' documents are read, by describe_workflow.
+    if ((path.startsWith('/id/') || path.startsWith('/path/')) && isRecord(body)) {
+      const properties = isRecord(body['properties']) ? body['properties'] : {};
+      for (const key of ['docri:variablesFacet', 'rnode:variablesFacet'])
+        if (typeof properties[key] === 'string') facets.add(properties[key]);
     }
   }
   for (const recording of recordings.values()) {
     if (recording.request.path !== '/config/facets' || !Array.isArray(recording.body)) continue;
-    for (const facet of recording.body.filter(isRecord)) {
-      const name = String(facet['name']);
-      // Workflow variables live in facet-var_<id>, whose schema is var_<id>.
-      if (!facets.has(name) && !name.startsWith('facet-var_')) continue;
-      facets.add(name);
-      for (const schema of Array.isArray(facet['schemas']) ? facet['schemas'].filter(isRecord) : [])
-        schemas.add(String(schema['name']));
-    }
+    for (const facet of recording.body.filter(isRecord))
+      if (facets.has(String(facet['name'])))
+        for (const schema of Array.isArray(facet['schemas'])
+          ? facet['schemas'].filter(isRecord)
+          : [])
+          schemas.add(String(schema['name']));
   }
   return { facets, schemas };
 }

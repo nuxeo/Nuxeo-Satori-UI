@@ -1,0 +1,30 @@
+{
+  "request": {
+    "path": "/search/pp/default_document_suggestion"
+  },
+  "status": 200,
+  "body": {
+    "name": "default_document_suggestion",
+    "enabled": true,
+    "properties": {
+      "maxResults": "PAGE_SIZE"
+    },
+    "queryParameters": [],
+    "pageSize": 5,
+    "pageSizeBinding": null,
+    "maxPageSize": null,
+    "pageSizeOptions": [5, 10, 20, 30, 40, 50],
+    "sortable": true,
+    "sortInfos": [],
+    "sortInfosBinding": null,
+    "pattern": "SELECT * FROM Document WHERE ecm:fulltext LIKE '?*' AND ecm:mixinType != 'HiddenInNavigation' AND ecm:isVersion = 0 AND ecm:isTrashed = 0",
+    "quotePatternParameters": false,
+    "escapePatternParameters": true,
+    "whereClause": null,
+    "searchDocumentType": null,
+    "quickFilters": [],
+    "aggregates": [],
+    "id": "default_document_suggestion",
+    "usageTrackingEnabled": false
+  }
+}

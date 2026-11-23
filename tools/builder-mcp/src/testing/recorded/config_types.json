@@ -77,5 +77,5 @@
     },
     "schemas": {}
   },
-  "trimmed": "doctypes: 8 of 60 kept (Document, Folder, File, Note, Workspace, Domain, DocumentRoute, RouteNode); the flat schemas map, which nothing reads, emptied"
+  "trimmed": "doctypes: 8 of 65 kept (Document, Folder, File, Note, Workspace, Domain, DocumentRoute, RouteNode); the flat schemas map, which nothing reads, emptied"
 }

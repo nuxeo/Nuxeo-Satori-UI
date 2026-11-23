@@ -13,10 +13,11 @@ import {
   countParameters,
   describeDefinition,
   describePageProvider,
+  isIndexed,
   listPageProviders,
   namedParameters,
 } from './page-providers.ts';
-import { RECORDED, RecordedReads, holdingSecrets } from './testing/recordings.ts';
+import { KEPT, RECORDED, RecordedReads, holdingSecrets } from './testing/recordings.ts';
 import { listVocabularies, readVocabulary } from './vocabularies.ts';
 import { describeWorkflow, listWorkflows } from './workflows.ts';
 
@@ -147,24 +148,23 @@ describe('page provider definitions, as Nuxeo reads them', () => {
     expect(named.parameters).toMatchObject({ positional: 0, named: ['who'] });
   });
 
-  it('marks a page provider indexed when it names a search client, or by its class', async () => {
-    const reads = {
-      origin: 'http://localhost:8080',
-      get: async () => [
-        {
-          name: 'a',
-          class: 'org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider',
-          defaultSearchClient: 'opensearch',
-        },
-        { name: 'b', class: 'org.nuxeo.elasticsearch.provider.ElasticSearchNxqlPageProvider' },
-        { name: 'c', class: 'org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider' },
-      ],
-    };
-    const listed = await listPageProviders(reads, undefined);
-    expect(listed.pageProviders.map((entry) => [entry.name, entry.indexed])).toEqual([
-      ['a', true],
-      ['b', true],
-      ['c', false],
+  it('marks a page provider indexed by its search client, or by its class when it names none', () => {
+    const search = 'org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider';
+    const core = 'org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider';
+    expect(isIndexed({ class: search, defaultSearchClient: 'opensearch' })).toBe(true);
+    // Nuxeo 2025's other search client queries the repository, which does not lag.
+    expect(isIndexed({ class: search, searchClient: 'repository' })).toBe(false);
+    expect(
+      isIndexed({ class: 'org.nuxeo.elasticsearch.provider.ElasticSearchNxqlPageProvider' }),
+    ).toBe(true);
+    expect(isIndexed({ class: search })).toBeNull();
+    expect(isIndexed({ class: core })).toBe(false);
+  });
+
+  it('marks the recorded default_document_suggestion indexed, from its search client', async () => {
+    const listed = await listPageProviders(nuxeo(), 'default_document_suggestion');
+    expect(listed.pageProviders).toEqual([
+      expect.objectContaining({ name: 'default_document_suggestion', indexed: true }),
     ]);
   });
 });
@@ -305,6 +305,39 @@ describe('the recordings themselves', () => {
         'type',
       ]);
     }
+  });
+
+  it('name nothing of the server but the stock entries they keep', () => {
+    const body = (name: string) => JSON.parse(files.get(name) ?? 'null').body;
+    const names = (list: unknown[], key = 'name') =>
+      list.map((entry) => String((entry as Record<string, unknown>)[key]));
+    expect(names(body('workflowModel.json').entries)).toEqual(
+      expect.arrayContaining(KEPT.workflows),
+    );
+    for (const name of names(body('workflowModel.json').entries))
+      expect(KEPT.workflows).toContain(name);
+    for (const name of names(body('directory.json').entries))
+      expect(KEPT.vocabularies).toContain(name);
+    for (const name of names(body('management_page-providers.json')))
+      expect(KEPT.pageProviders).toContain(name);
+    for (const name of Object.keys(body('config_types.json').doctypes))
+      expect(KEPT.types).toContain(name);
+    const automation = body('automation.json');
+    for (const id of names(automation.operations, 'id')) expect(KEPT.operations).toContain(id);
+    for (const id of names(automation.chains, 'id')) expect(KEPT.chains).toContain(id);
+    // A workflow variables facet is kept only when a kept workflow's own document names it.
+    const named = new Set(
+      [...files]
+        .filter(([name]) => /^(id|path)_/.test(name))
+        .flatMap(([, content]) => Object.values(JSON.parse(content).body.properties))
+        .filter(
+          (value): value is string => typeof value === 'string' && value.startsWith('facet-var_'),
+        ),
+    );
+    for (const facet of names(body('config_facets.json')).filter((name) =>
+      name.startsWith('facet-var_'),
+    ))
+      expect(named.has(facet), facet).toBe(true);
   });
 
   it('answer only the reads they hold: any other fails, naming the read', async () => {

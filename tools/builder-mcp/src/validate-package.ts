@@ -9,9 +9,9 @@
  *   passes: `--out` and `--platform`, the version of `libs/platform`. An allow-list, a registered
  *   file or another platform version are the deployment's to give, and change what is checked, so
  *   the answer lists each one it was given under `departsFromCi`, and `asCi` is then false.
- * - **Inside the repository only.** The folder and the files are resolved, links and all, and each
- *   must be in the repository: the pipeline's messages can quote what it read, and they go to the
- *   agent.
+ * - **Inside the repository only** (`within`): no link followed, in the path or anywhere in the
+ *   package, no hidden folder or file, and the allow-list and the registered file are JSON files.
+ *   The pipeline's messages can quote what it read, and they go to the agent.
  * - **Nothing in the package is written.** The zip and its checksum go to a temporary directory,
  *   which is removed afterwards; the package's own `dist/` is not touched.
  * - **No package code runs** that this repository did not review: step 1 refuses a `build.mjs`
@@ -19,14 +19,15 @@
  * - **No network and no credential.** The pipeline gets only what finds `unzip` and a temporary
  *   directory from the environment: not `NUXEO_PASS`, not a registry token.
  * - **Stopped whole.** Past {@link RUN_TIMEOUT_MS} or its output limit, the pipeline and every
- *   process it started are killed before the temporary directory is removed (on Windows, only the
- *   pipeline's own process).
+ *   process it started are killed before the temporary directory is removed, and so they are when
+ *   the server exits or is stopped by a signal it can catch (on Windows, only the pipeline's own
+ *   process, and only on a timeout).
  *
  * The run's output is returned whole, and parsed where its form is known: each validator finding,
  * the step that refused the package, and the zip's digest when it was built.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,21 +95,55 @@ export function inRepository(path: string): string {
 }
 
 /**
- * The path, resolved through any link, when it exists inside one of `roots`; otherwise why not.
- * Resolving first is what keeps a link inside the repository from reaching out of it.
+ * The path, when it is inside one of `roots`, through no link and no hidden folder or file;
+ * otherwise why not. The pipeline's messages can quote what it read, and they go to the agent, so:
+ *
+ * - **Outside is decided from the path alone,** before the file system is asked anything, so the
+ *   answer for a path outside is the same whether or not it exists.
+ * - **No link is followed.** Each part of the path below its root is read with `lstat`, and one
+ *   that is a link is refused, rather than resolved: a link inside can point anywhere.
+ * - **No hidden part**, such as `.git`, `.env` or `.claude`, which a repository keeps out of
+ *   version control.
  */
 export function within(
   path: string,
   roots: readonly string[],
 ): string | { readonly problem: string } {
   const absolute = inRepository(path);
-  if (!existsSync(absolute)) return { problem: `${path} does not exist (read as ${absolute}).` };
-  const real = realpathSync(absolute);
-  const inside = roots.some((root) => {
-    const from = relative(realpathSync(root), real);
-    return from === '' || (!from.startsWith('..') && !isAbsolute(from));
-  });
-  return inside ? real : { problem: `${path} is outside the repository, and is not read.` };
+  for (const root of roots.map((candidate) => resolve(candidate))) {
+    const from = relative(root, absolute);
+    if (from.startsWith('..') || isAbsolute(from)) continue;
+    const parts = from === '' ? [] : from.split(sep);
+    if (parts.some((part) => part.startsWith('.')))
+      return { problem: `${path} is a hidden folder or file, or is in one, and is not read.` };
+    let current = root;
+    for (const part of parts) {
+      current = join(current, part);
+      let entry;
+      try {
+        entry = lstatSync(current);
+      } catch {
+        return { problem: `${path} does not exist.` };
+      }
+      if (entry.isSymbolicLink())
+        return { problem: `${path} goes through a link, which is not followed.` };
+    }
+    return current;
+  }
+  return { problem: `${path} is outside the repository, and is not read.` };
+}
+
+/** The first link inside a folder, or `null`: the validator would follow one wherever it points. */
+export function linkInside(directory: string): string | null {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) return path;
+    if (entry.isDirectory()) {
+      const found = linkInside(path);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /** Only what finds programs and a temporary directory: no credential reaches the pipeline. */
@@ -141,10 +176,21 @@ export async function validatePackage(
   const directory = resolved(request.directory, 'directory');
   if (!statSync(directory).isDirectory())
     throw new Error(`directory: ${request.directory} is not a folder.`);
-  const allowList =
-    request.allowList === undefined ? undefined : resolved(request.allowList, 'allowList');
-  const registered =
-    request.registered === undefined ? undefined : resolved(request.registered, 'registered');
+  const link = linkInside(directory);
+  if (link)
+    throw new Error(
+      `directory: ${request.directory} holds a link, ${relative(directory, link)}, which is not` +
+        ' followed. A package holds its files.',
+    );
+  const file = (path: string | undefined, what: string): string | undefined => {
+    if (path === undefined) return undefined;
+    const found = resolved(path, what);
+    if (!found.endsWith('.json') || !statSync(found).isFile())
+      throw new Error(`${what}: ${path} is not a JSON file.`);
+    return found;
+  };
+  const allowList = file(request.allowList, 'allowList');
+  const registered = file(request.registered, 'registered');
   // An empty version would reach the pipeline as no version, and its range would go unchecked.
   if (
     request.platform !== undefined &&
@@ -185,6 +231,39 @@ export interface Run {
   readonly failure: string | null;
 }
 
+/**
+ * The process groups of the pipelines running now. A group of its own is what lets a timeout stop
+ * the pipeline whole, and is also what keeps a signal sent to the server's group, such as a
+ * terminal's Ctrl-C, from reaching it; so when the server exits, or is stopped by a signal it can
+ * catch, it stops them first. A server killed outright (`SIGKILL`) cannot, and a pipeline it had
+ * started runs on to its end.
+ */
+const RUNNING = new Set<number>();
+let stopsWithServer = false;
+
+function stopRunning(): void {
+  for (const pid of RUNNING) {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      // Already gone.
+    }
+  }
+  RUNNING.clear();
+}
+
+function stopWithServer(): void {
+  if (stopsWithServer) return;
+  stopsWithServer = true;
+  process.on('exit', stopRunning);
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const)
+    process.once(signal, () => {
+      stopRunning();
+      // Then as the signal would have, had nothing caught it.
+      process.kill(process.pid, signal);
+    });
+}
+
 /** Runs Node with `args`, as the pipeline runs: its own environment, stopped whole. */
 export function runNode(args: readonly string[], timeoutMs: number): Promise<Run> {
   return new Promise((done) => {
@@ -198,6 +277,10 @@ export function runNode(args: readonly string[], timeoutMs: number): Promise<Run
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: group,
     });
+    if (group && child.pid !== undefined) {
+      stopWithServer();
+      RUNNING.add(child.pid);
+    }
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     let size = 0;
@@ -228,6 +311,7 @@ export function runNode(args: readonly string[], timeoutMs: number): Promise<Run
     });
     child.on('close', (code, signal) => {
       clearTimeout(timer);
+      if (child.pid !== undefined) RUNNING.delete(child.pid);
       if (signal && failure === null) failure = `the pipeline was stopped by ${signal}`;
       done({
         exitCode: code,

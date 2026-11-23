@@ -5,19 +5,6 @@
   "status": 200,
   "body": [
     {
-      "name": "facet-var_global_Task38e",
-      "schemas": [
-        {
-          "name": "var_global_Task38e",
-          "@prefix": "var_global_Task38e",
-          "fields": {
-            "validationOrReview": "string",
-            "participants": "string[]"
-          }
-        }
-      ]
-    },
-    {
       "name": "NXTag",
       "schemas": [
         {
@@ -76,19 +63,6 @@
       ]
     },
     {
-      "name": "facet-var_global_Task2556",
-      "schemas": [
-        {
-          "name": "var_global_Task2556",
-          "@prefix": "var_global_Task2556",
-          "fields": {
-            "participants": "string[]",
-            "end_date": "date"
-          }
-        }
-      ]
-    },
-    {
       "name": "facet-var_SerialDocumentReview",
       "schemas": [
         {
@@ -142,19 +116,6 @@
           "name": "var_Task375f",
           "@prefix": "var_Task375f",
           "fields": {}
-        }
-      ]
-    },
-    {
-      "name": "facet-var_global_Task6d8",
-      "schemas": [
-        {
-          "name": "var_global_Task6d8",
-          "@prefix": "var_global_Task6d8",
-          "fields": {
-            "initiatorComment": "string",
-            "participants": "string[]"
-          }
         }
       ]
     },
@@ -264,36 +225,12 @@
       ]
     },
     {
-      "name": "facet-var_global_Task328d",
-      "schemas": [
-        {
-          "name": "var_global_Task328d",
-          "@prefix": "var_global_Task328d",
-          "fields": {
-            "initiatorComment": "string"
-          }
-        }
-      ]
-    },
-    {
       "name": "facet-var_Task21a0",
       "schemas": [
         {
           "name": "var_Task21a0",
           "@prefix": "var_Task21a0",
           "fields": {}
-        }
-      ]
-    },
-    {
-      "name": "facet-var_global_Task2169",
-      "schemas": [
-        {
-          "name": "var_global_Task2169",
-          "@prefix": "var_global_Task2169",
-          "fields": {
-            "review_result": "string"
-          }
         }
       ]
     },
@@ -308,5 +245,5 @@
       ]
     }
   ],
-  "trimmed": "34 of 65 kept: those the kept types and workflows use"
+  "trimmed": "29 of 65 kept: those the kept types and workflows use"
 }

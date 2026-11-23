@@ -15,6 +15,50 @@ import { NuxeoError, type NuxeoReads, type ReadOptions } from '../nuxeo.ts';
 export const RECORDED = fileURLToPath(new URL('./recorded/', import.meta.url));
 export const RECORDED_ORIGIN = 'http://localhost:8080';
 
+/**
+ * The only names the recordings keep, every one of them stock Nuxeo: the recorder trims every
+ * list the server answers to these, whatever else the server holds, so that a recording made on
+ * a server with a customer's model in it carries none of it. A test holds the recordings to it.
+ */
+export const KEPT = {
+  types: [
+    'Document',
+    'Folder',
+    'File',
+    'Note',
+    'Workspace',
+    'Domain',
+    'DocumentRoute',
+    'RouteNode',
+  ],
+  operations: [
+    'Document.Create',
+    'Document.Update',
+    'Document.FetchByProperty',
+    'Repository.Query',
+  ],
+  chains: ['AttachFiles', 'FileManager.ImportWithMetaData'],
+  pageProviders: [
+    'default_search',
+    'advanced_document_content',
+    'tree_children',
+    'default_document_suggestion',
+    'document_content',
+  ],
+  workflows: ['SerialDocumentReview', 'ParallelDocumentReview'],
+  vocabularies: [
+    'continent',
+    'country',
+    'language',
+    'nature',
+    'topic',
+    'subtopic',
+    'l10ncoverage',
+    'l10nsubjects',
+    'WorkflowType',
+  ],
+};
+
 export interface Recording {
   readonly request: {
     readonly path: string;

@@ -48,14 +48,6 @@
       }
     },
     {
-      "name": "var_global_Task6d8",
-      "@prefix": "var_global_Task6d8",
-      "fields": {
-        "initiatorComment": "string",
-        "participants": "string[]"
-      }
-    },
-    {
       "name": "var_ParallelDocumentReview",
       "@prefix": "var_ParallelDocumentReview",
       "fields": {
@@ -109,13 +101,6 @@
       "@prefix": "",
       "fields": {
         "content": "blob"
-      }
-    },
-    {
-      "name": "var_global_Task328d",
-      "@prefix": "var_global_Task328d",
-      "fields": {
-        "initiatorComment": "string"
       }
     },
     {
@@ -280,14 +265,6 @@
       }
     },
     {
-      "name": "var_global_Task38e",
-      "@prefix": "var_global_Task38e",
-      "fields": {
-        "validationOrReview": "string",
-        "participants": "string[]"
-      }
-    },
-    {
       "name": "relatedtext",
       "@prefix": "",
       "fields": {
@@ -329,26 +306,11 @@
       }
     },
     {
-      "name": "var_global_Task2169",
-      "@prefix": "var_global_Task2169",
-      "fields": {
-        "review_result": "string"
-      }
-    },
-    {
       "name": "common",
       "@prefix": "",
       "fields": {
         "icon-expanded": "string",
         "icon": "string"
-      }
-    },
-    {
-      "name": "var_global_Task2556",
-      "@prefix": "var_global_Task2556",
-      "fields": {
-        "participants": "string[]",
-        "end_date": "date"
       }
     },
     {
@@ -380,5 +342,5 @@
       }
     }
   ],
-  "trimmed": "33 of 98 kept: those the kept types and workflows use"
+  "trimmed": "28 of 103 kept: those the kept types and workflows use"
 }

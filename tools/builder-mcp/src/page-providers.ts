@@ -18,16 +18,19 @@ import { NuxeoError, segment, type NuxeoReads } from './nuxeo.ts';
 import { isRecord, list, notFound, record, text, texts, type JsonRecord } from './shapes.ts';
 
 /**
- * Whether the search index answers a page provider. The management API names a search client for
- * those it sends to the index; the class is read too, for a server whose answer names none.
+ * Whether the search index answers a page provider: `true`, `false`, or `null` when the answer
+ * does not say. The management API names the search client of one the search service answers:
+ * `opensearch` is the index; `repository`, the other client Nuxeo 2025 registers, queries the
+ * repository and does not lag. With no client named, a class of the index's own is `true`, the
+ * search service's is `null`, and any other is `false`.
  */
-function isIndexed(entry: JsonRecord): boolean {
+export function isIndexed(entry: JsonRecord): boolean | null {
+  const client = text(entry['searchClient']) ?? text(entry['defaultSearchClient']);
+  if (client !== null) return client.toLowerCase() !== 'repository';
   const kind = text(entry['class']) ?? '';
-  return (
-    text(entry['searchClient']) !== null ||
-    text(entry['defaultSearchClient']) !== null ||
-    /SearchServicePageProvider|ElasticSearch|OpenSearch/.test(kind)
-  );
+  if (/ElasticSearch|OpenSearch/.test(kind)) return true;
+  if (/SearchServicePageProvider/.test(kind)) return null;
+  return false;
 }
 
 export async function listPageProviders(nuxeo: NuxeoReads, query: string | undefined) {
@@ -68,7 +71,8 @@ export async function listPageProviders(nuxeo: NuxeoReads, query: string | undef
     pageProviders: shown,
     note:
       'indexed: true means the search index answers it, and the index lags: a list that must show' +
-      ' a write just made should not use one (AGENTS/11-beta-program.md, section 3).',
+      ' a write just made should not use one (AGENTS/11-beta-program.md, section 3). null means the' +
+      ' server did not say.',
   };
 }
 
