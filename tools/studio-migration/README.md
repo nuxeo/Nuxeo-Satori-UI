@@ -704,6 +704,15 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     a required record field through the conversion unreported. Each now has its test, and the
     second sort is gone.
 
+  - **For the slot registration, 17 guards**, broken the same way, each seen turning the suite
+    red: a disabled contribution, a later one of the name replacing, a lower priority ignored, a
+    change with no order giving 0, a change moving the earlier one, a change of Web UI's own
+    reported, slots kept apart, no name never merging; for actions, only what the slot keeps owning
+    one, what it leaves out reported, and the slot's order; for the menu, a left-out entry being
+    none, the page the slot keeps, and the slot's order; check 6's order of an action and of a menu
+    entry; and a tab's order left out being 0. The first round found two no test reached, the menu's
+    page and its order, each now tested.
+
   - **An independent review of M2** found twelve things. Fixed, each with a test: a guarded
     block's field moved under another block's rule passed check 5; a block given no document hid
     a dropped rule; a disabled tab, or one a later contribution replaced, still became a tab; Web

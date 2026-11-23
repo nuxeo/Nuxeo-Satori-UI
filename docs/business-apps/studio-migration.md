@@ -291,6 +291,12 @@ variable its step and workflow lack (3), put a task's variable in a document's l
 block's card or a tab (2), make a field Web UI only shows editable in a task form (2), drop a
 tab's rule (5), change a tab's label (6), and drop a block's use from the report (1).
 
+**For Web UI's slot registration** (`nuxeo-slots.js`: `disabled`, `priority`, and a later
+contribution of the same name replacing or changing an earlier one), which actions, the menu and
+tabs follow, five more: make an action of a disabled button, keep a replaced or an outranked
+button rather than the one Web UI keeps, or a menu entry of a disabled one (7), and move an action
+from the order Web UI's slot gives it (6).
+
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
 something to break fails its check too. The thirteen that do not say so: `widen-to-everyone`,
 `widen-column-to-everyone`, `invert-rule`, `drop-rule` and `bind-other-operation` find no

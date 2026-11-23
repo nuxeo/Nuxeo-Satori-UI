@@ -194,4 +194,26 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
     const mutation = MUTATIONS.find((candidate) => candidate.name === 'keep-replaced-action');
     expect(() => mutation?.apply(input.conversion)).toThrow(MutationError);
   });
+
+  it("opens the page Web UI's slot keeps, at the order its slot gives the entry", () => {
+    const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+    const changes = (extra: string) => prepare({ [SLOTS]: `${extra}` }).conversion;
+    // A later contribution with no template moves the entry, and one that hides its page leaves
+    // the entry nothing to open.
+    const moved = changes(
+      '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_ITEMS" order="7"></nuxeo-slot-content>',
+    );
+    expect(moved.app['navigation.json']).toMatchObject({
+      entries: [{ id: 'claimssearch', order: 7 }],
+    });
+    const hidden = changes(
+      '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_PAGES" disabled></nuxeo-slot-content>',
+    );
+    expect(hidden.app['navigation.json']).toBeUndefined();
+    expect(
+      hidden.report.constructs.find(
+        (construct) => construct.id === `slot-contribution:${bundle}#3`,
+      ),
+    ).toMatchObject({ outcome: 'pending', note: expect.stringContaining('opens no queue') });
+  });
 });
