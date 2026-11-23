@@ -25,11 +25,12 @@
  * And around them:
  *   - XML that is not UTF-8, or not well-formed as Nuxeo's namespace-aware parser reads it, which
  *     Nuxeo cannot load at all, or nested deeper than this script checks;
- *   - a `Nuxeo-Component` that names no packaged file in `bundle/`; a manifest that names its
- *     components in more than one such header or spells its one header another way, since the
- *     server reads the name in any letter case and keeps the last, so it could load a component
- *     this script never read; or one that names them only after its first blank line, where the
- *     server does not look;
+ *   - a `Nuxeo-Component` that names no packaged file in `bundle/`; a manifest whose main section,
+ *     above its first blank line, names its components in more than one such header or spells
+ *     its one header another way, since the server reads that section alone, matches the name in
+ *     any letter case and keeps the last, so it could load a component this script never read; or
+ *     one that names them only below that line, where the server does not look. A header in a
+ *     later `Name:` section is that entry's attribute, ignored here as on the server;
  *   - a component contributing configuration without
  *     `<require>org.nuxeo.agentic.ui.config.defaults</require>`, without which this package's
  *     fragments could register before Satori's own and lose to them;
