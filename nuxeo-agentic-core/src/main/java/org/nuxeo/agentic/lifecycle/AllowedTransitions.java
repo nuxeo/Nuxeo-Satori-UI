@@ -36,9 +36,10 @@ import org.nuxeo.ecm.core.lifecycle.LifeCycleTransition;
  * </ol>
  *
  * <p>Each permission is asked of the session, so the security policies answer as they do for the
- * operation: a document locked by someone else, or a record under retention, denies
- * {@code WriteLifeCycle} here as it does there. An administrator passes every check, as
- * {@code checkPermission} lets them through before asking the policies.
+ * operation. The default lock policy denies anything {@code Write} includes, {@code WriteLifeCycle}
+ * among them, to everyone but the lock's owner, so a document someone else has locked lists none
+ * here and is refused there. An administrator passes every check, as {@code checkPermission} lets
+ * them through before asking the policies.
  *
  * <p>This decides what the interface offers. It grants nothing: the operation still checks every
  * permission itself when it runs.
