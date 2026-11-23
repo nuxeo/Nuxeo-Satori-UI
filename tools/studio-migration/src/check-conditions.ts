@@ -24,6 +24,7 @@ import {
   layoutPath,
   placed,
   queuePath,
+  searchQueuePaths,
 } from './app-files';
 import { layoutFields, rulesIn } from './app-walk';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -62,9 +63,13 @@ export function checkConditions({ pkg, inventory, conversion }: HarnessInput): C
   const actions = conversion.app['actions.json'];
   const list = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
   const appId = appIdOf(pkg);
-  for (const { contribution, index } of placed(inventory.slotContributions)) {
+  const claimed = new Set<string>();
+  for (const { contribution, overall } of placed(inventory.slotContributions)) {
+    const id = actionIdOf(appId, contribution.name, overall);
+    // The first contribution to an id is the one the converter writes; a later one is reported.
+    if (claimed.has(id)) continue;
+    claimed.add(id);
     if (contribution.conditions.length === 0) continue;
-    const id = actionIdOf(appId, contribution.name, index);
     const action = list.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (action && !('visibleWhen' in (action as Record<string, unknown>)))
       findings.push(
@@ -72,9 +77,10 @@ export function checkConditions({ pkg, inventory, conversion }: HarnessInput): C
       );
   }
 
+  const taken = searchQueuePaths(inventory.searches);
   inventory.dashboard?.cards.forEach((card, index) => {
     const path = queuePath(homeQueueId(card, index));
-    if (card.conditional && conversion.app[path] !== undefined)
+    if (card.conditional && !taken.has(path) && conversion.app[path] !== undefined)
       findings.push(
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
       );

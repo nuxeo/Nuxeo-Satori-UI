@@ -97,23 +97,38 @@ export function homeQueueId(card: Pick<DashboardCard, 'provider'>, index: number
 
 /**
  * The id an action converted from a slot contribution takes: `<app id>.<contribution name>`, or
- * `<app id>.action-<n>` for one with no name, `<n>` its place in its file from 1.
+ * `<app id>.action-<n>` for one with no name, `<n>` its place among the package's contributions.
  */
 export function actionIdOf(appId: string, contribution: string, index: number): string {
   const name = contribution || `action-${index}`;
   return `${appId}.${name.replace(/[^A-Za-z0-9._-]+/g, '-')}`.slice(0, 64);
 }
 
-/** Each slot contribution with its place in its file, from 1, as its construct's id counts it. */
-export function placed(
-  contributions: readonly SlotContribution[],
-): { readonly contribution: SlotContribution; readonly index: number }[] {
+/**
+ * Each slot contribution with its place in its file, from 1, as its construct's id counts it, and
+ * its place in the package, which names an action for one with no name: two files' first unnamed
+ * buttons must not share an id.
+ */
+export function placed(contributions: readonly SlotContribution[]): {
+  readonly contribution: SlotContribution;
+  readonly index: number;
+  readonly overall: number;
+}[] {
   const byFile = new Map<string, number>();
-  return contributions.map((contribution) => {
+  return contributions.map((contribution, position) => {
     const index = (byFile.get(contribution.path) ?? 0) + 1;
     byFile.set(contribution.path, index);
-    return { contribution, index };
+    return { contribution, index, overall: position + 1 };
   });
+}
+
+/** The queues the search screens take, which a dashboard card's queue may not take too. */
+export function searchQueuePaths(searches: readonly SearchLayout[]): Set<string> {
+  return new Set(
+    searches
+      .filter((search) => search.part === 'results' && search.provider !== null)
+      .map((search) => queuePath(searchQueueId(search))),
+  );
 }
 
 /**

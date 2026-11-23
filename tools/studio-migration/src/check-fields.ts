@@ -10,7 +10,14 @@
  * readiness instead.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { LAYOUT_VERSION, homeQueueId, layoutPath, queuePath, searchQueueId } from './app-files';
+import {
+  LAYOUT_VERSION,
+  homeQueueId,
+  layoutPath,
+  queuePath,
+  searchQueueId,
+  searchQueuePaths,
+} from './app-files';
 import { layoutFields, listColumns, parametersOf, sameJson, widgetOf } from './app-walk';
 import { PANEL_ROWS } from './convert-layouts';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -136,9 +143,11 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
     );
     findings.push(...compareColumns(path, columns, app[path]));
   }
+  // A card whose queue a search screen took has no queue of its own: the converter reports it.
+  const taken = searchQueuePaths(inventory.searches);
   inventory.dashboard?.cards.forEach((card, index) => {
     const path = queuePath(homeQueueId(card, index));
-    if (app[path] === undefined) return;
+    if (app[path] === undefined || taken.has(path)) return;
     findings.push(
       ...compareColumns(
         path,

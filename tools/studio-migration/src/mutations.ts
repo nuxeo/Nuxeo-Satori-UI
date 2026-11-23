@@ -110,7 +110,11 @@ const convertedInto = (conversion: Conversion, path: string): Set<string> =>
       .flatMap((entry) => (entry.property ? [entry.property] : [])),
   );
 
-/** Prefixes of the platform's own schemas, which check 3 cannot hold to the package. */
+/**
+ * Prefixes of the platform's own schemas, which check 3 cannot hold to the package without a
+ * server. A guess: on a conversion whose first converted field outside them is still the
+ * platform's, check 3 stays partial rather than failing, and the tests would show it.
+ */
 const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'picture', 'thumbnail'];
 
 /** The entry as an object, so that a key can be set on it. */

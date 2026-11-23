@@ -20,6 +20,7 @@ import {
   homeQueueId,
   placed,
   queuePageSize,
+  searchQueuePaths,
   queuePath,
   searchQueueId,
 } from './app-files';
@@ -75,8 +76,11 @@ export function checkRequests({
     // Web UI's form sends a predicate's parameter only once someone fills it in.
     list(queuePath(searchQueueId(search)), search.provider, [], openingSort(search), null);
   }
+  // A card whose queue a search screen took is reported by the converter, and has no queue.
+  const taken = searchQueuePaths(inventory.searches);
   inventory.dashboard?.cards.forEach((card, index) => {
     if (!isListCard(card) || card.provider === null) return;
+    if (taken.has(queuePath(homeQueueId(card, index)))) return;
     const parameters = cardParameters(card);
     if ('problem' in parameters) return;
     // Web UI's data table asks a card's provider for its own page size, which a queue keeps when
@@ -97,12 +101,14 @@ export function checkRequests({
   const written = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
   const appId = appIdOf(pkg);
   const expectedActions = new Set<string>();
-  for (const { contribution, index } of placed(inventory.slotContributions)) {
+  for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const slot = slotEntry(catalogue, contribution.slot)?.slot;
     if (slot !== 'toolbar' && slot !== 'bulk-actions') continue;
     const button = buttonAction(contribution);
     if ('problem' in button) continue;
-    const id = actionIdOf(appId, contribution.name, index);
+    const id = actionIdOf(appId, contribution.name, overall);
+    // The first contribution to an id is the one the converter writes; a later one is reported.
+    if (expectedActions.has(id)) continue;
     expectedActions.add(id);
     const action = written.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (!isRecord(action)) {

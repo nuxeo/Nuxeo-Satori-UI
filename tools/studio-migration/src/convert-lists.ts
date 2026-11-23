@@ -242,7 +242,7 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
-    if (card.provider === null) {
+    if (!isListCard(card) || card.provider === null) {
       context.decide(id, { outcome: 'reported', note: 'It holds no list of a page provider' });
       return;
     }

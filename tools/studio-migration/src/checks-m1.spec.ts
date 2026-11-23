@@ -268,7 +268,7 @@ describe('check 6, what people see', () => {
       },
     });
     expect(run(webKey, 6)?.reason).toMatch(
-      /1 label key rests on a catalogue the package does not hold: claim\.amount\.heading \(Web UI's and the app's\)/,
+      /1 label rests on a catalogue or a binding the package does not hold: claim\.amount\.heading \(Web UI's and the app's\)/,
     );
   });
 });
@@ -638,6 +638,39 @@ describe('what the review found', () => {
       outcome: 'reported',
       note: 'Another list is already written as queues/home-1-claims.json',
     });
+    // The card has no queue of its own, so nothing holds it to the search screen's.
+    for (const number of [2, 5, 6, 7]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it("gives two files' unnamed buttons actions of their own, and holds each to its own", () => {
+    const button = (operation: string) =>
+      `<nuxeo-slot-content name="" slot="DOCUMENT_ACTIONS"><template><nuxeo-operation-button operation="${operation}" label="${operation}"></nuxeo-operation-button></template></nuxeo-slot-content>`;
+    const pkg = readStudioPackage(
+      syntheticPackage({
+        bundle: {
+          [`${UI}/nuxeo-Acme-Claims-bundle.html`]: button('Claim.Approve'),
+          [`${UI}/nuxeo-Acme-Extra-bundle.html`]: button('Claim.Reopen'),
+        },
+      }),
+    );
+    const read = inventory(pkg);
+    const allowList = new Set(['Claim.Approve', 'Claim.Reopen']);
+    const input: HarnessInput = {
+      pkg,
+      inventory: read,
+      catalogue,
+      allowList,
+      platformVersion: '0.2.0',
+      conversion: convert(pkg, read, catalogue, { allowList, platformVersion: '0.2.0' }),
+    };
+    const actions = input.conversion.app['actions.json'] as {
+      actions: { id: string; operation: string }[];
+    };
+    expect(actions.actions.map((action) => [action.id, action.operation])).toEqual([
+      ['acme-claims.action-1', 'Claim.Approve'],
+      ['acme-claims.action-2', 'Claim.Reopen'],
+    ]);
+    for (const number of [5, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
   });
 });
 

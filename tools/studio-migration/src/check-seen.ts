@@ -21,6 +21,7 @@ import {
   layoutPath,
   queuePath,
   searchQueueId,
+  searchQueuePaths,
 } from './app-files';
 import { layoutFields, listColumns } from './app-walk';
 import { listed } from './check-model';
@@ -132,10 +133,12 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
         );
     }
   }
+  // A card whose queue a search screen took has no queue of its own: the converter reports it.
+  const taken = searchQueuePaths(inventory.searches);
   inventory.dashboard?.cards.forEach((card, index) => {
     const path = queuePath(homeQueueId(card, index));
     const queue = conversion.app[path];
-    if (queue === undefined) return;
+    if (queue === undefined || taken.has(path)) return;
     compare(`${path}: its name`, web(card.heading), shown(queue, null, null));
     for (const column of listColumns(queue)) {
       const source = card.columns.find((candidate) => candidate.field === column.field);
@@ -154,7 +157,7 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     findings,
     rest:
       unsettled.size > 0
-        ? `${values}. ${unsettled.size} ${unsettled.size === 1 ? 'label key rests' : 'label keys rest'} on a catalogue the package does not hold: ${listed(
+        ? `${values}. ${unsettled.size} ${unsettled.size === 1 ? 'label rests' : 'labels rest'} on a catalogue or a binding the package does not hold: ${listed(
             [...unsettled].map(([key, whose]) => `${key} (${[...whose].join(' and ')})`),
           )}`
         : values,

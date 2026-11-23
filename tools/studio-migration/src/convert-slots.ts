@@ -72,7 +72,7 @@ export function buttonAction(contribution: SlotContribution):
 export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
-  for (const { contribution, index } of placed(inventory.slotContributions)) {
+  for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const id = `slot-contribution:${contribution.path}#${index}`;
     const entry = slotEntry(catalogue, contribution.slot);
     if (!entry) {
@@ -107,7 +107,7 @@ export function convertSlots(context: ConvertContext): void {
         });
         continue;
       }
-      const actionId = actionIdOf(context.appId, contribution.name, index);
+      const actionId = actionIdOf(context.appId, contribution.name, overall);
       if (actions.some((other) => other['id'] === actionId)) {
         context.decide(id, {
           outcome: 'reported',
