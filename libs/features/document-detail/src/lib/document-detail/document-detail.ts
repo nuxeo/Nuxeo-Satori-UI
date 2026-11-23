@@ -101,6 +101,8 @@ import {
   type ClipboardDoc,
   formatRelativeTime,
   permissionRightLabel,
+  allowedTransitions,
+  type NuxeoAllowedTransition,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { SAT_BANNER_IMPORTS } from '@hylandsoftware/satori-ui/banner';
 import { SatGhost } from '@hylandsoftware/satori-ui/ghost';
@@ -142,6 +144,9 @@ import {
   ExportDialogComponent,
   ExportDialogData,
   ExportType,
+  FollowTransitionDialogComponent,
+  type FollowTransitionDialogData,
+  lifecycleLabel,
   ShareDialogComponent,
   ShareDialogData,
   type ExifData,
@@ -694,6 +699,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly lockCreated = signal<string | null>(null);
   /** Token of the lock request that owns `actionInProgress`; navigation invalidates it. */
   private lockRequest = 0;
+  /**
+   * Token of the newest lifecycle transition request, so that an older response cannot clear a
+   * newer one's busy flag. Navigation is caught by comparing the document id instead.
+   */
+  private transitionRequest = 0;
   readonly isFavorite = signal(false);
   readonly isSubscribed = signal(false);
   readonly actionInProgress = signal<string | null>(null);
@@ -1075,6 +1085,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       'app.toolbar.removeFromClipboard': () => this.toggleClipboard(),
       'app.toolbar.export': () => this.exportDocument(),
       'app.toolbar.startProcess': () => this.openStartProcess(),
+      'app.toolbar.followTransition': () => this.openFollowTransition(),
     };
 
     const registration = this.actionRegistry.registerPackaged(
@@ -2864,6 +2875,73 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private releaseLockRequest(): void {
     this.lockRequest += 1;
     if (this.actionInProgress() === 'lock') this.actionInProgress.set(null);
+  }
+
+  /**
+   * Offer the transitions the `allowedTransitions` enricher lists for this document, one button
+   * each, and follow the one the user confirms. The server checks `WriteLifeCycle` and the lifecycle
+   * again when it is followed; the list only decides what is offered.
+   */
+  openFollowTransition(): void {
+    const doc = this.doc();
+    const transitions = allowedTransitions(doc);
+    if (!doc || transitions.length === 0 || this.actionInProgress()) return;
+    const uid = this.docUid;
+    this.dialog
+      .open<FollowTransitionDialogComponent, FollowTransitionDialogData, NuxeoAllowedTransition>(
+        FollowTransitionDialogComponent,
+        { data: { documentTitle: doc.title, state: doc.state ?? null, transitions } },
+      )
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((transition) => {
+        if (transition && uid === this.docUid && !this.actionInProgress()) {
+          this.followTransition(uid, transition);
+        }
+      });
+  }
+
+  /**
+   * Follow `transition`, say what the document is now, and reload it: its state, its permissions
+   * and the transitions it allows next all come from the server again. A refusal reloads it too,
+   * since the usual reason is that the document moved on, or someone locked it, meanwhile.
+   */
+  private followTransition(uid: string, transition: NuxeoAllowedTransition): void {
+    const request = ++this.transitionRequest;
+    this.actionInProgress.set('transition');
+    const settled = (): boolean => {
+      if (request !== this.transitionRequest) return false;
+      if (this.actionInProgress() === 'transition') this.actionInProgress.set(null);
+      return uid === this.docUid;
+    };
+    this.detailService
+      .followTransition(uid, transition.name)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (updated) => {
+          if (!settled()) return;
+          const state = updated?.state || transition.destinationState;
+          this.toast.show(
+            state
+              ? this.translate.instant('document-detail.message.transition-followed', {
+                  state: lifecycleLabel('state', state, (key) => this.translate.instant(key)),
+                })
+              : this.translate.instant('document-detail.message.transition-followed-unknown-state'),
+          );
+          this.loadDocument(uid);
+        },
+        error: (err: unknown) => {
+          if (!settled()) return;
+          this.toast.error(
+            this.translate.instant(
+              (err as { status?: number } | null)?.status === 403
+                ? 'document-detail.message.transition-not-allowed'
+                : 'document-detail.message.failed-to-follow-transition',
+            ),
+          );
+          this.loadDocument(uid);
+        },
+      });
   }
 
   private lockRefusalKey(err: unknown, wasLocked: boolean): string {

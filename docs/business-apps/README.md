@@ -68,7 +68,8 @@ Checked first-hand; build on them rather than re-checking.
   - each workflow step's variables;
   - audit, comments and bulk actions;
   - ranged downloads.
-- Nothing lists a document's allowed lifecycle transitions.
+- Nothing in Nuxeo lists a document's allowed lifecycle transitions. `nuxeo-agentic-core`'s
+  `allowedTransitions` enricher does, for the document page's Change state action.
 - The platform has picture, video and audio types, views, renditions and conversions.
 - `Document.AddPermission` grants time-limited access, including to an outside person by email.
 - Retention, legal hold and template rendering are add-ons that the checked servers do not have.

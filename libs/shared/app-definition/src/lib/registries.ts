@@ -192,6 +192,7 @@ export const APP_RULES: Readonly<Record<string, Signature>> = Object.fromEntries
     'app.rules.canAddChildren',
     'app.rules.canManagePermissions',
     'app.rules.canPublish',
+    'app.rules.canFollowTransition',
     'app.rules.hasDocument',
     'app.rules.isType',
     'app.rules.hasFacet',

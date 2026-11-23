@@ -465,12 +465,12 @@ With `page` (`{ currentPageIndex?, sort? }`), `Root` returns that one page in th
 
 **Request Headers:**
 
-| Header               | Value                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------------- |
-| `Authorization`      | `Basic <credentials>` (added by interceptor)                                                            |
-| `properties`         | `*` (all schemas)                                                                                       |
-| `enrichers.document` | `acls,permissions,renditions,favorites,subscribedNotifications,collections,preview,thumbnail`           |
-| `fetch-document`     | `lock` — without it a locked document arrives with no `lockOwner` / `lockCreated` and reads as unlocked |
+| Header               | Value                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `Authorization`      | `Basic <credentials>` (added by interceptor)                                                                     |
+| `properties`         | `*` (all schemas)                                                                                                |
+| `enrichers.document` | `acls,permissions,renditions,favorites,subscribedNotifications,collections,preview,thumbnail,allowedTransitions` |
+| `fetch-document`     | `lock` — without it a locked document arrives with no `lockOwner` / `lockCreated` and reads as unlocked          |
 
 **Request Payload:** None (GET request).
 
@@ -1001,6 +1001,47 @@ toolbar's Publish (`app.rules.canPublish`).
 - **Collection detail page** — Lock/Unlock icon button in the header
 
 ---
+
+## 16a. Document Actions — Follow a Lifecycle Transition
+
+| Field           | Value                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
+| **Method**      | `followTransition(uid, transition)`                                                              |
+| **HTTP Method** | `POST`                                                                                           |
+| **Endpoint**    | `/nuxeo/api/v1/id/{uid}/@op/Document.FollowLifecycleTransition`                                  |
+
+**Request Payload:**
+
+```json
+{ "params": { "value": "approve" }, "context": {} }
+```
+
+**Response (200 OK):** The `NuxeoDocument` in its new `state`. The page reloads it with
+`getFullDocument` anyway, for the transitions it allows next.
+
+**Which transitions to offer:** the `allowedTransitions` document enricher, which
+`nuxeo-agentic-core` adds (`org.nuxeo.agentic.lifecycle.AllowedTransitionsJsonEnricher`) and
+`getFullDocument` asks for. It writes
+
+```json
+"contextParameters": {
+  "allowedTransitions": [{ "name": "approve", "destinationState": "approved" }]
+}
+```
+
+in the lifecycle's order: what the document's lifecycle allows from its current state, kept only
+when the operation would succeed for this user. Nuxeo 2025's `followTransition` checks
+`WriteLifeCycle` and, on a checked-in live document, `WriteProperties` for the check-out it does
+first; listing the transitions needs `ReadLifeCycle`. The enricher asks each of the session, so
+security policies such as the lock policy answer as they do for the operation, and lets an
+administrator through as `checkPermission` does. A server without the bundle ignores the name, and
+`allowedTransitions(doc)` then reads none. Nuxeo has no operation or enricher of its own that lists
+them.
+
+**Errors:** `403` when the user may not change the lifecycle (the page says so); anything else,
+such as a transition the document's state no longer allows, is reported as the state not changing.
+The page reloads after either.
 
 ## 17. Document Actions — Add to / Remove from Favorites
 

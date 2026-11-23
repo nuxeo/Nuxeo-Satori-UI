@@ -1,5 +1,6 @@
 import {
   canAddChildren,
+  canFollowAnyTransition,
   canManageDocumentPermissions,
   canPublishDocument,
   canRemoveDocument,
@@ -60,6 +61,13 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
    * True on a version — Web UI publishes one as it is.
    */
   'app.rules.canPublish': (context) => canPublishDocument(context.document),
+  /**
+   * The user may follow at least one lifecycle transition on the focused document now, as
+   * nuxeo-agentic-core's `allowedTransitions` enricher lists them: what the lifecycle allows from
+   * the current state, kept only when the server would follow it for this user. False on a
+   * document fetched without the enricher, or from a server without the bundle.
+   */
+  'app.rules.canFollowTransition': (context) => canFollowAnyTransition(context.document),
   'app.rules.hasDocument': (context) => context.document !== null,
   /**
    * The focused document's type is one of `parameters` — `["Case", "Claim"]`. Exact match, as

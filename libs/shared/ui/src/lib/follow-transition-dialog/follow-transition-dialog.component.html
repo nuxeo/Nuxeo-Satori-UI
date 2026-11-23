@@ -1,0 +1,60 @@
+@let picked = chosen();
+@if (picked === null) {
+  <h2 mat-dialog-title>{{ 'shared-ui.follow-transition-dialog.title' | translate }}</h2>
+  <mat-dialog-content>
+    @if (data.state) {
+      <p class="lib-follow-transition__state">
+        {{
+          'shared-ui.follow-transition-dialog.current-state'
+            | translate: { state: stateLabel(data.state) }
+        }}
+      </p>
+    }
+    <ul class="lib-follow-transition__choices">
+      @for (transition of data.transitions; track transition.name) {
+        <li>
+          <button
+            type="button"
+            mat-stroked-button
+            class="lib-follow-transition__choice"
+            [attr.data-transition]="transition.name"
+            (click)="choose(transition)"
+          >
+            <span class="lib-follow-transition__name">{{ transitionLabel(transition.name) }}</span>
+            @if (transition.destinationState) {
+              <span class="lib-follow-transition__destination">
+                {{
+                  'shared-ui.follow-transition-dialog.leads-to'
+                    | translate: { state: stateLabel(transition.destinationState) }
+                }}
+              </span>
+            }
+          </button>
+        </li>
+      }
+    </ul>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button type="button" mat-button [mat-dialog-close]="cancelResult">
+      {{ 'shared-ui.follow-transition-dialog.cancel' | translate }}
+    </button>
+  </mat-dialog-actions>
+} @else {
+  <h2 mat-dialog-title>{{ transitionLabel(picked.name) }}</h2>
+  <mat-dialog-content>
+    <p class="lib-follow-transition__question">{{ confirmation(picked) }}</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    @if (canGoBack) {
+      <button type="button" mat-button data-follow-transition-back (click)="back()">
+        {{ 'shared-ui.follow-transition-dialog.back' | translate }}
+      </button>
+    }
+    <button type="button" mat-button [mat-dialog-close]="cancelResult">
+      {{ 'shared-ui.follow-transition-dialog.cancel' | translate }}
+    </button>
+    <button type="button" mat-flat-button data-follow-transition-confirm (click)="confirm()">
+      {{ transitionLabel(picked.name) }}
+    </button>
+  </mat-dialog-actions>
+}

@@ -22,6 +22,7 @@
     "toolbar-edit": "Edit",
     "toolbar-edit-properties": "Edit properties",
     "toolbar-export": "Export",
+    "toolbar-follow-transition": "Change state",
     "toolbar-lock": "Lock",
     "toolbar-publish": "Publish document",
     "toolbar-remove-from-clipboard": "Remove from Clipboard",
@@ -1368,6 +1369,7 @@
       "failed-to-delete-document": "Failed to delete document.",
       "failed-to-delete-reply": "Failed to delete reply",
       "failed-to-download-document": "Failed to download document",
+      "failed-to-follow-transition": "The document's state could not be changed.",
       "failed-to-load-document": "Failed to load document.",
       "failed-to-load-preview": "Failed to load preview",
       "failed-to-permanently-delete-document": "Failed to permanently delete document",
@@ -1410,6 +1412,9 @@
       "similar-doc-search-failed": "Similar doc search failed",
       "summary-generation-failed": "Summary generation failed",
       "tag-suggestion-failed": "Tag suggestion failed",
+      "transition-followed": "The document is now {{ state }}.",
+      "transition-followed-unknown-state": "The document's state has changed.",
+      "transition-not-allowed": "You may not change this document's state.",
       "uploaded-image-has-no-display-url-yet": "Uploaded image has no display URL yet",
       "workflow-abandoned": "Workflow abandoned.",
       "workflow-started-successfully": "Workflow started successfully"
@@ -1645,6 +1650,18 @@
     "error": "Error",
     "submitted": "Submitted",
     "unknown": "Unknown"
+  },
+  "lifecycle": {
+    "state": {
+      "approved": "Approved",
+      "obsolete": "Obsolete",
+      "project": "Project"
+    },
+    "transition": {
+      "approve": "Approve",
+      "backToProject": "Back to project",
+      "obsolete": "Mark as obsolete"
+    }
   },
   "login": {
     "panel-label": "Log in",
@@ -2970,6 +2987,16 @@
     "export-dialog": {
       "cancel": "Cancel",
       "export": "Export"
+    },
+    "follow-transition-dialog": {
+      "back": "Back",
+      "cancel": "Cancel",
+      "confirm-message": "“{{ title }}” moves from {{ from }} to {{ to }}.",
+      "confirm-message-to": "“{{ title }}” moves to {{ to }}.",
+      "confirm-message-unknown": "“{{ title }}” follows “{{ transition }}”.",
+      "current-state": "Current state: {{ state }}",
+      "leads-to": "Moves to {{ state }}",
+      "title": "Change state"
     },
     "message": {
       "failed-to-copy-link": "Failed to copy link",
