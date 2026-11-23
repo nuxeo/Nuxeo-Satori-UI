@@ -24,6 +24,7 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -597,6 +598,319 @@ expectBuilt(
   },
   (scratch) => ['--allow-list', join(scratch, 'allow-list.json')],
 );
+
+// Versions (package-pipeline.md, section 8): given the package as it was, `--previous`, the
+// version must move as far as what changed needs. Each control builds the previous package and this
+// one from the demo, each at a version of its own, and changes one of them in one way. JSON is
+// edited as JSON, so the controls hold whatever the demo's files say.
+const NEXT_MINOR = VERSION.replace(
+  /^(\d+)\.(\d+)\.\d+.*$/,
+  (_, major, minor) => `${major}.${Number(minor) + 1}.0`,
+);
+const APP = 'bundle/agentic-ui-config/app.json';
+const LABELS = 'bundle/agentic-ui-config/labels/en.json';
+const ACTIONS = 'bundle/agentic-ui-config/actions.json';
+
+/** `directory`'s package at `version`, in the three places that carry it. */
+function setVersion(directory, version) {
+  for (const [file, from, to] of [
+    [APP, `"packageVersion": "${VERSION}"`, `"packageVersion": "${version}"`],
+    ['package/package.xml', `version="${VERSION}">`, `version="${version}">`],
+    ['bundle/META-INF/MANIFEST.MF', `Bundle-Version: ${VERSION}`, `Bundle-Version: ${version}`],
+  ]) {
+    const path = join(directory, file);
+    const text = readFileSync(path, 'utf8');
+    if (!text.includes(from)) throw new Error(`the control cannot set the version in ${file}`);
+    writeFileSync(path, text.replace(from, to));
+  }
+}
+
+/** A JSON file of `directory`, changed by `change` and written back. */
+function jsonEdit(directory, file, change) {
+  const path = join(directory, file);
+  const content = JSON.parse(readFileSync(path, 'utf8'));
+  change(content);
+  writeFileSync(path, `${JSON.stringify(content, null, 2)}\n`);
+}
+
+/** The first queue file of `directory`'s package, relative to it. */
+function firstQueue(directory) {
+  const queues = join(directory, 'bundle/agentic-ui-config/queues');
+  const name = readdirSync(queues).find((file) => file.endsWith('.json'));
+  if (!name) throw new Error('the demo has no queue for the control to move');
+  return `bundle/agentic-ui-config/queues/${name}`;
+}
+
+/** The first schema file of `directory`'s bundle, relative to it: outside the app definition. */
+function firstSchema(directory) {
+  const schemas = join(directory, 'bundle/schemas');
+  const name = readdirSync(schemas).find((file) => file.endsWith('.xsd'));
+  if (!name) throw new Error('the demo has no schema for the control to change');
+  return `bundle/schemas/${name}`;
+}
+
+const removeQueue = (directory) => rmSync(join(directory, firstQueue(directory)));
+const changeLabelText = (directory) =>
+  jsonEdit(directory, LABELS, (labels) => {
+    const [key] = Object.keys(labels.labels);
+    labels.labels[key] = `${labels.labels[key]} (changed)`;
+  });
+
+/**
+ * The previous package at `from`, changed by `before`, and this one at `to`, changed by `after`,
+ * run with `--previous`. `refused`: exit 1 at step 3 for that reason, no zip and no changelog.
+ * Otherwise built, with a changelog holding each of `changelog`.
+ */
+function expectVersion(
+  what,
+  { from, to, before = () => undefined, after = () => undefined },
+  expected,
+) {
+  if (expected.refused) negative++;
+  else positive++;
+  const scratch = mkdtempSync(join(tmpdir(), 'app-package-version-'));
+  const previous = join(scratch, 'previous');
+  const directory = join(scratch, 'payers-claims-demo');
+  const out = join(scratch, 'out');
+  try {
+    for (const [copy, version, change] of [
+      [previous, from, before],
+      [directory, to, after],
+    ]) {
+      cpSync(DEMO, copy, { recursive: true, filter: (path) => basename(path) !== 'dist' });
+      setVersion(copy, version);
+      change(copy);
+    }
+    const zip = join(out, `payers-claims-demo-${to}.zip`);
+    const changes = join(out, `payers-claims-demo-${to}.changes.md`);
+    // An earlier run's changelog for the same version: a refused run must not leave it, and a
+    // built one must replace it.
+    mkdirSync(out, { recursive: true });
+    writeFileSync(changes, 'an earlier run left this');
+    const { status, output } = run(directory, out, ['--previous', previous]);
+    const problems = [];
+    if (expected.refused) {
+      if (status !== 1) problems.push(`exit ${status}, not 1`);
+      if (!output.includes('step 3 refused it')) problems.push('not refused at step 3');
+      if (!output.includes(expected.refused)) problems.push(`no "${expected.refused}"`);
+      if (existsSync(zip)) problems.push('a zip is left');
+      if (existsSync(changes)) problems.push('a changelog is left');
+    } else {
+      if (status !== 0) problems.push(`exit ${status}, not 0`);
+      if (!existsSync(zip)) problems.push('no zip');
+      const text = existsSync(changes) ? readFileSync(changes, 'utf8') : '';
+      if (!text.startsWith(`# payers-claims-demo ${to}\n`))
+        problems.push('no changelog, under its heading');
+      for (const line of expected.changelog)
+        if (!text.includes(line)) problems.push(`the changelog has no "${line}"`);
+    }
+    if (problems.length > 0)
+      failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+expectVersion(
+  'content changed, and the version did not move',
+  { from: VERSION, to: VERSION, after: changeLabelText },
+  {
+    refused: `and the version is still ${VERSION}. Raise it to ${OTHER} at least, a patch version`,
+  },
+);
+expectVersion(
+  'a breaking change below 1.0.0, raising only the patch',
+  { from: VERSION, to: OTHER, after: removeQueue },
+  { refused: 'need a minor version (below 1.0.0, a breaking change raises the minor' },
+);
+expectVersion(
+  'an addition from 1.0.0, raising only the patch',
+  {
+    from: '1.0.0',
+    to: '1.0.1',
+    after: (directory) =>
+      cpSync(
+        join(directory, firstQueue(directory)),
+        join(directory, 'bundle/agentic-ui-config/queues/added-queue.json'),
+      ),
+  },
+  {
+    refused:
+      'need a minor version, and 1.0.1 raises the patch. For one: The queue added-queue is added.',
+  },
+);
+expectVersion(
+  'a label key removed from 1.0.0, raising only the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) =>
+      jsonEdit(directory, LABELS, (labels) => (labels.labels['payers.only.before'] = 'Gone')),
+  },
+  {
+    refused:
+      'need a major version, and 1.1.0 raises the minor. For one: The label payers.only.before, in en, is removed',
+  },
+);
+expectVersion(
+  'an action removed below 1.0.0, raising only the patch',
+  {
+    from: VERSION,
+    to: OTHER,
+    before: (directory) =>
+      jsonEdit(directory, ACTIONS, (file) =>
+        file.actions.push({ ...file.actions[0], id: 'payers.claim.reopen' }),
+      ),
+  },
+  { refused: 'For one: The action payers.claim.reopen is removed' },
+);
+expectVersion(
+  "the app's address changed from 1.0.0, raising only the minor",
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.address = 'claims-desk')),
+  },
+  {
+    refused:
+      "need a major version, and 1.1.0 raises the minor. For one: The app's address is claims-desk",
+  },
+);
+expectVersion(
+  'a group losing the app from 1.0.0, raising only the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) => jsonEdit(directory, APP, (app) => app.groups.push('claims-adjusters')),
+  },
+  { refused: 'For one: The group claims-adjusters no longer has the app.' },
+);
+expectVersion(
+  'a platform range that leaves out a version it admitted, from 1.0.0, raising only the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <1.0.0')),
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <0.9.0')),
+  },
+  { refused: 'a server on a version the old range admitted cannot run this one' },
+);
+expectVersion(
+  'a change outside the app definition from 1.0.0, raising only the patch',
+  {
+    from: '1.0.0',
+    to: '1.0.1',
+    after: (directory) => {
+      const schema = join(directory, firstSchema(directory));
+      writeFileSync(schema, `${readFileSync(schema, 'utf8')}<!-- changed -->\n`);
+    },
+  },
+  { refused: 'need a minor version, and 1.0.1 raises the patch' },
+);
+expectVersion(
+  'a version lower than the previous one',
+  { from: OTHER, to: VERSION },
+  { refused: `${VERSION} is lower than the previous version, ${OTHER}` },
+);
+expectVersion(
+  "app.json's id changed",
+  {
+    from: VERSION,
+    to: NEXT_MINOR,
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.id = 'payers-claims-two')),
+  },
+  { refused: "app.json's id is payers-claims-two, and was payers-claims. An app keeps its id" },
+);
+expectVersion(
+  "the package's name changed",
+  {
+    from: VERSION,
+    to: NEXT_MINOR,
+    before: (directory) => {
+      const descriptor = join(directory, 'package/package.xml');
+      writeFileSync(
+        descriptor,
+        readFileSync(descriptor, 'utf8').replace(
+          'name="payers-claims-demo"',
+          'name="payers-claims-old"',
+        ),
+      );
+    },
+  },
+  { refused: 'the previous package is payers-claims-old, and this one is payers-claims-demo' },
+);
+
+expectVersion(
+  'unchanged, at the same version',
+  { from: VERSION, to: VERSION },
+  { changelog: [`No change since ${VERSION}.`] },
+);
+expectVersion(
+  'only the version raised, in its three places',
+  { from: VERSION, to: OTHER },
+  { changelog: [`No change since ${VERSION}; the version moved to ${OTHER} all the same.`] },
+);
+expectVersion(
+  'a change, raising the patch',
+  { from: VERSION, to: OTHER, after: changeLabelText },
+  {
+    changelog: [
+      `Since ${VERSION}: 1 change, which needs a patch version. ${OTHER} raises the patch.`,
+      '## Changed',
+      ', in en, changed.',
+    ],
+  },
+);
+expectVersion(
+  'a breaking change below 1.0.0, raising the minor',
+  { from: VERSION, to: NEXT_MINOR, after: removeQueue },
+  {
+    changelog: [
+      '## Breaking',
+      'is removed: a link to it, a menu entry or a home card naming it stops working.',
+    ],
+  },
+);
+expectVersion(
+  'a change outside the app definition from 1.0.0, raising the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    after: (directory) => {
+      const schema = join(directory, firstSchema(directory));
+      writeFileSync(schema, `${readFileSync(schema, 'utf8')}<!-- changed -->\n`);
+    },
+  },
+  { changelog: ['## To judge', 'changed.', 'which a person decides'] },
+);
+expectVersion(
+  'a platform range that admits more, from 1.0.0, raising the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <0.9.0')),
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <1.0.0')),
+  },
+  { changelog: ['## Added', 'it admits more platform versions.'] },
+);
+expectVersion(
+  'a breaking change in a later prerelease of the same version',
+  { from: '1.0.0-rc.1', to: '1.0.0-rc.2', after: removeQueue },
+  { changelog: ['## Breaking', '1.0.0-rc.2 is a later prerelease of the same version.'] },
+);
+
+// The previous package is the operator's input: one that is not there stops the run, exit 2.
+{
+  negative++;
+  const { scratch, directory, out } = packageWith();
+  try {
+    const { status, output } = run(directory, out, ['--previous', join(scratch, 'not-there')]);
+    if (status !== 2 || !output.includes('is not a folder'))
+      failures.push(`a --previous that is not there exits ${status}, not 2\n${output}`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 // The content model, given as a file (package-pipeline.md, section 4). The demo's is beside it,
 // and these controls copy the package with it, so each is held to the model it carries.

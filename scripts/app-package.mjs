@@ -7,9 +7,9 @@
  *
  *   node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
- *     [--model <file> | --model-server <address>]
+ *     [--model <file> | --model-server <address>] [--previous <package directory>]
  *
- * First it removes the zip and checksum an earlier run left for the package's name and version, so
+ * First it removes the zip, checksum and changelog an earlier run left for the package's name and version, so
  * that a refused package leaves nothing installable behind; a package.xml that is a symbolic link is
  * not read for them. Then, in order, each step stopping the run when it fails:
  *   1. nothing in the package is a symbolic link, so no step reads a file from elsewhere, and the
@@ -23,10 +23,13 @@
  *      names a folder or a hard link is refused before it is read (a missing one is the builder's
  *      to refuse, at step 4);
  *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
- *      `app-package/<name>/<version>` for this package;
+ *      `app-package/<name>/<version>` for this package; given the package as it was before,
+ *      `--previous`, the version moved as far as what changed needs (the validator's `changes`,
+ *      `libs/shared/app-definition/src/lib/changes.ts`), and the package's name did not change;
  *   4. `build.mjs` writes the zip, refusing what the server would;
  *   5. `verify-package-zip.mjs` finds a well-formed Nuxeo Package;
- *   6. the zip's SHA-256 goes beside it, as `<zip>.sha256`, in the form `sha256sum -c` reads.
+ *   6. the zip's SHA-256 goes beside it, as `<zip>.sha256`, in the form `sha256sum -c` reads, and,
+ *      given `--previous`, what changed since, as `<name>-<version>.changes.md`.
  *
  * Node 24 and the system's `unzip`, which reads the zip back at step 5, run all of it: no install
  * and no credential, so that a package's checks need nothing a customer's repository does not have.
@@ -87,7 +90,7 @@ const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
-  ' [--model <file> | --model-server <address>]';
+  ' [--model <file> | --model-server <address>] [--previous <package directory>]';
 // `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 /** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
@@ -101,6 +104,7 @@ const VALUED = [
   '--platform',
   '--model',
   '--model-server',
+  '--previous',
 ];
 
 function parse(argv) {
@@ -176,6 +180,7 @@ function run({
   platform,
   model,
   unread,
+  previous,
 }) {
   const near = relative(process.cwd(), resolve(directory));
   const shown = near === '' ? '.' : near.startsWith('..') ? resolve(directory) : near;
@@ -215,8 +220,9 @@ function run({
   const version = descriptor === null ? null : attribute(descriptor, 'package', 'version');
   const output = resolve(out ?? join(directory, 'dist'));
   if (FILE_NAME.test(name ?? '') && FILE_NAME.test(version ?? '')) {
-    const previous = join(output, `${name}-${version}.zip`);
-    for (const left of [previous, `${previous}.sha256`]) rmSync(left, { force: true });
+    const earlier = join(output, `${name}-${version}.zip`);
+    for (const left of [earlier, `${earlier}.sha256`, changesFile(output, name, version)])
+      rmSync(left, { force: true });
   }
   // A content model `--model-server` could not read.
   if (unread !== undefined) {
@@ -286,6 +292,18 @@ function run({
       3,
       `the tag ${tag} is not app-package/${name}/${version}, this package as it is.`,
     );
+  let changelog = null;
+  if (previous !== undefined) {
+    const compared = sinceThePrevious(previous, directory, name);
+    if (typeof compared === 'number') return compared;
+    if (compared.refused !== null) {
+      for (const change of compared.changes) console.error(`  - ${change.level}: ${change.what}`);
+      return refuse(3, compared.refused);
+    }
+    changelog = compared.changelog;
+    // The changelog's first sentence: how many changes, what they need, what was raised.
+    process.stdout.write(`${compared.changelog.split('\n')[0]}\n`);
+  }
 
   // 4. The zip, from version 1's builder, which checks the component XML the way the server does.
   const build = spawnSync(process.execPath, [builder, '--out', output], {
@@ -309,14 +327,75 @@ function run({
     return refuse(5, `${basename(zip)} is not a well-formed Nuxeo Package, and is removed.`);
   }
 
-  // 6. Its checksum, which the publishing job checks before it signs anything.
+  // 6. Its checksum, which the publishing job checks before it signs anything, and what changed.
   const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
   writeFileSync(`${zip}.sha256`, `${digest}  ${basename(zip)}\n`);
+  if (changelog !== null)
+    writeFileSync(changesFile(output, name, version), `# ${name} ${version}\n\n${changelog}`);
   const where = relative(process.cwd(), zip);
   process.stdout.write(
     `${name} ${version}: checked, built and verified: ${where.startsWith('..') ? zip : where}, sha256 ${digest}\n`,
   );
   return 0;
+}
+
+/** Where the changelog goes, beside the zip. */
+function changesFile(output, name, version) {
+  return join(output, `${name}-${version}.changes.md`);
+}
+
+/**
+ * The package against the one it was before (`--previous`): the validator's judgement of the
+ * version, as JSON, or the exit code when the comparison could not be made. The previous package is
+ * the operator's input, such as the base branch's copy; one with another name is another package,
+ * and is refused.
+ */
+function sinceThePrevious(previous, directory, name) {
+  if (!existsSync(previous) || !lstatSync(previous).isDirectory()) {
+    console.error(`--previous ${previous} is not a folder.\n${USAGE}`);
+    return 2;
+  }
+  const descriptor = join(previous, 'package', 'package.xml');
+  let previousName = null;
+  try {
+    if (!lstatSync(descriptor).isSymbolicLink())
+      previousName = attribute(
+        withoutCdata(withoutCommentsOrInstructions(readFileSync(descriptor, 'utf8'))),
+        'package',
+        'name',
+      );
+  } catch {
+    // Named below.
+  }
+  if (previousName === null) {
+    console.error(
+      `--previous ${previous} has no package/package.xml naming its package (a link is not followed).\n${USAGE}`,
+    );
+    return 2;
+  }
+  if (previousName !== name)
+    return {
+      changes: [],
+      refused:
+        `the previous package is ${previousName}, and this one is ${name}. A package keeps its` +
+        ' name from one version to the next; a new name is a new package, compared with nothing.',
+    };
+  const compared = spawnSync(
+    process.execPath,
+    [VALIDATOR, 'changes', resolve(previous), resolve(directory)],
+    { encoding: 'utf8', env: withoutCredentials(process.env), maxBuffer: OUTPUT_LIMIT },
+  );
+  if (compared.status !== 0 && compared.status !== 1) {
+    process.stderr.write(compared.stderr ?? '');
+    return 2;
+  }
+  try {
+    return JSON.parse(compared.stdout);
+  } catch {
+    process.stderr.write(compared.stdout ?? '');
+    process.stderr.write(compared.stderr ?? '');
+    return 2;
+  }
 }
 
 /**
