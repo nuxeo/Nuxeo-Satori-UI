@@ -503,8 +503,8 @@ Configuration facts worth knowing before you write a spec:
   (NXSAT-643). `storageState` does not work
   because the app uses `sessionStorage`, not `localStorage`.
 
-Accessibility: `@axe-core/playwright` (also untracked), scanning 15 cases across 8 routes against
-WCAG 2.1 A/AA. Separately, `npm run a11y` runs 11 `@angular-eslint/template` a11y rules over 89
+Accessibility: `@axe-core/playwright` (also untracked), scanning against WCAG 2.1 A/AA. The
+2026-11-23 capture made 14 axe scans across 9 routes; quote the counts of the run you cite. Separately, `npm run a11y` runs 11 `@angular-eslint/template` a11y rules over 89
 templates and compares against `tools/a11y/baseline.json` — the verdict is "no _new_ violations",
 not "zero violations".
 
@@ -770,9 +770,9 @@ Browse, search, document detail and administration are built from the `nxs-` com
 library, `libs/shared/satori-components-satori`, registers the same primitive IDs on
 `@hylandsoftware/satori-ui` and is published as `@nuxeo/satori-platform/components-satori`.
 
-| Package                     | Version          | Registry        | Note                                                        |
-| --------------------------- | ---------------- | --------------- | ----------------------------------------------------------- |
-| `@hylandsoftware/satori-ui` | 0.4.2 (`^0.4.2`) | GitHub Packages | Hyland design system; deliberately absent from the template |
+| Package                     | Version         | Registry        | Note                                                        |
+| --------------------------- | --------------- | --------------- | ----------------------------------------------------------- |
+| `@hylandsoftware/satori-ui` | 1.0.0 (`1.0.0`) | GitHub Packages | Hyland design system; deliberately absent from the template |
 
 Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on the Hyland org.
 `.npmrc` maps `@hylandsoftware` to `https://npm.pkg.github.com`.
@@ -916,8 +916,8 @@ Estimated effort: **20 hours** for §17.1 and §17.2 together.
 | ------------------------------- | ---------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Quill**                       | **2.0.3** (`^2.0.3`)   | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                  |
 | **DOMPurify**                   | **3.4.17** (`^3.4.16`) | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                              |
-| **`@ngx-translate/core`**       | **17.0.0**             | App and three features                        | Custom `TranslateLoader`. **Trap:** the manifest-`labels` Layer 0 capability depends on `AppTranslateLoader`; a replacement loader must keep it |
-| **`@hylandsoftware/satori-ui`** | **0.4.2**              | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`. 0.4 renamed its classes with a `Sat` prefix and re-exports the old names                |
+| **`@ngx-translate/core`**       | **18.0.0**             | App and three features                        | Custom `TranslateLoader`. **Trap:** the manifest-`labels` Layer 0 capability depends on `AppTranslateLoader`; a replacement loader must keep it |
+| **`@hylandsoftware/satori-ui`** | **1.0.0**              | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`. 1.0.0 removed the old unprefixed and `…Component` names (DS-1850, DS-2107)              |
 | **`date-fns`**                  | **2.30.0** (`^2.30.0`) | `libs/shared/ui`'s Satori date adapter        | Locales and parsing behind `provideSatoriDateAdapter`, with `@angular/material-date-fns-adapter`.                                               |
 
 - [Quill](https://quilljs.com/docs/quickstart)
@@ -1238,8 +1238,8 @@ before relying on it.
 | `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)   |
 | `zone.js`                                                                                  | 0.16.3 (`~0.16.3`) |
 | `tslib`                                                                                    | `^2.3.0`           |
-| `@hylandsoftware/satori-ui`                                                                | 0.4.2 (`^0.4.2`)   |
-| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`) |
+| `@hylandsoftware/satori-ui`                                                                | 1.0.0 (`1.0.0`)    |
+| `@ngx-translate/core`                                                                      | 18.0.0 (`18.0.0`)  |
 | `quill`                                                                                    | 2.0.3 (`^2.0.3`)   |
 | `dompurify`                                                                                | 3.4.17 (`^3.4.16`) |
 | `date-fns`                                                                                 | 2.30.0 (`^2.30.0`) |

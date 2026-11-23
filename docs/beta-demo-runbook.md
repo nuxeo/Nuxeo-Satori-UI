@@ -203,9 +203,9 @@ The interesting engineering detail, and it is worth reading aloud from
 
 ### The support boundary
 
-|                     |                                                                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer depends on | `@nuxeo/satori-platform` + peers: Angular 22.2, Material/CDK 22.2, `@hylandsoftware/satori-ui ^0.4`, `@ngx-translate/core ^17`, `rxjs ^7.8` |
+|                     |                                                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer depends on | `@nuxeo/satori-platform` + peers: Angular 22.2, Material/CDK 22.2, `@hylandsoftware/satori-ui ^1.0.0` (optional), `@ngx-translate/core ^18`, `rxjs ^7.8` |
 
 ---
 

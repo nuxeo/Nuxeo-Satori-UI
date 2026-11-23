@@ -1,0 +1,73 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "member",
+      "labelKey": "payers.member.card",
+      "fields": [
+        {
+          "id": "name",
+          "computed": {
+            "type": "core.template",
+            "parameters": ["{member:firstName} {member:lastName}"]
+          },
+          "labelKey": "payers.member.name"
+        },
+        {
+          "id": "age",
+          "widget": "number",
+          "labelKey": "payers.member.age",
+          "computed": { "type": "core.age", "parameters": [{ "field": "member:birthDate" }] }
+        },
+        {
+          "field": "member:address",
+          "widget": "address",
+          "parameters": {
+            "parts": { "street": "street", "city": "city", "postcode": "zip", "country": "country" }
+          }
+        },
+        { "field": "member:phone", "widget": "phone" },
+        {
+          "field": "member:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": { "active": "positive", "lapsed": "warning", "terminated": "negative" }
+          }
+        },
+        {
+          "field": "member:ssn",
+          "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["member-services"] }
+        }
+      ]
+    },
+    {
+      "id": "claims",
+      "labelKey": "payers.member.claims",
+      "related": {
+        "pageProvider": "member_claims",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "claim:number",
+          {
+            "field": "claim:billedAmount",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          "claim:status"
+        ],
+        "sort": [{ "field": "claim:serviceDate", "order": "desc" }]
+      }
+    },
+    {
+      "id": "cases",
+      "labelKey": "payers.member.cases",
+      "related": {
+        "pageProvider": "member_cases",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": ["dc:title", "case:state", { "field": "dc:modified", "widget": "relative-date" }]
+      }
+    }
+  ]
+}

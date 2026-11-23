@@ -6,6 +6,7 @@ import { constructsOf } from './constructs';
 import {
   convert,
   ConversionError,
+  labelsOf,
   readConversion,
   writeConversion,
   type Conversion,
@@ -23,10 +24,19 @@ import {
 const UI = 'web/nuxeo.war/ui';
 const catalogue = loadCatalogue();
 
+/** The deployment's allow-list the tests convert with: the synthetic package's approve button. */
+export const ALLOW_LIST: ReadonlySet<string> = new Set(['Claim.Approve']);
+
 function prepare(options?: SyntheticPackageOptions): HarnessInput {
   const pkg = readStudioPackage(syntheticPackage(options));
   const read = inventory(pkg);
-  return { pkg, inventory: read, catalogue, conversion: convert(pkg, read, catalogue) };
+  return {
+    pkg,
+    inventory: read,
+    catalogue,
+    allowList: ALLOW_LIST,
+    conversion: convert(pkg, read, catalogue, { allowList: ALLOW_LIST }),
+  };
 }
 
 const check = (input: HarnessInput, number: number) =>
@@ -36,24 +46,45 @@ describe('the harness on a sound conversion', () => {
   const input = prepare();
   const result = runHarness(input);
 
-  it('passes the three checks M0 runs', () => {
+  it('passes what runs without a server, and runs the rest in part', () => {
     expect(result.checks.map((c) => [c.number, c.status])).toEqual([
       [1, 'pass'],
-      [2, 'not run'],
-      [3, 'not run'],
+      [2, 'pass'],
+      [3, 'partial'],
       [4, 'pass'],
-      [5, 'not run'],
-      [6, 'not run'],
-      [7, 'not run'],
+      [5, 'partial'],
+      [6, 'partial'],
+      [7, 'partial'],
       [8, 'pass'],
       [9, 'not run'],
-      [10, 'not run'],
+      [10, 'pass'],
     ]);
     expect(result.checks.flatMap((c) => c.findings)).toEqual([]);
   });
 
+  it('says what each partial check did not run, and why', () => {
+    const reason = (number: number) => result.checks.find((c) => c.number === number)?.reason;
+    expect(reason(3)).toBe(
+      "1 name rests on the platform's own model, which only the migration server can confirm: dc:title",
+    );
+    expect(reason(5)).toBe(
+      '3 conditions wait for M2, whose truth tables run in Web UI on the migration server',
+    );
+    expect(reason(6)).toMatch(/^The values half opens the same records in both apps/);
+    expect(reason(7)).toMatch(/needs the migration server$/);
+  });
+
+  it("runs check 10 only in part when it has the conversion's word for the allow-list alone", () => {
+    const { allowList: _given, ...recorded } = input;
+    expect(runHarness(recorded).checks.find((c) => c.number === 10)).toMatchObject({
+      status: 'partial',
+      findings: [],
+      reason: expect.stringMatching(/the allow-list the conversion recorded/),
+    });
+  });
+
   it('says why each other check did not run, and never counts it as a pass', () => {
-    for (const notRun of result.checks.filter((c) => c.status === 'not run')) {
+    for (const notRun of result.checks.filter((c) => c.status !== 'pass')) {
       expect(notRun.reason).toMatch(/\w/);
     }
   });
@@ -61,19 +92,17 @@ describe('the harness on a sound conversion', () => {
   it('is not ready, and says what stands in the way', () => {
     expect(result.ready).toBe(false);
     expect(result.blockers).toEqual([
-      'check 2 did not run',
-      'check 3 did not run',
-      'check 5 did not run',
-      'check 6 did not run',
-      'check 7 did not run',
+      'check 3 ran only in part',
+      'check 5 ran only in part',
+      'check 6 ran only in part',
+      'check 7 ran only in part',
       'check 9 did not run',
-      'check 10 did not run',
       expect.stringMatching(/^\d+ constructs are pending a later phase$/),
       expect.stringMatching(/^\d+ reported items have no owner$/),
     ]);
   });
 
-  it('accounts for every construct, with the outcomes M0 gives them', () => {
+  it('accounts for every construct, with the outcomes M1 gives them', () => {
     const outcomes = Object.fromEntries(
       input.conversion.report.constructs.map((entry) => [
         entry.id.replace(/#.*/, ''),
@@ -86,11 +115,11 @@ describe('the harness on a sound conversion', () => {
       'file:OSGI-INF/extensions.xml': 'server',
       'file:data/i18n/messages.properties': 'reported',
       [`file:${UI}/themes/acme/logo.png`]: 'converted',
-      [`layout:${UI}/document/claim/nuxeo-claim-view-layout.html`]: 'pending',
+      [`layout:${UI}/document/claim/nuxeo-claim-view-layout.html`]: 'converted',
       [`script:${UI}/document/claim/nuxeo-claim-view-layout.html`]: 'generated',
       'translation:data/i18n/messages-fr.json': 'converted',
     });
-    expect(input.conversion.labels.fr['label.claim.amount']).toBe('Montant');
+    expect(labelsOf(input.conversion).fr['label.claim.amount']).toBe('Montant');
     expect(input.conversion.themes.acme.tokens).toEqual({
       '--mat-sys-primary': '#00796b',
       '--mat-sys-on-surface': '#1d1d1f',
@@ -108,8 +137,8 @@ describe('the harness on a sound conversion', () => {
   });
 });
 
-// The negative controls of docs/business-apps/studio-migration.md, section 7, for the checks M0
-// runs: each mutation must make the check it names fail.
+// The negative controls of docs/business-apps/studio-migration.md, section 7, for the checks the
+// harness runs: each mutation must make the check it names fail.
 describe('each deliberate breakage fails the check that guards it', () => {
   for (const mutation of MUTATIONS) {
     it(`${mutation.name}: ${mutation.description}`, () => {
@@ -122,6 +151,22 @@ describe('each deliberate breakage fails the check that guards it', () => {
     });
   }
 
+  it('says so, rather than failing some other way, when there is nothing of its kind to break', () => {
+    const files = syntheticBundleFiles();
+    const bare = prepare({
+      without: Object.keys(files).filter(
+        (path) => path.startsWith(`${UI}/`) || path.startsWith('data/i18n/'),
+      ),
+    });
+    for (const mutation of MUTATIONS) {
+      try {
+        mutation.apply(bare.conversion);
+      } catch (error) {
+        expect([mutation.name, (error as Error).name]).toEqual([mutation.name, 'MutationError']);
+      }
+    }
+  });
+
   it('names what broke', () => {
     const input = prepare();
     const findings = (name: string) => {
@@ -132,7 +177,42 @@ describe('each deliberate breakage fails the check that guards it', () => {
         mutation.caughtBy,
       )?.findings;
     };
-    expect(findings('drop-translation')).toEqual(['labels/en.json: label.claim.number is missing']);
+    expect(findings('drop-translation')).toEqual([
+      'app/labels/en.json: label.claim.number is missing',
+    ]);
+    expect(findings('drop-field')).toEqual([
+      "layouts/Claim/edit.layout.json: cl:number is missing, though Web UI's edit layout of Claim shows it",
+    ]);
+    expect(findings('date-to-text')).toEqual([
+      'layouts/Claim/view.layout.json: cl:incidentDate shows as text, not as date',
+    ]);
+    expect(findings('drop-required')).toEqual([
+      "layouts/Claim/edit.layout.json: cl:number is not required, but Web UI's is required",
+    ]);
+    expect(findings('rename-field')).toEqual([
+      'layouts/Claim/edit.layout.json sections.0.fields.0: the schema claim has no field numberRenamed, so cl:numberRenamed does not exist',
+    ]);
+    expect(findings('slip-free-javascript')).toEqual([
+      'layouts/Claim/edit.layout.json: sections.0.fields.0.visibleWhen holds a rule that no condition of the package gives: M1 converts no condition',
+    ]);
+    expect(findings('widen-to-everyone')).toEqual([
+      'layouts/Claim/metadata.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
+    ]);
+    expect(findings('change-label')).toEqual([
+      'layouts/Claim/edit.layout.json: cl:number: the app shows "Claim number (changed)", where Web UI shows "Claim number"',
+    ]);
+    expect(findings('wrong-page-provider')).toEqual([
+      'queues/claims.json: it asks the page provider "claims_other", where Web UI asks claims',
+    ]);
+    expect(findings('change-parameter')).toEqual([
+      'actions.json: acme-claims.approveClaim sends {"comment":"Approved in Web UIchanged"}, where Web UI sends {"comment":"Approved in Web UI"}',
+    ]);
+    expect(findings('bind-other-operation')).toEqual([
+      'actions.json: acme-claims.approveClaim runs "Document.Delete", where Web UI\'s "approveClaim" runs Claim.Approve',
+    ]);
+    expect(findings('unregistered-widget')).toEqual([
+      'app/layouts/Claim/view.layout.json cards[0].fields[0].widget: the widget "signature" is not registered',
+    ]);
     expect(findings('wrong-primary-token')).toEqual([
       'acme: --mat-sys-primary is not set, though --nuxeo-primary-color sets it to #00796b',
       'acme: --mat-sys-secondary is set, but no property of the theme sets it',
@@ -149,14 +229,14 @@ describe('each deliberate breakage fails the check that guards it', () => {
 describe('check 1, nothing dropped', () => {
   it('fails when the two counts of the package disagree, as when the parser misses something', () => {
     const path = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
-    // A field written inside a script's string: the text holds three, the parser sees two.
+    // A field written inside a script's string: the text holds four, the parser sees three.
     const layout = syntheticBundleFiles()[path].replace(
       '</template>',
       `<script>const row = '<div role="widget"></div>';</script></template>`,
     );
     const findings = check(prepare({ bundle: { [path]: layout } }), 1)?.findings;
     expect(findings).toEqual([
-      `the two counts disagree on ${path}: the parser finds 2 layout-field, the text holds 3`,
+      `the two counts disagree on ${path}: the parser finds 3 layout-field, the text holds 4`,
     ]);
   });
 
@@ -232,7 +312,7 @@ describe('writing and reading a conversion', () => {
     writeConversion(out, input.conversion);
     const back: Conversion = readConversion(out);
     expect(back.report).toEqual(input.conversion.report);
-    expect(back.labels).toEqual(input.conversion.labels);
+    expect(back.app).toEqual(input.conversion.app);
     expect(back.themes).toEqual(input.conversion.themes);
     expect(Object.keys(back.assets)).toEqual(Object.keys(input.conversion.assets));
     expect(
@@ -261,6 +341,13 @@ describe('writing and reading a conversion', () => {
       join(out, 'report.json'),
       JSON.stringify({ format: 'something-else', constructs: [] }),
     );
-    expect(() => readConversion(out)).toThrow(/is not a studio-migration-report\/m0 report/);
+    expect(() => readConversion(out)).toThrow(/is not a studio-migration-report\/m1 report/);
+    writeFileSync(
+      join(out, 'report.json'),
+      JSON.stringify({ format: 'studio-migration-report/m0', constructs: [] }),
+    );
+    expect(() => readConversion(out)).toThrow(
+      /a conversion of an earlier phase is converted again/,
+    );
   });
 });

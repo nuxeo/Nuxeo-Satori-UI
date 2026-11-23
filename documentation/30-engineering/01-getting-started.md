@@ -185,7 +185,8 @@ Credentials come from the environment only — never hardcoded, never in a URL q
 That rule is enforced by `checkHardcodedSecrets` in
 [`scripts/review-guardrails.mjs`](../../scripts/review-guardrails.mjs). For the Nuxeo pair,
 `checkNoNuxeoCredentialDefaults` fails the common shapes of a read defaulted to a literal under
-`scripts/`, `tools/` and `a11y/` — a fallback to another variable or a command is not one.
+`scripts/`, `tools/`, `a11y/` and `business-apps/` — a fallback to another variable or a command
+is not one.
 `NUXEO_USER` and `NUXEO_PASS` have **no default**: a harness, preflight or tool that talks to
 Nuxeo refuses to run without them, and a steps or scenes file that needs no backend opts out with
 `skipHttpCredentials = true`.

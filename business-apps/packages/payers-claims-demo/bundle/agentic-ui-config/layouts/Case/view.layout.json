@@ -1,0 +1,63 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "case",
+      "labelKey": "payers.case.card",
+      "fields": [
+        "case:number",
+        "case:category",
+        {
+          "field": "case:state",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "open": "info",
+              "inReview": "warning",
+              "decided": "positive",
+              "closed": "neutral"
+            }
+          }
+        },
+        {
+          "field": "case:member",
+          "widget": "document-link",
+          "parameters": { "types": ["Member"] }
+        },
+        { "field": "case:claim", "widget": "document-link", "parameters": { "types": ["Claim"] } },
+        { "field": "case:assignee", "widget": "user" }
+      ]
+    },
+    {
+      "id": "dates",
+      "labelKey": "payers.case.dates",
+      "fields": [
+        { "field": "case:received", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "case:due", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysOpen",
+          "widget": "number",
+          "labelKey": "payers.case.daysOpen",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "case:received" }, "today", "days"]
+          },
+          "visibleWhen": {
+            "type": "core.not",
+            "parameters": [
+              { "type": "app.rules.fieldIn", "parameters": [{ "field": "case:state" }, "closed"] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "labelKey": "payers.case.summary",
+      "span": 2,
+      "fields": [{ "field": "case:summary", "widget": "long-text" }]
+    }
+  ]
+}

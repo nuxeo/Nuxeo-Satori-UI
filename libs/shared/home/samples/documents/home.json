@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "label": "Documents",
+  "cards": [
+    {
+      "id": "all",
+      "label": "Documents",
+      "kpi": { "pageProvider": "default_search" }
+    },
+    {
+      "id": "contracts",
+      "label": "Contracts",
+      "kpi": {
+        "pageProvider": "default_search",
+        "aggregate": "dc_nature_agg",
+        "bucket": "contract"
+      },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["members", "administrators"] }
+    },
+    {
+      "id": "by-nature",
+      "label": "By nature",
+      "kpi": { "pageProvider": "default_search", "aggregate": "dc_nature_agg" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["members", "administrators"] }
+    },
+    {
+      "id": "by-author",
+      "label": "By author",
+      "kpi": { "pageProvider": "default_search", "aggregate": "dc_creator_agg" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["administrators"] }
+    }
+  ]
+}

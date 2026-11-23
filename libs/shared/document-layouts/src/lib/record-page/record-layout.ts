@@ -54,6 +54,38 @@ export interface RecordComputedField extends RecordFieldBase {
 
 export type RecordFieldEntry = RecordPropertyField | RecordComputedField;
 
+/** One key of a list's order, as a layout writes it. */
+export interface RecordListSort {
+  /** `<prefix>:<name>`. */
+  readonly field: string;
+  readonly order: 'asc' | 'desc';
+}
+
+/**
+ * A list of records (layout-v2.md, section 7): a page provider's results, one row per record. A
+ * related-records card has one, and so will a queue (app-definition-v2.md, section 4).
+ */
+export interface RecordListEntry {
+  /** A page provider defined on the server, which binds its own parameters. */
+  readonly pageProvider: string;
+  /**
+   * Its parameters in order, as written: literals, or `{ "field" }` for a property of the open
+   * record, read when the page is shown.
+   */
+  readonly parameters: readonly unknown[];
+  /** Property columns only: a computed column is reported and left out. */
+  readonly columns: readonly RecordPropertyField[];
+  /** The order the list opens in; empty, the page provider's own. */
+  readonly sort: readonly RecordListSort[];
+  /** 1 to 100. */
+  readonly pageSize: number;
+  /** Row actions by ID, as the file lists them. */
+  readonly rowActions: readonly string[];
+}
+
+/** What a list shows on a page when its file gives no `pageSize`. */
+export const DEFAULT_LIST_PAGE_SIZE = 10;
+
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
@@ -62,7 +94,10 @@ export interface RecordCardEntry {
   /** How many columns it takes, at least 1 and at most the file's `columns`. */
   readonly span: number;
   readonly visibleWhen: RecordRule | null;
+  /** Its fields; empty for a card of related records. */
   readonly fields: readonly RecordFieldEntry[];
+  /** For a card of related records, the list it shows; `null` for a card of fields. */
+  readonly related: RecordListEntry | null;
 }
 
 export interface RecordTabEntry {
@@ -111,17 +146,19 @@ function labelOf(entry: Json, keys: readonly string[], fallback: string | null):
 }
 
 /**
- * The entry a finding is about: the innermost tab, card or field its path passes through, as
- * `tabs[0].cards[1].fields[2]`. A widget's own lists — a table's `parameters.columns` — are not
- * fields of the file, so a finding inside one names the field whose widget it is. `null` for a
- * finding about the file as a whole.
+ * The entry a finding is about: the innermost tab, card, field, list column or row action its path
+ * passes through, as `tabs[0].cards[1].fields[2]` or `cards[3].related.columns[1]`. A widget's own
+ * lists — a table's `parameters.columns` — are not fields of the file, so a finding inside one
+ * names the field whose widget it is. `null` for a finding about the file as a whole.
  */
 export function entryOf(path: string): string | null {
   let entry: string | null = null;
-  for (const match of path.matchAll(/(?:^|\.)(tabs|cards|fields)\[(\d+)\]/g)) {
+  for (const match of path.matchAll(
+    /(?:^|\.)(tabs|cards|fields|related\.columns|related\.rowActions)\[(\d+)\]/g,
+  )) {
     const end = (match.index ?? 0) + match[0].length;
-    // Only a chain of tabs, cards and fields from the start of the path: `cards[0].related.columns[1]`
-    // stops at the card, and `cards[0].fields[1].parameters.columns[0]` at the field.
+    // Only a chain from the start of the path: `cards[0].fields[1].parameters.columns[0]` stops
+    // at the field, and `cards[0].related.sort[0]` at the card.
     const before = path.slice(0, match.index ?? 0);
     if (entry === null ? before !== '' : before !== entry) break;
     entry = path.slice(0, end);
@@ -253,8 +290,19 @@ function describe(finding: Finding): string {
   return finding.path ? `${finding.path}: ${finding.message}` : finding.message;
 }
 
+/** What this build registers, by ID, that a file may name. */
+export interface RecordLayoutRegistered {
+  /** The rule registry's rules. */
+  readonly rules: readonly string[];
+  /**
+   * The row actions slot's actions. A customer's own, registered in Layer 2 code, is known here
+   * as the platform's are; whether a row offers one is decided when the row is drawn.
+   */
+  readonly rowActions?: readonly string[];
+}
+
 /**
- * Read a version 2 `view` file. `registeredRules` are the rules this build registers, the rule
+ * Read a version 2 `view` file. `registered.rules` are the rules this build registers, the rule
  * registry's IDs, and they decide which rules the file may name:
  *
  * - a customer's own rule, registered in Layer 2 code, is known here though the validator's
@@ -264,13 +312,16 @@ function describe(finding: Finding): string {
  */
 export function readRecordLayout(
   content: Json,
-  registeredRules: readonly string[],
+  registered: RecordLayoutRegistered,
 ): RecordLayoutFile | Invalid {
-  const registered = new Set(registeredRules);
-  const isRuleKnown = (id: string): boolean => registered.has(id);
+  const rules = new Set(registered.rules);
+  const isRuleKnown = (id: string): boolean => rules.has(id);
   const findings = validateLayoutV2(content, {
     mode: 'view',
-    registries: withRegistered(PACKAGED_REGISTRIES, { rules: registeredRules }),
+    registries: withRegistered(PACKAGED_REGISTRIES, {
+      rules: registered.rules,
+      rowActions: registered.rowActions ?? [],
+    }),
   });
   if (!loadable(findings)) {
     const structural = findings.filter((finding) => finding.kind === 'structure');
@@ -380,31 +431,84 @@ export function readRecordLayout(
     ];
   };
 
+  /**
+   * A card's list of related records, with what this build cannot show of it left out: a column
+   * or a row action a finding names, a column whose rule the page cannot answer, a computed
+   * column, a table, and a column that repeats a property. `null`, and the card left out, when no
+   * column is left.
+   */
+  const relatedList = (raw: Json, card: string): RecordListEntry | null => {
+    const place = `${card}.related`;
+    const shown = new Set<string>();
+    const columns = (Array.isArray(raw['columns']) ? raw['columns'] : []).flatMap(
+      (entry: unknown, index): RecordPropertyField[] => {
+        const at = `${place}.columns[${index}]`;
+        return field(entry, at).flatMap((column) => {
+          // A cell is one line of text, so a table is not drawn in one, and no rule of its own
+          // columns is ever evaluated there.
+          if (column.kind !== 'property' || column.widget === 'table') {
+            const what =
+              column.kind === 'property' ? "a table in a list's cell" : 'a computed column';
+            problems.push(
+              `${at} is ${what}, which this build does not draw yet; that column left out`,
+            );
+            return [];
+          }
+          // A column is its property's, for sorting as for drawing: a second one would be the same.
+          if (shown.has(column.xpath)) {
+            problems.push(`${at} shows ${column.xpath} again; that column left out`);
+            return [];
+          }
+          shown.add(column.xpath);
+          return [column];
+        });
+      },
+    );
+    if (columns.length === 0) {
+      problems.push(`${card} has no column this build can show; left out`);
+      return null;
+    }
+    const sort = (Array.isArray(raw['sort']) ? raw['sort'] : [])
+      .filter(isRecord)
+      .map((key): RecordListSort => ({
+        field: String(key['field']),
+        order: key['order'] === 'desc' ? 'desc' : 'asc',
+      }));
+    const rowActions = (Array.isArray(raw['rowActions']) ? raw['rowActions'] : []).filter(
+      (id: unknown, index): id is string =>
+        typeof id === 'string' && !leftOut.has(`${place}.rowActions[${index}]`),
+    );
+    return {
+      pageProvider: String(raw['pageProvider']),
+      parameters: Array.isArray(raw['parameters']) ? raw['parameters'] : [],
+      columns,
+      sort,
+      pageSize: typeof raw['pageSize'] === 'number' ? raw['pageSize'] : DEFAULT_LIST_PAGE_SIZE,
+      rowActions,
+    };
+  };
+
   const cards = (list: unknown, prefix: string): RecordCardEntry[] =>
-    (Array.isArray(list) ? list : []).flatMap((card: unknown, index) => {
+    (Array.isArray(list) ? list : []).flatMap((card: unknown, index): RecordCardEntry[] => {
       const place = `${prefix}cards[${index}]`;
       if (!isRecord(card) || !kept(place, card)) return [];
-      if ('related' in card) {
-        problems.push(
-          `${place} lists related records, which this build does not draw yet; left out`,
-        );
-        return [];
+      const common = {
+        id: String(card['id']),
+        place,
+        label: labelOf(card, [], null),
+        span: typeof card['span'] === 'number' ? card['span'] : 1,
+        visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
+      };
+      if (isRecord(card['related'])) {
+        const related = relatedList(card['related'], place);
+        return related ? [{ ...common, fields: [], related }] : [];
       }
       const fields = (Array.isArray(card['fields']) ? card['fields'] : []).flatMap(
         (entry: unknown, position) => field(entry, `${place}.fields[${position}]`),
       );
       // A heading with nothing under it is not a card, as version 1 leaves out an empty section.
       if (fields.length === 0) return [];
-      return [
-        {
-          id: String(card['id']),
-          place,
-          label: labelOf(card, [], null),
-          span: typeof card['span'] === 'number' ? card['span'] : 1,
-          visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
-          fields,
-        },
-      ];
+      return [{ ...common, fields, related: null }];
     });
 
   const columns = typeof content['columns'] === 'number' ? content['columns'] : 1;

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until the presales Payers model arrives: a fictional case schema, for appeals and
+     grievances. Replace it with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/case"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/case"
+  xmlns:ref="http://www.nuxeo.org/ecm/schemas/core/external-references/">
+
+  <!-- The case number, such as CASE-2041. -->
+  <xs:element name="number" type="xs:string" />
+
+  <!-- The member, stored as its document's id (ecm:uuid), which member_cases is given. -->
+  <xs:element name="member">
+    <xs:simpleType>
+      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />
+    </xs:simpleType>
+  </xs:element>
+  <!-- The claim the case is about, if any, stored as its document's id. -->
+  <xs:element name="claim">
+    <xs:simpleType>
+      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />
+    </xs:simpleType>
+  </xs:element>
+
+  <xs:element name="category">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="appeal" />
+        <xs:enumeration value="grievance" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+
+  <!-- A property, as section 9's cases card shows it, not the lifecycle state. -->
+  <xs:element name="state">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="open" />
+        <xs:enumeration value="inReview" />
+        <xs:enumeration value="decided" />
+        <xs:enumeration value="closed" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+
+  <xs:element name="received" type="xs:date" />
+  <xs:element name="due" type="xs:date" />
+  <!-- The case specialist's user name. -->
+  <xs:element name="assignee" type="xs:string" />
+  <xs:element name="summary" type="xs:string" />
+</xs:schema>

@@ -33,14 +33,14 @@ install and no transpiler.
   - a JSON file out of place, such as `queue/open.json`, is refused rather than passed over;
   - `demo/` and `assets/` are not checked;
   - version 1's `bootstrap.json`, `manifest.json` and `layouts.json` are left alone.
-- **With its package:** each file is checked with its package's `app.json`, `actions.json` and
-  `assets/`, whether or not they were named. One of them that cannot be read is reported, and
-  fails the run.
+- **With its package:** each file is checked with its package's `app.json`, `actions.json`,
+  `assets/` and `queues/`, whether or not they were named. One of them that cannot be read is
+  reported, and fails the run.
 - **What the deployment gives it:**
   - **`--allow-list`:** the operations it allows, `{ "operations": [...] }`. Without one, every
     operation is refused. Decision 3 settles where the real allow-list lives.
   - **`--registered`:** what it registers in code beyond the platform's own, as
-    `{ "rules", "rowActions", "bulkActions", "actions", "modules" }`, each a list of ids. A
+    `{ "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }`, each a list of ids. A
     customer's Layer 2 rules and actions go here: `actions` are those in any other slot, a
     toolbar's for one, which a package's own action may not take the id of. Domain modules go here
     too, until each is built.
@@ -54,15 +54,17 @@ install and no transpiler.
 
 ## What is in it
 
-| File                                  | Validator                | JSON Schema             |
-| ------------------------------------- | ------------------------ | ----------------------- |
-| `layouts/<Type>/<mode>.layout.json`   | `validateLayoutV2`       | `layout-v2.schema.json` |
-| `tasks/<workflow>.<step>.layout.json` | `validateTaskForm`       | `layout-v2.schema.json` |
-| `app.json`                            | `validateApp`            | `app.schema.json`       |
-| `queues/<id>.json`                    | `validateQueue`          | `queue.schema.json`     |
-| `actions.json`                        | `validateActions`        | `actions.schema.json`   |
-| `labels/<locale>.json`                | `validateLabels`         | `labels.schema.json`    |
-| `modules/<module>.json`               | `validateModuleSettings` | `module.schema.json`    |
+| File                                  | Validator                | JSON Schema              |
+| ------------------------------------- | ------------------------ | ------------------------ |
+| `layouts/<Type>/<mode>.layout.json`   | `validateLayoutV2`       | `layout-v2.schema.json`  |
+| `tasks/<workflow>.<step>.layout.json` | `validateTaskForm`       | `layout-v2.schema.json`  |
+| `app.json`                            | `validateApp`            | `app.schema.json`        |
+| `queues/<id>.json`                    | `validateQueue`          | `queue.schema.json`      |
+| `actions.json`                        | `validateActions`        | `actions.schema.json`    |
+| `labels/<locale>.json`                | `validateLabels`         | `labels.schema.json`     |
+| `modules/<module>.json`               | `validateModuleSettings` | `module.schema.json`     |
+| `navigation.json`                     | `validateNavigation`     | `navigation.schema.json` |
+| `home.json`                           | `validateHome`           | `home.schema.json`       |
 
 - **Each validator returns every finding**, with its place and kind, and leaves the verdict to the
   caller. Layout version 2's section 8 wants two:
@@ -70,12 +72,14 @@ install and no transpiler.
   - **`loadable`:** no `structure` finding. This is the app's verdict, from phase 1: it is to
     leave out the card or field that an `unknown` or `parameter` finding names, so that a file
     written for a later platform still shows what this one knows. `app.json` and module settings
-    are stricter (app-definition-v2.md, section 10).
+    are stricter (app-definition-v2.md, section 12).
 - **`placeFile` and `validateFile`** place a path in its package, then check the file with the
   rest of its package:
   - a queue may use the package's own actions;
   - a module's settings need `app.json` to turn the module on;
-  - a branding image must be in `assets/`.
+  - a branding image must be in `assets/`;
+  - a queue the menu or the home names must be in `queues/`, when the caller knows the package's
+    queues. The app reads `home.json` alone, so it does not know them, and does not check them.
 - **The registries** hold everything a file may name, by ID (decision 4: no expression language):
   - 21 widgets, each with its parameters, which are checked, and the property types it takes,
     which are recorded for phase 1 to check;
@@ -83,8 +87,9 @@ install and no transpiler.
   - the rules, row actions and bulk actions the platform registers, version 2's three rules
     among them;
   - the domain modules, of which there are none yet;
-  - `withRegistered`, which adds a customer's own rules and actions, registered in Layer 2 code,
-    and modules.
+  - the pages a menu entry may open, by the ID of the platform's menu entry for each;
+  - `withRegistered`, which adds a customer's own rules, actions and pages, registered in a
+    manifest or in Layer 2 code, and modules.
 - **The JSON Schemas** (draft 2020-12) are for editors, the designer and the agent. Each file may
   name its schema in a `$schema` key. The validators are what refuse a package. They also check
   what a schema expresses poorly:
@@ -104,8 +109,8 @@ install and no transpiler.
 - **The proposals.** Every JSON example in `layout-v2.md` must validate with no finding. So must
   every example in `app-definition-v2.md`, checked together as one package, in the library and
   through the command.
-- **The extension reference.** The rules, row actions and bulk actions must be exactly those
-  `docs/extension-reference.md` documents. They live in `libs/shared/extensions`, which needs
+- **The extension reference.** The rules, row actions, bulk actions and pages must be exactly
+  those `docs/extension-reference.md` documents. They live in `libs/shared/extensions`, which needs
   Angular, so they are listed here too, and this test is what keeps the lists one.
 - **Version 1's image rules.** The copy in `image-source.ts` must be the same text as
   `describeLogoSrcForm` in `libs/shared/app-config/src/lib/bootstrap-config.ts`, so that a
@@ -115,8 +120,8 @@ install and no transpiler.
   - write the validators' patterns;
   - list the same widgets, computations, checks and row actions as the registries.
 
-  The schemas of queues, actions and `app.json` copy the layout schema's definitions they share,
-  so that each stands alone in an editor, and a test keeps the copies equal.
+  The schemas of queues, actions, `app.json`, the menu and the home copy the layout schema's
+  definitions they share, so that each stands alone in an editor, and a test keeps the copies equal.
 
 The test target lists both proposals, the extension reference and `bootstrap-config.ts` among its
 inputs, so an edit to any of them reruns the tests.
@@ -133,7 +138,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 75 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 97 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -182,12 +187,28 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - `null` parameters;
     - a rule id that is not one;
     - a `$schema` that is not a text.
+  - **The menu and the home:**
+    - letting a rule there read a record, in either file, in the checker, or in a customer's own
+      rule, which has no signature, at the top of its parameters or in a list;
+    - leaving a registered rule nested in a customer's own unchecked;
+    - a home schema that lets a card with a figure and a queue go unnamed;
+    - a bucket with no aggregate;
+    - a KPI's parameter from a record;
+    - a figure with no name, a page with no name;
+    - a card with neither a figure nor a queue, an entry with both a queue and a page;
+    - an id twice;
+    - skipping a card's rule;
+    - accepting any page, or one the reference does not list;
+    - `withRegistered` dropping pages;
+    - a home key the schema lacks.
   - **Across files:**
     - ignoring the package's own actions in queues;
     - skipping whether `app.json` turns a module on;
     - skipping the branding images;
     - checking a file without its package;
-    - ignoring which package has an `app.json`, when a path fits two places.
+    - ignoring which package has an `app.json`, when a path fits two places;
+    - passing any queue the home or the menu names;
+    - not placing `home.json`.
   - **The command:**
     - always exiting 0;
     - not reading `assets/`;
@@ -197,7 +218,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - passing when a package file cannot be read;
     - a byte-order mark;
     - passing with nothing checked;
-    - ignoring `--registered`.
+    - ignoring `--registered`;
+    - knowing queues in a package with no `queues/`.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;
@@ -216,12 +238,13 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
   completes it.
 - **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
-  which loads it with `validateLayoutV2` and `loadable`. The other modes, related records and
-  queues follow in phase 1, and actions and task forms in phase 2.
+  which loads it with `validateLayoutV2` and `loadable`, and draws its related records. The other
+  modes and queues follow in phase 1, and actions and task forms in phase 2.
 - **Checking widgets against property types**, which needs the content model: phase 1's model
   reader.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
-  rule that reads a record (app-definition-v2.md, section 11).
-- **The menu and the home**, whose files phase 1 proposes.
+  rule that reads a record (app-definition-v2.md, section 13). The menu and the home refuse a
+  `{ "field" }` value in a rule, and still pass a rule that reads a record.
+- **The menu** is checked and not drawn. The home is drawn by `libs/shared/home`.
 - **The allow-list's real home and format** (decision 3), and each module's settings schema, which
   comes with the module.

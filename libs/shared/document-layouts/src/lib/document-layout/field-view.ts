@@ -2,6 +2,7 @@ import { formatDate, formatNumber } from '@angular/common';
 
 import { LayoutFieldType } from '../layout.model';
 import { humanize } from '../resolve-layout';
+import { isStoredCalendarDay } from './stored-calendar-day';
 
 /** One rendered value: text, or a boolean the template translates. */
 export type ValueView = { readonly text: string } | { readonly flag: boolean };
@@ -22,10 +23,16 @@ export interface ValueContext {
   /** The vocabulary entry's label for an id, or the id itself when it is not known. */
   readonly vocabulary: (directory: string, id: string) => string;
   /**
-   * How a `date` value shows, at any depth of a complex value. Absent, in UTC, as version 1 shows
-   * every date. The record page gives its own, so that an instant is the reader's day there.
+   * How a `date` value shows, at any depth of a complex value. Absent, version 1's own rule: a
+   * stored day in UTC, and an instant in {@link timeZone}. The record page gives the `date`
+   * widget's rule, so that its fields, cells and placeholders show a date the one way.
    */
   readonly date?: (value: unknown) => ValueView;
+  /**
+   * The zone an instant is shown in: absent, the reader's own, as the panel leaves it; an offset
+   * such as `+0530`, so that a test controls it. A stored day is shown in UTC whatever this is.
+   */
+  readonly timeZone?: string;
 }
 
 /** Complex values nest arbitrarily in Nuxeo; past this depth the rest is shown as JSON. */
@@ -53,13 +60,21 @@ function textOf(value: unknown): string {
   return JSON.stringify(value) ?? '';
 }
 
+/**
+ * A date as a long date: a stored day in UTC, an instant in the reader's zone (pattern 29).
+ *
+ * A stored day, `2024-03-06T00:00:00.000Z`, is formatted in UTC, where Nuxeo and the edit form
+ * anchor it, so every reader sees the day that was written; in the reader's zone it would be 5
+ * March west of Greenwich. An instant, such as `dc:created` at `2026-11-23T20:00:00Z`, is formatted
+ * in the reader's zone, so that a reader at +05:30 sees 24 November, the day it was there. In UTC
+ * it would be the 23rd, which is the day it was in London and not where the reader is.
+ */
 function dateView(value: unknown, context: ValueContext): ValueView {
   if (context.date) return context.date(value);
-  // In UTC, as formatCompareDate does: a calendar date is stored at midnight UTC, and the
-  // browser's timezone would move it to the previous day west of Greenwich.
   const date = new Date(textOf(value));
   if (Number.isNaN(date.getTime())) return { text: textOf(value) };
-  return { text: formatDate(date, 'longDate', context.locale, 'UTC') };
+  const zone = isStoredCalendarDay(value) ? 'UTC' : context.timeZone;
+  return { text: formatDate(date, 'longDate', context.locale, zone) };
 }
 
 /**

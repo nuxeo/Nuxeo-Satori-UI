@@ -9,6 +9,7 @@
  */
 import {
   createChecker,
+  ICON,
   isLiteral,
   join,
   NAME,
@@ -47,7 +48,6 @@ export const ACTIONS_V2_KEYS = {
 export const PLACEMENTS = ['record', 'row', 'bulk'] as const;
 export type Placement = (typeof PLACEMENTS)[number];
 
-const ICON = /^[a-z0-9_]{1,64}$/;
 const PARAMETER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 /** IDs the platform registers in code, which a manifest cannot rebind (extension-reference.md). */
 const PLATFORM_ID = /^(?:app|core)\./;

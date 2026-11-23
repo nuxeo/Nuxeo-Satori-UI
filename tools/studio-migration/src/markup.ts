@@ -56,6 +56,16 @@ export function childLabel(element: Element): string | null {
   return null;
 }
 
+/**
+ * An element's attributes, by name. Built with `Object.fromEntries`, which defines each as the
+ * record's own, so an attribute named `__proto__` is a key like any other.
+ */
+export function attributesOf(element: Element): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Array.from(element.attributes, (attribute) => [attribute.name, attribute.value]),
+  );
+}
+
 export function normalizeSpace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }

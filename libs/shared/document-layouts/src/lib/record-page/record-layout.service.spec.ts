@@ -279,6 +279,50 @@ describe('DocumentLayoutService: record pages', () => {
     ]);
   });
 
+  describe('rowPropertiesOf', () => {
+    const row = (uid: string, schemas: { name: string; prefix: string }[] = []) => ({
+      uid,
+      title: uid,
+      type: 'Claim',
+      path: `/${uid}`,
+      lastModified: '',
+      properties: {},
+      schemas,
+    });
+
+    it("reads a row's type once for every row of it, and gives its properties' definitions", async () => {
+      const first = firstValueFrom(service.rowPropertiesOf(row('c1'), ['claim:amount']));
+      const second = firstValueFrom(service.rowPropertiesOf(row('c2'), ['claim:amount']));
+      http.expectOne(CLAIM_TYPE).flush(CLAIM);
+      expect((await first)?.get('claim:amount')).toEqual({ type: 'double' });
+      expect((await second)?.get('dc:title')).toEqual({ type: 'string' });
+    });
+
+    it("reads the schema a row's facet adds only where a column names its prefix", async () => {
+      const facets = [
+        { name: 'audit', prefix: 'aud' },
+        { name: 'unnamed', prefix: 'un' },
+      ];
+      const properties = firstValueFrom(
+        service.rowPropertiesOf(row('c1', facets), ['claim:number', 'aud:reviewer']),
+      );
+      http.expectOne(CLAIM_TYPE).flush(CLAIM);
+      http
+        .expectOne('/nuxeo/api/v1/config/schemas/audit')
+        .flush({ name: 'audit', '@prefix': 'aud', fields: { reviewer: 'string' } });
+      http.expectNone('/nuxeo/api/v1/config/schemas/unnamed');
+      const read = await properties;
+      expect(read?.get('aud:reviewer')).toEqual({ type: 'string' });
+      expect(read?.get('claim:number')).toEqual({ type: 'string' });
+    });
+
+    it("is null when the row's type cannot be read", async () => {
+      const properties = firstValueFrom(service.rowPropertiesOf(row('c1'), ['claim:amount']));
+      http.expectOne(CLAIM_TYPE).flush('', { status: 500, statusText: 'Server Error' });
+      expect(await properties).toBeNull();
+    });
+  });
+
   describe('principalLabel', () => {
     it('names a user by first and last name, and a group by its label', async () => {
       const user = firstValueFrom(service.principalLabel('user', 'jdoe'));

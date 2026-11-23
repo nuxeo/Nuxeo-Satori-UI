@@ -4,7 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
 
-import { AppTranslateLoader, UPSTREAM_FOLDERS } from './app-translate-loader';
+import { AppTranslateLoader, UPSTREAM_FOLDERS, upstreamCatalogueFor } from './app-translate-loader';
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
 /** The one upstream folder `UPSTREAM_FOLDERS` declares, then the app's own catalogue last. */
@@ -65,15 +65,149 @@ describe('AppTranslateLoader', () => {
         return request.request.url;
       });
 
+    // The app catalogue keeps the bare name; satori-ui's is the regional file `aliases` names,
+    // because 1.0.0 no longer ships `fr.json`.
     expect(urls).toEqual([
-      'assets/satori-ui/i18n/fr.json',
+      'assets/satori-ui/i18n/fr-FR.json',
       jasmine.stringMatching(/\/i18n\/fr\.json$/),
     ]);
     expect(urls[1]).not.toContain('assets/');
   });
 
   /**
-   * `@hylandsoftware/satori-ui` ships catalogues for de, en, es, fr, it, pl and pt only, while
+   * `en` has two regional candidates. The bare `en.json` satori-ui shipped before 1.0.0 carried
+   * the `en-US` strings, so that is what `en` must keep getting — not whichever English region
+   * sorts first.
+   */
+  it('asks satori-ui for US English when the application is in English', () => {
+    configure();
+    loader.getTranslation('en').subscribe();
+
+    const urls = httpMock
+      .match(() => true)
+      .map((request) => {
+        request.flush({});
+        return request.request.url;
+      });
+
+    expect(urls[0]).toBe('assets/satori-ui/i18n/en-US.json');
+  });
+
+  /**
+   * Every bare code satori-ui shipped before 1.0.0, against the regional file it must now reach.
+   *
+   * Written out here rather than derived from `UPSTREAM_FOLDERS` or `upstreamCatalogueFor`, because
+   * a check computed from the same table as the loader cannot notice a row going missing: delete
+   * `de` from `aliases` and both sides expect no request, so the invariant test below still passes
+   * and so does the dangling-alias check, which only sees aliases that exist. This list is the
+   * independent statement of what each language must fetch.
+   */
+  const EXPECTED_SATORI_CATALOGUE: Readonly<Record<string, string>> = {
+    de: 'de-DE',
+    en: 'en-US',
+    es: 'es-ES',
+    fr: 'fr-FR',
+    it: 'it-IT',
+    pl: 'pl-PL',
+    pt: 'pt-PT',
+  };
+
+  for (const [lang, catalogue] of Object.entries(EXPECTED_SATORI_CATALOGUE)) {
+    it(`asks satori-ui for ${catalogue}.json when the application is in ${lang}`, () => {
+      configure();
+      loader.getTranslation(lang).subscribe();
+
+      const upstream = httpMock
+        .match(() => true)
+        .map((request) => {
+          request.flush({});
+          return request.request.url;
+        })
+        .filter((url) => url.startsWith('assets/satori-ui/'));
+
+      expect(upstream).toEqual([`assets/satori-ui/i18n/${catalogue}.json`]);
+    });
+  }
+
+  /**
+   * An alias pointing at a catalogue the folder does not list would be skipped silently by
+   * `upstreamCatalogueFor`, leaving that language's `sat.*` keys in English with no error. The
+   * guardrail keeps `languages` equal to the installed files, so this check is what ties the
+   * aliases to the installed files as well.
+   */
+  it('aliases only to catalogues the folder lists', () => {
+    configure();
+    const dangling = UPSTREAM_FOLDERS.flatMap((folder) =>
+      Object.entries(folder.aliases ?? {})
+        .filter(([, target]) => !folder.languages.includes(target))
+        .map(([lang, target]) => `${folder.path}: ${lang} -> ${target}`),
+    );
+
+    expect(dangling).toEqual([]);
+  });
+
+  /**
+   * A deployment can be set to a regional code itself (`defaultLanguage: 'fr-FR'`). That must
+   * reach the same file directly, without passing through `aliases`, and the app's own catalogue
+   * keeps the code as given.
+   */
+  it('asks satori-ui for a regional code by its own name', () => {
+    configure();
+    loader.getTranslation('fr-FR').subscribe();
+
+    const upstream = httpMock
+      .match(() => true)
+      .map((request) => {
+        request.flush({});
+        return request.request.url;
+      })
+      .filter((url) => url.startsWith('assets/satori-ui/'));
+
+    expect(upstream).toEqual(['assets/satori-ui/i18n/fr-FR.json']);
+  });
+
+  /**
+   * The resolution rule on folders built here, so each case is stated rather than inherited from
+   * whatever `UPSTREAM_FOLDERS` happens to hold.
+   */
+  describe('upstreamCatalogueFor', () => {
+    // No HTTP here, but the suite's `afterEach` calls `httpMock.verify()` and only `configure()`
+    // assigns `httpMock`. Karma runs specs in random order, so without this these failed in CI
+    // whenever one of them ran before any other spec — and passed locally by the luck of the order.
+    beforeEach(() => configure());
+
+    const folder = (languages: string[], aliases?: Record<string, string>) => ({
+      path: 'assets/vendor',
+      languages,
+      aliases,
+    });
+
+    it('resolves a shipped regional code to itself', () => {
+      expect(upstreamCatalogueFor(folder(['en-US', 'fr-FR']), 'fr-FR')).toBe('fr-FR');
+    });
+
+    it('prefers a file shipped under the requested name over a conflicting alias', () => {
+      // A vendor that ships `en.json` again must be asked for it, even with `en` still aliased.
+      expect(upstreamCatalogueFor(folder(['en', 'en-US'], { en: 'en-US' }), 'en')).toBe('en');
+    });
+
+    it('follows an alias when the requested name is not shipped', () => {
+      expect(upstreamCatalogueFor(folder(['en-US'], { en: 'en-US' }), 'en')).toBe('en-US');
+    });
+
+    it('ignores an alias whose target is not shipped', () => {
+      expect(upstreamCatalogueFor(folder(['en-US'], { en: 'en-GB' }), 'en')).toBeNull();
+    });
+
+    it('does not fall back from an unshipped regional code to its base language', () => {
+      // `pt-BR` is neither shipped nor aliased, so Portuguese strings are not substituted for it.
+      expect(upstreamCatalogueFor(folder(['pt-PT'], { pt: 'pt-PT' }), 'pt-BR')).toBeNull();
+    });
+  });
+
+  /**
+   * `@hylandsoftware/satori-ui` ships catalogues for de, en, es, fr, it, pl and pt only (as
+   * regional files since 1.0.0, reached through `aliases`), while
    * `availableLanguages` advertises en, fr, de, ja, nl, th and zh. Requesting the folder for a
    * language it does not contain cannot succeed: it is a 404 and one browser console error on
    * every page load, for four of the seven shipped languages (NXSAT-732).
@@ -148,11 +282,15 @@ describe('AppTranslateLoader', () => {
       for (const lang of advertised) {
         const urls = upstreamUrlsFor(lang);
         for (const folder of UPSTREAM_FOLDERS) {
-          const url = `${folder.path}/i18n/${lang}.json`;
-          const requested = urls.includes(url);
-          const ships = folder.languages.includes(lang);
-          if (requested && !ships) unexpected.push(`${lang} -> ${url}`);
-          if (!requested && ships) missing.push(`${lang} -> ${url}`);
+          const catalogue = upstreamCatalogueFor(folder, lang);
+          const folderUrls = urls.filter((url) => url.startsWith(`${folder.path}/`));
+          const expected = catalogue === null ? [] : [`${folder.path}/i18n/${catalogue}.json`];
+          for (const url of folderUrls) {
+            if (!expected.includes(url)) unexpected.push(`${lang} -> ${url}`);
+          }
+          for (const url of expected) {
+            if (!folderUrls.includes(url)) missing.push(`${lang} -> ${url}`);
+          }
         }
       }
 
