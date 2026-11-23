@@ -1135,7 +1135,7 @@ describe('what the review of the home and the menu found', () => {
     ]);
   });
 
-  it('says why a menu entry is none: a page under a condition waits, a repeated name is reported', () => {
+  it('says why a menu entry is none: a page under a condition waits, a replaced one is reported', () => {
     const conditional = prepare({
       bundle: {
         [bundle]: files[bundle].replace(
@@ -1168,9 +1168,20 @@ describe('what the review of the home and the menu found', () => {
         ),
       },
     });
-    expect(entry(repeated, 4)).toMatchObject({
+    // Web UI's slot keeps the later contribution of a name (nuxeo-slots.js): the earlier one is
+    // left out, and the later one is the entry.
+    expect(entry(repeated, 3)).toMatchObject({
       outcome: 'reported',
-      note: 'Another menu entry already became navigation.json claimssearch',
+      note: expect.stringContaining(
+        'A later contribution of the same name, claimsSearch, replaces it',
+      ),
+    });
+    expect(entry(repeated, 4)).toMatchObject({
+      outcome: 'converted',
+      to: 'navigation.json claimssearch',
+    });
+    expect(repeated.conversion.app['navigation.json']).toMatchObject({
+      entries: [{ id: 'claimssearch', label: 'Again', order: 2 }],
     });
   });
 

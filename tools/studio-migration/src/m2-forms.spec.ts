@@ -771,7 +771,7 @@ describe("tabs as Web UI's slots register them", () => {
     expect(tabs(disabled)).toEqual([]);
     expect(note(disabled, 1)).toMatchObject({
       outcome: 'reported',
-      note: 'It is disabled, so Web UI shows nothing of it',
+      note: 'It is disabled, so Web UI shows nothing of it: it is left out',
     });
     expect(note(disabled, 2)?.note).toContain('No tab of the package opens it');
   });
@@ -795,7 +795,9 @@ describe("tabs as Web UI's slots register them", () => {
       ),
     );
     expect(tabs(hidden)).toEqual([]);
-    expect(note(hidden, 1)?.note).toBe('It is disabled, so Web UI shows nothing of it');
+    expect(note(hidden, 1)?.note).toBe(
+      'It is disabled, so Web UI shows nothing of it: it is left out',
+    );
     expect(note(hidden, 2)?.note).toContain('only changes the earlier contribution');
     const ignored = prepare(
       bundle(

@@ -13,16 +13,18 @@
  * server: it has not run, and the check says so.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { isBound, labelOf } from './app-files';
+import { appIdOf, isBound, labelOf } from './app-files';
 import { listColumns } from './app-walk';
 import { layoutCards } from './blocks';
 import { listed } from './check-model';
-import { labelsOf, readCatalogue } from './convert';
+import { labelsOf, readCatalogue, recordedAllowList } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
 import { own } from './catalogue';
 import { homeCards, menuEntries } from './convert-home';
 import { menuLabel, queueOwners } from './convert-lists';
+import { actionOwners } from './convert-slots';
 import { formPlaces, shownIn, tabOf } from './forms';
+import { slotRegistry } from './slot-registry';
 import type { CheckOutcome, HarnessInput } from './harness';
 import { fieldWidget } from './widgets';
 
@@ -161,6 +163,35 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
         `navigation.json: ${entry.id}`,
         web(own(icon.attributes, 'label') ?? null),
         shown(written, null, null),
+      );
+  }
+
+  // Each action and menu entry where Web UI's slot places it: its order, as the package writes it
+  // or a later contribution of its name changes it, and none where Web UI's is left to its default.
+  const placedAt = (written: unknown): number | null =>
+    isRecord(written) && typeof written['order'] === 'number' ? written['order'] : null;
+  const actionsFile = conversion.app['actions.json'];
+  const actionList =
+    isRecord(actionsFile) && Array.isArray(actionsFile['actions']) ? actionsFile['actions'] : [];
+  for (const [id, owner] of actionOwners(
+    inventory,
+    catalogue,
+    appIdOf(pkg),
+    recordedAllowList(conversion),
+  )) {
+    const written = actionList.find((action) => isRecord(action) && action['id'] === id);
+    if (written !== undefined && placedAt(written) !== owner.order)
+      findings.push(
+        `actions.json: ${id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${owner.contribution.name}" at ${owner.order ?? 'none'}`,
+      );
+  }
+  const registry = slotRegistry(inventory);
+  for (const entry of menuEntries(inventory, catalogue)) {
+    const written = listItem(conversion.app['navigation.json'], 'entries', entry.id);
+    const want = registry.kept.get(entry.item)?.order ?? null;
+    if (written !== undefined && placedAt(written) !== want)
+      findings.push(
+        `navigation.json: ${entry.id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${entry.item.name}" at ${want ?? 'none'}`,
       );
   }
 

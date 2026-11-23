@@ -21,6 +21,7 @@ import { carry, guardOfSet, type Guard } from './guards';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
 import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
+import { slotRegistry } from './slot-registry';
 
 /** The operation an action converted from a button runs, and its parameters, or why it cannot. */
 /**
@@ -99,6 +100,8 @@ export interface ActionOwner {
   readonly slot: 'toolbar' | 'bulk-actions';
   /** The rule of the conditions it sits in, for its `visibleWhen`; `null` for none. */
   readonly rule: Rule | null;
+  /** Its order as Web UI's slot registers it, a later contribution of its name included. */
+  readonly order: number | null;
 }
 
 /**
@@ -138,10 +141,14 @@ export function actionOwners(
   allowList: ReadonlySet<string>,
 ): Map<string, ActionOwner> {
   const owners = new Map<string, ActionOwner>();
+  const registry = slotRegistry(inventory);
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const entry = slotEntry(catalogue, contribution.slot);
     if (!entry || entry.how === 'reported') continue;
     if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') continue;
+    // What Web UI's slot does not show, disabled, replaced or outranked, becomes nothing.
+    const kept = registry.kept.get(contribution);
+    if (!kept) continue;
     if (contribution.operations.includes(null)) continue;
     const guard = actionGuard(inventory, contribution, entry.slot);
     if (!('rule' in guard)) continue;
@@ -149,7 +156,14 @@ export function actionOwners(
     if ('problem' in action || !allowList.has(action.operation)) continue;
     const id = actionIdOf(appId, contribution.name, overall);
     if (!owners.has(id))
-      owners.set(id, { contribution, index, ...action, slot: entry.slot, rule: guard.rule });
+      owners.set(id, {
+        contribution,
+        index,
+        ...action,
+        slot: entry.slot,
+        rule: guard.rule,
+        order: kept.order,
+      });
   }
   return owners;
 }
@@ -158,6 +172,7 @@ export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
   const owners = actionOwners(inventory, catalogue, context.appId, context.allowList);
+  const registry = slotRegistry(inventory);
   const menus = menuDecisions(inventory, catalogue);
   const entries = menus.entries;
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
@@ -173,6 +188,12 @@ export function convertSlots(context: ConvertContext): void {
     }
     // Tabs are decided with the view files they go into (`convert-tabs.ts`).
     if (entry.slot === 'tabs') continue;
+    // What Web UI's slot does not show of its own becomes nothing, and says why.
+    const dropped = registry.dropped.get(contribution);
+    if (dropped) {
+      context.decide(id, dropped);
+      continue;
+    }
     if (contribution.operations.includes(null)) {
       context.decide(id, { outcome: 'reported', note: 'Its operation button runs no operation' });
       continue;
@@ -219,12 +240,14 @@ export function convertSlots(context: ConvertContext): void {
         continue;
       }
       const label = labelOf(own(action.attributes, 'label') ?? null);
+      // Its order as Web UI's slot keeps it, a later contribution of its name included.
+      const order = owners.get(actionId)?.order ?? null;
       const icon = iconOf(own(action.attributes, 'icon'));
       actions.push({
         id: actionId,
         ...(Object.keys(label).length > 0 ? label : { label: contribution.name || actionId }),
         ...(icon !== null ? { icon } : {}),
-        ...(contribution.order !== null ? { order: contribution.order } : {}),
+        ...(order !== null ? { order } : {}),
         ...(entry.slot === 'bulk-actions' ? { on: ['bulk'] } : {}),
         ...(guard.rule !== null ? { visibleWhen: guard.rule } : {}),
         operation: action.operation,

@@ -6,7 +6,7 @@
  *                                                             the M1 conversion, with its report
  *   check     <package.zip> <conversion-directory> [--json] [--allow-list <file>]
  *                                                             the harness
- *   mutate    <conversion-directory> <mutation> <new-directory>   a deliberately broken copy
+ *   mutate    <conversion-directory> <mutation> <new-directory> [--package <zip>]   a deliberately broken copy
  *   mutate    --list                                          the mutations, and the check each fails
  *
  * `--allow-list` names the deployment's operations, `{ "operations": [...] }` (decision 3): a button
@@ -46,7 +46,7 @@ const USAGE = `usage:
   studio-migration inventory <package.zip> [--json]
   studio-migration convert <package.zip> <new-directory> [--allow-list <file>]
   studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
-  studio-migration mutate <conversion-directory> <mutation> <new-directory>
+  studio-migration mutate <conversion-directory> <mutation> <new-directory> [--package <package.zip>]
   studio-migration mutate --list
 `;
 
@@ -64,7 +64,7 @@ const COMMANDS: Readonly<
   inventory: { args: 1, flags: ['--json'] },
   convert: { args: 2, flags: [], valued: ['--allow-list'] },
   check: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
-  mutate: { args: 3, flags: [] },
+  mutate: { args: 3, flags: [], valued: ['--package'] },
 };
 
 export function main(argv: readonly string[], io: CliIo): number {
@@ -140,7 +140,16 @@ export function main(argv: readonly string[], io: CliIo): number {
           io.err(`${args[1]} is not a mutation; \`mutate --list\` lists them\n`);
           return 2;
         }
-        const { conversion, changed } = chosen.apply(readConversion(args[0]));
+        // A control that writes what the package's Web UI leaves out reads the package too.
+        const packageFile = values.get('--package');
+        const source =
+          packageFile === undefined
+            ? undefined
+            : (() => {
+                const pkg = readPackage(io, packageFile);
+                return { pkg, inventory: inventory(pkg), catalogue: loadCatalogue() };
+              })();
+        const { conversion, changed } = chosen.apply(readConversion(args[0]), source);
         writeConversion(args[2], conversion);
         io.out(
           `${chosen.name}: ${changed}. Written to ${args[2]}; check ${chosen.caughtBy} must now fail.\n`,

@@ -22,7 +22,9 @@
  * - a task layout whose workflow the package names in no schema, so its file's case is unknown;
  * - a block used without the document, a block inside a block, and a block used nowhere;
  * - a tab on every type, a tab whose condition does not convert, a tab with no page, a page with
- *   no tab, and a tab on a type the package writes no view layout of.
+ *   no tab, and a tab on a type the package writes no view layout of;
+ * - buttons and a menu entry as Web UI's slots register them: disabled, replaced, outranked,
+ *   reordered by a contribution with no template, and one changing a contribution of Web UI's own.
  */
 
 const UI = 'web/nuxeo.war/ui';
@@ -219,6 +221,39 @@ export function m2CorpusFiles(): Record<string, string> {
       properties: { /** @doctype Policy */ document: { type: Object } } });
   </script>
 </dom-module>`,
+
+    // Buttons and menu entries as Web UI's slots register them (nuxeo-slots.js): disabled,
+    // replaced by a later one of the same name, outranked by an earlier one of a higher priority,
+    // changed by a later one with no template, and one changing a contribution of Web UI's own.
+    [`${UI}/nuxeo-Acme-Claims-slots-bundle.html`]: `<!--
+STUDIO CODE SPACE
+-->
+<nuxeo-slot-content name="archiveClaim" slot="DOCUMENT_ACTIONS" order="30" disabled>
+  <template><nuxeo-operation-button label="Archive" operation="Claim.Approve" input="[[document]]" params='{"comment": "Archived"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="reopenClaim" slot="DOCUMENT_ACTIONS" order="40">
+  <template><nuxeo-operation-button label="Reopen" operation="Claim.Approve" input="[[document]]" params='{"comment": "Reopened first"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="reopenClaim" slot="DOCUMENT_ACTIONS" order="41">
+  <template><nuxeo-operation-button label="Reopen" operation="Claim.Approve" input="[[document]]" params='{"comment": "Reopened"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="escalateClaim" slot="DOCUMENT_ACTIONS" order="50" priority="10">
+  <template><nuxeo-operation-button label="Escalate" operation="Claim.Approve" input="[[document]]" params='{"comment": "Escalated"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="escalateClaim" slot="DOCUMENT_ACTIONS" order="51">
+  <template><nuxeo-operation-button label="Escalate" operation="Claim.Approve" input="[[document]]" params='{"comment": "Escalated later"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="settleClaim" slot="DOCUMENT_ACTIONS" order="60">
+  <template><nuxeo-operation-button label="Settle" operation="Claim.Approve" input="[[document]]" params='{"comment": "Settled"}'></nuxeo-operation-button></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="settleClaim" slot="DOCUMENT_ACTIONS" order="5"></nuxeo-slot-content>
+<nuxeo-slot-content name="documentLock" slot="DOCUMENT_ACTIONS" disabled></nuxeo-slot-content>
+<nuxeo-slot-content name="oldSearch" slot="DRAWER_ITEMS" order="2" disabled>
+  <template><nuxeo-menu-icon name="oldsearch" label="Old claims" icon="icons:search"></nuxeo-menu-icon></template>
+</nuxeo-slot-content>
+<nuxeo-slot-content name="oldSearch" slot="DRAWER_PAGES">
+  <template><nuxeo-search-form provider="claims" search-name="claims" name="oldsearch"></nuxeo-search-form></template>
+</nuxeo-slot-content>`,
 
     // Tabs.
     [`${UI}/nuxeo-Acme-Claims-tabs-bundle.html`]: `<!--

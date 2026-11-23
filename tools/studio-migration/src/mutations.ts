@@ -9,19 +9,39 @@
  * conditional field in a package with no conditions, says so and writes nothing.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { labelsPath } from './app-files';
+import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
 import { fieldOf, layoutFields } from './app-walk';
 import { labelsOf, type Conversion, type ConvertedTheme, type ReportEntry } from './convert';
+import { slotEntry, type Catalogue } from './catalogue';
+import { menuEntryId } from './convert-home';
+import { buttonAction } from './convert-slots';
+import type { Inventory, SlotContribution } from './inventory';
+import { slotRegistry } from './slot-registry';
+import type { StudioPackage } from './studio-package';
 
 export interface Mutation {
   readonly name: string;
   readonly description: string;
   /** The check that must fail once it is applied. */
   readonly caughtBy: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 10;
-  readonly apply: (conversion: Conversion) => {
+  /**
+   * Breaks the conversion. A control that writes what the package's own Web UI leaves out, such as
+   * a disabled button, reads that from the package too, and refuses without it.
+   */
+  readonly apply: (
+    conversion: Conversion,
+    source?: MutationSource,
+  ) => {
     readonly conversion: Conversion;
     readonly changed: string;
   };
+}
+
+/** The package a conversion was made from, for the controls that read it. */
+export interface MutationSource {
+  readonly pkg: StudioPackage;
+  readonly inventory: Inventory;
+  readonly catalogue: Catalogue;
 }
 
 export class MutationError extends Error {
@@ -921,8 +941,176 @@ const M2_MUTATIONS: readonly Mutation[] = [
   },
 ];
 
+/** The source a control reads, or a refusal saying how to give it. */
+function needSource(source: MutationSource | undefined): MutationSource {
+  if (!source)
+    throw new MutationError(
+      'it reads the package the conversion was made from: give it with --package <package.zip>',
+    );
+  return source;
+}
+
+/**
+ * The buttons Web UI's slots leave out for the reason `why` matches, each with the action the
+ * converter would have made of it: its id, operation and parameters.
+ */
+function leftOutButtons(
+  source: MutationSource,
+  why: RegExp,
+): {
+  readonly contribution: SlotContribution;
+  readonly id: string;
+  readonly operation: string;
+  readonly parameters: Record<string, unknown> | null;
+}[] {
+  const registry = slotRegistry(source.inventory);
+  const appId = appIdOf(source.pkg);
+  return placed(source.inventory.slotContributions).flatMap(({ contribution, overall }) => {
+    const decision = registry.dropped.get(contribution);
+    const entry = slotEntry(source.catalogue, contribution.slot);
+    if (!decision || !why.test(decision.note ?? '') || !entry) return [];
+    if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') return [];
+    const action = buttonAction(contribution, entry.slot);
+    if ('problem' in action) return [];
+    return [
+      {
+        contribution,
+        id: actionIdOf(appId, contribution.name, overall),
+        operation: action.operation,
+        parameters: action.parameters,
+      },
+    ];
+  });
+}
+
+/** The actions of a copy of the conversion's `actions.json`, which is made when there is none. */
+function actionsOf(conversion: Conversion): { file: Json; actions: Json[] } {
+  const file = (clone(conversion.app['actions.json'] ?? { version: 2, actions: [] }) as Json) ?? {};
+  if (!Array.isArray(file['actions'])) file['actions'] = [];
+  return { file, actions: file['actions'] as Json[] };
+}
+
+/**
+ * Gives the action a contribution of the same name owns the operation and parameters of the one
+ * Web UI left out for `why`: what a converter that kept the wrong one would write.
+ */
+function keepLeftOut(
+  conversion: Conversion,
+  source: MutationSource | undefined,
+  why: RegExp,
+  kind: string,
+) {
+  const { file, actions } = actionsOf(conversion);
+  for (const button of leftOutButtons(needSource(source), why)) {
+    const action = actions.find(
+      (candidate) => isRecord(candidate) && candidate['id'] === button.id,
+    );
+    if (!action) continue;
+    if (
+      action['operation'] === button.operation &&
+      JSON.stringify(action['parameters'] ?? {}) === JSON.stringify(button.parameters ?? {})
+    )
+      continue;
+    action['operation'] = button.operation;
+    if (button.parameters) action['parameters'] = button.parameters;
+    else delete action['parameters'];
+    return {
+      conversion: withFile(conversion, 'actions.json', file),
+      changed: `made ${button.id} run what the ${kind} "${button.contribution.name}" runs, ${button.operation} with ${JSON.stringify(button.parameters ?? {})}`,
+    };
+  }
+  throw new MutationError(`the package has no ${kind} button that differs from the one kept`);
+}
+
+/** Controls of Web UI's slot registration (`slot-registry.ts`), for actions and the menu. */
+const SLOT_MUTATIONS: readonly Mutation[] = [
+  {
+    name: 'revive-disabled-action',
+    description: 'Make an action of a button Web UI shows nothing of, being disabled',
+    caughtBy: 7,
+    apply: (conversion, source) => {
+      const { file, actions } = actionsOf(conversion);
+      const button = leftOutButtons(needSource(source), /is disabled/).find(
+        (candidate) => !actions.some((action) => isRecord(action) && action['id'] === candidate.id),
+      );
+      if (!button)
+        throw new MutationError('the package has no disabled button to make an action of');
+      actions.push({
+        id: button.id,
+        label: button.contribution.name || button.id,
+        operation: button.operation,
+        ...(button.parameters ? { parameters: button.parameters } : {}),
+      });
+      return {
+        conversion: withFile(conversion, 'actions.json', file),
+        changed: `made the action ${button.id} of the disabled button "${button.contribution.name}"`,
+      };
+    },
+  },
+  {
+    name: 'keep-replaced-action',
+    description: 'Keep a button a later one of the same name replaces, rather than the later one',
+    caughtBy: 7,
+    apply: (conversion, source) => keepLeftOut(conversion, source, /replaces it/, 'replaced'),
+  },
+  {
+    name: 'keep-outranked-action',
+    description: 'Keep a button a higher priority one of the same name outranks',
+    caughtBy: 7,
+    apply: (conversion, source) =>
+      keepLeftOut(conversion, source, /has a higher priority/, 'outranked'),
+  },
+  {
+    name: 'revive-disabled-menu-entry',
+    description: 'Make an entry of the menu of one Web UI shows nothing of, being disabled',
+    caughtBy: 7,
+    apply: (conversion, source) => {
+      const { inventory } = needSource(source);
+      const registry = slotRegistry(inventory);
+      const item = inventory.slotContributions.find(
+        (contribution) =>
+          contribution.slot === 'DRAWER_ITEMS' &&
+          /is disabled/.test(registry.dropped.get(contribution)?.note ?? ''),
+      );
+      const queue = Object.keys(conversion.app)
+        .sort()
+        .map((path) => /^queues\/([^/]+)\.json$/.exec(path)?.[1])
+        .find((id): id is string => id !== undefined);
+      if (!item || !queue)
+        throw new MutationError(
+          'the package has no disabled menu entry, or the conversion no queue',
+        );
+      const file = clone(conversion.app['navigation.json'] ?? { version: 2, entries: [] }) as Json;
+      if (!Array.isArray(file['entries'])) file['entries'] = [];
+      const id = menuEntryId(item);
+      (file['entries'] as Json[]).push({ id, queue });
+      return {
+        conversion: withFile(conversion, 'navigation.json', file),
+        changed: `made the menu entry ${id} of the disabled "${item.name}", opening queues/${queue}.json`,
+      };
+    },
+  },
+  {
+    name: 'change-action-order',
+    description: "Move an action from the place Web UI's slot gives it",
+    caughtBy: 6,
+    apply: (conversion) => {
+      const { file, actions } = actionsOf(conversion);
+      const action = actions.find(
+        (candidate) => isRecord(candidate) && typeof candidate['order'] === 'number',
+      );
+      if (!action) throw new MutationError('no converted action has an order to change');
+      action['order'] = (action['order'] as number) + 1000;
+      return {
+        conversion: withFile(conversion, 'actions.json', file),
+        changed: `moved ${String(action['id'])} to order ${String(action['order'])}`,
+      };
+    },
+  },
+];
+
 /** Every control, M1's and M2's. */
-export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS];
+export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS, ...SLOT_MUTATIONS];
 
 export function mutation(name: string): Mutation | null {
   return MUTATIONS.find((candidate) => candidate.name === name) ?? null;
