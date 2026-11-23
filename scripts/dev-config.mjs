@@ -13,6 +13,7 @@
  *   npm run config:dev -- --layout Claim/metadata=claim.layout.json
  *   npm run config:dev -- --home home.json
  *   npm run config:dev -- --labels en=labels/en.json --labels fr=labels/fr.json
+ *   npm run config:dev -- --queue queues/unassigned-claims.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
  * `layouts.json` and answered at `layouts/<Type>/<mode>.layout.json`. A later one for the same
@@ -31,6 +32,11 @@
  * platform's catalogue and below the manifest's `labels`. Without `--labels`, any written before
  * are removed. A later file for the same language replaces an earlier one.
  *
+ * `--queue <file>` serves an app's queue at `queues/<id>.json`, the id being the file's name, as
+ * the package writes it, with no envelope (app-definition-v2.md, section 4). The servlet does not
+ * answer there either, for the same reason as the home. Without `--queue`, no queue is served, and
+ * any written before are removed. A later `--queue` for the same id replaces an earlier one.
+ *
  * The dev server serves only files that existed when it started, so run this before `nx serve`;
  * edits to a file it already serves are picked up on reload. A bare configuration object is not
  * accepted by the application, which is why copying a defaults file there no longer works.
@@ -43,7 +49,7 @@ const ROOT = resolve(import.meta.dirname, '..');
 const DEFAULTS = join(ROOT, 'nuxeo-agentic-core/src/main/resources/agentic-ui-config');
 const TARGET = join(ROOT, 'apps/nuxeo-ui/public/agentic-ui-config');
 
-const extra = { bootstrap: [], manifest: [], layout: [], home: [], labels: [] };
+const extra = { bootstrap: [], manifest: [], layout: [], home: [], labels: [], queue: [] };
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {
   const layer = args[i]?.replace(/^--/, '');
@@ -51,7 +57,7 @@ for (let i = 0; i < args.length; i += 2) {
     console.error(
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
         '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>] ' +
-        '[--labels <lang>=<labels.json>]...',
+        '[--labels <lang>=<labels.json>]... [--queue <queues/<id>.json>]...',
     );
     process.exit(2);
   }
@@ -148,6 +154,25 @@ for (const entry of extra.labels) {
   }
   const path = resolve(file);
   labels.set(lang, { path, content: read(path) });
+}
+
+// Each queue is served as the package writes it, at its id, which is its file's name; the app
+// checks it with the validator when it reads it, and the pipeline when the package is built.
+// app-definition-v2.md, section 2: an id is 1 to 64 letters, digits, `.`, `_` or `-`. Read here,
+// as the labels are, before anything is written, so that a mistyped name or file changes nothing.
+const QUEUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const QUEUES = join(TARGET, 'queues');
+const queues = new Map();
+for (const path of extra.queue) {
+  const id = basename(path).replace(/\.json$/, '');
+  if (!path.endsWith('.json') || !QUEUE_ID.test(id)) {
+    console.error(
+      `--queue ${path}: expected <id>.json, the id 1 to 64 letters, digits, ".", "_" or "-", ` +
+        'starting with a letter or a digit, as a queue file is named in a package',
+    );
+    process.exit(2);
+  }
+  queues.set(id, { path, content: read(path) });
 }
 
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
@@ -256,3 +281,15 @@ if (labels.size === 0) {
     }
   }
 }
+
+// The queues, served at the end, as the package writes them.
+rmSync(QUEUES, { recursive: true, force: true });
+if (queues.size > 0) mkdirSync(QUEUES, { recursive: true });
+for (const [id, { content }] of queues) {
+  writeFileSync(join(QUEUES, `${id}.json`), `${JSON.stringify(content, null, 2)}\n`);
+}
+console.log(
+  queues.size === 0
+    ? `no queues: ${QUEUES.slice(ROOT.length + 1)} not served`
+    : `wrote ${QUEUES.slice(ROOT.length + 1)}: ${[...queues.keys()].join(', ')}`,
+);

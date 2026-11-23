@@ -153,6 +153,7 @@ apps/nuxeo-ui/public/agentic-ui-config/layouts.json
 apps/nuxeo-ui/public/agentic-ui-config/layouts/
 apps/nuxeo-ui/public/agentic-ui-config/home.json
 apps/nuxeo-ui/public/agentic-ui-config/labels/
+apps/nuxeo-ui/public/agentic-ui-config/queues/
 apps/nuxeo-ui/public/i18n/zz.json
 
 # Local planning scratch. Two stray files were swept into a translation PR by `git add -A`, and

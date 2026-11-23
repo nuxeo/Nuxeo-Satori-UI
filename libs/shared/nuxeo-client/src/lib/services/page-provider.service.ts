@@ -27,6 +27,23 @@ export interface PageProviderRequest {
   readonly sort?: readonly PageProviderSort[];
   /** The schemas each row carries, as the `properties` header names them. Every one by default. */
   readonly properties?: string;
+  /**
+   * The buckets chosen in the provider's aggregates, by aggregate id: each sent as a parameter
+   * named after the aggregate, its bucket keys a JSON array, as the search page sends its filters.
+   * Nuxeo keeps the records in any of one aggregate's chosen buckets, and in all the aggregates
+   * chosen in, and returns each aggregate's buckets and its `selection` with the results. An
+   * aggregate with no key chosen is not sent.
+   */
+  readonly aggregates?: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * One page of a page provider's results. A provider the search index serves also returns its
+ * aggregates, by id, each with its `buckets`; one that queries the repository returns none, or
+ * `null`. They are left as the server writes them: each aggregate type has its own shape.
+ */
+export interface PageProviderResults extends NuxeoDocumentList {
+  readonly aggregations?: Readonly<Record<string, unknown>> | null;
 }
 
 /**
@@ -42,6 +59,39 @@ const MAX_PAGE_SIZE = 1000;
 const SORT_FIELD = /^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /**
+ * An aggregate as a request may name one: letters, digits and `_`, as Nuxeo's own are named
+ * (`dc_creator_agg`). Neither `.` nor `-`, which the server's rendering parameters use
+ * (`enrichers.document`, `fetch-document`).
+ */
+const AGGREGATE = /^[A-Za-z][A-Za-z0-9_]{0,127}$/;
+
+/**
+ * The parameters the search endpoint, or the rendering of its response, reads for itself
+ * (`QueryExecutor` and `RenderingContextWebUtils`). An aggregate of one of these names would
+ * replace the page, the order or the properties of every row rather than filter.
+ */
+const RESERVED_PARAMETERS: ReadonlySet<string> = new Set([
+  'query',
+  'pageSize',
+  'currentPageIndex',
+  'offset',
+  'maxResults',
+  'sortBy',
+  'sortOrder',
+  'queryParams',
+  'quickFilters',
+  'highlight',
+  'properties',
+  'depth',
+  'embed',
+]);
+
+/** Whether a request may filter on the aggregate `name`: see {@link PageProviderRequest.aggregates}. */
+export function isAggregateParameter(name: string): boolean {
+  return AGGREGATE.test(name) && !RESERVED_PARAMETERS.has(name);
+}
+
+/**
  * Runs a page provider: a search defined on the server, which binds its own parameters, so the
  * client never writes a query. The records it returns are those the user may read; nothing here
  * widens or narrows that.
@@ -55,9 +105,10 @@ export class PageProviderService {
    * row action's rule such as `app.rules.canWrite` answers false.
    *
    * Errors, without a request, for a name that is not a page provider's, a page size outside 1 to
-   * 1000, or a sort that is not a property and a direction; otherwise as the request does.
+   * 1000, a sort that is not a property and a direction, or an aggregate that
+   * {@link isAggregateParameter} refuses; otherwise as the request does.
    */
-  execute(name: string, request: PageProviderRequest): Observable<NuxeoDocumentList> {
+  execute(name: string, request: PageProviderRequest): Observable<PageProviderResults> {
     if (!PAGE_PROVIDER.test(name)) {
       return throwError(() => new Error(`"${name}" is not the name of a page provider`));
     }
@@ -82,6 +133,18 @@ export class PageProviderService {
           ),
       );
     }
+    const aggregates = Object.entries(request.aggregates ?? {}).filter(
+      ([, keys]) => keys.length > 0,
+    );
+    const refused = aggregates.find(([aggregate]) => !isAggregateParameter(aggregate));
+    if (refused) {
+      return throwError(
+        () =>
+          new Error(
+            `"${refused[0]}" cannot be sent as an aggregate: it is not a name of letters, digits and _, or the search reads it for itself`,
+          ),
+      );
+    }
     let params = new HttpParams()
       .set('pageSize', request.pageSize)
       .set('currentPageIndex', request.pageIndex ?? 0);
@@ -93,7 +156,10 @@ export class PageProviderService {
         .set('sortBy', sort.map((key) => key.field).join(','))
         .set('sortOrder', sort.map((key) => key.order).join(','));
     }
-    return this.api.get<NuxeoDocumentList>(
+    for (const [aggregate, keys] of aggregates) {
+      params = params.set(aggregate, JSON.stringify(keys));
+    }
+    return this.api.get<PageProviderResults>(
       `/nuxeo/api/v1/search/pp/${encodeURIComponent(name)}/execute`,
       params,
       { properties: request.properties ?? '*', 'enrichers.document': 'permissions' },

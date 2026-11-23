@@ -8,10 +8,12 @@ export { DocumentLayoutService, layoutsIndexUrl } from './lib/document-layout.se
 export { readLayoutIndex } from './lib/layout-file';
 export { RECORD_PAGE_TODAY, RecordPageComponent } from './lib/record-page/record-page';
 export { RecordListComponent } from './lib/record-page/record-list';
-export type {
-  RecordListEntry,
-  RecordListSort,
-  RecordPropertyField,
+export {
+  readRecordList,
+  type EntryReading,
+  type RecordListEntry,
+  type RecordListSort,
+  type RecordPropertyField,
 } from './lib/record-page/record-layout';
 export type { ResolvedRecordLayout } from './lib/record-page/resolve-record-layout';
 export { readValidationFailure } from './lib/validation-failure';
