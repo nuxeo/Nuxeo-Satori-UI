@@ -276,6 +276,29 @@ Treat them as settled; if you contradict one, prove it first.
   `-2`. **The total is known only when there is nothing to page**, which is why a numbered pager is
   impossible and `isNextPageAvailable` is the fact to build on.
 
+- **A Bulk Action Framework command over a page provider leaves out, silently, what the list
+  applies.** `POST /api/v1/search/pp/<name>/bulk/<action>` builds the command from the provider's
+  query: a chosen bucket (`<aggregate>=[…]`) is dropped, and so is a `queryParams` value for a
+  provider that takes none. Neither is an error. Measured on 2025.10.18 on 2026-11-23: a bucket
+  that made the list count 0 left the command at 3, and a probe meant for three notes, given its
+  folder as a `queryParams` value of a provider that reads `ecm_parentId` by name, ran over the
+  provider's whole result, 2,314 records, before it was stopped. **Check the scope of a bulk
+  command with `csvExport` first**, which changes nothing and reports `total`, and compare it with
+  the list's count. The queue page never sends a bucket, and limits the command to one record more
+  than the person agreed to with `queryLimit`, which the server honours: stopping a command once its
+  `total` is known is too late for `trash`, which processed 5,010 notes in 70 ms.
+- **`trash` sent without `value` stops the server's `trash` processor until Nuxeo restarts.** The
+  command is taken (HTTP 202), its first record fails with a `NullPointerException`, and the stream
+  computation terminates: that command stays `RUNNING` at 0, and every later `trash` command waits
+  behind it. Measured 2026-11-23; a restart four minutes later brought it back. A framework action's
+  parameters are therefore fixed in code
+  (`PACKAGED_WHOLE_QUERY_BULK_ACTIONS`), never taken from a file.
+- **`trash` is not opened over HTTP on a stock Nuxeo 2025.10.** Its contribution in
+  `nuxeo-core-bulk` has no `httpEnabled="true"`; `setProperties`, `csvExport`, `automation` and
+  `automationUi` have it. Read from the bundles' contributions on 2025.10.18. What the REST layer
+  does with that for a person who is not an administrator is in `docs/api-integrations.md`,
+  section 34, and is not measured.
+
 ---
 
 ## 4. Phases and their gates

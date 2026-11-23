@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NUXEO_URL, readTarget } from './config.ts';
+import { DEFAULT_DEV_SERVER_URL, DEFAULT_NUXEO_URL, readDevServer, readTarget } from './config.ts';
 
 const CREDENTIALS = { NUXEO_USER: 'builder', NUXEO_PASS: 'not-a-real-password' };
 
@@ -67,5 +67,31 @@ describe('readTarget', () => {
         password: 'not-a-real-password',
       },
     });
+  });
+});
+
+describe('readDevServer', () => {
+  it("is nx serve's own address when unset or empty", () => {
+    expect(readDevServer({})).toBe(DEFAULT_DEV_SERVER_URL);
+    expect(readDevServer({ DEV_SERVER_URL: '' })).toBe(DEFAULT_DEV_SERVER_URL);
+    expect(readDevServer({ DEV_SERVER_URL: 'http://127.0.0.1:4300/' })).toBe(
+      'http://127.0.0.1:4300',
+    );
+  });
+
+  it('refuses a server elsewhere, a path, credentials or another scheme', () => {
+    for (const url of [
+      'http://dev.example.com:4200',
+      'https://dev.example.com',
+      'http://ui.localhost:4200',
+      'http://localhost:4200/app',
+      'http://localhost:4200/?a=b',
+      'http://user:pass@localhost:4200',
+      'ftp://localhost:4200',
+      'not a url',
+    ])
+      expect(readDevServer({ DEV_SERVER_URL: url }), url).toHaveProperty('problem');
+    const elsewhere = readDevServer({ DEV_SERVER_URL: 'http://dev.example.com:4200' });
+    expect(typeof elsewhere !== 'string' && elsewhere.problem).toContain('not this machine');
   });
 });

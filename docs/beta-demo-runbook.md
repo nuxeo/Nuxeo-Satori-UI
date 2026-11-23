@@ -100,7 +100,7 @@ Nothing is created in the repository — the manifest Note this section used to 
 longer read (NXSAT-312).
 
 ```bash
-npm run config:dev            # before `nx serve`: the dev server serves only files present at start
+npm run config:dev            # before `nx serve`: started without the folder, it serves nothing in it
 ```
 
 Save this as `/tmp/apply-manifest.sh` and `chmod +x` it. You will use it for every beat:

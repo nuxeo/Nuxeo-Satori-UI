@@ -85,4 +85,61 @@ describe('createServer', () => {
       await client.close();
     }
   });
+
+  it('passes preview_package its arguments as they were given', async () => {
+    const seen: PackageRequest[] = [];
+    const client = await connect(
+      createServer({
+        nuxeo: { problem: 'not needed' },
+        preview: async (request) => {
+          seen.push(request);
+          throw new Error('stopped here');
+        },
+      }),
+    );
+    try {
+      const answer = await client.call('preview_package', {
+        directory: 'business-apps/packages/x',
+        registered: 'registered.json',
+      });
+      expect(answer).toMatchObject({ isError: true, text: 'stopped here' });
+      expect(seen).toEqual([
+        { directory: 'business-apps/packages/x', registered: 'registered.json' },
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('refuses preview_package when it was given no dev server at all', async () => {
+    const client = await connect(createServer({ nuxeo: { problem: 'not needed' } }));
+    try {
+      const answer = await client.call('preview_package', {
+        directory: 'business-apps/packages/payers-claims-demo',
+      });
+      expect(answer).toMatchObject({ isError: true, text: 'No dev server is configured.' });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('refuses preview_package, before running anything, when it has no dev server to ask', async () => {
+    const client = await connect(
+      createServer({
+        nuxeo: { problem: 'not needed' },
+        devServer: { problem: 'DEV_SERVER_URL names example.com, which is not this machine' },
+      }),
+    );
+    try {
+      const answer = await client.call('preview_package', {
+        directory: 'business-apps/packages/payers-claims-demo',
+      });
+      expect(answer).toMatchObject({
+        isError: true,
+        text: 'DEV_SERVER_URL names example.com, which is not this machine',
+      });
+    } finally {
+      await client.close();
+    }
+  });
 });

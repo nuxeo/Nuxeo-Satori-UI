@@ -52,6 +52,11 @@ export interface PageProviderResults extends NuxeoDocumentList {
  */
 const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
 
+/** Whether `name` can be a page provider's: see {@link PAGE_PROVIDER}. */
+export function isPageProviderName(name: string): boolean {
+  return PAGE_PROVIDER.test(name);
+}
+
 /** Nuxeo reads a page size of 0 as no limit, so a page is 1 to this many records. */
 const MAX_PAGE_SIZE = 1000;
 

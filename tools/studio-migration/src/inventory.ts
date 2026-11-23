@@ -29,6 +29,8 @@ export type FileKind =
   | 'model-contributions'
   | 'model-schema'
   | 'document-layout'
+  | 'task-layout'
+  | 'layout-block'
   | 'search-form'
   | 'search-results'
   | 'slot-contributions'
@@ -77,6 +79,12 @@ export interface LayoutField {
    * holds, and whether everyone sees it is a person's call.
    */
   readonly placesUnclear: { readonly reason: 'outside' | 'other'; readonly at: number } | null;
+  /**
+   * True when it binds its property or variable two ways, in a `{{…}}` binding, as an input
+   * does: Web UI then writes what is entered back. One bound in `[[…]]` or text alone only
+   * shows it, as a label beside a value or `nuxeo-date` does.
+   */
+  readonly edits: boolean;
 }
 
 /**
@@ -100,6 +108,13 @@ export interface Condition {
    * `<nuxeo-connection user="{{user}}">`, whose `user` notifies. Declaring the property sets nothing.
    */
   readonly userInScope: boolean;
+  /**
+   * False in a task layout, where Web UI's document is the task's first target as its task page
+   * fetches the task (`nuxeo-app.js`, `fetch-task: targetDocumentIds`): the whole document, with
+   * its type, state, facets and properties, but none of its permissions, which no enricher asks
+   * for. A permission test there never passes. True, or left out, elsewhere.
+   */
+  readonly permissionsInScope?: boolean;
 }
 
 /** A column of a list of results, or of a dashboard card's list. */
@@ -139,6 +154,57 @@ export interface DocumentLayout {
   /** From the file name: `create`, `edit`, `import`, `metadata`, `view`, or another. */
   readonly mode: string;
   readonly fields: readonly LayoutField[];
+}
+
+/**
+ * A workflow task layout: the form of one step of a workflow, which Web UI loads from
+ * `ui/workflow/<workflow>/nuxeo-<step>-layout.html`, both names in lower case
+ * (`nuxeo-document-task.js`, `_updateTaskLayout`). Its fields bind the task's variables as
+ * `task.variables.<name>`.
+ */
+export interface TaskLayout {
+  readonly path: string;
+  /** The `dom-module` id. */
+  readonly element: string;
+  /** The workflow's folder: its model's name in lower case, as Web UI looks it up. */
+  readonly workflow: string;
+  /** The step's node id in lower case, from the file's name. */
+  readonly step: string;
+  /** From the layout's `@task` annotation: the step's variable schema, as Studio writes it. */
+  readonly variables: string | null;
+  /** Each binds `var:<name>` for `task.variables.<name>`, or a document property. */
+  readonly fields: readonly LayoutField[];
+}
+
+/**
+ * A layout block: a Polymer element of the package that other layouts use by its name, as Studio
+ * Designer's layout blocks are. Recognised by what it is, a `dom-module` with
+ * `Nuxeo.LayoutBehavior` in a Web UI file of no other kind, because no package in hand shows the
+ * folder Studio writes blocks to.
+ */
+export interface LayoutBlock {
+  readonly path: string;
+  /** The `dom-module` id: the element a layout uses it by. */
+  readonly element: string;
+  readonly fields: readonly LayoutField[];
+}
+
+/** A layout block used in a file: an element named as a block of the package is. */
+export interface BlockUse {
+  /** The file it is used in. */
+  readonly path: string;
+  /** Its place among its file's block uses, from 0. */
+  readonly index: number;
+  readonly element: string;
+  /** The block's file. */
+  readonly block: string;
+  /** How many of its file's fields come before it, in document order: where its card goes. */
+  readonly after: number;
+  /** The condition it sits in, innermost, by its place among its file's conditions; or none. */
+  readonly conditions: readonly number[];
+  /** True when it is given the page's document, as `document="[[document]]"` or `{{document}}`. */
+  readonly document: boolean;
+  readonly attributes: Readonly<Record<string, string>>;
 }
 
 export interface SearchLayout {
@@ -182,6 +248,14 @@ export interface SlotContribution {
    * form. With none of them, every condition it holds.
    */
   readonly conditions: readonly number[];
+  /** The layout blocks it holds, by their place among its file's block uses. */
+  readonly uses: readonly number[];
+  /** Set by `disabled`: Web UI's slot then shows nothing of it (`nuxeo-slots.js`, `_render`). */
+  readonly disabled: boolean;
+  /** Its `priority`, 0 when left out: a later contribution of the same name wins at the same or a higher one. */
+  readonly priority: number;
+  /** False when it holds no template: it then only changes another of its name, as `disabled` does. */
+  readonly hasTemplate: boolean;
 }
 
 export interface DashboardCard {
@@ -258,6 +332,10 @@ export interface Inventory {
   readonly files: readonly InventoryFile[];
   readonly model: readonly ModelContribution[];
   readonly layouts: readonly DocumentLayout[];
+  readonly taskLayouts: readonly TaskLayout[];
+  readonly blocks: readonly LayoutBlock[];
+  /** Every use of a layout block, in any Web UI file of the package. */
+  readonly blockUses: readonly BlockUse[];
   readonly searches: readonly SearchLayout[];
   readonly slotContributions: readonly SlotContribution[];
   readonly customCode: readonly CustomCode[];
@@ -288,6 +366,7 @@ const BUNDLE_KINDS: readonly (readonly [RegExp, FileKind])[] = [
   [/^data\/i18n\/messages(?:[-_][A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*)?\.json$/, 'translations'],
   [/^data\/i18n\/[^/]+\.properties$/, 'translations-jsf'],
   [/^web\/nuxeo\.war\/ui\/document\/[^/]+\/nuxeo-[^/]+-layout\.html$/, 'document-layout'],
+  [/^web\/nuxeo\.war\/ui\/workflow\/[^/]+\/nuxeo-[^/]+-layout\.html$/, 'task-layout'],
   [/^web\/nuxeo\.war\/ui\/search\/[^/]+\/nuxeo-[^/]+-search-form\.html$/, 'search-form'],
   [/^web\/nuxeo\.war\/ui\/search\/[^/]+\/nuxeo-[^/]+-search-results\.html$/, 'search-results'],
   [/^web\/nuxeo\.war\/ui\/nuxeo-[^/]+-custom-bundle\.html$/, 'custom-bundle'],
@@ -323,6 +402,20 @@ export function classify(
 }
 
 export function inventory(pkg: StudioPackage): Inventory {
+  // Every path asked for comes from the bundle's own listing, so it is always there.
+  const read = (path: string): string =>
+    (pkg.bundleFiles.get(path) ?? Buffer.alloc(0)).toString('utf8');
+  // A layout block is known by what it is, not by where it sits: a Web UI file of no other kind
+  // that defines an element with Web UI's layout behaviour. The first file to define an element
+  // is its block; a second one defining it stays of no known kind, and is reported.
+  const blockPaths = new Map<string, string>();
+  for (const [path] of pkg.bundleFiles) {
+    if (classify(path, 'bundle', pkg.bundlePath) !== 'unrecognised') continue;
+    if (!path.startsWith(UI) || !path.endsWith('.html')) continue;
+    const element = blockElement(read(path));
+    if (element !== null && !blockPaths.has(element)) blockPaths.set(element, path);
+  }
+  const blockFiles = new Set(blockPaths.values());
   const files: InventoryFile[] = [
     ...[...pkg.packageFiles].map(([path, data]) => ({
       path,
@@ -333,16 +426,15 @@ export function inventory(pkg: StudioPackage): Inventory {
     ...[...pkg.bundleFiles].map(([path, data]) => ({
       path,
       location: 'bundle' as const,
-      kind: classify(path, 'bundle', pkg.bundlePath),
+      kind: blockFiles.has(path)
+        ? ('layout-block' as const)
+        : classify(path, 'bundle', pkg.bundlePath),
       bytes: data.length,
     })),
   ];
 
   const problems: InventoryProblem[] = [];
   const elements = new Map<string, number>();
-  // Every path asked for comes from the bundle's own listing, so it is always there.
-  const read = (path: string): string =>
-    (pkg.bundleFiles.get(path) ?? Buffer.alloc(0)).toString('utf8');
   const ofKind = (kind: FileKind): string[] =>
     files
       .filter((file) => file.location === 'bundle' && file.kind === kind)
@@ -366,19 +458,46 @@ export function inventory(pkg: StudioPackage): Inventory {
    * Parses a Web UI file, counts its custom elements, records its scripts and conditions, and
    * hands its document on.
    */
-  const webUi = (path: string): { document: Document; text: string } => {
+  const blockUses: BlockUse[] = [];
+  /** Each block use's element, for the slot contribution that holds it. */
+  const useAt = new Map<Element, BlockUse>();
+  const webUi = (
+    path: string,
+    options: { readonly task?: boolean } = {},
+  ): { document: Document; text: string } => {
     const text = read(path);
     const document = parseHtml(text);
     conditions.push(
       ...conditionsOf(path, document, within, conditionAt).map((condition) => ({
         ...condition,
         userInScope: path.endsWith('-bundle.html') || writesUser(document),
+        ...(options.task ? { permissionsInScope: false } : {}),
       })),
     );
     let index = 0;
+    let fieldsBefore = 0;
     for (const element of elementsOf(document)) {
       if (isCustomElement(element) && !WRAPPERS.has(element.localName)) {
         elements.set(element.localName, (elements.get(element.localName) ?? 0) + 1);
+      }
+      if (element.getAttribute('role') === 'widget') fieldsBefore++;
+      const block = blockPaths.get(element.localName);
+      if (block !== undefined) {
+        const around = within.get(element);
+        const use: BlockUse = {
+          path,
+          index: blockUses.filter((other) => other.path === path).length,
+          element: element.localName,
+          block,
+          after: fieldsBefore,
+          conditions: around === undefined ? [] : [around],
+          document: /^(?:\[\[|\{\{)\s*document\s*(?:\]\]|\}\})$/.test(
+            element.getAttribute('document')?.trim() ?? '',
+          ),
+          attributes: attributesOf(element),
+        };
+        blockUses.push(use);
+        useAt.set(element, use);
       }
       if (element.localName === 'script') {
         // A script loaded from elsewhere is shaped by where it comes from: it is never a template.
@@ -420,6 +539,19 @@ export function inventory(pkg: StudioPackage): Inventory {
       docType: annotation(text, 'doctype'),
       mode: /-([a-z]+)-layout\.html$/.exec(path)?.[1] ?? '',
       fields: fieldsOf(document, placesIn(path)),
+    };
+  });
+
+  const taskLayouts: TaskLayout[] = ofKind('task-layout').map((path) => {
+    const { document, text } = webUi(path, { task: true });
+    const folder = path.slice(0, path.lastIndexOf('/'));
+    return {
+      path,
+      element: moduleId(document, path),
+      workflow: folder.slice(folder.lastIndexOf('/') + 1),
+      step: /\/nuxeo-([^/]+)-layout\.html$/.exec(path)?.[1] ?? '',
+      variables: annotation(text, 'task'),
+      fields: fieldsOf(document, placesIn(path), { task: true }),
     };
   });
 
@@ -485,16 +617,28 @@ export function inventory(pkg: StudioPackage): Inventory {
           parts: inner
             .filter((part) => isCustomElement(part) && !CONDITIONS.has(part.localName))
             .map((part) => ({ element: part.localName, attributes: attributesOf(part) })),
-          // What it becomes is its operation button or its menu icon, or for a left-menu page the
-          // search form it opens: the conditions around that, not around some other part of it,
-          // such as a tooltip.
+          // What it becomes is its operation button or its menu icon, for a left-menu page the
+          // search form it opens, for a tab its page item, and for a tab's page the element that
+          // page is, named as the item: the conditions around that, not around some other part
+          // of it, such as a tooltip.
           conditions: conditionsAround(
             [element, ...inner],
-            element.getAttribute('slot') === 'DRAWER_PAGES'
-              ? ['nuxeo-search-form']
-              : ['nuxeo-operation-button', 'nuxeo-menu-icon'],
+            element.getAttribute('slot') === 'DOCUMENT_VIEWS_PAGES'
+              ? inner
+                  .filter((part) => isCustomElement(part) && part.hasAttribute('name'))
+                  .map((part) => part.localName)
+              : (KEY_PARTS.get(element.getAttribute('slot') ?? '') ?? [
+                  'nuxeo-operation-button',
+                  'nuxeo-menu-icon',
+                ]),
             within,
           ),
+          uses: [element, ...inner]
+            .map((part) => useAt.get(part)?.index)
+            .filter((index): index is number => index !== undefined),
+          disabled: element.hasAttribute('disabled'),
+          priority: numberOf(element.getAttribute('priority')) ?? 0,
+          hasTemplate: Array.from(element.children).some((child) => child.localName === 'template'),
         };
       }),
   );
@@ -563,6 +707,16 @@ export function inventory(pkg: StudioPackage): Inventory {
     };
   });
 
+  // Read last, so that the conditions and scripts of the files above keep their order.
+  const blocks: LayoutBlock[] = ofKind('layout-block').map((path) => {
+    const { document } = webUi(path);
+    return {
+      path,
+      element: moduleId(document, path),
+      fields: fieldsOf(document, placesIn(path)),
+    };
+  });
+
   const translations: Translations[] = [];
   for (const path of ofKind('translations')) {
     const locale = /messages[-_]?([A-Za-z0-9_-]*)\.json$/.exec(path)?.[1] || 'en';
@@ -593,6 +747,9 @@ export function inventory(pkg: StudioPackage): Inventory {
     files,
     model,
     layouts,
+    taskLayouts,
+    blocks,
+    blockUses,
     searches,
     slotContributions,
     customCode,
@@ -635,12 +792,19 @@ interface Places {
   readonly parentOf: (index: number) => number | null;
 }
 
-/** The fields of a layout: its elements marked `role="widget"`. */
-function fieldsOf(document: Document, places: Places): LayoutField[] {
+/**
+ * The fields of a layout: its elements marked `role="widget"`. In a task layout a field binds a
+ * variable of the task, `task.variables.<name>`, which is `var:<name>`, before any property.
+ */
+function fieldsOf(
+  document: Document,
+  places: Places,
+  options: { readonly task?: boolean } = {},
+): LayoutField[] {
   return elementsOf(document)
     .filter((element) => element.getAttribute('role') === 'widget')
     .map((element) => {
-      const binding = bindingOf(element);
+      const binding = bindingOf(element, options.task === true);
       const shown = binding === null ? [] : placesShowing(element, binding, places);
       const inside = shown.filter((place): place is number => place !== null);
       const unclear = unclearPlaces(element, shown, inside, places);
@@ -659,8 +823,60 @@ function fieldsOf(document: Document, places: Places): LayoutField[] {
         condition: conditions[0] ?? null,
         conditions,
         placesUnclear: unclear,
+        edits: binding !== null && editsBinding(element, binding),
       };
     });
+}
+
+/** Web UI's elements that show a value and change none, whatever binds it. */
+const DISPLAY_ELEMENTS: ReadonlySet<string> = new Set([
+  'nuxeo-date',
+  'nuxeo-user-tag',
+  'nuxeo-tag',
+]);
+/** The native elements a person types or chooses in. */
+const NATIVE_INPUTS: ReadonlySet<string> = new Set(['input', 'textarea', 'select']);
+
+/**
+ * True when an element, or what it holds, edits `binding`: an input, not read-only nor disabled,
+ * that binds exactly that path two ways, `{{path}}` or `{{path::event}}`. Polymer binds a computed
+ * or negated `{{…}}` one way, and an element that only shows a value writes nothing back.
+ */
+function editsBinding(field: Element, binding: string): boolean {
+  const exact = bindingPath(binding);
+  return [field, ...elementsOf(field)].some((element) => {
+    const name = element.localName;
+    const input = name.includes('-') ? !DISPLAY_ELEMENTS.has(name) : NATIVE_INPUTS.has(name);
+    if (!input || element.hasAttribute('readonly') || element.hasAttribute('disabled'))
+      return false;
+    return Array.from(element.attributes).some((attribute) =>
+      [...attribute.value.matchAll(/\{\{([^}]*)\}\}/g)].some(([, inner]) => exact.test(inner)),
+    );
+  });
+}
+
+/** A binding's whole content when it names `binding` alone: the path, then any `::event`. */
+function bindingPath(binding: string): RegExp {
+  const variable = binding.startsWith(VARIABLE) ? binding.slice(VARIABLE.length) : null;
+  const escaped = (variable ?? binding).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const path =
+    variable !== null
+      ? `task\\.variables\\.${escaped}`
+      : `(?:document\\.properties|params)\\.${escaped}`;
+  return new RegExp(`^\\s*${path}(?:::[\\w-]+)?\\s*$`);
+}
+
+/** What names a binding in Web UI's markup: `task.variables.<name>`, or a property or parameter. */
+function bindingPattern(binding: string): RegExp {
+  const variable = binding.startsWith(VARIABLE) ? binding.slice(VARIABLE.length) : null;
+  const escaped = (variable ?? binding).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return variable !== null
+    ? new RegExp(`\\btask\\.variables\\.${escaped}(?![\\w-])`)
+    : new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
+}
+
+function numberOf(text: string | null): number | null {
+  return text !== null && /^-?\d+$/.test(text.trim()) ? Number(text) : null;
 }
 
 /**
@@ -718,8 +934,7 @@ function heldConditions(element: Element, places: Places): number[] {
  * template's condition, or in what the template sits in.
  */
 function placesShowing(field: Element, binding: string, places: Places): (number | null)[] {
-  const escaped = binding.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
+  const pattern = bindingPattern(binding);
   const found: (number | null)[] = [];
   const around = (element: Element): number | null => places.within.get(element) ?? null;
   const binds = (element: Element): boolean =>
@@ -901,7 +1116,7 @@ export function sortOptionsOf(script: string): SortOption[] {
  * view layout writes `[[document.properties.cl:number]]` in a child, an edit layout
  * `value="{{document.properties.cl:number}}"`, a search form `value="{{params.cl_number}}"`.
  */
-function bindingOf(field: Element): string | null {
+function bindingOf(field: Element, task: boolean): string | null {
   const elements = [field, ...elementsOf(field)];
   const texts = elements.flatMap((element) =>
     Array.from(element.attributes).map((attribute) => attribute.value),
@@ -912,12 +1127,39 @@ function bindingOf(field: Element): string | null {
     if (element.localName === 'template')
       texts.push((element as HTMLTemplateElement).content?.textContent ?? '');
   const all = texts.join('\n');
+  const variable = task ? /\btask\.variables\.([A-Za-z_][\w-]*)/.exec(all)?.[1] : undefined;
+  if (variable !== undefined) return `${VARIABLE}${variable}`;
   return (
     /document\.properties\.([\w-]+:[\w-]+)/.exec(all)?.[1] ??
     /\bparams\.([\w:-]+)/.exec(all)?.[1] ??
     null
   );
 }
+
+/** The prefix a task form names a variable of its step or workflow by (app-definition-v2.md, section 6). */
+export const VARIABLE = 'var:';
+
+/**
+ * The element a file defines when it is a layout block: one `dom-module`, with a custom element's
+ * name, whose script gives it Web UI's layout behaviour, as Studio Designer's templates do.
+ */
+function blockElement(text: string): string | null {
+  const document = parseHtml(text);
+  const modules = Array.from(document.querySelectorAll('dom-module'));
+  if (modules.length !== 1) return null;
+  const id = modules[0].getAttribute('id')?.trim() ?? '';
+  if (!/^[a-z][a-z0-9._-]*-[a-z0-9._-]*$/.test(id)) return null;
+  const scripts = elementsOf(document).filter((element) => element.localName === 'script');
+  return scripts.some((script) => /\bNuxeo\.LayoutBehavior\b/.test(script.textContent ?? ''))
+    ? id
+    : null;
+}
+
+/** The parts of a contribution, by its slot, whose conditions are what it becomes's. */
+const KEY_PARTS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['DRAWER_PAGES', ['nuxeo-search-form']],
+  ['DOCUMENT_VIEWS_ITEMS', ['nuxeo-page-item']],
+]);
 
 function moduleId(document: Document, path: string): string {
   return (

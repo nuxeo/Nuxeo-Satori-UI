@@ -936,14 +936,14 @@ Registered by `PACKAGED_BULK_ACTIONS` in
 `libs/shared/extensions/src/lib/packaged-actions.ts`, rendered by the selection
 topbar that appears when at least one document is selected.
 
-| ID                                | Label               | Icon            | Order | Enabled when                     |
-| --------------------------------- | ------------------- | --------------- | ----- | -------------------------------- |
-| `app.bulkActions.downloadZip`     | Download All as Zip | `download`      | 10    | always                           |
-| `app.bulkActions.addToCollection` | Add to Collection   | `library_add`   | 20    | always                           |
-| `app.bulkActions.compare`         | Compare             | `compare`       | 30    | `app.rules.hasMultipleSelection` |
-| `app.bulkActions.addToClipboard`  | Add to Clipboard    | `content_paste` | 40    | always                           |
-| `app.bulkActions.publish`         | Publish Document    | `publish`       | 50    | always                           |
-| `app.bulkActions.delete`          | Delete selected     | `delete`        | 60    | always                           |
+| ID                                | Label               | Icon            | Order | Enabled when                     | Over a whole query     |
+| --------------------------------- | ------------------- | --------------- | ----- | -------------------------------- | ---------------------- |
+| `app.bulkActions.downloadZip`     | Download All as Zip | `download`      | 10    | always                           | no                     |
+| `app.bulkActions.addToCollection` | Add to Collection   | `library_add`   | 20    | always                           | no                     |
+| `app.bulkActions.compare`         | Compare             | `compare`       | 30    | `app.rules.hasMultipleSelection` | no                     |
+| `app.bulkActions.addToClipboard`  | Add to Clipboard    | `content_paste` | 40    | always                           | no                     |
+| `app.bulkActions.publish`         | Publish Document    | `publish`       | 50    | always                           | no                     |
+| `app.bulkActions.delete`          | Delete selected     | `delete`        | 60    | always                           | `trash`, `value: true` |
 
 None of them carries a `rule`, deliberately: all six are offered whatever the
 user may do with the selection, exactly as they were before they became
@@ -985,6 +985,36 @@ inject(ExtensionActionRegistry).register({
   'acme.bulkActions.archive': inject(AcmeArchiveActionService),
 });
 ```
+
+### Over every result of a queue's query
+
+A queue's page can also run a bulk action over every result of its query rather than the rows
+selected, on the server, through Nuxeo's Bulk Action Framework. Which actions can, and what each one
+runs there, is code: `PACKAGED_WHOLE_QUERY_BULK_ACTIONS` in
+`libs/shared/extensions/src/lib/whole-query-actions.ts`, read with `wholeQueryBulkAction(id)`. The
+table's last column says it: only Delete, as the framework's `trash` sent `value: true`, after which
+the queue's list is read again. The other five work on the documents a person has in hand, and
+Nuxeo has no framework action for any of them that it opens over HTTP.
+
+- **A file cannot name what runs.** A queue file lists bulk actions by id, and a manifest may hide,
+  relabel or reorder their descriptors, but neither can map an id to another framework action or send
+  it other parameters.
+- **What it does on a selection, over the whole query.** An action is offered over a whole query
+  only while what the table maps is what it does on a selection. A descriptor that hands its work to
+  another action's handler (`action`) is not offered. Neither is one whose handler does not declare
+  the mapping its own: the app's handler for `app.bulkActions.delete` carries `wholeQuery: true`, and
+  a customer's handler registered in its place does not, so Delete is then not offered over the
+  whole query rather than trashing what the customer's handler would, say, archive.
+  `ExtensionActionRegistry.runsOverWholeQuery(id)` answers it.
+- **The server decides.** A stock Nuxeo 2025.10 does not open `trash` over HTTP: it answers HTTP 403
+  to everyone but an administrator, and the page says that the server does not let the person run it
+  over a whole query. A deployment opens it with `httpEnabled="true"` on the `trash` action. Either
+  way the server checks the person's permission on every record: one they may not trash is counted as
+  failed, and the page reports how many.
+- **A customer's own bulk action cannot run over a whole query yet.** The table has no registration
+  for Layer 2, and an action of a package's own, from `actions.json`, waits for decision 3.
+
+What the page does with them is in app-definition-v2.md, section 4.
 
 Handlers are objects with an `execute(context)` method — the usual
 service shape. Re-registering one of our IDs replaces

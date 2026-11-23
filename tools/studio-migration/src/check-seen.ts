@@ -13,14 +13,16 @@
  * server: it has not run, and the check says so.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { LAYOUT_VERSION, isBound, labelOf, layoutPath } from './app-files';
-import { layoutFields, listColumns } from './app-walk';
+import { isBound, labelOf } from './app-files';
+import { listColumns } from './app-walk';
+import { layoutCards } from './blocks';
 import { listed } from './check-model';
 import { labelsOf, readCatalogue } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
 import { own } from './catalogue';
 import { homeCards, menuEntries } from './convert-home';
 import { menuLabel, queueOwners } from './convert-lists';
+import { formPlaces, shownIn, tabOf } from './forms';
 import type { CheckOutcome, HarnessInput } from './harness';
 import { fieldWidget } from './widgets';
 
@@ -82,29 +84,40 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
       );
   };
 
-  const compared = new Set<string>();
-  for (const layout of inventory.layouts) {
-    if (layout.docType === null || !Object.hasOwn(LAYOUT_VERSION, layout.mode)) continue;
-    const path = layoutPath(layout.docType, layout.mode);
-    // The first layout of a type and mode is the one written; a later one is reported.
-    if (compared.has(path)) continue;
-    compared.add(path);
-    const fields = layoutFields(conversion.app[path]);
+  // Layouts, with the layout blocks they use, their tabs, and task forms: each field named as
+  // Web UI names it, and each tab as its page item does.
+  for (const place of formPlaces(pkg, inventory)) {
+    const fields = shownIn(conversion.app[place.path], place.tab);
+    const { cards, fields: placed } = layoutCards(inventory, place.source);
     const seen = new Set<string>();
-    for (const field of layout.fields) {
+    for (const { field, card } of placed) {
       // The field that shows a property is the first one in no condition and of an element the
       // catalogue knows, as check 2 reads it.
       if (field.binding === null || seen.has(field.binding) || field.condition !== null) continue;
+      if (!place.options.inTab && (cards[card].use?.conditions.length ?? 0) > 0) continue;
       if (fieldWidget(catalogue, field.element, field.attributes) === null) continue;
       seen.add(field.binding);
-      if (layout.mode === 'metadata' && PANEL_ROWS.has(field.binding)) continue;
+      if (place.options.mode === 'metadata' && PANEL_ROWS.has(field.binding)) continue;
       const match = fields.find((candidate) => candidate.field === field.binding);
       if (!match) continue;
       const name = field.binding.slice(field.binding.indexOf(':') + 1);
       compare(
-        `${path}: ${field.binding}`,
+        `${place.path}: ${field.binding}`,
         web(field.label),
         shown(match.entry, `layout.field.${field.binding}`, name),
+      );
+    }
+    const tab = place.tabPlan;
+    const written = tab ? tabOf(conversion.app[place.path], tab.id) : null;
+    if (tab && written) {
+      const item = tab.item.parts.find((part) => part.element === 'nuxeo-page-item');
+      // Web UI translates a page item's label as a key, and shows the key itself when no
+      // catalogue has it; with no label it shows nothing, where the app shows the tab's id.
+      const label = item ? (own(item.attributes, 'label') ?? null) : null;
+      compare(
+        `${place.path}: the tab ${tab.id}`,
+        label === null || label.trim() === '' ? null : web(`[[i18n('${label.trim()}')]]`),
+        shown(written.tab, null, tab.id),
       );
     }
   }

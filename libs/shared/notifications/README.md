@@ -74,7 +74,7 @@ allows to administrators only) and one `@audit` request per changed record for a
 at a time; each 50 entries to a page, up to four pages, so that your own entries cannot crowd other
 people's out. A task whose record comes back without its title costs a read of the record: Nuxeo
 sends the titles with the task list (`X-NXfetch.task`), so this is rare. See
-[api-integrations.md](../../../docs/api-integrations.md), section 34.
+[api-integrations.md](../../../docs/api-integrations.md), section 35.
 
 ## Read state: in this browser only
 

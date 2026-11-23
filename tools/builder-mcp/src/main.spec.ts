@@ -40,14 +40,16 @@ describe('the server over stdio', () => {
         listed.result as { tools: { name: string; annotations?: Record<string, boolean> }[] }
       ).tools;
       expect(tools.map((tool) => tool.name).sort()).toEqual(
-        [...NUXEO_TOOLS, 'validate_package'].sort(),
+        [...NUXEO_TOOLS, 'preview_package', 'validate_package'].sort(),
       );
+      const writers = ['preview_package', 'validate_package'];
       for (const tool of tools) {
-        // Every Nuxeo tool only reads; validate_package builds a zip, if only in a temporary folder.
-        expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(
-          tool.name !== 'validate_package',
+        // Every Nuxeo tool only reads; validate_package builds a zip, if only in a temporary
+        // folder; preview_package replaces what the dev folder served.
+        expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(!writers.includes(tool.name));
+        expect(tool.annotations?.['destructiveHint'], tool.name).toBe(
+          tool.name === 'preview_package',
         );
-        expect(tool.annotations?.['destructiveHint'], tool.name).toBe(false);
       }
       const refused = await client.call('get_content_model');
       expect(refused.isError).toBe(true);

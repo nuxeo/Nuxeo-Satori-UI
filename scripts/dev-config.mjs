@@ -50,9 +50,12 @@
  * writes the tasks it is given and removes any written before; a later `--task` for the same step
  * replaces an earlier one.
  *
- * The dev server serves only files that existed when it started, so run this before `nx serve`;
- * edits to a file it already serves are picked up on reload. A bare configuration object is not
- * accepted by the application, which is why copying a defaults file there no longer works.
+ * Run this once before `nx serve`: a dev server started while `agentic-ui-config/` did not exist
+ * serves nothing under it until it is restarted. Once the folder exists, a file written there, or
+ * edited, is served after a moment, when the dev server's watcher sees it (measured on Angular 22's
+ * dev server: under a second), so later runs need no restart; reload the page. A bare configuration
+ * object is not accepted by the application, which is why copying a defaults file there no longer
+ * works.
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { main } from './cli';
@@ -590,5 +590,123 @@ describe('app-definition validate', () => {
       for (const argv of [['model'], ['model', '--x'], ['model', 'a', 'b']])
         expect(run(argv).code).toBe(2);
     });
+  });
+});
+
+describe('app-definition changes', () => {
+  const app = (packageVersion: string, extra: Record<string, unknown> = {}) => ({
+    version: 2,
+    id: 'payers-claims',
+    label: 'Claims',
+    packageVersion,
+    platform: '>=0.2.0 <1.0.0',
+    groups: ['members'],
+    ...extra,
+  });
+  const queue = { version: 2, pageProvider: 'payers_unassigned_claims', columns: ['dc:title'] };
+  const configured = (version: string, files: Record<string, unknown> = {}) =>
+    packageWith({
+      'bundle/agentic-ui-config/app.json': app(version),
+      'package/package.xml': `<package name="payers-claims-demo" version="${version}"></package>`,
+      ...files,
+    });
+  const judged = (out: string) => JSON.parse(out) as Record<string, unknown>;
+
+  it('passes a version raised as far as the changes need, and prints the judgement as JSON', () => {
+    const before = configured('1.0.0');
+    const after = configured('1.1.0', { 'bundle/agentic-ui-config/queues/open.json': queue });
+    const { code, out, err } = run(['changes', before, after]);
+    expect({ code, err }).toEqual({ code: 0, err: '' });
+    expect(judged(out)).toMatchObject({
+      previous: '1.0.0',
+      version: '1.1.0',
+      required: 'minor',
+      raised: 'minor',
+      refused: null,
+      changes: [
+        {
+          level: 'addition',
+          file: 'bundle/agentic-ui-config/queues/open.json',
+          what: 'The queue open is added.',
+        },
+      ],
+    });
+  });
+
+  it('exits 1 for a version that did not move as far as the changes need', () => {
+    const before = configured('1.0.0', { 'bundle/agentic-ui-config/queues/open.json': queue });
+    const removed = run(['changes', before, configured('1.1.0')]);
+    expect(removed.code).toBe(1);
+    expect(judged(removed.out)['refused']).toContain('need a major version');
+    const unmoved = run([
+      'changes',
+      before,
+      configured('1.0.0', { 'bundle/schemas/x.xsd': '<a/>' }),
+    ]);
+    expect(unmoved.code).toBe(1);
+    expect(judged(unmoved.out)['refused']).toContain('and the version is still 1.0.0');
+  });
+
+  it('compares what the zip holds: not a Markdown file, nor what package/ keeps beside its two', () => {
+    const at = (text: string) =>
+      configured('1.0.0', {
+        'bundle/agentic-ui-config/README.md': text,
+        'package/notes.txt': text,
+        'bundle/agentic-ui-config/queues/open.json': { $schema: text, ...queue },
+      });
+    const { code, out } = run(['changes', at('one'), at('two')]);
+    expect(code).toBe(0);
+    expect(judged(out)['changes']).toEqual([]);
+  });
+
+  it('compares an image by its bytes, not by its text', () => {
+    const image = (byte: number) =>
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, byte]).toString('latin1');
+    const write = (version: string, byte: number) => {
+      const root = configured(version);
+      writeFileSync(
+        join(root, 'bundle/agentic-ui-config/logo.png'),
+        Buffer.from(image(byte), 'latin1'),
+      );
+      return root;
+    };
+    // Two bytes that are not UTF-8 read as the same replacement character: compared as text, the
+    // two images would be the same file.
+    const { code, out } = run(['changes', write('1.0.0', 0xfe), write('1.0.0', 0xfd)]);
+    expect(code).toBe(1);
+    expect(judged(out)['changes']).toEqual([
+      expect.objectContaining({ file: 'bundle/agentic-ui-config/logo.png' }),
+    ]);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a package holding a link, exit 2, reading nothing through it',
+    () => {
+      const before = configured('1.0.0');
+      const after = configured('1.0.0');
+      symlinkSync('/etc/hosts', join(after, 'bundle', 'hosts'));
+      const { code, err } = run(['changes', before, after]);
+      expect(code).toBe(2);
+      expect(err).toContain('bundle/hosts is a symbolic link, which is not followed');
+    },
+  );
+
+  it('exits 2 for a folder that is no package, or a wrong command', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'app-definition-'));
+    expect(run(['changes', configured('1.0.0'), empty])).toMatchObject({ code: 2 });
+    expect(run(['changes', configured('1.0.0'), empty]).err).toContain(
+      'has no bundle/agentic-ui-config/app.json',
+    );
+    const noVersion = packageWith({ 'bundle/agentic-ui-config/app.json': { version: 2 } });
+    expect(run(['changes', configured('1.0.0'), noVersion]).err).toContain(
+      'names no packageVersion',
+    );
+    for (const argv of [
+      ['changes'],
+      ['changes', 'a'],
+      ['changes', 'a', 'b', 'c'],
+      ['changes', '--x', 'a'],
+    ])
+      expect(run(argv).code, argv.join(' ')).toBe(2);
   });
 });
