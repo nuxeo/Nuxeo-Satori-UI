@@ -730,7 +730,7 @@ describe('RecordListComponent', () => {
       );
       await answer([claim(1)]);
       expect(warnings).toContain(
-        `[agentic-ui-layouts] Member/view layout: cards[1]: the row action "${PROBE}" names the rule "app.rules.isLocked", which answers for the page's own record, not a row; not offered`,
+        `[agentic-ui-layouts] Member/view layout: cards[1]: the row action "${PROBE}" names the rule "app.rules.isLocked", which is refused for a row: as packaged, it answers for the page's own record; not offered`,
       );
     });
 

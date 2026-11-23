@@ -443,7 +443,7 @@ becomes. In version 2's terms:
     or `enabledRule` names a rule that answers from the state the page publishes about its own
     record, such as `app.rules.isLocked` or `app.rules.isNotBusy`, itself or inside `core.every`,
     `core.some` or `core.not`, is not offered: nothing publishes that state for a row. Those are
-    the surface rules but `app.rules.isNote`, which reads the document. A row's rules see none of
+    the surface rules but `app.rules.isNote`, which reads the document, refused by ID. A row's rules see none of
     the page's flags, so a customer's own rule that reads them finds none;
   - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
     record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its

@@ -353,7 +353,7 @@ carry packaged entries.
 | `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11 |
 | `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 16 packaged actions, section 8     |
 | `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10     |
-| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a    |
+| `rowActions`       | Each row's menu, in browse and in related records  | **Populated** — 5 packaged actions, section 10a    |
 | `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9         |
 | `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7     |
 | `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a |
@@ -1944,7 +1944,7 @@ is a separate slot, `rowActions` — section 10a.
 
 ---
 
-## 10a. `rowActions` — the menu on each row of browse's list
+## 10a. `rowActions` — the menu on each row of a list of documents
 
 Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
 rendered as the "Actions for …" menu at the end of each row of browse's document list.
@@ -1957,7 +1957,9 @@ A record page's list of related records ([layout-v2.md](business-apps/layout-v2.
 resolves the same slot for the row actions its file lists, with two differences. A row's context
 there has none of the flags the page publishes about its own record. A row action whose `rule` or
 `enabledRule` names a surface-state rule (section 4) other than `app.rules.isNote`, itself or inside
-`core.every`, `core.some` or `core.not`, is not offered there, and the console says why.
+`core.every`, `core.some` or `core.not`, is not offered there, nor one whose rule nests more than 32
+levels deep, and the console says why. Those rules are refused by ID, so a customer's own evaluator
+registered under one is refused too.
 
 | ID                        | Label    | Icon                        | Order | Shown when                                |
 | ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |

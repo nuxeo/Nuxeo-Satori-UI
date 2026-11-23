@@ -114,7 +114,7 @@ const PAGE_STATE_RULES: ReadonlySet<string> = new Set(
 
 const refusePageState = (id: string): string | null =>
   PAGE_STATE_RULES.has(id)
-    ? `names the rule "${id}", which answers for the page's own record, not a row`
+    ? `names the rule "${id}", which is refused for a row: as packaged, it answers for the page's own record`
     : null;
 
 /**
