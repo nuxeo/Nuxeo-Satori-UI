@@ -80,6 +80,14 @@ describe('the proposed examples are refused until they are built', () => {
     expect(proposed.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('leaves no json block out: each is an example or a labelled proposal', () => {
+    // A block fenced "```json proposed" with no label, or a mistyped one, matches neither pattern,
+    // and no test would read it.
+    const fences = [...proposal.matchAll(/```json[^\n]*\n/g)].length;
+    const examples = [...proposal.matchAll(/```json\n/g)].length;
+    expect(fences).toBe(examples + proposed.length);
+  });
+
   proposed.forEach(({ widget, parameter, example }, index) => {
     it(`proposed example ${index + 1} is refused, for ${widget}'s "${parameter}" alone`, () => {
       // Wrapped as the examples above are: a file, a card, or a field.
