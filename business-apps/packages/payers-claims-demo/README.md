@@ -321,16 +321,17 @@ missing, a claim the seed did not write is in what the demo counts, or the dev s
 something other than the kit's files.
 
 Run on 24 November 2026, against Nuxeo 2025.10.18 with this package installed and seeded: 36 of 36
-checks passed, on six distinct screenshots. With the kit, or once the file a step reads, broken on
-purpose, in seven runs, 21 of its 27 checks outside the preconditions were each seen failing: every
-home figure and card set, both menus, the queue's order, facet, request and narrowing, the member's
-name, age, address, claims and cases, the SSN hidden from the adjuster (by its rule, and by the
-Properties panel) and shown to member services, the adjuster's right to change the member, and the
-page drawn as its file says. Not seen failing: the queue's address and title, the record page's
-three cards, the Properties panel drawn, the served layout being the kit's, the bundle holding no
-code, and the console. Of the preconditions, these were seen refusing a real environment: the dev
-server serving other files, a supervisor as the run's user, and, with its test widened on purpose, a
-claim another session had left on the server, which the demo's figures do not count.
+checks passed, on six distinct screenshots. With the kit broken on purpose in six runs, and in a
+seventh the steps file pointed at a claim instead of the member, 21 of its 27 checks outside the
+preconditions were each seen failing: every home figure and card set, both menus, the queue's order,
+facet, request and narrowing, the member's name, age, address, claims and cases, the SSN hidden from
+the adjuster (by its rule, and by the Properties panel) and shown to member services, the adjuster's
+right to change the member, and the page drawn as its file says. Not seen failing: the queue's
+address and title, the record page's three cards, the Properties panel drawn, the served layout
+being the kit's, the bundle holding no code, and the console. Of the preconditions, these were seen
+refusing a real environment: the dev server serving other files, a supervisor as the run's user,
+and, with its test widened on purpose, a claim another session had left on the server, which the
+demo's figures do not count.
 
 ## What a server shows, and what only the dev server does
 
