@@ -63,6 +63,12 @@ export interface NxsDocumentListColumn {
    * the list never sorts a page itself. A column that cannot sort has a plain header.
    */
   readonly sortable?: boolean;
+  /**
+   * The cell's text, already formatted, for a column whose key is not packaged: a value shown
+   * through a widget, such as an amount with its currency. Absent, the cell is the property's
+   * stored value as text. A packaged key keeps its own view.
+   */
+  readonly text?: (document: NuxeoDocument) => string;
 }
 
 /** The server-side order a list is in: a column's key and a direction. */
@@ -370,8 +376,11 @@ export class NxsDocumentListComponent {
           ? ''
           : `${major}.${properties['uid:minor_version'] ?? 0}`;
       }
-      default:
-        return key.includes(':') ? text(properties[key]) : '';
+      default: {
+        if (!key.includes(':')) return '';
+        const column = this.columns().find((candidate) => candidate.key === key);
+        return column?.text ? column.text(doc) : text(properties[key]);
+      }
     }
   }
 

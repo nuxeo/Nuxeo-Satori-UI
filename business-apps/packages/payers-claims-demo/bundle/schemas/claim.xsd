@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until the presales Payers model arrives: a fictional claim schema, with the
+     properties the Claim and Member pages, the queue and layout-v2.md's examples name. Replace it
+     with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/claim"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/claim"
+  xmlns:ref="http://www.nuxeo.org/ecm/schemas/core/external-references/">
+
+  <!-- The claim number, such as CLAIM-000131. -->
+  <xs:element name="number" type="xs:string" />
+
+  <!-- The member and the provider, each stored as its document's id (ecm:uuid), which is what
+       the member_claims and provider_claims page providers are given. -->
+  <xs:element name="member">
+    <xs:simpleType>
+      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="provider">
+    <xs:simpleType>
+      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />
+    </xs:simpleType>
+  </xs:element>
+
+  <!-- serviceDate is the date of service the Member page sorts by. serviceStart and serviceEnd
+       are section 6's form example, for a service over several days. -->
+  <xs:element name="serviceDate" type="xs:date" />
+  <xs:element name="serviceStart" type="xs:date" />
+  <xs:element name="serviceEnd" type="xs:date" />
+  <xs:element name="received" type="xs:date" />
+
+  <xs:element name="billedAmount" type="xs:double" />
+  <xs:element name="allowedAmount" type="xs:double" />
+
+  <!-- A property, as section 9 shows it, not the lifecycle state. -->
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="submitted" />
+        <xs:enumeration value="inReview" />
+        <xs:enumeration value="pended" />
+        <xs:enumeration value="approved" />
+        <xs:enumeration value="denied" />
+        <xs:enumeration value="paid" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+
+  <!-- The adjuster's user name. A claim without one is unassigned. -->
+  <xs:element name="adjuster" type="xs:string" />
+  <!-- An ICD-10 code. -->
+  <xs:element name="diagnosis" type="xs:string" />
+</xs:schema>

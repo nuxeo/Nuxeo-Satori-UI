@@ -38,7 +38,7 @@ const AUDIT: DocumentTypeSchema = {
 };
 
 function file(cards: unknown[], extra: Record<string, unknown> = {}): RecordLayoutFile {
-  const read = readRecordLayout({ version: 2, cards, ...extra }, []);
+  const read = readRecordLayout({ version: 2, cards, ...extra }, { rules: [] });
   if ('invalid' in read) throw new Error(read.invalid);
   return read;
 }
@@ -144,7 +144,7 @@ describe('resolveRecordLayout', () => {
           { id: 'kept', cards: [{ id: 'y', fields: ['dc:title'] }] },
         ],
       },
-      [],
+      { rules: [] },
     );
     if ('invalid' in read) throw new Error(read.invalid);
     const { layout } = resolveRecordLayout(MEMBER, read);

@@ -312,23 +312,46 @@ travel with a clone. **Anything load-bearing belongs in the repo docs.**
 by default; everything is recorded at every impact so the debt is visible rather than filtered
 away. If `@axe-core/playwright` is missing it is a **failed check**, never a silent skip.
 
-Current state — **AA met on the fifteen cases scanned**, `KNOWN_VIOLATIONS` **empty** (2026-08-24):
+**As of 2026-11-23, AA is not met.** `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at
+e27deeaa0, fails 15 of 35 checks. Fourteen are `label-content-name-mismatch` (2.5.3 Label in
+Name, Level A) on the navigation's user-profile control, which is in the shell and so fails on
+every surface. With the rail collapsed it shows only the avatar initials NXSAT-673 added on
+2026-10-26, and they are not a word of its accessible name. The fifteenth is a Health 404 on an
+optional configuration file the local server does not serve, which is an environment condition.
 
-| Rule                          | Nodes | Now | Owner |
-| ----------------------------- | ----- | --- | ----- |
-| `label`                       | 42    | 0   | ours  |
-| `nested-interactive`          | 40    | 0   | ours  |
-| `button-name`                 | 21    | 0   | ours  |
-| `role-img-alt`                | 12    | 0   | ours  |
-| `color-contrast`              | 7     | 0   | ours  |
-| `scrollable-region-focusable` | 2     | 0   | ours  |
-| `aria-progressbar-name`       | 2     | 0   | ours  |
+The rule only now counts because the engine changed. The capture's `--no-save` install pins no
+version, and resolved axe-core 4.14.1; the 35/35 of 2026-10-22 ran on 4.13.0, which tags the
+rule `experimental` and so does not run it under the WCAG tags. A full capture with 4.13.0 on the
+same commit passes every axe check. The diagnosis and both control runs are in
+[the accessibility standard](../../docs/accessibility.md#the-2026-11-23-measurement). Record the
+axe-core version with any later verdict.
+
+The table below is the 2026-08-24 measurement: **AA met on the fifteen cases scanned**,
+`KNOWN_VIOLATIONS` **empty**, with one upstream exclusion (the last row). The captures of
+2026-09-15 and 2026-09-16 failed three `button-name` checks on browse, which do not reproduce on
+2026-11-23.
+
+| Rule                          | Nodes | Now | Owner                                             |
+| ----------------------------- | ----- | --- | ------------------------------------------------- |
+| `label`                       | 42    | 0   | ours                                              |
+| `nested-interactive`          | 40    | 0   | ours                                              |
+| `button-name`                 | 21    | 0   | ours                                              |
+| `role-img-alt`                | 12    | 0   | ours                                              |
+| `color-contrast`              | 7     | 0   | ours                                              |
+| `scrollable-region-focusable` | 2     | 0   | ours                                              |
+| `aria-progressbar-name`       | 2     | 0   | ours                                              |
+| `aria-required-children`      | 3     | 3   | upstream; excluded, and its surface since removed |
 
 The lesson is about the **baseline**, not the fixes. The previous capture scanned **three** surfaces
 and ratcheted **four** rule ids. Widening it to fifteen cases found **seven** classes and 77 nodes,
 and three of the classes lived only in view-mode and column-panel states a single visit per route
 never reaches. A ratchet over an under-sampled scan reports "no new violations" while the ones it
 cannot see accumulate — the same failure mode as a gate nobody has watched go red.
+
+The one exclusion was scoped to the step that scanned the upstream library's surface, not to
+`KNOWN_VIOLATIONS`, so the same rule failing on a surface we own still failed the capture. That
+step went when the library and its route were removed in October 2026: the three nodes left with
+them unfixed, and were never re-scanned.
 
 **Not covered:** dialogs, the upload flow, dark mode, and the pre-auth login surface. The last is a
 harness limitation — the capture signs in before its first scan, and on a guest-enabled Nuxeo an

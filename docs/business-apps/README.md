@@ -54,7 +54,7 @@ Designer, the development plan and its decisions. Start here when you pick this 
 8. [layout-v2.md](layout-v2.md): layout file version 2, proposed. It is the format record pages
    and forms are configured in, and what the Studio migration writes.
 9. [app-definition-v2.md](app-definition-v2.md): the other files of an app definition, proposed:
-   `app.json`, queues, actions, task forms, labels and module settings.
+   `app.json`, queues, actions, task forms, labels, module settings, the menu and the home.
 10. [package-pipeline.md](package-pipeline.md): the package pipeline's first stage, which checks,
     signs and publishes an app definition package.
 

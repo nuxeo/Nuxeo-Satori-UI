@@ -2,10 +2,16 @@
  * npx tsx tools/studio-migration/src/cli.ts <command> …
  *
  *   inventory <package.zip> [--json]                          what the package holds, and becomes
- *   convert   <package.zip> <new-directory>                   the M0 conversion, with its report
- *   check     <package.zip> <conversion-directory> [--json]   the harness
+ *   convert   <package.zip> <new-directory> [--allow-list <file>]
+ *                                                             the M1 conversion, with its report
+ *   check     <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+ *                                                             the harness
  *   mutate    <conversion-directory> <mutation> <new-directory>   a deliberately broken copy
  *   mutate    --list                                          the mutations, and the check each fails
+ *
+ * `--allow-list` names the deployment's operations, `{ "operations": [...] }` (decision 3): a button
+ * becomes an action only when its operation is on it. `check` reads the list the conversion was
+ * made with unless it is given one.
  *
  * Exit codes: 0 done, and for `check`, no check failed; 1 a check failed, or something could not be
  * read or written, with the reason; 2 the command was wrong. Nothing in a package is ever run, and
@@ -17,6 +23,7 @@ import { CatalogueError, loadCatalogue, type How } from './catalogue';
 import {
   convert,
   ConversionError,
+  labelsOf,
   OUTCOMES,
   readConversion,
   writeConversion,
@@ -37,19 +44,26 @@ export interface CliIo {
 
 const USAGE = `usage:
   studio-migration inventory <package.zip> [--json]
-  studio-migration convert <package.zip> <new-directory>
-  studio-migration check <package.zip> <conversion-directory> [--json]
+  studio-migration convert <package.zip> <new-directory> [--allow-list <file>]
+  studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration mutate <conversion-directory> <mutation> <new-directory>
   studio-migration mutate --list
 `;
 
-/** What a command expects: its positional arguments and the flags it takes. */
+/** What a command expects: its positional arguments, the flags it takes, and those with a value. */
 const COMMANDS: Readonly<
-  Record<string, { readonly args: number; readonly flags: readonly string[] }>
+  Record<
+    string,
+    {
+      readonly args: number;
+      readonly flags: readonly string[];
+      readonly valued?: readonly string[];
+    }
+  >
 > = {
   inventory: { args: 1, flags: ['--json'] },
-  convert: { args: 2, flags: [] },
-  check: { args: 2, flags: ['--json'] },
+  convert: { args: 2, flags: [], valued: ['--allow-list'] },
+  check: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
   mutate: { args: 3, flags: [] },
 };
 
@@ -62,13 +76,27 @@ export function main(argv: readonly string[], io: CliIo): number {
   }
   const spec =
     command !== undefined && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
-  const flags = rest.filter((arg) => arg.startsWith('--'));
-  const args = rest.filter((arg) => !arg.startsWith('--'));
-  if (!spec || args.length !== spec.args || flags.some((flag) => !spec.flags.includes(flag))) {
+  const flags: string[] = [];
+  const args: string[] = [];
+  const values = new Map<string, string>();
+  let wrong = !spec;
+  for (let index = 0; index < rest.length && spec; index++) {
+    const arg = rest[index];
+    if (spec.valued?.includes(arg)) {
+      const value = rest[++index];
+      if (value === undefined || value.startsWith('--') || values.has(arg)) wrong = true;
+      else values.set(arg, value);
+    } else if (arg.startsWith('--')) {
+      if (!spec.flags.includes(arg)) wrong = true;
+      flags.push(arg);
+    } else args.push(arg);
+  }
+  if (!spec || wrong || args.length !== spec.args) {
     io.err(USAGE);
     return 2;
   }
   const json = flags.includes('--json');
+  const allowListFile = values.get('--allow-list');
   try {
     switch (command) {
       case 'inventory': {
@@ -83,7 +111,9 @@ export function main(argv: readonly string[], io: CliIo): number {
       }
       case 'convert': {
         const pkg = readPackage(io, args[0]);
-        const conversion = convert(pkg, inventory(pkg), loadCatalogue());
+        const conversion = convert(pkg, inventory(pkg), loadCatalogue(), {
+          allowList: readAllowList(io, allowListFile) ?? new Set(),
+        });
         writeConversion(args[1], conversion);
         io.out(conversionSummary(conversion, args[1]));
         return 0;
@@ -91,11 +121,13 @@ export function main(argv: readonly string[], io: CliIo): number {
       case 'check': {
         const pkg = readPackage(io, args[0]);
         const conversion = readConversion(args[1]);
+        const allowList = readAllowList(io, allowListFile);
         const result = runHarness({
           pkg,
           inventory: inventory(pkg),
           catalogue: loadCatalogue(),
           conversion,
+          ...(allowList ? { allowList } : {}),
         });
         io.out(
           json ? `${JSON.stringify(result, null, 2)}\n` : harnessSummary(result, pkg, args[1]),
@@ -132,6 +164,26 @@ export function main(argv: readonly string[], io: CliIo): number {
   return 2;
 }
 
+/** The deployment's allow-list, `{ "operations": [...] }`, as app-definition's command line reads it. */
+function readAllowList(io: CliIo, path: string | undefined): ReadonlySet<string> | undefined {
+  if (path === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(io.readFile(path).toString('utf8'));
+  } catch (error) {
+    throw new ConversionError(`${path}: ${(error as Error).message}`);
+  }
+  const operations =
+    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)['operations']
+      : undefined;
+  if (!Array.isArray(operations) || !operations.every((item) => typeof item === 'string'))
+    throw new ConversionError(
+      `${path}: an allow-list is { "operations": [ <operation id>, ... ] }`,
+    );
+  return new Set(operations as string[]);
+}
+
 function readPackage(io: CliIo, path: string): StudioPackage {
   let archive: Buffer;
   try {
@@ -154,9 +206,11 @@ export function conversionSummary(conversion: Conversion, directory: string): st
   const counts = new Map<Outcome, number>(OUTCOMES.map((outcome) => [outcome, 0]));
   for (const entry of report.constructs)
     counts.set(entry.outcome, (counts.get(entry.outcome) ?? 0) + 1);
-  const labels = Object.entries(conversion.labels).map(
+  const labels = Object.entries(labelsOf(conversion)).map(
     ([locale, texts]) => `${locale} (${Object.keys(texts).length})`,
   );
+  const files = Object.keys(conversion.app);
+  const count = (prefix: string): number => files.filter((path) => path.startsWith(prefix)).length;
   const themes = Object.entries(conversion.themes).map(
     ([name, theme]) =>
       `${name} (${plural(Object.keys(theme.tokens).length, 'token')}, ${plural(Object.keys(conversion.assets).filter((path) => path.startsWith(`themes/${name}/`)).length, 'file')})`,
@@ -167,6 +221,7 @@ export function conversionSummary(conversion: Conversion, directory: string): st
       .filter(([, n]) => n > 0)
       .map(([outcome, n]) => `${outcome} ${n}`)
       .join(', ')}`,
+    `  app/: ${plural(files.length, 'file')}: app.json, ${plural(count('layouts/'), 'layout')}, ${plural(count('queues/'), 'queue')}, ${count('actions.json') ? 'actions.json, ' : ''}${plural(count('labels/'), 'labels file')}`,
     `  labels: ${labels.join(', ') || 'none'}`,
     `  themes: ${themes.join(', ') || 'none'}`,
     '',
@@ -189,8 +244,10 @@ export function harnessSummary(
   for (const check of result.checks) {
     const head = `${String(check.number).padStart(2)}  ${check.name.padEnd(26)}`;
     if (check.status === 'not run') lines.push(`${head} not run: ${check.reason}`);
+    else if (check.status === 'partial') lines.push(`${head} partial: ${check.reason}`);
     else lines.push(`${head} ${check.status === 'pass' ? 'pass' : 'FAIL'}`);
     for (const finding of check.findings) lines.push(`      - ${finding}`);
+    if (check.status === 'fail' && check.reason) lines.push(`      Not run: ${check.reason}`);
   }
   lines.push('', `Verdict: ${result.ready ? 'ready' : 'not ready'}`);
   for (const blocker of result.blockers) lines.push(`  - ${blocker}`);
@@ -260,6 +317,10 @@ export function summary(result: Inventory, accounting: Accounting): string {
           : entry.how;
     lines.push(`  ${contribution.slot.padEnd(26)} ${contribution.name.padEnd(24)} ${target}`);
   }
+
+  lines.push(
+    `Conditions: ${result.conditions.length ? `${result.conditions.length}, converted in M2 with truth tables` : 'none'}`,
+  );
 
   const withCode = result.customCode.filter((custom) => custom.hasCode);
   lines.push(

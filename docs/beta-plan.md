@@ -10,7 +10,7 @@
 
 ## Programme status
 
-**As at 25 August 2026.** `CLAUDE.md` points here for the authoritative position, and for
+**As at 23 November 2026.** `CLAUDE.md` points here for the authoritative position, and for
 weeks there was no such section — so that pointer dangled while `CLAUDE.md`'s own summary
 claimed Phase 3 was next, three phases after it had shipped.
 
@@ -19,23 +19,29 @@ Run `npm run beta:state` for the machine-checked version. It reads
 whenever a phase claims more than the artifacts support. **Prefer it to this table**, which
 is a human summary and can go stale exactly as its predecessor did.
 
-| Phase                            | Status          | Evidence                   |
-| -------------------------------- | --------------- | -------------------------- |
-| 0 — Verify and unblock           | complete        | 14 checks                  |
-| 1 — Layer 0 config               | complete        | 39 checks                  |
-| 2 — Layer 1 extension registry   | complete        | 46 checks                  |
-| 3 — Component adoption           | complete        | 55 checks                  |
-| 4 — Layer 2 publishable platform | complete        | 25 checks                  |
-| 5 — Layer 3 agent harness        | complete        | 27 checks                  |
-| 6 — Beta quality bar and proof   | **in progress** | 5 of 7; steps 3 and 6 open |
+| Phase                            | Status                   | Evidence                                             |
+| -------------------------------- | ------------------------ | ---------------------------------------------------- |
+| 0 — Verify and unblock           | complete                 | 14 checks at sign-off; 12 since 2026-11-02           |
+| 1 — Layer 0 config               | **in progress**          | 39 checks at sign-off; now 39 of 40                  |
+| 2 — Layer 1 extension registry   | **in progress**          | 46 checks at sign-off; now 42 of 43                  |
+| 3 — Component adoption           | **superseded**           | 55 checks at sign-off                                |
+| 4 — Layer 2 publishable platform | complete with deviations | 25 checks at sign-off; 18 on the signed-out template |
+| 5 — Layer 3 agent harness        | complete                 | 27 checks                                            |
+| 6 — Beta quality bar and proof   | **in progress**          | 5 of 7; steps 3 and 6 open                           |
 
-All six completed phases are re-gated against the current 14-gate pipeline, not only the
-smaller pipeline that existed when each was signed off — Phases 0–2 were originally gated
-on 4–6 gates. The re-gate matters: two of the gates added since found real defects in
-already-signed-off work.
+Phases 0–5, all signed off by 24 August 2026, each cite a re-gate on 2026-11-03 against the
+whole pipeline as it then stood, 35 of 35 gates green (NXSAT-660), not only against the smaller
+pipeline that existed when each was signed off — Phases 0–2 were originally gated on 4–6 gates.
+The re-gate matters: two of the gates added since found real defects in already-signed-off
+work. It does not make a phase complete: Phases 1 and 2 are back in progress, and Phase 3 is
+superseded. Gates have been added since 2026-11-03, so that re-gate no longer covers the whole
+pipeline. `npm run beta:state` says so only for the complete phases, 0, 4 and 5, and only where
+their evidence and gate reports are on disk and pass. It does not check the re-gate of a phase
+in progress or superseded, so the absence of a warning for Phases 1, 2 and 3 says nothing about
+their gate coverage.
 
 **Deviations are recorded per phase in `.ai/state/phases.json`, not here.** Phase 4 carries
-ten, including the one that mattered most: the published package could not be published at
+twelve, including the one that mattered most: the published package could not be published at
 all for the whole phase. Read them before treating a phase as settled.
 
 An independent adversarial review after Phase 5 found defects in every phase, and the
@@ -195,7 +201,12 @@ Settled by first-hand inspection. Do not re-litigate; if you contradict one, pro
    built-in experimental `localStorage` collides with jsdom. CI runs Node 20, contributors do not.
 4. Triage the **9 high-severity `npm audit` findings**. NXENG-615 requires no high or critical.
 
-## Phase 1 — Layer 0: upgrade-safe configuration (**complete**)
+## Phase 1 — Layer 0: upgrade-safe configuration (**in progress**)
+
+**Back in progress since 2026-11-02** (NXSAT-660). The latest run `phases.json` records, on
+`9ba733864`, passes 39 of 40 checks: a request the app sends to `/nuxeo/agentic-ui/` from the
+browse and themes pages fails, and its source is not yet identified. The gates below are the
+sign-off record.
 
 Gates: quality gate **PASS** (4/4 green) · evidence gate **PASS** (38/38 checks, exit 0), after the
 remediation below.
@@ -261,7 +272,11 @@ Nuxeo document and nothing is read from the repository. The section carried a su
 What replaced it is [`docs/extension-reference.md`](extension-reference.md) §2, lines 117-119 — the
 manifest is a package fragment served anonymously, before sign-in, with no migration from the Note._
 
-## Phase 2 — Layer 1: extension registry (**complete**; toolbar/tabs/columns carried to Phase 3)
+## Phase 2 — Layer 1: extension registry (**in progress**; toolbar/tabs/columns carried to Phase 3)
+
+**Back in progress since 2026-11-02** (NXSAT-660), for the same failing request as Phase 1. The
+latest run `phases.json` records, on `9ba733864`, passes 42 of 43 checks. The gates below are
+the sign-off record.
 
 Gates: quality gate **PASS** (6/6 green, including the new lockfile and typecheck gates) ·
 evidence gate **PASS**.
@@ -342,13 +357,23 @@ Not attempted, and carried into the component-adoption phase:
   documents, so `app.rules.canWriteSelection` and `app.rules.canRemoveSelection` still
   answer `false`. Making them live costs a fetch per selected row.
 
-## Phase 3 — Component adoption (**complete**)
+## Phase 3 — Component adoption (**superseded**)
 
-The UI is built on our own `nxs-` Satori components (`libs/shared/satori-components`) rather than
-hand-written lookalikes. This section is the plan as it was carried out; the evidence is cited in
-`.ai/state/phases.json`.
+The phase adopted an upstream component library behind a proof-of-concept browse route, and was
+signed off on 2026-08-24 with 55 checks. The adopted components, their bridge and the route were
+removed in October 2026 (NXSAT-635, NXSAT-637), so that adoption no longer exists, and
+`.ai/state/phases.json` records the phase as `superseded` (NXSAT-660, 2026-11-02).
 
-## Phase 4 — Layer 2: publishable platform (**complete**, 10 deviations recorded)
+Its evidence steps now check the browse page that replaced the route, which is built on our own
+`nxs-` Satori components (`libs/shared/satori-components`): 29 of 29 on NXSAT-660's review head.
+`phases.json` keeps those checks as a record of that page, not as adoption evidence, so they are
+not this phase's sign-off.
+
+## Phase 4 — Layer 2: publishable platform (**complete with deviations**, 12 recorded)
+
+**Narrowed on 2026-11-02** (NXSAT-660): the evidence now checks the forkable template signed out
+only, 18 of 18 checks. The signed-in checks need Nuxeo, so they are recorded as notes rather than
+assertions.
 
 - Give the libraries real build targets with ng-packagr. Today every `project.json` has only `lint`
   and `test`, and the only artifact is a prebuilt SPA zip — there is nothing for a customer to
@@ -368,7 +393,7 @@ Largely built. Remaining:
 - Add Nx generators for "new extension component", "new action", "new rule".
 - Package the guardrail script for customer use.
 
-## Phase 6 — Beta quality bar and proof (**5 of 7 steps done**; steps 3 and 6 open as of 2026-09-23)
+## Phase 6 — Beta quality bar and proof (**5 of 7 steps done**; step 6 open since 2026-09-22, step 3 not met as of 2026-11-23)
 
 - NXENG-615's checklist, assessed against the slice: unit coverage above 90% (the bridge has 11
   tests for 2,949 lines today), ~~Playwright E2E on critical paths~~ (**done** — `npm run beta:e2e`,
@@ -384,15 +409,15 @@ Largely built. Remaining:
 
 **Progress, and what each step still needs**
 
-| Step                        | State                                                                                                                                                                                                                                                                                                                   |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 — coverage ratchet repair | **done** — orphaned and unratcheted entries now fail                                                                                                                                                                                                                                                                    |
-| 1 — upgrade rehearsal       | **done** — 15th gate, in CI                                                                                                                                                                                                                                                                                             |
-| 2 — Playwright E2E          | **done** — 12 specs, 4 critical paths, phase gate                                                                                                                                                                                                                                                                       |
-| 3 — WCAG 2.1 AA met         | **IN QUESTION as of 2026-09-23** — was done 2026-08-24 (7 rule classes fixed, 77 nodes, `KNOWN_VIOLATIONS` empty, 15 cases). Five consecutive `phase-6-a11y` captures since 2026-09-15 fail 3 checks: `button-name` on browse, browse cards and the column panel. Undiagnosed, so this is unverified rather than failed |
-| 4 — SAST + SCA              | **done** — but SAST already existed and was reporting 21 unread alerts, 6 high. Two gates now read the output: `supply-chain` and `code-scanning`                                                                                                                                                                       |
-| 5 — Safari/WebKit           | **done** — 34 specs (17 × 2 engines), 5 new specs target engine divergence; WebKit not Safari, distinction recorded                                                                                                                                                                                                     |
-| 6 — coverage to 90%         | **REOPENED 2026-09-22** — **10 of 11** in-scope projects meet the bar (was 10 of 10). `shared-ai-client` is at 15.98%. Read the caveat below                                                                                                                                                                            |
+| Step                        | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0 — coverage ratchet repair | **done** — orphaned and unratcheted entries now fail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 1 — upgrade rehearsal       | **done** — 15th gate, in CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 2 — Playwright E2E          | **done** — 12 specs, 4 critical paths, phase gate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 3 — WCAG 2.1 AA met         | **NOT MET as of 2026-11-23.** It was done on 2026-08-24 (7 rule classes fixed, 77 nodes, `KNOWN_VIOLATIONS` empty, 15 cases) and in question from 2026-09-23. `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at e27deeaa0 with axe-core 4.14.1, fails 15 of 35 checks. 14 are `label-content-name-mismatch` (2.5.3 Label in Name, Level A) on the navigation's user-profile control, which appears on every scanned surface. 1 is a Health 404 on an optional configuration file the local server does not serve, which is an environment condition. The 35/35 of 2026-10-22 used axe-core 4.13.0, which does not run that rule under the WCAG tags. The September `button-name` failures do not reproduce |
+| 4 — SAST + SCA              | **done** — but SAST already existed and was reporting 21 unread alerts, 6 high. Two gates now read the output: `supply-chain` and `code-scanning`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 5 — Safari/WebKit           | **done** — 34 specs (17 × 2 engines), 5 new specs target engine divergence; WebKit not Safari, distinction recorded                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 6 — coverage to 90%         | **REOPENED 2026-09-22** — **10 of 11** in-scope projects meet the bar (was 10 of 10). `shared-ai-client` is at 15.98%. Read the caveat below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 **Two steps are open: 3 and 6. Five of the seven are done.**
 
@@ -401,6 +426,15 @@ on 2026-09-23. Neither was reopened by new work — step 6 because the coverage 
 step 3 because reading the a11y manifests showed five consecutive failing captures behind a
 recorded pass. Both were already true and unrecorded. `shared-ai-client` is an in-scope project at 15.98%, so "coverage to 90%"
 is not met on its own terms.
+
+Step 3 was re-measured on 2026-11-23 and is **not met**, and this time the cause is new work. On
+2026-10-26 NXSAT-673 put the signed-in user's avatar initials in the navigation's user-profile
+control. With the rail collapsed, those initials are all the control shows, and they are not a
+word of its accessible name. A newer axe-core reports that as a WCAG 2.5.3 failure on every
+screen. The older engine behind the 2026-10-22 pass did not run the rule, so the defect was not
+measured until the `--no-save` install, which pins no version, moved on. The diagnosis and the
+two control runs are recorded in `.ai/state/phases.json` and in
+[the accessibility standard](accessibility.md#the-2026-11-23-measurement).
 
 A green `npm run beta:coverage` does not close this, and that is worth being explicit about: the
 gate's exit condition is the **ratchet**, not the target. A shortfall against 90% is reported and

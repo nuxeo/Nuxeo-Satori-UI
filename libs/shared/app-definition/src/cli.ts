@@ -13,14 +13,14 @@
  *   - a JSON file out of place is refused rather than passed over;
  *   - `demo/` and `assets/` are not checked;
  *   - version 1's `bootstrap.json`, `manifest.json` and `layouts.json` are left alone.
- * - **With its package:** a file is checked with the `app.json`, `actions.json` and `assets/` of
- *   the package it sits in, whether or not they were named. One of them that cannot be read is
- *   reported, and fails the run.
+ * - **With its package:** a file is checked with the `app.json`, `actions.json`, `assets/` and
+ *   `queues/` of the package it sits in, whether or not they were named. One of them that cannot
+ *   be read is reported, and fails the run.
  * - **A layout's mode** is read from its path, `layouts/<Type>/<mode>.layout.json`, unless
  *   `--mode` names it.
  * - **Operations** are refused unless `--allow-list` names a file that lists them (decision 3).
- * - **What the deployment registers in code**, a customer's own rules and actions, and the domain
- *   modules it has, come from `--registered`.
+ * - **What the deployment registers in code**, a customer's own rules, actions and pages, and the
+ *   domain modules it has, come from `--registered`.
  * - **`app.json`'s platform range** is held to `--platform`, when it is given.
  * - **The server's content model**, from `--model`, holds each version 2 layout to the document
  *   type its path names: its properties, and the property types its widgets show. The file is
@@ -328,12 +328,20 @@ function checkModel(rest: readonly string[], io: CliIo): number {
   return 0;
 }
 
-const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'actions', 'modules'] as const;
+const REGISTERED_KEYS = [
+  'rules',
+  'rowActions',
+  'bulkActions',
+  'actions',
+  'modules',
+  'pages',
+] as const;
 
 /**
  * What a deployment registers in code beyond the platform's own, from
- * `{ "rules", "rowActions", "bulkActions", "actions", "modules" }`, each a list of ids, or what is
- * wrong. `actions` are the others a deployment registers in code, in any other slot.
+ * `{ "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }`, each a list of ids, or
+ * what is wrong. `actions` are the others a deployment registers in code, in any other slot.
+ * `pages` are the menu entries of its own a menu may open, by ID.
  */
 function readRegistered(path: string): Registries | string {
   let content: unknown;
@@ -343,7 +351,7 @@ function readRegistered(path: string): Registries | string {
     return `cannot be read as JSON: ${(error as Error).message}`;
   }
   const wrong =
-    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules" }, each a list of ids';
+    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }, each a list of ids';
   if (!isRecord(content)) return wrong;
   const lists: Partial<Record<(typeof REGISTERED_KEYS)[number], string[]>> = {};
   for (const [key, value] of Object.entries(content)) {
@@ -359,9 +367,10 @@ function readRegistered(path: string): Registries | string {
 }
 
 /**
- * A package's `app.json`, `actions.json` and assets, read once for all its files. One that exists
- * and cannot be read goes into `problems`, so that the run reports it rather than leaning on
- * nothing in silence.
+ * A package's `app.json`, `actions.json`, assets and queues, read once for all its files. One that
+ * exists and cannot be read goes into `problems`, so that the run reports it rather than leaning on
+ * nothing in silence. Its queues are the names of its `queues/<id>.json` files; a directory with
+ * neither an `app.json` nor a `queues/` is no package, and its home's queues are not checked.
  */
 function contextOf(
   root: string,
@@ -393,7 +402,25 @@ function contextOf(
       problems.set(assetsRoot, `cannot be read: ${(error as Error).message}`);
     }
   }
-  const context = { app: read('app.json'), actions: read('actions.json'), assets: new Set(assets) };
+  const queuesRoot = join(root || '.', 'queues');
+  let queues: ReadonlySet<string> | undefined;
+  if (existsSync(queuesRoot)) {
+    try {
+      queues = new Set(
+        readdirSync(queuesRoot, { withFileTypes: true })
+          .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+          .map((entry) => entry.name.slice(0, -'.json'.length)),
+      );
+    } catch (error) {
+      problems.set(queuesRoot, `cannot be read: ${(error as Error).message}`);
+    }
+  } else if (existsSync(join(root || '.', 'app.json'))) queues = new Set();
+  const context = {
+    app: read('app.json'),
+    actions: read('actions.json'),
+    assets: new Set(assets),
+    queues,
+  };
   cache.set(root, context);
   return context;
 }

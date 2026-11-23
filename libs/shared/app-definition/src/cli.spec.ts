@@ -343,7 +343,7 @@ describe('app-definition validate', () => {
         '--registered',
         join(deployment, 'registered.json'),
       ]);
-      expect(out).toBe('6 files: 6 passed, 0 refused.\n');
+      expect(out).toBe('8 files: 8 passed, 0 refused.\n');
       expect(code).toBe(0);
     });
 
@@ -379,6 +379,61 @@ describe('app-definition validate', () => {
       expect(out).toContain(
         'actions[0].id: the id "acme.toolbar.countersign" is registered in code, and a manifest cannot rebind it [structure]',
       );
+    });
+
+    it("holds the home and the menu to the package's queues, and takes its own pages", () => {
+      const home = {
+        version: 2,
+        cards: [{ id: 'open', label: 'Open', kpi: { pageProvider: 'payers_open' }, queue: 'open' }],
+      };
+      const navigation = {
+        version: 2,
+        entries: [{ id: 'contracts', label: 'Contracts', page: 'acme.navbar.contracts' }],
+      };
+      const queue = {
+        version: 2,
+        label: 'Open',
+        pageProvider: 'payers_open',
+        columns: ['dc:title'],
+      };
+      const app = {
+        version: 2,
+        id: 'claims',
+        label: 'Claims',
+        packageVersion: '1.0.0',
+        platform: '^0.2.0',
+        groups: ['members'],
+      };
+      const withQueue = packageWith({
+        'app.json': app,
+        'home.json': home,
+        'queues/open.json': queue,
+      });
+      expect(run(['validate', withQueue])).toEqual({
+        code: 0,
+        out: '3 files: 3 passed, 0 refused.\n',
+        err: '',
+      });
+      // A package with no queues/ has no queue to name.
+      const noQueues = packageWith({ 'app.json': app, 'home.json': home });
+      const refused = run(['validate', noQueues]);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain(
+        'home.json: cards[0].queue: the queue "open" is not in the package: no queues/open.json [unknown]',
+      );
+      // A home.json with no package around it is checked alone: its queues cannot be known.
+      const alone = packageWith({ 'home.json': home });
+      expect(run(['validate', join(alone, 'home.json')]).code).toBe(0);
+
+      const menu = packageWith({ 'app.json': app, 'navigation.json': navigation });
+      const unregistered = run(['validate', menu]);
+      expect(unregistered.out).toContain(
+        'the page "acme.navbar.contracts" is not registered [unknown]',
+      );
+      const deployment = packageWith({ 'registered.json': { pages: ['acme.navbar.contracts'] } });
+      expect(
+        run(['validate', menu, '--registered', join(deployment, 'registered.json')]).code,
+      ).toBe(0);
     });
 
     it('exits 2 for an allow-list or a registered file of the wrong shape', () => {

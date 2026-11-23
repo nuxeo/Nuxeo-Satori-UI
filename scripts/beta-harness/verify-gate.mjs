@@ -578,6 +578,24 @@ const ALL_GATES = [
     argv: ['scripts/storybook-assemble-site.selftest.mjs'],
     echoOnPass: true,
   },
+  // The built Satori Storybook, opened story by story: is Satori's loader served the catalogues it
+  // asks for? satori-ui 1.0.0 dropped `en.json` and this Storybook rendered raw `sat.*` keys with
+  // every gate green, because a Storybook builds fine with raw keys on screen. The static
+  // `checkStorybookSatoriCatalogues` guardrail approximates this from the config files; this asks
+  // what is actually served. Needs satori-ui (a GitHub Packages token) and Playwright, so it
+  // declares the NOT RUN skip rather than passing without them.
+  {
+    id: 'storybook-satori',
+    // A browser reading HTTP status codes from a local static server; nothing OS-dependent. It also
+    // needs the GitHub Packages token, which the Windows job does not have.
+    platformSensitive: false,
+    label: 'Satori Storybook is served its catalogues',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/storybook-satori.mjs'],
+    mayNotRun: true,
+    // How many stories ran, and any that were not served a catalogue, is the evidence.
+    echoOnPass: true,
+  },
   // The published addresses this repository advertises, and the ones it records as dead.
   //
   // Next to `supply-chain` and `peer-installability` in kind: it needs the network, so it declares

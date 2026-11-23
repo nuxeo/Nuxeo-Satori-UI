@@ -1,16 +1,22 @@
+import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
+import { By } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
   DOCUMENT_RULE_EVALUATORS,
   ExtensionRuleContextService,
   ExtensionRuleRegistry,
 } from '@nuxeo/satori-platform/extensions';
-import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import { type NuxeoDocument, PageProviderService } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import type { DocumentTypeDefinition } from '../layout.model';
 import { readRecordLayout } from './record-layout';
+import { RecordListComponent } from './record-list';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
 import { resolveRecordLayout, type ResolvedRecordLayout } from './resolve-record-layout';
 
@@ -93,7 +99,7 @@ const GREETING_PAGE = {
   ],
 };
 
-/** The Member page of layout-v2.md, section 9, without the related lists this build does not draw. */
+/** The Member page of layout-v2.md, section 9, without its related lists: those are below. */
 const MEMBER_PAGE = {
   version: 2,
   columns: 2,
@@ -141,7 +147,9 @@ const MEMBER_PAGE = {
 };
 
 function layoutOf(content: Record<string, unknown>): ResolvedRecordLayout {
-  const read = readRecordLayout(content, TestBed.inject(ExtensionRuleRegistry).registeredRuleIds());
+  const read = readRecordLayout(content, {
+    rules: TestBed.inject(ExtensionRuleRegistry).registeredRuleIds(),
+  });
   if ('invalid' in read) throw new Error(read.invalid);
   return resolveRecordLayout(MEMBER_TYPE, read).layout;
 }
@@ -154,8 +162,10 @@ describe('RecordPageComponent', () => {
   /** The zone the page shows an instant in: the process's own, unless a test chooses one. */
   let timeZone: string | undefined;
   let warnings: string[];
+  let execute: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    execute = vi.fn(() => new Subject());
     rules = { memberServices: false, canSeeService: true };
     principal = (kind, id) =>
       of(
@@ -179,14 +189,18 @@ describe('RecordPageComponent', () => {
       warnings.push(String(message)),
     );
     TestBed.configureTestingModule({
-      imports: [RecordPageComponent],
+      imports: [RecordPageComponent, MatIconTestingModule],
       providers: [
         provideNxsComponents(),
+        provideRouter([]),
+        { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
+        { provide: PageProviderService, useValue: { execute } },
         {
           provide: DocumentLayoutService,
           useValue: {
             vocabularyLabel: (directory: string, id: string) => vocabularyLabel(directory, id),
             principalLabel: (kind: string, id: string) => principal(kind, id),
+            rowPropertiesOf: () => of(new Map()),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
@@ -346,10 +360,9 @@ describe('RecordPageComponent', () => {
     expect(root.querySelector('[data-field="greeting"]')).toBeNull();
     expect(root.querySelector('img, b')).toBeNull();
     // The reader, which the service logs from, says why.
-    const read = readRecordLayout(
-      GREETING_PAGE,
-      TestBed.inject(ExtensionRuleRegistry).registeredRuleIds(),
-    );
+    const read = readRecordLayout(GREETING_PAGE, {
+      rules: TestBed.inject(ExtensionRuleRegistry).registeredRuleIds(),
+    });
     expect('problems' in read && read.problems).toEqual([
       'cards[0].fields[1].widget: a computed field is text, never HTML, so it cannot use the widget "rich-text"; cards[0].fields[1] left out',
     ]);
@@ -804,5 +817,105 @@ describe('RecordPageComponent', () => {
       cards: [{ id: 'a', fields: ['member:phone'] }],
     });
     expect(valueOf(root, 'member:phone')).toBe('—');
+  });
+  describe('related records', () => {
+    /** The Member page's claims card, layout-v2.md section 9, with a column only some may see. */
+    const CLAIMS_PAGE = {
+      version: 2,
+      columns: 2,
+      cards: [
+        { id: 'member', label: 'Member', fields: ['member:phone'] },
+        {
+          id: 'claims',
+          label: 'Claims',
+          span: 2,
+          related: {
+            pageProvider: 'member_claims',
+            parameters: [{ field: 'ecm:uuid' }, { field: 'member:status' }],
+            columns: [
+              'claim:number',
+              {
+                field: 'claim:billedAmount',
+                widget: 'currency',
+                parameters: { currency: 'USD' },
+                visibleWhen: 'test.rules.memberServices',
+              },
+              'claim:status',
+            ],
+            sort: [{ field: 'claim:serviceDate', order: 'desc' }],
+          },
+        },
+      ],
+    };
+
+    const relatedList = (): RecordListComponent =>
+      fixture.debugElement.query(By.directive(RecordListComponent))
+        .componentInstance as RecordListComponent;
+
+    it("lists the records in a card of their own, asked for with the open record's values", async () => {
+      const root = await render(member(), CLAIMS_PAGE);
+      const card = root.querySelector<HTMLElement>('[data-card-id="claims"]');
+      expect(card?.querySelector('h3')?.textContent?.trim()).toBe('Claims');
+      expect(card?.querySelector('lib-record-list')).not.toBeNull();
+      expect(card?.querySelector('dl')).toBeNull();
+      expect(execute).toHaveBeenCalledWith('member_claims', {
+        parameters: ['m1', 'active'],
+        pageSize: 10,
+        pageIndex: 0,
+        sort: [{ field: 'claim:serviceDate', order: 'desc' }],
+      });
+      expect(relatedList().label()).toBe('Claims');
+      expect(relatedList().source()).toBe('Member/view layout: cards[1]');
+    });
+
+    it("shows a column only while its rule passes, as a field's does", async () => {
+      await render(member(), CLAIMS_PAGE);
+      expect(
+        relatedList()
+          .list()
+          .columns.map((column) => column.xpath),
+      ).toEqual(['claim:number', 'claim:status']);
+      rules.memberServices = true;
+      await render(member(), CLAIMS_PAGE);
+      expect(
+        relatedList()
+          .list()
+          .columns.map((column) => column.xpath),
+      ).toEqual(['claim:number', 'claim:billedAmount', 'claim:status']);
+      // Answered here, so that the list, which draws no column with a rule left to answer, draws it.
+      expect(
+        relatedList()
+          .list()
+          .columns.map((column) => column.visibleWhen),
+      ).toEqual([null, null, null]);
+      expect(relatedList()['shownColumns']()).toHaveLength(3);
+    });
+
+    it('does not ask for the list while a parameter has no value on the record, and says why', async () => {
+      await render(member({ 'member:status': '' }), CLAIMS_PAGE);
+      expect(relatedList().parameters()).toBeNull();
+      expect(execute).not.toHaveBeenCalled();
+      expect(warnings).toContain(
+        '[agentic-ui-layouts] Member/view layout: cards[1]: not listed: parameters[1] reads member:status, which has no single value on this record',
+      );
+    });
+
+    it('leaves out a card whose columns are all hidden by their rules', async () => {
+      const root = await render(member(), {
+        ...CLAIMS_PAGE,
+        cards: [
+          CLAIMS_PAGE.cards[0],
+          {
+            ...CLAIMS_PAGE.cards[1],
+            related: {
+              pageProvider: 'member_claims',
+              columns: [{ field: 'claim:number', visibleWhen: 'test.rules.memberServices' }],
+            },
+          },
+        ],
+      });
+      expect(root.querySelector('[data-card-id="claims"]')).toBeNull();
+      expect(execute).not.toHaveBeenCalled();
+    });
   });
 });

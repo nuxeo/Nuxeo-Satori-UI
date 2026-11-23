@@ -426,15 +426,15 @@ expectRefused(
   withModel,
 );
 expectRefused(
-  'a table column naming a subfield its property does not have, given the content model',
+  'an address part naming a subfield its property does not have, given the content model',
   ({ edit }) =>
     edit(
-      LAYOUT,
-      '"claim:number",',
-      '"claim:number", { "field": "claim:lines", "widget": "table", "parameters": { "columns": ["line:code", "line:cost"] } },',
+      'bundle/agentic-ui-config/layouts/Member/view.layout.json',
+      '"postcode": "zip"',
+      '"postcode": "postcode"',
     ),
   2,
-  'cards[0].fields[1].parameters.columns[1]: "claim:lines" has no subfield "cost" [unknown]',
+  'cards[0].fields[2].parameters.parts.postcode: "member:address" has no subfield "postcode" [unknown]',
   withModel,
 );
 expectRefused(

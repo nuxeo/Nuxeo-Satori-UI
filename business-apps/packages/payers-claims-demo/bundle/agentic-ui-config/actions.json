@@ -8,7 +8,13 @@
       "icon": "check",
       "order": 10,
       "on": ["record", "row"],
-      "visibleWhen": { "type": "app.rules.isType", "parameters": ["Claim"] },
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.isType", "parameters": ["Claim"] },
+          { "type": "app.rules.inState", "parameters": ["project"] }
+        ]
+      },
       "transition": "approve",
       "confirm": { "labelKey": "payers.action.approve.confirm" },
       "success": { "labelKey": "payers.action.approve.done" }

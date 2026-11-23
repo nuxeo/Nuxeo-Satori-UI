@@ -1486,6 +1486,8 @@ prefers `dc:source` (rarely auto-filled) and falls back to `dc:rights` when
 
 The create form opens empty and sends only the fields the user filled in, so every untouched field — an unticked checkbox included — takes its server default from Step 1, and a default cannot be cleared at creation (NXSAT-630).
 
+**Which types are blob-holding:** File, Picture, Audio and Video, and any type that extends one of them or carries the `file` schema itself — a customer's `RentalContract extends File`, for instance. The dialog reads the type hierarchy from Nuxeo's content model through `ContentModelService` (`GET /nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas`, cached for the application's lifetime). Until it arrives, or if the server refuses it, only the four stock names count. The same rule decides which types the Import tab offers for files.
+
 ---
 
 ## 28. Application Configuration — Bootstrap and Manifest (NXSAT-312)
@@ -1825,6 +1827,48 @@ Measured on the local 2025 instance:
 (`libs/features/search/src/lib/search-session/search-session.ts`), which sends one request per change
 of the query for both; `nxs-search-filters` for collections and tags; `nxs-saved-search-select` for the
 list; `nxs-saved-search-actions` for the permission read.
+
+---
+
+## 32. Home — `home.json` and the KPIs' Page Providers
+
+| Field           | Value                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `HomeService` (`libs/shared/home/src/lib/home.service.ts`)                                                                                                                 |
+| **Method**      | `load()`, once per visit of `/home`; `results(kpi)`, once per page provider and parameters that a card the person sees reads                                               |
+| **HTTP Method** | `GET`                                                                                                                                                                      |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/home.json` (`/agentic-ui-config/home.json` under `nx serve`) — without interceptors, no `Authorization` header                                   |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                   |
+| **Server side** | None for `home.json`: the configuration servlet does not answer there (404), and only `npm run config:dev -- --home <file>` serves it. Nuxeo's page providers for the KPIs |
+
+**Query parameters of the page provider read:**
+
+| Parameter          | Value                                                               |
+| ------------------ | ------------------------------------------------------------------- |
+| `pageSize`         | `1`: a KPI reads `resultsCount` and `aggregations`, not the records |
+| `currentPageIndex` | `0`                                                                 |
+| `queryParams`      | The KPI's `parameters`, one each, in order; none when it has none   |
+
+**Request headers:** `properties: dublincore`.
+
+**Notes:**
+
+- `aggregations.<id>.buckets` holds `{ key, docCount }` for each bucket. Only a page provider the
+  search index serves has aggregates; one that queries the repository, such as `tree_children`,
+  answers `aggregations: null`, and the card says its figure is unavailable. Measured on the local
+  server: `default_search` answers six aggregates; an unknown page provider answers HTTP 500.
+- A terms aggregate returns no bucket for a key no record has, so a KPI on that bucket is 0, unless
+  it returned as many buckets as its `size` (`properties.size`, 10 when unset): then the bucket may
+  be one it left out, and the card says its figure is unavailable.
+- The server reads `queryParams` as a list, one value per parameter, and splits none on commas
+  (`QueryExecutor.getParameters`, `nuxeo-search-rest-api` 2025.10.18). It replaces a value
+  `$currentUser` with the signed-in user's name.
+- `resultsCount` is negative (`-2`) when a page provider does not count its results, as
+  `tree_children` does; the card says its figure is unavailable.
+- The counts are the signed-in person's: a user in `members` only counted 2,167 records of
+  `default_search` where an administrator counted 2,249.
+
+**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`.
 
 ---
 

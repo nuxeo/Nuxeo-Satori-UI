@@ -479,8 +479,9 @@ The waves of the plan's section 14, and what each tier delivers in them.
   - an experience carries `scope:experience`, and may not use the current app's features. That is
     why `apps/nuxeo-ui` takes the tag only as its features become modules and engines.
 
-  Two engines carry `scope:engine` so far, `libs/shared/computations` and the record page's
-  `libs/shared/document-layouts`, and both import only shared code. No module or experience exists before phase 1, so lint has no forbidden
+  Three engines carry `scope:engine` so far, `libs/shared/computations`, the record page's
+  `libs/shared/document-layouts` and the home's `libs/shared/home`, and all three import only shared
+  code. No module or experience exists before phase 1, so lint has no forbidden
   import to fail on, and `npm run beta:module-boundaries` proves the rules in CI. It lints imports
   between probe projects that carry each tag, with the real rule: 6 forbidden imports reported, 6
   allowed ones quiet.

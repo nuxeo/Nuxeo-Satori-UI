@@ -273,11 +273,13 @@ out on purpose:
 
 ## 8. What is refused, and when
 
-| When                                     | A structural error                                                   | An ID the platform does not have                              |
-| ---------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| When the package is built (the pipeline) | The package is refused, naming the file and the place                | The package is refused, naming the file, the place and the ID |
-| When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That card or field is left out, and the console says why      |
+| When                                     | A structural error                                                   | An ID the platform does not have                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| When the package is built (the pipeline) | The package is refused, naming the file and the place                | The package is refused, naming the file, the place and the ID                     |
+| When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That card, field, list column or row action is left out, and the console says why |
 
+- **In a list of related records,** a finding about one column or one row action leaves out that
+  one. A finding about the list itself, such as a key version 2 does not have, leaves out its card.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -382,8 +384,11 @@ convenience. Masking it for real, so that the API does not return it either, is 
 
 ## 10. What the Studio migration writes
 
-The converter of M1 writes version 2. The [migration document](studio-migration.md), section 3,
-lists what each Web UI element becomes. In version 2's terms:
+The converter of M1 writes version 2 for `view`. For `metadata`, `edit` and `create` it writes
+version 1, which the app renders in those modes, while version 2 there is still refused (section
+11): a field whose widget version 1 cannot name is written as its schema type shows it, and
+reported. The [migration document](studio-migration.md), section 3, lists what each Web UI element
+becomes. In version 2's terms:
 
 | Web UI element                            | Becomes                                                          |
 | ----------------------------------------- | ---------------------------------------------------------------- |
@@ -405,11 +410,36 @@ lists what each Web UI element becomes. In version 2's terms:
   [`libs/shared/app-definition`](../../libs/shared/app-definition/README.md), with negative
   controls. Every JSON example in this document is one of its tests: a change here that the
   validator does not follow fails them. The package pipeline runs them
-  ([package-pipeline.md](package-pipeline.md)); the Studio migration's converter will, in M1.
+  ([package-pipeline.md](package-pipeline.md)), and so does the Studio migration's harness, check
+  10, on every package M1 converts.
 - **What the app draws so far.** A `view` file draws the record page, `RecordPageComponent` in
-  `libs/shared/document-layouts`, loaded as section 8 says. Its limits, each said in the console
-  when a file meets it:
-  - **related records** are not drawn yet, so a card that lists them is left out;
+  `libs/shared/document-layouts`, loaded as section 8 says.
+- **A card of related records** draws its list with `RecordListComponent`, in the same library,
+  through the design system's document list:
+  - the page provider is asked for one page at a time through `PageProviderService`, with each
+    parameter sent whole, as a `queryParams` value of its own;
+  - a `{ "field" }` parameter reads the open record, and `ecm:uuid`, `ecm:path`,
+    `ecm:primaryType` and `ecm:currentLifeCycleState` are read where Nuxeo returns them. A
+    parameter with no single value leaves the list unasked, and the card shows "No records";
+  - each cell shows its row's property through its column's widget, held to the row's own type,
+    which is read once per type;
+  - a column's `visibleWhen` is evaluated for the open record, as a field's is;
+  - the headers sort on the server, and a row opens its record;
+  - a row offers the row actions the file lists, while their rules pass for that row.
+- **The limits.** Each one that leaves something out is said in the console when a file meets it:
+  - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
+    a `phone` or `email` column shows its value without the link;
+  - **a column shows a property once:** a second column naming the same property is left out,
+    before any rule is evaluated, so two columns with opposite rules over one property cannot
+    stand in for each other;
+  - **a header sorts only a property with one value,** of a type a server can sort by. A sort the
+    server refuses, such as a text field in OpenSearch, shows the error state, and retrying goes
+    back to the file's order;
+  - **a computed column** of a related list is not drawn yet, nor **a table in a list's cell**:
+    that column is left out, and the rest of the list shows;
+  - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run
+    by the browse list today, so a record page offers none of them until they are registered for
+    the whole app. A customer's own row action, registered in Layer 2 code, is offered;
   - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
     record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
     editor: a record page beside a preview comes later;

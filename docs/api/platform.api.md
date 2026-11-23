@@ -1267,6 +1267,7 @@ interface NxsDocumentListColumn {
     readonly key: string;
     readonly label: string;
     readonly sortable?: boolean;
+    readonly text?: (document: NuxeoDocument) => string;
     }
 }
 class NxsDocumentListComponent {
@@ -3904,7 +3905,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-320 exported symbol(s).
+323 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4901,6 +4902,25 @@ interface NuxeoWorkflowModelList {
 }
 const PERMISSION_DENIED_KEY = "common.permission-denied";
 const PERMISSION_NOTIFICATION_MAIL_HINT_KEY = "permissions.notification.mail-hint";
+interface PageProviderRequest {
+    readonly parameters?: readonly string[];
+    readonly pageSize: number;
+    readonly pageIndex?: number;
+    readonly sort?: readonly PageProviderSort[];
+    readonly properties?: string;
+    }
+}
+class PageProviderService {
+    execute(name: string, request: PageProviderRequest): Observable<NuxeoDocumentList>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<PageProviderService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
+    }
+}
+interface PageProviderSort {
+    readonly field: string;
+    readonly order: 'asc' | 'desc';
+    }
+}
 interface PaginatedListMeta {
     totalSize?: number;
     resultsCount?: number;

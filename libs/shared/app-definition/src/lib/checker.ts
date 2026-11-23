@@ -22,7 +22,7 @@ export interface Finding {
    * registered, or something the package, or the content model it was given, does not have.
    * `parameter`: a registered ID with parameters it does not take.
    *
-   * What the app does with each, file by file, is in app-definition-v2.md, section 10.
+   * What the app does with each, file by file, is in app-definition-v2.md, section 12.
    */
   readonly kind: 'structure' | 'unknown' | 'parameter';
   readonly message: string;
@@ -80,13 +80,22 @@ export function unreadable(content: unknown, what: string): Finding[] | null {
 export interface CheckerOptions {
   /** A task form, whose `var:` fields are the step's variables and the only ones it edits. */
   readonly task?: boolean;
+  /**
+   * `false` where no record is open: the home and the menu. A rule there reads no property, so
+   * a value it is given is a literal. True when left out.
+   */
+  readonly record?: boolean;
 }
+
+/** The name of a Material Symbols icon, such as `check`. */
+export const ICON = /^[a-z0-9_]{1,64}$/;
 
 export type Checker = ReturnType<typeof createChecker>;
 
 /** One file's findings, and the checks that add to them. */
 export function createChecker(registries: Registries, options: CheckerOptions = {}) {
   const task = options.task === true;
+  const record = options.record !== false;
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
     findings.push({ path, kind, message });
@@ -168,13 +177,48 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     }
     const signature = registries.rules[type];
     if (signature) signed(signature, parameters, join(path, 'parameters'), `the rule "${type}"`);
+    // A customer's own rule has no signature here, so its parameters are not read as values.
+    else inCustomerRule(parameters, join(path, 'parameters'));
+  };
+
+  /**
+   * The parameters of a customer's own rule, at any depth, which this library cannot type. A
+   * customer's composite may resolve a rule among them, as `core.every` does, so a `{ "type" }`
+   * naming a registered rule is checked as one, its signature included. Where no record is open,
+   * a `{ "field" }` is refused. Anything else is the customer's to read: a text is a value, such
+   * as a group, not a rule's id.
+   */
+  const inCustomerRule = (item: unknown, path: string): void => {
+    if (isFieldReference(item)) {
+      if (!record)
+        add(
+          path,
+          'parameter',
+          'no record is open here, so a rule is given literals, not a property',
+        );
+    } else if (Array.isArray(item))
+      item.forEach((inner, index) => inCustomerRule(inner, join(path, index)));
+    else if (
+      isRecord(item) &&
+      typeof item['type'] === 'string' &&
+      Object.hasOwn(registries.rules, item['type'])
+    )
+      rule(item, path);
+    else if (isRecord(item))
+      for (const [key, inner] of Object.entries(item)) inCustomerRule(inner, join(path, key));
   };
 
   /** A literal, a property, or a computation. */
   const value = (item: unknown, path: string): void => {
     if (isLiteral(item)) return;
     if (isFieldReference(item)) {
-      variable(item.field, join(path, 'field'));
+      if (!record)
+        add(
+          path,
+          'parameter',
+          'no record is open here, so a rule is given literals, not a property',
+        );
+      else variable(item.field, join(path, 'field'));
       return;
     }
     if (isRecord(item) && Object.keys(item).length === 1 && 'computed' in item) {

@@ -129,8 +129,8 @@ function toDate(value: unknown): Date | null {
  * A date field edits a **calendar day**, and a calendar day is anchored in UTC — not in whichever
  * zone the browser happens to be in (NXSAT-727). That is not a preference; it is what everything
  * around this already assumes. Nuxeo stores a day-only write (`2024-03-06`) at midnight of the
- * server's day, read back as `2024-03-06T00:00:00.000Z`. The layout `date` renderer formats in
- * UTC, and `docs/extension-reference.md` publishes that as the field type's contract.
+ * server's day, read back as `2024-03-06T00:00:00.000Z`. The layout `date` renderer formats such a
+ * stored day in UTC, and `docs/extension-reference.md` publishes that as the field type's contract.
  * `formatCompareDate` and the two ACE formatters do the same, each with a comment saying why.
  *
  * Anchoring the day locally instead made the stored instant depend on the writer's zone — one

@@ -21,6 +21,14 @@ export {
   type PropertyModel,
   type SchemaModel,
 } from './lib/content-model';
+export {
+  HOME_PAGE,
+  HOME_V2_KEYS,
+  NAVIGATION_V2_KEYS,
+  validateHome,
+  validateNavigation,
+  type HomeOptions,
+} from './lib/home';
 export { LABELS_V2_KEYS, validateLabels, validateModuleSettings } from './lib/labels';
 export {
   LAYOUT_MODES,
@@ -50,6 +58,7 @@ export {
   PACKAGED_CHECKS,
   PACKAGED_COMPUTATIONS,
   PACKAGED_MODULES,
+  PACKAGED_PAGES,
   PACKAGED_REGISTRIES,
   PACKAGED_ROW_ACTIONS,
   PACKAGED_WIDGETS,

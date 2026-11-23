@@ -1324,6 +1324,7 @@
   "document-detail.visual-editor": "Rendered from an Angular binding in note-editor.html — usually one branch of a two-state control, so its opposite is a sibling key. Keep it as short as the English.",
   "document-detail.workflow-started-on-document": "Banner confirming a workflow was started. {{ workflow }} is the workflow model name, which the server supplies already localised where it can.",
   "document-layouts.no": "Value shown in the Properties panel for a yes/no (boolean) document property that is false, in the section generated from the document type's schema or set by a configuration package. Rendered in libs/shared/document-layouts/src/lib/document-layout/document-layout.html.",
+  "document-layouts.related.empty": "Heading shown inside a card of a record page that lists related records, such as a member's claims, when the list has none. A short noun phrase. Rendered by libs/shared/document-layouts/src/lib/record-page/record-list.html.",
   "document-layouts.sections": "Accessible name of the tab list, read by screen readers and not shown, when a document type's property sections are displayed as tabs in the Properties panel. Rendered in libs/shared/document-layouts/src/lib/document-layout/document-layout.html.",
   "document-layouts.yes": "Value shown in the Properties panel for a yes/no (boolean) document property that is true, in the section generated from the document type's schema or set by a configuration package. Rendered in libs/shared/document-layouts/src/lib/document-layout/document-layout.html.",
   "drawer.administration-analytics": "Link in a side drawer. A NOUN naming the page it opens. Route `/administration/analytics`.",
@@ -2770,5 +2771,14 @@
   "satori-components.trash-list.purged-one": "Message after one trashed document was deleted for good. {{title}} is the document title.",
   "satori-components.trash-list.purged-many": "Message after several trashed documents were deleted for good. {{count}} is the number.",
   "satori-components.trash-list.purge-failed-one": "Error after the permanent delete of one document failed. {{title}} is the document title.",
-  "satori-components.trash-list.purge-failed-many": "Error after the permanent delete of some of several documents failed. {{failed}} is how many failed, {{count}} how many were tried."
+  "satori-components.trash-list.purge-failed-many": "Error after the permanent delete of some of several documents failed. {{failed}} is how many failed, {{count}} how many were tried.",
+  "home.empty": "Shown on the home page when the app's home has cards, but none is meant for the signed-in user's groups. The home is the app's start page of figures and links.",
+  "home.loading": "Status text, read by screen readers, while the home page reads the app's home configuration.",
+  "home.largest-only": "Shown under the list of a figure card's groups on the home page when the server returned only the largest groups, so the list may be incomplete.",
+  "home.loading-figure": "Shown in a figure card on the home page while the number it shows is being counted on the server. A verb in progress: the count is being worked out.",
+  "home.none": "Shown on the home page when the app has no home configured: no home.json file is served. 'Home' is the app's start page of figures and links.",
+  "home.open-queue": "Link at the bottom of a figure card on the home page that opens the work queue the figure counts. A queue is a list of records waiting to be worked on.",
+  "home.refused": "Error shown on the home page when the app's home configuration exists but is not valid, so nothing can be drawn.",
+  "home.title": "Heading of the home page, the app's start page of figures and links, when the configuration gives it no title of its own.",
+  "home.unavailable": "Shown in a figure card on the home page instead of a number, when the server could not count it."
 }

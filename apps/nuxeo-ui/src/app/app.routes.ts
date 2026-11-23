@@ -28,6 +28,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./dashboard/dashboard-page.component').then((m) => m.DashboardPageComponent),
       },
+      // The app's home, drawn from its home.json (docs/business-apps/app-definition-v2.md, section
+      // 10). Not the first page yet: `''` still opens the dashboard.
+      {
+        path: 'home',
+        loadComponent: () => import('@agentic-ui/shared/home').then((m) => m.HomePageComponent),
+      },
       ...RETIRED_ROUTES,
       {
         path: 'browse',

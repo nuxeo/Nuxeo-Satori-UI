@@ -36,7 +36,11 @@ root: `app.json`, and the other files of [app-definition-v2.md](app-definition-v
   this yet.
 
 The demo is [`business-apps/packages/payers-claims-demo`](../../business-apps/packages/payers-claims-demo/README.md),
-with fictional data.
+with fictional data. It is also phase 1's Payers kit, version 0, so its bundle carries a second
+component: a stand-in content model, with its document types, schemas and page providers, until
+the presales Payers model replaces it. The builder holds its XML to what Nuxeo can load, as it
+does every component's; nothing in the pipeline checks the schemas, types or page providers
+themselves, nor that a layout's page provider exists.
 
 ## 2. The steps
 
@@ -77,7 +81,7 @@ header another way, is the builder's to refuse, at step 4: the server would load
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.1.0.zip` and its `.sha256` in the package. `--out` puts them
+It writes `dist/payers-claims-demo-0.2.0.zip` and its `.sha256` in the package. `--out` puts them
 elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
 `--platform` its platform version; the workflow passes the version of `libs/platform`. `--model`
 and `--model-server` give it the server's content model (section 4).
@@ -131,9 +135,11 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
   neither refused nor built on a model nobody saw.
 - **The credentials** go in an `Authorization` header and nowhere else: an address that carries
   them is refused, so is plain HTTP to another machine, and a redirect is not followed.
-- **The demo's model,** `content-model.json` beside the package, is fictional, as the package is.
+- **The demo's model,** `content-model.json` beside the package, is the kit's stand-in model as a
+  local Nuxeo with the package installed answers it, exported with `app-package:model` and cut down
+  to the kit's five types, their facets and their schemas. All four record pages pass against it.
   The negative controls hold the demo to it: a widget that does not fit, a property the type does
-  not have, a table column naming a missing subfield, and a type the model does not have are each
+  not have, an address part naming a missing subfield, and a type the model does not have are each
   refused at step 2. The same broken layout with no model is built, which shows that it is the
   model that refuses it. A malformed model, and a server that refuses a read, each exit 2. A fake
   server answering as Nuxeo does proves the live read and the export: the credentials arrive on
@@ -152,7 +158,7 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 4. Anyone can check the signature:
 
    ```bash
-   gh attestation verify payers-claims-demo-0.1.0.zip --repo nuxeo/Nuxeo-Satori-UI
+   gh attestation verify payers-claims-demo-0.2.0.zip --repo nuxeo/Nuxeo-Satori-UI
    ```
 
 A tag rather than a button: a manually dispatched workflow must be on `main`, which this one

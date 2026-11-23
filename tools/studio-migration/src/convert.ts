@@ -1,25 +1,39 @@
 /**
- * The conversion of phase M0, and the report every conversion writes.
+ * The conversion of phase M1, the declarative track, and the report every conversion writes.
  *
- * M0 converts only what the harness can already check without a server: the translations, to
- * `labels/<locale>.json`, and each theme's mappable properties, to `themes/<name>.json` with its
- * assets beside it. Every other construct is listed in the report with an outcome and its reason:
+ * M1 writes an app definition under `app/` (docs/business-apps/app-definition-v2.md), which the
+ * package pipeline's validator checks (harness check 10):
+ *
+ * - `app.json`, naming the app and its theme;
+ * - `layouts/<Type>/<mode>.layout.json`, from the document layouts (`convert-layouts.ts`);
+ * - `queues/<id>.json`, from the search screens and the dashboard's lists (`convert-lists.ts`);
+ * - `actions.json`, from the operation buttons (`convert-slots.ts`);
+ * - `labels/<locale>.json`, from the translations.
+ *
+ * Beside it, as M0 did, `themes/<name>.json` holds the tokens of each theme's mappable properties
+ * for the bootstrap configuration (Layer 0), and `themes/<name>/<file>` its files.
+ *
+ * Every construct is listed in the report with an outcome and, where it needs one, its reason:
  *
  * - **converted:** done, and where it went;
  * - **proposed:** an agent proposes it and a person accepts it;
- * - **reported:** it does not migrate, with why;
+ * - **reported:** it does not migrate, or not as Web UI shows it, with why;
  * - **generated:** Studio's own packaging, records and templates;
  * - **server:** it stays on the server, where the new app reads it;
  * - **pending:** a later phase converts it, and the note says which.
  *
  * Check 1 counts every outcome as accounted for. A migration with anything pending is not ready.
- * The format is provisional, `studio-migration-report/m0`, until layout version 2 and the package
- * pipeline fix the shape of a migrated package.
+ * The format is provisional, `studio-migration-report/m1`.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { mapThemeProperty, scriptEntry, slotEntry, type Catalogue } from './catalogue';
+import { validateLabels } from '@agentic-ui/shared/app-definition';
+import { appIdOf, labelsPath, labelTexts } from './app-files';
+import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
 import { constructsOf, type Construct, type ConstructKind } from './constructs';
+import { convertLayouts } from './convert-layouts';
+import { convertDashboard, convertSearches } from './convert-lists';
+import { convertSlots } from './convert-slots';
 import type { FileKind, Inventory } from './inventory';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -36,15 +50,17 @@ export type Outcome = (typeof OUTCOMES)[number];
 /** The outcomes that must say why. */
 export const EXPLAINED: ReadonlySet<string> = new Set<Outcome>(['proposed', 'reported', 'pending']);
 
-export const REPORT_FORMAT = 'studio-migration-report/m0';
+export const REPORT_FORMAT = 'studio-migration-report/m1';
 
 export interface ReportEntry {
   readonly id: string;
   readonly kind: ConstructKind;
   readonly file: string;
   readonly label: string;
+  /** For a field or a column: the property it shows. */
+  readonly property?: string;
   readonly outcome: Outcome;
-  /** Where a converted construct went in the conversion. */
+  /** Where a converted construct went in the conversion, and where a reported one was written. */
   readonly to?: string;
   /** Why, for what is proposed, reported or pending. */
   readonly note?: string;
@@ -61,7 +77,9 @@ export interface MigrationReport {
     readonly commit: string | null;
     readonly buildTime: string | null;
   };
-  readonly converter: { readonly name: string; readonly version: string; readonly phase: 'M0' };
+  readonly converter: { readonly name: string; readonly version: string; readonly phase: 'M1' };
+  /** The operations the deployment allowed when it was converted (decision 3). */
+  readonly allowList: readonly string[];
   readonly constructs: readonly ReportEntry[];
 }
 
@@ -73,19 +91,43 @@ export interface ConvertedTheme {
 
 export interface Conversion {
   readonly report: MigrationReport;
-  /** By locale, written as `labels/<locale>.json`. */
-  readonly labels: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** The app definition, each file parsed, by its path under `app/`. */
+  readonly app: Readonly<Record<string, unknown>>;
+  /** Files under `app/` that are not JSON, by their path there. */
+  readonly appAssets: Readonly<Record<string, Buffer>>;
   /** By theme name, written as `themes/<name>.json`. */
   readonly themes: Readonly<Record<string, ConvertedTheme>>;
   /** Copied files, by their path in the conversion: `themes/<name>/<file>`. */
   readonly assets: Readonly<Record<string, Buffer>>;
 }
 
+export interface ConvertOptions {
+  /** The deployment's allow-list of operations (decision 3). Empty, no button becomes an action. */
+  readonly allowList?: ReadonlySet<string>;
+  /** The platform version the app is written for; the platform's own when left out. */
+  readonly platformVersion?: string;
+}
+
 export class ConversionError extends Error {
   override readonly name = 'ConversionError';
 }
 
-const M1 = 'Converted in M1, with layout version 2';
+export type Decision = Pick<ReportEntry, 'outcome' | 'to' | 'note'>;
+
+/** What the parts of the conversion share: what they read, and what they write and decide. */
+export interface ConvertContext {
+  readonly pkg: StudioPackage;
+  readonly inventory: Inventory;
+  readonly catalogue: Catalogue;
+  readonly appId: string;
+  readonly allowList: ReadonlySet<string>;
+  /** The app definition being written, by path under `app/`. */
+  readonly files: Record<string, unknown>;
+  /** The theme `app.json` names, once a contribution to `THEMES` sets it. */
+  theme: string | null;
+  readonly decide: (id: string, decision: Decision) => void;
+}
+
 const FILE_OUTCOMES: Readonly<
   Record<FileKind, { readonly outcome: Outcome; readonly note?: string }>
 > = {
@@ -102,8 +144,14 @@ const FILE_OUTCOMES: Readonly<
     outcome: 'reported',
     note: 'It is for the JSF UI, which Studio is retiring',
   },
-  image: { outcome: 'pending', note: 'Sign-in branding is converted in M1' },
-  'theme-asset': { outcome: 'pending', note: 'A theme asset outside a theme is converted in M1' },
+  image: {
+    outcome: 'reported',
+    note: "Nothing in the package's model names it, and the app has no image of its own to set from it: app.json's branding takes a logo and a favicon only (app-definition-v2.md, section 3)",
+  },
+  'theme-asset': {
+    outcome: 'reported',
+    note: 'It sits in a theme folder with no theme.html, so no theme of the package uses it',
+  },
   'custom-bundle': { outcome: 'generated', note: "Studio's custom bundle, holding no code" },
   'document-layout': { outcome: 'generated', note: 'It holds nothing to convert' },
   'search-form': { outcome: 'generated', note: 'It holds nothing to convert' },
@@ -115,29 +163,60 @@ const FILE_OUTCOMES: Readonly<
   unrecognised: { outcome: 'reported', note: 'It is of no known kind' },
 };
 
-type Decision = Pick<ReportEntry, 'outcome' | 'to' | 'note'>;
-
 export function convert(
   pkg: StudioPackage,
   inventory: Inventory,
   catalogue: Catalogue,
+  options: ConvertOptions = {},
 ): Conversion {
   const decided = new Map<string, Decision>();
+  const files: Record<string, unknown> = {};
+  const allowList = options.allowList ?? new Set<string>();
+  const context: ConvertContext = {
+    pkg,
+    inventory,
+    catalogue,
+    appId: appIdOf(pkg),
+    allowList,
+    files,
+    theme: null,
+    decide: (id, decision) => decided.set(id, decision),
+  };
 
-  const labels: Record<string, Record<string, string>> = {};
+  convertLayouts(context);
+  convertSearches(context);
+  convertDashboard(context);
+  convertSlots(context);
+
   for (const translations of inventory.translations) {
     const texts = readCatalogue(pkg, translations.path);
-    const target = (labels[translations.locale] ??= {});
+    const path = labelsPath(translations.locale);
+    const labels: Record<string, string> = { ...labelTexts(files[path]) };
     for (const key of translations.keys) {
       const id = `translation:${translations.path}#${key}`;
       const text = Object.hasOwn(texts, key) ? texts[key] : undefined;
-      if (typeof text === 'string') {
-        target[key] = text;
-        decided.set(id, { outcome: 'converted', to: `labels/${translations.locale}.json` });
-      } else {
+      if (typeof text !== 'string') {
         decided.set(id, { outcome: 'reported', note: 'Its value is not a text' });
+        continue;
       }
+      // The labels file's own rules decide: a key it refuses, or an empty text, is reported.
+      const [refused] = validateLabels({ version: 2, labels: { [key]: text } });
+      if (refused) {
+        decided.set(id, {
+          outcome: 'reported',
+          note: `The app's labels refuse it: ${refused.message}`,
+        });
+        continue;
+      }
+      Object.defineProperty(labels, key, {
+        value: text,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+      decided.set(id, { outcome: 'converted', to: `app/${path}` });
     }
+    files[path] = { version: 2, labels };
   }
 
   const themes: Record<string, ConvertedTheme> = {};
@@ -178,12 +257,39 @@ export function convert(
     }
   }
 
+  // An image the model names, such as a type's icon, is served by the server from the package.
+  const modelText = inventory.model
+    .map((contribution) => contribution.path)
+    .filter((path, index, all) => all.indexOf(path) === index)
+    .map((path) => pkg.bundleFiles.get(path)?.toString('utf8') ?? '')
+    .join('\n');
+  for (const file of inventory.files.filter((candidate) => candidate.kind === 'image')) {
+    const served = `/${file.path.slice('web/nuxeo.war/'.length)}`;
+    if (modelText.includes(served))
+      decided.set(`file:${file.path}#file`, {
+        outcome: 'server',
+        note: `The model names it (${served}), as a type's icon, and the server keeps serving it from the Studio package`,
+      });
+  }
+
+  files['app.json'] = {
+    version: 2,
+    id: context.appId,
+    label: pkg.descriptor.name,
+    packageVersion: pkg.descriptor.version,
+    platform: `>=${options.platformVersion ?? platformVersion()} <1.0.0`,
+    // Web UI shows a Studio project's screens to everyone who signs in.
+    groups: ['members'],
+    ...(context.theme !== null ? { branding: { theme: context.theme } } : {}),
+  };
+
   const constructs = constructsOf(inventory);
   const entries: ReportEntry[] = constructs.map((construct) => ({
     id: construct.id,
     kind: construct.kind,
     file: construct.file,
     label: construct.label,
+    ...(construct.property ? { property: construct.property } : {}),
     ...(decided.get(construct.id) ?? decide(construct, inventory, catalogue)),
   }));
 
@@ -200,15 +306,17 @@ export function convert(
         buildTime: manifest.get('Studio-Build-Time') ?? null,
       },
       converter: converterIdentity(),
+      allowList: [...allowList].sort(),
       constructs: entries,
     },
-    labels,
+    app: sorted(files),
+    appAssets: {},
     themes,
     assets,
   };
 }
 
-/** The outcome of a construct the M0 conversion does not convert. */
+/** The outcome of a construct no part of the conversion decided. */
 function decide(construct: Construct, inventory: Inventory, catalogue: Catalogue): Decision {
   const key = Number(construct.id.slice(construct.id.lastIndexOf('#') + 1));
   switch (construct.kind) {
@@ -216,36 +324,6 @@ function decide(construct: Construct, inventory: Inventory, catalogue: Catalogue
       const kind =
         inventory.files.find((file) => file.path === construct.file)?.kind ?? 'unrecognised';
       return FILE_OUTCOMES[kind];
-    }
-    case 'layout':
-    case 'search':
-    case 'search-field':
-    case 'search-column':
-      return { outcome: 'pending', note: M1 };
-    case 'layout-field': {
-      const layout = inventory.layouts.find((candidate) => candidate.path === construct.file);
-      const binding = layout?.fields[key - 1]?.binding;
-      const first = layout?.fields.findIndex((field) => field.binding === binding);
-      return binding && first !== undefined && first !== key - 1
-        ? { outcome: 'reported', note: `It binds ${binding} again, and is kept once` }
-        : { outcome: 'pending', note: M1 };
-    }
-    case 'slot-contribution': {
-      const contribution = inventory.slotContributions.filter((c) => c.path === construct.file)[
-        key - 1
-      ];
-      const entry = contribution ? slotEntry(catalogue, contribution.slot) : null;
-      if (!contribution || !entry)
-        return { outcome: 'reported', note: 'Its slot is not in the catalogue' };
-      if (entry.how === 'reported')
-        return { outcome: 'reported', note: entry.note ?? catalogue.reportedBecause };
-      if (contribution.operations.includes(null)) {
-        return { outcome: 'reported', note: 'Its operation button runs no operation' };
-      }
-      return {
-        outcome: 'pending',
-        note: entry.how === 'agent-proposes' ? 'An agent proposes it, in M1' : M1,
-      };
     }
     case 'custom-code':
       return { outcome: 'pending', note: 'An agent proposes a Layer 2 plugin for it, in M3' };
@@ -261,15 +339,13 @@ function decide(construct: Construct, inventory: Inventory, catalogue: Catalogue
             note: 'Customer code: an agent proposes a Layer 2 plugin for it, in M3',
           };
     }
-    case 'dashboard-card': {
-      const card = inventory.dashboard?.cards[key - 1];
-      return card && card.repeatOf !== null
-        ? { outcome: 'reported', note: `It repeats card ${card.repeatOf + 1}, and is kept once` }
-        : { outcome: 'pending', note: 'Converted in M1, as a home card' };
-    }
-    case 'theme-property':
-    case 'translation':
-      // Decided as they are converted; reaching here means the conversion skipped one.
+    case 'condition':
+      return {
+        outcome: 'pending',
+        note: 'M2 converts conditions into registered rules, proven with truth tables (check 5)',
+      };
+    default:
+      // Each part decides its own constructs; reaching here means one skipped a construct.
       return { outcome: 'reported', note: 'The conversion did not reach it' };
   }
 }
@@ -284,6 +360,27 @@ export function readCatalogue(pkg: StudioPackage, path: string): Readonly<Record
   } catch {
     return {};
   }
+}
+
+/**
+ * The allow-list the conversion was made with, as its report records it. It says which buttons
+ * the converter made actions of, so the checks can tell whose each action is; whether those
+ * operations are allowed is check 10's, against the deployment's own list.
+ */
+export function recordedAllowList(conversion: Pick<Conversion, 'report'>): ReadonlySet<string> {
+  return new Set(conversion.report.allowList ?? []);
+}
+
+/** Each language's translations as the conversion holds them, in its labels files. */
+export function labelsOf(
+  conversion: Pick<Conversion, 'app'>,
+): Readonly<Record<string, Readonly<Record<string, string>>>> {
+  const labels: Record<string, Readonly<Record<string, string>>> = {};
+  for (const [path, content] of Object.entries(conversion.app)) {
+    const locale = /^labels\/([^/]+)\.json$/.exec(path)?.[1];
+    if (locale !== undefined) labels[locale] = labelTexts(content);
+  }
+  return labels;
 }
 
 /** A JAR manifest's main attributes. A line that starts with a space carries on the one before. */
@@ -309,11 +406,27 @@ function converterIdentity(): MigrationReport['converter'] {
     name: string;
     version: string;
   };
-  return { name: manifest.name, version: manifest.version, phase: 'M0' };
+  return { name: manifest.name, version: manifest.version, phase: 'M1' };
+}
+
+/** The platform's own version, from `libs/platform/package.json`, which `app.json`'s range holds. */
+export function platformVersion(): string {
+  const manifest = JSON.parse(
+    readFileSync(join(__dirname, '..', '..', '..', 'libs', 'platform', 'package.json'), 'utf8'),
+  ) as { version: string };
+  return manifest.version;
+}
+
+function sorted<T>(record: Record<string, T>): Record<string, T> {
+  return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 /** A name that is a safe file name on every system: letters, digits, `.`, `_` and `-`. */
 const SAFE_NAME = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/;
+
+function safePath(path: string): boolean {
+  return path.split('/').every((part) => SAFE_NAME.test(part));
+}
 
 /** Writes the conversion into a directory that does not exist yet, or is empty. */
 export function writeConversion(directory: string, conversion: Conversion): void {
@@ -325,8 +438,13 @@ export function writeConversion(directory: string, conversion: Conversion): void
       `${directory} is not an empty directory; a conversion is written only into a new one`,
     );
   }
-  const names = [...Object.keys(conversion.labels), ...Object.keys(conversion.themes)];
-  const unsafe = names.find((name) => !SAFE_NAME.test(name));
+  const paths = [
+    ...Object.keys(conversion.app).map((path) => `app/${path}`),
+    ...Object.keys(conversion.appAssets).map((path) => `app/${path}`),
+    ...Object.keys(conversion.themes).map((name) => `themes/${name}.json`),
+    ...Object.keys(conversion.assets),
+  ];
+  const unsafe = paths.find((path) => !safePath(path));
   if (unsafe !== undefined) {
     throw new ConversionError(
       `"${unsafe}" cannot be a file name on every system, so the conversion cannot be written`,
@@ -338,9 +456,9 @@ export function writeConversion(directory: string, conversion: Conversion): void
     writeFileSync(full, content);
   };
   write('report.json', `${JSON.stringify(conversion.report, null, 2)}\n`);
-  for (const [locale, texts] of Object.entries(conversion.labels)) {
-    write(`labels/${locale}.json`, `${JSON.stringify(texts, null, 2)}\n`);
-  }
+  for (const [path, content] of Object.entries(conversion.app))
+    write(`app/${path}`, `${JSON.stringify(content, null, 2)}\n`);
+  for (const [path, content] of Object.entries(conversion.appAssets)) write(`app/${path}`, content);
   for (const [name, theme] of Object.entries(conversion.themes)) {
     write(`themes/${name}.json`, `${JSON.stringify(theme, null, 2)}\n`);
   }
@@ -361,18 +479,28 @@ export function readConversion(directory: string): Conversion {
   }
   const report = json('report.json') as MigrationReport;
   if (report?.format !== REPORT_FORMAT || !Array.isArray(report.constructs)) {
-    throw new ConversionError(`report.json is not a ${REPORT_FORMAT} report`);
+    throw new ConversionError(
+      `report.json is not a ${REPORT_FORMAT} report; a conversion of an earlier phase is converted again`,
+    );
   }
-  const entries = (folder: string): string[] =>
-    existsSync(join(directory, folder)) ? readdirSync(join(directory, folder)) : [];
-  const labels: Record<string, Record<string, string>> = {};
-  for (const file of entries('labels').filter((name) => name.endsWith('.json'))) {
-    labels[file.slice(0, -'.json'.length)] = json(`labels/${file}`) as Record<string, string>;
-  }
+  const app: Record<string, unknown> = {};
+  const appAssets: Record<string, Buffer> = {};
+  const walk = (folder: string): void => {
+    const full = join(directory, ...folder.split('/'));
+    if (!existsSync(full)) return;
+    for (const name of readdirSync(full).sort()) {
+      const path = `${folder}/${name}`;
+      if (statSync(join(full, name)).isDirectory()) walk(path);
+      else if (name.endsWith('.json')) app[path.slice('app/'.length)] = json(path);
+      else appAssets[path.slice('app/'.length)] = readFileSync(join(full, name));
+    }
+  };
+  walk('app');
   const themes: Record<string, ConvertedTheme> = {};
   const assets: Record<string, Buffer> = {};
-  for (const file of entries('themes')) {
-    const path = join(directory, 'themes', file);
+  const themeFolder = join(directory, 'themes');
+  for (const file of existsSync(themeFolder) ? readdirSync(themeFolder) : []) {
+    const path = join(themeFolder, file);
     if (file.endsWith('.json') && statSync(path).isFile()) {
       themes[file.slice(0, -'.json'.length)] = json(`themes/${file}`) as ConvertedTheme;
     } else if (statSync(path).isDirectory()) {
@@ -380,5 +508,5 @@ export function readConversion(directory: string): Conversion {
         assets[`themes/${file}/${asset}`] = readFileSync(join(path, asset));
     }
   }
-  return { report, labels, themes, assets };
+  return { report, app, appAssets, themes, assets };
 }

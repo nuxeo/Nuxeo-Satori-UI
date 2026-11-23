@@ -11,10 +11,18 @@
  *   npm run config:dev                                   # our defaults only
  *   npm run config:dev -- --bootstrap acme.json --manifest acme-manifest.json
  *   npm run config:dev -- --layout Claim/metadata=claim.layout.json
+ *   npm run config:dev -- --home home.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
  * `layouts.json` and answered at `layouts/<Type>/<mode>.layout.json`. A later one for the same
  * type and mode replaces the earlier, as a later package's contribution does.
+ *
+ * `--home <file>` serves an app's `home.json` at `home.json`, as the package writes it, with no
+ * envelope (docs/business-apps/app-definition-v2.md, section 10). The servlet does not answer
+ * there: it serves a fixed set of addresses, and the app registry that would serve the home waits
+ * on decisions B and E. So this is the only place the home is served for now. Without `--home`,
+ * any `home.json` written before is removed, so the app finds no home, as on a server. A later
+ * `--home` replaces an earlier one.
  *
  * The dev server serves only files that existed when it started, so run this before `nx serve`;
  * edits to a file it already serves are picked up on reload. A bare configuration object is not
@@ -28,14 +36,14 @@ const ROOT = resolve(import.meta.dirname, '..');
 const DEFAULTS = join(ROOT, 'nuxeo-agentic-core/src/main/resources/agentic-ui-config');
 const TARGET = join(ROOT, 'apps/nuxeo-ui/public/agentic-ui-config');
 
-const extra = { bootstrap: [], manifest: [], layout: [] };
+const extra = { bootstrap: [], manifest: [], layout: [], home: [] };
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {
   const layer = args[i]?.replace(/^--/, '');
   if (!Object.hasOwn(extra, layer ?? '') || !args[i + 1]) {
     console.error(
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
-        '[--layout <Type>/<mode>=<layout.json>]...',
+        '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>]',
     );
     process.exit(2);
   }
@@ -177,3 +185,17 @@ writeFileSync(
 console.log(
   `wrote ${join(TARGET, 'layouts.json').slice(ROOT.length + 1)}: ${index.map((l) => `${l.type}/${l.mode}`).join(', ') || 'no layouts'}`,
 );
+
+// The home is served as the package writes it; the app checks it with the validator when it reads
+// it, and the pipeline when the package is built.
+const HOME = join(TARGET, 'home.json');
+const home = extra.home.at(-1);
+if (home === undefined) {
+  rmSync(HOME, { force: true });
+  console.log(`no home: ${HOME.slice(ROOT.length + 1)} not served`);
+} else {
+  writeFileSync(HOME, `${JSON.stringify(read(home), null, 2)}\n`);
+  console.log(
+    `wrote ${HOME.slice(ROOT.length + 1)}: ${home.startsWith(ROOT) ? home.slice(ROOT.length + 1) : home}`,
+  );
+}

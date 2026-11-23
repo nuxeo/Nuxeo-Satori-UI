@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until the presales Payers model arrives: the document of a claim, such as its claim
+     form or a medical record. The Claim page's documents card lists them through
+     payers_claim_documents, by claim number. Replace it with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/claimdoc"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/claimdoc">
+
+  <!-- The number of the claim it belongs to, its claim:number, such as CLAIM-000131. -->
+  <xs:element name="claim" type="xs:string" />
+  <!-- What it is: a claim form, an invoice, a medical record or an authorization. -->
+  <xs:element name="category" type="xs:string" />
+</xs:schema>

@@ -4,10 +4,10 @@
  *
  * **A calendar day is anchored in UTC.** Nuxeo stores a day-only write (`2024-03-06`) at midnight
  * of the server's day, read back as `2024-03-06T00:00:00.000Z`; the layout `date` renderer and the
- * Properties panel's Expires row both format in UTC, and `docs/extension-reference.md` publishes
- * that as the field type's contract. Calling `toISOString()` on the picker's `Date` instead anchors
- * the day in the editor's own zone, so the same picked day becomes a different instant per user and
- * every reader outside that zone can name a different day.
+ * Properties panel's Expires row both format such a day in UTC, and `docs/extension-reference.md`
+ * publishes that as the field type's contract. Calling `toISOString()` on the picker's `Date`
+ * instead anchors the day in the editor's own zone, so the same picked day becomes a different
+ * instant per user and every reader outside that zone can name a different day.
  *
  * `nxs-metadata-editor` does this at its own property boundary, in
  * `satori-components/metadata-editor/metadata-editor-form.ts`. It is repeated here rather than

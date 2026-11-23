@@ -36,6 +36,7 @@
       "@agentic-ui/shared/util": ["libs/shared/util/src/index.ts"],
       "@agentic-ui/shared/app-definition": ["libs/shared/app-definition/src/index.ts"],
       "@agentic-ui/shared/computations": ["libs/shared/computations/src/index.ts"],
+      "@agentic-ui/shared/home": ["libs/shared/home/src/index.ts"],
       "@nuxeo/satori-platform": ["libs/platform/src/index.ts"],
       "@nuxeo/satori-platform/app-config": ["libs/shared/app-config/src/index.ts"],
       "@nuxeo/satori-platform/components": ["libs/shared/satori-components/src/index.ts"],
