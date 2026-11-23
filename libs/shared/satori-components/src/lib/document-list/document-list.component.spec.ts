@@ -690,6 +690,28 @@ describe('NxsDocumentListComponent', () => {
       ]);
     });
 
+    it("shows a property column's own text where one is given, and leaves a packaged key's view", async () => {
+      host.columns.set([
+        { key: 'title', label: 'Title', text: () => 'never shown' },
+        { key: 'author', label: 'Author', text: () => 'never shown' },
+        {
+          key: 'claim:amount',
+          label: 'Amount',
+          text: (document) => `$${String(document.properties?.['claim:amount'])}.00`,
+        },
+        { key: 'claim:status', label: 'Status' },
+      ]);
+      host.documents.set([
+        doc(1, {
+          properties: { 'dc:creator': 'asmith', 'claim:amount': 50, 'claim:status': 'open' },
+        }),
+      ]);
+      await render();
+      const cells = [...rows()[0].querySelectorAll('td')].map((td) => td.textContent?.trim());
+      expect(cells[1]).toContain('Report 1');
+      expect(cells.slice(2)).toEqual(['asmith', '$50.00', 'open']);
+    });
+
     it('falls back to the built-in tag and avatar without the registered components', async () => {
       // The outlet learns the ID is unregistered from a promise, after the first render.
       await new Promise((resolve) => setTimeout(resolve));

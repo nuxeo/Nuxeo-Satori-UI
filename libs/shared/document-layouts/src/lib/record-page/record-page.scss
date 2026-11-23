@@ -40,6 +40,13 @@
   margin: 0 0 12px;
 }
 
+/* A list of related records fills its card, and scrolls sideways inside it when its columns are wide. */
+.record-page__related {
+  display: block;
+  min-width: 0;
+  overflow-x: auto;
+}
+
 .record-page__fields,
 .record-page__nested {
   margin: 0;
