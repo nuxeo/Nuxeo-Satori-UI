@@ -5491,10 +5491,43 @@ function checkStorybookSatoriCatalogues() {
       }
       return node;
     };
+    /**
+     * Calls known to return their argument unchanged: Storybook's `defineMain` (`return config`
+     * in @storybook/angular 10.6.3), imported under that name from an `@storybook/…` package.
+     * Any other call may transform the configuration — `customize({ staticDirs: [mount] })` can
+     * return `{ ...config, staticDirs: [] }` — so it is not unwrapped, and the export is then not
+     * an object literal this gate can read (review on #602).
+     */
+    const identityHelpers = new Set();
+    for (const statement of mainSource.statements) {
+      if (
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text.startsWith('@storybook/') &&
+        statement.importClause?.namedBindings &&
+        ts.isNamedImports(statement.importClause.namedBindings)
+      ) {
+        for (const element of statement.importClause.namedBindings.elements) {
+          if ((element.propertyName ?? element.name).text === 'defineMain') {
+            identityHelpers.add(element.name.text);
+          }
+        }
+      }
+    }
+    /** The call that stopped resolution, named in the failure so the author knows what to change. */
+    let unresolvedCall = null;
     const objectOf = (node) => {
       let expression = unwrap(node);
-      if (expression && ts.isCallExpression(expression) && expression.arguments.length === 1) {
-        expression = unwrap(expression.arguments[0]);
+      if (expression && ts.isCallExpression(expression)) {
+        if (
+          expression.arguments.length === 1 &&
+          ts.isIdentifier(expression.expression) &&
+          identityHelpers.has(expression.expression.text)
+        ) {
+          expression = unwrap(expression.arguments[0]);
+        } else {
+          unresolvedCall = expression;
+        }
       }
       return expression;
     };
@@ -5533,7 +5566,12 @@ function checkStorybookSatoriCatalogues() {
       fail(
         `${main} sets \`staticDirs\`, but \`checkStorybookSatoriCatalogues\` cannot find the ` +
           'configuration it exports, so it cannot tell whether that value is the one Storybook ' +
-          'uses. Export an object literal, or a `const` holding one.',
+          'uses. ' +
+          (unresolvedCall
+            ? `It exports the result of \`${unresolvedCall.getText().slice(0, 60)}\`, which may ` +
+              'transform it; only `defineMain` imported from an `@storybook/` package is known to ' +
+              'return its argument unchanged.'
+            : 'Export an object literal, or a `const` holding one.'),
       );
       legible = false;
     } else if (definitions.length > 1) {

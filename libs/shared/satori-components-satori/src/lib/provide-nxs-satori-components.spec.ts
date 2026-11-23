@@ -357,6 +357,11 @@ describe('the Satori primitives, rendered by ID', () => {
       await settle();
       expect(shown()).toBe(2);
       expect(showMore()).toBeNull();
+      // The instance that must survive the trail change. A remount would fit the new trail too — a
+      // new `sat-breadcrumbs` measures itself as it starts — so only this proves the items-change
+      // path did the fitting, and that the remount (and its NG0956) has not come back.
+      const first = el.querySelector('sat-breadcrumbs');
+      expect(first).not.toBeNull();
 
       fixture.componentRef.setInput('items', [
         { label: 'Domain', href: '/d' },
@@ -371,6 +376,8 @@ describe('the Satori primitives, rendered by ID', () => {
       expect(showMore()).not.toBeNull();
       expect(el.textContent).toContain('Claim 42');
       expect(el.querySelector('nav')?.getAttribute('aria-label')).toBe('Fil d’Ariane');
+      expect(el.querySelectorAll('sat-breadcrumbs')).toHaveLength(1);
+      expect(el.querySelector('sat-breadcrumbs')).toBe(first);
     } finally {
       if (original.offsetWidth) Object.defineProperty(proto, 'offsetWidth', original.offsetWidth);
       // `scrollWidth` lives on Element.prototype; only the HTMLElement shadow was added.

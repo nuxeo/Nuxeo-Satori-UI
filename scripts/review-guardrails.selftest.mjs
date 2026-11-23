@@ -13272,10 +13272,30 @@ expectGreen(
   'checkStorybookSatoriCatalogues',
   {
     ...SB_VENDOR_1_0_0,
-    [`${SB}/.storybook/main.ts`]: `export default defineMain({ staticDirs: [${SB_SATORI_DIR}] } satisfies StorybookConfig);
+    [`${SB}/.storybook/main.ts`]: `import { defineMain } from '@storybook/angular/node';
+export default defineMain({ staticDirs: [${SB_SATORI_DIR}] } satisfies StorybookConfig);
 `,
     [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
   },
+);
+
+// Review on #602, ninth round: every one-argument call was unwrapped as if it returned its
+// argument. A helper of our own may not — `customize` here empties `staticDirs` — so only
+// Storybook's `defineMain` is unwrapped, and any other call fails closed.
+expectRed(
+  'an exported configuration passed through a helper that may transform it',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `import { customize } from './customize';
+export default customize({ staticDirs: [${SB_SATORI_DIR}] });
+`,
+    [`${SB}/.storybook/customize.ts`]: `export const customize = (config) => ({ ...config, staticDirs: [] });
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /exports the result of `customize\(\{ staticDirs: \[[^`]*`, which may transform it/,
 );
 
 // A spread before `staticDirs` cannot replace it — the explicit value wins — so it must stay green.
