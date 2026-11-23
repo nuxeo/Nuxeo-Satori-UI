@@ -1,0 +1,149 @@
+:host {
+  display: block;
+}
+
+.record-page {
+  padding: 16px;
+}
+
+/* The file's `columns`, and each card's `span` of them. One column on a narrow screen. */
+.record-page__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--record-page-columns, 1), minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.record-page__card {
+  grid-column: span var(--record-card-span, 1);
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+}
+
+@media (max-width: 720px) {
+  .record-page__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .record-page__card {
+    grid-column: auto;
+  }
+}
+
+.record-page__heading {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+  margin: 0 0 12px;
+}
+
+.record-page__fields,
+.record-page__nested {
+  margin: 0;
+}
+
+.record-page__field {
+  margin-bottom: 14px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.record-page__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 2px;
+}
+
+.record-page__value {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.record-page__multiline {
+  white-space: pre-line;
+}
+
+.record-page__lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.record-page__nested {
+  padding-left: 10px;
+  border-left: 2px solid var(--mat-sys-outline-variant);
+
+  & + & {
+    margin-top: 8px;
+  }
+
+  .record-page__field {
+    margin-bottom: 6px;
+  }
+}
+
+.record-page__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-page__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 16px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  line-height: 20px;
+}
+
+.record-page__link {
+  color: var(--mat-sys-primary);
+}
+
+.record-page__table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 4px 8px;
+    text-align: start;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  th {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.record-page__rich-text > :first-child {
+  margin-top: 0;
+}
+
+.record-page__rich-text > :last-child {
+  margin-bottom: 0;
+}
+
+.record-page__empty {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-page__tabs .record-page__grid {
+  padding-top: 12px;
+}

@@ -217,7 +217,9 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 
 - **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
   completes it.
-- **The app's use of it:** phase 1 renders layouts and queues, and phase 2 actions and task forms.
+- **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
+  which loads it with `validateLayoutV2` and `loadable`. The other modes, related records and
+  queues follow in phase 1, and actions and task forms in phase 2.
 - **Checking widgets against property types**, which needs the content model: phase 1's model
   reader.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a

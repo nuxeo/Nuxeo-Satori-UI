@@ -399,12 +399,22 @@ lists what each Web UI element becomes. In version 2's terms:
 - **The schema and the validator are built**, in
   [`libs/shared/app-definition`](../../libs/shared/app-definition/README.md), with negative
   controls. Every JSON example in this document is one of its tests: a change here that the
-  validator does not follow fails them. What is still open about them:
-  - wiring them into the package pipeline, which phase 0 builds next;
-  - into the app, when phase 1 renders version 2;
-  - into the Studio migration's converter, in M1.
-- **Checking widgets against property types** needs the content model, so it comes in phase 1,
-  with the model reader.
+  validator does not follow fails them. The package pipeline runs them
+  ([package-pipeline.md](package-pipeline.md)); the Studio migration's converter will, in M1.
+- **What the app draws so far.** A `view` file draws the record page, `RecordPageComponent` in
+  `libs/shared/document-layouts`, loaded as section 8 says. Its limits, each said in the console
+  when a file meets it:
+  - **related records** are not drawn yet, so a card that lists them is left out;
+  - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
+    the stored id, until each has its lookup;
+  - **the three rules of section 5** are not registered yet, so a tab, card or field that one of
+    them shows is left out, rather than shown to everyone;
+  - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
+    layout shows.
+- **Checking widgets against property types** happens wherever the content model is known. The app
+  checks each field against the type's schemas when it loads the page, and leaves out one whose
+  widget does not show its property. The pipeline, the designer and the migration server need
+  phase 1's model reader.
 - **More widgets, computations and rules** join the registries as kits need them. A map, a
   signature or a chart is a kit's request, not version 2's.
 - **Whether `metadata` mode should exist** once `view` does is phase 1's call, made once the

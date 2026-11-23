@@ -13,7 +13,7 @@ import {
   viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
@@ -117,7 +117,12 @@ import {
   type SentimentItem,
   type SentimentResponse,
 } from '@agentic-ui/shared/ai-client';
-import { DocumentLayoutComponent } from '@agentic-ui/shared/document-layouts';
+import {
+  DocumentLayoutComponent,
+  DocumentLayoutService,
+  RecordPageComponent,
+  type ResolvedRecordLayout,
+} from '@agentic-ui/shared/document-layouts';
 import {
   catchError,
   finalize,
@@ -293,6 +298,7 @@ interface DocumentBanner {
     MatInputModule,
     MatSelectModule,
     DocumentLayoutComponent,
+    RecordPageComponent,
     DocumentViewerComponent,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
@@ -492,6 +498,32 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    * `documentView` entry takes the tab, and when the entry that did fails to load.
    */
   readonly packagedDocumentView = computed<PackagedDocumentView>(() => this.typeTraits().view);
+
+  private readonly layouts = inject(DocumentLayoutService);
+
+  /**
+   * The record page the focused document's type was contributed: its `view` layout file, version
+   * 2 (docs/business-apps/layout-v2.md), resolved for this document. `null` while it resolves and
+   * when the type has none, so the View tab stays today's until a record page is ready to replace
+   * it, and a slow or failed read never leaves the tab empty. A `documentView` entry still comes
+   * first: code or a manifest that chose the tab's component keeps it.
+   */
+  private readonly resolvedRecordLayout = toSignal(
+    toObservable(this.doc).pipe(
+      switchMap((document) =>
+        document?.type
+          ? this.layouts.recordLayoutOf(document).pipe(map((layout) => ({ document, layout })))
+          : of(null),
+      ),
+    ),
+    { initialValue: null },
+  );
+
+  /** The record page for the document on screen, never the one resolved for the previous. */
+  readonly recordLayout = computed<ResolvedRecordLayout | null>(() => {
+    const resolved = this.resolvedRecordLayout();
+    return resolved && resolved.document === this.doc() ? resolved.layout : null;
+  });
 
   /** `document` last, so a manifest `inputs.document` cannot stand in for the one on screen. */
   readonly documentViewInputs = computed<Readonly<Record<string, unknown>>>(() => ({

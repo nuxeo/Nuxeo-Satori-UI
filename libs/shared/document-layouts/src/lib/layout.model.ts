@@ -8,8 +8,9 @@
  */
 
 /**
- * The modes this build renders: `metadata` read-only in the Properties panel, `edit` and `create`
- * as forms. `view` is not one: the View tab body is the `documentView` slot.
+ * The modes a version 1 file is rendered in: `metadata` read-only in the Properties panel, `edit`
+ * and `create` as forms. `view` is layout version 2 only, the record page, and has its own reader
+ * in `record-page/`; a `documentView` entry still takes the View tab before it.
  */
 export type LayoutMode = 'metadata' | 'edit' | 'create';
 

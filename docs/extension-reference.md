@@ -1717,15 +1717,19 @@ the Properties panel, and a type with only a `metadata` file gets a generated `e
 
 What a layout file does **not** do:
 
-- **Not `view`.** The View tab body is the `documentView` slot, section 9a. A file for a mode
-  other than `metadata`, `edit` and `create` is served but not rendered.
+- **`view` is layout version 2.** A `view` file draws the record page, in the View tab: cards,
+  named widgets, computed fields and rules ([layout-v2.md](business-apps/layout-v2.md)). It is
+  read only as version 2, since version 1 has no `view` mode, and a `documentView` entry (section
+  9a) still takes the tab first. A file for any mode other than `view`, `metadata`, `edit` and
+  `create` is served but not rendered.
 - **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
   still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
   `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
   in their place — and its `"required": true` and its schema constraints apply there, so a file
   can make Nature required.
-- **Not new controls.** The schema type picks the control; a file cannot name a widget, and a
-  `blob` field it lists is shown, not edited.
+- **Not new controls, in version 1.** In the `metadata`, `edit` and `create` modes the schema type
+  picks the control; a version 1 file cannot name a widget, and a `blob` field it lists is shown,
+  not edited.
 - **Folderish types.** Document detail redirects them to Browse, so their Properties panel is never
   shown.
 - **Like every configuration, it is not a security control.** A field left out of a layout is still

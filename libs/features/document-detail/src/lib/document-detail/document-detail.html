@@ -280,6 +280,8 @@
             @if (documentViewOutlet.unresolved()) {
               <ng-container [ngTemplateOutlet]="packagedViewContent" />
             }
+          } @else if (recordLayout(); as recordPage) {
+            <lib-record-page [document]="doc()!" [layout]="recordPage" />
           } @else {
             <ng-container [ngTemplateOutlet]="packagedViewContent" />
           }
