@@ -18,8 +18,9 @@
  * - the rule set to `warn`;
  * - the rule skipping itself, which it does, with only a warning, when it finds no project graph.
  *
- * And the tiers' rules have no project to fail on until phase 1 creates the first engine and the
- * first module. So this gate gives them projects now.
+ * And the tiers' rules have no forbidden import to fail on until phase 1 creates the first module.
+ * The one engine so far, `libs/shared/computations`, imports only shared code. So this gate gives
+ * them projects now.
  *
  * ## What it does
  *

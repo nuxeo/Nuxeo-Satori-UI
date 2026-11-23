@@ -4,7 +4,7 @@
   "sourceRoot": "libs/shared/app-definition/src",
   "projectType": "library",
   "tags": ["scope:shared", "type:util"],
-  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the app definition's contract, which the engines render and the pipeline, the designer, the agent and the Studio migration all write. Shared code, not an engine: tier 3's engines render it, and phase 1's record-page engine, the first scope:engine project, will depend on it. Plain TypeScript, so a Node command line and the browser can both use it.",
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the app definition's contract, which the engines render and the pipeline, the designer, the agent and the Studio migration all write. Shared code, not an engine: tier 3's engines render it. The first scope:engine project, libs/shared/computations, depends on it, and phase 1's record-page engine will. Plain TypeScript, so a Node command line and the browser can both use it.",
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",

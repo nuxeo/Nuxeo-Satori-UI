@@ -1,0 +1,29 @@
+{
+  "name": "shared-computations",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/computations/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "scope:engine", "type:util"],
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the runtime of layout version 2's computed fields, one of the engines section 14 lists. The first scope:engine project. An engine carries scope:shared as well, because it lives in libs/shared/ and shared code may use it. Plain TypeScript with no Angular and no HTTP, so it depends on the app definition's contract only.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the layout version 2 proposal, whose examples' computations must evaluate. Without it an edit to the proposal would replay a cached pass. Not SATORI_TEST_TZ: vite.config.mts runs the suite in two zones of its own, which are project files. The signatures the contract test holds the evaluators to come in through ^production.",
+      "inputs": ["default", "^production", "{workspaceRoot}/docs/business-apps/layout-v2.md"],
+      "options": { "reportsDirectory": "coverage/libs/shared/computations" }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "$comment": "Plain TypeScript, so tsc rather than ngc. The spec files are type-checked by the spec-types gate through tsconfig.spec.json.",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "command": "tsc -p libs/shared/computations/tsconfig.lib.json --noEmit"
+      }
+    }
+  }
+}
