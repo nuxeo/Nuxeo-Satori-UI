@@ -297,8 +297,12 @@ async function preflight() {
   }
   if (missing.length > 0)
     throw new Precondition(
-      `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package first ` +
-        '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
+      missing.length === 1 && missing[0] === 'PayersClaimSearch'
+        ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
+            'PayersClaimSearch type for its queues: upgrade it to 0.3.0 ' +
+            '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
+        : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
+            'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
@@ -583,8 +587,16 @@ async function staff({ members, claims }) {
           headers: { 'enrichers-document': 'permissions' },
         })
       )?.contextParameters?.permissions ?? [];
-    const onClaim = await rights(claimId);
-    const onMember = await rights(memberId);
+    let onClaim;
+    let onMember;
+    try {
+      onClaim = await rights(claimId);
+      onMember = await rights(memberId);
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      problems.push(`${user.username} cannot read the seeded records (${error.status})`);
+      continue;
+    }
     const mayChangeClaims = GRANTS.some(
       (entry) =>
         entry.place === 'claims' &&

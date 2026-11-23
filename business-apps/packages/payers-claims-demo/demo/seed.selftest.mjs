@@ -534,7 +534,7 @@ await against(
     const { status, output } = await run();
     expect(
       status === 2 &&
-        /no PayersClaimSearch type/.test(output) &&
+        /version 0.2.0 or older .* upgrade it to 0.3.0/.test(output) &&
         server.calls.every((call) => call.startsWith('GET ')),
       'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
       output,

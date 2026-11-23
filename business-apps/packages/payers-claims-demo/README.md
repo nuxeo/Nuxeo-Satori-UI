@@ -296,7 +296,8 @@ Phase 1's demo script, as a steps file of the beta harness
 2. a queue opened, its rows in the server's order, and narrowed by a facet on the server;
 3. a member, with age, combined address, and the claims and cases lists;
 4. member services seeing the social security number, which the adjuster does not, anywhere on
-   the Member page, the Properties panel included, and may not change;
+   the Member page, the Properties panel included; nor may the adjuster change the member, whose
+   Edit form would list it;
 5. the layout file behind the page, beside it.
 
 Step 4 differs from the plan's words, "the protected fields are masked on screen": it follows the
@@ -305,9 +306,10 @@ alone and leaves it out, not masked, for everyone else. Masking the value itself
 
 Its figures, rows and values are read from `data.mjs` and the kit's files; the demo's own choices,
 which cards each group's home shows, the member and the facet bucket, are written in the script.
-**What it needs:** the package installed and seeded (above), the dev server serving the kit's files (above),
-and Playwright (`scripts/beta-harness/README.md`, "Prerequisites"). It signs in as an adjuster, the
-run's own user, then switches the browser to member services, which the identity guard is told of.
+**What it needs:** the package installed and seeded (above), the dev server serving the kit's files
+(above), and Playwright (`scripts/beta-harness/README.md`, "Prerequisites"). It signs in as an
+adjuster, the run's own user, then switches the browser to member services, which the identity guard
+is told of.
 
 ```bash
 NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-claims-demo
@@ -320,7 +322,7 @@ adjuster in no other group, `PAYERS_DEMO_PASSWORD` is unset or refused, the pack
 missing, a claim the seed did not write is in what the demo counts, or the dev server serves
 something other than the kit's files.
 
-Run on 24 November 2026, against Nuxeo 2025.10.18 with this package installed and seeded: 36 of 36
+Run on 24 November 2026, against Nuxeo 2025.10.18 with this package installed and seeded: 37 of 37
 checks passed, on six distinct screenshots. With the kit broken on purpose in six runs, and in a
 seventh the steps file pointed at a claim instead of the member, 21 of its 27 checks outside the
 preconditions were each seen failing: every home figure and card set, both menus, the queue's order,
@@ -331,7 +333,8 @@ address and title, the record page's three cards, the Properties panel drawn, th
 being the kit's, the bundle holding no code, and the console. Of the preconditions, these were seen
 refusing a real environment: the dev server serving other files, a supervisor as the run's user,
 and, with its test widened on purpose, a claim another session had left on the server, which the
-demo's figures do not count.
+demo's figures do not count; and, with the seeded statuses it expects changed, the one that proves
+the properties it judges arrived.
 
 ## What a server shows, and what only the dev server does
 

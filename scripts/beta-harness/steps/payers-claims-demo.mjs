@@ -252,6 +252,34 @@ async function whoIs(baseUrl, username, password) {
 }
 
 /**
+ * Every document an NXQL query finds in the repository, as `username`, with `schema`'s properties,
+ * from Node: `Repository.Query`, not the search endpoint, whose index can still hold a trashed
+ * document. `null` when it is refused, or holds more than one page.
+ */
+async function repositoryQuery(baseUrl, username, password, query, schema) {
+  try {
+    const response = await fetch(`${baseUrl}/nuxeo/api/v1/automation/Repository.Query`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        properties: schema,
+        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+      },
+      body: JSON.stringify({ params: { query, pageSize: 1000 } }),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) return null;
+    const page = await response.json();
+    return page?.isNextPageAvailable === true ? null : (page?.entries ?? null);
+  } catch {
+    // Refused or unanswered: the caller says it could not judge, and the precondition fails.
+    return null;
+  }
+}
+
+/**
  * @param {import('@playwright/test').Page} page
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
@@ -319,43 +347,71 @@ export default async function run(page, h) {
     'run demo/seed.mjs against this server',
   );
 
-  // The figures are counted exactly, so no claim the seed did not write may be in what they count:
-  // a queue's, or a seeded member's. Another claim the adjuster can read, in none of them, changes
-  // nothing. The repository is asked, not the index, which can still hold a trashed one.
-  const readable = await page.request
-    .post(`${h.baseUrl}/nuxeo/api/v1/automation/Repository.Query`, {
-      headers: { 'Content-Type': 'application/json', properties: 'claim' },
-      data: {
-        params: {
-          query:
-            "SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND ecm:isVersion = 0 " +
-            'AND ecm:isProxy = 0 AND ecm:isTrashed = 0',
-          pageSize: 1000,
-        },
-      },
-    })
-    .then((r) => (r.ok() ? r.json() : null))
-    .catch(unread);
-  const seededPath = (entry) =>
-    CLAIMS.some(
-      (claim) =>
-        entry.path ===
-        `/default-domain/workspaces/payers-demo/claims/${claim.number.toLowerCase()}`,
-    );
-  const counted = (claim) =>
-    ((claim['claim:adjuster'] ?? null) === null &&
-      ['submitted', 'inReview'].includes(claim['claim:status'])) ||
-    ['inReview', 'pended'].includes(claim['claim:status']) ||
-    claim['claim:adjuster'] === adjuster ||
-    claim['claim:member'] === memberDoc?.uid;
-  const intruders = (readable?.entries ?? [])
-    .filter((entry) => !seededPath(entry) && counted(entry.properties ?? {}))
-    .map((entry) => entry.path);
+  // The figures and lists are counted exactly, so no record the seed did not write may be in what
+  // they count: a queue's claims, the member's claims, or the member's cases. Asked as each of the
+  // two people the demo signs in as, since each counts what they may read, and of the repository,
+  // not the index, which can still hold a trashed one. Each seeded claim must come back with its
+  // seeded status, or the properties did not arrive and nothing would be judged.
+  const seededAt = (folder, number) =>
+    `/default-domain/workspaces/payers-demo/${folder}/${number.toLowerCase()}`;
+  const counted = {
+    Claim: (claim, as) =>
+      ((claim['claim:adjuster'] ?? null) === null &&
+        ['submitted', 'inReview'].includes(claim['claim:status'])) ||
+      ['inReview', 'pended'].includes(claim['claim:status']) ||
+      claim['claim:adjuster'] === as ||
+      claim['claim:member'] === memberDoc?.uid,
+    Case: (kase) => kase['case:member'] === memberDoc?.uid,
+  };
+  const seededPaths = {
+    Claim: CLAIMS.map((claim) => seededAt('claims', claim.number)),
+    Case: CASES.map((kase) => seededAt('cases', kase.number)),
+  };
+  const { password: adjusterPassword } = requireStepCredentials('read as the adjuster');
+  const intruders = [];
+  const unjudged = [];
+  for (const [as, password] of [
+    [adjuster, adjusterPassword],
+    [services.username, demoPassword],
+  ]) {
+    for (const [type, schema] of [
+      ['Claim', 'claim'],
+      ['Case', 'case'],
+    ]) {
+      const entries = await repositoryQuery(
+        h.baseUrl,
+        as,
+        password,
+        `SELECT * FROM Document WHERE ecm:primaryType = '${type}' AND ecm:isVersion = 0 ` +
+          'AND ecm:isProxy = 0 AND ecm:isTrashed = 0',
+        schema,
+      );
+      if (entries === null) {
+        unjudged.push(`${type} as ${as}: the query was not answered whole`);
+        continue;
+      }
+      if (type === 'Claim') {
+        const misread = CLAIMS.filter(
+          (claim) =>
+            entries.find((entry) => entry.path === seededAt('claims', claim.number))?.properties?.[
+              'claim:status'
+            ] !== claim.status,
+        );
+        if (misread.length > 0)
+          unjudged.push(`${misread.length} seeded claim(s) read without their status as ${as}`);
+      }
+      for (const entry of entries)
+        if (!seededPaths[type].includes(entry.path) && counted[type](entry.properties ?? {}, as))
+          intruders.push(`${entry.path} (${type}, read as ${as})`);
+    }
+  }
   h.requirePrecondition(
-    'no claim the seed did not write is in what the demo counts',
-    readable !== null && readable.isNextPageAvailable !== true && intruders.length === 0,
-    `${intruders.length} claim(s) not seeded would change the demo's figures: ` +
-      `${intruders.slice(0, 3).join(', ')}. Run it on a server without them`,
+    'no record the seed did not write is in what the demo counts, as either person',
+    unjudged.length === 0 && intruders.length === 0,
+    unjudged.length > 0
+      ? `could not judge: ${unjudged.join('; ')}`
+      : `${intruders.length} record(s) not seeded would change the demo's figures: ` +
+          `${intruders.slice(0, 3).join(', ')}. Run it on a server without them`,
   );
 
   // What the dev server serves at /agentic-ui-config/ must be the kit's own files: they are what
@@ -482,6 +538,11 @@ export default async function run(page, h) {
     statuses.paid < mine.length
       ? 'paid'
       : Object.keys(statuses).find((key) => statuses[key] < mine.length);
+  h.requirePrecondition(
+    "the adjuster's claims have more than one status, so a facet can narrow them",
+    chosen !== undefined,
+    `every one of ${adjuster}'s claims is ${Object.keys(statuses).join(', ')}: change data.mjs`,
+  );
   const filtered = page
     .waitForRequest(
       (request) =>
@@ -598,7 +659,7 @@ export default async function run(page, h) {
     .catch(unread);
   const adjusterRights = memberRights?.contextParameters?.permissions ?? null;
   h.check(
-    'the adjuster may not change the member, so is offered no Edit form, which would list the SSN',
+    "the adjuster lacks WriteProperties on the member, which a member's Edit form, listing the SSN, needs",
     Array.isArray(adjusterRights) &&
       adjusterRights.includes('Read') &&
       !adjusterRights.includes('WriteProperties'),
@@ -609,8 +670,8 @@ export default async function run(page, h) {
   // JSESSIONID Nuxeo has answered on beats a Basic header, so it would keep the browser the
   // adjuster's whatever the session says. Until the reload below, the app still holds the
   // adjuster's session in memory, so every request a frame sends to Nuxeo is given member
-  // services' header here, and the route is removed once the reload has loaded: from then on the
-  // header is the app's own, from the session it restored, and the identity guard judges that.
+  // services' header here, and the route is removed as soon as the reload commits: from then on
+  // the header is the app's own, from the session it restored, and the identity guard judges that.
   // page.request, the run's own channel, is not routed here and keeps the adjuster's.
   await h.signedInAs(services.username, 'member services read the member the adjuster just read');
   const servicesBasic = Buffer.from(`${services.username}:${demoPassword}`).toString('base64');
@@ -647,8 +708,11 @@ export default async function run(page, h) {
       }),
     },
   );
-  await page.reload({ waitUntil: 'load', timeout: 120_000 });
+  // The route goes as soon as the new document is committed, before the app's script runs, so
+  // every request the app makes as it boots carries the header of the session it restored.
+  await page.reload({ waitUntil: 'commit', timeout: 120_000 });
   await page.unroute('**/nuxeo/**');
+  await page.waitForLoadState('load', { timeout: 120_000 });
   await h.goTo('/#/home');
   await homeSettled(page);
   const servicesHome = await readHome(page);
