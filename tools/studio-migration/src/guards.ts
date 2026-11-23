@@ -34,7 +34,7 @@ export function chainOf(inventory: Inventory, path: string, index: number): Cond
   const byIndex = conditionsOf(inventory, path);
   const chain: Condition[] = [];
   const seen = new Set<number>();
-  for (let at: number | null = index; at !== null && !seen.has(at); ) {
+  for (let at: number | null = index; at !== null && !seen.has(at);) {
     seen.add(at);
     const condition = byIndex.get(at);
     if (!condition) break;
@@ -67,7 +67,11 @@ export function guardOf(conditions: readonly Condition[]): Guard {
     .map((decision) => (decision.kind === 'rule' ? decision.rule : 'core.true'))
     .filter((rule) => rule !== 'core.true');
   const rule: Rule =
-    rules.length === 0 ? 'core.true' : rules.length === 1 ? rules[0] : { type: 'core.every', parameters: rules };
+    rules.length === 0
+      ? 'core.true'
+      : rules.length === 1
+        ? rules[0]
+        : { type: 'core.every', parameters: rules };
   return {
     kind: 'rule',
     rule,
@@ -87,16 +91,45 @@ export function guardAt(inventory: Inventory, path: string, index: number): Guar
  * is a person's call.
  */
 export function guardOfSet(inventory: Inventory, path: string, indexes: readonly number[]): Guard {
-  if (indexes.length === 0) return { kind: 'rule', rule: 'core.true', document: false, conditions: [] };
+  if (indexes.length === 0)
+    return { kind: 'rule', rule: 'core.true', document: false, conditions: [] };
   const byIndex = conditionsOf(inventory, path);
   const innermost = indexes.find((index) =>
-    indexes.every((other) => other === index || chainOf(inventory, path, index).some((c) => c.index === other)),
+    indexes.every(
+      (other) => other === index || chainOf(inventory, path, index).some((c) => c.index === other),
+    ),
   );
   if (innermost === undefined)
     return {
       kind: 'reported',
-      note: 'It holds conditions side by side, and which encloses what is a person\'s call',
-      conditions: indexes.map((index) => byIndex.get(index)).filter((c): c is Condition => c !== undefined),
+      note: "It holds conditions side by side, and which encloses what is a person's call",
+      conditions: indexes
+        .map((index) => byIndex.get(index))
+        .filter((c): c is Condition => c !== undefined),
     };
   return guardOf(chainOf(inventory, path, innermost));
+}
+
+/** A menu entry's guard: its item's conditions and its page's, all of which must pass. */
+export function menuGuard(
+  inventory: Inventory,
+  item: { readonly path: string; readonly conditions: readonly number[] },
+  page: { readonly path: string; readonly conditions: readonly number[] } | undefined,
+): Guard {
+  const first = guardOfSet(inventory, item.path, item.conditions);
+  if (!page || page.conditions.length === 0 || first.kind !== 'rule') return first;
+  const second = guardOfSet(inventory, page.path, page.conditions);
+  if (second.kind !== 'rule') return second;
+  const rules = [first.rule, second.rule].filter((rule) => rule !== 'core.true');
+  return {
+    kind: 'rule',
+    rule:
+      rules.length === 0
+        ? 'core.true'
+        : rules.length === 1
+          ? rules[0]
+          : { type: 'core.every', parameters: rules },
+    document: first.document || second.document,
+    conditions: [...first.conditions, ...second.conditions],
+  };
 }

@@ -25,6 +25,7 @@ import {
   searchQueueId,
 } from './app-files';
 import { homeCards } from './convert-home';
+import { guardOfSet, type Guard } from './guards';
 import { columnWidget } from './widgets';
 
 /** A column, as a queue writes it: the property alone, or with its heading and widget. */
@@ -119,8 +120,7 @@ export function convertSearches(context: ConvertContext): void {
     }
     if (isConditionalTable(search)) {
       report(
-        `Its table shows only while a condition passes. M2 converts the condition, with truth tables, so the list is not shown to everyone meanwhile`,
-        'pending',
+        "Its table shows only while a condition passes, and M2 converts no condition on a search screen's table: a person decides it, and the list is not shown to everyone meanwhile",
       );
       continue;
     }
@@ -129,8 +129,8 @@ export function convertSearches(context: ConvertContext): void {
       const columnId = `search-column:${search.path}#${index + 1}`;
       if (column.conditional) {
         context.decide(columnId, {
-          outcome: 'pending',
-          note: 'It shows only while a condition passes. M2 converts the condition, with truth tables, so the column is not shown to everyone meanwhile',
+          outcome: 'reported',
+          note: "It shows only while a condition passes, and M2 converts no condition on a list's column: a person decides it, and it is not shown to everyone meanwhile",
         });
         return;
       }
@@ -220,7 +220,14 @@ export function queueOwners(inventory: Inventory): Map<string, QueueOwner> {
     if (!owners.has(path)) owners.set(path, { kind: 'search', search });
   }
   inventory.dashboard?.cards.forEach((card, index) => {
-    if (!isListCard(card) || !card.columns.some((column) => column.field !== null)) return;
+    if (!isListCard({ ...card, conditional: false }) || !card.columns.some((c) => c.field !== null))
+      return;
+    // A card under a condition is a list too when its rule can travel to the home, which reads
+    // the user only.
+    if (card.conditional) {
+      const guard = cardGuard(inventory, card);
+      if (guard.kind !== 'rule' || guard.document) return;
+    }
     const parameters = cardParameters(card);
     if ('problem' in parameters) return;
     const path = queuePath(homeQueueId(card, index));
@@ -228,6 +235,13 @@ export function queueOwners(inventory: Inventory): Map<string, QueueOwner> {
       owners.set(path, { kind: 'card', card, index, parameters: parameters.parameters });
   });
   return owners;
+}
+
+/** The guard of a dashboard card: the conditions it sits in or holds, nested. */
+export function cardGuard(inventory: Inventory, card: DashboardCard): Guard {
+  return inventory.dashboard
+    ? guardOfSet(inventory, inventory.dashboard.path, card.conditions)
+    : { kind: 'rule', rule: 'core.true', document: false, conditions: [] };
 }
 
 /** True when the results' table sits in a condition: the whole list then shows only to some. */
@@ -312,10 +326,15 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
-    if (card.conditional) {
+    const guard = card.conditional ? cardGuard(context.inventory, card) : null;
+    if (guard && guard.kind !== 'rule') {
+      context.decide(id, { outcome: guard.kind, note: guard.note });
+      return;
+    }
+    if (guard?.kind === 'rule' && guard.document) {
       context.decide(id, {
-        outcome: 'pending',
-        note: 'It shows only while a condition passes: M2 converts the condition, with truth tables',
+        outcome: 'reported',
+        note: 'Its condition reads a document, and no record is open on the home',
       });
       return;
     }
@@ -340,7 +359,7 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
-    if (!isListCard(card) || card.provider === null) {
+    if (!isListCard({ ...card, conditional: false }) || card.provider === null) {
       context.decide(id, { outcome: 'reported', note: 'It holds no list of a page provider' });
       return;
     }
@@ -378,6 +397,8 @@ export function convertDashboard(context: ConvertContext): void {
       ...(parameters.parameters.length > 0 ? { parameters: parameters.parameters } : {}),
       ...(columns.length > 0 ? { columns } : {}),
       ...(pageSize !== null ? { pageSize } : {}),
+      // The queue a card under a condition opens shows to whom the card does.
+      ...(guard?.kind === 'rule' && guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
     };
     const home = cards.find((candidate) => candidate.index === index);
     context.decide(id, {

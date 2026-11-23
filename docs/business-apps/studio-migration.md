@@ -267,8 +267,8 @@ all of them on every change:
 - **For check 2:** drop a field, turn a date widget into text, make a required field optional.
 - **For check 3:** name a field the package's own schema lacks.
 - **For check 5:** slip a free JavaScript condition in, or show a field or a list column Web UI
-  shows only under a condition to everyone. "Invert a rule" waits for M2, which converts the
-  first rules.
+  shows only under a condition to everyone. M2 adds inverting a converted rule (`invert-rule`)
+  and dropping one (`drop-rule`).
 - **For check 6:** change a field's label.
 - **For check 7:** point a list at another page provider, change one parameter, bind a button to
   another operation, point a home card at another queue, or drop a menu entry.
@@ -354,6 +354,19 @@ These sit inside the [development plan](development-plan.md):
 | M2    | Phase 4                 | Conditions (structured, and the known JavaScript patterns) with truth tables; task forms, tabs and layout blocks                                                                   |
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
+
+**Where M2 stands, 23 November 2026:**
+
+- **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
+  decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed.
+  Anything else is reported. The rule travels as the `visibleWhen` of a view field, an action, a
+  home card, its queue, or a menu entry. Check 5 holds every rule to its condition's truth table,
+  without a server.
+- **Not yet:**
+  - task forms, tabs and layout blocks;
+  - conditions on version 1 fields, list columns and search tables;
+  - the truth tables' server half, which evaluates each original in Web UI on the migration
+    server.
 
 **Where M1 stands, 23 November 2026:**
 

@@ -117,6 +117,40 @@ const convertedInto = (conversion: Conversion, path: string): Set<string> =>
  */
 const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'picture', 'thumbnail'];
 
+/**
+ * The first `visibleWhen` a converted file carries, in a layout's fields or an action, with a copy
+ * of its file and the object holding it in that copy.
+ */
+function findRule(
+  conversion: Conversion,
+): { path: string; file: Json; holder: Json; at: string } | null {
+  for (const path of Object.keys(conversion.app).sort()) {
+    const file = clone(conversion.app[path]) as Json;
+    if (path.startsWith('layouts/')) {
+      for (const shown of layoutFields(file)) {
+        const parts = shown.at.split('.');
+        const card = (file[parts[0]] as Json[])[Number(parts[1])];
+        const entry = (card['fields'] as unknown[])[Number(parts[3])];
+        if (isRecord(entry) && 'visibleWhen' in entry)
+          return { path, file, holder: entry, at: `${shown.at}.visibleWhen` };
+      }
+    }
+    if (path === 'actions.json' && Array.isArray(file['actions'])) {
+      const index = (file['actions'] as unknown[]).findIndex(
+        (action) => isRecord(action) && 'visibleWhen' in action,
+      );
+      if (index !== -1)
+        return {
+          path,
+          file,
+          holder: (file['actions'] as Json[])[index],
+          at: `actions.${index}.visibleWhen`,
+        };
+    }
+  }
+  return null;
+}
+
 /** The entry as an object, so that a key can be set on it. */
 const asObject = (entry: unknown): Json =>
   typeof entry === 'string' ? { field: entry } : (entry as Json);
@@ -405,6 +439,34 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
   {
+    name: 'invert-rule',
+    description: 'Invert the rule a converted condition became',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findRule(conversion);
+      if (!found) throw new MutationError('the conversion carries no rule to invert');
+      found.holder['visibleWhen'] = { type: 'core.not', parameters: [found.holder['visibleWhen']] };
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `inverted the rule at ${found.at} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-rule',
+    description: 'Drop the rule of something Web UI shows only under a condition',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findRule(conversion);
+      if (!found) throw new MutationError('the conversion carries no rule to drop');
+      delete found.holder['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule at ${found.at} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
     name: 'widen-column-to-everyone',
     description: 'Show a list column Web UI shows only under a condition to every user',
     caughtBy: 5,
@@ -413,7 +475,7 @@ export const MUTATIONS: readonly Mutation[] = [
       const column = entries.find(
         (entry) =>
           entry.kind === 'search-column' &&
-          entry.outcome === 'pending' &&
+          entry.outcome !== 'converted' &&
           entry.property &&
           /condition/.test(entry.note ?? ''),
       );

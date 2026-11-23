@@ -374,7 +374,7 @@ const OTHER = '~other';
  * the permissions of every rule a permission may become. A dimension it does not test is held to
  * one value, which keeps the table small enough to run in full.
  */
-export function situations(condition: Condition): Situation[] {
+export function situations(condition: Condition, extra: RuleValues = NO_VALUES): Situation[] {
   const named = (attribute: string): string[] => values(own(condition.attributes, attribute) ?? '');
   const expression = own(condition.attributes, 'if') ?? '';
   const called = (name: string): string[] =>
@@ -387,13 +387,20 @@ export function situations(condition: Condition): Situation[] {
       (m) => m[2],
     ),
   ];
+  // The rule's own values too, so that a rule naming more than the condition is seen passing
+  // where Web UI does not.
   const tested = (attribute: string, literals: readonly string[]): string[] =>
     [...new Set([...named(attribute), ...literals])].slice(0, 4);
-  const types = [...tested('type', called('hasType')), OTHER];
-  const states = [...tested('state', called('hasState')), OTHER];
-  const facetPool = tested('facet', facetLiterals);
-  const groupPool = tested('group', called('isMember'));
-  const asked = tested('permission', called('hasPermission'));
+  // The rule's own values too, each in its dimension, so that a rule naming more than the
+  // condition is seen passing where Web UI does not.
+  const types = [...new Set([...tested('type', called('hasType')), ...extra.types]), OTHER];
+  const states = [...new Set([...tested('state', called('hasState')), ...extra.states]), OTHER];
+  const facetPool = [...new Set([...tested('facet', facetLiterals), ...extra.facets])].slice(0, 5);
+  const groupPool = [...new Set([...tested('group', called('isMember')), ...extra.groups])].slice(
+    0,
+    5,
+  );
+  const asked = [...new Set([...named('permission'), ...called('hasPermission')])].slice(0, 4);
   const permissionPool =
     asked.length === 0
       ? []
@@ -428,7 +435,7 @@ export function truthTable(
   readonly disagree: readonly Situation[];
   readonly unreadable: boolean;
 } {
-  const rows = situations(condition);
+  const rows = situations(condition, literalsOf(rule));
   const disagree: Situation[] = [];
   for (const situation of rows) {
     const web = webUiPasses(condition, situation);
@@ -446,21 +453,62 @@ export function truthTable(
 export function chainTable(
   conditions: readonly Condition[],
   rule: unknown,
-): { readonly rows: number; readonly disagree: readonly Situation[]; readonly unreadable: boolean } {
+): {
+  readonly rows: number;
+  readonly disagree: readonly Situation[];
+  readonly unreadable: boolean;
+} {
   if (conditions.length === 1) return truthTable(conditions[0], rule);
   const merged: Record<string, string> = {};
   for (const condition of conditions)
     for (const [name, value] of Object.entries(condition.attributes))
       merged[name] = merged[name] ? `${merged[name]}, ${value}` : value;
-  const rows = situations({ path: '', index: -1, element: 'nuxeo-filter', attributes: merged, parent: null });
+  const rows = situations(
+    { path: '', index: -1, element: 'nuxeo-filter', attributes: merged, parent: null },
+    literalsOf(rule),
+  );
   const disagree: Situation[] = [];
   for (const situation of rows) {
     const results = conditions.map((condition) => webUiPasses(condition, situation));
     const app = rulePasses(rule, situation);
-    if (results.includes(null) || app === null) return { rows: rows.length, disagree, unreadable: true };
+    if (results.includes(null) || app === null)
+      return { rows: rows.length, disagree, unreadable: true };
     if (results.every(Boolean) !== app) disagree.push(situation);
   }
   return { rows: rows.length, disagree, unreadable: false };
+}
+
+/** The values a rule tests, by dimension. */
+interface RuleValues {
+  readonly types: readonly string[];
+  readonly facets: readonly string[];
+  readonly states: readonly string[];
+  readonly groups: readonly string[];
+}
+
+const NO_VALUES: RuleValues = { types: [], facets: [], states: [], groups: [] };
+
+/** The values a rule names, at any depth, each in the dimension its rule tests. */
+function literalsOf(rule: unknown): RuleValues {
+  const found = {
+    types: [] as string[],
+    facets: [] as string[],
+    states: [] as string[],
+    groups: [] as string[],
+  };
+  const visit = (value: unknown): void => {
+    if (typeof value !== 'object' || value === null) return;
+    const { type, parameters } = value as { type?: unknown; parameters?: unknown };
+    const list = Array.isArray(parameters) ? parameters : [];
+    const texts = list.filter((item): item is string => typeof item === 'string');
+    if (type === 'app.rules.isType') found.types.push(...texts);
+    else if (type === 'app.rules.hasFacet') found.facets.push(...texts);
+    else if (type === 'app.rules.inState') found.states.push(...texts);
+    else if (type === 'app.rules.inGroup') found.groups.push(...texts);
+    else list.forEach(visit);
+  };
+  visit(rule);
+  return found;
 }
 
 /** A row of a truth table, for a finding. */

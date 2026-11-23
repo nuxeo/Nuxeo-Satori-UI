@@ -12,7 +12,8 @@
  */
 import { homeQueueId, iconOf, labelOf, placed, queuePath, searchQueueId, slug } from './app-files';
 import { own, slotEntry, type Catalogue } from './catalogue';
-import { queueOwners, searchOfForm } from './convert-lists';
+import { cardGuard, queueOwners, searchOfForm } from './convert-lists';
+import { menuGuard } from './guards';
 import type { Inventory, SlotContribution } from './inventory';
 
 /** A card of `home.json`, from a dashboard card whose list is a queue. */
@@ -51,7 +52,19 @@ export function homeCards(inventory: Inventory): HomeCard[] {
     if (owner?.kind !== 'card' || owner.card !== card) return;
     const id = `card-${index + 1}`;
     const queue = queueIdOf(path);
-    cards.push({ index, id, queue, entry: { id, ...labelOf(card.heading), queue } });
+    const guard = cardGuard(inventory, card);
+    const rule = guard.kind === 'rule' && guard.rule !== 'core.true' ? guard.rule : null;
+    cards.push({
+      index,
+      id,
+      queue,
+      entry: {
+        id,
+        ...labelOf(card.heading),
+        queue,
+        ...(rule !== null ? { visibleWhen: rule } : {}),
+      },
+    });
   });
   return cards;
 }
@@ -64,7 +77,7 @@ export function menuEntryId(item: SlotContribution): string {
 
 /** Why a left-menu contribution is no entry of `navigation.json`, as its report entry says. */
 export interface MenuSkip {
-  readonly outcome: 'pending' | 'reported';
+  readonly outcome: 'pending' | 'proposed' | 'reported';
   readonly note: string;
 }
 
@@ -92,10 +105,17 @@ export function menuDecisions(
     const page = contributions.find(
       (other) => other.slot === 'DRAWER_PAGES' && other.name === item.name,
     );
-    if (item.conditions.length > 0 || (page?.conditions.length ?? 0) > 0) {
+    // Its conditions and its page's travel with it as its rule, which on the menu, where no
+    // record is open, may read the user only.
+    const guard = menuGuard(inventory, item, page);
+    if (guard.kind !== 'rule') {
+      none(item, page, { outcome: guard.kind, note: guard.note });
+      continue;
+    }
+    if (guard.document) {
       none(item, page, {
-        outcome: 'pending',
-        note: 'It shows only while a condition passes: M2 converts the condition, with truth tables, so it is not shown to everyone meanwhile',
+        outcome: 'reported',
+        note: 'Its condition reads a document, and no record is open in the menu',
       });
       continue;
     }
@@ -132,6 +152,7 @@ export function menuDecisions(
         ...(symbol !== null ? { icon: symbol } : {}),
         ...(item.order !== null ? { order: item.order } : {}),
         queue,
+        ...(guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
       },
     });
   }

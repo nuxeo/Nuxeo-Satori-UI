@@ -1,6 +1,6 @@
 # Studio migration
 
-Phases M0 and M1 of the migration in
+Phases M0, M1 and the conditions of M2 of the migration in
 [docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It reads a
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
 declarative track (M1) into an app definition the package pipeline's validator accepts, and runs the
@@ -200,8 +200,10 @@ gives the same conversion. A conversion directory holds:
 - **`import`** has no place in the app, whose import step reads no layout. It is reported, with its
   fields.
 - **Not written:**
-  - a field that sits in a condition (`nuxeo-filter`, `dom-if`) is pending: M2 converts the
-    condition, and until then the field is not shown to everyone;
+  - a field that sits in a condition (`nuxeo-filter`, `dom-if`) is written with the condition's
+    rule only in `view` (see **Conditions**, below). In version 1 it is pending, as version 1 has
+    no rules; where its condition does not convert it is reported, and where the rule is proposed
+    it waits for a person;
   - an element the catalogue does not know as a field is reported;
   - a field that binds a property another field already shows is reported, and the property is
     kept once. A field under a condition, or of an unknown element, shows nothing, so a later
@@ -251,7 +253,37 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
   proposes which. `navigation.json` holds only the package's own entries; Web UI's stock ones are
   the app's.
 - **Pending:** tabs wait for M2.
-- **Conditions.** A contribution that sits in a condition is pending, whatever the allow-list says.
+- **Conditions.** A button under a condition becomes an action whose `visibleWhen` is the
+  condition's rule. A bulk action whose condition reads the open record is reported. A menu entry
+  under a condition carries its rule too, where the rule reads only the user.
+
+**Conditions (M2).** A Web UI condition becomes the registered rule that decides exactly as it
+does ([`conditions.ts`](src/conditions.ts)).
+
+- **What each side decides is read from its own code.** Web UI's side comes from nuxeo-elements'
+  `nuxeo-filter.js` and `nuxeo-filters-behavior.js`. The app's side comes from the registered rules
+  in `libs/shared/extensions` and `libs/shared/nuxeo-client`.
+- **A `nuxeo-filter`'s tests** convert one by one, joined by `core.every`. A nested filter joins its
+  parent's the same way ([`guards.ts`](src/guards.ts)):
+  - `type`, `facet`, `state` and `group` become `isType`, `hasFacet`, `inState` and `inGroup`;
+  - `permission` converts only when its values are exactly one rule's permissions: `Write,
+WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren` becomes
+    `canAddChildren`, and `WriteSecurity, Everything` becomes `canManagePermissions`.
+- **Reported, never guessed:**
+  - `path`, `schema` and `expression`;
+  - a single permission no rule matches exactly, such as `Write`, which `canWrite` would widen to
+    `WriteProperties`;
+  - a filter given another document than the open record;
+  - a group test given no user, which never passes in Web UI.
+- **JavaScript in a known pattern is proposed.** That is a `dom-if`'s `if` calling a filter
+  function on `document` or `user`, or `document.facets.indexOf(…)`, with `!`, `&&` or `||`. Its rule
+  is in the report for a person to accept, and what it guards is written only once they do. Any
+  other JavaScript is reported.
+- **Where a rule travels:**
+  - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
+  - on the home and the menu, no record is open, so only a rule on the user travels;
+  - not to a version 1 field, which waits for the app to draw version 2 forms;
+  - not to a list's column or a search screen's table, which are reported.
 
 **The theme.** M0's tokens and files, and its name in `app.json`'s `branding.theme`.
 
@@ -321,10 +353,21 @@ check that did not run does.
     lacks fails. What rests on the platform's model is listed: Dublin Core, and stock types,
     vocabularies and page providers. `/config/types`, `/config/schemas`, the directories and the
     page provider definitions confirm it.
-  - **5, conditions.** No rule is invented: M1 converts no condition, so any rule in the package
-    fails, a free JavaScript one slipped in among them. Nothing Web UI shows under a condition is
-    shown to everyone. The truth tables wait for M2, in Web UI on the migration server. A package
-    with no condition passes: there is nothing for a table to decide.
+  - **5, conditions.**
+    - Every rule in the package sits on something a condition of the package guards, worked out
+      from the inventory.
+    - Each rule decides as Web UI's reading of those conditions does on every row of their truth
+      table. The rows are:
+      - each value tested, and one value that is not;
+      - every subset of the facets, permissions and groups named;
+      - the rule's own values.
+    - So an inverted rule, a widened one, a rule on the wrong field and a free JavaScript one
+      slipped in all fail. A rule written differently that decides the same passes.
+    - Each condition's own rule is held to the same table.
+    - Nothing Web UI shows under a condition is shown to everyone.
+    - The tables prove the mapping against the two sources as written. Evaluating each original
+      in Web UI itself, on the migration server, has not run. A package with no condition passes,
+      because there is nothing for a table to decide.
   - **6, what people see.** Each field, column and list is named as Web UI names it, the app's
     label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
     made readable. A label that rests on a catalogue the package does not hold is listed. The values
@@ -361,6 +404,8 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `slip-free-javascript`     | 5     | Slips a free JavaScript condition into the configuration              |
 | `widen-to-everyone`        | 5     | Shows a field Web UI shows only under a condition to every user       |
 | `widen-column-to-everyone` | 5     | Shows a list column Web UI shows only under a condition to every user |
+| `invert-rule`              | 5     | Inverts the rule a converted condition became                         |
+| `drop-rule`                | 5     | Drops the rule of something Web UI shows only under a condition       |
 | `change-label`             | 6     | Changes the label of a converted field                                |
 | `wrong-page-provider`      | 7     | Points a list at a different page provider                            |
 | `change-parameter`         | 7     | Changes one parameter of a list or an action                          |
@@ -376,8 +421,8 @@ and say so: `widen-to-everyone` and `widen-column-to-everyone`,
 because the sample has no condition, and `bind-other-operation`, because its one button runs no
 operation. The tests apply all three to the made-up package, which has them.
 
-Section 7's "invert a rule" waits for M2, which converts the first rules: until then there is no
-rule to invert, and any rule at all fails check 5.
+Section 7's "invert a rule" is `invert-rule`. The sample has no condition, so it and `drop-rule`
+have nothing to break there; the tests apply both to the made-up package.
 
 ## Tests
 
@@ -462,8 +507,11 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   package installed and Web UI beside the new app (development plan, phase 4). Neither local server
   has it, and no code reads a server yet: those halves say they did not run.
 - **Check 9** needs plugins, in M3.
-- **Conditions, tabs, task forms and layout blocks** are M2's. Until then a field, button or card
-  under a condition is pending, and tabs are pending.
+- **The rest of M2: task forms, tabs and layout blocks.** Tabs are pending. Task forms target
+  app-definition-v2.md, section 6, and need Studio's task-layout file format read from Web UI's
+  own sources first.
+- **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
+  screen's table. The server half of check 5 needs the migration server.
 - **The home and the menu, as the app draws them.** The conversion writes `home.json` and
   `navigation.json`, which the validator checks, but the app draws neither of what M1 writes yet:
   - it does not read `navigation.json` (app-definition-v2.md, section 9);

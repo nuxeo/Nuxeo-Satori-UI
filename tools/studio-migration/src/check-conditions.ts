@@ -2,19 +2,22 @@
  * Check 5, conditions (docs/business-apps/studio-migration.md, section 6): each converted rule
  * decides as the original condition did.
  *
- * M1 converts no condition; M2 does, with a truth table per condition evaluated in Web UI on the
- * migration server. So what M1 can hold, it holds in full, without a server:
+ * M2 converts conditions into registered rules (`conditions.ts`), each carried as the
+ * `visibleWhen` of what it guards (`guards.ts`). Without a server, the check holds:
  *
- * - **no rule is invented.** Every rule in the converted package must come from a condition of
- *   the package, and in M1 none does, so any rule fails: a free JavaScript condition slipped into
- *   the configuration among them;
+ * - **no rule is invented.** Every rule in the converted package sits on something a condition of
+ *   the package guards, and decides as that condition does on every row of their truth table. A
+ *   free JavaScript condition slipped in, an inverted rule or a rule on the wrong field fails;
+ * - **each condition's own rule** decides as Web UI does on every row;
  * - **nothing is widened to everyone.** A field, button or dashboard card Web UI shows only while
  *   a condition passes must not be converted without it: a field written without a
  *   `visibleWhen`, an action without one, a queue written for the card at all, or a card of
  *   `home.json` or an entry of `navigation.json` for what shows only under a condition.
  *
- * The truth tables wait for M2 and the migration server. With conditions in the package, that part
- * has not run, and the check says so; with none, there is nothing for a table to decide.
+ * The truth tables run Web UI's reading of a condition, as `nuxeo-filter` and `FiltersBehavior`
+ * implement it, against the app's reading of the rule, as the registered rules implement it.
+ * Evaluating the original in Web UI itself, on the migration server, has not run: with conditions
+ * in the package, the check says so; with none, there is nothing for a table to decide.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import {
@@ -29,7 +32,7 @@ import {
 } from './app-files';
 import { fieldOf, layoutFields, listColumns, rulesIn } from './app-walk';
 import { chainTable, decideCondition, describeSituation } from './conditions';
-import { guardAt, guardOfSet, type Guard } from './guards';
+import { guardAt, guardOfSet, menuGuard, type Guard } from './guards';
 import { recordedAllowList } from './convert';
 import { homeCards, menuEntries, menuEntryId } from './convert-home';
 import { isConditionalTable, queueOwners } from './convert-lists';
@@ -185,7 +188,7 @@ export function checkConditions({
     findings,
     ...(conditions > 0
       ? {
-          rest: `${conditions} ${conditions === 1 ? 'condition waits' : 'conditions wait'} for M2, whose truth tables run in Web UI on the migration server`,
+          rest: `The truth tables of ${conditions} ${conditions === 1 ? 'condition' : 'conditions'} ran against Web UI's and the app's code as written; evaluating each original in Web UI itself, on the migration server, has not run`,
         }
       : {}),
   };
@@ -268,28 +271,4 @@ function guardFor(
       : null;
   }
   return null;
-}
-
-/** A menu entry's guard: its item's conditions and its page's, all of which must pass. */
-export function menuGuard(
-  inventory: HarnessInput['inventory'],
-  item: { readonly path: string; readonly conditions: readonly number[] },
-  page: { readonly path: string; readonly conditions: readonly number[] } | undefined,
-): Guard {
-  const first = guardOfSet(inventory, item.path, item.conditions);
-  if (!page || page.conditions.length === 0 || first.kind !== 'rule') return first;
-  const second = guardOfSet(inventory, page.path, page.conditions);
-  if (second.kind !== 'rule') return second;
-  const rules = [first.rule, second.rule].filter((rule) => rule !== 'core.true');
-  return {
-    kind: 'rule',
-    rule:
-      rules.length === 0
-        ? 'core.true'
-        : rules.length === 1
-          ? rules[0]
-          : { type: 'core.every', parameters: rules },
-    document: first.document || second.document,
-    conditions: [...first.conditions, ...second.conditions],
-  };
 }

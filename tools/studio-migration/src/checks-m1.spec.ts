@@ -105,14 +105,14 @@ describe('check 2, fields', () => {
     const vocabulary = prepare({
       bundle: {
         [path]: syntheticBundleFiles()[path].replace(
-          '</template>',
-          '<nuxeo-directory-suggestion role="widget" value="[[document.properties.cl:adjuster]]" directory-name="adjusters"></nuxeo-directory-suggestion></template>',
+          '</template>\n  <script>',
+          '<nuxeo-directory-suggestion role="widget" value="[[document.properties.cl:adjuster]]" directory-name="adjusters"></nuxeo-directory-suggestion></template>\n  <script>',
         ),
       },
     });
     expect(run(vocabulary, 2)?.findings).toEqual([]);
     const other = edit(vocabulary, 'layouts/Claim/view.layout.json', (file) => {
-      file.cards[0].fields[3].parameters.directory = 'others';
+      file.cards[0].fields[4].parameters.directory = 'others';
       return file;
     });
     expect(run(other, 2)?.findings).toEqual([
@@ -149,7 +149,7 @@ describe('check 3, model', () => {
       return file;
     });
     expect(run(party, 3)?.findings).toEqual([
-      'layouts/Claim/view.layout.json cards.0.fields.3: the schema party has no field name, so pt:name does not exist',
+      'layouts/Claim/view.layout.json cards.0.fields.4: the schema party has no field name, so pt:name does not exist',
     ]);
     const typed = prepare({
       bundle: {
@@ -162,7 +162,7 @@ describe('check 3, model', () => {
       return file;
     });
     expect(run(elsewhere, 3)?.findings).toEqual([
-      'layouts/Claim/view.layout.json cards.0.fields.3: the type Claim has no party schema, so it has no pt:name',
+      'layouts/Claim/view.layout.json cards.0.fields.4: the type Claim has no party schema, so it has no pt:name',
     ]);
   });
 
@@ -191,6 +191,11 @@ describe('check 5, conditions', () => {
     const none = prepare({
       without: [`${UI}/document/claim/nuxeo-claim-metadata-layout.html`],
       bundle: {
+        [`${UI}/document/claim/nuxeo-claim-view-layout.html`]: files[
+          `${UI}/document/claim/nuxeo-claim-view-layout.html`
+        ]
+          .replace(/<nuxeo-filter[\s\S]*?<\/nuxeo-filter>/, '')
+          .replace(/<template is="dom-if"[\s\S]*?<\/template>/, ''),
         [results]: files[results].replace(
           /<nuxeo-data-table-column name="Reserve"[\s\S]*?<\/nuxeo-data-table-column>/,
           '',
@@ -211,7 +216,7 @@ describe('check 5, conditions', () => {
       visibleWhen: 'app.rules.canWrite',
     }));
     expect(run(queue, 5)?.findings).toEqual([
-      'queues/claims.json: visibleWhen holds a rule that no condition of the package gives: M1 converts no condition',
+      'queues/claims.json: visibleWhen holds a rule that no condition of the package gives',
     ]);
     const required = edit(input, 'layouts/Claim/edit.layout.json', (file) => {
       file.sections[0].fields[0].required = 'app.rules.canWrite';
@@ -547,7 +552,7 @@ describe('what the review found', () => {
       },
     });
     expect(input.conversion.app['layouts/Claim/view.layout.json']).toMatchObject({
-      cards: [{ fields: [{}, {}, { field: 'cl:incidentDate', widget: 'date' }] }],
+      cards: [{ fields: [{}, {}, { field: 'cl:incidentDate', widget: 'date' }, {}] }],
     });
     expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
       '[[',
@@ -695,7 +700,7 @@ describe("what Copilot's review found", () => {
     });
     expect(
       input.conversion.report.constructs.find((entry) => entry.id === `search-column:${results}#3`),
-    ).toMatchObject({ outcome: 'pending', note: expect.stringMatching(/condition/) });
+    ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/condition/) });
     for (const number of [2, 5]) expect(run(input, number)?.findings).toEqual([]);
     const widened = edit(input, 'queues/claims.json', (file) => {
       file.columns.push({ field: 'cl:reserve', label: 'Reserve' });
@@ -722,7 +727,7 @@ describe("what Copilot's review found", () => {
     expect(input.conversion.app['queues/claims.json']).toBeUndefined();
     expect(
       input.conversion.report.constructs.find((entry) => entry.id === `search:${results}#search`),
-    ).toMatchObject({ outcome: 'pending' });
+    ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/condition/) });
     expect(run(input, 2)?.findings).toEqual([]);
     const widened = edit(input, 'queues/claims.json', () => ({
       version: 2,
@@ -786,30 +791,31 @@ describe("what Copilot's second review found", () => {
   const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
   const results = `${UI}/search/claims/nuxeo-claims-search-results.html`;
 
-  it('leaves a field pending whose wrapper takes its binding from inside a condition', () => {
+  it('leaves a field out whose wrapper takes its binding from inside a condition that does not convert', () => {
     const files = syntheticBundleFiles();
     const input = prepare({
       bundle: {
         [view]: files[view].replace(
           '</template>\n  <script>',
-          `<div role="widget"><label>Reserve</label><nuxeo-filter group="adjusters"><template><nuxeo-input value="{{document.properties.cl:reserve}}"></nuxeo-input></template></nuxeo-filter></div>
+          `<div role="widget"><label>Adjuster</label><nuxeo-filter group="adjusters"><template><nuxeo-input value="{{document.properties.cl:adjuster}}"></nuxeo-input></template></nuxeo-filter></div>
   </template>\n  <script>`,
         ),
       },
     });
-    expect(input.inventory.layouts[0].fields[3]).toMatchObject({
-      binding: 'cl:reserve',
-      condition: 0,
+    // The filter has no user, so it does not convert; the wrapper sits in none but holds it.
+    expect(input.inventory.layouts[0].fields[5]).toMatchObject({
+      binding: 'cl:adjuster',
+      condition: 2,
     });
     expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
-      'cl:reserve',
+      'cl:adjuster',
     );
     const widened = edit(input, 'layouts/Claim/view.layout.json', (file) => {
-      file.cards[0].fields.push('cl:reserve');
+      file.cards[0].fields.push('cl:adjuster');
       return file;
     });
     expect(run(widened, 5)?.findings).toEqual([
-      'layouts/Claim/view.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
+      'layouts/Claim/view.layout.json: it shows cl:adjuster to everyone, though Web UI shows it only while condition 3 passes',
     ]);
   });
 
@@ -1064,7 +1070,7 @@ describe('the home and the menu', () => {
       return file;
     });
     expect(run(ruled, 5)?.findings).toEqual([
-      'home.json: cards.0.visibleWhen holds a rule that no condition of the package gives: M1 converts no condition',
+      'home.json: cards.0.visibleWhen holds a rule that no condition of the package gives',
     ]);
   });
 
@@ -1144,8 +1150,8 @@ describe('what the review of the home and the menu found', () => {
       );
     expect(conditional.conversion.app['navigation.json']).toBeUndefined();
     expect(entry(conditional, 3)).toMatchObject({
-      outcome: 'pending',
-      note: expect.stringMatching(/condition/),
+      outcome: 'reported',
+      note: expect.stringMatching(/does not convert/),
     });
     const widened = edit(conditional, 'navigation.json', () => ({
       version: 2,
@@ -1189,6 +1195,237 @@ describe('what the review of the home and the menu found', () => {
     expect(run(widened, 5)?.findings).toEqual([
       'navigation.json: claimssearch shows to everyone, though Web UI shows the menu entry "" only while a condition passes',
     ]);
+  });
+});
+
+describe('M2: conditions become rules, held by truth tables', () => {
+  const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+  const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+  const home = `${UI}/nuxeo-home.html`;
+  const files = syntheticBundleFiles();
+
+  it('passes the rules the converter writes, and fails one that decides otherwise than Web UI', () => {
+    const input = prepare();
+    expect(run(input, 5)).toMatchObject({ status: 'partial', findings: [] });
+    const inverted = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      const field = file.cards[0].fields[3];
+      field.visibleWhen = { type: 'app.rules.isType', parameters: ['Case'] };
+      return file;
+    });
+    expect(run(inverted, 5)?.findings).toEqual([
+      "layouts/Claim/view.layout.json: cards.0.fields.3.visibleWhen decides otherwise than Web UI's condition on 2 of 3 rows, such as type Claim",
+    ]);
+    const equivalent = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      file.cards[0].fields[3].visibleWhen = {
+        type: 'core.not',
+        parameters: [
+          { type: 'core.not', parameters: [{ type: 'app.rules.isType', parameters: ['Claim'] }] },
+        ],
+      };
+      return file;
+    });
+    // Written otherwise, but deciding the same on every row: the truth table is the proof.
+    expect(run(equivalent, 5)?.findings).toEqual([]);
+  });
+
+  it('fails a rule on what Web UI shows to everyone, and a converted field written without its rule', () => {
+    const input = prepare();
+    const moved = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      file.cards[0].fields[0] = {
+        field: 'cl:number',
+        label: 'Claim number',
+        visibleWhen: 'app.rules.canWrite',
+      };
+      return file;
+    });
+    expect(run(moved, 5)?.findings).toEqual([
+      'layouts/Claim/view.layout.json: cards.0.fields.0.visibleWhen holds a rule that no condition of the package gives',
+    ]);
+    const dropped = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      delete file.cards[0].fields[3].visibleWhen;
+      return file;
+    });
+    expect(run(dropped, 5)?.findings).toEqual([
+      'layouts/Claim/view.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
+    ]);
+  });
+
+  it('writes nested conditions as one core.every, and holds it to both', () => {
+    const input = prepare({
+      bundle: {
+        [view]: files[view]
+          .replace(
+            '<nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
+            '<nuxeo-filter document="[[document]]" user="[[user]]" group="adjusters"><template><nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
+          )
+          .replace(
+            '</template>\n    </nuxeo-filter>',
+            '</template>\n    </nuxeo-filter></template></nuxeo-filter>',
+          ),
+      },
+    });
+    const view1 = input.conversion.app['layouts/Claim/view.layout.json'] as {
+      cards: { fields: unknown[] }[];
+    };
+    expect(view1.cards[0].fields[3]).toMatchObject({
+      field: 'cl:reserve',
+      visibleWhen: {
+        type: 'core.every',
+        parameters: [
+          { type: 'app.rules.isType', parameters: ['Claim'] },
+          { type: 'app.rules.inGroup', parameters: ['adjusters'] },
+        ],
+      },
+    });
+    expect(run(input, 5)?.findings).toEqual([]);
+    const half = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      file.cards[0].fields[3].visibleWhen = { type: 'app.rules.isType', parameters: ['Claim'] };
+      return file;
+    });
+    expect(run(half, 5)?.findings).toEqual([
+      expect.stringMatching(
+        /cards\.0\.fields\.3\.visibleWhen decides otherwise than Web UI's condition/,
+      ),
+    ]);
+  });
+
+  it('holds an action to the condition its button sits in', () => {
+    const allowList = new Set(['Claim.Approve', 'Claim.Close']);
+    const pkg = readStudioPackage(syntheticPackage());
+    const read = inventory(pkg);
+    const input: HarnessInput = {
+      pkg,
+      inventory: read,
+      catalogue,
+      allowList,
+      platformVersion: '0.2.0',
+      conversion: convert(pkg, read, catalogue, { allowList, platformVersion: '0.2.0' }),
+    };
+    for (const number of [5, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+    const inverted = edit(input, 'actions.json', (file) => {
+      file.actions[1].visibleWhen = { type: 'core.not', parameters: ['app.rules.canWrite'] };
+      return file;
+    });
+    expect(run(inverted, 5)?.findings).toEqual([
+      expect.stringMatching(
+        /^actions\.json: actions\.1\.visibleWhen decides otherwise than Web UI's condition/,
+      ),
+    ]);
+  });
+
+  it('carries a group condition to the home and the menu, and reports one that reads a document there', () => {
+    const groups = prepare({
+      bundle: {
+        [home]: files[home].replace(
+          '<nuxeo-card heading="My tasks">',
+          '<nuxeo-filter user="[[user]]" group="supervisors"><template><nuxeo-card heading="Supervised"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter><nuxeo-card heading="My tasks">',
+        ),
+        [bundle]: files[bundle].replace(
+          '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
+          '<template><nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
+        ),
+      },
+    });
+    const rule = (group: string) => ({ type: 'app.rules.inGroup', parameters: [group] });
+    expect(groups.conversion.app['home.json']).toMatchObject({
+      cards: [
+        { id: 'card-1' },
+        { id: 'card-3', queue: 'home-3-claims', visibleWhen: rule('supervisors') },
+      ],
+    });
+    expect(groups.conversion.app['queues/home-3-claims.json']).toMatchObject({
+      visibleWhen: rule('supervisors'),
+    });
+    expect(groups.conversion.app['navigation.json']).toMatchObject({
+      entries: [{ id: 'claimssearch', visibleWhen: rule('adjusters') }],
+    });
+    for (const number of [2, 5, 6, 7, 10]) expect(run(groups, number)?.findings).toEqual([]);
+    const typed = prepare({
+      bundle: {
+        [bundle]: files[bundle].replace(
+          '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
+          '<template><nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
+        ),
+      },
+    });
+    expect(typed.conversion.app['navigation.json']).toBeUndefined();
+    expect(
+      typed.conversion.report.constructs.find(
+        (entry) => entry.id === `slot-contribution:${bundle}#3`,
+      ),
+    ).toMatchObject({
+      outcome: 'reported',
+      note: 'Its condition reads a document, and no record is open in the menu',
+    });
+  });
+});
+
+describe('M2: where a condition cannot travel', () => {
+  const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+  const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+  const home = `${UI}/nuxeo-home.html`;
+  const files = syntheticBundleFiles();
+  const outcome = (input: HarnessInput, id: string) =>
+    input.conversion.report.constructs.find((entry) => entry.id === id);
+
+  it('keeps the field that shows a property to everyone, and reports a copy under a condition', () => {
+    const input = prepare({
+      bundle: {
+        [view]: files[view].replace(
+          '</template>\n  <script>',
+          '<div role="widget"><label>Reserve</label><div>[[document.properties.cl:reserve]]</div></div>\n  </template>\n  <script>',
+        ),
+      },
+    });
+    const fields = (
+      input.conversion.app['layouts/Claim/view.layout.json'] as { cards: { fields: unknown[] }[] }
+    ).cards[0].fields;
+    expect(fields.filter((field) => JSON.stringify(field).includes('cl:reserve'))).toEqual([
+      { field: 'cl:reserve', label: 'Reserve' },
+    ]);
+    expect(outcome(input, `layout-field:${view}#4`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/another field of the layout shows it to everyone/),
+    });
+    for (const number of [2, 5]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it('reports a bulk action whose condition reads the open record, which a selection has not', () => {
+    const allowList = new Set(['Claim.Approve', 'Claim.Bulk']);
+    const pkg = readStudioPackage(
+      syntheticPackage({
+        bundle: {
+          [bundle]: `<nuxeo-slot-content name="bulk" slot="RESULTS_SELECTION_ACTIONS"><template><nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-operation-button operation="Claim.Bulk" label="Bulk" input="[[selectedItems]]"></nuxeo-operation-button></template></nuxeo-filter></template></nuxeo-slot-content>`,
+        },
+      }),
+    );
+    const read = inventory(pkg);
+    const conversion = convert(pkg, read, catalogue, { allowList, platformVersion: '0.2.0' });
+    expect(conversion.app['actions.json']).toBeUndefined();
+    expect(
+      conversion.report.constructs.find((entry) => entry.id === `slot-contribution:${bundle}#1`),
+    ).toMatchObject({
+      outcome: 'reported',
+      note: 'Its condition reads the open record, and an action over a selection has none',
+    });
+  });
+
+  it('reports a dashboard card whose condition reads a document, which the home has not', () => {
+    const input = prepare({
+      bundle: {
+        [home]: files[home].replace(
+          '<nuxeo-card heading="My tasks">',
+          '<nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-card heading="Typed"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter><nuxeo-card heading="My tasks">',
+        ),
+      },
+    });
+    expect(input.conversion.app['queues/home-3-claims.json']).toBeUndefined();
+    expect(outcome(input, `dashboard-card:${home}#3`)).toMatchObject({
+      outcome: 'reported',
+      note: 'Its condition reads a document, and no record is open on the home',
+    });
+    // The checks hold it to no queue and no home card of its own.
+    for (const number of [2, 5, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
   });
 });
 
