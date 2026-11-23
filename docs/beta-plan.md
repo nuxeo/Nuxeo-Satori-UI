@@ -24,7 +24,7 @@ is a human summary and can go stale exactly as its predecessor did.
 | 0 — Verify and unblock           | complete        | 14 checks                  |
 | 1 — Layer 0 config               | complete        | 39 checks                  |
 | 2 — Layer 1 extension registry   | complete        | 46 checks                  |
-| 3 — Component adoption           | complete        | 55 checks                  |
+| 3 — Component adoption           | **superseded**  | 55 checks at sign-off      |
 | 4 — Layer 2 publishable platform | complete        | 25 checks                  |
 | 5 — Layer 3 agent harness        | complete        | 27 checks                  |
 | 6 — Beta quality bar and proof   | **in progress** | 5 of 7; steps 3 and 6 open |
@@ -342,11 +342,17 @@ Not attempted, and carried into the component-adoption phase:
   documents, so `app.rules.canWriteSelection` and `app.rules.canRemoveSelection` still
   answer `false`. Making them live costs a fetch per selected row.
 
-## Phase 3 — Component adoption (**complete**)
+## Phase 3 — Component adoption (**superseded**)
 
-The UI is built on our own `nxs-` Satori components (`libs/shared/satori-components`) rather than
-hand-written lookalikes. This section is the plan as it was carried out; the evidence is cited in
-`.ai/state/phases.json`.
+The phase adopted an upstream component library behind a proof-of-concept browse route, and was
+signed off on 2026-08-24 with 55 checks. The adopted components, their bridge and the route were
+removed in October 2026 (NXSAT-635, NXSAT-637), so that adoption no longer exists, and
+`.ai/state/phases.json` records the phase as `superseded` (NXSAT-660, 2026-11-02).
+
+Its evidence steps now check the browse page that replaced the route, which is built on our own
+`nxs-` Satori components (`libs/shared/satori-components`): 29 of 29 on NXSAT-660's review head.
+`phases.json` keeps those checks as a record of that page, not as adoption evidence, so they are
+not this phase's sign-off.
 
 ## Phase 4 — Layer 2: publishable platform (**complete**, 10 deviations recorded)
 

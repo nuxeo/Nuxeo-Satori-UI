@@ -127,10 +127,13 @@ Stated plainly, because a comparison that finds no weaknesses is not credible.
 1. **Breadth.** The Web UI is the mature product. Satori is a slice, and workflow is out of
    scope.
 2. **Maturity and proof.** Years of production customers versus **zero**.
-3. **Accessibility.** Satori has _measured_ itself and **meets WCAG 2.1 AA on the fifteen cases
-   scanned** (2026-08-24). The Web UI's position is **Not verified**. This is now a strength
-   rather than a weakness — but the honest form of the claim names its scope: dialogs, the upload
-   flow, dark mode and the pre-auth login surface are not covered.
+3. **Accessibility.** Satori has _measured_ itself: on 2026-08-24 it **met WCAG 2.1 AA on the
+   fifteen cases scanned**, excluding three nodes in an upstream component library that has since
+   been removed. The Web UI's position is **Not verified**. That would make this a strength rather
+   than a weakness, but the result is dated: captures in mid-September failed three checks on the
+   browse page, and the plan has listed the bar as open since 2026-09-23 (Maturity, above). Re-run
+   the capture before quoting it. The honest form of the claim also names its scope: dialogs, the
+   upload flow, dark mode and the pre-auth login surface are not covered.
 4. **Studio integration.** Nuxeo Studio's relationship to Satori is **Not verified in
    repository** — no Studio integration exists here. For a customer whose configuration lives
    in Studio, this is a material open question.
