@@ -264,7 +264,7 @@ function readFields(
  * `fetch-schema: fields`.
  */
 function readProperty(raw: unknown, at: string, problems: string[]): PropertyModel | null {
-  if (typeof raw === 'string' && raw !== '') return typed(raw);
+  if (typeof raw === 'string') return typed(raw, at, problems);
   if (!isRecord(raw)) {
     problems.push(`${at}: a field is its type, or { type, fields, constraints }`);
     return null;
@@ -272,17 +272,22 @@ function readProperty(raw: unknown, at: string, problems: string[]): PropertyMod
   const hasFields = 'fields' in raw;
   // The list answers a complex field without `type` when the schema says nothing more.
   const type = raw['type'] === undefined ? (hasFields ? 'complex' : undefined) : raw['type'];
-  if (typeof type !== 'string' || type === '') {
+  if (typeof type !== 'string') {
     problems.push(`${at}.type: must be the field's type`);
     return null;
   }
+  const read = typed(type, `${at}.type`, problems);
+  if (!read) return null;
   if (hasFields && !isRecord(raw['fields'])) {
     problems.push(`${at}.fields: must be an object of fields`);
     return null;
   }
-  const directory = directoryOf(raw['constraints']) ?? directoryOf(raw['itemConstraints']);
+  const own = directoryOf(raw['constraints'], `${at}.constraints`, problems);
+  const items = directoryOf(raw['itemConstraints'], `${at}.itemConstraints`, problems);
+  if (own === null || items === null) return null;
+  const directory = own ?? items;
   return {
-    ...typed(type),
+    ...read,
     ...(hasFields
       ? { fields: readFields(raw['fields'] as Record<string, unknown>, `${at}.fields`, problems) }
       : {}),
@@ -290,17 +295,47 @@ function readProperty(raw: unknown, at: string, problems: string[]): PropertyMod
   };
 }
 
-function typed(type: string): { type: string; list: boolean } {
-  return type.endsWith('[]') ? { type: type.slice(0, -2), list: true } : { type, list: false };
+/** A type as Nuxeo writes one: a name, `string`, then `[]` once for a list, `string[]`. */
+const TYPE = /^([A-Za-z][A-Za-z0-9_.:-]*)(\[\])?$/;
+
+function typed(
+  type: string,
+  at: string,
+  problems: string[],
+): { type: string; list: boolean } | null {
+  const match = TYPE.exec(type);
+  if (!match) {
+    problems.push(`${at}: "${type}" is not a type, such as string or string[]`);
+    return null;
+  }
+  return { type: match[1], list: match[2] !== undefined };
 }
 
-function directoryOf(constraints: unknown): string | undefined {
-  if (!Array.isArray(constraints)) return undefined;
-  for (const constraint of constraints) {
+/**
+ * The directory a `directoryResolver` among `constraints` binds the value to; `undefined` when
+ * none does, and `null`, with the problem, when the constraints cannot be read: a binding with no
+ * directory named would be read as no binding at all.
+ */
+function directoryOf(
+  constraints: unknown,
+  at: string,
+  problems: string[],
+): string | undefined | null {
+  if (constraints === undefined) return undefined;
+  if (!Array.isArray(constraints)) {
+    problems.push(`${at}: must be a list of constraints`);
+    return null;
+  }
+  let directory: string | undefined;
+  for (const [index, constraint] of constraints.entries()) {
     if (!isRecord(constraint) || constraint['name'] !== 'directoryResolver') continue;
     const parameters = constraint['parameters'];
-    const directory = isRecord(parameters) ? parameters['directory'] : undefined;
-    if (typeof directory === 'string' && directory !== '') return directory;
+    const named = isRecord(parameters) ? parameters['directory'] : undefined;
+    if (typeof named !== 'string' || named === '') {
+      problems.push(`${at}[${index}]: a directoryResolver names its directory`);
+      return null;
+    }
+    directory ??= named;
   }
-  return undefined;
+  return directory;
 }

@@ -196,6 +196,51 @@ describe('readContentModel', () => {
       'doctypes.File.schemas: the schema "claim" is not in schemas',
     ]);
   });
+  it('refuses a type that is not one, and a directory binding that names none', () => {
+    const broken = source();
+    broken.schemas.push({
+      name: 'q',
+      fields: {
+        empty: '',
+        bare: '[]',
+        twice: 'string[][]',
+        objectEmpty: { type: '' },
+        unnamed: {
+          type: 'string',
+          constraints: [{ name: 'directoryResolver', parameters: { directory: '' } }],
+        },
+        noParameters: { type: 'string[]', itemConstraints: [{ name: 'directoryResolver' }] },
+        notAList: { type: 'string', constraints: { name: 'directoryResolver' } },
+        // A constraint of another kind, or a binding beside one, is read as before.
+        bound: {
+          type: 'string[]',
+          constraints: [{ name: 'string', parameters: {} }],
+          itemConstraints: [{ name: 'directoryResolver', parameters: { directory: 'colours' } }],
+        },
+      },
+    });
+    const reading = readContentModel(broken);
+    expect(reading.problems).toEqual([
+      'schemas[6].fields.empty: "" is not a type, such as string or string[]',
+      'schemas[6].fields.bare: "[]" is not a type, such as string or string[]',
+      'schemas[6].fields.twice: "string[][]" is not a type, such as string or string[]',
+      'schemas[6].fields.objectEmpty.type: "" is not a type, such as string or string[]',
+      'schemas[6].fields.unnamed.constraints[0]: a directoryResolver names its directory',
+      'schemas[6].fields.noParameters.itemConstraints[0]: a directoryResolver names its directory',
+      'schemas[6].fields.notAList.constraints: must be a list of constraints',
+    ]);
+    const sound = source();
+    sound.schemas.push({
+      name: 'q',
+      fields: { bound: (broken.schemas[6].fields as Record<string, unknown>)['bound'] },
+    });
+    expect(plain(read(sound).schemas.get('q')?.properties.get('bound'))).toEqual({
+      type: 'string',
+      list: true,
+      directory: 'colours',
+    });
+  });
+
   it('reads an explicit null as malformed, not as absent', () => {
     const broken = source();
     broken.schemas.push(
