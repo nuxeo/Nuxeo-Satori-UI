@@ -598,6 +598,22 @@ describe('a name every object inherits', () => {
     expect(view).toMatchObject({ rows: [['A', 'x']] });
   });
 
+  /** The record page shows a complex value with no widget through version 1's view. */
+  it('is a sub-field like any other of a complex value with no widget, which never throws', () => {
+    const view = showValue(
+      {
+        key: 'k',
+        label: 'L',
+        value: JSON.parse('{"code":"A","constructor":"x"}'),
+        parameters: {},
+        definition: { type: 'complex' },
+      },
+      null,
+      context,
+    );
+    expect(viewText(view, context.flagText)).toBe('Code: A, Constructor: x');
+  });
+
   it('is no part of an address', () => {
     expect(
       show(
