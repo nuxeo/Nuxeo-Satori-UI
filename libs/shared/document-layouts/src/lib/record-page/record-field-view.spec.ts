@@ -137,6 +137,32 @@ describe('showValue', () => {
       });
     });
 
+    /**
+     * Pattern 29: a stored day is the day written, wherever it is read; an instant is the
+     * reader's day. 20:00 UTC is the next day at +05:30, and 00:00 UTC the previous one at -05:00,
+     * so each case below fails if the two are read alike.
+     */
+    it("shows a stored day as written, in any zone, and an instant on the reader's day", () => {
+      const at = (timeZone: string, value: string) =>
+        showValue(
+          { key: 'k', label: 'L', value, parameters: {}, definition: { type: 'date' } },
+          'date',
+          { ...context, timeZone },
+        );
+      expect(at('-0500', '2026-11-23T00:00:00.000Z')).toEqual({
+        kind: 'text',
+        text: 'November 23, 2026',
+      });
+      expect(at('+0530', '2026-11-23T20:00:00.000Z')).toEqual({
+        kind: 'text',
+        text: 'November 24, 2026',
+      });
+      expect(at('-0500', '2026-11-24T00:30:00.000Z')).toEqual({
+        kind: 'text',
+        text: 'November 23, 2026',
+      });
+    });
+
     it('relative to today', () => {
       expect(show('relative-date', '2026-11-20T12:00:00Z', {}, { type: 'date' })).toEqual({
         kind: 'text',

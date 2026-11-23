@@ -1,4 +1,5 @@
 import { formatDate, formatNumber, formatPercent } from '@angular/common';
+import { isStoredCalendarDay } from '@agentic-ui/shared/computations';
 
 import { describeField, type FieldView } from '../document-layout/field-view';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
@@ -59,6 +60,11 @@ export interface RecordValueContext {
   readonly flagText: (flag: boolean) => string;
   /** Whether a rule passes for the record and the user: a table column's `visibleWhen`. */
   readonly rule: (rule: unknown) => boolean;
+  /**
+   * The zone an instant is shown in: absent, the reader's own, as the page leaves it; an offset
+   * such as `+0530` in a test, so that the views are deterministic in any zone.
+   */
+  readonly timeZone?: string;
 }
 
 type Json = Record<string, unknown>;
@@ -241,13 +247,15 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
     const fraction = parameters['scale'] === 100 ? value / 100 : value;
     return text(formatPercent(fraction, locale, '1.0-2'));
   },
-  date: ({ value, parameters }, { locale }) => {
+  date: ({ value, parameters }, { locale, timeZone }) => {
     const date = dateOf(value);
     if (!date) return text(textOf(value));
-    // In UTC, as version 1 does: a calendar date is stored at midnight UTC.
-    return text(
-      formatDate(date, parameters['format'] === 'short' ? 'shortDate' : 'longDate', locale, 'UTC'),
-    );
+    // A stored day in UTC, where Nuxeo anchors a day-only write, so that every reader sees the
+    // day that was written; an instant, such as `dc:created`, in the reader's own zone. The same
+    // rule as the computations' (AGENTS/08-bug-patterns.md, pattern 29).
+    const zone = isStoredCalendarDay(value) ? 'UTC' : timeZone;
+    const format = parameters['format'] === 'short' ? 'shortDate' : 'longDate';
+    return text(formatDate(date, format, locale, zone));
   },
   'relative-date': ({ value }, { today, locale }) => {
     const date = dateOf(value);
