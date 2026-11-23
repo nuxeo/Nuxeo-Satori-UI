@@ -46,13 +46,14 @@ themselves, nor that a layout's page provider exists.
 
 `scripts/app-package.mjs` runs steps 1 to 6 on one package, each stopping the run when it fails.
 It first removes the zip and checksum an earlier run left for the package's name and version, so
-a refused package leaves nothing installable behind, not even an older zip that looks current.
+a refused package leaves nothing installable behind, not even an older zip that looks current. The
+one exception is a `package.xml` that is a symbolic link, whose name is not read (below).
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
 | Step              | What is checked or done                                                                                                                                                                                          |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | The package's `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                                         |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                    |
 | 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4) |
 | 3. The version    | `app.json`'s `packageVersion` is `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`                                                                                        |
 | 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                |
@@ -73,7 +74,19 @@ inline, or contributed from another file or in another mode, is refused, because
 what the component says. It finds the components as the builder, the verifier and the server do:
 the `Nuxeo-Component` headers of the manifest's main section, in any letter case, and it checks
 those of every such header. A manifest that names them in more than one header, or spells the
-header another way, is the builder's to refuse, at step 4: the server would load only the last.
+header another way, is the builder's to refuse, at step 4: the server would load only the last. A
+component path must also stay in `bundle/`: one that climbs out with `..`, is absolute, or names a
+folder or a hard link is refused before it is read. Read, a component outside the package would
+have its layout attributes quoted back from wherever it is. A component that is missing is the
+builder's to refuse.
+
+Nothing in a package is read through a symbolic link. Step 1 searches the package for one before
+any step reads a file, and refuses it: a link can point anywhere, a linked `build.mjs` would have
+steps 1 and 4 use a builder from elsewhere, and what a step reads it may quote back. The builder
+refuses a link in `bundle/` or `package/` too, at step 4. A `package.xml` that is a link is not read
+even to clear an earlier run's zip, so that zip stays. The content model `--model` names is the operator's input, not the
+package's, and is read wherever it is (section 4); kept in the package's folder, as the demo's is,
+it must not be a link either.
 
 ## 3. Running it
 
