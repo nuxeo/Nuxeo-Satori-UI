@@ -2,11 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:nuxeo-satori:app-definition:layout:2",
   "title": "Layout file version 2",
-  "description": "docs/business-apps/layout-v2.md. Editors, the designer and the agent read this schema. The validator in libs/shared/app-definition is what refuses a package, and it also checks what a schema cannot: that ids are unique, which keys a mode allows, and each widget's parameters and each computation's signature.",
+  "description": "docs/business-apps/layout-v2.md. A task form, tasks/<workflow>.<step>.layout.json, is a layout file too (app-definition-v2.md, section 6). Editors, the designer and the agent read this schema. The validator in libs/shared/app-definition is what refuses a package, and it also checks what a schema cannot: that ids are unique, which keys a mode allows, each widget's parameters and each computation's signature, and a task form's var: fields.",
   "type": "object",
   "required": ["version"],
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this JSON Schema, for editors. Ignored otherwise."
+    },
     "version": {
       "const": 2
     },

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nuxeo-satori:app-definition:labels:2",
+  "title": "A labels file, labels/<locale>.json, app definition version 2",
+  "description": "docs/business-apps/app-definition-v2.md, section 7. The validator in libs/shared/app-definition is what refuses a package.",
+  "type": "object",
+  "required": ["version", "labels"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this JSON Schema, for editors. Ignored otherwise."
+    },
+    "version": {
+      "const": 2
+    },
+    "labels": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "\\S"
+      }
+    }
+  }
+}

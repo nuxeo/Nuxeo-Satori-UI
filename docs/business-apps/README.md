@@ -53,6 +53,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
 7. [decisions.md](decisions.md): what is open, who decides, by when, and what is settled.
 8. [layout-v2.md](layout-v2.md): layout file version 2, proposed. It is the format record pages
    and forms are configured in, and what the Studio migration writes.
+9. [app-definition-v2.md](app-definition-v2.md): the other files of an app definition, proposed:
+   `app.json`, queues, actions, task forms, labels and module settings.
 
 ## Facts that hold
 

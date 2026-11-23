@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nuxeo-satori:app-definition:module:2",
+  "title": "A module's settings, modules/<module>.json, app definition version 2",
+  "description": "docs/business-apps/app-definition-v2.md, section 8. The validator in libs/shared/app-definition is what refuses a package. It also checks that the module is registered and that app.json turns it on.",
+  "type": "object",
+  "required": ["version", "settings"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this JSON Schema, for editors. Ignored otherwise."
+    },
+    "version": {
+      "const": 2
+    },
+    "settings": {
+      "type": "object",
+      "description": "The module's own. Each module brings the schema of its settings when it is built."
+    }
+  }
+}

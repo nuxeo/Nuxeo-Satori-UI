@@ -1,9 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ACTIONS_V2_KEYS, PLACEMENTS } from './actions';
+import { APP_ID, APP_V2_KEYS } from './app';
+import { ID, NAME } from './checker';
+import { LABEL_KEY, LABELS_V2_KEYS } from './labels';
 import { LAYOUT_V2_KEYS } from './layout-v2';
+import { QUEUE_V2_KEYS } from './queue';
+import { parseRange, parseVersion } from './semver';
 import {
   APP_RULES,
   CORE_RULES,
+  PACKAGED_BULK_ACTIONS,
   PACKAGED_CHECKS,
   PACKAGED_COMPUTATIONS,
   PACKAGED_REGISTRIES,
@@ -11,6 +18,7 @@ import {
   PACKAGED_WIDGETS,
   PROPOSED_RULES,
   withRegistered,
+  XPATH,
 } from './registries';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', '..', '..');
@@ -56,6 +64,15 @@ describe('the registries, held to the extension reference', () => {
     );
     expect([...PACKAGED_ROW_ACTIONS].sort()).toEqual(actions);
   });
+
+  it('know exactly the bulk actions the reference documents', () => {
+    const actions = documented(
+      section('## 5. `bulk-actions`', '\n## 6.'),
+      /^\| `(app\.bulkActions\.[A-Za-z]+)`/gm,
+    );
+    expect(actions.length).toBeGreaterThan(5);
+    expect([...PACKAGED_BULK_ACTIONS].sort()).toEqual(actions);
+  });
 });
 
 describe('the JSON Schema, held to the registries and the validator', () => {
@@ -87,6 +104,86 @@ describe('the JSON Schema, held to the registries and the validator', () => {
     ] as const) {
       expect(Object.keys(defs[part].properties).sort()).toEqual([...keys].sort());
     }
+  });
+});
+
+type AnySchema = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const schemaFile = (name: string): AnySchema =>
+  JSON.parse(readFileSync(join(import.meta.dirname, '..', `${name}.schema.json`), 'utf8'));
+const keysOf = (part: AnySchema): string[] => Object.keys(part['properties']).sort();
+
+describe("the other files' JSON Schemas, held to their validators", () => {
+  const [app, queue, actions, labels, module] = ['app', 'queue', 'actions', 'labels', 'module'].map(
+    schemaFile,
+  );
+
+  it('allow the same keys in each part of a file as the validators do', () => {
+    const pairs: [AnySchema, readonly string[]][] = [
+      [app, APP_V2_KEYS.app],
+      [app['$defs'].branding, APP_V2_KEYS.branding],
+      [app['$defs'].image.oneOf[1], APP_V2_KEYS.image],
+      [queue, QUEUE_V2_KEYS.queue],
+      [queue['$defs'].facet, QUEUE_V2_KEYS.facet],
+      [actions, ACTIONS_V2_KEYS.file],
+      [actions['$defs'].action, ACTIONS_V2_KEYS.action],
+      [actions['$defs'].message, ACTIONS_V2_KEYS.message],
+      [labels, LABELS_V2_KEYS.labels],
+      [module, LABELS_V2_KEYS.module],
+    ];
+    for (const [part, keys] of pairs) expect(keysOf(part)).toEqual([...keys].sort());
+    expect(actions['$defs'].action.properties.on.items.enum).toEqual([...PLACEMENTS]);
+  });
+
+  it("copy the layout schema's definitions they share, unchanged", () => {
+    // Each schema stands alone, for editors, so the rules, values and field entries are copied
+    // from the layout schema rather than referenced across files. This keeps the copies equal.
+    for (const other of [app, queue, actions]) {
+      const shared = Object.keys(other['$defs']).filter((name) => name in schema.$defs);
+      expect(shared.length).toBeGreaterThan(0);
+      for (const name of shared) expect(other['$defs'][name]).toEqual(schema.$defs[name]);
+    }
+  });
+
+  it('read versions and ranges as the validator does, so an editor marks what it refuses', () => {
+    const version = new RegExp(app['properties'].packageVersion.pattern);
+    const range = new RegExp(app['properties'].platform.pattern);
+    for (const text of [
+      '1.0.0',
+      '1.0.0+build.5',
+      '1.0.0-0',
+      '1.0.0-0a',
+      '1.0.0-rc.1',
+      '1.0.0-01',
+      '01.0.0',
+      '1.0',
+      'v1.0.0',
+    ])
+      expect([text, version.test(text)]).toEqual([text, parseVersion(text) !== null]);
+    for (const text of [
+      '^1.2.0',
+      '~1.2.0',
+      '>=1.0.0 <2.0.0',
+      '>=1.0.0+b <2.0.0',
+      '1.2.0',
+      '>=1.0.0-01',
+      '>= 1.0.0',
+      '1.x',
+      '',
+    ])
+      expect([text, range.test(text)]).toEqual([text, parseRange(text) !== null]);
+  });
+
+  it("write the validators' patterns", () => {
+    const layout = schema as AnySchema;
+    expect(layout['$defs'].id.pattern).toBe(ID.source);
+    expect(layout['$defs'].xpath.pattern).toBe(XPATH.source);
+    expect(layout['$defs'].related.properties.pageProvider.pattern).toBe(NAME.source);
+    expect(app['$defs'].appId.pattern).toBe(APP_ID.source);
+    expect(queue['properties'].pageProvider.pattern).toBe(NAME.source);
+    expect(queue['$defs'].facet.properties.aggregate.pattern).toBe(NAME.source);
+    expect(actions['$defs'].action.properties.transition.pattern).toBe(NAME.source);
+    expect(actions['$defs'].action.properties.operation.pattern).toBe(NAME.source);
+    expect(labels['properties'].labels.propertyNames.pattern).toBe(LABEL_KEY.source);
   });
 });
 

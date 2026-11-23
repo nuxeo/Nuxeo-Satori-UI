@@ -4,7 +4,7 @@
   "sourceRoot": "libs/shared/app-definition/src",
   "projectType": "library",
   "tags": ["scope:shared", "type:util"],
-  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the app definition's contract, which the engines render and the pipeline, the designer, the agent and the Studio migration all write. Shared code and an engine, as the module boundary rules tag engines. Plain TypeScript, so a Node command line and the browser can both use it.",
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the app definition's contract, which the engines render and the pipeline, the designer, the agent and the Studio migration all write. Shared code, not an engine: tier 3's engines render it, and phase 1's record-page engine, the first scope:engine project, will depend on it. Plain TypeScript, so a Node command line and the browser can both use it.",
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",
@@ -15,7 +15,9 @@
         "^production",
         { "env": "SATORI_TEST_TZ" },
         "{workspaceRoot}/docs/business-apps/layout-v2.md",
-        "{workspaceRoot}/docs/extension-reference.md"
+        "{workspaceRoot}/docs/business-apps/app-definition-v2.md",
+        "{workspaceRoot}/docs/extension-reference.md",
+        "{workspaceRoot}/libs/shared/app-config/src/lib/bootstrap-config.ts"
       ],
       "options": { "reportsDirectory": "coverage/libs/shared/app-definition" }
     },

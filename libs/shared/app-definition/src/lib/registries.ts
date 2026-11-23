@@ -1,13 +1,14 @@
 /**
- * What a layout file version 2 may name: the widgets, computations, checks, rules and row actions
- * the platform packages (docs/business-apps/layout-v2.md, sections 3 to 7). Everything a file
- * refers to is one of these by ID, as decision 4 settled; there is no expression language.
+ * What the files of app definition version 2 may name: the widgets, computations, checks, rules,
+ * row and bulk actions and domain modules the platform packages (docs/business-apps/layout-v2.md,
+ * sections 3 to 7, and app-definition-v2.md). Everything a file refers to is one of these by ID,
+ * as decision 4 settled; there is no expression language.
  *
- * The rules and row actions exist today and are registered in code by `libs/shared/extensions`,
- * which needs Angular. They are listed again here so that this library stays plain TypeScript,
- * usable by a Node command line, and a test holds the two lists to the ones
- * `docs/extension-reference.md` documents. A caller with more of them, a customer's own rule
- * registered in Layer 2 code for one, passes them in: see `withRegistered`.
+ * The rules and actions exist today and are registered in code by `libs/shared/extensions`, which
+ * needs Angular. They are listed again here so that this library stays plain TypeScript, usable by
+ * a Node command line, and a test holds the lists to the ones `docs/extension-reference.md`
+ * documents. A caller with more of them, a customer's own rule registered in Layer 2 code for one,
+ * passes them in: see `withRegistered`.
  */
 
 /** The property types a widget can show, as Nuxeo names them; `[]` marks a list. */
@@ -62,6 +63,16 @@ export interface Registries {
   /** Rules by ID. `null` for a rule whose parameters this library does not know, which accepts any. */
   readonly rules: Readonly<Record<string, Signature | null>>;
   readonly rowActions: ReadonlySet<string>;
+  readonly bulkActions: ReadonlySet<string>;
+  /**
+   * The other actions registered in code, in any slot but rows and bulk: a toolbar's or a context
+   * menu's. Nothing a file names is one of these; they are known so that a package's own action
+   * cannot take one's id, which a manifest may not rebind. The platform's are `app.` IDs, refused
+   * by their prefix, so this holds a customer's own, registered in Layer 2 code.
+   */
+  readonly actions: ReadonlySet<string>;
+  /** The domain modules an app may turn on (architecture.md, section 6). */
+  readonly modules: ReadonlySet<string>;
 }
 
 const text: ParameterCheck = (value) =>
@@ -233,26 +244,56 @@ export const PACKAGED_ROW_ACTIONS: ReadonlySet<string> = new Set([
   'app.rowActions.delete',
 ]);
 
+/** The actions over a queue's selection (extension-reference.md, section 5). */
+export const PACKAGED_BULK_ACTIONS: ReadonlySet<string> = new Set([
+  'app.bulkActions.downloadZip',
+  'app.bulkActions.addToCollection',
+  'app.bulkActions.compare',
+  'app.bulkActions.addToClipboard',
+  'app.bulkActions.publish',
+  'app.bulkActions.delete',
+]);
+
+/**
+ * The domain modules the platform has. None yet: each joins when it is built, with the schema of
+ * its settings, so until then an app that turns one on is refused.
+ */
+export const PACKAGED_MODULES: ReadonlySet<string> = new Set();
+
 export const PACKAGED_REGISTRIES: Registries = {
   widgets: PACKAGED_WIDGETS,
   computations: PACKAGED_COMPUTATIONS,
   checks: PACKAGED_CHECKS,
   rules: { ...CORE_RULES, ...APP_RULES, ...PROPOSED_RULES },
   rowActions: PACKAGED_ROW_ACTIONS,
+  bulkActions: PACKAGED_BULK_ACTIONS,
+  actions: new Set(),
+  modules: PACKAGED_MODULES,
 };
 
 /**
- * The packaged registries with more IDs added: the rules and row actions a customer registered in
- * Layer 2 code, whose parameters this library cannot know, so it accepts any.
+ * The packaged registries with more IDs added: the rules and actions a customer registered in
+ * Layer 2 code, whose parameters this library cannot know, so it accepts any; a package's own
+ * actions, from its `actions.json`; and modules. A rule the platform already registers keeps its
+ * own signature, so that adding it again cannot loosen the checks of its parameters.
  */
 export function withRegistered(
   base: Registries,
-  extra: { readonly rules?: readonly string[]; readonly rowActions?: readonly string[] },
+  extra: {
+    readonly rules?: readonly string[];
+    readonly rowActions?: readonly string[];
+    readonly bulkActions?: readonly string[];
+    readonly actions?: readonly string[];
+    readonly modules?: readonly string[];
+  },
 ): Registries {
   return {
     ...base,
-    rules: { ...base.rules, ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])) },
+    rules: { ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])), ...base.rules },
     rowActions: new Set([...base.rowActions, ...(extra.rowActions ?? [])]),
+    bulkActions: new Set([...base.bulkActions, ...(extra.bulkActions ?? [])]),
+    actions: new Set([...base.actions, ...(extra.actions ?? [])]),
+    modules: new Set([...base.modules, ...(extra.modules ?? [])]),
   };
 }
 

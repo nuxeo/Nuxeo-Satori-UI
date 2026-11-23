@@ -1,24 +1,40 @@
 /**
- * npm run app-definition:validate -- <file or directory>... [--mode <mode>]
+ * npm run app-definition:validate -- <file or directory>... [--mode <mode>] [--allow-list <file>]
+ *   [--registered <file>] [--platform <version>]
  *
  * The check behind phase 0's demo step 1, which the package pipeline is to run first. A layout file
  * that names a widget the platform does not have is refused, and the message names the widget.
  *
- * - **Files checked:** given a directory, it checks every `*.layout.json` under it, so a whole
- *   configuration package can be checked at once.
- * - **Mode:** read from the path a configuration package gives every layout,
- *   `layouts/<Type>/<mode>.layout.json`, unless `--mode` names it.
- * - **Version 1 files** are left to the version 1 reader in `libs/shared/document-layouts`, and
+ * - **Files checked:** given a directory, every file of an app definition under it
+ *   (docs/business-apps/app-definition-v2.md, section 1), so a whole package is checked at once.
+ *   Given a file, that file.
+ * - **Inside a package**, a directory that holds an `app.json`:
+ *   - a JSON file out of place is refused rather than passed over;
+ *   - `demo/` and `assets/` are not checked;
+ *   - version 1's `bootstrap.json`, `manifest.json` and `layouts.json` are left alone.
+ * - **With its package:** a file is checked with the `app.json`, `actions.json` and `assets/` of
+ *   the package it sits in, whether or not they were named. One of them that cannot be read is
+ *   reported, and fails the run.
+ * - **A layout's mode** is read from its path, `layouts/<Type>/<mode>.layout.json`, unless
+ *   `--mode` names it.
+ * - **Operations** are refused unless `--allow-list` names a file that lists them (decision 3).
+ * - **What the deployment registers in code**, a customer's own rules and actions, and the domain
+ *   modules it has, come from `--registered`.
+ * - **`app.json`'s platform range** is held to `--platform`, when it is given.
+ * - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
  *   counted.
  *
  * Exit codes:
- * - 0: every version 2 file has no finding;
- * - 1: a file has a finding, or cannot be read;
+ * - 0: every file has no finding;
+ * - 1: a file has a finding or cannot be read, or there was nothing to check;
  * - 2: the command was wrong.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { LAYOUT_MODES, validateLayoutV2, type LayoutMode } from './lib/layout-v2';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
+import { placeFile, validateFile, type PackageContext, type PlacedFile } from './lib/package';
+import { isRecord, PACKAGED_REGISTRIES, withRegistered, type Registries } from './lib/registries';
+import { parseVersion } from './lib/semver';
 
 export interface CliIo {
   readonly out: (text: string) => void;
@@ -26,13 +42,21 @@ export interface CliIo {
 }
 
 const USAGE =
-  'usage: app-definition validate <file or directory>... [--mode view|metadata|edit|create]\n';
-const LAYOUT_PATH = /(?:^|[\\/])layouts[\\/][^\\/]+[\\/]([a-z][a-z0-9-]*)\.layout\.json$/;
+  'usage: app-definition validate <file or directory>... [--mode view|metadata|edit|create]' +
+  ' [--allow-list <file>] [--registered <file>] [--platform <version>]\n';
+const CANNOT_TELL =
+  'cannot tell which file of an app definition it is; name it as a package places it,' +
+  ' such as layouts/<Type>/<mode>.layout.json or queues/<id>.json, or pass --mode for a layout';
+/** Version 1's own files, which a package may hold beside version 2's. */
+const VERSION_ONE_FILES = ['bootstrap.json', 'manifest.json', 'layouts.json'];
 
 export function main(argv: readonly string[], io: CliIo): number {
   const [command, ...rest] = argv;
   const paths: string[] = [];
   let mode: LayoutMode | undefined;
+  let allowList: string | undefined;
+  let registeredFile: string | undefined;
+  let platformVersion: string | undefined;
   for (let index = 0; index < rest.length; index++) {
     const arg = rest[index];
     if (arg === '--mode') {
@@ -42,6 +66,17 @@ export function main(argv: readonly string[], io: CliIo): number {
         return 2;
       }
       mode = value as LayoutMode;
+    } else if (arg === '--allow-list' && rest[index + 1] !== undefined) {
+      allowList = rest[++index];
+    } else if (arg === '--registered' && rest[index + 1] !== undefined) {
+      registeredFile = rest[++index];
+    } else if (arg === '--platform') {
+      const value = rest[++index];
+      if (value === undefined || !parseVersion(value)) {
+        io.err(`--platform is a version, such as 1.0.0\n${USAGE}`);
+        return 2;
+      }
+      platformVersion = value;
     } else if (arg.startsWith('--')) {
       io.err(USAGE);
       return 2;
@@ -51,76 +86,254 @@ export function main(argv: readonly string[], io: CliIo): number {
     io.err(USAGE);
     return 2;
   }
+  let operations: ReadonlySet<string> = new Set();
+  if (allowList !== undefined) {
+    const read = readAllowList(allowList);
+    if (typeof read === 'string') {
+      io.err(`${allowList}: ${read}\n${USAGE}`);
+      return 2;
+    }
+    operations = read;
+  }
+  let registries: Registries = PACKAGED_REGISTRIES;
+  if (registeredFile !== undefined) {
+    const read = readRegistered(registeredFile);
+    if (typeof read === 'string') {
+      io.err(`${registeredFile}: ${read}\n${USAGE}`);
+      return 2;
+    }
+    registries = read;
+  }
 
-  const files: string[] = [];
+  const apps = new Map<string, boolean>();
+  const hasApp = (root: string): boolean => {
+    const known = apps.get(root);
+    if (known !== undefined) return known;
+    const found = existsSync(join(root || '.', 'app.json'));
+    apps.set(root, found);
+    return found;
+  };
+  const found: Found[] = [];
   for (const path of paths) {
     try {
-      files.push(...(statSync(path).isDirectory() ? layoutFiles(path) : [path]));
+      if (statSync(path).isDirectory()) walk(path, null, found);
+      else found.push({ path, root: null, named: true });
     } catch (error) {
       io.err(`${path}: ${(error as Error).message}\n`);
       return 1;
     }
   }
-  if (files.length === 0) {
-    io.out(`No layout files in ${paths.join(', ')}.\n`);
-    return 0;
-  }
 
+  const contexts = new Map<string, PackageContext>();
+  const problems = new Map<string, string>();
   let refused = 0;
   let passed = 0;
   let versionOne = 0;
-  for (const file of files) {
+  let operationRefused = false;
+  const checked = new Set<string>();
+  for (const { path, root, named } of found) {
+    const placed: PlacedFile | null =
+      placeFile(path, hasApp) ??
+      (mode && (named || path.endsWith('.layout.json'))
+        ? { file: { kind: 'layout', type: '', mode }, root: dirname(path) }
+        : null);
+    // Inside a package, a file is the package's at its place, version 1's own, or out of place.
+    const inPackage = root !== null;
+    // Compared as directories, not as spellings: `./pkg` and `/tmp/pkg/` are the package too.
+    const atItsPlace =
+      placed !== null && (!inPackage || resolve(placed.root || '.') === resolve(root));
+    if (!atItsPlace) {
+      const versionOneFile =
+        inPackage && VERSION_ONE_FILES.includes(relative(root, path).split(sep).join('/'));
+      if (versionOneFile || (!inPackage && !named && !path.endsWith('.layout.json'))) continue;
+    }
+    checked.add(path);
     let content: unknown;
     try {
-      content = JSON.parse(readFileSync(file, 'utf8'));
+      content = readJson(path);
     } catch (error) {
-      io.out(`${file}: cannot be read as JSON: ${(error as Error).message}\n`);
+      io.out(`${path}: cannot be read as JSON: ${(error as Error).message}\n`);
       refused++;
       continue;
     }
-    if (
-      typeof content === 'object' &&
-      content !== null &&
-      (content as { version?: unknown }).version === 1
-    ) {
+    if (!placed || !atItsPlace) {
+      io.out(`${path}: ${CANNOT_TELL}\n`);
+      refused++;
+      continue;
+    }
+    if (placed.file.kind === 'layout' && isRecord(content) && content['version'] === 1) {
       versionOne++;
       continue;
     }
-    const fileMode = mode ?? (LAYOUT_PATH.exec(file)?.[1] as LayoutMode | undefined);
-    if (!fileMode || !LAYOUT_MODES.includes(fileMode)) {
-      io.out(
-        `${file}: cannot tell its mode; name it layouts/<Type>/<mode>.layout.json, or pass --mode\n`,
-      );
-      refused++;
-      continue;
-    }
-    const findings = validateLayoutV2(content, { mode: fileMode });
+    const findings = validateFile(
+      placed.file,
+      content,
+      contextOf(placed.root, contexts, problems),
+      { registries, operations, platformVersion, mode },
+    );
     if (findings.length === 0) {
       passed++;
       continue;
     }
     refused++;
     for (const finding of findings) {
-      io.out(`${file}: ${finding.path || 'the file'}: ${finding.message} [${finding.kind}]\n`);
+      io.out(`${path}: ${finding.path || 'the file'}: ${finding.message} [${finding.kind}]\n`);
+      if (finding.message.endsWith("is not on this deployment's allow-list"))
+        operationRefused = true;
     }
   }
+  if (checked.size === 0) {
+    io.out(`No app definition files in ${paths.join(', ')}: nothing was checked.\n`);
+    return 1;
+  }
+  // A package file the checks leant on that could not be read, and was not itself checked.
+  const unread = [...problems].filter(([path]) => !checked.has(path));
+  for (const [path, problem] of unread) io.out(`${path}: ${problem}\n`);
+  if (operationRefused && allowList === undefined)
+    io.out('No --allow-list was given, so every operation is refused.\n');
+  const total = checked.size;
   io.out(
-    `${files.length} layout files: ${passed} passed, ${refused} refused` +
+    `${total} ${total === 1 ? 'file' : 'files'}: ${passed} passed, ${refused} refused` +
       (versionOne ? `, ${versionOne} in version 1, which this does not check` : '') +
       '.\n',
   );
-  return refused > 0 ? 1 : 0;
+  return refused > 0 || unread.length > 0 ? 1 : 0;
 }
 
-/** Every `*.layout.json` under a directory, in a stable order. */
-function layoutFiles(directory: string): string[] {
-  const found: string[] = [];
+/** A JSON file found under a directory, with the package it is inside, or one named on its own. */
+interface Found {
+  readonly path: string;
+  /** The outermost directory above it, within the walk, that holds an `app.json`. */
+  readonly root: string | null;
+  readonly named: boolean;
+}
+
+/**
+ * Every JSON file under a directory, in a stable order, each with the package it is inside. Beside
+ * an `app.json`, `demo/` and `assets/` are the package's own, and not app definition files.
+ */
+function walk(directory: string, root: string | null, found: Found[]): void {
+  const entries = readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const app = entries.some((entry) => entry.isFile() && entry.name === 'app.json');
+  const packageRoot = root ?? (app ? directory : null);
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      // Dependencies are passed over, but not inside a package: there `node_modules` is a name like
+      // any other, a layout's type for one, and what the package holds is what it ships.
+      if (entry.name === 'node_modules' && packageRoot === null) continue;
+      if (app && (entry.name === 'demo' || entry.name === 'assets')) continue;
+      walk(path, packageRoot, found);
+    } else if (entry.isFile() && entry.name.endsWith('.json'))
+      found.push({ path, root: packageRoot, named: false });
+  }
+}
+
+/** JSON, read as a browser reads it: a leading byte-order mark is not part of the text. */
+function readJson(path: string): unknown {
+  const text = readFileSync(path, 'utf8');
+  return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+}
+
+/** The deployment's operations, from `{ "operations": [...] }`, or what is wrong with the file. */
+function readAllowList(path: string): ReadonlySet<string> | string {
+  let content: unknown;
+  try {
+    content = readJson(path);
+  } catch (error) {
+    return `cannot be read as JSON: ${(error as Error).message}`;
+  }
+  const operations = isRecord(content) ? content['operations'] : undefined;
+  if (
+    !isRecord(content) ||
+    Object.keys(content).some((key) => key !== 'operations') ||
+    !Array.isArray(operations) ||
+    !operations.every((operation) => typeof operation === 'string')
+  )
+    return 'an allow-list is { "operations": [<operation or chain ID>, ...] }';
+  return new Set(operations as string[]);
+}
+
+const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'actions', 'modules'] as const;
+
+/**
+ * What a deployment registers in code beyond the platform's own, from
+ * `{ "rules", "rowActions", "bulkActions", "actions", "modules" }`, each a list of ids, or what is
+ * wrong. `actions` are the others a deployment registers in code, in any other slot.
+ */
+function readRegistered(path: string): Registries | string {
+  let content: unknown;
+  try {
+    content = readJson(path);
+  } catch (error) {
+    return `cannot be read as JSON: ${(error as Error).message}`;
+  }
+  const wrong =
+    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules" }, each a list of ids';
+  if (!isRecord(content)) return wrong;
+  const lists: Partial<Record<(typeof REGISTERED_KEYS)[number], string[]>> = {};
+  for (const [key, value] of Object.entries(content)) {
+    if (
+      !REGISTERED_KEYS.includes(key as (typeof REGISTERED_KEYS)[number]) ||
+      !Array.isArray(value) ||
+      !value.every((id) => typeof id === 'string' && id !== '')
+    )
+      return wrong;
+    lists[key as (typeof REGISTERED_KEYS)[number]] = value as string[];
+  }
+  return withRegistered(PACKAGED_REGISTRIES, lists);
+}
+
+/**
+ * A package's `app.json`, `actions.json` and assets, read once for all its files. One that exists
+ * and cannot be read goes into `problems`, so that the run reports it rather than leaning on
+ * nothing in silence.
+ */
+function contextOf(
+  root: string,
+  cache: Map<string, PackageContext>,
+  problems: Map<string, string>,
+): PackageContext {
+  const cached = cache.get(root);
+  if (cached) return cached;
+  const read = (name: string): unknown => {
+    const path = join(root || '.', name);
+    if (!existsSync(path)) return undefined;
+    try {
+      return readJson(path);
+    } catch (error) {
+      problems.set(path, `cannot be read as JSON: ${(error as Error).message}`);
+      return null;
+    }
+  };
+  const assetsRoot = join(root || '.', 'assets');
+  let assets: string[] = [];
+  if (existsSync(assetsRoot)) {
+    try {
+      assets = everyFile(assetsRoot).map((path) =>
+        relative(root || '.', path)
+          .split(sep)
+          .join('/'),
+      );
+    } catch (error) {
+      problems.set(assetsRoot, `cannot be read: ${(error as Error).message}`);
+    }
+  }
+  const context = { app: read('app.json'), actions: read('actions.json'), assets: new Set(assets) };
+  cache.set(root, context);
+  return context;
+}
+
+function everyFile(directory: string): string[] {
+  const files: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
     a.name.localeCompare(b.name),
   )) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory() && entry.name !== 'node_modules') found.push(...layoutFiles(path));
-    else if (entry.isFile() && entry.name.endsWith('.layout.json')) found.push(path);
+    if (entry.isDirectory()) files.push(...everyFile(path));
+    else if (entry.isFile()) files.push(path);
   }
-  return found;
+  return files;
 }
