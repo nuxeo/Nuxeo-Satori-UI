@@ -196,12 +196,12 @@ negative control instead. It proves the _mechanism_, not that any future upgrade
 
 ## Journey 8 — What a customer cannot do today
 
-| Want                                                 | Status                                                                                                                                      |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Install from a registry                              | `private: true`. Scope decided, publishing deferred                                                                                         |
-| Use the AI features                                  | Need a **separate backend package**                                                                                                         |
-| Place an action on the document toolbar via manifest | `toolbar` is **reserved** — nothing reads it. Same for `contextMenu`, `tabs`, `routes`                                                      |
-| Gate a bulk action on write permission               | `selection` rule context is empty                                                                                                           |
-| Meet an accessibility procurement requirement        | WCAG 2.1 AA **not met** as of 2026-11-23, with one 2.5.3 defect on every screen. It was met on 15 scanned cases on 2026-08-24; scope stated |
-| Configure Layer 0/1 through a UI                     | Text editing of JSON only                                                                                                                   |
-| Migrate a customised Web UI                          | **Not verified in repository** — nothing addresses it                                                                                       |
+| Want                                                 | Status                                                                                                                                                                                                          |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Install from a registry                              | `private: true`. Scope decided, publishing deferred                                                                                                                                                             |
+| Use the AI features                                  | Need a **separate backend package**                                                                                                                                                                             |
+| Place an action on the document toolbar via manifest | `toolbar` is **reserved** — nothing reads it. Same for `contextMenu`, `tabs`, `routes`                                                                                                                          |
+| Gate a bulk action on write permission               | `selection` rule context is empty                                                                                                                                                                               |
+| Meet an accessibility procurement requirement        | WCAG 2.1 AA **not met** as of 2026-11-23. That day's one 2.5.3 defect on every screen was fixed the same day, and the re-run passes every axe check. It was met on 15 scanned cases on 2026-08-24; scope stated |
+| Configure Layer 0/1 through a UI                     | Text editing of JSON only                                                                                                                                                                                       |
+| Migrate a customised Web UI                          | **Not verified in repository** — nothing addresses it                                                                                                                                                           |

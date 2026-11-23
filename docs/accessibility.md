@@ -73,8 +73,9 @@ Both run axe, so one of them had to give it up. phase-6 keeps it for three reaso
    `--mat-sys-on-surface-variant` (8.93:1), and phase-6 re-measured at **35/35, `verdict PASS`**
    on 2026-10-22, with axe-core 4.13.0.
    The remedy was to fix those and re-measure phase-6, not to move the verdict to a scanner
-   with 22 untriaged axe findings. That zero did not hold either. On 2026-11-23 phase-6 fails
-   one rule on one control, on every screen; see
+   with 22 untriaged axe findings. That zero did not hold either. On 2026-11-23 phase-6 failed
+   one rule on one control, on every screen. The control was fixed the same day and the next
+   capture passes every axe check; see
    [The 2026-11-23 measurement](#the-2026-11-23-measurement).
 2. **It depends on a public package.** `@axe-core/playwright` is on the public registry.
    a11y-scout is distributed as hand-passed tarballs that no registry can serve. A
@@ -180,8 +181,9 @@ violation.
 Seven consecutive rounds in one class is a statement about the approach: the rule needs a real
 Sass parser (`postcss-scss`), not a regex, and that is tracked as **NXSAT-709**. Recorded here so the
 next attempt starts from the ten known cases and their controls rather than from scratch. The
-WCAG verdict is unaffected either way. It belongs to axe, and `phase-6-a11y` was `PASS 35/35` on
-2026-10-22 and is `FAIL`, 20 of 35, on 2026-11-23
+WCAG verdict is unaffected either way. It belongs to axe. `phase-6-a11y` was `PASS 35/35` on
+2026-10-22 and `FAIL`, 20 of 35, in the first capture of 2026-11-23. After that day's fix it is
+`FAIL`, 34 of 35, with every axe check passing
 ([The 2026-11-23 measurement](#the-2026-11-23-measurement)).
 
 ## Baselines and suppression
@@ -328,16 +330,17 @@ of the run you cite.
 No other axe rule reported a violation at any impact.
 
 **The defect.** The control is the navigation's user-profile button, and it is in the shell, so
-every surface fails. On 2026-10-26 NXSAT-673 started projecting the signed-in user's avatar into
+every surface failed. On 2026-10-26 NXSAT-673 started projecting the signed-in user's avatar into
 it, and the avatar renders their initials as text. The rail is collapsed in the state the capture
-scans, so the initials are all the control shows. Its accessible name is the full display name,
+scans, so the initials are all the control shows. Its accessible name was the full display name,
 which the upstream navigation component copies from a label that is hidden in that state. A
-speech-input user who says what they see therefore does not name the control. The avatar is
+speech-input user who said what they saw therefore did not name the control. The avatar is
 `aria-hidden`, which hides it from a screen reader but not from sight, and 2.5.3 concerns what
 is visible.
 
 **What fixing it would show.** It would clear this capture's axe checks, and nothing more: the
-Health 404 would still fail the run.
+Health 404 would still fail the run. The fix was made and measured the same day, and that is
+what it showed; see [The fix, measured the same day](#the-fix-measured-the-same-day).
 [Storybook observations](#storybook-observations--triaged-2026-10-15) above records failures
 under the same tags in states the capture does not reach, among them the viewer placeholder for
 a File without a main file. [What nothing covers](#what-nothing-covers) lists what no layer
@@ -368,6 +371,44 @@ record the version. That is how the verdict changed without a commit, and it is 
 optional layout index, which the local dev server does not serve. The layout service falls back to
 generated layouts by design. The check's ignore list names the sibling `bootstrap.json` and
 `manifest.json`, but not this file.
+
+### The fix, measured the same day
+
+The shell now names the control with `aria-labelledby`: the initials the avatar draws, then the
+display name. That name contains what the control shows on either rail. Its source is a `hidden`
+span. The upstream directive builds its own `aria-label` and its tooltip from the label's
+`innerText`, which skips hidden text, so both are still the display name.
+
+`phase-6-a11y/2026-11-23T17-24-58` was captured on the fix's branch at `be4be35cd`, which is `main`
+at `645e3c485` plus the fix. It used the same `--no-save` install, with axe-core 4.14.1. It is
+**`FAIL`, 34 of 35**. **All 14 axe checks pass**, and no rule reported a violation at any impact.
+The one failing check is Health, and none of its errors is an accessibility finding:
+
+| Errors | What                                                                                                                                               | Verdict                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1      | `HTTP 404 /agentic-ui-config/layouts.json`, as in the record above                                                                                 | **environment**                           |
+| 51     | `HTTP 404` on the thumbnails of 23 documents seeded into the local repository that day, after the first capture, as custom types with no thumbnail | **environment**: test data                |
+| 1      | `HTTP 404 /nuxeo/agentic-ui/`, the unexplained request that keeps Phases 1 and 2 open (NXSAT-660)                                                  | **open** elsewhere, and not accessibility |
+
+WCAG 2.1 AA is still **not met**. The fix clears this capture's axe checks and nothing more, as
+[What fixing it would show](#the-2026-11-23-measurement) says.
+
+The capture scans only the collapsed rail. The expanded rail was measured once, by a diagnostic
+kept outside the evidence of record under
+`agentic-ui-evidence/a11y-label-in-name-diagnostic-2026-11-23/`. With axe-core 4.14.1 and the
+capture's tags, the control passes on both rails. It fails on both once its `aria-labelledby` is
+removed in the page, which restores the old name.
+
+`apps/nuxeo-ui/src/app/shell/platform-nav-user-profile-label-in-name.spec.ts` holds the
+invariant on both rails: the accessible name contains, word for word, the text the control
+paints, `aria-hidden` text included. On the old markup it fails on both rails. The case it
+replaces passed on the defect, because it counted only text exposed to assistive technology. It
+is a declared cross-check under
+[the rule above](#component-specs-are-a-declared-cross-check-not-a-fifth-layer), and it asserts
+that invariant, not a verdict. The runtime layer cannot hold it: phase-6 needs a local backend, so
+it never runs on a pull request, and while its engine is unpinned (gap 8) a 4.13.0 install passes
+the broken control even with the rule forced on. Scanning the expanded rail is still the
+runtime layer's job, and phase-6 does not do it yet.
 
 ## The disagreement — resolved 2026-09-11, against phase-6
 
