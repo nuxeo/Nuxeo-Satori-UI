@@ -58,6 +58,13 @@ export class SelectionTopbarComponent {
   >([]);
   /** Collapses the bar to its label and Clear button — no bulk actions, no popup. */
   readonly clearOnly = input(false);
+  /**
+   * The bulk actions to offer, by id, or `null`, the default, for every one the slot resolves.
+   * Given a list, the bar offers those of it that the slot resolves and that have a handler, in
+   * the slot's order, as a queue offers its row actions: one with nothing to run it would do
+   * nothing when chosen.
+   */
+  readonly offered = input<readonly string[] | null>(null);
   /** Chrome, not an action: clearing the selection dismisses the bar itself. */
   readonly cleared = output<void>();
   readonly selectionPopupOpen = signal(false);
@@ -80,12 +87,18 @@ export class SelectionTopbarComponent {
    * shell — three files across two projects to add one action. A registration
    * now does it, and the shell owns the behaviour as an action service.
    */
-  readonly bulkActions = computed(() =>
-    this.extensions.resolve<ExtensionActionDescriptor>(
+  readonly bulkActions = computed(() => {
+    const resolved = this.extensions.resolve<ExtensionActionDescriptor>(
       EXTENSION_SLOTS['bulk-actions'],
       this.ruleContext.context(),
-    ),
-  );
+    );
+    const offered = this.offered();
+    if (offered === null) return resolved;
+    const listed = new Set(offered);
+    return resolved.filter(
+      (action) => listed.has(action.id) && this.actions.has(action.action ?? action.id),
+    );
+  });
 
   /** `enabledRule` renders the control disabled rather than hiding it. */
   isEnabled(action: ExtensionActionDescriptor): boolean {

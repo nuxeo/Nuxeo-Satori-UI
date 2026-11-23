@@ -6,8 +6,11 @@
  *   predicates left empty, as Web UI's results do before anyone searches. The form and its fields
  *   are reported: letting a person fill them in needs a form the queue does not have yet.
  * - **A queue is a table.** A grid of thumbnails or a justified grid is reported.
- * - **What shows under a condition** waits for M2, as a layout's field does: a column in a
- *   condition is left out, and a table in one leaves the whole list pending.
+ * - **What shows under a condition.** A dashboard card under a rule on the user carries it, and so
+ *   does its queue (`guards.ts`); one whose rule reads a document is reported, as no record is
+ *   open on the home. A column in a condition its table is not in is left out: reported for a
+ *   search screen, and named in a card's note. A search screen's table in one gets no queue and is
+ *   reported. M2 converts no condition there, and none shows to everyone meanwhile.
  * - **A dashboard card** whose list becomes a queue is a card of `home.json`, naming the queue
  *   (`convert-home.ts`). The tasks and recently viewed cards wait: `home.json` has no card for
  *   either yet.
@@ -25,6 +28,7 @@ import {
   searchQueueId,
 } from './app-files';
 import { homeCards } from './convert-home';
+import { carry, guardOfSet, type Guard } from './guards';
 import { columnWidget } from './widgets';
 
 /** A column, as a queue writes it: the property alone, or with its heading and widget. */
@@ -119,8 +123,7 @@ export function convertSearches(context: ConvertContext): void {
     }
     if (isConditionalTable(search)) {
       report(
-        `Its table shows only while a condition passes. M2 converts the condition, with truth tables, so the list is not shown to everyone meanwhile`,
-        'pending',
+        "Its table shows only while a condition passes, and M2 converts no condition on a search screen's table: a person decides it, and the list is not shown to everyone meanwhile",
       );
       continue;
     }
@@ -129,8 +132,8 @@ export function convertSearches(context: ConvertContext): void {
       const columnId = `search-column:${search.path}#${index + 1}`;
       if (column.conditional) {
         context.decide(columnId, {
-          outcome: 'pending',
-          note: 'It shows only while a condition passes. M2 converts the condition, with truth tables, so the column is not shown to everyone meanwhile',
+          outcome: 'reported',
+          note: "It shows only while a condition passes, and M2 converts no condition on a list's column: a person decides it, and it is not shown to everyone meanwhile",
         });
         return;
       }
@@ -220,7 +223,14 @@ export function queueOwners(inventory: Inventory): Map<string, QueueOwner> {
     if (!owners.has(path)) owners.set(path, { kind: 'search', search });
   }
   inventory.dashboard?.cards.forEach((card, index) => {
-    if (!isListCard(card) || !card.columns.some((column) => column.field !== null)) return;
+    if (!isListCard({ ...card, conditional: false }) || !card.columns.some((c) => c.field !== null))
+      return;
+    // A card under a condition is a list too when its rule can travel to the home, which reads
+    // the user only.
+    if (card.conditional) {
+      const guard = cardGuard(inventory, card);
+      if (guard.kind !== 'rule' || guard.document) return;
+    }
     const parameters = cardParameters(card);
     if ('problem' in parameters) return;
     const path = queuePath(homeQueueId(card, index));
@@ -228,6 +238,13 @@ export function queueOwners(inventory: Inventory): Map<string, QueueOwner> {
       owners.set(path, { kind: 'card', card, index, parameters: parameters.parameters });
   });
   return owners;
+}
+
+/** The guard of a dashboard card: the conditions it sits in or holds, nested. */
+export function cardGuard(inventory: Inventory, card: DashboardCard): Guard {
+  return inventory.dashboard
+    ? guardOfSet(inventory, inventory.dashboard.path, card.conditions)
+    : { kind: 'rule', rule: 'core.true', document: false, conditions: [] };
 }
 
 /** True when the results' table sits in a condition: the whole list then shows only to some. */
@@ -312,10 +329,15 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
-    if (card.conditional) {
+    const guard = card.conditional ? cardGuard(context.inventory, card) : null;
+    if (guard && guard.kind !== 'rule') {
+      context.decide(id, { outcome: guard.kind, note: guard.note });
+      return;
+    }
+    if (guard?.kind === 'rule' && guard.document) {
       context.decide(id, {
-        outcome: 'pending',
-        note: 'It shows only while a condition passes: M2 converts the condition, with truth tables',
+        outcome: 'reported',
+        note: 'Its condition reads a document, and no record is open on the home',
       });
       return;
     }
@@ -340,7 +362,7 @@ export function convertDashboard(context: ConvertContext): void {
       });
       return;
     }
-    if (!isListCard(card) || card.provider === null) {
+    if (!isListCard({ ...card, conditional: false }) || card.provider === null) {
       context.decide(id, { outcome: 'reported', note: 'It holds no list of a page provider' });
       return;
     }
@@ -353,7 +375,12 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     const path = queuePath(homeQueueId(card, index));
-    const columns = card.columns.filter((column) => column.field !== null).map(queueColumn);
+    // A column under a condition is left out, as a search screen's is: M2 converts no condition
+    // on a list's column, and it is not shown to everyone meanwhile.
+    const hidden = card.columns.filter((column) => column.field !== null && column.conditional);
+    const columns = card.columns
+      .filter((column) => column.field !== null && !column.conditional)
+      .map(queueColumn);
     if (columns.length === 0) {
       context.decide(id, {
         outcome: 'reported',
@@ -378,18 +405,36 @@ export function convertDashboard(context: ConvertContext): void {
       ...(parameters.parameters.length > 0 ? { parameters: parameters.parameters } : {}),
       ...(columns.length > 0 ? { columns } : {}),
       ...(pageSize !== null ? { pageSize } : {}),
+      // The queue a card under a condition opens shows to whom the card does.
+      ...(guard?.kind === 'rule' && guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
     };
     const home = cards.find((candidate) => candidate.index === index);
+    const notes = [
+      ...(card.pageSize !== null && pageSize === null
+        ? [
+            `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
+          ]
+        : []),
+      ...(hidden.length > 0
+        ? [
+            `Its columns ${hidden.map((column) => column.field).join(', ')} show only while a condition passes, and are left out: M2 converts no condition on a list's column, and a person decides them`,
+          ]
+        : []),
+    ];
     context.decide(id, {
       outcome: 'converted',
       to: `home.json ${home?.id ?? `card-${index + 1}`}, its list in ${path}`,
-      ...(card.pageSize !== null && pageSize === null
-        ? {
-            note: `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
-          }
-        : {}),
+      ...(notes.length > 0 ? { note: notes.join('. ') } : {}),
     });
   });
-  if (cards.length > 0)
+  if (cards.length > 0) {
     context.files['home.json'] = { version: 2, cards: cards.map((c) => c.entry) };
+    for (const card of cards) {
+      const source = dashboard.cards[card.index];
+      if (!source.conditional) continue;
+      const guard = cardGuard(context.inventory, source);
+      carry(context.carried, guard, `home.json ${card.id}`);
+      carry(context.carried, guard, `queues/${card.queue}.json`);
+    }
+  }
 }

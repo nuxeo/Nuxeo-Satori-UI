@@ -312,6 +312,174 @@ export function propertiesReadBy(computation: unknown, found: Set<string>): void
   }
 }
 
+/**
+ * What reading entries needs from the file around them: what its findings leave out, the rules
+ * this build answers, and where to write what is left out, and why, for the console.
+ */
+export interface EntryReading {
+  /** The places a finding leaves out, as `cards[0].fields[2]`, or `columns[1]` in a queue. */
+  readonly leftOut: ReadonlySet<string>;
+  /** Whether this build registers the rule. */
+  readonly isRuleKnown: (id: string) => boolean;
+  readonly problems: string[];
+}
+
+/** `key` inside `place`, or `key` alone where the list is the file's own, as a queue's is. */
+const inside = (place: string, key: string): string => (place ? `${place}.${key}` : key);
+
+/**
+ * Whether the entry at `place` shows: neither a finding nor a rule the page could not answer
+ * leaves it out.
+ */
+function keptEntry(reading: EntryReading, place: string, entry: Json): boolean {
+  const { isRuleKnown, problems } = reading;
+  if (reading.leftOut.has(place)) return false;
+  const refused =
+    refusedRule(entry['visibleWhen'], isRuleKnown) ??
+    refusedRuleInComputation(entry['computed'], isRuleKnown);
+  if (refused) {
+    problems.push(`${place} ${refused}; left out`);
+    return false;
+  }
+  // A table's columns may each have a rule too, and one the page cannot answer would show its
+  // column to everyone: the whole table is left out rather than drawn without it. A column this
+  // build does not draw (`notDrawnColumn`) is not checked, nor anything inside it: no rule of
+  // its is ever evaluated, and leaving the table out for it would lose the columns that show.
+  for (const [index, column] of tableColumnEntries(entry).entries()) {
+    if (notDrawnColumn(column)) continue;
+    const inColumn = isRecord(column) ? refusedRule(column['visibleWhen'], isRuleKnown) : null;
+    if (inColumn) {
+      problems.push(`${place}.parameters.columns[${index}] ${inColumn}; ${place} left out`);
+      return false;
+    }
+  }
+  return true;
+}
+
+/** The field at `place`, or none when it is left out. */
+function readField(reading: EntryReading, entry: unknown, place: string): RecordFieldEntry[] {
+  // One check for both shapes: a bare `<prefix>:<name>` has no rule, and only a finding can
+  // leave it out.
+  if (!keptEntry(reading, place, isRecord(entry) ? entry : {})) return [];
+  if (typeof entry === 'string') {
+    const name = entry.slice(entry.indexOf(':') + 1);
+    return [
+      {
+        kind: 'property',
+        place,
+        xpath: entry,
+        label: { keys: [fieldLabelKey(entry)], fallback: humanize(name) },
+        widget: null,
+        parameters: {},
+        visibleWhen: null,
+      },
+    ];
+  }
+  if (!isRecord(entry)) return [];
+  for (const [index, column] of tableColumnEntries(entry).entries()) {
+    const notDrawn = notDrawnColumn(column);
+    if (notDrawn) {
+      reading.problems.push(
+        `${place}.parameters.columns[${index}] is ${notDrawn}, which this build does not draw yet; that column left out`,
+      );
+    }
+  }
+  const common = {
+    place,
+    widget: text(entry['widget']) ?? null,
+    parameters: isRecord(entry['parameters']) ? entry['parameters'] : {},
+    visibleWhen: (entry['visibleWhen'] as RecordRule | undefined) ?? null,
+  };
+  if (typeof entry['field'] === 'string') {
+    const xpath = entry['field'];
+    const name = xpath.slice(xpath.indexOf(':') + 1);
+    return [
+      {
+        kind: 'property',
+        xpath,
+        label: labelOf(entry, [fieldLabelKey(xpath)], humanize(name)),
+        ...common,
+      },
+    ];
+  }
+  const id = String(entry['id']);
+  return [
+    {
+      kind: 'computed',
+      id,
+      computed: entry['computed'],
+      label: labelOf(entry, [], humanize(id)),
+      ...common,
+    },
+  ];
+}
+
+/**
+ * A list of records, as a related-records card (layout-v2.md, section 7) and a queue
+ * (app-definition-v2.md, section 4) write one, with what this build cannot show of it left out: a
+ * column or a row action a finding names, a column whose rule the page cannot answer, a computed
+ * column, a table, and a column that repeats a property.
+ *
+ * `place` is where the list's keys are: `cards[3].related`, or `''` for a queue, whose keys are the
+ * file's own. `owner` is what the list is, for the console. `null`, and the owner left out, when
+ * no column is left. The parameters are as written: a queue's reader holds them to literals.
+ */
+export function readRecordList(
+  raw: Json,
+  place: string,
+  owner: string,
+  reading: EntryReading,
+): RecordListEntry | null {
+  const { problems } = reading;
+  const shown = new Set<string>();
+  const columns = (Array.isArray(raw['columns']) ? raw['columns'] : []).flatMap(
+    (entry: unknown, index): RecordPropertyField[] => {
+      const at = inside(place, `columns[${index}]`);
+      return readField(reading, entry, at).flatMap((column) => {
+        // A cell is one line of text, so a table is not drawn in one, and no rule of its own
+        // columns is ever evaluated there.
+        if (column.kind !== 'property' || column.widget === 'table') {
+          const what =
+            column.kind === 'property' ? "a table in a list's cell" : 'a computed column';
+          problems.push(
+            `${at} is ${what}, which this build does not draw yet; that column left out`,
+          );
+          return [];
+        }
+        // A column is its property's, for sorting as for drawing: a second one would be the same.
+        if (shown.has(column.xpath)) {
+          problems.push(`${at} shows ${column.xpath} again; that column left out`);
+          return [];
+        }
+        shown.add(column.xpath);
+        return [column];
+      });
+    },
+  );
+  if (columns.length === 0) {
+    problems.push(`${owner} has no column this build can show; left out`);
+    return null;
+  }
+  const sort = (Array.isArray(raw['sort']) ? raw['sort'] : [])
+    .filter(isRecord)
+    .map((key): RecordListSort => ({
+      field: String(key['field']),
+      order: key['order'] === 'desc' ? 'desc' : 'asc',
+    }));
+  const rowActions = (Array.isArray(raw['rowActions']) ? raw['rowActions'] : []).filter(
+    (id: unknown, index): id is string =>
+      typeof id === 'string' && !reading.leftOut.has(inside(place, `rowActions[${index}]`)),
+  );
+  return {
+    pageProvider: String(raw['pageProvider']),
+    parameters: Array.isArray(raw['parameters']) ? raw['parameters'] : [],
+    columns,
+    sort,
+    pageSize: typeof raw['pageSize'] === 'number' ? raw['pageSize'] : DEFAULT_LIST_PAGE_SIZE,
+    rowActions,
+  };
+}
+
 export function describe(finding: Finding): string {
   return finding.path ? `${finding.path}: ${finding.message}` : finding.message;
 }
@@ -372,147 +540,10 @@ export function readRecordLayout(
     problems.push(`${describe(finding)}; ${entry ? `${entry} left out` : 'ignored'}`);
   }
 
-  /**
-   * Whether the entry at `place` shows: neither a finding nor a rule the page could not answer
-   * leaves it out.
-   */
-  const kept = (place: string, entry: Json): boolean => {
-    if (leftOut.has(place)) return false;
-    const refused =
-      refusedRule(entry['visibleWhen'], isRuleKnown) ??
-      refusedRuleInComputation(entry['computed'], isRuleKnown);
-    if (refused) {
-      problems.push(`${place} ${refused}; left out`);
-      return false;
-    }
-    // A table's columns may each have a rule too, and one the page cannot answer would show its
-    // column to everyone: the whole table is left out rather than drawn without it. A column this
-    // build does not draw (`notDrawnColumn`) is not checked, nor anything inside it: no rule of
-    // its is ever evaluated, and leaving the table out for it would lose the columns that show.
-    for (const [index, column] of tableColumnEntries(entry).entries()) {
-      if (notDrawnColumn(column)) continue;
-      const inColumn = isRecord(column) ? refusedRule(column['visibleWhen'], isRuleKnown) : null;
-      if (inColumn) {
-        problems.push(`${place}.parameters.columns[${index}] ${inColumn}; ${place} left out`);
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const field = (entry: unknown, place: string): RecordFieldEntry[] => {
-    // One check for both shapes: a bare `<prefix>:<name>` has no rule, and only a finding can
-    // leave it out.
-    if (!kept(place, isRecord(entry) ? entry : {})) return [];
-    if (typeof entry === 'string') {
-      const name = entry.slice(entry.indexOf(':') + 1);
-      return [
-        {
-          kind: 'property',
-          place,
-          xpath: entry,
-          label: { keys: [fieldLabelKey(entry)], fallback: humanize(name) },
-          widget: null,
-          parameters: {},
-          visibleWhen: null,
-        },
-      ];
-    }
-    if (!isRecord(entry)) return [];
-    for (const [index, column] of tableColumnEntries(entry).entries()) {
-      const notDrawn = notDrawnColumn(column);
-      if (notDrawn) {
-        problems.push(
-          `${place}.parameters.columns[${index}] is ${notDrawn}, which this build does not draw yet; that column left out`,
-        );
-      }
-    }
-    const common = {
-      place,
-      widget: text(entry['widget']) ?? null,
-      parameters: isRecord(entry['parameters']) ? entry['parameters'] : {},
-      visibleWhen: (entry['visibleWhen'] as RecordRule | undefined) ?? null,
-    };
-    if (typeof entry['field'] === 'string') {
-      const xpath = entry['field'];
-      const name = xpath.slice(xpath.indexOf(':') + 1);
-      return [
-        {
-          kind: 'property',
-          xpath,
-          label: labelOf(entry, [fieldLabelKey(xpath)], humanize(name)),
-          ...common,
-        },
-      ];
-    }
-    const id = String(entry['id']);
-    return [
-      {
-        kind: 'computed',
-        id,
-        computed: entry['computed'],
-        label: labelOf(entry, [], humanize(id)),
-        ...common,
-      },
-    ];
-  };
-
-  /**
-   * A card's list of related records, with what this build cannot show of it left out: a column
-   * or a row action a finding names, a column whose rule the page cannot answer, a computed
-   * column, a table, and a column that repeats a property. `null`, and the card left out, when no
-   * column is left.
-   */
-  const relatedList = (raw: Json, card: string): RecordListEntry | null => {
-    const place = `${card}.related`;
-    const shown = new Set<string>();
-    const columns = (Array.isArray(raw['columns']) ? raw['columns'] : []).flatMap(
-      (entry: unknown, index): RecordPropertyField[] => {
-        const at = `${place}.columns[${index}]`;
-        return field(entry, at).flatMap((column) => {
-          // A cell is one line of text, so a table is not drawn in one, and no rule of its own
-          // columns is ever evaluated there.
-          if (column.kind !== 'property' || column.widget === 'table') {
-            const what =
-              column.kind === 'property' ? "a table in a list's cell" : 'a computed column';
-            problems.push(
-              `${at} is ${what}, which this build does not draw yet; that column left out`,
-            );
-            return [];
-          }
-          // A column is its property's, for sorting as for drawing: a second one would be the same.
-          if (shown.has(column.xpath)) {
-            problems.push(`${at} shows ${column.xpath} again; that column left out`);
-            return [];
-          }
-          shown.add(column.xpath);
-          return [column];
-        });
-      },
-    );
-    if (columns.length === 0) {
-      problems.push(`${card} has no column this build can show; left out`);
-      return null;
-    }
-    const sort = (Array.isArray(raw['sort']) ? raw['sort'] : [])
-      .filter(isRecord)
-      .map((key): RecordListSort => ({
-        field: String(key['field']),
-        order: key['order'] === 'desc' ? 'desc' : 'asc',
-      }));
-    const rowActions = (Array.isArray(raw['rowActions']) ? raw['rowActions'] : []).filter(
-      (id: unknown, index): id is string =>
-        typeof id === 'string' && !leftOut.has(`${place}.rowActions[${index}]`),
-    );
-    return {
-      pageProvider: String(raw['pageProvider']),
-      parameters: Array.isArray(raw['parameters']) ? raw['parameters'] : [],
-      columns,
-      sort,
-      pageSize: typeof raw['pageSize'] === 'number' ? raw['pageSize'] : DEFAULT_LIST_PAGE_SIZE,
-      rowActions,
-    };
-  };
+  const reading: EntryReading = { leftOut, isRuleKnown, problems };
+  const kept = (place: string, entry: Json): boolean => keptEntry(reading, place, entry);
+  const field = (entry: unknown, place: string): RecordFieldEntry[] =>
+    readField(reading, entry, place);
 
   const cards = (list: unknown, prefix: string): RecordCardEntry[] =>
     (Array.isArray(list) ? list : []).flatMap((card: unknown, index): RecordCardEntry[] => {
@@ -530,7 +561,7 @@ export function readRecordLayout(
         visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
       };
       if (isRecord(card['related'])) {
-        const related = relatedList(card['related'], place);
+        const related = readRecordList(card['related'], `${place}.related`, place, reading);
         return related ? [{ ...common, fields: [], related }] : [];
       }
       const fields = (Array.isArray(card['fields']) ? card['fields'] : []).flatMap(

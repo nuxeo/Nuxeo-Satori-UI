@@ -32,7 +32,15 @@ export const routes: Routes = [
       // 10). Not the first page yet: `''` still opens the dashboard.
       {
         path: 'home',
-        loadComponent: () => import('@agentic-ui/shared/home').then((m) => m.HomePageComponent),
+        loadChildren: () => import('./business-apps.routes').then((m) => m.homeRoutes),
+      },
+      // The app's queues, each drawn from its queues/<id>.json (section 4). `/queues` alone names
+      // no queue: as for `/doc` below, the lazy children would match nothing and leave an empty
+      // outlet rather than fall through to the `**`.
+      { path: 'queues', pathMatch: 'full', loadComponent: notFound },
+      {
+        path: 'queues',
+        loadChildren: () => import('./business-apps.routes').then((m) => m.queueRoutes),
       },
       ...RETIRED_ROUTES,
       {

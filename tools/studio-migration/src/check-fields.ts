@@ -129,7 +129,7 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
         findings.push(
           ...compareColumns(
             path,
-            owner.card.columns.filter((column) => column.field !== null),
+            owner.card.columns.filter((column) => column.field !== null && !column.conditional),
             app[path],
           ),
         );

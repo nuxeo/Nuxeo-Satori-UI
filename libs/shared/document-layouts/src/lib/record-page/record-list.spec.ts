@@ -667,6 +667,65 @@ describe('RecordListComponent', () => {
     expect(flagged).toEqual([]);
   });
 
+  it('filters by the buckets chosen, from the first page, keeping the order chosen from a header', async () => {
+    await render();
+    await answer([claim(1)], { numberOfPages: 3, isNextPageAvailable: true });
+    list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
+    await settle();
+    list().pageChange.emit(2);
+    await settle();
+    fixture.componentRef.setInput('aggregates', {
+      claim_type_agg: ['medical', 'dental'],
+      claim_state_agg: [],
+    });
+    await settle();
+    // An aggregate with no bucket chosen filters nothing and is not sent; the keys are in order.
+    expect(execute).toHaveBeenLastCalledWith('member_claims', {
+      parameters: ['m1'],
+      pageSize: 10,
+      pageIndex: 0,
+      sort: [{ field: 'claim:number', order: 'asc' }],
+      aggregates: { claim_type_agg: ['dental', 'medical'] },
+    });
+    const asked = execute.mock.calls.length;
+    // The same choice written another way is the same request.
+    fixture.componentRef.setInput('aggregates', { claim_type_agg: ['medical', 'dental'] });
+    await settle();
+    expect(execute).toHaveBeenCalledTimes(asked);
+  });
+
+  it('hands each page on as the server returned it, with its aggregates', async () => {
+    const loaded: unknown[] = [];
+    await render();
+    fixture.componentInstance.loaded.subscribe((page) => loaded.push(page));
+    const aggregations = { claim_type_agg: { buckets: [{ key: 'medical', docCount: 1 }] } };
+    await answer([claim(1)], { aggregations } as Partial<NuxeoDocumentList>);
+    expect(loaded).toEqual([expect.objectContaining({ aggregations })]);
+  });
+
+  it('lets rows be selected only when asked, and keeps the selection two-way', async () => {
+    await render();
+    await answer([claim(1), claim(2)]);
+    expect(list().selectable()).toBe(false);
+    fixture.componentRef.setInput('selectable', true);
+    fixture.componentRef.setInput('selectedIds', ['c2']);
+    await settle();
+    expect(list().selectable()).toBe(true);
+    expect(list().selectedIds()).toEqual(['c2']);
+    list().selectedIds.set(['c2', 'c1']);
+    await settle();
+    expect(fixture.componentInstance.selectedIds()).toEqual(['c2', 'c1']);
+  });
+
+  it("says what an empty list is with the caller's words, or the related records' own", async () => {
+    await render();
+    await answer([]);
+    expect(list().emptyHeading()).toBe('No records');
+    fixture.componentRef.setInput('emptyHeading', 'Nothing in this queue');
+    await settle();
+    expect(list().emptyHeading()).toBe('Nothing in this queue');
+  });
+
   describe("a row's rules, against the state the page publishes about its own record", () => {
     /** What the record page around the list publishes about the Member: every flag set. */
     const PAGE_FLAGS = {

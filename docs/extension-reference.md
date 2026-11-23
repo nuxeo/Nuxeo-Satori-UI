@@ -967,6 +967,12 @@ The descriptor decides where and when; a registered handler decides what. A
 descriptor with no handler renders and is inert rather than throwing, so a
 manifest can be written before the Layer 2 library that backs it ships.
 
+**On a queue's page** (`/queues/<id>`, app-definition-v2.md, section 4) the topbar offers only the
+queue file's `bulkActions`: those this slot resolves **and** that have a registered handler, in this
+slot's order. The page names them in `SelectionService.offeredBulkActions` while it is shown, and
+puts `null`, every action, back when it goes. A queue's own action with no handler is not offered
+there, since it would do nothing. Offering fewer actions is not a security control either.
+
 ```ts
 import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
