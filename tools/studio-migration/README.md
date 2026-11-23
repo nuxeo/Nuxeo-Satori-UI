@@ -638,34 +638,53 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     through the conversion. No test changed a list's parameters: `change-parameter` changes an
     action's first. The third was a mistake in the round itself. Each now has its test.
 
-  - **In M2, 47 guards**, broken in turn the same way, and each seen turning the suite red:
-    - **In the inventory:** the task layout's kind and its variables; its document out of scope;
-      a block known by its layout behaviour, in a file of one element; a block use's document,
-      condition and place among the fields.
+  - **In M2, 60 guards**, broken in turn the same way, and each seen turning the suite red:
+    - **In the inventory:** the task layout's kind and its variables; its permissions out of
+      scope; a field's two-way binding; a block known by its layout behaviour, in a file of one
+      element; a block use's document, condition and place among the fields; a slot
+      contribution's `disabled` and template.
     - **In the second count:** task fields, block uses, and a block's fields at each use.
-    - **In the conditions:** a filter's and a `dom-if`'s test of a task layout's document.
-    - **In the converter:** a task layout's document field, and its block; the case of a task
-      form's names, and names differing in case only; a field Web UI only shows made read-only;
-      a block given no document; a block under a condition, in version 1 and in version 2; a field
-      of a block under a condition kept once behind a field everyone sees; a block inside a block;
-      a tab named as Web UI's own, with no page, under a condition that does not convert, whose
-      page is no block, or on every type; a tab's label, rule, order and card names; tabs left to
-      their converter.
+    - **In the conditions:** a permission test of a task layout's document, alone or joined with
+      another.
+    - **In the converter:** the case of a task form's names, and names differing in case only; a
+      variable Web UI only shows made read-only, and version 1 reporting what it cannot make
+      read-only; a block given no document; a block under a condition, in version 1 and in version
+      2; a field of a block under a condition kept once behind a field everyone sees; a block
+      inside a block; a tab named as Web UI's own, with no page, under a condition that does not
+      convert, whose page is no block, or on every type; a disabled tab, a later one of its name
+      replacing it, a lower priority ignored, a contribution with no template changing another;
+      an order left out being 0, the View tab first, the tabs in Web UI's order; a tab on fewer
+      types reported, and a view of the preview alone said so; a tab's label, rule and card names;
+      tabs left to their converter.
     - **In check 2:** a block's fields; a tab or a task form no Web UI one gives; read-only
-      against Web UI's element.
+      against a two-way binding; version 1 saying what it cannot make read-only.
     - **In check 3:** a task's variables, and their widgets.
-    - **In check 5:** a field of a block under a condition moved out of its card; a tab without
-      its rule; a tab's and a block card's rule held to their conditions; a field's rule found in
-      its own card; only a rule that always passes taken for a read-only field.
+    - **In check 5:** a field of a block under a condition kept in its own card and under its
+      rule; a tab without its rule; a tab's and a block card's rule held to their conditions; a
+      field's rule found in its own card; only a rule that always passes taken for a read-only
+      field; a property everyone sees only through a field Web UI shows.
     - **In check 6:** a tab's label.
     - **In check 1:** a block use as a construct.
 
-    The first round found five that did not turn the suite red: no test had a block file of two
-    elements, a `dom-if` on a task layout's document, a block under a condition in version 1, a
-    field of a conditional block kept behind one everyone sees, or a rule moved to another card.
-    Each now has its test.
+    Three rounds ran. The first found five guards no test reached: a block file of two elements, a
+    `dom-if` on a task layout's document, a block under a condition in version 1, a field of a
+    conditional block kept behind one everyone sees, and a rule moved to another card. The third,
+    after the review below, found two: a permission rule joined with another, and the tabs'
+    order, which a second sort hid. Each now has its test, and the second sort is gone.
 
-  - **An independent review** then found twelve ways to drop, widen or misread something that
+  - **An independent review of M2** found twelve things. Fixed, each with a test: a guarded
+    block's field moved under another block's rule passed check 5; a block given no document hid
+    a dropped rule; a disabled tab, or one a later contribution replaced, still became a tab; Web
+    UI's task page fetches the task's target whole, so a task layout's record fields, blocks and
+    type, facet and state tests convert, where the first version reported them all on a reading of
+    the server's plain answer; a field bound two ways inside a wrapper became read-only; a field
+    Web UI only shows became an editable field of a version 1 form, unreported; a tab with no order
+    sorted last, and the record page opened on another tab than Web UI's; a tab on fewer types
+    than Web UI was `converted`; a view of the preview alone gave a false reason; and stale counts
+    in the migration document. Two are limits, listed under **Not done yet**: check 3 with one
+    variables schema in the package, and what the checks share with the converter.
+
+  - **An independent review of M1** found twelve ways to drop, widen or misread something that
     every check still passed. Examples: a property shown to everyone, dropped because an earlier
     field bound it under a condition; a queue written for a card under a condition; a bound label
     copied as text. Each is fixed, with a test in `checks-m1.spec.ts` that was run against the code

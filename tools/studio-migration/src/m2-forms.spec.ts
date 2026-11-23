@@ -227,6 +227,17 @@ describe('the conversion of task layouts into task forms', () => {
       note: expect.stringContaining('without its permissions'),
     });
     expect(outcome(10)).toMatchObject({ outcome: 'reported' });
+    // And so is one joined with another test, which a rule of them all would still read.
+    const joined = prepare({
+      [TASK]: `<dom-module id="nuxeo-assessclaim-layout"><template>
+<nuxeo-filter document="[[document]]" type="Claim" permission="Write, WriteProperties"><template>
+<nuxeo-input role="widget" label="Escalate" value="{{task.variables.escalate}}"></nuxeo-input></template></nuxeo-filter>
+</template></dom-module>`,
+    });
+    expect(entry(joined.conversion, `condition:${TASK}#1`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringContaining('without its permissions'),
+    });
   });
 
   it("reports a task layout whose names' case the package does not give", () => {

@@ -332,8 +332,7 @@ function registered(contributions: readonly SlotContribution[]): {
       ]);
     else kept.push({ contribution: node.contribution, order: node.order });
   }
-  // Web UI's slot orders what it shows by `order`, keeping the package's order between equals.
-  kept.sort((a, b) => a.order - b.order);
+  // In the package's order: the view file orders its tabs by `order`, as Web UI's slot does.
   return { kept, dropped };
 }
 
