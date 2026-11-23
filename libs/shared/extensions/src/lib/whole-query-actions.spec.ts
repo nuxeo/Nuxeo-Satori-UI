@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { PACKAGED_BULK_ACTIONS } from './packaged-actions';
@@ -48,5 +50,29 @@ describe('wholeQueryBulkAction', () => {
       entry.parameters['value'] = false;
     }).toThrow(TypeError);
     expect(wholeQueryBulkAction('app.bulkActions.delete')?.action).toBe('trash');
+  });
+
+  it("is what the extension reference's section 5 says, action by action", () => {
+    const root = join(import.meta.dirname, '..', '..', '..', '..', '..');
+    const reference = readFileSync(join(root, 'docs', 'extension-reference.md'), 'utf8');
+    const start = reference.indexOf('## 5. `bulk-actions`');
+    const section = reference.slice(start, reference.indexOf('\n## 6.', start));
+    const rows = [...section.matchAll(/^\| `(app\.bulkActions\.[A-Za-z]+)` .*\| ([^|]+?) +\|$/gm)];
+    expect(rows.map((row) => row[1]).sort()).toEqual(
+      PACKAGED_BULK_ACTIONS.map((action) => action.id).sort(),
+    );
+    for (const [, id, cell] of rows) {
+      const mapped = wholeQueryBulkAction(id);
+      const expected =
+        mapped === null
+          ? 'no'
+          : [
+              `\`${mapped.action}\``,
+              ...Object.entries(mapped.parameters).map(
+                ([name, value]) => `\`${name}: ${String(value)}\``,
+              ),
+            ].join(', ');
+      expect(cell, id).toBe(expected);
+    }
   });
 });
