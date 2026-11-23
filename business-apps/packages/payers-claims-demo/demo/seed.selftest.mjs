@@ -128,7 +128,7 @@ function standIn({
       live().filter(
         (d) =>
           d.type === 'Claim' &&
-          d.properties['claim:adjuster'] == null &&
+          (d.properties['claim:adjuster'] ?? null) === null &&
           ['submitted', 'inReview'].includes(d.properties['claim:status']),
       ),
   };

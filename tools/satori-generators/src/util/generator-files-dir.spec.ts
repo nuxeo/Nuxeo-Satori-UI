@@ -10,6 +10,7 @@ import { filesDirFrom, generatorFilesDir } from './generator-files-dir';
  * so a new generator with a `files/` directory cannot be added without this list naming it.
  */
 const WITH_TEMPLATES = [
+  'app-package',
   'config-package',
   'extension-component',
   'extension-library',

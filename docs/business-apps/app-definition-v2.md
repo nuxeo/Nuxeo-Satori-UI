@@ -332,7 +332,17 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   `labels` replace a key in every language at once.
 - **A text** is not empty.
 - **Looking a key up:** in the person's language, in the package first and then in the
-  platform's catalogue.
+  platform's catalogue. A customer's manifest `labels` still win over both.
+- **How the app reads them:** at `labels/<lang>.json`, beside `bootstrap.json`, for the person's
+  language, and for the fallback language through the platform's own fallback, and only in a
+  language the layouts index (`layouts.json`) lists in its `labels`, so that nothing is asked for
+  that is not there. A listed file that cannot be read, a file that is not a version 2 labels
+  file, and a key or a text the validator refuses are each said in the console; the rest still
+  loads.
+- **Where they are served:** nothing on a server serves or lists them yet. The app registry that
+  will waits on decisions B and E, as the home does. Until then,
+  `npm run config:dev -- --labels <lang>=<file>` serves and lists them for the dev server. A card that names
+  its heading by a key with no text still shows its `id`, made readable (layout-v2.md, section 2).
 
 ## 8. Module settings
 

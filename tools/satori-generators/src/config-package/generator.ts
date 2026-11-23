@@ -21,7 +21,7 @@ export interface ConfigPackageSchema {
 }
 
 /** `acme-insurance` → `Acme Insurance`. */
-function titleCase(kebab: string): string {
+export function titleCase(kebab: string): string {
   return kebab
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -39,7 +39,7 @@ function titleCase(kebab: string): string {
  * defaults occupy; `ContributionRegistry.resolve()` then does what it is designed to do and
  * lets the later contribution take that key, reporting it only at `info`.
  */
-const SATORI_NAMES = new Map([
+export const SATORI_NAMES = new Map([
   [
     'defaults',
     'the name of Satori’s own packaged fragments in both layers, so a package of this name replaces them on the server',
@@ -70,7 +70,7 @@ const WINDOWS_DEVICE_NAMES = new Set([
  * neither, having already been held to lower-case kebab-case; a `--directory` segment permits
  * both.
  */
-function isWindowsDeviceName(segment: string): boolean {
+export function isWindowsDeviceName(segment: string): boolean {
   return WINDOWS_DEVICE_NAMES.has(segment.toLowerCase().replace(/\..*$/, ''));
 }
 

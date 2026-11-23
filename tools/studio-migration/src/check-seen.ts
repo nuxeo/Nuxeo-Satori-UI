@@ -18,6 +18,8 @@ import { layoutFields, listColumns } from './app-walk';
 import { listed } from './check-model';
 import { labelsOf, readCatalogue } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
+import { own } from './catalogue';
+import { homeCards, menuEntries } from './convert-home';
 import { menuLabel, queueOwners } from './convert-lists';
 import type { CheckOutcome, HarnessInput } from './harness';
 import { fieldWidget } from './widgets';
@@ -130,6 +132,25 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     }
   }
 
+  // The home's cards and the menu's entries, named as the dashboard and the left menu name them.
+  // One with no name of its own shows its queue's, compared above.
+  for (const card of homeCards(inventory)) {
+    const written = listItem(conversion.app['home.json'], 'cards', card.id);
+    const source = inventory.dashboard?.cards[card.index];
+    if (written && source && ('label' in written || 'labelKey' in written))
+      compare(`home.json: ${card.id}`, web(source.heading), shown(written, null, null));
+  }
+  for (const entry of menuEntries(inventory, catalogue)) {
+    const written = listItem(conversion.app['navigation.json'], 'entries', entry.id);
+    const icon = entry.item.parts.find((part) => part.element === 'nuxeo-menu-icon');
+    if (written && icon && ('label' in written || 'labelKey' in written))
+      compare(
+        `navigation.json: ${entry.id}`,
+        web(own(icon.attributes, 'label') ?? null),
+        shown(written, null, null),
+      );
+  }
+
   const values =
     'The values half opens the same records in both apps, as the same user, and needs the migration server';
   return {
@@ -161,4 +182,14 @@ export function readable(name: string): string {
     .map((word) => (word.length > 1 && word === word.toUpperCase() ? word : word.toLowerCase()));
   const text = words.join(' ');
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : name;
+}
+
+/** The card or entry of a home or menu file with the given id. */
+function listItem(
+  file: unknown,
+  key: 'cards' | 'entries',
+  id: string,
+): Record<string, unknown> | undefined {
+  const items = isRecord(file) && Array.isArray(file[key]) ? file[key] : [];
+  return items.find((item): item is Record<string, unknown> => isRecord(item) && item['id'] === id);
 }

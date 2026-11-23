@@ -68,7 +68,8 @@ export function listColumns(file: unknown): ShownField[] {
  *   `readOnlyWhen`, a `required` that is a rule rather than `true` or `false`, and the rule of a
  *   `core.choose` computation; and the same in a table's columns and a related list's columns;
  * - **a queue:** its `visibleWhen`, and its columns' as a field's;
- * - **`actions.json`:** each action's `visibleWhen`.
+ * - **`actions.json`:** each action's `visibleWhen`;
+ * - **`home.json` and `navigation.json`:** each card's and each entry's `visibleWhen`.
  *
  * A labels file, a module's settings, `app.json` and an operation's parameters hold none: a
  * translation key or a parameter named `required` is text, not a rule.
@@ -121,6 +122,14 @@ export function rulesIn(
   } else if (path.startsWith('queues/')) {
     rule(file, 'visibleWhen', '');
     list(file['columns']).forEach((entry, index) => field(entry, `columns.${index}.`));
+  } else if (path === 'home.json') {
+    list(file['cards']).forEach((card, index) => {
+      if (isRecord(card)) rule(card, 'visibleWhen', `cards.${index}.`);
+    });
+  } else if (path === 'navigation.json') {
+    list(file['entries']).forEach((entry, index) => {
+      if (isRecord(entry)) rule(entry, 'visibleWhen', `entries.${index}.`);
+    });
   } else if (path === 'actions.json') {
     list(file['actions']).forEach((action, index) => {
       if (isRecord(action)) rule(action, 'visibleWhen', `actions.${index}.`);
