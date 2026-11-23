@@ -6,6 +6,7 @@ import {
   type ExtensionRule,
 } from '@nuxeo/satori-platform/extensions';
 
+import { tableColumns } from './widget-support';
 import {
   MAX_RULE_LEVELS,
   entryOf,
@@ -413,6 +414,52 @@ describe('readRecordLayout', () => {
       expect(file.problems).toEqual([
         'cards[0].fields[0].parameters.columns[1] is a computed column, which this build does not draw yet; that column left out',
       ]);
+    });
+
+    /**
+     * A table inside a table's column is not drawn, so a rule inside it, even one this build does
+     * not register, is never evaluated: the column goes, and the rest of the table stays.
+     */
+    it('a table inside a table, which this build does not draw yet: that column only', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'visit:note',
+                    {
+                      field: 'visit:calls',
+                      widget: 'table',
+                      parameters: {
+                        columns: [
+                          'call:by',
+                          {
+                            field: 'call:secret',
+                            visibleWhen: { type: 'app.rules.inGroup', parameters: ['g'] },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields).toHaveLength(1);
+      expect(file.problems).toEqual([
+        'cards[0].fields[0].parameters.columns[1] is a table inside a table, which this build does not draw yet; that column left out',
+      ]);
+      expect(
+        tableColumns(file.cards[0].fields[0].parameters['columns']).map((c) => c.subfield),
+      ).toEqual(['note']);
     });
 
     it('a card of related records, which this build does not draw yet', () => {

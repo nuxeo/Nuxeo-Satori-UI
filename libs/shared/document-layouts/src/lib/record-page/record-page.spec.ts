@@ -36,6 +36,10 @@ const MEMBER_TYPE: DocumentTypeDefinition = {
             adjuster: { type: 'string' },
             note: { type: 'string' },
             country: { type: 'string' },
+            calls: {
+              type: 'complex[]',
+              fields: { by: { type: 'string' }, secret: { type: 'string' } },
+            },
           },
         },
         address: {
@@ -487,6 +491,57 @@ describe('RecordPageComponent', () => {
     ).toEqual(['Called back', 'France']);
   });
 
+  /** Its rules are never checked, so nothing in it is drawn: not a cell, not a heading. */
+  it('leaves out a table inside a table, and shows the rest of the outer one', async () => {
+    const root = await render(
+      member({
+        'member:visits': [
+          { note: 'Called back', calls: [{ by: 'jdoe', secret: 'for the group only' }] },
+        ],
+      }),
+      {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'visit:note',
+                    {
+                      field: 'visit:calls',
+                      widget: 'table',
+                      parameters: {
+                        columns: [
+                          'call:by',
+                          {
+                            field: 'call:secret',
+                            visibleWhen: { type: 'app.rules.inGroup', parameters: ['g'] },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const table = root.querySelector('[data-field="member:visits"]');
+    expect([...(table?.querySelectorAll('th') ?? [])].map((th) => th.textContent?.trim())).toEqual([
+      'Note',
+    ]);
+    expect([...(table?.querySelectorAll('td') ?? [])].map((td) => td.textContent)).toEqual([
+      'Called back',
+    ]);
+    expect(root.textContent).not.toContain('for the group only');
+  });
+
   /** A cell is text: an entity is its character, and an escaped tag stays characters. */
   it("shows a table's rich-text cell as its words, entities read, never as markup", async () => {
     const root = await render(
@@ -518,6 +573,38 @@ describe('RecordPageComponent', () => {
     expect(cell?.textContent).toBe('Under <10, R&D <img src="https://tracker.example/p.gif">');
     expect(cell?.children).toHaveLength(0);
     expect(root.querySelector('img')).toBeNull();
+  });
+
+  /** A complex value with no widget is its sub-fields, in a cell as in a placeholder. */
+  it('writes a complex value in a cell and in a placeholder, as its field lists it', async () => {
+    const root = await render(
+      member({
+        'member:visits': [{ note: 'Called back', calls: [{ by: 'jdoe', secret: null }] }],
+      }),
+      {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                id: 'where',
+                computed: { type: 'core.template', parameters: ['At {member:address}'] },
+              },
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: { columns: ['visit:note', 'visit:calls'] },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    expect(valueOf(root, 'where')).toBe('At City: Springfield, Street: 1 Main St, Zip: 12345');
+    expect(
+      [...root.querySelectorAll('[data-field="member:visits"] td')].map((td) => td.textContent),
+    ).toEqual(['Called back', 'By: jdoe']);
   });
 
   describe("a template's placeholder", () => {
@@ -612,6 +699,36 @@ describe('RecordPageComponent', () => {
       expect(valueOf(root, 'member:visitedAt')).toBe(day);
       expect(valueOf(root, 'dates')).toBe(`Born November 24, 1980, seen ${day}`);
     });
+  });
+
+  /** The validator lets a card show one property twice, so the page tracks each by its place. */
+  it('shows one property twice, each through its own widget, each tracked apart', async () => {
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            { field: 'member:birthDate', widget: 'date', parameters: { format: 'short' } },
+            { field: 'member:birthDate', widget: 'date' },
+          ],
+        },
+      ],
+    });
+    expect(
+      [...root.querySelectorAll('[data-field="member:birthDate"] .record-page__value')].map(
+        (value) => value.textContent?.trim(),
+      ),
+    ).toEqual(['11/24/80', 'November 24, 1980']);
+    // Angular checks the keys when it reconciles a list it drew: a refetch, as a new object.
+    fixture.componentRef.setInput('document', member({ 'member:birthDate': '1981-01-02' }));
+    fixture.detectChanges();
+    expect(
+      [...root.querySelectorAll('[data-field="member:birthDate"] .record-page__value')].map(
+        (value) => value.textContent?.trim(),
+      ),
+    ).toEqual(['1/2/81', 'January 2, 1981']);
+    expect(warnings.filter((warning) => warning.includes('NG0955'))).toEqual([]);
   });
 
   it('shows an empty value as a dash', async () => {

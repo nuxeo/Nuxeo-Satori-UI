@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { describeField } from '../document-layout/field-view';
 import type { LayoutFieldType } from '../layout.model';
 import {
   WIDGETS_SHOWN_AS_VERSION_1,
@@ -209,6 +210,27 @@ describe('showValue', () => {
 
     it('a phone number with no digits is text', () => {
       expect(show('phone', 'n/a')).toEqual({ kind: 'text', text: 'n/a' });
+      // Separators alone are written like a number, and are still not one.
+      expect(show('phone', '( ) - -')).toEqual({ kind: 'text', text: '( ) - -' });
+    });
+
+    /** Taking out what is not a separator would dial another number: `ext. 42` adds `42`. */
+    it.each([
+      '+1 (555) 010-0199 ext. 42',
+      '+1 555 010 0199 x42',
+      '1-800-FLOWERS',
+      '555 0100 or 555 0101',
+      '++1 555 0100',
+      '555+0100',
+    ])('%j, which holds more than digits and separators, is text', (phone) => {
+      expect(show('phone', phone)).toEqual({ kind: 'text', text: phone });
+    });
+
+    it.each([
+      ['  +44 20 7946 0958 ', 'tel:+442079460958'],
+      ['030/123.45-67', 'tel:0301234567'],
+    ])('%j dials %j', (phone, href) => {
+      expect(show('phone', phone)).toEqual({ kind: 'link', text: phone, href });
     });
 
     it('an email address writes to it', () => {
@@ -404,27 +426,54 @@ describe('showValue', () => {
 
   /**
    * Except a date, which version 1 formats in UTC: an instant is the reader's day here, as the
-   * `date` widget shows it (pattern 29). 20:00 UTC on the 23rd is the 24th at +05:30.
+   * `date` widget shows it (pattern 29), alone, in a list, and at any depth of a complex value.
+   * 20:00 UTC on the 23rd is the 24th at +05:30.
    */
-  it('shows a date with no widget as the date widget does, and a list of them', () => {
-    const at = (value: unknown, type: string) =>
-      showValue({ key: 'k', label: 'L', value, parameters: {}, definition: { type } }, null, {
-        ...context,
-        timeZone: '+0530',
+  describe('a date with no widget, as the date widget shows it', () => {
+    const at = (value: unknown, definition: LayoutFieldType) =>
+      viewText(
+        showValue({ key: 'k', label: 'L', value, parameters: {}, definition }, null, {
+          ...context,
+          timeZone: '+0530',
+        }),
+        context.flagText,
+      );
+
+    it('alone, and in a list', () => {
+      expect(at('2026-11-23T20:00:00.000Z', { type: 'date' })).toBe('November 24, 2026');
+      expect(at('2026-11-23T00:00:00.000Z', { type: 'date' })).toBe('November 23, 2026');
+      expect(at(['2026-11-23T20:00:00.000Z', null, '2026-11-23'], { type: 'date[]' })).toBe(
+        'November 24, 2026, November 23, 2026',
+      );
+      expect(at('soon', { type: 'date' })).toBe('soon');
+    });
+
+    it('in a complex value, and in a list of them, at any depth version 1 shows', () => {
+      const visit: LayoutFieldType = {
+        type: 'complex',
+        fields: {
+          at: { type: 'date' },
+          follow: { type: 'complex', fields: { due: { type: 'date' } } },
+        },
+      };
+      const value = {
+        at: '2026-11-23T20:00:00.000Z',
+        follow: { due: '2026-11-23T00:00:00.000Z' },
+      };
+      expect(at(value, visit)).toBe('At: November 24, 2026, Follow: (Due: November 23, 2026)');
+      expect(at([value], { ...visit, type: 'complex[]' })).toBe(
+        'At: November 24, 2026, Follow: (Due: November 23, 2026)',
+      );
+    });
+
+    /** The hook is the record page's: version 1's own view, given none, is in UTC as before. */
+    it("leaves version 1's own view in UTC", () => {
+      const field = describeField('k', 'L', { type: 'date' }, '2026-11-23T20:00:00.000Z', {
+        locale: 'en-US',
+        vocabulary: (_, id) => id,
       });
-    expect(at('2026-11-23T20:00:00.000Z', 'date')).toEqual({
-      kind: 'text',
-      text: 'November 24, 2026',
+      expect(field.value).toEqual({ text: 'November 23, 2026' });
     });
-    expect(at('2026-11-23T00:00:00.000Z', 'date')).toEqual({
-      kind: 'text',
-      text: 'November 23, 2026',
-    });
-    expect(at(['2026-11-23T20:00:00.000Z', null, '2026-11-23'], 'date[]')).toEqual({
-      kind: 'chips',
-      chips: ['November 24, 2026', 'November 23, 2026'],
-    });
-    expect(at('soon', 'date')).toEqual({ kind: 'text', text: 'soon' });
   });
 });
 
@@ -471,6 +520,36 @@ describe('richTextWords', () => {
       ),
     ).toBe('Hi');
     expect(richTextWords('<form><label>Name</label></form>')).toBe('Name');
+  });
+
+  /** A complex value with no widget, as its field lists it: a cell or a placeholder is not empty. */
+  it('writes a complex value as its sub-fields, one value after another', () => {
+    const address: LayoutFieldType = {
+      type: 'complex[]',
+      fields: {
+        street: { type: 'string' },
+        city: { type: 'string' },
+        country: { type: 'string', directory: 'country' },
+        verified: { type: 'boolean' },
+      },
+    };
+    const view = showValue(
+      {
+        key: 'k',
+        label: 'L',
+        value: [
+          { street: '1 Main St', city: 'Springfield', country: 'fr', verified: true },
+          { street: null, city: 'Paris', country: null, verified: null },
+        ],
+        parameters: {},
+        definition: address,
+      },
+      null,
+      context,
+    );
+    expect(viewText(view, context.flagText)).toBe(
+      'City: Springfield, Country: France, Street: 1 Main St, Verified: Yes; City: Paris',
+    );
   });
 
   it('writes a flag in words, through the page’s translation', () => {

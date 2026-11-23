@@ -9,6 +9,7 @@ import {
 import type { Invalid } from '../layout-file';
 import type { LayoutLabel } from '../layout.model';
 import { fieldLabelKey, humanize } from '../resolve-layout';
+import { notDrawnColumn } from './widget-support';
 
 /**
  * Layout file version 2 in `view` mode, as the app loads it: the record page's main area
@@ -262,7 +263,9 @@ export function readRecordLayout(
       return false;
     }
     // A table's columns may each have a rule too, and one the page cannot answer would show its
-    // column to everyone: the whole table is left out rather than drawn without it.
+    // column to everyone: the whole table is left out rather than drawn without it. The columns
+    // of a table inside a column are not checked: that column is never drawn (`notDrawnColumn`),
+    // so no rule in it is ever evaluated.
     for (const [index, column] of tableColumnEntries(entry).entries()) {
       const inColumn = isRecord(column) ? refusedRule(column['visibleWhen'], isRuleKnown) : null;
       if (inColumn) {
@@ -293,9 +296,10 @@ export function readRecordLayout(
     }
     if (!isRecord(entry)) return [];
     for (const [index, column] of tableColumnEntries(entry).entries()) {
-      if (isRecord(column) && 'computed' in column) {
+      const notDrawn = notDrawnColumn(column);
+      if (notDrawn) {
         problems.push(
-          `${place}.parameters.columns[${index}] is a computed column, which this build does not draw yet; that column left out`,
+          `${place}.parameters.columns[${index}] is ${notDrawn}, which this build does not draw yet; that column left out`,
         );
       }
     }

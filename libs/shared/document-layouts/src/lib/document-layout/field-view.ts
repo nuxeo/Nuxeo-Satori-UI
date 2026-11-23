@@ -21,6 +21,11 @@ export interface ValueContext {
   readonly locale: string;
   /** The vocabulary entry's label for an id, or the id itself when it is not known. */
   readonly vocabulary: (directory: string, id: string) => string;
+  /**
+   * How a `date` value shows, at any depth of a complex value. Absent, in UTC, as version 1 shows
+   * every date. The record page gives its own, so that an instant is the reader's day there.
+   */
+  readonly date?: (value: unknown) => ValueView;
 }
 
 /** Complex values nest arbitrarily in Nuxeo; past this depth the rest is shown as JSON. */
@@ -49,6 +54,7 @@ function textOf(value: unknown): string {
 }
 
 function dateView(value: unknown, context: ValueContext): ValueView {
+  if (context.date) return context.date(value);
   // In UTC, as formatCompareDate does: a calendar date is stored at midnight UTC, and the
   // browser's timezone would move it to the previous day west of Greenwich.
   const date = new Date(textOf(value));
