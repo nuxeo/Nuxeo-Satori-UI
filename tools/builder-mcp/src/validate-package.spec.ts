@@ -1,6 +1,7 @@
 import {
   cpSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -21,7 +22,7 @@ import {
   validatePackage,
   within,
 } from './validate-package.ts';
-import { HAS_UNZIP } from './testing/unzip.ts';
+import { PIPELINE_TESTS_RUN } from './testing/unzip.ts';
 
 const DEMO = join(REPO_ROOT, 'business-apps', 'packages', 'payers-claims-demo');
 const scratch = mkdtempSync(join(tmpdir(), 'builder-mcp-spec-'));
@@ -57,118 +58,126 @@ const SCRATCH = { roots: [REPO_ROOT, scratch] };
 
 const LAYOUT = join('bundle', 'agentic-ui-config', 'layouts', 'Claim', 'view.layout.json');
 
-describe.skipIf(!HAS_UNZIP)('validatePackage (the pipeline needs unzip)', () => {
-  it('passes the demo package, as CI does, writing nothing into it', async () => {
-    const root = demoWith('sound');
-    const before = everyFile(root);
-    const left = leftovers();
-    const check = await validatePackage({ directory: root }, SCRATCH);
-    expect(check.passed).toBe(true);
-    expect(check.exitCode).toBe(0);
-    expect(check.refusedAt).toBeNull();
-    expect(check.findings).toEqual([]);
-    expect(check.zip?.name).toMatch(/^payers-claims-demo-.+\.zip$/);
-    expect(check.zip?.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(check.command).toContain(`--platform ${platformVersion()}`);
-    expect(everyFile(root)).toEqual(before);
-    // The temporary folder the zip went to is gone too.
-    expect(leftovers()).toEqual(left);
-  });
-
-  it("names the file, the place and the widget for phase 0's demo step 1", async () => {
-    const root = demoWith('calendar', (copy) =>
-      edit(join(copy, LAYOUT), '"widget": "document-link"', '"widget": "calendar"'),
-    );
-    const check = await validatePackage({ directory: root }, SCRATCH);
-    expect(check.passed).toBe(false);
-    expect(check.refusedAt).toEqual({
-      step: 2,
-      reason: 'the app definition has findings, listed above.',
+describe.skipIf(!PIPELINE_TESTS_RUN)(
+  'validatePackage (the pipeline needs unzip, which a Windows runner lacks)',
+  () => {
+    it('passes the demo package, as CI does, writing nothing into it', async () => {
+      const root = demoWith('sound');
+      const before = everyFile(root);
+      const left = leftovers();
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.passed).toBe(true);
+      expect(check.exitCode).toBe(0);
+      expect(check.refusedAt).toBeNull();
+      expect(check.findings).toEqual([]);
+      expect(check.zip?.name).toMatch(/^payers-claims-demo-.+\.zip$/);
+      expect(check.zip?.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(check.command).toContain(`--platform ${platformVersion()}`);
+      expect(everyFile(root)).toEqual(before);
+      // The temporary folder the zip went to is gone too.
+      expect(leftovers()).toEqual(left);
     });
-    expect(check.findings).toEqual([
-      {
-        file: 'bundle/agentic-ui-config/layouts/Claim/view.layout.json',
-        place: 'cards[0].fields[1].widget',
-        message: 'the widget "calendar" is not registered',
-        kind: 'unknown',
-      },
-    ]);
-    expect(check.zip).toBeNull();
-  });
 
-  it('refuses a builder that is not the reviewed one, before running it', async () => {
-    const root = demoWith('builder', (copy) =>
-      writeFileSync(
-        join(copy, 'build.mjs'),
-        `${readFileSync(join(copy, 'build.mjs'), 'utf8')}\n// changed\n`,
-      ),
-    );
-    const check = await validatePackage({ directory: root }, SCRATCH);
-    expect(check.passed).toBe(false);
-    expect(check.refusedAt?.step).toBe(1);
-    expect(check.refusedAt?.reason).toContain("build.mjs is not the generator's");
-  });
+    it("names the file, the place and the widget for phase 0's demo step 1", async () => {
+      const root = demoWith('calendar', (copy) =>
+        edit(join(copy, LAYOUT), '"widget": "document-link"', '"widget": "calendar"'),
+      );
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.passed).toBe(false);
+      expect(check.refusedAt).toEqual({
+        step: 2,
+        reason: 'the app definition has findings, listed above.',
+      });
+      expect(check.findings).toEqual([
+        {
+          file: 'bundle/agentic-ui-config/layouts/Claim/view.layout.json',
+          place: 'cards[0].fields[1].widget',
+          message: 'the widget "calendar" is not registered',
+          kind: 'unknown',
+        },
+      ]);
+      expect(check.zip).toBeNull();
+    });
 
-  it('refuses versions that disagree, at step 3', async () => {
-    const root = demoWith('version', (copy) =>
-      edit(
-        join(copy, 'bundle', 'agentic-ui-config', 'app.json'),
-        '"packageVersion": "',
-        '"packageVersion": "9',
-      ),
-    );
-    const check = await validatePackage({ directory: root }, SCRATCH);
-    expect(check.refusedAt?.step).toBe(3);
-    expect(check.refusedAt?.reason).toContain('They are one version');
-  });
+    it('refuses a builder that is not the reviewed one, before running it', async () => {
+      const root = demoWith('builder', (copy) =>
+        writeFileSync(
+          join(copy, 'build.mjs'),
+          `${readFileSync(join(copy, 'build.mjs'), 'utf8')}\n// changed\n`,
+        ),
+      );
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.passed).toBe(false);
+      expect(check.refusedAt?.step).toBe(1);
+      expect(check.refusedAt?.reason).toContain("build.mjs is not the generator's");
+    });
 
-  it("holds app.json's platform range to the version it is given", async () => {
-    const check = await validatePackage(
-      { directory: demoWith('platform'), platform: '99.0.0' },
-      SCRATCH,
-    );
-    expect(check.passed).toBe(false);
-    expect(check.refusedAt?.step).toBe(2);
-    expect(check.findings.map((finding) => finding.file)).toContain(
-      'bundle/agentic-ui-config/app.json',
-    );
-  });
+    it('refuses versions that disagree, at step 3', async () => {
+      const root = demoWith('version', (copy) =>
+        edit(
+          join(copy, 'bundle', 'agentic-ui-config', 'app.json'),
+          '"packageVersion": "',
+          '"packageVersion": "9',
+        ),
+      );
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.refusedAt?.step).toBe(3);
+      expect(check.refusedAt?.reason).toContain('They are one version');
+    });
 
-  it('says when a folder or a file it was given is not there', async () => {
-    await expect(validatePackage({ directory: join(scratch, 'none') }, SCRATCH)).rejects.toThrow(
-      'directory: ',
-    );
-    await expect(validatePackage({ directory: join(scratch, 'none') }, SCRATCH)).rejects.toThrow(
-      'does not exist',
-    );
-    await expect(
-      validatePackage(
-        { directory: demoWith('allow-list'), allowList: join(scratch, 'none.json') },
+    it("holds app.json's platform range to the version it is given", async () => {
+      const check = await validatePackage(
+        { directory: demoWith('platform'), platform: '99.0.0' },
         SCRATCH,
-      ),
-    ).rejects.toThrow('allowList: ');
-    const file = join(scratch, 'a-file.json');
-    writeFileSync(file, '{}');
-    await expect(validatePackage({ directory: file }, SCRATCH)).rejects.toThrow('is not a folder');
-  });
+      );
+      expect(check.passed).toBe(false);
+      expect(check.refusedAt?.step).toBe(2);
+      expect(check.findings.map((finding) => finding.file)).toContain(
+        'bundle/agentic-ui-config/app.json',
+      );
+    });
 
-  it('says when it ran as CI runs it, and when it was given more', async () => {
-    const root = demoWith('departs');
-    const asCi = await validatePackage({ directory: root }, SCRATCH);
-    expect(asCi).toMatchObject({ asCi: true, departsFromCi: [] });
-    const allowList = join(scratch, 'allow-list.json');
-    writeFileSync(allowList, JSON.stringify({ operations: [] }));
-    const given = await validatePackage({ directory: root, allowList, platform: '0.9.0' }, SCRATCH);
-    expect(given).toMatchObject({ asCi: false, departsFromCi: ['allowList', 'platform'] });
-    expect(given.command).toContain('--allow-list <file>');
-  });
+    it('says when a folder or a file it was given is not there', async () => {
+      await expect(validatePackage({ directory: join(scratch, 'none') }, SCRATCH)).rejects.toThrow(
+        'directory: ',
+      );
+      await expect(validatePackage({ directory: join(scratch, 'none') }, SCRATCH)).rejects.toThrow(
+        'does not exist',
+      );
+      await expect(
+        validatePackage(
+          { directory: demoWith('allow-list'), allowList: join(scratch, 'none.json') },
+          SCRATCH,
+        ),
+      ).rejects.toThrow('allowList: ');
+      const file = join(scratch, 'a-file.json');
+      writeFileSync(file, '{}');
+      await expect(validatePackage({ directory: file }, SCRATCH)).rejects.toThrow(
+        'is not a folder',
+      );
+    });
 
-  it('refuses an empty platform, which the pipeline would take as none and check nothing', async () => {
-    await expect(
-      validatePackage({ directory: demoWith('empty-platform'), platform: '' }, SCRATCH),
-    ).rejects.toThrow('is not a version');
-  });
-});
+    it('says when it ran as CI runs it, and when it was given more', async () => {
+      const root = demoWith('departs');
+      const asCi = await validatePackage({ directory: root }, SCRATCH);
+      expect(asCi).toMatchObject({ asCi: true, departsFromCi: [] });
+      const allowList = join(scratch, 'allow-list.json');
+      writeFileSync(allowList, JSON.stringify({ operations: [] }));
+      const given = await validatePackage(
+        { directory: root, allowList, platform: '0.9.0' },
+        SCRATCH,
+      );
+      expect(given).toMatchObject({ asCi: false, departsFromCi: ['allowList', 'platform'] });
+      expect(given.command).toContain('--allow-list <file>');
+    });
+
+    it('refuses an empty platform, which the pipeline would take as none and check nothing', async () => {
+      await expect(
+        validatePackage({ directory: demoWith('empty-platform'), platform: '' }, SCRATCH),
+      ).rejects.toThrow('is not a version');
+    });
+  },
+);
 
 describe('what validatePackage may read', () => {
   it('refuses a folder or a file outside the repository, so nothing there is quoted back', async () => {
@@ -232,6 +241,26 @@ describe('what validatePackage may read', () => {
     await expect(validatePackage({ directory: root }, SCRATCH)).rejects.toThrow(
       'holds a link, bundle/agentic-ui-config/actions.json, which is not followed',
     );
+  });
+
+  it('counts a hard link as a link: its other name can be anywhere on the volume', async () => {
+    const elsewhere = join(scratch, 'hard-original.json');
+    writeFileSync(elsewhere, '{}');
+    const root = demoWith('hard-linked-actions', (copy) => {
+      const actions = join(copy, 'bundle', 'agentic-ui-config', 'actions.json');
+      rmSync(actions);
+      linkSync(elsewhere, actions);
+    });
+    await expect(validatePackage({ directory: root }, SCRATCH)).rejects.toThrow(
+      'holds a link, bundle/agentic-ui-config/actions.json, which is not followed',
+    );
+    const inside = join(scratch, 'hard-inside');
+    mkdirSync(inside, { recursive: true });
+    const named = join(inside, 'allow-list.json');
+    if (!existsSync(named)) linkSync(elsewhere, named);
+    expect(within(named, [inside])).toEqual({
+      problem: `${named} goes through a link, which is not followed.`,
+    });
   });
 
   it('takes an allow-list or a registered file only as a JSON file', async () => {

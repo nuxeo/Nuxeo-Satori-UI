@@ -17,8 +17,9 @@ export const RECORDED_ORIGIN = 'http://localhost:8080';
 
 /**
  * The only names the recordings keep, every one of them stock Nuxeo: the recorder trims every
- * list the server answers to these, whatever else the server holds, so that a recording made on
- * a server with a customer's model in it carries none of it. A test holds the recordings to it.
+ * list the server answers to these, and a test holds the recordings to it. What a kept name holds
+ * is kept as the server answered it: a server that overrides `default_search` or adds to `country`
+ * puts that in, so record from a stock server and read the diff (README, "Running and testing it").
  */
 export const KEPT = {
   types: [
@@ -36,6 +37,42 @@ export const KEPT = {
     'Document.Update',
     'Document.FetchByProperty',
     'Repository.Query',
+  ],
+  /** The stock facets and schemas of those types: a type keeps only these, so a schema a server
+   *  adds to File, say, is not kept. A workflow's variables facets are kept besides, when a kept
+   *  workflow's own documents name them. */
+  facets: [
+    'Commentable',
+    'DocumentRoute',
+    'Downloadable',
+    'Folderish',
+    'ForceAudit',
+    'HasRelatedText',
+    'HiddenInNavigation',
+    'NXTag',
+    'NotCollectionMember',
+    'NotFulltextIndexable',
+    'Orderable',
+    'Publishable',
+    'SuperSpace',
+    'SystemDocument',
+    'Versionable',
+  ],
+  schemas: [
+    'common',
+    'document_route_instance',
+    'document_route_model',
+    'domain',
+    'dublincore',
+    'facetedTag',
+    'file',
+    'files',
+    'note',
+    'publishing',
+    'relatedtext',
+    'route_node',
+    'uid',
+    'webcontainer',
   ],
   chains: ['AttachFiles', 'FileManager.ImportWithMetaData'],
   pageProviders: [

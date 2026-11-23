@@ -187,13 +187,29 @@ function trim(
   const body = recording.body;
   if (path === '/config/types' && isRecord(body) && isRecord(body['doctypes'])) {
     const all = Object.keys(body['doctypes']);
+    // Each kept type keeps only its stock facets and schemas.
     const doctypes = Object.fromEntries(
-      Object.entries(body['doctypes']).filter(([name]) => KEPT.types.includes(name)),
+      Object.entries(body['doctypes'])
+        .filter(([name]) => KEPT.types.includes(name))
+        .map(([name, type]) => [
+          name,
+          isRecord(type)
+            ? {
+                ...type,
+                facets: (Array.isArray(type['facets']) ? type['facets'] : []).filter((facet) =>
+                  KEPT.facets.includes(String(facet)),
+                ),
+                schemas: (Array.isArray(type['schemas']) ? type['schemas'] : []).filter((schema) =>
+                  KEPT.schemas.includes(String(schema)),
+                ),
+              }
+            : type,
+        ]),
     );
     return {
       ...recording,
       body: { doctypes, schemas: {} },
-      trimmed: `doctypes: ${Object.keys(doctypes).length} of ${all.length} kept (${KEPT.types.join(', ')}); the flat schemas map, which nothing reads, emptied`,
+      trimmed: `doctypes: ${Object.keys(doctypes).length} of ${all.length} kept (${KEPT.types.join(', ')}), each with its stock facets and schemas only; the flat schemas map, which nothing reads, emptied`,
     };
   }
   if ((path === '/config/facets' || path === '/config/schemas') && Array.isArray(body)) {
@@ -280,9 +296,9 @@ function usedNames(recordings: ReadonlyMap<string, Recording>): {
         const type = body['doctypes'][name];
         if (!isRecord(type)) continue;
         for (const facet of Array.isArray(type['facets']) ? type['facets'] : [])
-          facets.add(String(facet));
+          if (KEPT.facets.includes(String(facet))) facets.add(String(facet));
         for (const schema of Array.isArray(type['schemas']) ? type['schemas'] : [])
-          schemas.add(String(schema));
+          if (KEPT.schemas.includes(String(schema))) schemas.add(String(schema));
       }
     }
     // Only the kept workflows' documents are read, by describe_workflow.

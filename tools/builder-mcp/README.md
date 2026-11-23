@@ -80,11 +80,15 @@ Some things about them are worth knowing before relying on them:
   they go to the agent, so:
   - the folder and the files must be in the repository, and the answer for a path outside is the
     same whether or not it exists;
-  - no link is followed, in the path or anywhere in the package: one is refused;
+  - no link is followed, in the path or anywhere in the package: one is refused, and so is a
+    hard link, a file with a second name elsewhere;
   - nothing hidden, such as `.git`, `.env` or `.claude`, is read;
   - the allow-list and the registered file are JSON files.
 
-  A package kept elsewhere has to be copied in first, without links.
+  A package kept elsewhere has to be copied in first, without links. What the pipeline then reads
+  is the pipeline's: a component path in the bundle's manifest that climbs out with `..` is not
+  refused by it yet, so a manifest can still have step 2 read a component outside the package,
+  and quote that component's layout attributes back.
 
 - **It writes nothing in the package.** The zip goes to a temporary folder, which is removed, and
   nothing is published. The pipeline gets only `PATH`, the temporary folder and the locale from the
@@ -163,8 +167,9 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
   [`src/testing/recorded/`](src/testing/recorded/). `manifest.json` says when and from where they
   were recorded, and what was trimmed from the large answers. A read the recordings do not hold
   fails its test, naming the read.
-- **The tests that run the pipeline need `unzip`**, as the pipeline does. On a machine without it,
-  such as a Windows runner, vitest lists them as skipped; CI's Linux run has it.
+- **The tests that run the pipeline need `unzip`**, as the pipeline does. On a Windows runner,
+  which has none, vitest lists them as skipped. Anywhere else they run, and fail without it, so a
+  CI image that lost it is not mistaken for a pass. Nothing here has been run on Windows.
 - **`src/main.spec.ts`** starts the real entry point over stdio, as Claude Code does: with no
   credentials, with a server that answers as its guest, with one that stops accepting the account
   after the first call, and validating the demo package.
@@ -172,8 +177,10 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
   prints what each answered. Without `--check` it also rewrites the recordings, which are
   committed to a public repository, so:
   - **it keeps stock Nuxeo names only.** Every list the server answers is trimmed to the names in
-    `KEPT` (`src/testing/recordings.ts`), whatever else the server holds, and a test holds the
-    recordings to that list;
+    `KEPT` (`src/testing/recordings.ts`), each kept type to its stock facets and schemas, and a
+    test holds the recordings to that list. What a kept name holds is kept as the server answered
+    it: a server that overrides `default_search` or adds entries to `country` puts that in. So
+    record from a stock server, such as the local Docker one;
   - **it keeps no document property but the workflow's own**, and writes none that would hold
     `NUXEO_USER` or `NUXEO_PASS`;
   - **it writes only from a server on this machine**, refusing before any request. That checks the

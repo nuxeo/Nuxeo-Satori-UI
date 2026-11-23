@@ -101,7 +101,8 @@ export function inRepository(path: string): string {
  * - **Outside is decided from the path alone,** before the file system is asked anything, so the
  *   answer for a path outside is the same whether or not it exists.
  * - **No link is followed.** Each part of the path below its root is read with `lstat`, and one
- *   that is a link is refused, rather than resolved: a link inside can point anywhere.
+ *   that is a link is refused, rather than resolved: a link inside can point anywhere. A file with
+ *   more than one name, a hard link, is refused too.
  * - **No hidden part**, such as `.git`, `.env` or `.claude`, which a repository keeps out of
  *   version control.
  */
@@ -125,7 +126,7 @@ export function within(
       } catch {
         return { problem: `${path} does not exist.` };
       }
-      if (entry.isSymbolicLink())
+      if (entry.isSymbolicLink() || (entry.isFile() && entry.nlink > 1))
         return { problem: `${path} goes through a link, which is not followed.` };
     }
     return current;
@@ -133,11 +134,15 @@ export function within(
   return { problem: `${path} is outside the repository, and is not read.` };
 }
 
-/** The first link inside a folder, or `null`: the validator would follow one wherever it points. */
+/**
+ * The first link inside a folder, or `null`: the validator would follow one wherever it points. A
+ * file with more than one name is a hard link, whose other name can be anywhere on the volume, so
+ * it counts as one.
+ */
 export function linkInside(directory: string): string | null {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isSymbolicLink()) return path;
+    if (entry.isSymbolicLink() || (entry.isFile() && lstatSync(path).nlink > 1)) return path;
     if (entry.isDirectory()) {
       const found = linkInside(path);
       if (found) return found;

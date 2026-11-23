@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawnServer } from './testing/client.ts';
-import { HAS_UNZIP } from './testing/unzip.ts';
+import { PIPELINE_TESTS_RUN } from './testing/unzip.ts';
 
 const ENTRY = fileURLToPath(new URL('./main.ts', import.meta.url));
 const NUXEO_TOOLS = [
@@ -58,7 +58,7 @@ describe('the server over stdio', () => {
     }
   });
 
-  it.skipIf(!HAS_UNZIP)('validates a package without any Nuxeo setting', async () => {
+  it.skipIf(!PIPELINE_TESTS_RUN)('validates a package without any Nuxeo setting', async () => {
     const client = await spawnServer(ENTRY, environment());
     try {
       const checked = await client.call('validate_package', {

@@ -1,9 +1,11 @@
 /**
- * Whether this machine has `unzip`, which the package pipeline reads its zip back with at step 5
- * (docs/business-apps/package-pipeline.md, section 2). The tests that run the pipeline need it; on
- * a machine without it, such as a Windows runner, they are skipped, and vitest lists them as
- * skipped. CI's Linux run, where the pipeline itself runs, has it.
+ * Whether the tests that run the package pipeline run here. The pipeline reads its zip back with
+ * `unzip` at step 5 (docs/business-apps/package-pipeline.md, section 2). A Windows runner has
+ * none, so there they are skipped, and vitest lists them as skipped. Anywhere else they run, and
+ * a machine with no `unzip` fails them, as it would fail the pipeline: a CI image that lost it
+ * must not turn them into skips.
  */
 import { spawnSync } from 'node:child_process';
 
-export const HAS_UNZIP = spawnSync('unzip', ['-v'], { stdio: 'ignore' }).status === 0;
+export const PIPELINE_TESTS_RUN =
+  process.platform !== 'win32' || spawnSync('unzip', ['-v'], { stdio: 'ignore' }).status === 0;

@@ -322,6 +322,16 @@ describe('the recordings themselves', () => {
       expect(KEPT.pageProviders).toContain(name);
     for (const name of Object.keys(body('config_types.json').doctypes))
       expect(KEPT.types).toContain(name);
+    for (const [name, type] of Object.entries(
+      body('config_types.json').doctypes as Record<string, { facets: string[]; schemas: string[] }>,
+    )) {
+      for (const facet of type.facets) expect(KEPT.facets, name).toContain(facet);
+      for (const schema of type.schemas) expect(KEPT.schemas, name).toContain(schema);
+    }
+    for (const schema of names(body('config_schemas.json')))
+      if (!schema.startsWith('var_')) expect(KEPT.schemas).toContain(schema);
+    for (const facet of names(body('config_facets.json')))
+      if (!facet.startsWith('facet-var_')) expect(KEPT.facets).toContain(facet);
     const automation = body('automation.json');
     for (const id of names(automation.operations, 'id')) expect(KEPT.operations).toContain(id);
     for (const id of names(automation.chains, 'id')) expect(KEPT.chains).toContain(id);
