@@ -313,21 +313,21 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
     const tooltip = host.injector.get(MatTooltip);
     const button = host.nativeElement as HTMLButtonElement;
 
-    username.set('grace.hopper');
+    username.set('test.user');
     fixture.detectChanges();
     // The directive hears of the change from a MutationObserver, which reports asynchronously.
     await new Promise((resolve) => setTimeout(resolve));
     fixture.detectChanges();
 
     const shown = paintedText(button);
-    expect(shown).withContext('the avatar must redraw for the new user').toBe('GR');
+    expect(shown).withContext('the avatar must redraw for the new user').toBe('TE');
     const name = accessibleName(button);
     expect(containsWords(name, shown))
       .withContext(`accessible name "${name}" must contain the shown text "${shown}" as words`)
       .toBeTrue();
     expect(tooltip.message)
       .withContext('the tooltip must give the new display name alone')
-      .toBe('grace.hopper');
+      .toBe('test.user');
   });
 
   it('opens the settings drawer when the profile control is activated', () => {
