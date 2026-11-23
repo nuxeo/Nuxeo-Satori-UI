@@ -17,6 +17,7 @@ import { isRecord } from '@agentic-ui/shared/app-definition';
 import { appIdOf, queuePageSize } from './app-files';
 import { sameJson } from './app-walk';
 import { recordedAllowList } from './convert';
+import { homeCards, menuEntries } from './convert-home';
 import { openingSort, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -96,6 +97,32 @@ export function checkRequests({
     if (path.startsWith('queues/') && !expectedQueues.has(path))
       findings.push(`${path}: it asks for a list that no screen or card of the package asks for`);
 
+  // The home and the menu open the same lists as Web UI's dashboard and left menu, and no other.
+  findings.push(
+    ...opened(
+      'home.json',
+      app['home.json'],
+      'cards',
+      homeCards(inventory).map((card) => ({
+        id: card.id,
+        queue: card.queue,
+        source: `Web UI's dashboard card ${card.index + 1}`,
+      })),
+      'no dashboard card of the package shows',
+    ),
+    ...opened(
+      'navigation.json',
+      app['navigation.json'],
+      'entries',
+      menuEntries(inventory, catalogue).map((entry) => ({
+        id: entry.id,
+        queue: entry.queue,
+        source: `Web UI's menu entry "${entry.item.name}"`,
+      })),
+      'no menu entry of the package opens',
+    ),
+  );
+
   const actions = app['actions.json'];
   const written = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
   // Each action is held to the button that owns its id: the first that becomes an action at all,
@@ -138,4 +165,39 @@ export function checkRequests({
     findings,
     rest: 'Recording the requests both apps send, and comparing their result counts, needs the migration server',
   };
+}
+
+/**
+ * A home's cards or a menu's entries against those the package's dashboard or left menu gives:
+ * each there once, opening the same queue, and none besides.
+ */
+function opened(
+  file: string,
+  content: unknown,
+  key: 'cards' | 'entries',
+  expected: readonly { id: string; queue: string; source: string }[],
+  none: string,
+): string[] {
+  const findings: string[] = [];
+  const written = isRecord(content) && Array.isArray(content[key]) ? content[key] : [];
+  for (const want of expected) {
+    const matches = written.filter((item) => isRecord(item) && item['id'] === want.id);
+    if (matches.length === 0) {
+      findings.push(
+        `${file}: ${want.id} is missing, though ${want.source} opens queues/${want.queue}.json`,
+      );
+      continue;
+    }
+    const [item] = matches as Record<string, unknown>[];
+    if (item['queue'] !== want.queue)
+      findings.push(
+        `${file}: ${want.id} opens ${JSON.stringify(item['queue'] ?? item['page'] ?? null)}, where ${want.source} opens queues/${want.queue}.json`,
+      );
+  }
+  for (const item of written) {
+    const id = isRecord(item) ? item['id'] : undefined;
+    if (!expected.some((want) => want.id === id))
+      findings.push(`${file}: ${JSON.stringify(id)} opens a list ${none}`);
+  }
+  return findings;
 }

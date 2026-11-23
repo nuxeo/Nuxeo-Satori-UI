@@ -8,8 +8,9 @@
  * - **A queue is a table.** A grid of thumbnails or a justified grid is reported.
  * - **What shows under a condition** waits for M2, as a layout's field does: a column in a
  *   condition is left out, and a table in one leaves the whole list pending.
- * - **A dashboard card's place on the home** is phase 1's `home.json`, which is not in the app
- *   definition yet. Its list is written as a queue now, and the card is pending, naming it.
+ * - **A dashboard card** whose list becomes a queue is a card of `home.json`, naming the queue
+ *   (`convert-home.ts`). The tasks and recently viewed cards wait: `home.json` has no card for
+ *   either yet.
  */
 import { own } from './catalogue';
 import type { ConvertContext } from './convert';
@@ -22,6 +23,7 @@ import {
   queuePath,
   searchQueueId,
 } from './app-files';
+import { homeCards } from './convert-home';
 import { columnWidget } from './widgets';
 
 /** A column, as a queue writes it: the property alone, or with its heading and widget. */
@@ -288,6 +290,7 @@ export function convertDashboard(context: ConvertContext): void {
   const dashboard = context.inventory.dashboard;
   if (!dashboard) return;
   const owners = queueOwners(context.inventory);
+  const cards = homeCards(context.inventory);
   dashboard.cards.forEach((card, index) => {
     const id = `dashboard-card:${dashboard.path}#${index + 1}`;
     if (card.repeatOf !== null) {
@@ -314,14 +317,14 @@ export function convertDashboard(context: ConvertContext): void {
     if (card.elements.includes('nuxeo-tasks-list')) {
       context.decide(id, {
         outcome: 'pending',
-        note: `A card of the user's tasks: phase 1's home.json places it, and is not in the app definition yet`,
+        note: "A card of the user's tasks: home.json has no card for them yet (app-definition-v2.md, section 10)",
       });
       return;
     }
     if (card.elements.includes('nuxeo-document-storage')) {
       context.decide(id, {
         outcome: 'pending',
-        note: `A card of recently viewed documents: phase 1's home.json places it, and is not in the app definition yet`,
+        note: 'A card of recently viewed documents: home.json has no card for them yet (app-definition-v2.md, section 10)',
       });
       return;
     }
@@ -364,13 +367,17 @@ export function convertDashboard(context: ConvertContext): void {
       ...(columns.length > 0 ? { columns } : {}),
       ...(pageSize !== null ? { pageSize } : {}),
     };
-    const unkept =
-      card.pageSize !== null && pageSize === null
-        ? `. Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`
-        : '';
+    const home = cards.find((candidate) => candidate.index === index);
     context.decide(id, {
-      outcome: 'pending',
-      note: `Its list is written as ${path}; its place on the home is phase 1's home.json, which is not in the app definition yet${unkept}`,
+      outcome: 'converted',
+      to: `home.json ${home?.id ?? `card-${index + 1}`}, its list in ${path}`,
+      ...(card.pageSize !== null && pageSize === null
+        ? {
+            note: `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
+          }
+        : {}),
     });
   });
+  if (cards.length > 0)
+    context.files['home.json'] = { version: 2, cards: cards.map((c) => c.entry) };
 }

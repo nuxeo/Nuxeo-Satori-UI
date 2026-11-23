@@ -270,8 +270,8 @@ all of them on every change:
   shows only under a condition to everyone. "Invert a rule" waits for M2, which converts the
   first rules.
 - **For check 6:** change a field's label.
-- **For check 7:** point a list at another page provider, change one parameter, or bind a button
-  to another operation.
+- **For check 7:** point a list at another page provider, change one parameter, bind a button to
+  another operation, point a home card at another queue, or drop a menu entry.
 - **For check 10:** name a widget the platform does not have.
 
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
@@ -311,12 +311,14 @@ For the sample, M1's report lists:
   has neither;
 - 4 slot contributions:
   - the button with no operation, reported;
-  - the menu entry and its page, pending phase 1's `navigation.json`;
+  - the menu entry, converted to an entry of `navigation.json` that opens the search screen's queue,
+    and its page, converted to that queue;
   - the theme, converted;
 - the dashboard's 5 cards:
   - the repeated one, reported;
   - the favourites card, which reads an operation, proposed;
-  - the other three, pending phase 1's `home.json`, the first with its list written as a queue;
+  - the first card, converted to a card of `home.json` that opens its list, written as a queue;
+  - the tasks and recently viewed cards, pending: `home.json` has no card for either yet;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts
   of 4.43 and 4.17;
@@ -356,18 +358,19 @@ These sit inside the [development plan](development-plan.md):
 
 - **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md), the
   declarative track:
-  - layouts, search screens as queues, the dashboard's lists as queues, operation buttons as
-    actions, the theme and the translations, written as an app definition the package pipeline's
-    validator accepts;
+  - layouts, search screens as queues, the dashboard's lists as queues and cards of
+    `home.json`, the left menu's search entries as entries of `navigation.json`, operation buttons
+    as actions, the theme and the translations, written as an app definition the package
+    pipeline's validator accepts;
   - checks 2, 3, 5, 6, 7 and 10. Checks 3, 5, 6 and 7 run in part until the migration server
-    exists. With M0's, there are twenty-one negative controls.
+    exists. With M0's, there are twenty-three negative controls.
 - **On the sample:**
   - checks 1, 2, 4, 5 and 10 pass;
   - checks 3, 6 and 7 run in part;
   - check 8 finds the two colours below AA.
 - **Waiting:**
   - the migration lab server, for the server halves of checks 3, 5, 6 and 7;
-  - phase 1's `home.json` and `navigation.json`, for the dashboard's cards and the drawer;
+  - card kinds of `home.json` for the tasks and recently viewed cards;
   - M2, for conditions, tabs, task forms and layout blocks;
   - real packages: only the sample has arrived, and phase 4 needs three.
 
