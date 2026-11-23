@@ -547,11 +547,26 @@ becomes. In version 2's terms:
     measured). What a refresh brings joins the entries shown, which stay, unless more was
     recorded than a page holds: the timeline then starts again from that first page;
   - a timeline drawn anew, or given another record, is asked once more 2.5 seconds after it first
-    is, too; another kind chosen in the filter is not. That is the refresh a reader of the
-    document page sees: it draws the record page anew each time it reloads the record, after an
-    edit or a transition and not after a lock, so the timeline starts again from its first page
-    with every kind shown, and a comment half written in a comments card is lost. An audit slower
-    than 2.5 seconds still lacks the change, until the record next reloads.
+    is, too; another kind chosen in the filter is not. An audit slower than 2.5 seconds still
+    lacks the change, until the record next reloads.
+- **The document page keeps the record page while it reloads the record** with the reader on the
+  View tab: after an edit, a transition, a check-in, a restore from the trash or a change to its
+  attachments. A lock does not reload it, and restoring a version opens the live record instead,
+  drawn anew. The page shows no spinner, and hands the record page the reloaded record in place,
+  so the record page and its cards stay: the timeline is refreshed in place, with the kind chosen
+  in its filter, and a comment half written in a comments card is kept.
+  - while the layout is resolved again for the reloaded record, the one already resolved for that
+    record stays, compared by `uid`. Another record, even of the same type, shows no record page
+    until its own layout is resolved;
+  - between the save and the reload, the page shows the record with the edited values and the
+    permissions, favourite, transitions and lock it had, since the save's answer carries none of
+    them. After a transition, until the reload answers, the toolbar still offers the transitions
+    of the state the record left;
+  - a reload from another tab, a View tab that a `documentView` entry takes, and the packaged view
+    still give way to the spinner and are drawn anew;
+  - the rest of the page stays too. The History tab reads the audit when it is drawn, and is put
+    away on such a reload, so that it reads the reloaded record's history when it is next opened.
+    A tab that a customer's code contributes is not drawn anew by it either.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
