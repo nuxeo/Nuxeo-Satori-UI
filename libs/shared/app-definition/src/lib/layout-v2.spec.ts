@@ -67,26 +67,32 @@ describe('the proposal and the validator agree', () => {
 });
 
 describe('the proposed examples are refused until they are built', () => {
-  // A "```json proposed" block is a proposal not yet built (layout-v2.md, section 12): the
-  // validator refuses it today, and for the proposed parameter alone. The day it is accepted, the
-  // proposal is built: make the block a plain ```json example, and settle its section.
-  const proposed = [...proposal.matchAll(/```json proposed\n([\s\S]*?)```/g)].map((match) =>
-    JSON.parse(match[1]),
-  );
+  // A block fenced "```json proposed <widget>.<parameter>" is a proposal not yet built, such as
+  // layout-v2.md's section 12: the validator refuses it today, and for that widget's parameter
+  // alone. The day it is accepted, the proposal is built: make the block a plain ```json example,
+  // which the test above then holds to no finding, and settle its section. When no proposed block
+  // is left, delete this describe, whose first test would fail.
+  const proposed = [
+    ...proposal.matchAll(/```json proposed ([a-z-]+)\.([A-Za-z]+)\n([\s\S]*?)```/g),
+  ].map(([, widget, parameter, body]) => ({ widget, parameter, example: JSON.parse(body) }));
 
   it('finds them', () => {
     expect(proposed.length).toBeGreaterThanOrEqual(1);
   });
 
-  proposed.forEach((example, index) => {
-    it(`proposed example ${index + 1} is refused, for document-link's "show" alone`, () => {
-      const file = 'version' in example ? example : { version: 2, columns: 2, cards: [example] };
+  proposed.forEach(({ widget, parameter, example }, index) => {
+    it(`proposed example ${index + 1} is refused, for ${widget}'s "${parameter}" alone`, () => {
+      // Wrapped as the examples above are: a file, a card, or a field.
+      const file =
+        'version' in example
+          ? example
+          : 'related' in example || 'fields' in example
+            ? { version: 2, columns: 2, cards: [example] }
+            : withFields(example);
       const found = messages(file);
       expect(found.length).toBeGreaterThan(0);
-      for (const message of found)
-        expect(message).toMatch(
-          /\.parameters\.show: the widget "document-link" has no parameter "show" \[parameter\]$/,
-        );
+      const refusal = `.parameters.${parameter}: the widget "${widget}" has no parameter "${parameter}" [parameter]`;
+      for (const message of found) expect(message.endsWith(refusal)).toBe(true);
     });
   });
 });
