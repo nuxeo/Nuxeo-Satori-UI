@@ -46,7 +46,9 @@ support boundary, the upgrade path and any certification claim.
 
 |                           |                                                                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Phases 0–5**            | Complete, each with evidence and a green 15-gate run                                                                             |
+| **Phases 0, 4 and 5**     | Complete, each with evidence and a green re-gate (35 of 35 gates, 2026-11-03); Phase 4 with deviations recorded                  |
+| **Phases 1 and 2**        | Back in progress since 2026-11-02: a request the app sends fails, and its cause is not yet found                                 |
+| **Phase 3**               | Superseded: the components it adopted were removed                                                                               |
 | **Phase 6** (quality bar) | In progress — **5 of 7 steps** as of 2026-09-23; steps 3 (WCAG) and 6 (coverage) open                                            |
 | **Customers**             | **Zero.** Nothing has been published; nothing installed by anyone outside the team                                               |
 | **Published**             | No. `private: true`. Scope decided (`@nuxeo/satori-platform`, Nuxeo Nexus); publishing deliberately deferred to final deployment |

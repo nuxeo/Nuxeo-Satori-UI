@@ -28,11 +28,11 @@ Updating this file is **step 10 of the `beta-phase` skill**, not an optional cou
 
 | Phase                                   | Status                                                                              | Evidence                                                                                  |
 | --------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 0 — Unblock and verify                  | **complete**                                                                        | `phase-0-baseline` 14/14                                                                  |
-| 1 — Layer 0: upgrade-safe configuration | **complete**, with one caveat below                                                 | `phase-1-config` 39/39                                                                    |
-| 2 — Layer 1: extension registry         | **complete**, carry-forward named                                                   | `phase-2-registry` 46/46                                                                  |
+| 0 — Unblock and verify                  | **complete**                                                                        | `phase-0-baseline` 14/14 at sign-off; re-captured 12/12 on the browse page                |
+| 1 — Layer 0: upgrade-safe configuration | **in progress** 2026-11-02 (NXSAT-660): an unexplained request fails; caveat below  | `phase-1-config` 39/39 at sign-off; now 39/40                                             |
+| 2 — Layer 1: extension registry         | **in progress** 2026-11-02 (NXSAT-660): the same request fails; carry-forward named | `phase-2-registry` 46/46 at sign-off; now 42/43                                           |
 | 3 — Component adoption                  | **superseded** 2026-11-02 (NXSAT-660): the adopted components were removed          | 55/55 at sign-off; now 29/29 on the browse page, which is **not adoption evidence**       |
-| 4 — Layer 2: publishable platform       | **complete**, 10 deviations recorded                                                | `phase-4-platform` 25/25                                                                  |
+| 4 — Layer 2: publishable platform       | **complete with deviations**, 12 recorded; narrowed 2026-11-02 (NXSAT-660)          | `phase-4-platform` 25/25 at sign-off; now 18/18 on the signed-out template                |
 | 5 — Layer 3: agent harness              | **complete**                                                                        | `phase-5-harness` 27/27                                                                   |
 | 6 — Beta quality bar                    | **in progress** — 5 of 7; step 6 reopened 2026-09-22, step 3 in question 2026-09-23 | `phase-6-a11y` 27/27 on `2026-08-24T14-40-16`; **3 failed on every run since 2026-09-15** |
 
@@ -41,9 +41,17 @@ started", Phase 5 "partial" after all three had shipped. `npm run beta:state` is
 machine-checked version and is red whenever a phase claims more than its evidence supports;
 prefer it to this table.
 
-**Phase 1's caveat:** it is recorded complete, but i18n extraction covers only three
-templates. That is real remaining work sitting inside a closed phase, and it should be
-reopened rather than quietly carried.
+**Phases 1 and 2** have been back in progress since 2026-11-02 (NXSAT-660). The latest run
+`phases.json` records for each fails one check: a request the app sends to
+`/nuxeo/agentic-ui/` from the browse and themes pages fails, and its source is not yet
+identified.
+
+**Phase 4's claim** was narrowed the same day: its template is now checked signed out only,
+and the signed-in checks, which need Nuxeo, are recorded as notes rather than assertions.
+
+**Phase 1's caveat:** i18n extraction covers only three templates. That is real remaining
+work, and it was carried inside the phase while the phase was recorded complete. It is not
+why the phase reopened; `phases.json` still lists it under what the phase does not cover.
 
 ---
 
@@ -437,7 +445,7 @@ Nothing here is a surprise later.
    **Closed** — each gained a host; `toolbar`, `contextMenu` and `tabs` carry packaged entries
    and `routes` resolves contributions. NXSAT-316 added a ninth, `documentView`. The gated
    inventory is section 2 of `docs/extension-reference.md`.
-2. **i18n covers three templates.** Inside a phase recorded complete.
+2. **i18n covers three templates.** Inside Phase 1, which was recorded complete until 2026-11-02.
 3. ~~**`nuxeo-ui` has no `typecheck` target.**~~ **Closed** — added and proven by
    reintroducing the exact typo that escaped twice.
 4. ~~**The marketplace package has never been installed or upgraded on a real server.**~~

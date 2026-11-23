@@ -10,7 +10,7 @@
 
 ## Programme status
 
-**As at 25 August 2026.** `CLAUDE.md` points here for the authoritative position, and for
+**As at 23 November 2026.** `CLAUDE.md` points here for the authoritative position, and for
 weeks there was no such section — so that pointer dangled while `CLAUDE.md`'s own summary
 claimed Phase 3 was next, three phases after it had shipped.
 
@@ -19,23 +19,27 @@ Run `npm run beta:state` for the machine-checked version. It reads
 whenever a phase claims more than the artifacts support. **Prefer it to this table**, which
 is a human summary and can go stale exactly as its predecessor did.
 
-| Phase                            | Status          | Evidence                   |
-| -------------------------------- | --------------- | -------------------------- |
-| 0 — Verify and unblock           | complete        | 14 checks                  |
-| 1 — Layer 0 config               | complete        | 39 checks                  |
-| 2 — Layer 1 extension registry   | complete        | 46 checks                  |
-| 3 — Component adoption           | **superseded**  | 55 checks at sign-off      |
-| 4 — Layer 2 publishable platform | complete        | 25 checks                  |
-| 5 — Layer 3 agent harness        | complete        | 27 checks                  |
-| 6 — Beta quality bar and proof   | **in progress** | 5 of 7; steps 3 and 6 open |
+| Phase                            | Status                   | Evidence                                             |
+| -------------------------------- | ------------------------ | ---------------------------------------------------- |
+| 0 — Verify and unblock           | complete                 | 14 checks at sign-off; 12 since 2026-11-02           |
+| 1 — Layer 0 config               | **in progress**          | 39 checks at sign-off; now 39 of 40                  |
+| 2 — Layer 1 extension registry   | **in progress**          | 46 checks at sign-off; now 42 of 43                  |
+| 3 — Component adoption           | **superseded**           | 55 checks at sign-off                                |
+| 4 — Layer 2 publishable platform | complete with deviations | 25 checks at sign-off; 18 on the signed-out template |
+| 5 — Layer 3 agent harness        | complete                 | 27 checks                                            |
+| 6 — Beta quality bar and proof   | **in progress**          | 5 of 7; steps 3 and 6 open                           |
 
-All six completed phases are re-gated against the current 14-gate pipeline, not only the
-smaller pipeline that existed when each was signed off — Phases 0–2 were originally gated
-on 4–6 gates. The re-gate matters: two of the gates added since found real defects in
-already-signed-off work.
+Phases 0–5, all signed off by 24 August 2026, each cite a re-gate on 2026-11-03 against the
+whole pipeline as it then stood, 35 of 35 gates green (NXSAT-660), not only against the smaller
+pipeline that existed when each was signed off — Phases 0–2 were originally gated on 4–6 gates.
+The re-gate matters: two of the gates added since found real defects in already-signed-off
+work. It does not make a phase complete: Phases 1 and 2 are back in progress, and Phase 3 is
+superseded. Gates have been added since 2026-11-03, so that re-gate no longer covers the whole
+pipeline. Where the gate reports are on disk, `npm run beta:state` warns for each phase whose
+re-gate ran fewer gates than exist now.
 
 **Deviations are recorded per phase in `.ai/state/phases.json`, not here.** Phase 4 carries
-ten, including the one that mattered most: the published package could not be published at
+twelve, including the one that mattered most: the published package could not be published at
 all for the whole phase. Read them before treating a phase as settled.
 
 An independent adversarial review after Phase 5 found defects in every phase, and the
@@ -195,7 +199,12 @@ Settled by first-hand inspection. Do not re-litigate; if you contradict one, pro
    built-in experimental `localStorage` collides with jsdom. CI runs Node 20, contributors do not.
 4. Triage the **9 high-severity `npm audit` findings**. NXENG-615 requires no high or critical.
 
-## Phase 1 — Layer 0: upgrade-safe configuration (**complete**)
+## Phase 1 — Layer 0: upgrade-safe configuration (**in progress**)
+
+**Back in progress since 2026-11-02** (NXSAT-660). The latest run `phases.json` records, on
+`9ba733864`, passes 39 of 40 checks: a request the app sends to `/nuxeo/agentic-ui/` from the
+browse and themes pages fails, and its source is not yet identified. The gates below are the
+sign-off record.
 
 Gates: quality gate **PASS** (4/4 green) · evidence gate **PASS** (38/38 checks, exit 0), after the
 remediation below.
@@ -261,7 +270,11 @@ Nuxeo document and nothing is read from the repository. The section carried a su
 What replaced it is [`docs/extension-reference.md`](extension-reference.md) §2, lines 117-119 — the
 manifest is a package fragment served anonymously, before sign-in, with no migration from the Note._
 
-## Phase 2 — Layer 1: extension registry (**complete**; toolbar/tabs/columns carried to Phase 3)
+## Phase 2 — Layer 1: extension registry (**in progress**; toolbar/tabs/columns carried to Phase 3)
+
+**Back in progress since 2026-11-02** (NXSAT-660), for the same failing request as Phase 1. The
+latest run `phases.json` records, on `9ba733864`, passes 42 of 43 checks. The gates below are
+the sign-off record.
 
 Gates: quality gate **PASS** (6/6 green, including the new lockfile and typecheck gates) ·
 evidence gate **PASS**.
@@ -354,7 +367,11 @@ Its evidence steps now check the browse page that replaced the route, which is b
 `phases.json` keeps those checks as a record of that page, not as adoption evidence, so they are
 not this phase's sign-off.
 
-## Phase 4 — Layer 2: publishable platform (**complete**, 10 deviations recorded)
+## Phase 4 — Layer 2: publishable platform (**complete with deviations**, 12 recorded)
+
+**Narrowed on 2026-11-02** (NXSAT-660): the evidence now checks the forkable template signed out
+only, 18 of 18 checks. The signed-in checks need Nuxeo, so they are recorded as notes rather than
+assertions.
 
 - Give the libraries real build targets with ng-packagr. Today every `project.json` has only `lint`
   and `test`, and the only artifact is a prebuilt SPA zip — there is nothing for a customer to
