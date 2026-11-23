@@ -107,6 +107,37 @@ describe('app-action generator', () => {
     });
   });
 
+  it('written again, keeps what it does not write: order, refresh, label, rule, where it shows', async () => {
+    await generate({ on: 'record,row', icon: 'check', confirm: 'Sure?' });
+    const file = `${CONFIG}/actions.json`;
+    const actions = read(tree, file);
+    const [first] = actions['actions'] as Record<string, unknown>[];
+    const byHand = {
+      order: 10,
+      refresh: false,
+      label: 'Approve it',
+      visibleWhen: { type: 'app.rules.inState', parameters: ['project'] },
+    };
+    tree.write(file, JSON.stringify({ ...actions, actions: [{ ...first, ...byHand }] }));
+    await generate({ force: true, transition: 'sign' });
+    expect((read(tree, file)['actions'] as unknown[])[0]).toEqual({
+      ...first,
+      ...byHand,
+      transition: 'sign',
+    });
+    // An operation's parameters go when it becomes a transition.
+    await generate({
+      force: true,
+      transition: undefined,
+      operation: 'Acme.Sign',
+      parameters: '{ "x": 1 }',
+    });
+    await generate({ force: true });
+    expect(
+      (read(tree, file)['actions'] as Record<string, unknown>[])[0]['parameters'],
+    ).toBeUndefined();
+  });
+
   it('written again with fewer places, leaves the queues that offered it there', async () => {
     await generate({ on: 'record,row,bulk', queue: 'open-contracts' });
     expect(read(tree, `${CONFIG}/queues/open-contracts.json`)).toMatchObject({
@@ -158,6 +189,16 @@ describe('app-action generator', () => {
         'its parameters are literals',
       ],
       [
+        'a computed value, a list or null as a bulk action’s parameter',
+        {
+          transition: undefined,
+          operation: 'Acme.Assign',
+          on: 'bulk',
+          parameters: '{ "notify": true, "ids": ["a"] }',
+        },
+        '"ids" is not a literal',
+      ],
+      [
         'a parameter name the validator refuses',
         { transition: undefined, operation: 'Acme.Assign', parameters: '{ "a-b": 1 }' },
         '"a-b" is not a parameter name',
@@ -169,6 +210,23 @@ describe('app-action generator', () => {
         expect(tree.exists(`${CONFIG}/actions.json`)).toBe(false);
       });
     }
+
+    it('an action whose label key is another’s question or message', async () => {
+      await generate({ confirm: 'Approve this contract?', success: 'Approved.' });
+      await expect(generate({ id: 'acme-contracts.approve.confirm' })).rejects.toThrow(
+        'has the label key acme-contracts.action.approve.confirm already',
+      );
+      await expect(generate({ id: 'approve.done' })).rejects.toThrow(
+        'has the label key acme-contracts.action.approve.done already',
+      );
+    });
+
+    it('an action whose question or message would be another’s label key', async () => {
+      await generate({ id: 'approve.confirm', label: 'Confirm' });
+      await expect(generate({ id: 'approve', confirm: 'Approve this contract?' })).rejects.toThrow(
+        'The action approve.confirm has the label key acme-contracts.action.approve.confirm already',
+      );
+    });
 
     it('a second action whose label key would be the first one’s', async () => {
       await generate({ id: 'approve', label: 'Approve' });

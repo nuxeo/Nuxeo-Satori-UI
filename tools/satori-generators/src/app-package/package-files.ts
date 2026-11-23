@@ -172,15 +172,69 @@ export function addLabels(
   return kept;
 }
 
+const CLOSING: Readonly<Record<string, string>> = { '<!--': '-->', '<?': '?>', '<![CDATA[': ']]>' };
+
+/** `text` as spaces, its line breaks kept, so that offsets into it stay offsets into the original. */
+const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
+
 /**
- * `xml` with each comment and CDATA section blanked, character for character: a search of it finds
- * only markup, as the server's reader and the pipeline's do, and an index into it is an index into
- * `xml`. An unterminated one is left as it is, for `build.mjs` to refuse.
+ * `xml` with what the server does not register blanked, character for character, as the
+ * pipeline's `componentXmlOf` (`scripts/verify-package-zip.mjs`) reads a component: comments,
+ * processing instructions and CDATA sections, then the `<documentation>` of the component and of
+ * its extension points, which may hold examples of real markup. A search of it finds only what the
+ * server would register, and an index into it is an index into `xml`. One left unterminated is
+ * blanked to the end, as the pipeline drops it; `build.mjs` refuses it.
  */
 function markupOnly(xml: string): string {
-  return xml.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, (part) =>
-    part.replace(/[^\n]/g, ' '),
-  );
+  const next = /<!--|<\?|<!\[CDATA\[/g;
+  let out = '';
+  let at = 0;
+  for (;;) {
+    next.lastIndex = at;
+    const match = next.exec(xml);
+    if (!match) break;
+    const end = xml.indexOf(CLOSING[match[0]], match.index + match[0].length);
+    const stop = end < 0 ? xml.length : end + CLOSING[match[0]].length;
+    out += xml.slice(at, match.index) + blank(xml.slice(match.index, stop));
+    at = stop;
+  }
+  return withoutDocumentation(out + xml.slice(at));
+}
+
+/** The pipeline's `withoutDocumentation`, ported: documentation inside a descriptor is not read. */
+function withoutDocumentation(xml: string): string {
+  const parents: string[] = [];
+  let start: number | undefined;
+  let depth = 0;
+  let at = 0;
+  let out = '';
+  for (const match of xml.matchAll(/<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g)) {
+    const [tag, close, name, tail] = match;
+    const index = match.index ?? 0;
+    const empty = tail.trimEnd().endsWith('/');
+    if (
+      !close &&
+      name === 'documentation' &&
+      start === undefined &&
+      parents[0] === 'component' &&
+      (parents.length === 1 || (parents.length === 2 && parents[1] === 'extension-point'))
+    ) {
+      start = index;
+      depth = parents.length;
+    }
+    if (
+      start !== undefined &&
+      ((close && parents.length === depth + 1) || (empty && index === start))
+    ) {
+      const end = index + tag.length;
+      out += xml.slice(at, start) + blank(xml.slice(start, end));
+      at = end;
+      start = undefined;
+    }
+    if (close) parents.pop();
+    else if (!empty) parents.push(name);
+  }
+  return out + xml.slice(at);
 }
 
 /**
@@ -191,10 +245,11 @@ function markupOnly(xml: string): string {
  * server serves only what the component contributes, so a layout file the component does not
  * name is never seen.
  *
- * The component is read as the pipeline reads it: what a comment or a CDATA section holds is not
- * an entry. An entry for the type and mode already there is left alone when it names that file,
- * and refused when it names another, since two contributions of one layout leave the later to win,
- * or when it is disabled, since the server would then serve nothing.
+ * The component is read as the pipeline reads it (`markupOnly`, `attribute`): what a comment, a
+ * processing instruction, a CDATA section or a component's documentation holds is not an entry. An
+ * entry for the type and mode already there is left alone when it names that file, and refused when
+ * it names another, since two contributions of one layout leave the later to win, or when it is
+ * disabled, since the server would then serve nothing.
  */
 export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode: string): void {
   const xml = tree.read(pkg.component, 'utf-8');
@@ -245,10 +300,33 @@ export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode
   tree.write(pkg.component, `${xml.slice(0, lineStart)}\n${extension}${xml.slice(lineStart)}`);
 }
 
-/** An attribute's value, quoted either way, as XML allows. */
+const ENTITIES: Readonly<Record<string, string>> = {
+  lt: '<',
+  gt: '>',
+  amp: '&',
+  quot: '"',
+  apos: "'",
+};
+
+/**
+ * An attribute's value as the pipeline's `attributesOf` reads it: quoted either way, its character
+ * and predefined entity references resolved, and trimmed.
+ */
 function attribute(tag: string, name: string): string | undefined {
-  const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(tag);
-  return match ? (match[1] ?? match[2]) : undefined;
+  const match = new RegExp(`\\s${name}[ \\t\\r\\n]*=[ \\t\\r\\n]*(?:"([^"]*)"|'([^']*)')`).exec(
+    tag,
+  );
+  if (!match) return undefined;
+  return (match[1] ?? match[2])
+    .replace(
+      /&(?:#x([0-9A-Fa-f]+)|#([0-9]+)|(lt|gt|amp|quot|apos));/g,
+      (reference, hex, decimal, named) => {
+        if (named) return ENTITIES[named];
+        const codePoint = hex ? parseInt(hex, 16) : Number(decimal);
+        return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : reference;
+      },
+    )
+    .trim();
 }
 
 /** A comma-separated option as a list, or a list as given; empty items dropped. */

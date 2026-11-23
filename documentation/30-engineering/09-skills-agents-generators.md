@@ -15,6 +15,9 @@ audience: engineering
 > `tools/satori-generators/generators.json` and the package `beta:publishable` builds. The link to
 > Dev Harness & Gates §2 was re-verified on 2026-10-08 at `fb97d44`; the rest of the page was last
 > reviewed on 2026-08-24 at `77265f9`.
+> On 2026-11-23 (`feat/business-apps-generators-skill`), §3's list and count were brought in line with
+> `.cursor/skills/`, §5's with `tools/satori-generators/generators.json`, and the summary's counts
+> with both; nothing else on the page was re-reviewed.
 > Supersedes [`docs/agentic-system-guide.md`](../../docs/agentic-system-guide.md) and the
 > agent-catalog sections of [`docs/agentic-development-system.md`](../../docs/agentic-development-system.md).
 
@@ -102,7 +105,7 @@ treat a "settled" list.
 
 ---
 
-## 3. Skills — 13 procedures
+## 3. Skills — 17 procedures
 
 [`.cursor/skills/`](../../.cursor/skills). A skill is a Markdown procedure a tool reads
 before starting a class of task. They are **not auto-loaded**; the entry point tells you
@@ -122,6 +125,11 @@ which to read.
 | `generate-tests.md`               | Test generation                                                                                      |
 | `new-feature.md`                  | New feature workflow                                                                                 |
 | `fix-pr-comments.md`              | PR feedback                                                                                          |
+| `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket, each with `fix-bug`                                 |
+| `build-feature/SKILL.md`          | A feature end to end: `fix-bug`'s machinery, with a feature's planning                               |
+| `validate-fix/SKILL.md`           | Validating a delivered fix: accessibility gates, browsers, strings, corner cases                     |
+| `pre-pr-review/SKILL.md`          | Reviewing a change before its pull request, by the defect classes reviewers here catch               |
+| `satori-developer/SKILL.md`       | Which Satori component fits, its import and API (vendored from `HylandSoftware/satori-skills`)       |
 
 ### The `beta-phase` skill is the real lifecycle
 
@@ -268,7 +276,7 @@ the architecture.
 
 |                                                                 |                                                                                          Count |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------: |
-| Real, discrete, verifiable components                           |                                  **7 workflows + 2 review agents + 10 generators + 13 skills** |
+| Real, discrete, verifiable components                           |                                  **7 workflows + 2 review agents + 10 generators + 17 skills** |
 | Catalog entries that are context/procedure rather than an agent |                                                                                              8 |
 | Catalog entries not implemented at all                          | **8** (Broken Link, Performance, Refactoring Opportunity, and all six of Tier 4, less overlap) |
 

@@ -87,20 +87,51 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
     }
     parameters = parsed;
   }
+  const file = `${pkg.config}/actions.json`;
+  const text = tree.read(file, 'utf-8');
+  const current =
+    text === null
+      ? { $schema: schemaFor(file, 'actions.schema.json'), version: 2, actions: [] }
+      : parseJson(text, file);
+  if (!isRecord(current) || !Array.isArray(current['actions'])) {
+    throw new Error(`${file} has no "actions" list to add to.`);
+  }
+  const actions = current['actions'] as unknown[];
+  const at = actions.findIndex((action) => isRecord(action) && action['id'] === id);
+  if (at >= 0 && !options.force) {
+    throw new Error(`${file} already has the action ${id}. Pass --force to write it again.`);
+  }
+
+  // Written again, the action keeps what this generator does not write, as a queue does: its
+  // order, refresh, label, rule and icon, and where it shows unless --on says again.
+  const previous: Record<string, unknown> =
+    at >= 0 && isRecord(actions[at]) ? (actions[at] as Record<string, unknown>) : {};
+
   const on = listOption(options.on);
   const badPlacement = on.find((placement) => !PLACEMENTS.includes(placement));
   if (badPlacement !== undefined) {
     throw new Error(`--on "${badPlacement}" is not one of ${PLACEMENTS.join(', ')}.`);
   }
-  const placements = on.length > 0 ? [...new Set(on)] : ['record'];
-  // A bulk action runs on many records at once, so no one record's field can give it a value.
-  if (
-    placements.includes('bulk') &&
-    parameters &&
-    Object.values(parameters).some((value) => isRecord(value) && 'field' in value)
-  ) {
+  const placements =
+    on.length > 0
+      ? [...new Set(on)]
+      : Array.isArray(previous['on'])
+        ? (previous['on'] as unknown[]).filter((item): item is string => typeof item === 'string')
+        : ['record'];
+  // The parameters it will have: those given, else an operation's own, kept.
+  const effective =
+    parameters ??
+    (options.operation !== undefined && isRecord(previous['parameters'])
+      ? previous['parameters']
+      : undefined);
+  // A bulk action runs on many records at once, so no one record's field can give it a value: each
+  // parameter is a text, a number or a boolean, as the validator's `isLiteral` says.
+  const notLiteral = Object.entries(effective ?? {}).find(
+    ([, value]) => !['string', 'number', 'boolean'].includes(typeof value),
+  );
+  if (placements.includes('bulk') && notLiteral !== undefined) {
     throw new Error(
-      '--parameters: a bulk action runs on many records at once, so its parameters are literals, not { "field" }.',
+      `--parameters: "${notLiteral[0]}" is not a literal, and a bulk action runs on many records at once, so its parameters are literals: texts, numbers or booleans.`,
     );
   }
   if (options.type !== undefined) {
@@ -117,21 +148,6 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
   }
   if (options.icon !== undefined && !ICON.test(options.icon)) {
     throw new Error(`--icon "${options.icon}" is not a Material Symbols name, such as check.`);
-  }
-
-  const file = `${pkg.config}/actions.json`;
-  const text = tree.read(file, 'utf-8');
-  const current =
-    text === null
-      ? { $schema: schemaFor(file, 'actions.schema.json'), version: 2, actions: [] }
-      : parseJson(text, file);
-  if (!isRecord(current) || !Array.isArray(current['actions'])) {
-    throw new Error(`${file} has no "actions" list to add to.`);
-  }
-  const actions = current['actions'] as unknown[];
-  const at = actions.findIndex((action) => isRecord(action) && action['id'] === id);
-  if (at >= 0 && !options.force) {
-    throw new Error(`${file} already has the action ${id}. Pass --force to write it again.`);
   }
 
   let queueFile: string | undefined;
@@ -154,22 +170,38 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
 
   const name = id.startsWith(`${pkg.appId}.`) ? id.slice(pkg.appId.length + 1) : id;
   const labelKey = `${pkg.appId}.action.${name}`;
-  // `approve` and `<app>.approve` would share it, and the second button would show the first's text.
-  const sharing = actions.find(
-    (action) => isRecord(action) && action['id'] !== id && action['labelKey'] === labelKey,
-  );
-  if (isRecord(sharing)) {
-    throw new Error(
-      `The action ${String(sharing['id'])} has the label key ${labelKey} already, which ${id} would share. Give ${id} another id.`,
-    );
-  }
   const labels: Record<string, string> = {
     [labelKey]: options.label?.trim() || humanize(name.split('.').pop() as string),
   };
   if (options.confirm?.trim()) labels[`${labelKey}.confirm`] = options.confirm.trim();
   if (options.success?.trim()) labels[`${labelKey}.done`] = options.success.trim();
+  // No key of this action may be another's: `approve` and `<app>.approve` would share one, and so
+  // would `approve.confirm` and the question of `approve`. A button would show the other's text.
+  const keysOf = (action: Record<string, unknown>): string[] =>
+    [
+      action['labelKey'],
+      ...['confirm', 'success'].map((key) => {
+        const message = action[key];
+        return isRecord(message) ? message['labelKey'] : undefined;
+      }),
+    ].filter((key): key is string => typeof key === 'string');
+  const mine = Object.keys(labels);
+  for (const other of actions) {
+    if (!isRecord(other) || other['id'] === id) continue;
+    const shared = keysOf(other).find((key) => mine.includes(key));
+    if (shared !== undefined) {
+      throw new Error(
+        `The action ${String(other['id'])} has the label key ${shared} already, which ${id} would share. Give ${id} another id.`,
+      );
+    }
+  }
 
+  const base: Record<string, unknown> = { ...previous };
+  delete base['transition'];
+  delete base['operation'];
+  if (options.transition !== undefined) delete base['parameters'];
   const action = {
+    ...base,
     id,
     labelKey,
     ...(options.icon ? { icon: options.icon } : {}),

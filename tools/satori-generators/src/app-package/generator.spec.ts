@@ -141,6 +141,22 @@ describe('app-package generator', () => {
       'leaves out this platform, 0.2.0',
     );
     await expect(generate({ platform: '^0.3.0' })).rejects.toThrow('leaves out this platform');
+    // A release comes after every prerelease of its own version, as the validator compares them.
+    for (const range of ['^0.3.0-0', '>=0.3.0-0', '<0.2.0-rc.1', '>0.2.0']) {
+      await expect(generate({ platform: range }), range).rejects.toThrow(
+        'leaves out this platform',
+      );
+    }
+    await expect(generate({ platform: '>=0.2.0 <9007199254740993.0.0' })).rejects.toThrow(
+      'is not a range',
+    );
+    await generate({ platform: '>=0.2.0-0 <1.0.0' });
+    // 0.2.0 is after its own prerelease: a range that starts past one holds it.
+    tree = createTreeWithEmptyWorkspace();
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.2.0' }));
+    await generate({ platform: '>0.2.0-rc.1 <1.0.0' });
+    tree = createTreeWithEmptyWorkspace();
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.2.0' }));
     await generate({ platform: '~0.2.0' });
     expect((json(tree, `${CONFIG}/app.json`) as { platform: string }).platform).toBe('~0.2.0');
   });

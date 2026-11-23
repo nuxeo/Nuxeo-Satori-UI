@@ -44,47 +44,49 @@ const SEMVER =
 
 type Triple = readonly [number, number, number];
 
-function compare(a: Triple, b: Triple): number {
-  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
-  return 0;
+/** A version's major, minor and patch, and whether it has a prerelease; `null` for no version. */
+function versionOf(text: string): { triple: Triple; prerelease: boolean } | null {
+  const match = SEMVER.exec(text);
+  if (!match) return null;
+  const triple = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+  // As the validator's `parseVersion`: past 2^53 a number no longer says which version it is.
+  if (!triple.every(Number.isSafeInteger)) return null;
+  return { triple, prerelease: match[4] !== undefined };
 }
 
 /**
  * What is wrong with `range` as `app.json`'s `platform` (app-definition-v2.md, section 3), or
- * `null`. Read as the validator reads it: comparators separated by spaces, each `>=`, `<=`, `>`,
- * `<`, `=`, `^` or `~` and a version. When `version`, this platform's, is a release, the range must
- * hold it, as the pipeline will check; a range or version with a prerelease is left to the
- * pipeline, whose prerelease rules this does not repeat.
+ * `null`. Read as the validator's `parseRange` reads it: comparators separated by spaces, each
+ * `>=`, `<=`, `>`, `<`, `=`, `^` or `~` and a version, `^` and `~` stopping short of the next
+ * version's prereleases. When `version`, this platform's, is a release, the range must hold it,
+ * as the pipeline checks; a release comes after every prerelease of its own version, as in
+ * `compareVersions`. A prerelease platform is left to the pipeline, whose rules for it this does
+ * not repeat.
  */
 export function platformProblem(range: string, version: string | null): string | null {
-  const bounds: { operator: string; version: Triple; prerelease: boolean }[] = [];
+  const bounds: { operator: string; triple: Triple; prerelease: boolean }[] = [];
   for (const part of range.trim().split(/\s+/)) {
     const match = /^(>=|<=|>|<|=|\^|~)?(.+)$/.exec(part);
-    const parsed = match ? SEMVER.exec(match[2]) : null;
-    if (!match || !parsed) {
+    const at = match ? versionOf(match[2]) : null;
+    if (!match || !at) {
       return `"${range}" is not a range of platform versions, such as ">=0.2.0 <1.0.0", "^1.2.0" or "~1.2.0"`;
     }
-    const at: Triple = [Number(parsed[1]), Number(parsed[2]), Number(parsed[3])];
-    const prerelease = parsed[4] !== undefined;
     const operator = match[1] ?? '=';
     if (operator === '^' || operator === '~') {
+      const [major, minor, patch] = at.triple;
       const upper: Triple =
-        operator === '~' || (at[0] === 0 && at[1] > 0)
-          ? [at[0], at[1] + 1, 0]
-          : at[0] > 0
-            ? [at[0] + 1, 0, 0]
-            : [0, 0, at[2] + 1];
-      bounds.push(
-        { operator: '>=', version: at, prerelease },
-        { operator: '<', version: upper, prerelease },
-      );
-    } else bounds.push({ operator, version: at, prerelease });
+        operator === '~' || (major === 0 && minor > 0)
+          ? [major, minor + 1, 0]
+          : major > 0
+            ? [major + 1, 0, 0]
+            : [0, 0, patch + 1];
+      bounds.push({ operator: '>=', ...at }, { operator: '<', triple: upper, prerelease: true });
+    } else bounds.push({ operator, ...at });
   }
-  const own = version === null ? null : SEMVER.exec(version);
-  if (!own || own[4] !== undefined || bounds.some((bound) => bound.prerelease)) return null;
-  const platform: Triple = [Number(own[1]), Number(own[2]), Number(own[3])];
-  const holds = bounds.every(({ operator, version: bound }) => {
-    const order = compare(platform, bound);
+  const own = version === null ? null : versionOf(version);
+  if (!own || own.prerelease) return null;
+  const holds = bounds.every(({ operator, triple, prerelease }) => {
+    const order = compare(own.triple, triple) || (prerelease ? 1 : 0);
     return operator === '>='
       ? order >= 0
       : operator === '<='
@@ -98,6 +100,11 @@ export function platformProblem(range: string, version: string | null): string |
   return holds
     ? null
     : `"${range}" leaves out this platform, ${version}, which the pipeline checks it against`;
+}
+
+function compare(a: Triple, b: Triple): number {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
+  return 0;
 }
 
 /** `libs/platform`'s version, or `null` when the workspace has none. */

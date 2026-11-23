@@ -109,7 +109,7 @@ describe('app-layout generator', () => {
     );
   });
 
-  it('reads the component as the pipeline does: a comment holds no entry and no extension', async () => {
+  it('reads no entry and no extension in a comment', async () => {
     const xml = tree.read(COMPONENT, 'utf-8') ?? '';
     tree.write(
       COMPONENT,
@@ -130,6 +130,54 @@ describe('app-layout generator', () => {
       ),
     ).toBeGreaterThan(comment);
     expect(written.slice(comment).match(/<extension /g)).toHaveLength(1);
+  });
+
+  describe('reads the component as the pipeline does', () => {
+    const LAYOUT =
+      '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />';
+    const withXml = (extra: string): void => {
+      const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+      tree.write(COMPONENT, xml.replace('</component>', `${extra}\n</component>`));
+    };
+
+    it("adds nothing inside the component's documentation, whatever markup it shows", async () => {
+      withXml(
+        '  <documentation>An example:\n' +
+          '    <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+          '    </extension>\n  </documentation>',
+      );
+      await generate();
+      const written = tree.read(COMPONENT, 'utf-8') ?? '';
+      expect(written.indexOf(LAYOUT)).toBeGreaterThan(written.indexOf('</documentation>'));
+    });
+
+    it('finds no entry in a CDATA section or a processing instruction', async () => {
+      withXml(
+        '  <?note <layout type="Contract" mode="view" src="x.json" /> ?>\n' +
+          '  <![CDATA[ <layout type="Contract" mode="view" src="y.json" /> ]]>',
+      );
+      await generate();
+      expect(tree.read(COMPONENT, 'utf-8')).toContain(LAYOUT);
+    });
+
+    it('decodes and trims attribute values, as the server does', async () => {
+      withXml(
+        '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+          '    <layout type=" Contr&#97;ct " mode="view" src="agentic-ui-config/other.json" />\n' +
+          '  </extension>',
+      );
+      await expect(generate()).rejects.toThrow('already contributes the Contract/view layout');
+      tree.write(
+        COMPONENT,
+        (tree.read(COMPONENT, 'utf-8') ?? '').replace(
+          '<layout type=" Contr&#97;ct " mode="view" src="agentic-ui-config/other.json" />',
+          '<layout type="Contract" mode="view" enabled="tr&#117;e" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
+        ),
+      );
+      // Enabled, and naming the file: there already, so nothing is added.
+      await generate();
+      expect((tree.read(COMPONENT, 'utf-8') ?? '').match(/<layout /g)).toHaveLength(1);
+    });
   });
 
   it('finds an extension whose attributes are quoted with apostrophes, and adds to it', async () => {
@@ -154,14 +202,14 @@ describe('app-layout generator', () => {
   it('names each card with a label key, its English text in labels/en.json, keeping a corrected one', async () => {
     await generate();
     expect(labelsOf(tree)).toMatchObject({
-      'acme-contracts.contract.contract': 'Contract',
-      'acme-contracts.contract.review': 'Review',
+      'acme-contracts.card.contract.contract': 'Contract',
+      'acme-contracts.card.contract.review': 'Review',
     });
     const labels = JSON.parse(tree.read(`${CONFIG}/labels/en.json`, 'utf-8') ?? '');
-    labels.labels['acme-contracts.contract.contract'] = 'The contract';
+    labels.labels['acme-contracts.card.contract.contract'] = 'The contract';
     tree.write(`${CONFIG}/labels/en.json`, JSON.stringify(labels));
     await generate({ force: true });
-    expect(labelsOf(tree)['acme-contracts.contract.contract']).toBe('The contract');
+    expect(labelsOf(tree)['acme-contracts.card.contract.contract']).toBe('The contract');
   });
 
   it('shows exactly the schemas --schemas names, in its order, one card in one column', async () => {
@@ -171,7 +219,7 @@ describe('app-layout generator', () => {
     expect(layout['cards']).toEqual([
       {
         id: 'dublincore',
-        labelKey: 'acme-contracts.contract.dublincore',
+        labelKey: 'acme-contracts.card.contract.dublincore',
         fields: ['dc:title', 'dc:description', 'dc:created', 'dc:modified'],
       },
     ]);

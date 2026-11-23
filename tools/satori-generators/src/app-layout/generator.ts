@@ -282,7 +282,7 @@ export default async function appLayoutGenerator(tree: Tree, options: AppLayoutS
       return [];
     }
     const id = cardId(name, taken);
-    const labelKey = `${pkg.appId}.${keyType}.${id}`;
+    const labelKey = `${pkg.appId}.card.${keyType}.${id}`;
     labels[labelKey] = humanize(name);
     return [{ id, labelKey, fields }];
   });
@@ -290,6 +290,8 @@ export default async function appLayoutGenerator(tree: Tree, options: AppLayoutS
     throw new Error(`Nothing in ${chosen.join(', ')} can be shown:\n  ${left.join('\n  ')}`);
   }
 
+  // First, since it may refuse: nothing is written before it has.
+  contributeLayout(tree, pkg, options.type, 'view');
   const layoutColumns = columns ?? Math.min(2, cards.length);
   writeJson(tree, file, {
     $schema: schemaFor(file, 'layout-v2.schema.json'),
@@ -297,7 +299,6 @@ export default async function appLayoutGenerator(tree: Tree, options: AppLayoutS
     ...(layoutColumns > 1 ? { columns: layoutColumns } : {}),
     cards,
   });
-  contributeLayout(tree, pkg, options.type, 'view');
   const kept = addLabels(tree, pkg, labels);
 
   await formatFiles(tree);
