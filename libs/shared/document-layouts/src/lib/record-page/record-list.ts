@@ -26,7 +26,9 @@ import {
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
+  SURFACE_RULE_EVALUATORS,
   type ExtensionActionDescriptor,
+  type ExtensionRuleContext,
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import {
@@ -35,7 +37,6 @@ import {
   PageProviderService,
   type PageProviderSort,
   documentNavigationUrl,
-  resolvePaginatedListTotal,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { catchError, forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
 
@@ -44,7 +45,7 @@ import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType } from '../layout.model';
 import { type RecordValueContext, showValue, viewText } from './record-field-view';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
-import type { RecordListEntry, RecordPropertyField } from './record-layout';
+import { type RecordListEntry, type RecordPropertyField, ruleRefusal } from './record-layout';
 import {
   LookupCollector,
   NO_LABELS,
@@ -100,6 +101,33 @@ const sameRequest = (a: ListRequest | null, b: ListRequest | null): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
 
 /**
+ * The rules that answer from what the page publishes about its own record, the one in focus
+ * (`ExtensionRuleContext.flags`): whether it is a favourite, locked, subscribed, in the clipboard,
+ * has a version, whether AI is on, whether an operation on it is in flight. A row is another
+ * record, and nothing publishes that for it. `app.rules.isNote` is in the same map and reads the
+ * document, which a row's context has.
+ */
+const PAGE_STATE_RULES: ReadonlySet<string> = new Set(
+  Object.keys(SURFACE_RULE_EVALUATORS).filter((id) => id !== 'app.rules.isNote'),
+);
+
+const refusePageState = (id: string): string | null =>
+  PAGE_STATE_RULES.has(id)
+    ? `names the rule "${id}", which answers for the page's own record, not a row`
+    : null;
+
+/**
+ * A row's rule context, for its menu and for running a choice from it: the row in focus, and none
+ * of the state the page publishes about its own record. A rule of a customer's own that reads
+ * `flags` finds none for a row.
+ */
+const rowContext = (base: ExtensionRuleContext, row: NuxeoDocument): ExtensionRuleContext => ({
+  ...base,
+  document: row,
+  flags: {},
+});
+
+/**
  * A list of records: one page of a page provider's results at a time, one row per record, each
  * column a property shown through its widget (layout-v2.md, section 7). A related-records card
  * shows one, and a queue will.
@@ -151,7 +179,7 @@ export class RecordListComponent {
   protected readonly pageIndex = linkedSignal({ source: this.identity, computation: () => 0 });
 
   /** The order chosen from a header; `null`, the file's. */
-  private readonly chosenSort = linkedSignal<string, NxsDocumentListSort | null>({
+  protected readonly chosenSort = linkedSignal<string, NxsDocumentListSort | null>({
     source: this.identity,
     computation: () => null,
   });
@@ -268,11 +296,23 @@ export class RecordListComponent {
     return state.status === 'failed' ? state.error : null;
   });
 
+  /**
+   * How many records the list holds: the server's count, or `-1`, unknown, where it gave none. A
+   * count no larger than the rows up to this page while another page follows is a limit, as
+   * `resultsCountLimit` makes one, and is unknown too. Never an estimate: the list shows it, and
+   * tells assistive technology it is the number of rows.
+   */
   protected readonly totalSize = computed(() => {
     const state = this.state();
-    return state.status === 'loaded'
-      ? resolvePaginatedListTotal(state.page, this.list().pageSize, this.pageIndex())
-      : -1;
+    if (state.status !== 'loaded') return -1;
+    const { page } = state;
+    const counts = [page.totalSize, page.resultsCount].filter(
+      (count): count is number => typeof count === 'number' && count >= 0,
+    );
+    if (counts.length === 0) return -1;
+    const count = Math.max(...counts);
+    const shown = this.pageIndex() * this.list().pageSize + page.entries.length;
+    return this.hasNextPage() && count <= shown ? -1 : count;
   });
 
   protected readonly hasNextPage = computed(() => {
@@ -282,13 +322,13 @@ export class RecordListComponent {
     return page.isNextPageAvailable ?? page.currentPageIndex + 1 < page.numberOfPages;
   });
 
-  /** The header that shows the order: the one chosen, or the file's first key while a column has it. */
-  protected readonly shownSort = computed<NxsDocumentListSort | null>(() => {
-    const chosen = this.chosenSort();
-    if (chosen) return chosen;
+  /**
+   * The file's order, by its first key, for the list's header: it shows it while no other is
+   * chosen, and turns it round rather than clearing it.
+   */
+  protected readonly defaultSort = computed<NxsDocumentListSort | null>(() => {
     const [first] = this.list().sort;
-    if (!first || !this.shownColumns().some((column) => column.xpath === first.field)) return null;
-    return { key: first.field, direction: first.order };
+    return first ? { key: first.field, direction: first.order } : null;
   });
 
   protected readonly columns = computed<readonly NxsDocumentListColumn[]>(() => {
@@ -312,10 +352,10 @@ export class RecordListComponent {
     const base = this.ruleContext.context();
     const menus: Record<string, NxsMenuAction[]> = {};
     for (const row of this.documents()) {
-      const context = { ...base, document: row };
+      const context = rowContext(base, row);
       const entries = this.extensions
         .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
-        .filter((action) => listed.has(action.id) && this.runnable(action))
+        .filter((action) => listed.has(action.id) && this.offered(action))
         .map((action): NxsMenuAction => ({
           id: action.id,
           label: descriptorLabel(action, (key) => this.translate.instant(key)),
@@ -327,18 +367,9 @@ export class RecordListComponent {
     return menus;
   });
 
+  /** `null` goes back to the file's order: the list's header of that order never clears it. */
   protected onSort(sort: NxsDocumentListSort | null): void {
-    // The header of the file's own order cycles from its direction to none, which would leave the
-    // rows in that order under a header that says they are not: it turns the order round instead.
-    const shown = this.shownSort();
-    const next =
-      sort === null && this.chosenSort() === null && shown
-        ? {
-            key: shown.key,
-            direction: shown.direction === 'asc' ? ('desc' as const) : ('asc' as const),
-          }
-        : sort;
-    this.chosenSort.set(next);
+    this.chosenSort.set(sort);
     this.pageIndex.set(0);
   }
 
@@ -349,13 +380,13 @@ export class RecordListComponent {
   /**
    * Asks again. After a failure under an order chosen from a header, the order may be what failed:
    * Nuxeo refuses some sorts, such as a text field in OpenSearch. Retrying then goes back to the
-   * file's order, rather than sending the same refusal again.
+   * file's order, rather than sending the same refusal again. Each retry is an attempt of its own,
+   * so one whose order comes back the same as the chosen one is still sent.
    */
   protected onRetry(): void {
     if (this.state().status === 'failed' && this.chosenSort() !== null) {
       this.chosenSort.set(null);
       this.pageIndex.set(0);
-      return;
     }
     this.attempt.update((n) => n + 1);
   }
@@ -370,24 +401,37 @@ export class RecordListComponent {
    */
   protected onRowAction({ action, document }: NxsDocumentListRowAction): void {
     if (!this.list().rowActions.includes(action.id)) return;
-    const context = { ...this.ruleContext.context(), document };
+    const context = rowContext(this.ruleContext.context(), document);
     const descriptor = this.extensions
       .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
       .find((candidate) => candidate.id === action.id);
-    if (!descriptor || !this.runnable(descriptor)) return;
+    if (!descriptor || !this.offered(descriptor)) return;
     if (!this.extensions.evaluateRule(descriptor.enabledRule, context)) return;
     this.actions.execute(descriptor, context);
   }
 
   /**
-   * Whether something on this page runs the action. One with no handler here would do nothing
-   * when chosen: it is not offered, and the console says so once. The platform's own row actions
-   * are registered by the browse list, so a record page has none of them yet.
+   * Whether a row offers the action, its rules aside: something on this page runs it, and a row
+   * can answer its rules. Otherwise it is not offered, and the console says why once.
+   *
+   * - One with no handler here would do nothing when chosen. The platform's own row actions are
+   *   registered by the browse list, so a record page has none of them yet.
+   * - One whose `rule` or `enabledRule` names, anywhere in it, a rule that answers for the page's
+   *   own record ({@link PAGE_STATE_RULES}) would show or run on that record's state, not the
+   *   row's. One whose rule has already answered no for the row is not offered either way.
    */
-  private runnable(action: ExtensionActionDescriptor): boolean {
-    if (this.actions.has(action.action ?? action.id)) return true;
-    this.tell(`the row action "${action.id}" has nothing to run it on this page; not offered`);
-    return false;
+  private offered(action: ExtensionActionDescriptor): boolean {
+    if (!this.actions.has(action.action ?? action.id)) {
+      this.tell(`the row action "${action.id}" has nothing to run it on this page; not offered`);
+      return false;
+    }
+    const refused =
+      ruleRefusal(action.rule, refusePageState) ?? ruleRefusal(action.enabledRule, refusePageState);
+    if (refused) {
+      this.tell(`the row action "${action.id}" ${refused}; not offered`);
+      return false;
+    }
+    return true;
   }
 
   private valueContext(): RecordValueContext {

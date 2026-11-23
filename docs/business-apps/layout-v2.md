@@ -439,6 +439,11 @@ becomes. In version 2's terms:
   - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run
     by the browse list today, so a record page offers none of them until they are registered for
     the whole app. A customer's own row action, registered in Layer 2 code, is offered;
+  - **a row action's rules answer for the row, not the page's record.** A row action whose rule
+    or `enabledRule` names, anywhere in it, a rule that answers from the state the page publishes
+    about its own record, such as `app.rules.isLocked` or `app.rules.isNotBusy`, is not offered:
+    nothing publishes that state for a row. Those are the surface rules but `app.rules.isNote`,
+    which reads the document;
   - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
     record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
     editor: a record page beside a preview comes later;

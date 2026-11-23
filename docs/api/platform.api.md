@@ -1275,6 +1275,7 @@ class NxsDocumentListComponent {
     readonly columns: import("@angular/core").InputSignal<readonly NxsDocumentListColumn[]>;
     readonly label: import("@angular/core").InputSignal<string>;
     readonly sort: import("@angular/core").InputSignal<NxsDocumentListSort | null>;
+    readonly defaultSort: import("@angular/core").InputSignal<NxsDocumentListSort | null>;
     readonly selectedIds: import("@angular/core").ModelSignal<readonly string[]>;
     readonly selectable: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
@@ -1358,6 +1359,11 @@ class NxsDocumentListComponent {
     };
     "sort": {
     "alias": "sort";
+    "required": false;
+    "isSignal": true;
+    };
+    "defaultSort": {
+    "alias": "defaultSort";
     "required": false;
     "isSignal": true;
     };
