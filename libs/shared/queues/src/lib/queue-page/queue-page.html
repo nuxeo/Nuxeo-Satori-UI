@@ -1,0 +1,62 @@
+<div class="queue-page">
+  <h1 class="queue-page__title">{{ title() ?? ('queues.title' | translate) }}</h1>
+  @switch (view()) {
+    @case ('loading') {
+      <p class="queue-page__message" role="status">{{ 'queues.loading' | translate }}</p>
+    }
+    @case ('none') {
+      <p class="queue-page__message">{{ 'queues.none' | translate }}</p>
+    }
+    @case ('refused') {
+      <p class="queue-page__message" role="alert">{{ 'queues.refused' | translate }}</p>
+    }
+    @case ('hidden') {
+      <p class="queue-page__message">{{ 'queues.hidden' | translate }}</p>
+    }
+    @case ('queue') {
+      @if (shown(); as shown) {
+        <div class="queue-page__body" [class.queue-page__body--with-facets]="facets().length > 0">
+          @if (facets().length > 0) {
+            <section class="queue-page__facets" [attr.aria-label]="'queues.filters' | translate">
+              @for (facet of facets(); track facet.aggregate) {
+                <fieldset class="queue-facet" [attr.data-aggregate]="facet.aggregate">
+                  <legend class="queue-facet__label">{{ facet.label }}</legend>
+                  @for (bucket of facet.buckets; track bucket.key) {
+                    <mat-checkbox
+                      class="queue-facet__bucket"
+                      [checked]="bucket.chosen"
+                      (change)="toggle(facet.aggregate, bucket.key)"
+                      >{{ bucket.key }}
+                      @if (bucket.count !== null) {
+                        <span class="queue-facet__count"> ({{ bucket.count }})</span>
+                      }
+                    </mat-checkbox>
+                  } @empty {
+                    <p class="queue-facet__note">{{ 'queues.no-buckets' | translate }}</p>
+                  }
+                  @if (facet.truncated) {
+                    <p class="queue-facet__note">{{ 'queues.largest-only' | translate }}</p>
+                  }
+                </fieldset>
+              }
+            </section>
+          }
+          <lib-record-list
+            class="queue-page__list"
+            [list]="shown.queue.list"
+            [parameters]="shown.queue.parameters"
+            [label]="title() ?? shown.id"
+            [stateHeadingLevel]="2"
+            [source]="'queues/' + shown.id + '.json'"
+            [aggregates]="chosen()"
+            [selectable]="bulkActions().length > 0"
+            [selectedIds]="selectedIds()"
+            [emptyHeading]="'queues.empty' | translate"
+            (selectedIdsChange)="onSelection($event)"
+            (loaded)="onLoaded($event)"
+          />
+        </div>
+      }
+    }
+  }
+</div>

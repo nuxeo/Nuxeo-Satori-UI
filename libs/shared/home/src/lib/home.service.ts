@@ -12,8 +12,9 @@ export const HOME_LOAD_TIMEOUT_MS = 10_000;
 /**
  * Where a queue opens, for the home's links to queues: the router link of the queue `id`.
  *
- * `null`, the default, until the app has a queue page. Phase 1's queue page is not in the app yet,
- * so the home leaves out a card that is only a link to a queue, and draws no link on a KPI.
+ * The app gives `queueLink` from `libs/shared/queues`, `/queues/<id>`, on its home route. `null`,
+ * the default, is for a host with no queue page: the home then leaves out a card that is only a
+ * link to a queue, and draws no link on a KPI.
  */
 export const HOME_QUEUE_LINK = new InjectionToken<
   ((queue: string) => string | readonly unknown[]) | null
