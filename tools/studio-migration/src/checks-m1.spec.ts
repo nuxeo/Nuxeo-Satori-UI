@@ -781,6 +781,84 @@ describe("what Copilot's review found", () => {
   });
 });
 
+// Found by Copilot's second review of #643.
+describe("what Copilot's second review found", () => {
+  const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+  const results = `${UI}/search/claims/nuxeo-claims-search-results.html`;
+
+  it('leaves a field pending whose wrapper takes its binding from inside a condition', () => {
+    const files = syntheticBundleFiles();
+    const input = prepare({
+      bundle: {
+        [view]: files[view].replace(
+          '</template>\n  <script>',
+          `<div role="widget"><label>Reserve</label><nuxeo-filter group="adjusters"><template><nuxeo-input value="{{document.properties.cl:reserve}}"></nuxeo-input></template></nuxeo-filter></div>
+  </template>\n  <script>`,
+        ),
+      },
+    });
+    expect(input.inventory.layouts[0].fields[3]).toMatchObject({
+      binding: 'cl:reserve',
+      condition: 0,
+    });
+    expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
+      'cl:reserve',
+    );
+    const widened = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      file.cards[0].fields.push('cl:reserve');
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      'layouts/Claim/view.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
+    ]);
+  });
+
+  it('holds a property shown by a column in no condition to it, though another column shows it under one', () => {
+    const input = prepare({
+      bundle: {
+        [results]: syntheticBundleFiles()[results].replace(
+          '<nuxeo-data-table-column name="Amount" field="cl:amount"></nuxeo-data-table-column>',
+          '<nuxeo-data-table-column name="Amount" field="cl:amount"></nuxeo-data-table-column><nuxeo-data-table-column name="Amount" field="cl:amount"><template><nuxeo-filter group="x"><template>[[item.properties.cl:amount]]</template></nuxeo-filter></template></nuxeo-data-table-column>',
+        ),
+      },
+    });
+    for (const number of [2, 5]) expect(run(input, number)?.findings).toEqual([]);
+    const dropped = edit(input, 'queues/claims.json', (file) => ({
+      ...file,
+      columns: file.columns.filter((column: { field: string }) => column.field !== 'cl:amount'),
+    }));
+    expect(run(dropped, 2)?.findings).toEqual([
+      'queues/claims.json: the column cl:amount is missing',
+    ]);
+  });
+
+  it('writes no queue without a column, which the validator would refuse', () => {
+    const home = `${UI}/nuxeo-home.html`;
+    const input = prepare({
+      bundle: {
+        [results]: syntheticBundleFiles()[results].replace(
+          /<nuxeo-data-table class="results">[\s\S]*<\/nuxeo-data-table>/,
+          '<nuxeo-data-table class="results"><nuxeo-data-table-column name="Thumb"><template><nuxeo-document-thumbnail></nuxeo-document-thumbnail></template></nuxeo-data-table-column></nuxeo-data-table>',
+        ),
+        [home]: `<dom-module id="nuxeo-home"><template><nuxeo-card heading="Bare"><nuxeo-page-provider provider="claims"></nuxeo-page-provider></nuxeo-card></template></dom-module>`,
+      },
+    });
+    expect(input.conversion.app['queues/claims.json']).toBeUndefined();
+    expect(input.conversion.app['queues/home-1-claims.json']).toBeUndefined();
+    const outcome = (id: string) =>
+      input.conversion.report.constructs.find((entry) => entry.id === id);
+    expect(outcome(`search:${results}#search`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/a queue needs at least one/),
+    });
+    expect(outcome(`dashboard-card:${home}#1`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/a queue needs at least one/),
+    });
+    for (const number of [2, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+  });
+});
+
 describe('the verdict', () => {
   it('counts a partial check as a blocker, never as a pass', () => {
     const result = runHarness(prepare());

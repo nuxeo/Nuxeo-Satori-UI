@@ -155,6 +155,23 @@ export function convertSearches(context: ConvertContext): void {
             },
       ),
     );
+    // A queue needs at least one column (app-definition-v2.md, section 4).
+    if (columns.length === 0) {
+      const waiting = search.columnDetails.some((column) => column.conditional);
+      context.decide(id, {
+        outcome: waiting ? 'pending' : 'reported',
+        note: waiting
+          ? 'Every column it can show is under a condition, which M2 converts, and a queue needs at least one'
+          : 'None of its columns shows a property a queue can name, and a queue needs at least one',
+      });
+      search.views.forEach((_, index) =>
+        context.decide(`search-view:${search.path}#${index + 1}`, {
+          outcome: waiting ? 'pending' : 'reported',
+          note: `Its results are ${waiting ? 'pending' : 'reported'}`,
+        }),
+      );
+      continue;
+    }
     const sort = openingSort(search);
     // A queue needs a name: the menu's, or else its page provider's.
     const named = labelOf(menuLabel(context, search));
@@ -287,6 +304,13 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     const columns = card.columns.filter((column) => column.field !== null).map(queueColumn);
+    if (columns.length === 0) {
+      context.decide(id, {
+        outcome: 'reported',
+        note: 'Its list shows no column a queue can name, and a queue needs at least one',
+      });
+      return;
+    }
     const pageSize = queuePageSize(card);
     const label = labelOf(card.heading);
     context.files[path] = {

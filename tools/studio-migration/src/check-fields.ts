@@ -147,8 +147,12 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
         !column.conditional &&
         !excused(`search-column:${search.path}#${index + 1}`),
     );
+    // A property a column in no condition also shows is that column's, and held to it here.
+    const always = new Set(columns.map((column) => column.field));
     const conditional = new Set(
-      search.columnDetails.filter((column) => column.conditional).map((column) => column.field),
+      search.columnDetails
+        .filter((column) => column.conditional && !always.has(column.field))
+        .map((column) => column.field),
     );
     findings.push(...compareColumns(path, columns, app[path], conditional));
   }

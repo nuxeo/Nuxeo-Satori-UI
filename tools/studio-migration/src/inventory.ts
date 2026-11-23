@@ -576,8 +576,25 @@ function fieldsOf(document: Document, within: ReadonlyMap<Element, number>): Lay
       label: element.getAttribute('label') ?? childLabel(element),
       required: element.hasAttribute('required'),
       attributes: attributesOf(element),
-      condition: within.get(element) ?? null,
+      condition: conditionOfField(element, within),
     }));
+}
+
+/**
+ * The condition a field shows under: the one it sits in, or else the first one inside it. A
+ * wrapper such as `<div role="widget">` can take its binding from an element inside a
+ * `nuxeo-filter` it holds, and then shows that value only while the filter passes. Any condition
+ * inside the field counts, whether or not the binding comes from within it: a field left pending
+ * by mistake is a decision for M2, where one shown to everyone by mistake is widened access.
+ */
+function conditionOfField(field: Element, within: ReadonlyMap<Element, number>): number | null {
+  const own = within.get(field);
+  if (own !== undefined) return own;
+  for (const inner of elementsOf(field)) {
+    const index = within.get(inner);
+    if (index !== undefined) return index;
+  }
+  return null;
 }
 
 /** The elements that show what they hold only while a condition passes. */
