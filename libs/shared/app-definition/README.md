@@ -55,6 +55,13 @@ install and no transpiler.
     how many layouts were, or that none was.
 - **`model <file>`:** reads a content model alone, as `--model` does: exit 0 when it can be read
   whole, 1 with every problem when it cannot. The export checks the file it writes with it.
+- **`changes <previous package> <package>`:** compares two versions of one configuration package,
+  each a folder holding `bundle/` and `package/`, by the rules of
+  [package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8
+  (`src/lib/changes.ts`), and prints as JSON every change, the version part they need raised, the
+  part that was, why the version is refused if it is, and the changelog: exit 0 when the version
+  moved far enough, 1 when not, 2 for a folder that is no package or holds a link. The package
+  pipeline runs it at step 3, given `--previous`.
 - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
   counted.
 - **Exit codes:**

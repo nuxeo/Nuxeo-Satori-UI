@@ -43,6 +43,8 @@ export interface PackageModel {
   readonly facets: ReadonlyMap<string, readonly string[]>;
   readonly pageProviders: ReadonlySet<string>;
   readonly directories: ReadonlySet<string>;
+  /** The workflows it imports (`routeModelImporter`), by their model's id. */
+  readonly workflows: ReadonlySet<string>;
   /** What could not be read, one line each. */
   readonly problems: readonly string[];
 }
@@ -51,6 +53,7 @@ const SCHEMA_POINT = 'schema';
 const DOCTYPE_POINT = 'doctype';
 const PROVIDERS_POINT = 'providers';
 const DIRECTORIES_POINT = 'directories';
+const WORKFLOWS_POINT = 'routeModelImporter';
 const PROVIDER_ELEMENTS = new Set(['coreQueryPageProvider', 'genericPageProvider']);
 
 /** XSD's built-in types, as Nuxeo maps them. */
@@ -77,6 +80,7 @@ export function packageModel(pkg: StudioPackage, inventory: Inventory): PackageM
   const facets = new Map<string, readonly string[]>();
   const pageProviders = new Set<string>();
   const directories = new Set<string>();
+  const workflows = new Set<string>();
   const problems: string[] = [];
 
   // Every file of model contributions, not only those the inventory could read: one it could not
@@ -127,6 +131,13 @@ export function packageModel(pkg: StudioPackage, inventory: Inventory): PackageM
           const name = provider.getAttribute('name');
           if (name) pageProviders.add(name);
         }
+      } else if (point === WORKFLOWS_POINT) {
+        for (const resource of children.filter(
+          (child) => child.localName === 'template-resource',
+        )) {
+          const id = resource.getAttribute('id');
+          if (id) workflows.add(id);
+        }
       } else if (point === DIRECTORIES_POINT) {
         for (const directory of children.filter((child) => child.localName === 'directory')) {
           const name = directory.getAttribute('name');
@@ -135,7 +146,7 @@ export function packageModel(pkg: StudioPackage, inventory: Inventory): PackageM
       }
     }
   }
-  return { schemas, types, facets, pageProviders, directories, problems };
+  return { schemas, types, facets, pageProviders, directories, workflows, problems };
 }
 
 function namesOf(parent: Element, child: string): string[] {

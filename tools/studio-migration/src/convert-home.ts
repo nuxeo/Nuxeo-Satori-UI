@@ -10,11 +10,21 @@
  * Both are worked out here from the inventory alone, so that the converter and harness check 7
  * read the same answer: which card or entry each is, and which queue it opens.
  */
-import { homeQueueId, iconOf, labelOf, placed, queuePath, searchQueueId, slug } from './app-files';
+import {
+  homeQueueId,
+  iconOf,
+  labelOf,
+  placed,
+  queuePath,
+  searchQueueId,
+  slug,
+  translatedLabelOf,
+} from './app-files';
 import { own, slotEntry, type Catalogue } from './catalogue';
 import { cardGuard, queueOwners, searchOfForm } from './convert-lists';
 import { menuGuard, type Guard } from './guards';
 import type { Inventory, SlotContribution } from './inventory';
+import { slotRegistry } from './slot-registry';
 
 /** A card of `home.json`, from a dashboard card whose list is a queue. */
 export interface HomeCard {
@@ -102,12 +112,38 @@ export function menuDecisions(
     skipped.set(item, skip);
     if (page && !skipped.has(page)) skipped.set(page, skip);
   };
+  const registry = slotRegistry(inventory);
+  const translated = new Set(inventory.translations.flatMap((translations) => translations.keys));
   for (const { contribution: item } of placed(contributions)) {
     if (item.slot !== 'DRAWER_ITEMS') continue;
     if (slotEntry(catalogue, item.slot)?.how !== 'automatic') continue;
+    // The page Web UI's slot shows under the entry's name, if it shows one.
     const page = contributions.find(
-      (other) => other.slot === 'DRAWER_PAGES' && other.name === item.name,
+      (other) =>
+        other.slot === 'DRAWER_PAGES' && other.name === item.name && registry.kept.has(other),
     );
+    // An entry Web UI's slot does not show, disabled, replaced or outranked, is none, and its
+    // page opens from nowhere.
+    const dropped = registry.dropped.get(item);
+    if (dropped) {
+      skipped.set(item, { outcome: 'reported', note: dropped.note ?? '' });
+      if (
+        page &&
+        !skipped.has(page) &&
+        !contributions.some(
+          (other) =>
+            other !== item &&
+            other.slot === 'DRAWER_ITEMS' &&
+            other.name === item.name &&
+            registry.kept.has(other),
+        )
+      )
+        skipped.set(page, {
+          outcome: 'reported',
+          note: `Its menu entry, ${item.name}, is not shown in Web UI: ${dropped.note ?? ''}`,
+        });
+      continue;
+    }
     // Its conditions and its page's travel with it as its rule, which on the menu, where no
     // record is open, may read the user only.
     const guard = menuGuard(inventory, item, page);
@@ -143,6 +179,8 @@ export function menuDecisions(
       continue;
     }
     const queue = queueIdOf(path);
+    // Its order as Web UI's slot keeps it, a later contribution of its name included.
+    const order = registry.kept.get(item)?.order;
     const symbol = iconOf(own(icon.attributes, 'icon'));
     entries.push({
       item,
@@ -151,15 +189,20 @@ export function menuDecisions(
       queue,
       entry: {
         id,
-        ...labelOf(own(icon.attributes, 'label') ?? null),
+        // Web UI's menu icon translates its label as a key (`nuxeo-menu-icon`, `i18n(label)`).
+        ...translatedLabelOf(own(icon.attributes, 'label') ?? null, translated),
         ...(symbol !== null ? { icon: symbol } : {}),
-        ...(item.order !== null ? { order: item.order } : {}),
+        // An order is a whole number in an app definition; one that is not is kept by the place.
+        ...(order !== undefined && Number.isInteger(order) ? { order } : {}),
         queue,
         ...(guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
       },
       guard,
     });
   }
+  // In Web UI's order, which places equals as its slots do.
+  const rank = (entry: MenuEntry): number => registry.kept.get(entry.item)?.rank ?? 0;
+  entries.sort((a, b) => rank(a) - rank(b));
   return { entries, skipped };
 }
 

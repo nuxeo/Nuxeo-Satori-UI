@@ -68,8 +68,13 @@ type BulkActionModule = typeof import('./bulk-action.services');
  * registration eager — so the descriptors are always addressable — while the
  * code stays where it was.
  */
-function bulkHandler(injector: Injector, name: keyof BulkActionModule): ExtensionActionHandler {
+function bulkHandler(
+  injector: Injector,
+  name: keyof BulkActionModule,
+  options: { readonly wholeQuery?: true } = {},
+): ExtensionActionHandler {
   return {
+    ...options,
     execute: (context) => {
       void import('./bulk-action.services')
         // The keyed lookup widens to a union of the six service classes, which
@@ -152,7 +157,11 @@ function provideAppContributions(): EnvironmentProviders {
         'app.bulkActions.compare': bulkHandler(injector, 'BulkCompareActionService'),
         'app.bulkActions.addToClipboard': bulkHandler(injector, 'BulkAddToClipboardActionService'),
         'app.bulkActions.publish': bulkHandler(injector, 'BulkPublishActionService'),
-        'app.bulkActions.delete': bulkHandler(injector, 'BulkDeleteActionService'),
+        // Trashing the selection is what `app.bulkActions.delete` maps to over a whole query, the
+        // framework's `trash` (PACKAGED_WHOLE_QUERY_BULK_ACTIONS), so this handler declares it.
+        'app.bulkActions.delete': bulkHandler(injector, 'BulkDeleteActionService', {
+          wholeQuery: true,
+        }),
       },
 
       // Drawer panels that live in lazy-loaded feature libraries, so a manifest

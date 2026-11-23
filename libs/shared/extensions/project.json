@@ -18,6 +18,8 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the extension reference whose section 5 a spec reads: without it an edit to the table would replay a cached pass.",
+      "inputs": ["default", "^production", "{workspaceRoot}/docs/extension-reference.md"],
       "options": {
         "reportsDirectory": "coverage/libs/shared/extensions"
       }

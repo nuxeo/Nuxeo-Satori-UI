@@ -53,6 +53,11 @@ export {
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   PACKAGED_ROW_ACTIONS,
 } from './lib/packaged-actions';
+export {
+  PACKAGED_WHOLE_QUERY_BULK_ACTIONS,
+  wholeQueryBulkAction,
+  type WholeQueryBulkAction,
+} from './lib/whole-query-actions';
 export { PACKAGED_DOCUMENT_TABS } from './lib/packaged-tabs';
 export { PACKAGED_BROWSE_COLUMNS } from './lib/packaged-columns';
 export {

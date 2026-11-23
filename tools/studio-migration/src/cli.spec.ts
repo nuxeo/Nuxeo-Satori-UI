@@ -130,7 +130,7 @@ describe('studio-migration inventory', () => {
       bundle: {
         [`${UI}/nuxeo-Acme-Claims-bundle.html`]:
           '<nuxeo-slot-content name="x" slot="MY_SLOT"><template><acme-widget></acme-widget></template></nuxeo-slot-content>',
-        [`${UI}/workflow/review/nuxeo-review-task-layout.html`]: '<p></p>',
+        [`${UI}/mystery/review/nuxeo-review-panel.html`]: '<p></p>',
       },
     });
     const { code, out } = run(['inventory', 'acme.zip'], { 'acme.zip': pkg });
@@ -139,9 +139,7 @@ describe('studio-migration inventory', () => {
     expect(out).toContain('Decisions needed: 5');
     expect(out).toContain('slot MY_SLOT (contribution "x") is not in the catalogue');
     expect(out).toContain('element acme-widget (used once) is not in the catalogue');
-    expect(out).toContain(
-      `file ${UI}/workflow/review/nuxeo-review-task-layout.html is of no known kind`,
-    );
+    expect(out).toContain(`file ${UI}/mystery/review/nuxeo-review-panel.html is of no known kind`);
   });
 
   it('writes the whole inventory and accounting as JSON with --json', () => {

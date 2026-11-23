@@ -7,7 +7,8 @@
  *   reported.
  * - **A theme** becomes the app's `branding.theme`, with its tokens in `themes/<name>.json`.
  * - **The left menu's entries** that open a search screen become entries of `navigation.json`
- *   (`convert-home.ts`); **tabs** wait for M2.
+ *   (`convert-home.ts`); **tabs** become tabs of the view files of the types they show on
+ *   (`convert-tabs.ts`).
  *
  * A contribution that sits in a condition carries its rule as the `visibleWhen` of what it
  * becomes, where that can hold one: an action, or a menu entry. Elsewhere it is pending, because
@@ -19,7 +20,8 @@ import { menuDecisions } from './convert-home';
 import { carry, guardOfSet, type Guard } from './guards';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
-import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
+import { actionIdOf, iconOf, isBound, placed, translatedLabelOf } from './app-files';
+import { slotRegistry } from './slot-registry';
 
 /** The operation an action converted from a button runs, and its parameters, or why it cannot. */
 /**
@@ -98,6 +100,10 @@ export interface ActionOwner {
   readonly slot: 'toolbar' | 'bulk-actions';
   /** The rule of the conditions it sits in, for its `visibleWhen`; `null` for none. */
   readonly rule: Rule | null;
+  /** Its order as Web UI's slot registers it, a later contribution of its name included: 0 when left out. */
+  readonly order: number;
+  /** Its place among what its slot shows, as Web UI orders them. */
+  readonly rank: number;
 }
 
 /**
@@ -137,10 +143,14 @@ export function actionOwners(
   allowList: ReadonlySet<string>,
 ): Map<string, ActionOwner> {
   const owners = new Map<string, ActionOwner>();
+  const registry = slotRegistry(inventory);
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const entry = slotEntry(catalogue, contribution.slot);
     if (!entry || entry.how === 'reported') continue;
     if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') continue;
+    // What Web UI's slot does not show, disabled, replaced or outranked, becomes nothing.
+    const kept = registry.kept.get(contribution);
+    if (!kept) continue;
     if (contribution.operations.includes(null)) continue;
     const guard = actionGuard(inventory, contribution, entry.slot);
     if (!('rule' in guard)) continue;
@@ -148,15 +158,30 @@ export function actionOwners(
     if ('problem' in action || !allowList.has(action.operation)) continue;
     const id = actionIdOf(appId, contribution.name, overall);
     if (!owners.has(id))
-      owners.set(id, { contribution, index, ...action, slot: entry.slot, rule: guard.rule });
+      owners.set(id, {
+        contribution,
+        index,
+        ...action,
+        slot: entry.slot,
+        rule: guard.rule,
+        order: kept.order,
+        rank: kept.rank,
+      });
   }
   return owners;
+}
+
+/** Why an order Web UI reads is not written: an app definition's orders are whole numbers. */
+function unwholeOrder(order: number): string {
+  return `Its order, ${order}, is no whole number, which an app definition's order is: written with none, the app shows it after every ordered one, where Web UI's slot places it at ${order}: a person picks a whole order`;
 }
 
 export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
   const owners = actionOwners(inventory, catalogue, context.appId, context.allowList);
+  const registry = slotRegistry(inventory);
+  const translated = new Set(inventory.translations.flatMap((translations) => translations.keys));
   const menus = menuDecisions(inventory, catalogue);
   const entries = menus.entries;
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
@@ -168,6 +193,14 @@ export function convertSlots(context: ConvertContext): void {
     }
     if (entry.how === 'reported') {
       context.decide(id, { outcome: 'reported', note: entry.note ?? catalogue.reportedBecause });
+      continue;
+    }
+    // Tabs are decided with the view files they go into (`convert-tabs.ts`).
+    if (entry.slot === 'tabs') continue;
+    // What Web UI's slot does not show of its own becomes nothing, and says why.
+    const dropped = registry.dropped.get(contribution);
+    if (dropped) {
+      context.decide(id, dropped);
       continue;
     }
     if (contribution.operations.includes(null)) {
@@ -215,20 +248,33 @@ export function convertSlots(context: ConvertContext): void {
         });
         continue;
       }
-      const label = labelOf(own(action.attributes, 'label') ?? null);
+      // Web UI's button translates its label as a key (`nuxeo-operation-button`, `i18n(label)`).
+      const label = translatedLabelOf(own(action.attributes, 'label') ?? null, translated);
+      // Its order as Web UI's slot keeps it, a later contribution of its name included.
+      const owner = owners.get(actionId);
       const icon = iconOf(own(action.attributes, 'icon'));
       actions.push({
         id: actionId,
         ...(Object.keys(label).length > 0 ? label : { label: contribution.name || actionId }),
         ...(icon !== null ? { icon } : {}),
-        ...(contribution.order !== null ? { order: contribution.order } : {}),
+        // An order is a whole number in an app definition; one that is not is kept by the place.
+        ...(owner && Number.isInteger(owner.order) ? { order: owner.order } : {}),
         ...(entry.slot === 'bulk-actions' ? { on: ['bulk'] } : {}),
         ...(guard.rule !== null ? { visibleWhen: guard.rule } : {}),
         operation: action.operation,
         ...(action.parameters !== null ? { parameters: action.parameters } : {}),
       });
       if (guard.guard) carry(context.carried, guard.guard, `actions.json ${actionId}`);
-      context.decide(id, { outcome: 'converted', to: `actions.json ${actionId}` });
+      context.decide(
+        id,
+        owner && !Number.isInteger(owner.order)
+          ? {
+              outcome: 'reported',
+              to: `actions.json ${actionId}`,
+              note: unwholeOrder(owner.order),
+            }
+          : { outcome: 'converted', to: `actions.json ${actionId}` },
+      );
       continue;
     }
     if (entry.layer0 === 'themes') {
@@ -268,16 +314,18 @@ export function convertSlots(context: ConvertContext): void {
               note: 'No entry of the left menu opens it, so it is no entry of navigation.json: the mapping agent proposes where it goes (section 5)',
             })
           : menu.item === contribution
-            ? { outcome: 'converted', to: `navigation.json ${menu.id}` }
+            ? Number.isInteger(registry.kept.get(contribution)?.order ?? 0)
+              ? { outcome: 'converted', to: `navigation.json ${menu.id}` }
+              : {
+                  outcome: 'reported',
+                  to: `navigation.json ${menu.id}`,
+                  note: unwholeOrder(registry.kept.get(contribution)?.order ?? 0),
+                }
             : {
                 outcome: 'converted',
                 to: `queues/${menu.queue}.json, which the menu entry navigation.json ${menu.id} opens`,
               },
       );
-      continue;
-    }
-    if (entry.slot === 'tabs') {
-      context.decide(id, { outcome: 'pending', note: 'Tabs are converted in M2' });
       continue;
     }
     context.decide(id, {
@@ -288,6 +336,10 @@ export function convertSlots(context: ConvertContext): void {
           : `Its target, ${entry.slot ?? entry.layer0}, is converted in a later phase`,
     });
   }
+  // In Web UI's order, which places equals as its slots do.
+  const rank = (action: Record<string, unknown>): number =>
+    owners.get(String(action['id']))?.rank ?? 0;
+  actions.sort((a, b) => rank(a) - rank(b));
   if (actions.length > 0) context.files['actions.json'] = { version: 2, actions };
   if (entries.length > 0) {
     context.files['navigation.json'] = { version: 2, entries: entries.map((e) => e.entry) };

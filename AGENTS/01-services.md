@@ -580,6 +580,33 @@ refuses, without a request, a name that is not a page provider's, a page size ou
 sort that is not `<prefix>:<name>`, and an aggregate the search reads for itself (`pageSize`,
 `sortBy`, `properties` and the like) or named with a `.` or a `-`.
 
+```typescript
+isPageProviderName(name: string): boolean
+```
+
+---
+
+## BulkCommandService (`bulk-command.service.ts`)
+
+Nuxeo's Bulk Action Framework over REST, as the user: an action over a page provider's whole
+result on the server, its status, and stopping it. A queue's page runs a bulk action over every
+result of its query through it (`docs/api-integrations.md`, section 34).
+
+```typescript
+runOverPageProvider(name: string, query: BulkCommandQuery, action: string,
+  actionParameters: Readonly<Record<string, unknown>>): Observable<BulkCommandStatus> // POST …/search/pp/<name>/bulk/<action>
+status(commandId: string): Observable<BulkCommandStatus>  // GET …/bulk/<commandId>
+abort(commandId: string): Observable<BulkCommandStatus>   // PUT …/bulk/<commandId>/abort
+readBulkCommandStatus(body: unknown): BulkCommandStatus   // BulkCommandStatusError on anything but a bulkStatus
+```
+
+`BulkCommandQuery` carries the page provider's `parameters` only. There is no way to send a bucket:
+the server leaves chosen buckets out of the command, which would then reach records the list does
+not show. `BulkCommandStatus.ended` is true once the server writes `completed`, not merely
+`ABORTED`: after a stop, the batches already started still finish. It refuses, without a request, a
+name that is not a page provider's, an action that is not a name, an empty parameter and a command
+id that is not a UUID.
+
 ---
 
 ## QueueService (`libs/shared/queues/src/lib/queue.service.ts`)

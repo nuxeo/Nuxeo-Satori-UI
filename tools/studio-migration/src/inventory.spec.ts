@@ -35,11 +35,11 @@ describe('inventory', () => {
 
   it('lists a file it does not know as unrecognised, never drops it', () => {
     const result = of({
-      bundle: { [`${UI}/workflow/review/nuxeo-review-task-layout.html`]: '<p></p>' },
+      bundle: { [`${UI}/mystery/review/nuxeo-review-panel.html`]: '<p></p>' },
     });
     expect(
       result.files.filter((file) => file.kind === 'unrecognised').map((file) => file.path),
-    ).toEqual([`${UI}/workflow/review/nuxeo-review-task-layout.html`]);
+    ).toEqual([`${UI}/mystery/review/nuxeo-review-panel.html`]);
     expect(classify('notes.txt', 'package', SYNTHETIC_BUNDLE)).toBe('unrecognised');
   });
 
