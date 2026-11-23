@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { validateLabels } from '@agentic-ui/shared/app-definition';
+import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateLoader } from '@ngx-translate/core';
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
@@ -133,19 +134,63 @@ export const UPSTREAM_FOLDERS: readonly UpstreamCatalogueFolder[] = [
 ];
 
 /**
+ * Where a package's labels for `lang` are read from: `labels/<lang>.json`, in the directory
+ * `bootstrap.json` is served from (app-definition-v2.md, section 7).
+ */
+export function packageLabelsUrl(bootstrapUrl: string, lang: string): string {
+  const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
+  return `${path.slice(0, path.lastIndexOf('/') + 1)}labels/${encodeURIComponent(lang)}.json`;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The labels a package's file gives, read as the layouts are read: tolerantly. A file that is not
+ * a version 2 labels file gives none; a key or a text the validator refuses is left out on its own.
+ * The console says why, as it does for a layout.
+ */
+export function readPackageLabels(raw: unknown, source: string): Record<string, string> {
+  if (!isRecord(raw) || raw['version'] !== 2 || !isRecord(raw['labels'])) {
+    console.warn(`[agentic-ui-config] ${source} ignored: it is not a version 2 labels file`);
+    return {};
+  }
+  const findings = validateLabels(raw);
+  const refused = new Set(findings.map((finding) => finding.path));
+  for (const finding of findings) {
+    console.warn(`[agentic-ui-config] ${source}: ${finding.path}: ${finding.message}; left out`);
+  }
+  const labels: Record<string, string> = {};
+  for (const [key, text] of Object.entries(raw['labels'])) {
+    if (typeof text === 'string' && !refused.has(`labels[${JSON.stringify(key)}]`)) {
+      labels[key] = text;
+    }
+  }
+  return labels;
+}
+
+/**
  * Loads the shipped translation catalogue and layers the manifest's `labels` over it.
  *
  * That second step is the Layer 0 point of this class: relabelling the product for a
  * customer is a manifest edit, not a rebuild. The English catalogue is also compiled in
  * as a fallback, so a failed fetch degrades to English rather than to raw keys.
  *
- * Precedence, lowest to highest: upstream folders, this app's catalogue, the manifest's
- * `labels`. A customer's relabelling wins over both, which is the point of Layer 0.
+ * Precedence, lowest to highest: upstream folders, this app's catalogue, the business app's own
+ * labels for the language, and the manifest's `labels`. A package's labels come before the
+ * platform's catalogue, as app-definition-v2.md section 7 asks, and a customer's relabelling still
+ * wins over all of them, which is the point of Layer 0.
+ *
+ * A package's labels file is served at `labels/<lang>.json` beside `bootstrap.json`. Nothing on a
+ * server answers there until the app registry (decisions B and E); `npm run config:dev --
+ * --labels` serves it to the dev server. Where there is none, the request fails and the labels
+ * are simply absent.
  */
 @Injectable({ providedIn: 'root' })
 export class AppTranslateLoader implements TranslateLoader {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
+  private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
 
   getTranslation(lang: string): Observable<Record<string, string>> {
     // Only folders that ship this language. `catchError` stays on the ones that are asked: a
@@ -166,15 +211,26 @@ export class AppTranslateLoader implements TranslateLoader {
     const app$ = this.http
       .get<unknown>(translationUrl(lang, document.baseURI))
       .pipe(catchError(() => of(EN_FALLBACK_TRANSLATIONS)));
+    const labelsUrl = packageLabelsUrl(this.bootstrapUrl, lang);
+    const package$ = this.http.get<unknown>(labelsUrl).pipe(
+      map((raw) => readPackageLabels(raw, labelsUrl)),
+      catchError(() => of({})),
+    );
 
-    return forkJoin([...folders$, app$]).pipe(
+    return forkJoin([...folders$, app$, package$]).pipe(
       map((catalogues) => {
+        const labels = catalogues.pop() as Record<string, string>;
         const app = catalogues.pop();
         const folders = catalogues.reduce<Record<string, string>>(
           (acc, catalogue) => ({ ...acc, ...flattenCatalogue(catalogue) }),
           {},
         );
-        return { ...folders, ...flattenCatalogue(app), ...this.config.manifest().labels };
+        return {
+          ...folders,
+          ...flattenCatalogue(app),
+          ...labels,
+          ...this.config.manifest().labels,
+        };
       }),
     );
   }

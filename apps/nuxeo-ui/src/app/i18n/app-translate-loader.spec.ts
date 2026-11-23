@@ -4,7 +4,13 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
 
-import { AppTranslateLoader, UPSTREAM_FOLDERS, upstreamCatalogueFor } from './app-translate-loader';
+import {
+  AppTranslateLoader,
+  UPSTREAM_FOLDERS,
+  packageLabelsUrl,
+  readPackageLabels,
+  upstreamCatalogueFor,
+} from './app-translate-loader';
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
 /** The one upstream folder `UPSTREAM_FOLDERS` declares, then the app's own catalogue last. */
@@ -35,26 +41,35 @@ describe('AppTranslateLoader', () => {
 
   /**
    * Answers every outstanding request: the upstream folders in declaration order, then the app's
-   * own catalogue. `getTranslation` issues them in one `forkJoin`, so they are all pending at
-   * once and the order of `httpMock.match` is the order the loader built them in.
+   * own catalogue, then the business app's labels, which are absent unless a test gives them.
+   * `getTranslation` issues them in one `forkJoin`, so they are all pending at once and the order
+   * of `httpMock.match` is the order the loader built them in.
    */
-  function flushCatalogues(folders: CatalogueBody[], app: CatalogueBody): void {
+  function flushCatalogues(
+    folders: CatalogueBody[],
+    app: CatalogueBody,
+    packageLabels?: CatalogueBody,
+  ): void {
     const requests = httpMock.match(() => true);
-    expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 1);
+    expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 2);
 
     requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request, index) => {
       request.flush(folders[index] ?? {});
     });
     requests[UPSTREAM_FOLDER_COUNT].flush(app);
+    const labels = requests[UPSTREAM_FOLDER_COUNT + 1];
+    if (packageLabels) labels.flush(packageLabels);
+    else labels.flush('', { status: 404, statusText: 'Not Found' });
   }
 
   afterEach(() => httpMock.verify());
 
   /**
-   * Exactly two catalogues per language: the app's own, and satori-ui's, which names controls —
-   * `sat-platform-nav`'s toggle has an empty accessible name without it.
+   * Three files per language: the app's own catalogue; satori-ui's, which names controls —
+   * `sat-platform-nav`'s toggle has an empty accessible name without it; and the business app's
+   * labels, beside `bootstrap.json`.
    */
-  it('fetches the satori-ui catalogue and the app catalogue, and nothing else', () => {
+  it('fetches the satori-ui catalogue, the app catalogue and the business app labels, and nothing else', () => {
     configure();
     loader.getTranslation('fr').subscribe();
 
@@ -70,6 +85,7 @@ describe('AppTranslateLoader', () => {
     expect(urls).toEqual([
       'assets/satori-ui/i18n/fr-FR.json',
       jasmine.stringMatching(/\/i18n\/fr\.json$/),
+      '/agentic-ui-config/labels/fr.json',
     ]);
     expect(urls[1]).not.toContain('assets/');
   });
@@ -227,7 +243,11 @@ describe('AppTranslateLoader', () => {
         return request.request.url;
       });
 
-    expect(urls).toEqual([jasmine.stringMatching(/\/i18n\/ja\.json$/)]);
+    // The app catalogue, and the business app's labels, which are asked for in every language.
+    expect(urls).toEqual([
+      jasmine.stringMatching(/\/i18n\/ja\.json$/),
+      '/agentic-ui-config/labels/ja.json',
+    ]);
     expect(urls).not.toContain('assets/satori-ui/i18n/ja.json');
   });
 
@@ -325,6 +345,82 @@ describe('AppTranslateLoader', () => {
     expect(merged?.['only.app']).toBe('app');
   });
 
+  describe("the business app's labels", () => {
+    let warnings: string[];
+
+    beforeEach(() => {
+      warnings = [];
+      spyOn(console, 'warn').and.callFake((message: unknown) => {
+        warnings.push(String(message));
+      });
+    });
+
+    it('come above the platform catalogue and below the manifest labels', () => {
+      configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' });
+      let merged: Record<string, string> | undefined;
+      loader.getTranslation('en').subscribe((value) => (merged = value));
+
+      flushCatalogues(
+        [{}],
+        { 'layout.field.claim:memberId': 'Member', 'only.app': 'app' },
+        {
+          version: 2,
+          labels: {
+            'payers.member.claims': 'Claims',
+            'payers.member.cases': 'Cases',
+            'layout.field.claim:memberId': 'Member ID',
+          },
+        },
+      );
+
+      expect(merged?.['payers.member.cases']).toBe('Cases');
+      // The package replaces the platform's own key in its language, as section 7 says.
+      expect(merged?.['layout.field.claim:memberId']).toBe('Member ID');
+      expect(merged?.['only.app']).toBe('app');
+      // And a customer's relabelling still wins.
+      expect(merged?.['payers.member.claims']).toBe('Claims, as the customer relabelled them');
+    });
+
+    it('are read for the language asked, beside bootstrap.json', () => {
+      configure();
+      expect(packageLabelsUrl('/agentic-ui-config/bootstrap.json', 'en')).toBe(
+        '/agentic-ui-config/labels/en.json',
+      );
+      expect(packageLabelsUrl('/nuxeo/agentic-ui-config/bootstrap.json?v=2', 'pt-BR')).toBe(
+        '/nuxeo/agentic-ui-config/labels/pt-BR.json',
+      );
+    });
+
+    it('are simply absent where none are served, and the rest still loads', () => {
+      configure();
+      let merged: Record<string, string> | undefined;
+      loader.getTranslation('en').subscribe((value) => (merged = value));
+      flushCatalogues([{}], { 'only.app': 'app' });
+      expect(merged?.['only.app']).toBe('app');
+      expect(warnings).toEqual([]);
+    });
+
+    it('leave out a file that is not version 2, and each key or text the validator refuses', () => {
+      expect(readPackageLabels({ version: 1, labels: { a: 'A' } }, 'labels/en.json')).toEqual({});
+      expect(readPackageLabels('<html>', 'labels/en.json')).toEqual({});
+      expect(
+        readPackageLabels(
+          { version: 2, labels: { 'payers.ok': 'Fine', 'payers.empty': '  ', 'bad key!': 'X' } },
+          'labels/en.json',
+        ),
+      ).toEqual({ 'payers.ok': 'Fine' });
+      expect(warnings).toContain(
+        '[agentic-ui-config] labels/en.json ignored: it is not a version 2 labels file',
+      );
+      expect(
+        warnings.some((w) => w.includes('labels["payers.empty"]') && w.endsWith('left out')),
+      ).toBe(true);
+      expect(warnings.some((w) => w.includes('labels["bad key!"]') && w.endsWith('left out'))).toBe(
+        true,
+      );
+    });
+  });
+
   it('falls back to the compiled-in English map when the app catalogue cannot be fetched', () => {
     configure();
     let merged: Record<string, string> | undefined;
@@ -333,6 +429,7 @@ describe('AppTranslateLoader', () => {
     const requests = httpMock.match(() => true);
     requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
     requests[UPSTREAM_FOLDER_COUNT].flush('', { status: 404, statusText: 'Not Found' });
+    requests[UPSTREAM_FOLDER_COUNT + 1].flush('', { status: 404, statusText: 'Not Found' });
 
     expect(merged?.['app.title']).toBe(EN_FALLBACK_TRANSLATIONS['app.title']);
   });
@@ -351,6 +448,7 @@ describe('AppTranslateLoader', () => {
     const requests = httpMock.match(() => true);
     requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
     requests[UPSTREAM_FOLDER_COUNT].flush('', { status: 500, statusText: 'Server Error' });
+    requests[UPSTREAM_FOLDER_COUNT + 1].flush('', { status: 404, statusText: 'Not Found' });
 
     expect(merged?.['settings.themes.search']).toBe('Search themes');
     expect(merged?.['document-detail.hide-details']).toBe('Hide details');

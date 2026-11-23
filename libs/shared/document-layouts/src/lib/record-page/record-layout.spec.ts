@@ -76,7 +76,8 @@ describe('readRecordLayout', () => {
       span: 2,
       visibleWhen: 'app.rules.canWrite',
     });
-    expect(card.label).toEqual({ keys: ['payers.member.card'], fallback: null });
+    // Named by a key, so its id is the heading where the key has no text.
+    expect(card.label).toEqual({ keys: ['payers.member.card'], fallback: 'Member' });
     expect(card.fields).toEqual([
       {
         kind: 'property',
@@ -140,7 +141,7 @@ describe('readRecordLayout', () => {
     expect(file.problems).toEqual([]);
     const [card] = file.cards;
     expect(card).toMatchObject({ id: 'claims', place: 'cards[0]', span: 2, fields: [] });
-    expect(card.label).toEqual({ keys: ['payers.member.claims'], fallback: null });
+    expect(card.label).toEqual({ keys: ['payers.member.claims'], fallback: 'Claims' });
     expect(card.related).toEqual({
       pageProvider: 'member_claims',
       parameters: [{ field: 'ecm:uuid' }, 'open'],
@@ -188,6 +189,20 @@ describe('readRecordLayout', () => {
       pageSize: 10,
       rowActions: [],
     });
+  });
+
+  it('gives a heading only to a card that names one', () => {
+    const file = read({
+      version: 2,
+      cards: [
+        { id: 'member-details', labelKey: 'payers.nope', fields: ['dc:title'] },
+        { id: 'plain', fields: ['dc:title'] },
+      ],
+    });
+    expect(file.cards.map((card) => card.label)).toEqual([
+      { keys: ['payers.nope'], fallback: 'Member details' },
+      { keys: [], fallback: null },
+    ]);
   });
 
   it('defaults a card to one column of one', () => {
