@@ -1,0 +1,105 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/SerialDocumentReview/Task38e",
+    "properties": "*"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/SerialDocumentReview/Task38e",
+    "facets": ["SystemDocument", "NotFulltextIndexable", "HiddenInNavigation", "facet-var_Task38e"],
+    "properties": {
+      "rnode:taskDocType": "TaskDoc",
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [
+        {
+          "filter": "",
+          "name": "cancel",
+          "label": "wf.serialDocumentReview.cancel",
+          "validate": false
+        },
+        {
+          "filter": "",
+          "name": "start_review",
+          "label": "wf.serialDocumentReview.startReview",
+          "validate": true
+        }
+      ],
+      "rnode:transitions": [
+        {
+          "result": null,
+          "path": [],
+          "condition": "NodeVariables[\"button\"] ==\"cancel\"",
+          "chain": "",
+          "targetId": "Task5c1",
+          "name": "sdr_cancelationTask38e",
+          "description": null,
+          "label": "sdr_cancelation"
+        },
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 180,
+              "y": 0
+            },
+            {
+              "x": 180,
+              "y": 24
+            },
+            {
+              "x": 0,
+              "y": 24
+            },
+            {
+              "x": 0,
+              "y": 100
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] ==\"start_review\"",
+          "chain": "",
+          "targetId": "Task6d8",
+          "name": "sdr_start_reviewTask38e",
+          "description": null,
+          "label": "sdr_start_review"
+        }
+      ],
+      "rnode:taskLayout": "Task38e@taskLayout",
+      "rnode:startDate": null,
+      "rnode:taskY": "100",
+      "rnode:variablesFacet": "facet-var_Task38e",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "420",
+      "rnode:inputChain": "",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": false,
+      "rnode:taskNotificationTemplate": null,
+      "rnode:allowTaskReassignment": false,
+      "rnode:stop": false,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": "CurrentDate.days(5)",
+      "rnode:hasTask": true,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "initInitiatorComment",
+      "rnode:taskDirective": "wf.serialDocumentReview.pleaseSelect",
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": "workflowInitiator",
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task38e",
+      "rnode:merge": null,
+      "rnode:start": false,
+      "rnode:taskAssigneesPermission": null,
+      "var_Task38e:comment": null
+    }
+  },
+  "trimmed": "properties: 38 of 56 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

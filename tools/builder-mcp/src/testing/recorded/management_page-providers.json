@@ -1,0 +1,71 @@
+{
+  "request": {
+    "path": "/management/page-providers"
+  },
+  "status": 200,
+  "body": [
+    {
+      "name": "document_picker",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "document_content",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "document_trash_content",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "default_search",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "default_content_collection",
+      "class": "org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider",
+      "maxPageSize": 1000
+    },
+    {
+      "name": "default_trash_search",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "tree_children",
+      "class": "org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider",
+      "maxPageSize": 1000
+    },
+    {
+      "name": "default_document_suggestion",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "default_collection_candidate",
+      "class": "org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider",
+      "maxPageSize": 1000
+    },
+    {
+      "name": "default_collection",
+      "class": "org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider",
+      "maxPageSize": 1000
+    },
+    {
+      "name": "advanced_document_content",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    }
+  ],
+  "trimmed": "11 of 96 kept: the default_, document_, tree_ and advanced_ ones"
+}

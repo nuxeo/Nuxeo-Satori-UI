@@ -1,0 +1,69 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/ParallelDocumentReview/Task21a0",
+    "properties": "*"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/ParallelDocumentReview/Task21a0",
+    "facets": [
+      "SystemDocument",
+      "NotFulltextIndexable",
+      "HiddenInNavigation",
+      "facet-var_Task21a0"
+    ],
+    "properties": {
+      "rnode:taskDocType": null,
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [],
+      "rnode:transitions": [
+        {
+          "result": null,
+          "path": [],
+          "condition": "true",
+          "chain": "",
+          "targetId": "Task2556",
+          "name": "automatic_transitionTask21a0",
+          "description": null,
+          "label": "automatic_transition"
+        }
+      ],
+      "rnode:taskLayout": null,
+      "rnode:startDate": null,
+      "rnode:taskY": "20",
+      "rnode:variablesFacet": "facet-var_Task21a0",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "360",
+      "rnode:inputChain": "",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": null,
+      "rnode:taskNotificationTemplate": null,
+      "rnode:allowTaskReassignment": true,
+      "rnode:stop": false,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": null,
+      "rnode:hasTask": false,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "",
+      "rnode:taskDirective": null,
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": null,
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task21a0",
+      "rnode:merge": null,
+      "rnode:start": true,
+      "rnode:taskAssigneesPermission": null
+    }
+  },
+  "trimmed": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

@@ -1,0 +1,94 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/ParallelDocumentReview/Task2556",
+    "properties": "*"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/ParallelDocumentReview/Task2556",
+    "facets": [
+      "SystemDocument",
+      "NotFulltextIndexable",
+      "HiddenInNavigation",
+      "facet-var_Task2556"
+    ],
+    "properties": {
+      "var_Task2556:comment": null,
+      "var_Task2556:assignees": [],
+      "rnode:taskDocType": "TaskDoc",
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [
+        {
+          "filter": "",
+          "name": "cancel",
+          "label": "wf.parallelDocumentReview.cancel",
+          "validate": false
+        },
+        {
+          "filter": "",
+          "name": "start_review",
+          "label": "wf.parallelDocumentReview.startReview",
+          "validate": true
+        }
+      ],
+      "rnode:transitions": [
+        {
+          "result": null,
+          "path": [],
+          "condition": "NodeVariables[\"button\"] ==\"cancel\"",
+          "chain": "NRD-AC-PR-UnlockDocument",
+          "targetId": "Task2225",
+          "name": "prl_cancelationTask2556",
+          "description": null,
+          "label": "prl_cancelation"
+        },
+        {
+          "result": null,
+          "path": [],
+          "condition": "NodeVariables[\"button\"] ==\"start_review\"",
+          "chain": "",
+          "targetId": "Task328d",
+          "name": "prl_review_startTask2556",
+          "description": null,
+          "label": "prl_review_start"
+        }
+      ],
+      "rnode:taskLayout": "Task2556@taskLayout",
+      "rnode:startDate": null,
+      "rnode:taskY": "120",
+      "rnode:variablesFacet": "facet-var_Task2556",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "340",
+      "rnode:inputChain": "",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": false,
+      "rnode:taskNotificationTemplate": null,
+      "rnode:allowTaskReassignment": false,
+      "rnode:stop": false,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": "CurrentDate.days(1)",
+      "rnode:hasTask": true,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "NRD-AC-PR-ChooseParticipants-Output",
+      "rnode:taskDirective": "wf.parallelDocumentReview.chooseParticipants.directive",
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": "workflowInitiator",
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task2556",
+      "rnode:merge": null,
+      "rnode:start": false,
+      "rnode:taskAssigneesPermission": "ReadWrite"
+    }
+  },
+  "trimmed": "properties: 39 of 57 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

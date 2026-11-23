@@ -1,0 +1,81 @@
+{
+  "request": {
+    "path": "/config/types"
+  },
+  "status": 200,
+  "body": {
+    "doctypes": {
+      "Document": {
+        "parent": "None!!!",
+        "facets": [],
+        "schemas": []
+      },
+      "RouteNode": {
+        "parent": "Document",
+        "facets": ["SystemDocument", "NotFulltextIndexable", "HiddenInNavigation"],
+        "schemas": ["dublincore", "route_node"]
+      },
+      "DocumentRoute": {
+        "parent": "OrderedFolder",
+        "facets": [
+          "SystemDocument",
+          "Folderish",
+          "ForceAudit",
+          "NXTag",
+          "HiddenInNavigation",
+          "Orderable",
+          "DocumentRoute"
+        ],
+        "schemas": [
+          "document_route_instance",
+          "document_route_model",
+          "common",
+          "dublincore",
+          "facetedTag"
+        ]
+      },
+      "Note": {
+        "parent": "Document",
+        "facets": ["Versionable", "NXTag", "Publishable", "Commentable", "HasRelatedText"],
+        "schemas": ["common", "note", "uid", "files", "dublincore", "facetedTag", "relatedtext"]
+      },
+      "Domain": {
+        "parent": "Folder",
+        "facets": ["Folderish", "NXTag", "SuperSpace", "NotCollectionMember"],
+        "schemas": ["domain", "common", "dublincore", "facetedTag"]
+      },
+      "File": {
+        "parent": "Document",
+        "facets": [
+          "Versionable",
+          "NXTag",
+          "Publishable",
+          "Commentable",
+          "HasRelatedText",
+          "Downloadable"
+        ],
+        "schemas": ["common", "file", "dublincore", "uid", "files", "facetedTag", "relatedtext"]
+      },
+      "Folder": {
+        "parent": "Document",
+        "facets": ["Folderish", "NXTag"],
+        "schemas": ["common", "dublincore", "facetedTag"]
+      },
+      "Workspace": {
+        "parent": "Folder",
+        "facets": ["Folderish", "NXTag", "SuperSpace"],
+        "schemas": [
+          "file",
+          "webcontainer",
+          "publishing",
+          "files",
+          "common",
+          "dublincore",
+          "facetedTag"
+        ]
+      }
+    },
+    "schemas": {}
+  },
+  "trimmed": "doctypes: 8 of 60 kept (Document, Folder, File, Note, Workspace, Domain, DocumentRoute, RouteNode); the flat schemas map, which nothing reads, emptied"
+}

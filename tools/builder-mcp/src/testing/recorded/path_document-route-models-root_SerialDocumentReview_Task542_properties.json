@@ -1,0 +1,129 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/SerialDocumentReview/Task542",
+    "properties": "*"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/SerialDocumentReview/Task542",
+    "facets": ["SystemDocument", "NotFulltextIndexable", "HiddenInNavigation", "facet-var_Task542"],
+    "properties": {
+      "rnode:taskDocType": "TaskDoc",
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [
+        {
+          "filter": "",
+          "name": "cancel",
+          "label": "wf.serialDocumentReview.cancel",
+          "validate": true
+        },
+        {
+          "filter": "",
+          "name": "submit",
+          "label": "wf.serialDocumentReview.submit",
+          "validate": true
+        }
+      ],
+      "rnode:transitions": [
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 200,
+              "y": 0
+            },
+            {
+              "x": 200,
+              "y": 130
+            },
+            {
+              "x": 0,
+              "y": 130
+            },
+            {
+              "x": 0,
+              "y": 260
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] ==\"cancel\"",
+          "chain": "",
+          "targetId": "Task5c1",
+          "name": "sdr_cancelationTask542",
+          "description": null,
+          "label": "sdr_cancelation"
+        },
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 380,
+              "y": 80
+            },
+            {
+              "x": 380,
+              "y": 103
+            },
+            {
+              "x": 71,
+              "y": 103
+            },
+            {
+              "x": 71,
+              "y": -30
+            },
+            {
+              "x": 0,
+              "y": -30
+            },
+            {
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] ==\"submit\"",
+          "chain": "",
+          "targetId": "Task6d8",
+          "name": "sdr_submissionTask542",
+          "description": null,
+          "label": "sdr_submission"
+        }
+      ],
+      "rnode:taskLayout": "Task542@taskLayout",
+      "rnode:startDate": null,
+      "rnode:taskY": "280",
+      "rnode:variablesFacet": "facet-var_Task542",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "620",
+      "rnode:inputChain": "",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": false,
+      "rnode:taskNotificationTemplate": null,
+      "rnode:allowTaskReassignment": false,
+      "rnode:stop": false,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": "CurrentDate.days(5)",
+      "rnode:hasTask": true,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "nextAssignee",
+      "rnode:taskDirective": "wf.serialDocumentReview.updateRequest.directive",
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": "workflowInitiator",
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task542",
+      "rnode:merge": null,
+      "rnode:start": false,
+      "rnode:taskAssigneesPermission": null
+    }
+  },
+  "trimmed": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

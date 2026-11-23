@@ -1,0 +1,27 @@
+{
+  "recordedAt": "2026-11-23",
+  "by": "tools/builder-mcp/src/testing/record.ts",
+  "server": "the local Docker Nuxeo of AGENTS/11-beta-program.md, recorded as http://localhost:8080",
+  "reads": 32,
+  "trims": {
+    "/config/schemas": "33 of 98 kept: those the kept types and workflows use",
+    "/config/facets": "34 of 65 kept: those the kept types and workflows use",
+    "/config/types": "doctypes: 8 of 60 kept (Document, Folder, File, Note, Workspace, Domain, DocumentRoute, RouteNode); the flat schemas map, which nothing reads, emptied",
+    "/management/page-providers": "11 of 96 kept: the default_, document_, tree_ and advanced_ ones",
+    "/id/0907ccd2-f60f-4471-b084-b3e3e5b6e626 [properties: *]": "properties: 11 of 32 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/SerialDocumentReview/Task38e [properties: *]": "properties: 38 of 56 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/SerialDocumentReview/Task5c1 [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/SerialDocumentReview/Task375f [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/SerialDocumentReview/Task6d8 [properties: *]": "properties: 38 of 56 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/SerialDocumentReview/Task542 [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/id/59e3b7f5-0e98-423b-8b49-bd3f63a1c0f6 [properties: *]": "properties: 13 of 34 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task22b4 [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task232e [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task2169 [properties: *]": "properties: 39 of 57 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task2556 [properties: *]": "properties: 39 of 57 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task2225 [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task21a0 [properties: *]": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/path/document-route-models-root/ParallelDocumentReview/Task328d [properties: *]": "properties: 39 of 57 kept (rnode, docri and var_ ones); the document's other keys left out",
+    "/automation": "operations: 4 of 313 kept (Document.Create, Document.Update, Document.FetchByProperty, Repository.Query); chains: 2 of 29"
+  }
+}
