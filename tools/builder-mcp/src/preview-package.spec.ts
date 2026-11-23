@@ -270,6 +270,21 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(everyFile(join(directory, 'dist'))).toEqual([]);
     });
 
+    it('names, rather than passes, a file whose name the validator takes and config:dev does not', async () => {
+      const dev = checkout('names');
+      const directory = packageWith('names-package', (root) =>
+        cpSync(join(root, 'labels', 'en.json'), join(root, 'labels', 'es-419.json')),
+      );
+      const preview = await previewPackage({ directory }, options(dev, await closedOrigin()));
+      expect(preview.validation.passed).toBe(true);
+      expect(preview.served).toBe(true);
+      expect(preview.notServed.find((file) => file.file === 'labels/es-419.json')?.why).toContain(
+        'es-419 is not one',
+      );
+      expect(existsSync(join(dev.folder, 'labels', 'en.json'))).toBe(true);
+      expect(existsSync(join(dev.folder, 'labels', 'es-419.json'))).toBe(false);
+    });
+
     it('keeps a dist/ the package already has, and what is in it', async () => {
       const dev = checkout('dist');
       const directory = packageWith('dist-package');
@@ -308,7 +323,8 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           stale: ['home.json'],
           stillServed: ['queues/old-queue.json'],
         });
-        expect(preview.devServer?.note).toContain('Restart it (npx nx serve nuxeo-ui)');
+        expect(preview.devServer?.note).toContain('restart it (npx nx serve nuxeo-ui)');
+        expect(preview.devServer?.note).toContain('another checkout or worktree');
         expect(existsSync(join(dev.folder, 'queues', 'old-queue.json'))).toBe(false);
       } finally {
         server.close();

@@ -50,10 +50,6 @@ function everyFile(root: string): string[] {
     .sort();
 }
 
-function leftovers(): string[] {
-  return readdirSync(tmpdir()).filter((name) => name.startsWith('builder-mcp-package-'));
-}
-
 /** The scratch copies are outside the repository, so the tests name their folder as a root. */
 const SCRATCH = { roots: [REPO_ROOT, scratch] };
 
@@ -97,8 +93,12 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
     it('passes the demo package, as CI does, writing nothing into it', async () => {
       const root = demoWith('sound');
       const before = everyFile(root);
-      const left = leftovers();
-      const check = await validatePackage({ directory: root }, SCRATCH);
+      // A work folder of this test's own: the system's temporary folder is shared with the other
+      // spec files, which run the pipeline at the same time, so a folder one of them has just made
+      // would read as this run's leftover.
+      const workIn = join(scratch, 'sound-work');
+      mkdirSync(workIn);
+      const check = await validatePackage({ directory: root }, { ...SCRATCH, workIn });
       expect(check.passed).toBe(true);
       expect(check.exitCode).toBe(0);
       expect(check.refusedAt).toBeNull();
@@ -107,9 +107,8 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(check.zip?.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(check.command).toContain(`--platform ${platformVersion()}`);
       expect(everyFile(root)).toEqual(before);
-      // The temporary folder the zip went to is gone too. Others' runs, in parallel, may come
-      // and go meanwhile, so only this run's is looked for.
-      expect(leftovers().filter((name) => !left.includes(name))).toEqual([]);
+      // The folder the zip went to is gone too.
+      expect(readdirSync(workIn)).toEqual([]);
     });
 
     it("names the file, the place and the widget for phase 0's demo step 1", async () => {

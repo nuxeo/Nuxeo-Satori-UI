@@ -1,6 +1,7 @@
 import {
   changesBetween,
   judgeVersion,
+  packagedText,
   withoutVersion,
   type Change,
   type PackageFiles,
@@ -104,11 +105,34 @@ describe('changesBetween', () => {
         what: 'The view layout of Claim records changed.',
       },
     ]);
-    // The same layout, written another way: the zip changes, so the version must too.
-    const rewritten = files({
-      [`${ROOT}layouts/Claim/view.layout.json`]: JSON.stringify(LAYOUT),
+    // Compared as the builder zips it: spacing and $schema are not in the zip; the keys' order is.
+    const respaced = files({
+      [`${ROOT}layouts/Claim/view.layout.json`]: JSON.stringify({
+        $schema: '../x.json',
+        ...LAYOUT,
+      }),
     });
-    expect(levels(before, rewritten)).toEqual(['change']);
+    expect(levels(before, respaced)).toEqual([]);
+    const reordered = files({
+      [`${ROOT}layouts/Claim/view.layout.json`]: { cards: LAYOUT.cards, version: 2 },
+    });
+    expect(levels(before, reordered)).toEqual(['change']);
+  });
+
+  it("leaves the manifest's Bundle-Version out while it is the package's version", () => {
+    const manifest = (version: string) =>
+      `Manifest-Version: 1.0\r\nBundle-SymbolicName: x\r\nBundle-Version: ${version}\r\n`;
+    const at = (version: string, bundle: string) =>
+      files({ 'bundle/META-INF/MANIFEST.MF': manifest(bundle) }, { packageVersion: version });
+    expect(changes(at('1.0.0', '1.0.0'), at('1.0.1', '1.0.1'))).toEqual([]);
+    // Moved alone, it is the zip's bytes changing under one version.
+    expect(levels(at('1.0.0', '1.0.0'), at('1.0.0', '9.9.9'))).toEqual(['judge']);
+    // A Bundle-Version that never followed the package's is compared as it is.
+    expect(levels(at('1.0.0', '7.0.0'), at('1.0.1', '7.0.0'))).toEqual([]);
+    // Its lines as the builder writes them: unfolded, one kind of line end.
+    expect(packagedText('bundle/META-INF/MANIFEST.MF', 'A: b\r\n c\r\nD: e\n\n')).toBe(
+      'A: bc\nD: e',
+    );
   });
 
   it('reads labels and actions by key: removed, added or changed', () => {
@@ -265,17 +289,31 @@ describe('judgeVersion', () => {
     expect(judgeVersion('0.2.0', '1.0.0', [change('breaking')]).refused).toBeNull();
   });
 
-  it('lets a later prerelease of the same version, or its release, carry any change', () => {
+  it("holds a later prerelease of a version, or its release, to what that version's release may carry", () => {
+    // 1.0.0's prereleases are on the way to a major: they may break.
     expect(judgeVersion('1.0.0-rc.1', '1.0.0-rc.2', [change('breaking')])).toMatchObject({
       refused: null,
       raised: 'prerelease',
+      changelog: expect.stringContaining('1.0.0-rc.2 is a later prerelease of the same version.'),
     });
     expect(judgeVersion('1.0.0-rc.1', '1.0.0', [change('breaking')])).toMatchObject({
       refused: null,
       changelog: expect.stringContaining('1.0.0 is the release 1.0.0-rc.1 was a prerelease of.'),
     });
-    expect(judgeVersion('1.0.0-rc.1', '1.0.0-rc.2', [change('breaking')]).changelog).toContain(
-      '1.0.0-rc.2 is a later prerelease of the same version.',
+    // 1.0.1's are on the way to a patch: a breaking change cannot reach a patch release through them.
+    expect(judgeVersion('1.0.1-rc.1', '1.0.1-rc.2', [change('breaking')]).refused).toBe(
+      'the changes since 1.0.1-rc.1 need a major version, and 1.0.1-rc.2 is on the way to 1.0.1,' +
+        ' which raises the patch. For one: A breaking. Make it 2.0.0 or a prerelease of it, at least.',
+    );
+    expect(judgeVersion('1.0.1-rc.2', '1.0.1', [change('addition')]).refused).toContain(
+      'Make it 1.1.0 or a prerelease of it',
+    );
+    expect(judgeVersion('1.0.1-rc.1', '1.0.1-rc.2', [change('change')]).refused).toBeNull();
+    expect(judgeVersion('1.1.0-rc.1', '1.1.0', [change('addition')]).refused).toBeNull();
+    // Below 1.0.0, 0.3.0 is a minor, which is what a breaking change needs there.
+    expect(judgeVersion('0.3.0-rc.1', '0.3.0-rc.2', [change('breaking')]).refused).toBeNull();
+    expect(judgeVersion('0.2.1-rc.1', '0.2.1', [change('breaking')]).refused).toContain(
+      'Make it 0.3.0 or a prerelease of it',
     );
     // A prerelease of a higher core is a raise of that core.
     expect(judgeVersion('1.0.0', '2.0.0-rc.1', [change('breaking')]).refused).toBeNull();

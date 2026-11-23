@@ -839,6 +839,31 @@ expectVersion(
   },
   { refused: 'the previous package is payers-claims-old, and this one is payers-claims-demo' },
 );
+expectVersion(
+  'a breaking change in a later prerelease of a patch version',
+  { from: '1.0.1-rc.1', to: '1.0.1-rc.2', after: removeQueue },
+  {
+    refused: 'need a major version, and 1.0.1-rc.2 is on the way to 1.0.1, which raises the patch.',
+  },
+);
+expectVersion(
+  "the manifest's Bundle-Version changed alone, at the same version",
+  {
+    from: VERSION,
+    to: VERSION,
+    after: (directory) => {
+      const manifest = join(directory, 'bundle/META-INF/MANIFEST.MF');
+      writeFileSync(
+        manifest,
+        readFileSync(manifest, 'utf8').replace(
+          `Bundle-Version: ${VERSION}`,
+          'Bundle-Version: 9.9.9',
+        ),
+      );
+    },
+  },
+  { refused: `and the version is still ${VERSION}` },
+);
 
 expectVersion(
   'unchanged, at the same version',
@@ -894,7 +919,21 @@ expectVersion(
   { changelog: ['## Added', 'it admits more platform versions.'] },
 );
 expectVersion(
-  'a breaking change in a later prerelease of the same version',
+  'a Markdown file in the bundle and a JSON file re-spaced, neither of which the zip shows',
+  {
+    from: VERSION,
+    to: VERSION,
+    before: (directory) => writeFileSync(join(directory, 'bundle/NOTES.md'), 'one\n'),
+    after: (directory) => {
+      writeFileSync(join(directory, 'bundle/NOTES.md'), 'two\n');
+      const labels = join(directory, LABELS);
+      writeFileSync(labels, JSON.stringify(JSON.parse(readFileSync(labels, 'utf8'))));
+    },
+  },
+  { changelog: [`No change since ${VERSION}.`] },
+);
+expectVersion(
+  'a breaking change in a later prerelease of a major version',
   { from: '1.0.0-rc.1', to: '1.0.0-rc.2', after: removeQueue },
   { changelog: ['## Breaking', '1.0.0-rc.2 is a later prerelease of the same version.'] },
 );

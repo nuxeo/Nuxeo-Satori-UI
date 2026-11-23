@@ -387,9 +387,20 @@ function compare(rest: readonly string[], io: CliIo): number {
 }
 
 /**
- * The files of a configuration package's `bundle/` and `package/`, each by its path with `/`: its
- * text, or, for a file that is not UTF-8 text, such as an image, its digest. A link is not
- * followed, and the package is refused rather than read in part.
+ * What `build.mjs`, the generator's, puts into the zip: every file of `bundle/` but its Markdown,
+ * and `package/`'s `package.xml` and `install.xml`. Anything else in the package is not shipped, so
+ * changing it changes no version.
+ */
+const PACKAGED = (name: string): boolean =>
+  name.startsWith('bundle/')
+    ? !name.endsWith('.md')
+    : name === 'package/package.xml' || name === 'package/install.xml';
+
+/**
+ * The files of a configuration package that its zip holds (`PACKAGED`), each by its path with
+ * `/`: its text, or, for a file that is not UTF-8 text, such as an image, its digest. A link is
+ * not followed, anywhere in `bundle/` or `package/`, and the package is refused rather than read
+ * in part.
  */
 function packageFiles(directory: string): PackageFiles | string {
   const files = new Map<string, string>();
@@ -405,6 +416,7 @@ function packageFiles(directory: string): PackageFiles | string {
       return null;
     }
     if (!entry.isFile()) return `${name} is neither a file nor a folder`;
+    if (!PACKAGED(name)) return null;
     const bytes = readFileSync(path);
     const text = bytes.toString('utf8');
     files.set(

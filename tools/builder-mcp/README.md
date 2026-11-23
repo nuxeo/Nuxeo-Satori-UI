@@ -114,13 +114,16 @@ as dev mode would on a server:
    **replaces what was served before**: one package is previewed at a time.
 3. **It says what it could not serve,** and why: `app.json`, which the app registry will read and
    which waits on decisions B and E; `actions.json` and `modules/`, which nothing in the app reads
-   yet; `assets/`, which `config:dev` does not serve; version 1's fragments.
-4. **It checks the dev server,** at `DEV_SERVER_URL`: each file the dev folder holds must be
-   answered byte for byte, and each the run removed must no longer be answered as it was. The dev
-   server sees a new file a moment after it is written (measured: under a second), so it is given
-   five seconds. A dev server started before `agentic-ui-config/` existed serves nothing under it
-   until it is restarted, and the answer says to restart it then. Nothing answering means it is not
-   running.
+   yet; `assets/`, which `config:dev` does not serve; version 1's fragments; and a file whose name
+   the validator accepts and `config:dev` does not, such as labels for `es-419`, which would stop
+   the script whole.
+4. **It checks the dev server,** at `DEV_SERVER_URL`: each file the dev folder holds is asked for
+   and compared byte for byte, and each the run removed is asked for again. Those not answered as
+   they should be are named; the package is served all the same. The dev server sees a new file a
+   moment after it is written (measured: under a second), so it is given five seconds. A dev server
+   started before `agentic-ui-config/` existed serves nothing under it until it is restarted, and
+   one started from another checkout or worktree serves that one's folder: the answer says which
+   to do. Nothing answering means it is not running.
 5. **It answers with the addresses:** the home, each queue and the tasks page, under
    `<DEV_SERVER_URL>/#/`. A record page opens on a record of its type, which the tool does not look
    up, since it reads no record: open one from a queue or a search.
@@ -131,8 +134,9 @@ workflows and records the package names must be there.
 
 **What it writes, and nothing else:** the dev folder, through the script; and, while it runs, a
 folder of its own in the package's `dist/`, for the pipeline's zip and what step 5 unpacks to read
-it back, removed afterwards, with `dist/` itself when the tool made it. The package's files are
-read before the pipeline runs and again after the script, and a package that changed in between is
+it back, removed afterwards, with `dist/` itself when the tool made it. The app definition's files,
+`bundle/agentic-ui-config/`, are read before the pipeline runs and again after the script, and a
+package whose definition changed in between is
 refused, with the dev folder put back to the platform's defaults: what is served is what was
 validated. No credential reaches the pipeline or the script.
 

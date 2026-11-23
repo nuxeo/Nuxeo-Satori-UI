@@ -11,7 +11,8 @@
  *    configuration servlet would, and removes what it served before. Each file the package holds
  *    that it cannot serve is named, with the reason.
  * 3. **Checked in the dev server.** Each file the dev folder holds is asked of the dev server and
- *    compared byte for byte, and each it removed must no longer be answered as it was. The dev
+ *    compared byte for byte, and each it removed is asked for again, and named when it is still
+ *    answered as it was. The dev
  *    server's watcher takes a moment to see a new file, so it is given a few seconds; a file still
  *    not answered then is named, with a restart as the fix.
  * 4. **The addresses to open:** the home, each queue, the tasks page. A record page opens on a
@@ -102,7 +103,10 @@ export interface Preview {
   readonly command: string | null;
   readonly output: readonly string[];
   readonly devServer: DevServerCheck | null;
-  /** The address to open first: the home, else the first queue, else the app's own first page. */
+  /**
+   * The address to open first: the home, else the first queue, else the tasks page when there are
+   * task forms, else the app's own first page.
+   */
   readonly open: string | null;
   readonly pages: readonly Page[];
   readonly note: string;
@@ -113,6 +117,8 @@ let previous: Promise<unknown> = Promise.resolve();
 
 export function previewPackage(request: PackageRequest, options: PreviewOptions): Promise<Preview> {
   const run = previous.then(() => preview(request, options));
+  // The caller gets this run's failure through `run`; the chain only waits for it to end, so the
+  // next preview starts whether this one passed or failed.
   previous = run.catch(() => undefined);
   return run;
 }
@@ -263,35 +269,72 @@ function place(root: string): Placed {
     flags.push(flag, value);
     files.push({ file, servedAt, what });
   };
+  // A name the validator accepts and config:dev does not would stop the script whole; such a file
+  // is named, not passed.
+  const refuse = (file: string, why: string) => notServed.push({ file, why });
   for (const file of filesUnder(root)) {
     const path = join(root, ...file.split('/'));
     let match: RegExpExecArray | null;
-    if ((match = /^layouts\/([^/]+)\/([^/]+)\.layout\.json$/.exec(file)))
-      serve(
-        file,
-        '--layout',
-        `${match[1]}/${match[2]}=${path}`,
-        `layouts/${match[1]}/${match[2]}.layout.json`,
-        `the ${match[2]} layout of ${match[1]} records, listed in layouts.json`,
-      );
-    else if (file === 'home.json') serve(file, '--home', path, file, "the app's home, at /home");
+    if ((match = /^layouts\/([^/]+)\/([^/]+)\.layout\.json$/.exec(file))) {
+      if (!SERVED.layoutType.test(match[1]) || !SERVED.layoutMode.test(match[2]))
+        refuse(file, 'config:dev serves a layout only for a type and a mode the server accepts.');
+      else
+        serve(
+          file,
+          '--layout',
+          `${match[1]}/${match[2]}=${path}`,
+          `layouts/${match[1]}/${match[2]}.layout.json`,
+          `the ${match[2]} layout of ${match[1]} records, listed in layouts.json`,
+        );
+    } else if (file === 'home.json') serve(file, '--home', path, file, "the app's home, at /home");
     else if (file === 'navigation.json') serve(file, '--navigation', path, file, "the app's menu");
-    else if ((match = /^queues\/([^/]+)\.json$/.exec(file)))
-      serve(file, '--queue', path, file, `the queue ${match[1]}, at /queues/${match[1]}`);
-    else if ((match = /^labels\/([^/]+)\.json$/.exec(file)))
-      serve(file, '--labels', `${match[1]}=${path}`, file, `the labels in ${match[1]}`);
-    else if ((match = /^tasks\/([^/]+)\.layout\.json$/.exec(file)))
-      serve(
-        file,
-        '--task',
-        `${match[1]}=${path}`,
-        file,
-        `the task form of the workflow step ${match[1]}`,
-      );
-    else notServed.push({ file, why: whyNotServed(file) });
+    else if ((match = /^queues\/([^/]+)\.json$/.exec(file))) {
+      if (!SERVED.queue.test(match[1]))
+        refuse(
+          file,
+          'config:dev serves a queue only under an id of 1 to 64 letters, digits, ".", "_" or "-".',
+        );
+      else serve(file, '--queue', path, file, `the queue ${match[1]}, at /queues/${match[1]}`);
+    } else if ((match = /^labels\/([^/]+)\.json$/.exec(file))) {
+      if (!SERVED.language.test(match[1]))
+        refuse(
+          file,
+          `config:dev serves labels for a language named as the platform's catalogues are, such as` +
+            ` en or pt-BR, and ${match[1]} is not one, so the app would never ask for them.`,
+        );
+      else serve(file, '--labels', `${match[1]}=${path}`, file, `the labels in ${match[1]}`);
+    } else if ((match = /^tasks\/([^/]+)\.layout\.json$/.exec(file))) {
+      if (!SERVED.task.test(match[1]))
+        refuse(
+          file,
+          'config:dev serves a task form only as <workflow>.<step>, each a letter then letters,' +
+            ' digits, "_" or "-".',
+        );
+      else
+        serve(
+          file,
+          '--task',
+          `${match[1]}=${path}`,
+          file,
+          `the task form of the workflow step ${match[1]}`,
+        );
+    } else notServed.push({ file, why: whyNotServed(file) });
   }
   return { files, notServed, flags };
 }
+
+/**
+ * The names `scripts/dev-config.mjs` accepts, as it states them: one it refuses stops the whole
+ * run, so a file named otherwise is left out and named instead. Kept beside the script's own; a
+ * name the script refuses all the same is reported as its refusal.
+ */
+const SERVED = {
+  layoutType: /^[A-Za-z][A-Za-z0-9_-]{0,127}$/,
+  layoutMode: /^[a-z][a-z0-9-]{0,31}$/,
+  queue: /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/,
+  language: /^[a-z]{2,3}(?:-[A-Z]{2})?$/,
+  task: /^[A-Za-z][A-Za-z0-9_-]{0,127}\.[A-Za-z][A-Za-z0-9_-]{0,127}$/,
+};
 
 function whyNotServed(file: string): string {
   if (file === 'app.json')
@@ -411,8 +454,10 @@ async function askDevServer(
       behind.length === 0
         ? `The dev server at ${origin} answers every file as the dev folder holds it.`
         : `The dev server at ${origin} still does not answer ${behind.join(', ')} as the dev` +
-          ` folder holds them, ${Math.round(waitMs / 1000)}s after they were written. Restart it` +
-          ' (npx nx serve nuxeo-ui), then open the address.',
+          ` folder holds them, ${waitMs / 1000}s after they were written. If it runs` +
+          ' from this checkout, restart it (npx nx serve nuxeo-ui), then open the address. If' +
+          " it runs from another checkout or worktree, it serves that one's folder: stop it, and" +
+          " start this one's.",
   };
 }
 
@@ -430,6 +475,8 @@ async function readAtMost(response: Response, limit: number): Promise<Buffer> {
       size += value.byteLength;
     }
   } finally {
+    // Stops the rest of the body being read. Cancelling a body already read to its end, or one
+    // the server closed, can reject, and there is nothing to report: what was read is compared.
     await reader.cancel().catch(() => undefined);
   }
   return Buffer.concat(chunks).subarray(0, limit);

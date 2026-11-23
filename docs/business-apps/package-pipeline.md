@@ -171,7 +171,7 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 1. Raise the version in `package/package.xml` and `app.json`'s `packageVersion`, together, as far
    as section 8 says the changes need, and merge. The pull request's check refuses less.
 2. Tag the merged commit `app-package/<name>/<version>`, and push the tag.
-3. The workflow checks and builds the package again at that commit, held to its previous tag,
+3. The workflow checks and builds the package again at that commit, held to its last release,
    signs the zip and publishes it, with what changed since in the run's summary.
 4. Anyone can check the signature:
 
@@ -228,22 +228,26 @@ on. It does not measure how much changed.
 | **Breaking:** a layout, a queue, a task form, a labels language or one of its keys, an action, a module's settings, the home, the menu or an image removed; the app's `address` changed; a group losing the app; the platform range leaving out a release it admitted; a domain module newly needed | major                                                         | minor                               |
 | **Addition:** any of those added; a group given the app; the platform range admitting more                                                                                                                                                                                                          | minor                                                         | patch                               |
 | **To judge:** a change outside the app definition, such as the component that contributes it, a schema, the stand-in model, `package.xml`'s dependencies or `install.xml`                                                                                                                           | minor, and a person raises the major when it breaks something | patch, and the minor when it breaks |
-| **Change:** anything else in a file that stays: a card, a field, a column, a rule, a label's text, the branding, or the same file written another way                                                                                                                                               | patch                                                         | patch                               |
+| **Change:** anything else in a file that stays: a card, a field, a column, a rule, a label's text, the branding, or the same file with its keys in another order                                                                                                                                    | patch                                                         | patch                               |
 
 - **Below 1.0.0, everything moves down one,** as npm reads `^0.y.z`, and as `app.json`'s platform
   range is read ([app-definition-v2.md](app-definition-v2.md), section 3).
 - **Raising more is allowed.** A large redesign may be a minor. The pipeline refuses less than the
   changes need, never more.
-- **The version is not a change.** `app.json`'s `packageVersion`, `package.xml`'s `version` and
-  the manifest's `Bundle-Version` are left out of the comparison: a version raised with nothing
-  else changed passes, and its changelog says so.
+- **The version is not a change.** `app.json`'s `packageVersion` and `package.xml`'s `version` are
+  left out of the comparison, and so is the manifest's `Bundle-Version` while it is the package's
+  version: a version raised in all three with nothing else changed passes, and its changelog says
+  so. A `Bundle-Version` moved alone is a change, since the zip's bytes move with it.
 - **An app keeps its id, and a package its name.** A changed one is another app or package, not a
   new version, and is refused.
-- **A prerelease.** From `1.0.0-rc.1`, a later prerelease of 1.0.0, or 1.0.0 itself, may carry any
-  change, as semantic versioning allows before a release. `1.0.1-rc.1` is a raise of the patch.
-- **Content is bytes.** Every file of `bundle/` and `package/` is compared, and one whose bytes
-  differ, the version aside, is a change: a JSON file rewritten with the same meaning changes the
-  zip, so it changes the version. An image is compared by its bytes.
+- **A prerelease carries what its release may.** `1.0.1-rc.2` is on the way to 1.0.1, a patch, so
+  from `1.0.1-rc.1` it may carry a change and nothing more; a breaking change needs `2.0.0` or one
+  of its prereleases. `1.0.0`'s prereleases are on the way to a major, and may break. Otherwise a
+  breaking change could reach a patch release one prerelease at a time.
+- **Content is what the zip holds,** as the builder writes it: every file of `bundle/` but its
+  Markdown, and `package.xml` and `install.xml`. A JSON file is compared as the builder packages
+  it, parsed and written again without its `$schema`, so its spacing is not content and the order
+  of its keys is; the manifest with its lines unfolded. An image is compared by its bytes.
 - **Not weighed:** what a file says beyond the names above, so a field removed from a record page
   is a change, since nothing outside the package can name a field; which prereleases a platform
   range admits; and `build.mjs`, which is the generator's, byte for byte.
@@ -283,19 +287,22 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 ```
 
 **In CI,** `app-packages.yml` holds a pull request to its base, a push to the commit before it, and
-a tag to the package's previous tag, the next below it in version order, a prerelease before its
-release. A package the base does not have is new, and held to nothing. The changelog goes into the
+a tag to the package's last release below it, skipping prereleases, so a release's changelog and
+its judgement cover everything since the release before it, whatever prereleases came between. A
+package the base does not have is new, and held to nothing. The changelog goes into the
 job's summary and the artifact. The base is fetched by its commit, at depth 1, with the checkout's
 anonymous access, which a public repository allows; a private one would need the job's token for
 that fetch.
 
-**Its controls:** `npm run app-package:selftest` breaks the demo once per rule, 12 times, each
+**Its controls:** `npm run app-package:selftest` breaks the demo once per rule, 14 times, each
 refused at step 3 for its own reason with no zip and no changelog left, an earlier run's changelog
-included; builds 7 sound ones with the changelog each should have; and checks that a
-`--previous` that is not there stops the run, exit 2. The library's spec holds each rule's classification and
-judgement. The workflow's step was run on a scratch clone, as a pull request that changes nothing
-(built), one that removes a queue at the same version (refused), and a tag 0.10.0, held to
-0.10.0-rc.1 rather than 0.9.0. It has not run on GitHub yet.
+included; builds 8 sound ones with the changelog each should have, among them a Markdown file and
+a re-spaced JSON file that change nothing the zip holds; and checks that a `--previous` that is
+not there stops the run, exit 2. The library's spec holds each rule's classification and
+judgement. The workflow's step was run on a scratch clone: a pull request that changes nothing
+(built), one that removes a queue at the same version (refused), a tag 0.9.1 whose queue was
+removed in 0.9.1-rc.1, held to 0.9.0 and refused, and a tag 0.10.0, held to 0.9.1, not to
+0.10.0-rc.1. It has not run on GitHub yet.
 
 **Not yet:** `validate_package`, in the Builder MCP server, takes no previous package, so an agent
 learns that a version must move only from the pipeline.
@@ -372,7 +379,7 @@ tag app-package/<name>/<version>
 - **Its secrets are its own.** The production Marketplace credentials would be environment
   secrets of `app-packages-production`, which a job reads only once approved. Today's
   `CONNECT_PREPROD_*` would move to an `app-packages-preprod` environment the same way.
-- **What the approver sees,** in the run's summary: the changelog since the previous tag (section
+- **What the approver sees,** in the run's summary: the changelog since the last release (section
   8), the part the version needed and the part it raised, the zip's digest, the attestation, and
   the preprod install to try. Approving says that these bytes, tried in preprod, go to production.
 - **The same bytes.** The promotion job never builds: it takes the artifact of the same run, as

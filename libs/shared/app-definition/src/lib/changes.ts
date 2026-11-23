@@ -22,8 +22,19 @@
  * change the patch. Below 1.0.0, as npm's `^0.y.z` reads a version, everything moves down one: a
  * breaking change raises the minor, and anything else the patch. Raising more is always allowed.
  *
- * The version itself is not content: `app.json`'s `packageVersion`, `package.xml`'s version and the
- * manifest's `Bundle-Version` are left out of the comparison, since they move together on purpose.
+ * **What is compared is what the builder packages** (`build.mjs`, the generator's): a JSON file of
+ * the bundle as it is zipped, parsed and written again without its `$schema`, so its spacing is not
+ * content and the order of its keys is; the manifest with its lines unfolded. Which files the
+ * builder packages, the bundle but its Markdown and `package.xml` and `install.xml`, is the
+ * command line's to choose when it reads them.
+ *
+ * The version itself is not content: `app.json`'s `packageVersion` and `package.xml`'s version are
+ * left out of the comparison, and so is the manifest's `Bundle-Version` while it is the package's
+ * version. One that is not is compared, so a `Bundle-Version` changed alone is a change.
+ *
+ * A prerelease is held to the release its core is: `1.0.1-rc.2` is on the way to a patch, so,
+ * coming from `1.0.1-rc.1`, it may carry what a patch may carry and no more. A release or a
+ * prerelease is best held to the last release below it, which is what CI compares a tag with.
  *
  * Pure: the files are given as text, keyed by their path in the package with `/`. Reading them is
  * the command line's (`cli.ts`, `changes`).
@@ -72,10 +83,17 @@ export function changesBetween(
   const changes: Change[] = [];
   const refusals: string[] = [];
   const paths = [...new Set([...previous.keys(), ...current.keys()])].sort();
+  const [was, is] = [versionIn(previous), versionIn(current)];
   for (const file of paths) {
     const before = previous.get(file);
     const after = current.get(file);
-    if (before !== undefined && after !== undefined && same(file, before, after)) continue;
+    if (
+      before !== undefined &&
+      after !== undefined &&
+      withoutVersion(file, packagedText(file, before), was) ===
+        withoutVersion(file, packagedText(file, after), is)
+    )
+      continue;
     if (!file.startsWith(DEFINITION_ROOT)) {
       changes.push({
         level: 'judge',
@@ -140,9 +158,20 @@ export function judgeVersion(
         ` ${version}. Raise it to ${suggested(was, required)} at least, a ${required} version, in` +
         " package.xml and app.json's packageVersion together.",
     );
-  // A later prerelease of the same core, or its release: still on the way to one version, which
-  // semantic versioning lets change freely before its release.
-  if (raised === 'prerelease') return judged(null);
+  // A later prerelease of the same core, or its release: still on the way to that core's release,
+  // so it carries no more than that release may. `1.0.1-rc.2` is a patch's prerelease.
+  if (raised === 'prerelease') {
+    const core = { ...is, prerelease: [] };
+    const implied = partOf(core);
+    if (rank(implied) >= rank(required)) return judged(null);
+    const why = changes.find((change) => levelNeeds(change.level, was) === required);
+    const coreText = `${core.major}.${core.minor}.${core.patch}`;
+    return judged(
+      `the changes since ${previous} need a ${required} version, and ${version} is on the way to` +
+        ` ${coreText}, which raises the ${implied}. ${why ? `For one: ${why.what} ` : ''}Make it` +
+        ` ${suggested(core, required)} or a prerelease of it, at least.`,
+    );
+  }
   if (rank(raised) < rank(required)) {
     const why = changes.find((change) => levelNeeds(change.level, was) === required);
     return judged(
@@ -187,6 +216,13 @@ function raisedPart(was: Version, is: Version): VersionPart | 'prerelease' | nul
   if (is.minor !== was.minor) return 'minor';
   if (is.patch !== was.patch) return 'patch';
   return 'prerelease';
+}
+
+/** The part a release raises by its own form: `1.0.1` a patch, `1.1.0` a minor, `2.0.0` a major. */
+function partOf(core: Version): VersionPart {
+  if (core.patch > 0) return 'patch';
+  if (core.minor > 0) return 'minor';
+  return 'major';
 }
 
 /** The least version that raises `part` from `was`. */
@@ -244,25 +280,48 @@ function changelogOf(
   return `${lines.join('\n')}\n`;
 }
 
-/** Whether two texts of one file say the same, the version fields aside. */
-function same(file: string, before: string, after: string): boolean {
-  return withoutVersion(file, before) === withoutVersion(file, after);
+/** The package's version, as its `app.json` names it, or `null`. */
+function versionIn(files: PackageFiles): string | null {
+  const text = files.get(`${DEFINITION_ROOT}app.json`);
+  const version = text === undefined ? undefined : objectOf(text)?.['packageVersion'];
+  return typeof version === 'string' ? version : null;
 }
 
 /**
- * The file's text with its version blanked, for the three files that carry it: `app.json`'s
- * `packageVersion`, the version of `package.xml`'s `<package>` element, and the manifest's
- * `Bundle-Version`. A comment cannot hide a `<package>` element: comments are blanked first.
+ * A file's text as the builder packages it: a JSON file of the bundle parsed and written again
+ * without its `$schema`, the manifest with its lines unfolded and its line ends made one. Anything
+ * else, and JSON that cannot be read, which the builder would refuse, as it is.
  */
-export function withoutVersion(file: string, text: string): string {
+export function packagedText(file: string, text: string): string {
+  if (file.startsWith('bundle/') && file.endsWith('.json')) {
+    const content = objectOf(text);
+    if (content === null) return text;
+    delete content['$schema'];
+    return JSON.stringify(content);
+  }
+  if (file === 'bundle/META-INF/MANIFEST.MF')
+    return text.replace(/\r\n?/g, '\n').replace(/\n /g, '').replace(/\n+$/, '');
+  return text;
+}
+
+/**
+ * The file's text with the package's version blanked where it is written: `app.json`'s
+ * `packageVersion`, the version of `package.xml`'s `<package>` element, and the manifest's
+ * `Bundle-Version` when it is `version`. A comment cannot hide a `<package>` element: comments are
+ * blanked first.
+ */
+export function withoutVersion(file: string, text: string, version: string | null = null): string {
   if (file === `${DEFINITION_ROOT}app.json`)
     return text.replace(/("packageVersion"\s*:\s*)"(?:[^"\\]|\\.)*"/, '$1""');
   if (file === 'package/package.xml')
     return text
       .replace(/<!--[^]*?-->/g, (comment) => comment.replace(/[^\n]/g, ' '))
       .replace(/(<package\b[^>]*?\bversion\s*=\s*)("[^"]*"|'[^']*')/, '$1""');
-  if (file === 'bundle/META-INF/MANIFEST.MF')
-    return text.replace(/^(Bundle-Version:)[^\r\n]*/im, '$1');
+  if (file === 'bundle/META-INF/MANIFEST.MF' && version !== null)
+    return text.replace(
+      /^(Bundle-Version:)[ \t]*([^\r\n]*)/im,
+      (line, header: string, value: string) => (value.trim() === version ? header : line),
+    );
   return text;
 }
 
@@ -490,8 +549,14 @@ function platformChange(file: string, from: string | undefined, to: string | und
     to === undefined ? null : interval(to),
   ];
   const said = `The platform range is ${to ?? 'gone'}, and was ${from ?? 'none'}`;
+  // app.json requires a range, so a side without one, or with one that cannot be read, was not a
+  // valid app: what it admitted cannot be weighed, and the change is taken as the larger one.
   if (was === null || is === null)
-    return { level: 'breaking', file, what: `${said}: the two cannot be compared.` };
+    return {
+      level: 'breaking',
+      file,
+      what: `${said}: what one of them admits cannot be read, so it is taken to leave some out.`,
+    };
   if (startsEarlier(was.low, is.low) || endsEarlier(is.high, was.high))
     return {
       level: 'breaking',

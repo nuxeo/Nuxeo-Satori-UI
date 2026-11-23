@@ -647,6 +647,18 @@ describe('app-definition changes', () => {
     expect(judged(unmoved.out)['refused']).toContain('and the version is still 1.0.0');
   });
 
+  it('compares what the zip holds: not a Markdown file, nor what package/ keeps beside its two', () => {
+    const at = (text: string) =>
+      configured('1.0.0', {
+        'bundle/agentic-ui-config/README.md': text,
+        'package/notes.txt': text,
+        'bundle/agentic-ui-config/queues/open.json': { $schema: text, ...queue },
+      });
+    const { code, out } = run(['changes', at('one'), at('two')]);
+    expect(code).toBe(0);
+    expect(judged(out)['changes']).toEqual([]);
+  });
+
   it('compares an image by its bytes, not by its text', () => {
     const image = (byte: number) =>
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, byte]).toString('latin1');
