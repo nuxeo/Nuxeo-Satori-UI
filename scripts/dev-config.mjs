@@ -14,6 +14,7 @@
  *   npm run config:dev -- --home home.json
  *   npm run config:dev -- --labels en=labels/en.json --labels fr=labels/fr.json
  *   npm run config:dev -- --queue queues/unassigned-claims.json
+ *   npm run config:dev -- --navigation navigation.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
  * `layouts.json` and answered at `layouts/<Type>/<mode>.layout.json`. A later one for the same
@@ -37,6 +38,10 @@
  * answer there either, for the same reason as the home. Without `--queue`, no queue is served, and
  * any written before are removed. A later `--queue` for the same id replaces an earlier one.
  *
+ * `--navigation <file>` serves an app's menu at `navigation.json`, as `--home` serves its home
+ * (app-definition-v2.md, section 9). Without it, any `navigation.json` written before is removed, so
+ * the platform's menu shows alone, as on a server. A later `--navigation` replaces an earlier one.
+ *
  * The dev server serves only files that existed when it started, so run this before `nx serve`;
  * edits to a file it already serves are picked up on reload. A bare configuration object is not
  * accepted by the application, which is why copying a defaults file there no longer works.
@@ -49,7 +54,15 @@ const ROOT = resolve(import.meta.dirname, '..');
 const DEFAULTS = join(ROOT, 'nuxeo-agentic-core/src/main/resources/agentic-ui-config');
 const TARGET = join(ROOT, 'apps/nuxeo-ui/public/agentic-ui-config');
 
-const extra = { bootstrap: [], manifest: [], layout: [], home: [], labels: [], queue: [] };
+const extra = {
+  bootstrap: [],
+  manifest: [],
+  layout: [],
+  home: [],
+  labels: [],
+  queue: [],
+  navigation: [],
+};
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {
   const layer = args[i]?.replace(/^--/, '');
@@ -57,7 +70,8 @@ for (let i = 0; i < args.length; i += 2) {
     console.error(
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
         '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>] ' +
-        '[--labels <lang>=<labels.json>]... [--queue <queues/<id>.json>]...',
+        '[--labels <lang>=<labels.json>]... [--queue <queues/<id>.json>]... ' +
+        '[--navigation <navigation.json>]',
     );
     process.exit(2);
   }
@@ -174,6 +188,10 @@ for (const path of extra.queue) {
   }
   queues.set(id, { path, content: read(path) });
 }
+
+// The menu's file, read here too, before anything is written.
+const navigation = extra.navigation.at(-1);
+const navigationContent = navigation === undefined ? undefined : read(navigation);
 
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
   const defaults = join(DEFAULTS, `${layer}.defaults.json`);
@@ -293,3 +311,15 @@ console.log(
     ? `no queues: ${QUEUES.slice(ROOT.length + 1)} not served`
     : `wrote ${QUEUES.slice(ROOT.length + 1)}: ${[...queues.keys()].join(', ')}`,
 );
+
+// The menu is served as the package writes it, as the home is.
+const NAVIGATION = join(TARGET, 'navigation.json');
+if (navigation === undefined) {
+  rmSync(NAVIGATION, { force: true });
+  console.log(`no menu: ${NAVIGATION.slice(ROOT.length + 1)} not served`);
+} else {
+  writeFileSync(NAVIGATION, `${JSON.stringify(navigationContent, null, 2)}\n`);
+  console.log(
+    `wrote ${NAVIGATION.slice(ROOT.length + 1)}: ${navigation.startsWith(ROOT) ? navigation.slice(ROOT.length + 1) : navigation}`,
+  );
+}

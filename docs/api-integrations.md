@@ -1916,7 +1916,21 @@ list; `nxs-saved-search-actions` for the permission read.
 - The counts are the signed-in person's: a user in `members` only counted 2,167 records of
   `default_search` where an administrator counted 2,249.
 
-**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`.
+**The menu, `navigation.json`:** `HomeService.loadNavigation()` reads
+`/nuxeo/agentic-ui-config/navigation.json` (`/agentic-ui-config/navigation.json` under `nx serve`)
+the same way, without interceptors, once, at startup: `startAppMenu`
+(`apps/nuxeo-ui/src/app/business-apps.menu-start.ts`), an `APP_INITIALIZER`, loads
+`registerAppMenu` (`business-apps.menu.ts`) lazily, which waits for the configuration to load before
+it reads anything, since `NuxeoApiBase` keeps the API origin it first reads. Only
+`npm run config:dev -- --navigation <file>` serves the file; on a server it is 404 and the
+platform's menu shows alone. For each entry that opens a queue and has no literal name of its own,
+it then reads `queues/<id>.json` once (section 33), for the queue's name. **Startup waits for all
+of it**: the menu's chunk, the file, then the queues' files, each read with the home's 10-second
+timeout. It never rejects, not even when the chunk cannot be fetched: the platform's menu shows,
+and the console says why.
+
+**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`;
+`registerAppMenu`, at startup, for the menu.
 
 ---
 

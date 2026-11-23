@@ -667,6 +667,10 @@ Entries dropped for an unreachable `path` are reported the same way, on
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
+An app definition's menu, `navigation.json`, adds its entries for queues and its home to this slot
+at startup, as `appMenu.<id>`, after the entries below unless their `order` places them among them
+(app-definition-v2.md, section 9). The prefix keeps a file from replacing one of these IDs.
+
 | ID                              | Label               | Path                   | Order | Rule                                 | Notes    |
 | ------------------------------- | ------------------- | ---------------------- | ----- | ------------------------------------ | -------- |
 | `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                    | Disabled |

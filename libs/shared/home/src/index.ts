@@ -8,8 +8,15 @@ export {
   HOME_QUEUE_LINK,
   HomeService,
   homeFileUrl,
+  navigationFileUrl,
   type HomeLoad,
 } from './lib/home.service';
+export {
+  readNavigation,
+  type MenuEntry,
+  type NavigationRegistered,
+  type ReadNavigation,
+} from './lib/navigation-file';
 export {
   MAX_RULE_LEVELS,
   readHome,

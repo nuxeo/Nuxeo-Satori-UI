@@ -461,9 +461,22 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   `parameter` finding.
 - **Hiding an entry is not a security control.** The route still answers, and the page provider
   behind a queue still returns only what the person may read.
-- **Not drawn yet.** The file is proposed and checked. The shell's menu is still the manifest's
-  `navbar` slot, so the app does not read `navigation.json` (section 13). A queue's entry is to open
-  the queue's page, `/queues/<id>`, as the home's links do.
+- **Joined to the platform's menu, for now.** The app reads `navigation.json` once, at startup, at
+  `agentic-ui-config/navigation.json` beside the home, served by the development server alone
+  (`npm run config:dev -- --navigation <file>`), and adds its entries to the shell's menu, the
+  `navbar` slot, after the platform's own unless an entry's `order` places it among them:
+  - an entry for a queue opens the queue's page, `/queues/<id>` (section 4), and with no name of its
+    own shows the queue's, read from its file, or its id;
+  - the entry for `home` opens `/home`;
+  - an entry for a platform page, such as `app.navbar.tasks`, is not added: the platform's own
+    entry for it is in the menu already, and the console says so;
+  - each is shown by its rule, as the person signed in. An entry whose rule this build cannot
+    answer is left out, as a home's card is;
+  - an entry's `icon` is looked up in the shell's icon set, Satori's, not in Material Symbols.
+    `inbox` and `home` are in both; `task_alt`, the example's, is not in Satori's.
+
+  Whether an app's entries replace the platform's or join them is still for the shell that switches
+  apps (section 13); joining them leaves every platform page reachable meanwhile.
 
 ## 10. The home
 
@@ -631,7 +644,7 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   platform's keys says so in its platform range.
 - **A settings file for a module the app does not turn on** is never read, so it refuses nothing
   when the app loads.
-- **The menu's row** is what the app is to do once it draws the menu, which it does not yet.
+- **The menu's row** is what the app does: a refused file leaves the platform's menu alone.
 
 ## 13. Not settled here
 
@@ -645,11 +658,11 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
 - **Serving the menu, the home and the queues.** The app registry serves them, once decisions B and
-  E are taken. Until then only the development server answers `home.json` and `queues/<id>.json`
-  (sections 4 and 10).
-- **Drawing the menu.** `navigation.json` is checked, and the shell's menu is still the manifest's
-  `navbar` slot. Whether an app's entries replace the platform's or join them is for the shell
-  that switches apps, with the registry.
+  E are taken. Until then only the development server answers `navigation.json`, `home.json` and
+  `queues/<id>.json` (sections 4, 9 and 10).
+- **Replacing the platform's menu.** The app joins its entries to the manifest's `navbar` slot
+  (section 9). Whether an app's entries replace the platform's or join them is for the shell that
+  switches apps, with the registry.
 - **The home as the first page.** The app still opens `/dashboard` after sign-in; the home is at
   `/home`. Opening an app on its home is the shell's, with the registry.
 - **A bucket's name.** A KPI's bucket shows its key, as the server returns it. A vocabulary's
