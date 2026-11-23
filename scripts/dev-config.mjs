@@ -189,6 +189,10 @@ for (const path of extra.queue) {
   queues.set(id, { path, content: read(path) });
 }
 
+// The menu's file, read here too, before anything is written.
+const navigation = extra.navigation.at(-1);
+const navigationContent = navigation === undefined ? undefined : read(navigation);
+
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
   const defaults = join(DEFAULTS, `${layer}.defaults.json`);
   const fragments = [
@@ -310,12 +314,11 @@ console.log(
 
 // The menu is served as the package writes it, as the home is.
 const NAVIGATION = join(TARGET, 'navigation.json');
-const navigation = extra.navigation.at(-1);
 if (navigation === undefined) {
   rmSync(NAVIGATION, { force: true });
   console.log(`no menu: ${NAVIGATION.slice(ROOT.length + 1)} not served`);
 } else {
-  writeFileSync(NAVIGATION, `${JSON.stringify(read(navigation), null, 2)}\n`);
+  writeFileSync(NAVIGATION, `${JSON.stringify(navigationContent, null, 2)}\n`);
   console.log(
     `wrote ${NAVIGATION.slice(ROOT.length + 1)}: ${navigation.startsWith(ROOT) ? navigation.slice(ROOT.length + 1) : navigation}`,
   );

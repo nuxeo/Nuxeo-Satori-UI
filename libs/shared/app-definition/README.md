@@ -286,6 +286,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
   rule that reads a record (app-definition-v2.md, section 13). The menu and the home refuse a
   `{ "field" }` value in a rule, and still pass a rule that reads a record.
-- **The menu** is checked and not drawn. The home is drawn by `libs/shared/home`.
+- **The menu** is joined to the platform's by the app, and **the home** is drawn by
+  `libs/shared/home`. Whether an app's menu replaces the platform's is still open.
 - **The allow-list's real home and format** (decision 3), and each module's settings schema, which
   comes with the module.

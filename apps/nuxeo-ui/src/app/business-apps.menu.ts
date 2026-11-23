@@ -1,5 +1,6 @@
 import type { Injector } from '@angular/core';
 import { HomeService, readNavigation, type MenuEntry } from '@agentic-ui/shared/home';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { QueueService, queueLink, readQueue } from '@agentic-ui/shared/queues';
 import {
   APP_NAV_ITEMS,
@@ -20,10 +21,14 @@ import { catchError, firstValueFrom, forkJoin, map, of } from 'rxjs';
  * apps, with the registry. An entry for a platform page, such as `app.navbar.tasks`, is therefore
  * not added, since the platform's own entry for it is in the menu already.
  *
- * Loaded once, at startup, by an `APP_INITIALIZER` that imports this file lazily, so neither
- * engine is in the first bundle. At startup because the `navbar` slot is read once by the shell,
- * and a registration after that would not reach it. The file is read past the interceptors, as
- * `home.json` is; nothing on a server answers there yet, so the platform's menu shows alone.
+ * Loaded once, at startup, by an `APP_INITIALIZER` that imports this file lazily
+ * (`business-apps.menu-start.ts`), so neither engine is in the first bundle. At startup because
+ * the `navbar` slot is a plain registry, not a signal: the shell's menu is worked out again when
+ * the person or the address changes, not when an entry registers, so one registered after it is
+ * first drawn would not show until then. Startup waits for the read: the menu's chunk, the file,
+ * with the home's 10-second timeout, and then each unnamed queue's file, with the same. The file is
+ * read past the interceptors, as `home.json` is; nothing on a server answers there yet, so the
+ * platform's menu shows alone.
  *
  * Hiding an entry is not a security control: its address still answers, and a queue's page
  * provider still returns only what the person may read.
@@ -42,13 +47,14 @@ function warn(message: string): void {
   console.warn(`[agentic-ui-menu] ${message}`);
 }
 
-/** The entries that open queues and have no name of their own: their queues' names are read. */
+/**
+ * The entries that open queues and have no literal name of their own: their queues' names are
+ * read, to show where the entry has no `labelKey`, or one that does not resolve.
+ */
 export function unnamedQueues(entries: readonly MenuEntry[]): readonly string[] {
   return [
     ...new Set(
-      entries.flatMap((entry) =>
-        entry.queue !== null && !entry.label && !entry.labelKey ? [entry.queue] : [],
-      ),
+      entries.flatMap((entry) => (entry.queue !== null && !entry.label ? [entry.queue] : [])),
     ),
   ];
 }
@@ -65,7 +71,7 @@ export function appMenuItems(
   return entries.flatMap((entry): NavItemDescriptor[] => {
     if (entry.queue === null && entry.page !== 'home') {
       tell(
-        `navigation.json entry "${entry.id}" opens the platform page "${entry.page}", which the menu has already; not added`,
+        `navigation.json entry "${entry.id}" opens the platform page "${entry.page}", which has a menu entry of its own; not added`,
       );
       return [];
     }
@@ -74,7 +80,7 @@ export function appMenuItems(
     const text: Pick<NavItemDescriptor, 'label' | 'labelKey'> = entry.label
       ? { label: entry.label }
       : entry.labelKey
-        ? { label: fallback, labelKey: entry.labelKey }
+        ? { label: name?.label || fallback, labelKey: entry.labelKey }
         : name?.label
           ? { label: name.label }
           : name?.labelKey
@@ -99,6 +105,10 @@ export function appMenuItems(
  */
 export async function registerAppMenu(injector: Injector): Promise<void> {
   try {
+    // First: `HomeService` injects `NuxeoApiBase`, whose API origin is read from the configuration
+    // once and kept, so resolving it before the configuration loads would pin the default for the
+    // whole session (provide-app-config.ts, "Ordering note"). `load()` is the one shared request.
+    await injector.get(AppConfigService).load();
     const load = await firstValueFrom(injector.get(HomeService).loadNavigation());
     if (load.kind === 'none') return;
     if (load.kind === 'unreadable') {
@@ -109,10 +119,14 @@ export async function registerAppMenu(injector: Injector): Promise<void> {
     // entry naming one of them is known.
     injector.get(APP_NAV_ITEMS);
     const slots = injector.get(ExtensionSlotRegistry);
+    const extensions = injector.get(AppExtensionsService);
     const rules = injector.get(ExtensionRuleRegistry).registeredRuleIds();
+    // The pages: the entries registered in code, and those a manifest adds, which the slot
+    // applies when it resolves and never registers.
+    const added = extensions.config().slots?.[EXTENSION_SLOTS.navbar] ?? [];
     const read = readNavigation(load.content, {
       rules,
-      pages: slots.registeredIds(EXTENSION_SLOTS.navbar),
+      pages: [...slots.registeredIds(EXTENSION_SLOTS.navbar), ...added.map((entry) => entry.id)],
     });
     if ('refused' in read) {
       for (const problem of read.refused) warn(`navigation.json refused: ${problem}`);
@@ -124,9 +138,7 @@ export async function registerAppMenu(injector: Injector): Promise<void> {
       rowActions: slots.registeredIds(EXTENSION_SLOTS.rowActions),
       bulkActions: slots.registeredIds(EXTENSION_SLOTS['bulk-actions']),
     });
-    injector
-      .get(AppExtensionsService)
-      .register(EXTENSION_SLOTS.navbar, appMenuItems(read.entries, names));
+    extensions.register(EXTENSION_SLOTS.navbar, appMenuItems(read.entries, names));
   } catch (error) {
     warn(`navigation.json not applied: ${(error as Error)?.message ?? String(error)}`);
   }
