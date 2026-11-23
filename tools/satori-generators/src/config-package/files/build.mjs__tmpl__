@@ -166,11 +166,12 @@ function readUtf8(file) {
 
 /**
  * An XML file as a parser reads it — no byte-order mark, line endings normalised — checked for
- * well-formedness; `null`, reported, when it is missing or malformed.
+ * well-formedness; `null`, reported, when it is missing, not a file, or malformed.
  */
 function readXml(file) {
-  if (!existsSync(file)) {
-    problem(file, 'is missing');
+  if (!isFile(file)) {
+    // A folder or anything else where a file belongs is refused, not read.
+    problem(file, existsSync(file) ? 'is not a file' : 'is missing');
     return null;
   }
   const text = readUtf8(file);
@@ -781,7 +782,8 @@ if (!packageName || !packageVersion) {
 
 const manifestFile = join(BUNDLE, 'META-INF', 'MANIFEST.MF');
 // A manifest line longer than 72 bytes continues on the next one, which starts with a space.
-const manifest = ((existsSync(manifestFile) ? readUtf8(manifestFile) : '') ?? '').replace(
+if (existsSync(manifestFile) && !isFile(manifestFile)) problem(manifestFile, 'is not a file');
+const manifest = ((isFile(manifestFile) ? readUtf8(manifestFile) : '') ?? '').replace(
   /(?:\r\n|\r|\n) /g,
   '',
 );
@@ -1023,7 +1025,10 @@ for (const componentPath of componentPaths) {
 }
 
 const entries = [];
-for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE).sort()) {
+// A bundle/ that is a file holds nothing to package; it is refused, not walked.
+const bundleIsFolder = entryOf(BUNDLE)?.isDirectory() === true;
+if (existsSync(BUNDLE) && !bundleIsLink && !bundleIsFolder) problem(BUNDLE, 'is not a folder');
+for (const file of bundleIsLink || !bundleIsFolder ? [] : filesUnder(BUNDLE).sort()) {
   if (!isPackaged(file)) continue;
   const name = relative(BUNDLE, file).split(sep).join('/');
   // A contribution's JSON contract also applies when its src names the JAR manifest.

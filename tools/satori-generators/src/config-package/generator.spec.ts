@@ -1029,6 +1029,31 @@ describe('the generated build.mjs', () => {
     expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
   });
 
+  // A standalone build: the package pipeline refuses such a package at an earlier step.
+  it.each([
+    ['package/package.xml', 'is not a file'],
+    ['package/install.xml', 'is not a file'],
+    ['bundle/META-INF/MANIFEST.MF', 'is not a file'],
+  ])('refuses a folder where %s belongs, rather than crashing', async (file, why) => {
+    await generate();
+    rmSync(join(dir, file));
+    mkdirSync(join(dir, file));
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain(`${file}: ${why}`);
+    expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+  });
+
+  it('refuses a bundle/ that is a file, rather than crashing', async () => {
+    await generate();
+    rmSync(join(dir, 'bundle'), { recursive: true });
+    writeFileSync(join(dir, 'bundle'), 'not a folder');
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('bundle: is not a folder');
+    expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+  });
+
   // Names the file system answers with an error rather than as missing.
   it.each([
     ['through a file', 'agentic-ui-config/bootstrap.json/x.json'],
