@@ -26,7 +26,9 @@ import {
   queuePath,
   searchQueueId,
 } from './app-files';
-import { layoutFields, listColumns, rulesIn } from './app-walk';
+import { fieldOf, layoutFields, listColumns, rulesIn } from './app-walk';
+import { chainTable, decideCondition, describeSituation } from './conditions';
+import { guardAt, guardOfSet, type Guard } from './guards';
 import { recordedAllowList } from './convert';
 import { isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
@@ -39,10 +41,34 @@ export function checkConditions({
   conversion,
 }: HarnessInput): CheckOutcome {
   const findings: string[] = [];
+  // Every rule in the package must be the guard of what it sits on, the conditions that thing
+  // shows under in Web UI, and must decide as they do on every row of their truth table.
   for (const [path, file] of Object.entries(conversion.app)) {
-    for (const { at } of rulesIn(path, file))
+    for (const { at, rule } of rulesIn(path, file)) {
+      const guard = guardFor(inventory, catalogue, pkg, conversion, path, file, at);
+      if (!guard || guard.kind !== 'rule' || guard.conditions.length === 0) {
+        findings.push(`${path}: ${at} holds a rule that no condition of the package gives`);
+        continue;
+      }
+      const table = chainTable(guard.conditions, rule);
+      if (table.unreadable)
+        findings.push(
+          `${path}: ${at} holds a rule the truth table cannot read, so it cannot be held to Web UI's condition`,
+        );
+      else if (table.disagree.length > 0)
+        findings.push(
+          `${path}: ${at} decides otherwise than Web UI's condition on ${table.disagree.length} of ${table.rows} rows, such as ${describeSituation(table.disagree[0])}`,
+        );
+    }
+  }
+  // Each condition the converter turns into a rule decides as Web UI's on every row.
+  for (const condition of inventory.conditions) {
+    const decision = decideCondition(condition);
+    if (decision.kind === 'reported') continue;
+    const table = chainTable([condition], decision.rule);
+    if (table.unreadable || table.disagree.length > 0)
       findings.push(
-        `${path}: ${at} holds a rule that no condition of the package gives: M1 converts no condition`,
+        `condition ${condition.index + 1} of ${condition.path}: its rule decides otherwise than Web UI on ${table.disagree.length} of ${table.rows} rows`,
       );
   }
 
@@ -128,5 +154,108 @@ export function checkConditions({
           rest: `${conditions} ${conditions === 1 ? 'condition waits' : 'conditions wait'} for M2, whose truth tables run in Web UI on the migration server`,
         }
       : {}),
+  };
+}
+
+/**
+ * The guard of what a rule sits on, worked out from the package: the field of a view layout by
+ * its property, an action by its id, a home card or a menu entry by its id. `null` when the rule
+ * sits on something no condition of the package guards, or somewhere the converter writes none.
+ */
+function guardFor(
+  inventory: HarnessInput['inventory'],
+  catalogue: HarnessInput['catalogue'],
+  pkg: HarnessInput['pkg'],
+  conversion: HarnessInput['conversion'],
+  path: string,
+  file: unknown,
+  at: string,
+): Guard | null {
+  const parts = at.split('.');
+  const item = (list: string, index: string): unknown => {
+    const holder = isRecord(file) ? file[list] : undefined;
+    return Array.isArray(holder) ? holder[Number(index)] : undefined;
+  };
+  const layout = /^layouts\/([^/]+)\/([^/]+)\.layout\.json$/.exec(path);
+  if (layout) {
+    // cards.<i>.fields.<j>.visibleWhen: a field, by the property it shows.
+    if (
+      parts.length !== 5 ||
+      parts[0] !== 'cards' ||
+      parts[2] !== 'fields' ||
+      parts[4] !== 'visibleWhen'
+    )
+      return null;
+    const card = item('cards', parts[1]);
+    const fields = isRecord(card) && Array.isArray(card['fields']) ? card['fields'] : [];
+    const binding = fieldOf(fields[Number(parts[3])]);
+    const source = inventory.layouts.find(
+      (candidate) => candidate.docType === layout[1] && candidate.mode === layout[2],
+    );
+    const field = source?.fields.find(
+      (candidate) => candidate.binding === binding && candidate.condition !== null,
+    );
+    return source && field && field.condition !== null
+      ? guardAt(inventory, source.path, field.condition)
+      : null;
+  }
+  const id = (list: string): unknown => {
+    const entry = item(list, parts[1]);
+    return isRecord(entry) ? entry['id'] : undefined;
+  };
+  if (path === 'actions.json' && parts[0] === 'actions') {
+    const owner = actionOwners(
+      inventory,
+      catalogue,
+      appIdOf(pkg),
+      recordedAllowList(conversion),
+    ).get(String(id('actions')));
+    return owner
+      ? guardOfSet(inventory, owner.contribution.path, owner.contribution.conditions)
+      : null;
+  }
+  if (path === 'home.json' && parts[0] === 'cards') {
+    const card = homeCards(inventory).find((candidate) => candidate.id === id('cards'));
+    const source = card && inventory.dashboard?.cards[card.index];
+    return source && inventory.dashboard
+      ? guardOfSet(inventory, inventory.dashboard.path, source.conditions)
+      : null;
+  }
+  if (path === 'navigation.json' && parts[0] === 'entries') {
+    const entry = menuEntries(inventory, catalogue).find(
+      (candidate) => candidate.id === id('entries'),
+    );
+    return entry ? menuGuard(inventory, entry.item, entry.page) : null;
+  }
+  if (path.startsWith('queues/') && at === 'visibleWhen') {
+    const owner = queueOwners(inventory).get(path);
+    return owner?.kind === 'card' && inventory.dashboard
+      ? guardOfSet(inventory, inventory.dashboard.path, owner.card.conditions)
+      : null;
+  }
+  return null;
+}
+
+/** A menu entry's guard: its item's conditions and its page's, all of which must pass. */
+export function menuGuard(
+  inventory: HarnessInput['inventory'],
+  item: { readonly path: string; readonly conditions: readonly number[] },
+  page: { readonly path: string; readonly conditions: readonly number[] } | undefined,
+): Guard {
+  const first = guardOfSet(inventory, item.path, item.conditions);
+  if (!page || page.conditions.length === 0 || first.kind !== 'rule') return first;
+  const second = guardOfSet(inventory, page.path, page.conditions);
+  if (second.kind !== 'rule') return second;
+  const rules = [first.rule, second.rule].filter((rule) => rule !== 'core.true');
+  return {
+    kind: 'rule',
+    rule:
+      rules.length === 0
+        ? 'core.true'
+        : rules.length === 1
+          ? rules[0]
+          : { type: 'core.every', parameters: rules },
+    document: first.document || second.document,
+    conditions: [...first.conditions, ...second.conditions],
   };
 }

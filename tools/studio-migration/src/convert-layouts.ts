@@ -14,6 +14,7 @@
 import type { ConvertContext } from './convert';
 import type { DocumentLayout, LayoutField } from './inventory';
 import { LAYOUT_VERSION, labelOf, layoutPath } from './app-files';
+import { guardAt, type Guard } from './guards';
 import { VERSION_ONE_WIDGETS, fieldWidget } from './widgets';
 
 /** The document types a layout path may name: as the configuration service accepts them. */
@@ -45,19 +46,34 @@ export type FieldPlan =
     }
   | { readonly kind: 'panel'; readonly binding: string }
   | { readonly kind: 'preview' }
-  | { readonly kind: 'skip'; readonly outcome: 'reported' | 'pending'; readonly note: string };
+  | {
+      readonly kind: 'skip';
+      readonly outcome: 'reported' | 'pending' | 'proposed';
+      readonly note: string;
+    };
 
 /**
  * What to do with each field of a layout, in order. Shared with harness check 2, which expects
  * the fields planned for writing, and only those, in the converted file.
  */
 export function planFields(
-  context: Pick<ConvertContext, 'catalogue'>,
+  context: Pick<ConvertContext, 'catalogue' | 'inventory'>,
   layout: DocumentLayout,
 ): FieldPlan[] {
   const mode = layout.mode;
   const version = LAYOUT_VERSION[mode];
   const seen = new Set<string>();
+  // The properties a field in no condition, of an element the catalogue knows, shows to everyone.
+  const always = new Set(
+    layout.fields
+      .filter(
+        (field) =>
+          field.condition === null &&
+          field.binding !== null &&
+          fieldWidget(context.catalogue, field.element, field.attributes) !== null,
+      )
+      .map((field) => field.binding as string),
+  );
   return layout.fields.map((field): FieldPlan => {
     if (field.element === 'nuxeo-document-viewer') return { kind: 'preview' };
     const binding = field.binding;
@@ -72,12 +88,24 @@ export function planFields(
         outcome: 'reported',
         note: `It binds ${binding} again, and is kept once`,
       };
-    if (field.condition !== null)
-      return {
-        kind: 'skip',
-        outcome: 'pending',
-        note: `It shows only while condition ${field.condition + 1} of its file passes. M2 converts the condition, with truth tables, so it is not shown to everyone meanwhile`,
-      };
+    let guard: Guard | null = null;
+    if (field.condition !== null) {
+      // Web UI shows the property to everyone through another field: that one is kept.
+      if (always.has(binding))
+        return {
+          kind: 'skip',
+          outcome: 'reported',
+          note: `It shows ${binding} only while a condition passes, and another field of the layout shows it to everyone: that one is kept`,
+        };
+      if (version === 1)
+        return {
+          kind: 'skip',
+          outcome: 'pending',
+          note: `It shows only while condition ${field.condition + 1} of its file passes, and version 1 has no rules: it waits for the app to draw version 2 in ${mode} mode`,
+        };
+      guard = guardAt(context.inventory, layout.path, field.condition);
+      if (guard.kind !== 'rule') return { kind: 'skip', outcome: guard.kind, note: guard.note };
+    }
     const choice = fieldWidget(context.catalogue, field.element, field.attributes);
     if (choice === null)
       return {
@@ -88,7 +116,14 @@ export function planFields(
     seen.add(binding);
     if (mode === 'metadata' && PANEL_ROWS.has(binding)) return { kind: 'panel', binding };
     const required = (mode === 'edit' || mode === 'create') && field.required;
-    const entry = version === 2 ? viewField(field, choice) : formField(field, required);
+    const written = version === 2 ? viewField(field, choice) : formField(field, required);
+    const entry =
+      guard?.kind === 'rule'
+        ? {
+            ...(typeof written === 'string' ? { field: written } : (written as object)),
+            visibleWhen: guard.rule,
+          }
+        : written;
     // Written all the same, so that its value stays in the panel or the form, shown as its type
     // picks; reported, because that is not how Web UI shows it.
     const reported =

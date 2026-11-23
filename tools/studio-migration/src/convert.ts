@@ -30,6 +30,7 @@ import { dirname, join } from 'node:path';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
 import { appIdOf, labelsPath, labelTexts } from './app-files';
 import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
+import { decideCondition } from './conditions';
 import { constructsOf, type Construct, type ConstructKind } from './constructs';
 import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
@@ -66,6 +67,8 @@ export interface ReportEntry {
   readonly note?: string;
   /** Who decides, for what is reported. Unset until someone takes it on. */
   readonly owner?: string;
+  /** For a condition: the registered rule it becomes, or is proposed to become. */
+  readonly rule?: unknown;
 }
 
 export interface MigrationReport {
@@ -112,7 +115,7 @@ export class ConversionError extends Error {
   override readonly name = 'ConversionError';
 }
 
-export type Decision = Pick<ReportEntry, 'outcome' | 'to' | 'note'>;
+export type Decision = Pick<ReportEntry, 'outcome' | 'to' | 'note' | 'rule'>;
 
 /** What the parts of the conversion share: what they read, and what they write and decide. */
 export interface ConvertContext {
@@ -339,11 +342,21 @@ function decide(construct: Construct, inventory: Inventory, catalogue: Catalogue
             note: 'Customer code: an agent proposes a Layer 2 plugin for it, in M3',
           };
     }
-    case 'condition':
+    case 'condition': {
+      const condition = inventory.conditions.find(
+        (candidate) => candidate.path === construct.file && candidate.index === key - 1,
+      );
+      if (!condition) return { outcome: 'reported', note: 'The conversion did not reach it' };
+      const decision = decideCondition(condition);
+      if (decision.kind === 'reported') return { outcome: 'reported', note: decision.note };
+      if (decision.kind === 'proposed')
+        return { outcome: 'proposed', note: decision.note, rule: decision.rule };
       return {
-        outcome: 'pending',
-        note: 'M2 converts conditions into registered rules, proven with truth tables (check 5)',
+        outcome: 'converted',
+        to: 'the visibleWhen of what it holds, where that can carry a rule',
+        rule: decision.rule,
       };
+    }
     default:
       // Each part decides its own constructs; reaching here means one skipped a construct.
       return { outcome: 'reported', note: 'The conversion did not reach it' };

@@ -74,6 +74,8 @@ export interface Condition {
   /** `nuxeo-filter`, `dom-if`, or `template` for `<template is="dom-if">`. */
   readonly element: string;
   readonly attributes: Readonly<Record<string, string>>;
+  /** The condition it sits in, by its place among its file's conditions; `null` for none. */
+  readonly parent: number | null;
 }
 
 /** A column of a list of results, or of a dashboard card's list. */
@@ -166,6 +168,8 @@ export interface DashboardCard {
   readonly operation: string | null;
   /** True when it sits in a condition or holds one. */
   readonly conditional: boolean;
+  /** The conditions it sits in or holds, by their place among the dashboard's conditions. */
+  readonly conditions: readonly number[];
 }
 
 export interface Dashboard {
@@ -481,6 +485,13 @@ export function inventory(pkg: StudioPackage): Inventory {
             inner.find((element) => element.localName === 'nuxeo-operation')?.getAttribute('op') ??
             null,
           conditional: [card, ...elementsOf(card)].some((element) => within.has(element)),
+          conditions: [
+            ...new Set(
+              [card, ...elementsOf(card)]
+                .map((element) => within.get(element))
+                .filter((index): index is number => index !== undefined),
+            ),
+          ],
         };
       });
     dashboard = { path: dashboardPath, cards };
@@ -624,6 +635,7 @@ function conditionsOf(path: string, document: Document, within: Map<Element, num
           index: inner,
           element: child.localName,
           attributes: attributesOf(child),
+          parent: current,
         });
       }
       // The condition itself is not inside it: only what it holds is.
