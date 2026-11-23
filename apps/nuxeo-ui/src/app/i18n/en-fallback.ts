@@ -265,6 +265,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.note-image-picker-dialog.select-all': 'Select all',
   'document-layouts.loading-form': 'Loading the form',
   'document-layouts.sections': 'Property sections',
+  'document-layouts.timeline.loading': 'Loading the history',
   'kd.content-lake-upload.loading': 'Loading',
   'kd.content-lake-upload.up-one-folder-level': 'Up one folder level',
   'kd.kd-citation-dialog.citation-references': 'Citation references',

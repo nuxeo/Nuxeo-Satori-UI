@@ -18,6 +18,7 @@ no expression language and no code in configuration.
   - computed fields;
   - fields and cards shown or hidden by a rule;
   - related records;
+  - the record's timeline and its comments;
   - in forms, fields that are required or read-only by rule, and checks across fields.
 - **Version 1 files keep working**, unchanged. A file says which version it is, and nothing turns
   a version 1 file into a version 2 one.
@@ -82,6 +83,10 @@ A file has `cards` or `tabs`, never both.
 | `visibleWhen`       | A rule (section 5). The card shows only while it passes                                                                                                                                                       |
 | `fields`            | Its fields (below)                                                                                                                                                                                            |
 | `related`           | Or a list of related records (section 7), in `view` mode only                                                                                                                                                 |
+| `timeline`          | Or the record's history (section 7), in `view` mode only                                                                                                                                                      |
+| `comments`          | Or the record's comments (section 7), in `view` mode only                                                                                                                                                     |
+
+A card has one of `fields`, `related`, `timeline` and `comments`.
 
 In `metadata`, `edit` and `create` modes, cards show as the sections of the panel or the form.
 
@@ -231,7 +236,7 @@ In a form, a field may carry checks that compare it with another field before sa
 - **The server's own constraints still apply.** A check is a help to the person typing, not a
   guarantee.
 
-## 7. Related records
+## 7. Related records, the timeline and comments
 
 A card can list records related to the open one, in `view` mode:
 
@@ -271,6 +276,62 @@ out on purpose:
 - a page provider is defined on the server, which binds its parameters;
 - Studio projects define their searches as page providers already.
 
+### The timeline
+
+A card can show the record's history, newest first, in `view` mode:
+
+```json
+{
+  "id": "history",
+  "labelKey": "payers.claim.timeline",
+  "span": 2,
+  "timeline": {
+    "events": ["documentCreated", "documentModified", "lifecycle_transition_event"],
+    "filter": true,
+    "pageSize": 20
+  }
+}
+```
+
+| Key        | Meaning                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `events`   | The kinds of event it shows, by the audit's event ID. Default: the record's own changes                         |
+| `filter`   | `true` offers the reader a filter by kind of event, among `events` when it names more than one. Default `false` |
+| `pageSize` | How many entries show first, and how many more each "Show more" adds: 1 to 100. Default 10                      |
+
+- **Each entry says who, what and when:** the user by name, the kind of event and the audit's
+  comment if it has one, and the time in the reader's own zone. A lifecycle transition also says
+  the state it left and the state it reached.
+- **The history is Nuxeo's audit** (`@audit`), filtered by kind on the server, so it is what the
+  server recorded and what the user may read there.
+- **The default kinds** are the record's own changes: `documentCreated`, `documentModified`,
+  `documentCheckedIn`, `lifecycle_transition_event`, `documentLocked`, `documentUnlocked`,
+  `documentMoved`, `documentPublished`, `documentSecurityUpdated`, `documentRestored`,
+  `documentTrashed` and `documentUntrashed`. `download` is not one: Nuxeo audits every download,
+  each thumbnail the app shows included, and they would fill the timeline.
+- **An event is the server's to name,** as a page provider is: a Studio project's own event is
+  named in `events` as the audit writes it, and its label is `document-layouts.timeline.event.<ID>`
+  in the labels. A transition's entry is one sentence, `document-layouts.timeline.transition`, so
+  that a translation orders its states as its language does.
+
+### Comments
+
+A card can show the record's comments and their replies, in `view` mode:
+
+```json
+{ "id": "notes", "labelKey": "payers.claim.comments", "comments": { "pageSize": 5 } }
+```
+
+| Key        | Meaning                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| `pageSize` | How many of the newest comments, and of each one's newest replies, show first: 1 to 100. Default 10 |
+
+- **Anyone who may read the record is offered the comment box,** and Reply on a comment. The server
+  decides whether it takes the comment, and a refusal says so.
+- **Edit and Delete are offered on the user's own comments,** and to an administrator on every
+  one. The server's permissions still decide.
+- It is the record's one thread, the one the Comments panel beside the page shows.
+
 ## 8. What is refused, and when
 
 | When                                     | A structural error                                                   | An ID the platform does not have                                                  |
@@ -279,7 +340,8 @@ out on purpose:
 | When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That card, field, list column or row action is left out, and the console says why |
 
 - **In a list of related records,** a finding about one column or one row action leaves out that
-  one. A finding about the list itself, such as a key version 2 does not have, leaves out its card.
+  one. A finding about the list itself, such as a key version 2 does not have, leaves out its card,
+  and so does one about a timeline or comments.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -290,9 +352,11 @@ What counts as structural:
 - not version 2;
 - `cards` and `tabs` together;
 - an `id` that is missing, malformed or used twice;
+- a card with more than one of `fields`, `related`, `timeline` and `comments`, or none;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `related` outside it;
+- form-only keys in `view` mode, or `related`, `timeline` or `comments` outside it;
+- a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
 - a `var:` property, which only a task form has
   ([app-definition-v2.md, section 6](app-definition-v2.md#6-task-forms)).
@@ -458,6 +522,25 @@ becomes. In version 2's terms:
   - a column's `visibleWhen` is evaluated for the open record, as a field's is;
   - the headers sort on the server, and a row opens its record;
   - a row offers the row actions the file lists, while their rules pass for that row.
+- **A timeline's card** draws `RecordTimelineComponent`, in the same library:
+  - it asks the record's audit, through `DocumentDetailService.getAuditLog`, for the card's kinds of
+    event, newest first, `pageSize` entries at a time; "Show more" asks for the next page;
+  - each entry names its user as a `user` field does, Nuxeo's own `system` excepted, and shows its
+    time in the reader's zone ([pattern 29](../../AGENTS/08-bug-patterns.md));
+  - the filter asks the server for one kind at a time, and "All events" for the card's kinds again;
+  - it is refreshed in place when the page is given the record with another modification date,
+    state or lock, or checked in or out, or put in or out of the trash: asked at once, and again
+    2.5 seconds later, since Nuxeo writes its audit a moment after the change (0.8 to 1.4 seconds,
+    measured). What a refresh brings joins the entries shown, which stay, unless more was
+    recorded than a page holds: the timeline then starts again from that first page;
+  - a timeline drawn anew, or given another record, is asked once more 2.5 seconds after it first
+    is, too; another kind chosen in the filter is not. That is the refresh a reader of the
+    document page sees: it draws the record page anew each time it reloads the record, after an
+    edit or a transition and not after a lock, so the timeline starts again from its first page
+    with every kind shown, and a comment half written in a comments card is lost. An audit slower
+    than 2.5 seconds still lacks the change, until the record next reloads.
+- **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
+  the page shows, with the card's `pageSize`.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;
@@ -495,6 +578,19 @@ becomes. In version 2's terms:
     names; `image` and `file-list` read-only, as version 1 shows a file. The console says so for
     each such field. The rich text editor, the pickers, the select and the uploads come later;
   - **`metadata` files of version 2** are still refused, and the generated panel shows.
+
+  Three more are what the server records, measured on Nuxeo 2025, and the console does not say them:
+  - **a transition is audited with the state it reached only.** The state it left is read from the
+    entry before it among those the timeline shows. A transition with none before it says only
+    where it went: the oldest one loaded, until "Show more" loads the next, and the first a record
+    ever made, when the timeline shows state changes alone, by its `events` or by the reader's
+    filter;
+  - **a comment is audited as a modification of the record:** adding or editing one saves the
+    record, so it shows as Modified, and the timeline on the same page shows it once the record
+    reloads. A comments card and the Comments panel load the thread apart, and one shows a comment
+    added in the other when it next loads;
+  - **workflow events are not among the default kinds:** whether Nuxeo audits them against the
+    record was not measured. A kit that wants them names them in `events`.
 
   Where this document is silent, the record page decides three things. **A template's placeholder**
   shows its property as the first field on the page that shows it does, through that field's
