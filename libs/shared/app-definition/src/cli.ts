@@ -39,7 +39,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { readContentModel, type ContentModel } from './lib/content-model';
-import { LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
+import { heldToModel, LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
 import { placeFile, validateFile, type PackageContext, type PlacedFile } from './lib/package';
 import { isRecord, PACKAGED_REGISTRIES, withRegistered, type Registries } from './lib/registries';
 import { parseVersion } from './lib/semver';
@@ -151,7 +151,7 @@ export function main(argv: readonly string[], io: CliIo): number {
   let refused = 0;
   let passed = 0;
   let versionOne = 0;
-  let heldToModel = 0;
+  let held = 0;
   let operationRefused = false;
   const checked = new Set<string>();
   for (const { path, root, named } of found) {
@@ -188,7 +188,13 @@ export function main(argv: readonly string[], io: CliIo): number {
       versionOne++;
       continue;
     }
-    if (model && placed.file.kind === 'layout') heldToModel++;
+    // Counted as the validator holds them: one it stops before the model's checks is not.
+    if (
+      model &&
+      placed.file.kind === 'layout' &&
+      heldToModel(content, { mode: mode ?? placed.file.mode, type: placed.file.type })
+    )
+      held++;
     const findings = validateFile(
       placed.file,
       content,
@@ -217,9 +223,9 @@ export function main(argv: readonly string[], io: CliIo): number {
     io.out('No --allow-list was given, so every operation is refused.\n');
   if (model)
     io.out(
-      heldToModel > 0
-        ? `${heldToModel} ${heldToModel === 1 ? 'layout was' : 'layouts were'} held to the content model in ${modelFile}.\n`
-        : `No layout of version 2 was found, so none was held to the content model in ${modelFile}.\n`,
+      held > 0
+        ? `${held} ${held === 1 ? 'layout was' : 'layouts were'} held to the content model in ${modelFile}.\n`
+        : `No layout was held to the content model in ${modelFile}: none is of version 2, in a mode, for a type its path names.\n`,
     );
   const total = checked.size;
   io.out(

@@ -1,5 +1,6 @@
 import { readContentModel, type ContentModel } from './content-model';
 import {
+  heldToModel,
   loadable,
   publishable,
   validateLayoutV2,
@@ -277,6 +278,27 @@ describe('validateLayoutV2, given the content model', () => {
     expect(findings.map((finding) => finding.kind)).toEqual(['unknown', 'parameter']);
     expect(loadable(findings)).toBe(true);
     expect(publishable(findings)).toBe(false);
+  });
+
+  it('heldToModel answers true exactly when the validator runs the model checks', () => {
+    // A model with no type: every file the checks reach is refused for its type.
+    const empty = readContentModel({ doctypes: {}, facets: [], schemas: [] });
+    if (!empty.model) throw new Error(empty.problems.join('\n'));
+    const cases: [unknown, LayoutMode, string, boolean][] = [
+      [withFields('member:firstName'), 'view', 'Member', true],
+      [withFields('member:firstName'), 'edit', 'Member', true],
+      [{ version: 3, cards: [] }, 'view', 'Member', false],
+      [null, 'view', 'Member', false],
+      [withFields('member:firstName'), 'other' as LayoutMode, 'Member', false],
+      [withFields('member:firstName'), 'view', '', false],
+    ];
+    for (const [content, mode, type, held] of cases) {
+      expect(heldToModel(content, { mode, type })).toBe(held);
+      const findings = validateLayoutV2(content, { mode, model: empty.model, type });
+      expect(
+        findings.some((finding) => finding.message.includes('is not in the content model')),
+      ).toBe(held);
+    }
   });
 
   it("is checked by validateFile against the type a layout's path names", () => {

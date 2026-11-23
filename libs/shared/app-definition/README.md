@@ -154,7 +154,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 88 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 100 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -229,7 +229,15 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - reading `integer` as other than `long`;
     - `validateFile` not passing the model on, or the validator not running its checks;
     - the command exiting 0 for a model it cannot read, with `--model` or with `model <file>`;
-    - counting a file that is not a layout as held to the model.
+    - counting a file that is not a layout as held to the model, or one the validator stops before
+      the model's checks: of another version, or with no type, which `heldToModel` answers;
+    - reading a prefix that is not a text, or two that disagree, as no prefix;
+    - reading an explicit `null` as absent, for a type's facets or schemas, a facet's schemas or a
+      schema's fields, or a field's type as `complex`;
+    - accepting `""`, `"[]"` or `"string[][]"` as a type;
+    - reading a `directoryResolver` that names no directory, or constraints that are not a list, as
+      no binding;
+    - putting an address part that is not a text into a message, which threw.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;

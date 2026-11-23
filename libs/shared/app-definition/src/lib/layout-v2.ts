@@ -196,6 +196,23 @@ function related(c: Checker, item: unknown, path: string): void {
   c.list(item, path, { openRecord: true });
 }
 
+/**
+ * Whether `validateLayoutV2`, given a model, holds this file to it: a file of version 2, in a mode,
+ * for a named type. Any other stops before the model's checks, and is not one a caller may count
+ * as checked against the model. A type the model lacks is held to it, and refused.
+ */
+export function heldToModel(
+  content: unknown,
+  options: { readonly mode: LayoutMode; readonly type?: string },
+): boolean {
+  return (
+    unreadable(content, 'a layout file') === null &&
+    LAYOUT_MODES.includes(options.mode) &&
+    typeof options.type === 'string' &&
+    options.type !== ''
+  );
+}
+
 /** True when the pipeline may publish the file: no finding at all. */
 export function publishable(findings: readonly Finding[]): boolean {
   return findings.length === 0;

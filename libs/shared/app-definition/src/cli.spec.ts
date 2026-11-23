@@ -433,22 +433,30 @@ describe('app-definition validate', () => {
       );
     });
 
-    it('says so when no layout was held to the model: version 1 is not', () => {
+    it('counts only the layouts the validator held to the model: not version 1, 3, or one with no type', () => {
+      const none = (model: string): string =>
+        `No layout was held to the content model in ${model}: none is of version 2, in a mode, for a type its path names.`;
       const root = packageWith({
-        'layouts/Member/view.layout.json': { version: 1, sections: [{ fields: ['member:x'] }] },
+        'pkg/layouts/Member/view.layout.json': { version: 1, sections: [{ fields: ['member:x'] }] },
+        'pkg/layouts/Member/edit.layout.json': { version: 3, cards: [] },
+        'loose/member.json': view,
         'model.json': model,
       });
-      const { code, out } = run([
+      const modelFile = join(root, 'model.json');
+      const versions = run(['validate', join(root, 'pkg'), '--model', modelFile]);
+      expect(versions.out).toContain('version must be 2, not 3 [structure]');
+      expect(versions.out).toContain(none(modelFile));
+      expect(versions.out).not.toMatch(/\d+ layouts? (was|were) held/);
+      // A file a forced --mode reads has no type in its path, so it is not held either.
+      const loose = run([
         'validate',
-        join(root, 'layouts'),
+        join(root, 'loose/member.json'),
+        '--mode',
+        'view',
         '--model',
-        join(root, 'model.json'),
+        modelFile,
       ]);
-      expect(code).toBe(0);
-      expect(out).toContain(
-        `No layout of version 2 was found, so none was held to the content model in ${join(root, 'model.json')}.`,
-      );
-      expect(out).not.toContain('layout was held');
+      expect(loose.out).toContain(none(modelFile));
     });
 
     it('refuses a widget that does not show its property, naming the file, the place and both types', () => {

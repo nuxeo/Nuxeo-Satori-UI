@@ -25,6 +25,7 @@ export { LABELS_V2_KEYS, validateLabels, validateModuleSettings } from './lib/la
 export {
   LAYOUT_MODES,
   LAYOUT_V2_KEYS,
+  heldToModel,
   loadable,
   publishable,
   validateLayoutV2,
