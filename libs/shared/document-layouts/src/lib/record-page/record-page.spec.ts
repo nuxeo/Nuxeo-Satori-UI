@@ -10,7 +10,13 @@ import {
   ExtensionRuleContextService,
   ExtensionRuleRegistry,
 } from '@nuxeo/satori-platform/extensions';
-import { type NuxeoDocument, PageProviderService } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  CURRENT_USERNAME,
+  DocumentDetailService,
+  type NuxeoDocument,
+  type NuxeoDocumentList,
+  PageProviderService,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -18,6 +24,7 @@ import type { DocumentTypeDefinition } from '../layout.model';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
+import { RecordTimelineComponent } from './record-timeline';
 import { resolveRecordLayout, type ResolvedRecordLayout } from './resolve-record-layout';
 
 const MEMBER_TYPE: DocumentTypeDefinition = {
@@ -163,9 +170,20 @@ describe('RecordPageComponent', () => {
   let timeZone: string | undefined;
   let warnings: string[];
   let execute: ReturnType<typeof vi.fn>;
+  /** The record's history and comments: what the timeline and the comments cards ask for. */
+  let documents: {
+    getAuditLog: ReturnType<typeof vi.fn>;
+    getAllComments: ReturnType<typeof vi.fn>;
+    createComment: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     execute = vi.fn(() => new Subject());
+    documents = {
+      getAuditLog: vi.fn(() => new Subject()),
+      getAllComments: vi.fn(() => new Subject()),
+      createComment: vi.fn(),
+    };
     rules = { memberServices: false, canSeeService: true };
     principal = (kind, id) =>
       of(
@@ -195,6 +213,8 @@ describe('RecordPageComponent', () => {
         provideRouter([]),
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         { provide: PageProviderService, useValue: { execute } },
+        { provide: DocumentDetailService, useValue: documents },
+        { provide: CURRENT_USERNAME, useValue: () => 'jdoe' },
         {
           provide: DocumentLayoutService,
           useValue: {
@@ -916,6 +936,144 @@ describe('RecordPageComponent', () => {
       });
       expect(root.querySelector('[data-card-id="claims"]')).toBeNull();
       expect(execute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the timeline and comments', () => {
+    /** A claim's page, as a kit writes one: its fields, its history and its comments. */
+    const HISTORY_PAGE = {
+      version: 2,
+      columns: 2,
+      cards: [
+        { id: 'member', label: 'Member', fields: ['member:phone'] },
+        {
+          id: 'history',
+          label: 'History',
+          timeline: { events: ['documentModified', 'lifecycle_transition_event'], pageSize: 5 },
+        },
+        { id: 'notes', label: 'Comments', span: 2, comments: { pageSize: 2 } },
+      ],
+    };
+
+    /** Comment documents, oldest first, as the thread reads them. */
+    const thread = (...texts: string[]): NuxeoDocumentList => ({
+      entries: texts.map((text, index): NuxeoDocument => ({
+        uid: `k${index}`,
+        title: `comment.${index}`,
+        type: 'Comment',
+        path: `/m1/Comments/comment.${index}`,
+        lastModified: `2026-11-2${index}T09:00:00.000Z`,
+        properties: {
+          'comment:parentId': 'm1',
+          'comment:text': text,
+          'comment:author': 'jdoe',
+          'comment:creationDate': `2026-11-2${index}T09:00:00.000Z`,
+        },
+      })),
+      totalSize: texts.length,
+      currentPageSize: texts.length,
+      currentPageIndex: 0,
+      numberOfPages: 1,
+    });
+
+    it('draws both cards from the layout file, each asking for the open record', async () => {
+      documents.getAllComments.mockReturnValue(of(thread('First', 'Second', 'Third')));
+      const root = await render(member(), HISTORY_PAGE);
+      expect(
+        [...root.querySelectorAll<HTMLElement>('.record-page__card')].map(
+          (card) => card.dataset['cardId'],
+        ),
+      ).toEqual(['member', 'history', 'notes']);
+
+      const history = root.querySelector<HTMLElement>('[data-card-id="history"]');
+      expect(history?.querySelector('h3')?.textContent?.trim()).toBe('History');
+      expect(history?.querySelector('lib-record-timeline')).not.toBeNull();
+      expect(history?.querySelector('dl')).toBeNull();
+      expect(documents.getAuditLog).toHaveBeenCalledWith('m1', 5, 0, {
+        eventIds: ['documentModified', 'lifecycle_transition_event'],
+        sortBy: 'eventDate',
+        sortOrder: 'desc',
+      });
+      const timeline = fixture.debugElement.query(By.directive(RecordTimelineComponent))
+        .componentInstance as RecordTimelineComponent;
+      expect(timeline.label()).toBe('History');
+
+      const notes = root.querySelector<HTMLElement>('[data-card-id="notes"]');
+      expect(notes?.style.getPropertyValue('--record-card-span')).toBe('2');
+      expect(documents.getAllComments).toHaveBeenCalledWith('m1');
+      // The file's page size: the two newest, under a button for the rest.
+      expect(
+        [...(notes?.querySelectorAll('.nxs-comments__text') ?? [])].map((text) =>
+          text.textContent?.trim(),
+        ),
+      ).toEqual(['Second', 'Third']);
+    });
+
+    it("adds the user's comment to the record's thread", async () => {
+      documents.getAllComments.mockReturnValue(of(thread()));
+      documents.createComment.mockReturnValue(
+        of({
+          id: 'k9',
+          parentId: 'm1',
+          text: 'Called the provider',
+          author: 'jdoe',
+          creationDate: '2026-11-23T09:00:00.000Z',
+        }),
+      );
+      const root = await render(member(), HISTORY_PAGE);
+      const box = root.querySelector<HTMLTextAreaElement>('[data-card-id="notes"] textarea');
+      if (!box) throw new Error('no comment box');
+      box.value = 'Called the provider';
+      box.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(documents.createComment).toHaveBeenCalledWith('m1', 'Called the provider');
+      expect(
+        root.querySelector('[data-card-id="notes"] .nxs-comments__text')?.textContent?.trim(),
+      ).toBe('Called the provider');
+    });
+
+    it('asks for neither while the rule of its card does not pass', async () => {
+      rules.canSeeService = false;
+      const root = await render(member(), {
+        ...HISTORY_PAGE,
+        cards: HISTORY_PAGE.cards.map((card) =>
+          card.id === 'member' ? card : { ...card, visibleWhen: 'test.rules.canSeeService' },
+        ),
+      });
+      expect(root.querySelector('[data-card-id="history"]')).toBeNull();
+      expect(root.querySelector('[data-card-id="notes"]')).toBeNull();
+      expect(documents.getAuditLog).not.toHaveBeenCalled();
+      expect(documents.getAllComments).not.toHaveBeenCalled();
+    });
+
+    it('draws a timeline or comments inside a tab, as it draws any card', async () => {
+      documents.getAllComments.mockReturnValue(of(thread('First')));
+      const root = await render(member(), {
+        version: 2,
+        columns: 2,
+        tabs: [
+          { id: 'summary', label: 'Summary', cards: [HISTORY_PAGE.cards[0]] },
+          { id: 'activity', label: 'Activity', cards: HISTORY_PAGE.cards.slice(1) },
+        ],
+      });
+      const tabs = [...root.querySelectorAll<HTMLElement>('[role="tab"]')];
+      expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Summary', 'Activity']);
+      // A tab draws its cards when it is shown, so neither is asked for until then.
+      expect(documents.getAuditLog).not.toHaveBeenCalled();
+      expect(documents.getAllComments).not.toHaveBeenCalled();
+
+      tabs[1].click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(documents.getAuditLog).toHaveBeenCalledTimes(1);
+      expect(root.querySelector('[data-tab-id="activity"] lib-record-timeline')).not.toBeNull();
+      expect(
+        root.querySelector('[data-tab-id="activity"] .nxs-comments__text')?.textContent?.trim(),
+      ).toBe('First');
     });
   });
 });

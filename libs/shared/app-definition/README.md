@@ -278,7 +278,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
   completes it.
 - **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
-  which loads it with `validateLayoutV2` and `loadable`, and draws its related records. The other
+  which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its timeline
+  and its comments. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
 - **The content model in the designer and the migration server.** The pipeline holds a package to
   a model when given one; the designer and the migration server are still to call

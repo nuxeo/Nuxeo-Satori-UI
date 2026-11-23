@@ -193,8 +193,14 @@ export function resolveRecordLayout(
     list
       .map((card) => ({ ...card, fields: card.fields.flatMap(field) }))
       // A card of related records has no fields of its own: its columns are its rows' properties,
-      // held to the rows' types when they are drawn.
-      .filter((card) => card.related !== null || card.fields.length > 0);
+      // held to the rows' types when they are drawn. Nor has a timeline or comments.
+      .filter(
+        (card) =>
+          card.related !== null ||
+          card.timeline !== null ||
+          card.comments !== null ||
+          card.fields.length > 0,
+      );
 
   const tabs = file.tabs
     ? file.tabs

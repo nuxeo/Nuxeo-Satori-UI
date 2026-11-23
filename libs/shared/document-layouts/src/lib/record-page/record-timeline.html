@@ -1,0 +1,91 @@
+@if (kinds().length > 0) {
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="record-timeline__filter">
+    <mat-label>{{ 'document-layouts.timeline.filter' | translate }}</mat-label>
+    <mat-select [value]="kind()" (valueChange)="kind.set($event)">
+      <mat-option value="">{{ 'document-layouts.timeline.all' | translate }}</mat-option>
+      @for (option of kinds(); track option.id) {
+        <mat-option [value]="option.id">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+}
+
+@let current = state();
+<div class="record-timeline__body" [attr.aria-busy]="current.status === 'loading'">
+  @switch (current.status) {
+    @case ('failed') {
+      <nxs-error-state
+        [status]="current.error"
+        [heading]="'document-layouts.timeline.failed' | translate"
+        [headingLevel]="stateHeadingLevel()"
+        [retryable]="current.error === 500"
+        (retry)="retry()"
+      />
+    }
+    @case ('loaded') {
+      @if (entries().length === 0) {
+        <nxs-empty-state
+          icon="event_busy"
+          [heading]="
+            (kind() ? 'document-layouts.timeline.no-match' : 'document-layouts.timeline.empty')
+              | translate
+          "
+          [headingLevel]="stateHeadingLevel()"
+        />
+      } @else {
+        <ol class="record-timeline__entries" [attr.aria-label]="label()">
+          @for (entry of entries(); track entry.id) {
+            <li class="record-timeline__entry" [attr.data-event]="entry.event">
+              <p class="record-timeline__what">
+                <span class="record-timeline__event">{{ entry.what }}</span>
+                @if (entry.transition; as transition) {
+                  <span class="record-timeline__transition">
+                    @if (transition.from) {
+                      {{
+                        'document-layouts.timeline.transition'
+                          | translate: { from: transition.from, to: transition.to }
+                      }}
+                    } @else {
+                      {{ 'document-layouts.timeline.reached' | translate: { to: transition.to } }}
+                    }
+                  </span>
+                }
+              </p>
+              <p class="record-timeline__meta">
+                <span class="record-timeline__who">{{ entry.who }}</span>
+                <time class="record-timeline__when" [attr.datetime]="entry.datetime">{{
+                  entry.when
+                }}</time>
+              </p>
+              @if (entry.comment) {
+                <p class="record-timeline__comment">{{ entry.comment }}</p>
+              }
+            </li>
+          }
+        </ol>
+        @if (current.next !== null) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="record-timeline__more"
+            [disabled]="current.loadingMore"
+            (click)="showMore()"
+          >
+            {{ 'document-layouts.timeline.more' | translate }}
+          </button>
+        }
+        <!-- Always there, so that a failure written into it is announced. -->
+        <p class="record-timeline__more-failed" role="status">
+          @if (current.moreFailed) {
+            {{ 'document-layouts.timeline.more-failed' | translate }}
+          }
+        </p>
+      }
+    }
+    @default {
+      <div class="record-timeline__loading">
+        <nxs-spinner diameter="32" [label]="'document-layouts.timeline.loading' | translate" />
+      </div>
+    }
+  }
+</div>

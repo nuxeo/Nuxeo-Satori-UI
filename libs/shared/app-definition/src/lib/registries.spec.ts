@@ -105,6 +105,8 @@ describe('the JSON Schema, held to the registries and the validator', () => {
       ['card', LAYOUT_V2_KEYS.card],
       ['field', LAYOUT_V2_KEYS.field],
       ['related', LAYOUT_V2_KEYS.related],
+      ['timeline', LAYOUT_V2_KEYS.timeline],
+      ['comments', LAYOUT_V2_KEYS.comments],
       ['check', LAYOUT_V2_KEYS.check],
     ] as const) {
       expect(Object.keys(defs[part].properties).sort()).toEqual([...keys].sort());
