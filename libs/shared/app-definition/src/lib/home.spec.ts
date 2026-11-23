@@ -503,6 +503,14 @@ describe('nesting deeper than the validator reads', () => {
     expect(deepest(validateLayoutV2(layout, { mode: 'view' }))).toEqual([tooDeep, tooDeep]);
   });
 
+  it('finds it in tables nested in tables', () => {
+    let column: unknown = 'dc:title';
+    for (let index = 0; index < levels; index++)
+      column = { field: 'dc:contributors', widget: 'table', parameters: { columns: [column] } };
+    const layout = { version: 2, cards: [{ id: 'c', fields: [column] }] };
+    expect(deepest(validateLayoutV2(layout, { mode: 'view' }))).toEqual([tooDeep]);
+  });
+
   it('reads as deep as the limit', () => {
     let rule: unknown = 'core.true';
     // Each core.not is one level, and the innermost rule one more.

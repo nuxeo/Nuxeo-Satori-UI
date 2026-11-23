@@ -91,8 +91,8 @@ export interface CheckerOptions {
 export const ICON = /^[a-z0-9_]{1,64}$/;
 
 /**
- * How many levels of rules, computations and a customer's rule's parameters the validator reads,
- * the outermost being the first. JSON can nest further than a recursive walk has stack for, so
+ * How many levels of rules, computations, a customer's rule's parameters and fields (a table's
+ * columns are fields, which may be tables) the validator reads, the outermost being the first. JSON can nest further than a recursive walk has stack for, so
  * past this a walk stops with a `parameter` finding: the entry it is in is left out, or the
  * package refused, rather than the check overflowing its stack. Far above what any file needs, and
  * above the 32 levels the rule registry answers, which the engines enforce on their own.
@@ -110,7 +110,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     findings.push({ path, kind, message });
   };
 
-  /** How deep the walk is in rules, computations and a customer's rule's parameters. */
+  /** How deep the walk is in rules, computations, a customer's rule's parameters and fields. */
   let depth = 0;
   /**
    * `walk` one level deeper, or, past {@link MAX_NESTING}, a finding instead. The level is given
@@ -439,7 +439,10 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
    * A field entry: a property as `<prefix>:<name>`, or an object. `form` is a form's field, where
    * `inForm` says whether the form keys may be used: a table's columns in a form may not.
    */
-  const field = (entry: unknown, path: string, form: boolean, inForm = form): void => {
+  const field = (entry: unknown, path: string, form: boolean, inForm = form): void =>
+    nested(path, () => fieldAt(entry, path, form, inForm));
+
+  const fieldAt = (entry: unknown, path: string, form: boolean, inForm: boolean): void => {
     if (typeof entry === 'string') {
       if (!XPATH.test(entry))
         add(path, 'structure', `"${entry}" is not a property, <prefix>:<name>`);
