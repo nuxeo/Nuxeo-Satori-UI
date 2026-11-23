@@ -503,6 +503,126 @@ describe('readRecordLayout', () => {
       ]);
     });
 
+    /**
+     * What the validator finds inside a column this build does not draw is about that column
+     * only: a rule or a computation neither registry has, or an inner column's unknown widget.
+     * The column goes, the table stays. On a column that is drawn, the same rule still leaves
+     * the table out, and a structural error anywhere still refuses the file.
+     */
+    it('keeps a table for what the validator finds in a column it does not draw, and only there', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:lines',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'line:code',
+                    {
+                      id: 'n',
+                      visibleWhen: 'acme.rules.unavailable',
+                      computed: { type: 'core.nope' },
+                    },
+                    {
+                      field: 'line:items',
+                      widget: 'table',
+                      parameters: {
+                        columns: [
+                          {
+                            field: 'item:a',
+                            widget: 'calendar',
+                            visibleWhen: 'acme.rules.unavailable',
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                field: 'member:other',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'line:code',
+                    { field: 'line:x', visibleWhen: 'acme.rules.unavailable' },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields.map((field) => field.place)).toEqual(['cards[0].fields[0]']);
+      const columns = 'cards[0].fields[0].parameters.columns';
+      expect(file.problems).toEqual([
+        `${columns}[1].computed.type: the computation "core.nope" is not registered; ${columns}[1] left out`,
+        `${columns}[1].visibleWhen: the rule "acme.rules.unavailable" is not registered; ${columns}[1] left out`,
+        `${columns}[2].parameters.columns[0].widget: the widget "calendar" is not registered; ${columns}[2] left out`,
+        `${columns}[2].parameters.columns[0].visibleWhen: the rule "acme.rules.unavailable" is not registered; ${columns}[2] left out`,
+        'cards[0].fields[1].parameters.columns[1].visibleWhen: the rule "acme.rules.unavailable" is not registered; cards[0].fields[1] left out',
+        `${columns}[1] is a computed column, which this build does not draw yet; that column left out`,
+        `${columns}[2] is a table inside a table, which this build does not draw yet; that column left out`,
+      ]);
+      expect(
+        readRecordLayout(
+          {
+            version: 2,
+            cards: [
+              {
+                id: 'a',
+                fields: [
+                  {
+                    field: 'member:lines',
+                    widget: 'table',
+                    parameters: {
+                      columns: [
+                        'line:code',
+                        { id: 'n', computed: { type: 'core.count', parameters: null } },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          known,
+        ),
+      ).toEqual({
+        invalid: `${columns}[1].computed.parameters: parameters must be a list`,
+      });
+    });
+
+    /**
+     * `columns[1]` undrawn says nothing of `columns[10]`, which is drawn: its rule still counts.
+     * A place ends in `]`, so no prefix of one is another's; this pins that, not a guard.
+     */
+    it('leaves a table out for a drawn column whose place begins like an undrawn one', () => {
+      const columns: unknown[] = Array.from({ length: 11 }, (_, index) => `line:c${index}`);
+      columns[1] = { id: 'n', computed: { type: 'core.count', parameters: [{ field: 'x:y' }] } };
+      columns[10] = { field: 'line:c10', visibleWhen: 'acme.rules.unavailable' };
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              'dc:title',
+              { field: 'member:lines', widget: 'table', parameters: { columns } },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields.map((field) => field.place)).toEqual(['cards[0].fields[0]']);
+      expect(file.problems).toContain(
+        'cards[0].fields[1].parameters.columns[10].visibleWhen: the rule "acme.rules.unavailable" is not registered; cards[0].fields[1] left out',
+      );
+    });
+
     it('a card of related records, which this build does not draw yet', () => {
       const file = read({
         version: 2,
