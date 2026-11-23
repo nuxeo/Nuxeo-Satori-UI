@@ -77,7 +77,7 @@ header another way, is the builder's to refuse, at step 4: the server would load
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.1.0.zip` and its `.sha256` in the package. `--out` puts them
+It writes `dist/payers-claims-demo-0.2.0.zip` and its `.sha256` in the package. `--out` puts them
 elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
 `--platform` its platform version; the workflow passes the version of `libs/platform`.
 
@@ -98,7 +98,7 @@ npm run app-package:selftest
 4. Anyone can check the signature:
 
    ```bash
-   gh attestation verify payers-claims-demo-0.1.0.zip --repo nuxeo/Nuxeo-Satori-UI
+   gh attestation verify payers-claims-demo-0.2.0.zip --repo nuxeo/Nuxeo-Satori-UI
    ```
 
 A tag rather than a button: a manually dispatched workflow must be on `main`, which this one

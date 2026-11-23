@@ -1540,7 +1540,7 @@ function scanScriptCredentialDefaults(files, report) {
  * - A literal login that never touches the environment — `NXSAT-164.mjs` passed
  *   `'Administrator', 'Administrator'` straight to its `loginAs`, and that was found by reading,
  *   not by this check.
- * - Anything outside the three roots — `apps/nuxeo-ui-e2e` and `libs/integration-tests` enforce
+ * - Anything outside the four roots — `apps/nuxeo-ui-e2e` and `libs/integration-tests` enforce
  *   their own no-default rule in code. Product code that falls back to `'Administrator'` as a
  *   display **user id** (`currentUsername() ?? 'Administrator'`) reads no credential and is a
  *   different question.

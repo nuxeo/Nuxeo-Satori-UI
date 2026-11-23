@@ -4,7 +4,8 @@
 
   Everything here is fictional: the document types, schemas and page providers the kit's layouts
   and queue name, and nothing more. When the presales model arrives, this file and schemas/ are
-  replaced by theirs, and the layouts follow its property names.
+  replaced by theirs, and the layouts follow its property names. Records of these types must be
+  deleted from a server before its model goes: a document whose type is gone cannot be read.
 
   Its own component, apart from the configuration one, so that it can be replaced whole. It
   contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
@@ -50,9 +51,10 @@
     </doctype>
   </extension>
 
-  <!-- The platform's default lifecycle, so that the package's approve action (a transition of
-       that lifecycle) and the inState rule have a state to work with. The claim's own status is
-       claim:status. A Payers lifecycle is phase 2's. -->
+  <!-- The platform's default lifecycle, so that a record has a lifecycle state and the package's
+       approve action has a transition: that lifecycle's approve, which it offers only in the
+       project state. Approving moves the lifecycle state, not claim:status, which the queue and
+       the pages read: a Payers lifecycle that keeps the two as one is phase 2's. -->
   <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
     <types>
       <type name="Member">default</type>

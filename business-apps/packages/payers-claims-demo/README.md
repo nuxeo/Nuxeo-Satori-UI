@@ -17,27 +17,27 @@ fictional. Phase 0's demo runs on it, and the pipeline's controls
 
 ## What is in it
 
-| File                                                         | What it is                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| `bundle/agentic-ui-config/app.json`                          | The app: its name, version, platform range and groups              |
-| `bundle/agentic-ui-config/layouts/Member/view.layout.json`   | The Member record page: section 9's                                |
-| `bundle/agentic-ui-config/layouts/Claim/view.layout.json`    | The Claim record page                                              |
-| `bundle/agentic-ui-config/layouts/Case/view.layout.json`     | The Case record page                                               |
-| `bundle/agentic-ui-config/layouts/Provider/view.layout.json` | The Provider record page, with the claims it billed                |
-| `bundle/agentic-ui-config/queues/unassigned-claims.json`     | A queue                                                            |
-| `bundle/agentic-ui-config/actions.json`                      | An approve button: a lifecycle transition                          |
-| `bundle/agentic-ui-config/labels/en.json`                    | Its labels, in English                                             |
-| `bundle/OSGI-INF/payers-claims-demo-config.xml`              | The component that contributes the four layouts                    |
-| `bundle/OSGI-INF/payers-claims-demo-model.xml`               | **The stand-in model:** document types, lifecycles, page providers |
-| `bundle/schemas/*.xsd`                                       | **The stand-in model's** schemas                                   |
-| `demo/seed.mjs`, `demo/data.mjs`                             | The seed script and its fictional records. Not packaged            |
-| `package/package.xml`                                        | The Marketplace package: name, version, and what it depends on     |
-| `build.mjs`                                                  | Version 1's builder: the generator's, byte for byte                |
+| File                                                         | What it is                                                            |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                          | The app: its name, version, platform range and groups                 |
+| `bundle/agentic-ui-config/layouts/Member/view.layout.json`   | The Member record page: section 9's                                   |
+| `bundle/agentic-ui-config/layouts/Claim/view.layout.json`    | The Claim record page                                                 |
+| `bundle/agentic-ui-config/layouts/Case/view.layout.json`     | The Case record page                                                  |
+| `bundle/agentic-ui-config/layouts/Provider/view.layout.json` | The Provider record page, with the claims it billed                   |
+| `bundle/agentic-ui-config/queues/unassigned-claims.json`     | A queue                                                               |
+| `bundle/agentic-ui-config/actions.json`                      | An approve button: a lifecycle transition                             |
+| `bundle/agentic-ui-config/labels/en.json`                    | Its labels, in English                                                |
+| `bundle/OSGI-INF/payers-claims-demo-config.xml`              | The component that contributes the four layouts                       |
+| `bundle/OSGI-INF/payers-claims-demo-model.xml`               | **The stand-in model:** document types, lifecycles, page providers    |
+| `bundle/schemas/*.xsd`                                       | **The stand-in model's** schemas                                      |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`   | The seed script, its fictional records and its controls. Not packaged |
+| `package/package.xml`                                        | The Marketplace package: name, version, and what it depends on        |
+| `build.mjs`                                                  | Version 1's builder: the generator's, byte for byte                   |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No operation button.** Decision 3 is open, so the pipeline refuses every operation.
 - **One version in two places:** `package.xml`'s and `app.json`'s `packageVersion`, raised
-  together.
+  together. The manifest's `Bundle-Version` follows them; nothing checks it.
 
 ## The stand-in model
 
@@ -60,6 +60,10 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
   `case:state`. Each schema lists its values. Every type has the platform's default lifecycle, so
   the approve action has a transition; a Payers lifecycle is phase 2's.
 - **None of the four record types holds a file or is a folder,** so each opens as a record page.
+- **Created by the seed, not by hand:** no folder lists the types among its subtypes, so the
+  Create menu does not offer them.
+- **The names are plain:** `Member`, `Claim`, `member_claims` and the rest. On a server shared with
+  another model that uses them, the two would collide. The presales model sets the real ones.
 
 | Page provider              | Given                    | Returns                                                       |
 | -------------------------- | ------------------------ | ------------------------------------------------------------- |
@@ -78,7 +82,7 @@ records.
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.1.0.zip`.
+It writes `dist/payers-claims-demo-0.2.0.zip`.
 
 ## Installing it on a local Nuxeo
 
@@ -86,18 +90,21 @@ The local Nuxeo is the Docker container `nuxeo`, on port 8080. The package depen
 `nuxeo-agentic-ui` 2026.0.2 (`package/package.xml`), which serves its layouts: install that first.
 
 ```bash
-docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.1.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker exec nuxeo nuxeoctl mp-install /tmp/payers-claims-demo-0.1.0.zip --accept=true
+docker exec nuxeo nuxeoctl mp-install /tmp/payers-claims-demo-0.2.0.zip --accept=true
 ```
 
 ```bash
 docker restart nuxeo
 ```
 
-To remove it, `nuxeoctl mp-remove payers-claims-demo --accept=true`, then restart.
+**Before removing it, or replacing its stand-in model,** delete the seeded workspace,
+`/default-domain/workspaces/payers-demo`, and empty it from the trash. A document whose type is
+gone cannot be read, and would break the folder and the searches that hold it. Then
+`nuxeoctl mp-remove payers-claims-demo --accept=true`, and restart.
 
 ## Seeding it
 
@@ -141,5 +148,7 @@ the member, and masking it there is decision I.
   is labelled from its name, `billedAmount` as "Billed amount".
 - **Phase 1's kit has more:** three queues and a home for two groups. This version has one queue
   and no home.
-- **Not run against a server yet:** the install and the seed, against a real Nuxeo. The seed's
-  logic is checked against a stand-in for the REST API it calls.
+- **Not run against a server yet:** the install and the seed, against a real Nuxeo.
+  `node business-apps/packages/payers-claims-demo/demo/seed.selftest.mjs` checks the seed's logic
+  against a stand-in for the REST API it calls, written from what that API is documented to do,
+  so it proves the script, not the server. CI does not run it.

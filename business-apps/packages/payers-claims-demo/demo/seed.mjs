@@ -26,9 +26,9 @@
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
  *
- * Exit codes: 0, seeded and checked; 1, the server refused a write or a check failed; 2, a
- * precondition: no credentials, no server, credentials refused, the package not installed, or no
- * /default-domain/workspaces.
+ * Exit codes: 0, seeded and checked; 1, the server refused a write, stopped answering part way, or
+ * a check failed; 2, a precondition, found before anything is written: no credentials, no server,
+ * credentials refused, the package not installed, or no /default-domain/workspaces.
  */
 import { CASES, CLAIM_DOCUMENTS, CLAIMS, MEMBERS, PROVIDERS } from './data.mjs';
 
@@ -37,6 +37,8 @@ const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/
 const APP = (process.env['APP_URL'] || 'http://localhost:4200').replace(/\/+$/, '');
 const API = `${SERVER}/nuxeo/api/v1`;
 const TIMEOUT_MS = 30_000;
+const PAGE_SIZE = 100;
+const MAX_PAGES = 100;
 
 const WORKSPACES = '/default-domain/workspaces';
 const ROOT = `${WORKSPACES}/payers-demo`;
@@ -68,6 +70,8 @@ class HttpError extends Error {
 }
 
 const tally = { created: 0, updated: 0, restored: 0, uploaded: 0 };
+/** Whether the run is still in its preflight, where no answer at all means no server. */
+let preflighting = true;
 
 const username = process.env['NUXEO_USER'];
 const password = process.env['NUXEO_PASS'];
@@ -94,6 +98,7 @@ try {
 async function seed() {
   console.log(`Seeding ${SERVER} with the Payers kit's fictional records.`);
   await preflight();
+  preflighting = false;
 
   await ensure(WORKSPACES, 'payers-demo', 'Workspace', {
     'dc:title': 'Payers demo',
@@ -232,7 +237,7 @@ async function preflight() {
  */
 async function ensure(parent, name, type, properties, file) {
   const path = `${parent}/${name}`;
-  const existing = await find(`/path${pathOf(path)}`);
+  const existing = (await find(`/path${pathOf(path)}`)) ?? (await trashedFrom(parent, name));
   if (existing === null) {
     const content = file ? { 'file:content': await upload(file) } : {};
     const created = await call('POST', `/path${pathOf(parent)}`, {
@@ -262,6 +267,26 @@ async function ensure(parent, name, type, properties, file) {
   tally.updated++;
   console.log(`  updated  ${path}`);
   return updated;
+}
+
+/**
+ * The document trashed from `parent/name`, or `null`. Nuxeo renames what it trashes, to
+ * `<name>._<time>_.trashed`, unless it is configured not to, so the record's place no longer finds
+ * it. Restoring it gives the name back.
+ */
+async function trashedFrom(parent, name) {
+  const folder = await find(`/path${pathOf(parent)}`);
+  if (folder === null) return null;
+  const entries = await nxql(
+    `SELECT * FROM Document WHERE ecm:parentId = ${literal(folder.uid)} AND ecm:isTrashed = 1 ` +
+      `AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:name LIKE ${literal(`${name}._%_.trashed`)}`,
+  );
+  if (entries.length > 1)
+    throw new Error(
+      `${parent} holds ${entries.length} trashed documents named ${name}, and the seed restores ` +
+        'only one. Restore or delete all but one, then run this again.',
+    );
+  return entries[0] ?? null;
 }
 
 /** Whether the document's file is already `file`, by name and bytes. */
@@ -354,12 +379,37 @@ async function check({ members, providers, claims, cases, documents }) {
   console.log(`  checked  ${PAGE_PROVIDERS.join(', ')}`);
 }
 
-/** Every id a page provider returns, given one parameter or none. */
+/** Every id a page provider returns, given one parameter or none, page after page. */
 async function results(pageProvider, parameter) {
-  const query = new URLSearchParams({ pageSize: '100' });
-  if (parameter !== undefined) query.set('queryParams', parameter);
-  const page = await call('GET', `/search/pp/${pageProvider}/execute?${query}`);
-  return (page.entries ?? []).map((entry) => entry.uid);
+  const ids = [];
+  for (let index = 0; index < MAX_PAGES; index++) {
+    const query = new URLSearchParams({
+      pageSize: String(PAGE_SIZE),
+      currentPageIndex: `${index}`,
+    });
+    if (parameter !== undefined) query.set('queryParams', parameter);
+    const page = await call('GET', `/search/pp/${pageProvider}/execute?${query}`);
+    ids.push(...(page.entries ?? []).map((entry) => entry.uid));
+    if (page.isNextPageAvailable !== true) return ids;
+  }
+  throw new Error(
+    `${pageProvider} returns more than ${MAX_PAGES * PAGE_SIZE} records, past which the check ` +
+      'does not read, so it cannot say what the page provider holds.',
+  );
+}
+
+/** The documents an NXQL query finds, up to one page: the callers expect one or none. */
+async function nxql(query) {
+  const page = await call(
+    'GET',
+    `/search/lang/NXQL/execute?${new URLSearchParams({ query, pageSize: `${PAGE_SIZE}` })}`,
+  );
+  return page.entries ?? [];
+}
+
+/** An NXQL string literal. */
+function literal(text) {
+  return `'${text.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
 }
 
 function idOf(ids, number, from) {
@@ -415,11 +465,13 @@ async function request(method, path, { json, body, headers = {} } = {}) {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (error) {
-    throw new Precondition(
+    const unanswered =
       `${SERVER} did not answer ${method} ${path}: ` +
-        `${error?.cause?.code ?? error?.message ?? error}. ` +
-        'Is Nuxeo running, and is NUXEO_URL its address?',
-    );
+      `${error?.cause?.code ?? error?.message ?? error}.`;
+    // Before anything is written, no answer means no server. After, the run stopped part way.
+    if (preflighting)
+      throw new Precondition(`${unanswered} Is Nuxeo running, and is NUXEO_URL its address?`);
+    throw new Error(`${unanswered} The run stopped part way; running it again is safe.`);
   }
   if (!response.ok) {
     const text = await response.text();

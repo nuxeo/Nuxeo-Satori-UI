@@ -13,7 +13,7 @@
   <xs:element name="birthDate" type="xs:date" />
 
   <!-- The subfields section 9's address widget names: street, city, zip and country. -->
-  <xs:complexType name="address">
+  <xs:complexType name="memberAddress">
     <xs:sequence>
       <xs:element name="street" type="xs:string" />
       <xs:element name="city" type="xs:string" />
@@ -21,7 +21,7 @@
       <xs:element name="country" type="xs:string" />
     </xs:sequence>
   </xs:complexType>
-  <xs:element name="address" type="nxs:address" />
+  <xs:element name="address" type="nxs:memberAddress" />
 
   <xs:element name="phone" type="xs:string" />
   <xs:element name="email" type="xs:string" />

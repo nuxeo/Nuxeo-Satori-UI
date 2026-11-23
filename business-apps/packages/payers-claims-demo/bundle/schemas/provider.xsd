@@ -24,8 +24,10 @@
 
   <xs:element name="phone" type="xs:string" />
 
-  <!-- The same subfields as the member's address, so one widget setting shows both. -->
-  <xs:complexType name="address">
+  <!-- The same subfields as the member's address, so one widget setting shows both. The type has
+       a name of its own: Nuxeo's SQL storage keeps a complex type in a table named after it, so
+       two schemas each declaring an "address" could share one. -->
+  <xs:complexType name="providerAddress">
     <xs:sequence>
       <xs:element name="street" type="xs:string" />
       <xs:element name="city" type="xs:string" />
@@ -33,5 +35,5 @@
       <xs:element name="country" type="xs:string" />
     </xs:sequence>
   </xs:complexType>
-  <xs:element name="address" type="nxs:address" />
+  <xs:element name="address" type="nxs:providerAddress" />
 </xs:schema>
