@@ -405,6 +405,45 @@ populated) honour four more:
 | `enabledRule` | A rule ID. When it denies, the control renders **disabled** rather than gone. |
 | `action`      | Registered handler ID. Defaults to the descriptor `id`.                       |
 
+#### `icon` names removed in Satori 1.0.0
+
+`icon` is a name in Satori's icon sprite: the action bar, the action menu and the selection top
+bar render it as `<mat-icon [svgIcon]="action.icon">`. Satori 1.0.0 (DS-1505) removed the
+deprecated names below. A manifest that still uses one gets **a blank icon and no error** — no
+warning is logged and nothing in §2a reports it. Satori's `migrate-deprecated-satori-icons`
+migrator cannot help here either: it rewrites names written in templates, and a manifest value
+reaches the template only at run time. Rename them in the manifest:
+
+| Removed         | Use instead    |
+| --------------- | -------------- |
+| `AI`            | `ai`           |
+| `UI`            | `ui`           |
+| `Acs`           | `acs`          |
+| `Comprehend`    | `comprehend`   |
+| `DocuSign`      | `docusign`     |
+| `Lambda`        | `lambda`       |
+| `Mariadb`       | `mariadb`      |
+| `MS_Teams`      | `ms_teams`     |
+| `Nuxeo`         | `nuxeo`        |
+| `OnBase`        | `onbase`       |
+| `OpenAI`        | `openai`       |
+| `Outlook`       | `outlook`      |
+| `PostgreSQL`    | `postgresql`   |
+| `Perceptive`    | `perceptive`   |
+| `Rekognition`   | `rekognition`  |
+| `Rest`          | `rest`         |
+| `Salesforce`    | `salesforce`   |
+| `SFTP`          | `sftp`         |
+| `Stack`         | `slack`        |
+| `SQL_database`  | `sql_database` |
+| `Textract`      | `textract`     |
+| `Trello`        | `trello`       |
+| `regenerate_ai` | `autorenew`    |
+| `record_audio`  | `audio`        |
+
+Source: the `migrate-deprecated-satori-icons` README in `@hylandsoftware/satori-migrations@1.0.0`.
+None of these names is used by the descriptors this product registers.
+
 ### Per-ID overrides
 
 `extensions.overrides` is keyed by **descriptor ID, never by slot**, so a slot invented after Beta
