@@ -342,18 +342,22 @@ UI's own task page (`nuxeo-document-task.js`) and its stock layouts:
   widget, label and required flag, as an edit form's field. A step whose layout shows no field gets
   a form with no card, as Web UI shows none; with no file the app would show its own form of the
   step's variables.
-- **Read-only.** A field Web UI binds one way, in `[[…]]` or text, only shows its value, and
-  Web UI writes back only a two-way `{{…}}` binding. So in a task form, a field bound one way is
-  written `readOnlyWhen: "core.true"`: the app neither edits nor sends what Web UI never changes.
-  Version 1 cannot make a field read-only, so in an edit or create layout such a field is written
-  editable and reported.
+- **Read-only.** Web UI writes back only what an input binds two ways: `{{path}}` or
+  `{{path::event}}` on an element that edits, not a `nuxeo-date`, `nuxeo-user-tag` or `nuxeo-tag`,
+  and not one marked `readonly` or `disabled`. A computed or negated `{{…}}`, a `[[…]]` binding
+  and text are one way. So in a task form, a variable Web UI does not edit is written
+  `readOnlyWhen: "core.true"`: the app neither edits nor sends what Web UI never changes. Version
+  1 cannot make a field read-only, so in an edit or create layout such a field is written editable
+  and reported.
 - **The document.** Web UI's task page fetches the task with its first target whole
   (`nuxeo-app.js`, `fetch-task: targetDocumentIds`, with every schema): on the reference server it
   holds the document's type, state, facets and properties, but no permissions, since no enricher
   asks for them. So a field or a layout block bound to the document becomes the record's property,
   which the app's task form shows read-only; a type, facet or state test converts as anywhere; and
-  a permission test, which never passes there, is reported. A group test converts where the layout
-  writes the user, as everywhere.
+  a permission test, which never passes there, is reported, in the task layout and in a block it
+  uses. A record's field Web UI requires is written without the flag, since a task form requires
+  only the step's variables, and reported. A group test converts where the layout writes the user,
+  as everywhere.
 - **The buttons** are the step's own, from the workflow on the server: Web UI's task page and the
   app's task panel both draw `taskInfo.taskActions`, so a form has none to write.
 
@@ -638,7 +642,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     through the conversion. No test changed a list's parameters: `change-parameter` changes an
     action's first. The third was a mistake in the round itself. Each now has its test.
 
-  - **In M2, 60 guards**, broken in turn the same way, and each seen turning the suite red:
+  - **In M2, 69 guards**, broken in turn the same way, and each seen turning the suite red:
     - **In the inventory:** the task layout's kind and its variables; its permissions out of
       scope; a field's two-way binding; a block known by its layout behaviour, in a file of one
       element; a block use's document, condition and place among the fields; a slot
@@ -665,12 +669,18 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
       field; a property everyone sees only through a field Web UI shows.
     - **In check 6:** a tab's label.
     - **In check 1:** a block use as a construct.
+    - **After the second review:** a permission test of a block a task layout uses, in the
+      converter and in check 5; a record field of a task form neither required nor left
+      unreported, in the converter and in check 2; a display element, a read-only input, a
+      computed binding and a native input, read as Web UI binds them.
 
-    Three rounds ran. The first found five guards no test reached: a block file of two elements, a
+    Four rounds ran. The first found five guards no test reached: a block file of two elements, a
     `dom-if` on a task layout's document, a block under a condition in version 1, a field of a
     conditional block kept behind one everyone sees, and a rule moved to another card. The third,
     after the review below, found two: a permission rule joined with another, and the tabs'
-    order, which a second sort hid. Each now has its test, and the second sort is gone.
+    order, which a second sort hid. The fourth, after the second review, found that no test sent
+    a required record field through the conversion unreported. Each now has its test, and the
+    second sort is gone.
 
   - **An independent review of M2** found twelve things. Fixed, each with a test: a guarded
     block's field moved under another block's rule passed check 5; a block given no document hid
@@ -682,7 +692,11 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     sorted last, and the record page opened on another tab than Web UI's; a tab on fewer types
     than Web UI was `converted`; a view of the preview alone gave a false reason; and stale counts
     in the migration document. Two are limits, listed under **Not done yet**: check 3 with one
-    variables schema in the package, and what the checks share with the converter.
+    variables schema in the package, and what the checks share with the converter. A second round
+    confirmed the fixes and found three regressions they brought, fixed the same way: a permission
+    test inside a block a task layout uses became a rule; a required field of the record made the
+    task form one the app refuses; and a display element or a read-only input bound two ways, or a
+    computed binding, read as editing its value.
 
   - **An independent review of M1** found twelve ways to drop, widen or misread something that
     every check still passed. Examples: a property shown to everyone, dropped because an earlier
@@ -721,11 +735,13 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   actions and menu entries are not yet, so a disabled button still becomes an action, and a
   replaced one is not reported.
 - **What the checks share with the converter.** The checks hold what each file shows to the
-  package, but they find which tab is which, which types a tab goes to, which file a task form is
-  and which card is a block's through the converter's own planning (`forms.ts`, `blocks.ts`,
-  `convert-tabs.ts`, `convert-tasks.ts`), and whether a field edits through the inventory's
-  reading of its bindings. A mistake there would pass both. Only check 1's second count reads the
-  package another way.
+  package, but they take from the converter's own planning (`forms.ts`, `blocks.ts`,
+  `convert-tabs.ts`, `convert-tasks.ts`, `convert-layouts.ts`): which tabs exist, as `registered`
+  reads Web UI's slots; which tab is which, which types each goes to and the conditions of its
+  rule; which file a task form is; which card is a block's; and, through `planFields`, which field
+  a rule belongs to. Whether a field edits is the inventory's reading of its bindings, for both. A
+  mistake there would pass both. Only check 1's second count reads the package another way, and
+  it too takes the files' kinds, layout blocks among them, from the inventory.
 - **A task variable only one variables schema holds.** Check 3 fails a variable neither its step's
   nor its workflow's schema has only when the package holds both schemas. With one of them on the
   server, the variable may be that one's, and the check lists it as resting on the platform.

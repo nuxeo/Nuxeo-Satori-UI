@@ -843,7 +843,9 @@ describe("tabs as Web UI's slots register them", () => {
       "the view layout of Policy shows only the document's preview",
     );
   });
+});
 
+describe('task layouts, read as Web UI reads them', () => {
   it('reports a permission test of a block a task layout uses, and a required field of the record', () => {
     const task = prepare({
       [`${UI}/acme-blocks/acme-secure.html`]: `<dom-module id="acme-secure"><template>
@@ -873,6 +875,24 @@ describe("tabs as Web UI's slots register them", () => {
     });
     expect(run(task, 2)?.status).toBe('pass');
     expect(run(task, 10)?.status).toBe('pass');
+    // Check 2 fails it when the report does not say so.
+    const unsaid = {
+      ...task,
+      conversion: {
+        ...task.conversion,
+        report: {
+          ...task.conversion.report,
+          constructs: task.conversion.report.constructs.map((construct) =>
+            construct.id === `task-field:${TASK}#1`
+              ? { ...construct, outcome: 'converted' as const, note: undefined }
+              : construct,
+          ),
+        },
+      },
+    };
+    expect(run(unsaid, 2)?.findings).toEqual([
+      "tasks/ClaimReview.AssessClaim.layout.json: dc:title is required in Web UI, which a task form cannot say of the record's property, and the report does not say so",
+    ]);
     // Its rule written after all fails check 5, though the block's condition decides it.
     const ruled = edit(task, 'tasks/ClaimReview.AssessClaim.layout.json', (file) => {
       file.cards[0].fields.unshift({
