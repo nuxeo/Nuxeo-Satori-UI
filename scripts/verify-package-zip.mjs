@@ -14,8 +14,8 @@
  * installer looks for them, that the package name and version the zip is named after are the ones
  * `package.xml` declares, that every path `install.xml` copies exists in the zip and that one of
  * them deploys the bundle into `${env.bundles}`, and that the bundle is a readable jar whose
- * manifest names its components in a single header spelt `Nuxeo-Component`, and whose
- * `Nuxeo-Component`, `<require>` and contribution `src` targets resolve to entries in it.
+ * manifest names its components in a single header spelt `Nuxeo-Component` in its main section,
+ * and whose `Nuxeo-Component`, `<require>` and contribution `src` targets resolve to entries in it.
  *
  * **Where it stops, on purpose.** It does not check that a contribution with no `src` carries a
  * body: reading inline `<json>` means parsing element content, which `build.mjs` already does
