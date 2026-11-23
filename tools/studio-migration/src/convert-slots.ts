@@ -9,11 +9,14 @@
  * - **The left menu's entries** that open a search screen become entries of `navigation.json`
  *   (`convert-home.ts`); **tabs** wait for M2.
  *
- * A contribution that sits in a condition waits for M2, which converts the condition: converting
- * it alone would show it to everyone.
+ * A contribution that sits in a condition carries its rule as the `visibleWhen` of what it
+ * becomes, where that can hold one: an action, or a menu entry. Elsewhere it is pending, because
+ * converting it alone would show it to everyone.
  */
 import { own, slotEntry, type Catalogue } from './catalogue';
+import type { Rule } from './conditions';
 import { menuDecisions } from './convert-home';
+import { carry, guardOfSet, type Guard } from './guards';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
 import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
@@ -93,6 +96,30 @@ export interface ActionOwner {
   readonly parameters: Record<string, unknown> | null;
   readonly attributes: Readonly<Record<string, string>>;
   readonly slot: 'toolbar' | 'bulk-actions';
+  /** The rule of the conditions it sits in, for its `visibleWhen`; `null` for none. */
+  readonly rule: Rule | null;
+}
+
+/**
+ * Whether a contribution's conditions can travel with the action it becomes: they must convert,
+ * and over a selection none may read the open record, which a bulk action has not.
+ */
+export function actionGuard(
+  inventory: Inventory,
+  contribution: SlotContribution,
+  slot: 'toolbar' | 'bulk-actions',
+):
+  | { readonly rule: Rule | null; readonly guard?: Guard }
+  | { readonly outcome: 'pending' | 'proposed' | 'reported'; readonly note: string } {
+  if (contribution.conditions.length === 0) return { rule: null };
+  const guard = guardOfSet(inventory, contribution.path, contribution.conditions);
+  if (guard.kind !== 'rule') return { outcome: guard.kind, note: guard.note };
+  if (slot === 'bulk-actions' && guard.document)
+    return {
+      outcome: 'reported',
+      note: 'Its condition reads the open record, and an action over a selection has none',
+    };
+  return { rule: guard.rule === 'core.true' ? null : guard.rule, guard };
 }
 
 /**
@@ -114,11 +141,14 @@ export function actionOwners(
     const entry = slotEntry(catalogue, contribution.slot);
     if (!entry || entry.how === 'reported') continue;
     if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') continue;
-    if (contribution.operations.includes(null) || contribution.conditions.length > 0) continue;
+    if (contribution.operations.includes(null)) continue;
+    const guard = actionGuard(inventory, contribution, entry.slot);
+    if (!('rule' in guard)) continue;
     const action = buttonAction(contribution, entry.slot);
     if ('problem' in action || !allowList.has(action.operation)) continue;
     const id = actionIdOf(appId, contribution.name, overall);
-    if (!owners.has(id)) owners.set(id, { contribution, index, ...action, slot: entry.slot });
+    if (!owners.has(id))
+      owners.set(id, { contribution, index, ...action, slot: entry.slot, rule: guard.rule });
   }
   return owners;
 }
@@ -144,14 +174,27 @@ export function convertSlots(context: ConvertContext): void {
       context.decide(id, { outcome: 'reported', note: 'Its operation button runs no operation' });
       continue;
     }
-    if (contribution.conditions.length > 0) {
+    // A contribution under a condition carries its rule where its target can, and waits or is
+    // reported where it cannot: an action reads it below, a menu entry in `menuDecisions`.
+    const actionable = entry.slot === 'toolbar' || entry.slot === 'bulk-actions';
+    const menu = entry.slot === 'navbar' || entry.slot === 'sidebar';
+    if (contribution.conditions.length > 0 && !actionable && !menu) {
+      const guard = guardOfSet(inventory, contribution.path, contribution.conditions);
       context.decide(id, {
-        outcome: 'pending',
-        note: 'It shows only while a condition passes: M2 converts the condition, with truth tables, so it is not shown to everyone meanwhile',
+        outcome: guard.kind === 'rule' ? 'pending' : guard.kind,
+        note:
+          guard.kind === 'rule'
+            ? `It shows only while a condition passes, and its target, ${entry.slot ?? entry.layer0}, carries no rule yet`
+            : guard.note,
       });
       continue;
     }
     if (entry.slot === 'toolbar' || entry.slot === 'bulk-actions') {
+      const guard = actionGuard(inventory, contribution, entry.slot);
+      if (!('rule' in guard)) {
+        context.decide(id, { outcome: guard.outcome, note: guard.note });
+        continue;
+      }
       const action = buttonAction(contribution, entry.slot);
       if ('problem' in action) {
         context.decide(id, { outcome: 'reported', note: action.problem });
@@ -180,9 +223,11 @@ export function convertSlots(context: ConvertContext): void {
         ...(icon !== null ? { icon } : {}),
         ...(contribution.order !== null ? { order: contribution.order } : {}),
         ...(entry.slot === 'bulk-actions' ? { on: ['bulk'] } : {}),
+        ...(guard.rule !== null ? { visibleWhen: guard.rule } : {}),
         operation: action.operation,
         ...(action.parameters !== null ? { parameters: action.parameters } : {}),
       });
+      if (guard.guard) carry(context.carried, guard.guard, `actions.json ${actionId}`);
       context.decide(id, { outcome: 'converted', to: `actions.json ${actionId}` });
       continue;
     }
@@ -244,6 +289,8 @@ export function convertSlots(context: ConvertContext): void {
     });
   }
   if (actions.length > 0) context.files['actions.json'] = { version: 2, actions };
-  if (entries.length > 0)
+  if (entries.length > 0) {
     context.files['navigation.json'] = { version: 2, entries: entries.map((e) => e.entry) };
+    for (const menu of entries) carry(context.carried, menu.guard, `navigation.json ${menu.id}`);
+  }
 }

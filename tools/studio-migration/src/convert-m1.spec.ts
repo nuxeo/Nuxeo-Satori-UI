@@ -46,10 +46,31 @@ describe('M1 converts document layouts', () => {
             { field: 'cl:number', label: 'Claim number' },
             { field: 'cl:amount', label: 'Amount' },
             { field: 'cl:incidentDate', label: 'Incident date', widget: 'date' },
+            // Under nuxeo-filter type="Claim": the rule it becomes travels with it.
+            {
+              field: 'cl:reserve',
+              label: 'Reserve',
+              visibleWhen: { type: 'app.rules.isType', parameters: ['Claim'] },
+            },
           ],
         },
       ],
     });
+  });
+
+  it('proposes the rule of a dom-if in a known pattern, and writes its field only once it is accepted', () => {
+    const path = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+    expect(outcome(conversion, `condition:${path}#2`)).toMatchObject({
+      outcome: 'proposed',
+      rule: { type: 'app.rules.hasFacet', parameters: ['Versionable'] },
+    });
+    expect(outcome(conversion, `layout-field:${path}#5`)).toMatchObject({
+      outcome: 'proposed',
+      property: 'cl:tags',
+    });
+    expect(JSON.stringify(conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
+      'cl:tags',
+    );
   });
 
   it('writes edit and metadata in version 1, which the app renders in those modes', () => {
@@ -88,17 +109,48 @@ describe('M1 converts document layouts', () => {
     });
   });
 
-  it('leaves a field under a condition, and the condition, pending for M2', () => {
+  it('leaves a version 1 field under a condition pending, as version 1 has no rules', () => {
     const path = `${UI}/document/claim/nuxeo-claim-metadata-layout.html`;
     expect(outcome(conversion, `layout-field:${path}#3`)).toMatchObject({
       outcome: 'pending',
       property: 'cl:reserve',
-      note: expect.stringMatching(/condition 1 of its file.*not shown to everyone/),
+      note: expect.stringMatching(/condition 1 of its file passes, and version 1 has no rules/),
     });
-    expect(outcome(conversion, `condition:${path}#1`)).toMatchObject({ outcome: 'pending' });
+    // Its group test is given [[user]], which a document layout does not hold: it never passes.
+    expect(outcome(conversion, `condition:${path}#1`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/given \[\[user\]\], which its file does not hold/),
+    });
     expect(outcome(conversion, `layout-field:${path}#1`)).toMatchObject({
       outcome: 'converted',
       to: expect.stringMatching(/Properties panel's own row for dc:title/),
+    });
+  });
+
+  it('converts a condition only where its rule is written, and leaves one nothing carries pending', () => {
+    const edit = `${UI}/document/claim/nuxeo-claim-edit-layout.html`;
+    const typed = converted({
+      bundle: {
+        [edit]: syntheticBundleFiles()
+          [edit].replace(
+            '<nuxeo-user-suggestion role="widget"',
+            '<nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-user-suggestion role="widget"',
+          )
+          .replace(
+            '</nuxeo-user-suggestion>',
+            '</nuxeo-user-suggestion></template></nuxeo-filter>',
+          ),
+      },
+    });
+    // Its one field is in version 1, which has no rules: the rule is decided, and written nowhere.
+    expect(outcome(typed, `condition:${edit}#1`)).toMatchObject({
+      outcome: 'pending',
+      note: expect.stringMatching(/nothing it guards carries one yet/),
+    });
+    const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+    expect(outcome(typed, `condition:${view}#1`)).toMatchObject({
+      outcome: 'converted',
+      to: 'the visibleWhen of layouts/Claim/view.layout.json cl:reserve',
     });
   });
 
@@ -339,11 +391,33 @@ describe('M1 converts slot contributions', () => {
     });
   });
 
-  it('leaves a button under a condition pending, whatever the allow-list says', () => {
+  it("makes a button under a condition an action that carries the condition's rule", () => {
     const allowed = converted(undefined, new Set(['Claim.Approve', 'Claim.Close']));
     expect(outcome(allowed, `slot-contribution:${bundle}#2`)).toMatchObject({
-      outcome: 'pending',
-      note: expect.stringMatching(/condition/),
+      outcome: 'converted',
+      to: 'actions.json acme-claims.closeClaim',
+    });
+    expect(allowed.app['actions.json']).toMatchObject({
+      actions: [{}, { id: 'acme-claims.closeClaim', visibleWhen: 'app.rules.canWrite' }],
+    });
+  });
+
+  it('reports a button under a condition that does not convert, whatever the allow-list says', () => {
+    const files = syntheticBundleFiles();
+    const allowed = converted(
+      {
+        bundle: {
+          [bundle]: files[bundle].replace(
+            'permission="Write, WriteProperties"',
+            'permission="Write"',
+          ),
+        },
+      },
+      new Set(['Claim.Approve', 'Claim.Close']),
+    );
+    expect(outcome(allowed, `slot-contribution:${bundle}#2`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/permission test, Write, is no registered rule/),
     });
     expect(JSON.stringify(allowed.app['actions.json'])).not.toContain('Claim.Close');
   });
