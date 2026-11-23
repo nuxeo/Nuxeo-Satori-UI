@@ -52,13 +52,19 @@ describe('the proposal and the validator agree', () => {
     expect(examples.length).toBeGreaterThanOrEqual(5);
   });
 
+  it("finds the timeline's and the comments' examples among them", () => {
+    expect(examples.filter((example) => 'timeline' in example)).toHaveLength(1);
+    expect(examples.filter((example) => 'comments' in example)).toHaveLength(1);
+  });
+
   examples.forEach((example, index) => {
     it(`example ${index + 1} has no finding`, () => {
       const form = JSON.stringify(example).includes('"checks"');
+      const card = ['fields', 'related', 'timeline', 'comments'].some((key) => key in example);
       const file =
         'version' in example
           ? example
-          : 'related' in example || 'fields' in example
+          : card
             ? { version: 2, columns: 2, cards: [example] }
             : withFields(example);
       expect(messages(file, form ? 'edit' : 'view')).toEqual([]);
@@ -474,6 +480,62 @@ describe('the validator finds', () => {
   });
 });
 
+describe('a timeline and comments', () => {
+  const card = (content: Record<string, unknown>) => ({
+    version: 2,
+    cards: [{ id: 'c', label: 'History', ...content }],
+  });
+
+  it('take a card of their own, each with every key or none', () => {
+    expect(messages(card({ timeline: {} }))).toEqual([]);
+    expect(messages(card({ comments: {} }))).toEqual([]);
+    expect(
+      messages(
+        card({
+          timeline: {
+            events: ['documentModified', 'lifecycle_transition_event'],
+            filter: false,
+            pageSize: 1,
+          },
+        }),
+      ),
+    ).toEqual([]);
+    expect(messages(card({ comments: { pageSize: 100 } }))).toEqual([]);
+  });
+
+  it('are refused outside view mode, as related records are', () => {
+    expect(messages(card({ timeline: {} }), 'edit')).toEqual([
+      'cards[0].timeline: a timeline belongs in view mode only [structure]',
+    ]);
+    expect(messages(card({ comments: {} }), 'metadata')).toEqual([
+      'cards[0].comments: comments belong in view mode only [structure]',
+    ]);
+  });
+
+  it('are refused beside fields, related records or each other', () => {
+    const twice =
+      'cards[0]: a card has one of "fields", "related", "timeline" or "comments" [structure]';
+    expect(messages(card({ timeline: {}, comments: {} }))).toEqual([twice]);
+    expect(messages(card({ timeline: {}, fields: ['dc:title'] }))).toEqual([twice]);
+    expect(
+      messages(card({ comments: {}, related: { pageProvider: 'p', columns: ['dc:title'] } })),
+    ).toEqual([twice]);
+  });
+
+  it('name a key version 2 does not have as unknown, so the app leaves out only that card', () => {
+    expect(findings(card({ timeline: { groupBy: 'day' } }))).toEqual([
+      {
+        path: 'cards[0].timeline.groupBy',
+        kind: 'unknown',
+        message: '"groupBy" is not a key version 2 has',
+      },
+    ]);
+    expect(messages(card({ comments: { readOnly: true } }))).toEqual([
+      'cards[0].comments.readOnly: "readOnly" is not a key version 2 has [unknown]',
+    ]);
+  });
+});
+
 /** A view file with one related-records card, its list given these keys too. */
 const relatedWith = (keys: Record<string, unknown>) => ({
   version: 2,
@@ -633,9 +695,61 @@ const refusals: readonly { what: string; file: unknown; mode?: LayoutMode; found
     found: 'cards[0].span: span belongs in view mode only [structure]',
   },
   {
-    what: 'a card with neither fields nor related records',
+    what: 'a card with neither fields, related records, a timeline nor comments',
     file: { version: 2, cards: [{ id: 'c' }] },
-    found: 'cards[0]: a card has "fields" or "related", one of the two [structure]',
+    found: 'cards[0]: a card has one of "fields", "related", "timeline" or "comments" [structure]',
+  },
+  {
+    what: 'a timeline that is not an object',
+    file: { version: 2, cards: [{ id: 't', timeline: true }] },
+    found: 'cards[0].timeline: timeline is an object [structure]',
+  },
+  {
+    what: "a timeline's events that are not a list",
+    file: { version: 2, cards: [{ id: 't', timeline: { events: 'documentModified' } }] },
+    found: 'cards[0].timeline.events: events is a list of at least one event [structure]',
+  },
+  {
+    what: "a timeline's events that are an empty list, which would show nothing",
+    file: { version: 2, cards: [{ id: 't', timeline: { events: [] } }] },
+    found: 'cards[0].timeline.events: events is a list of at least one event [structure]',
+  },
+  {
+    what: 'an event that is not named by its ID',
+    file: { version: 2, cards: [{ id: 't', timeline: { events: ['Document modified'] } }] },
+    found:
+      'cards[0].timeline.events[0]: an event is named by its ID, as the audit writes it: "documentModified" [structure]',
+  },
+  {
+    what: 'an event that is not a text',
+    file: { version: 2, cards: [{ id: 't', timeline: { events: [{ id: 'documentModified' }] } }] },
+    found:
+      'cards[0].timeline.events[0]: an event is named by its ID, as the audit writes it: "documentModified" [structure]',
+  },
+  {
+    what: "a timeline's filter that is not true or false",
+    file: { version: 2, cards: [{ id: 't', timeline: { filter: 'yes' } }] },
+    found: 'cards[0].timeline.filter: filter is true or false [structure]',
+  },
+  {
+    what: "a timeline's page size over 100",
+    file: { version: 2, cards: [{ id: 't', timeline: { pageSize: 101 } }] },
+    found: 'cards[0].timeline.pageSize: pageSize is a whole number from 1 to 100 [structure]',
+  },
+  {
+    what: 'comments that are not an object',
+    file: { version: 2, cards: [{ id: 'c', comments: [] }] },
+    found: 'cards[0].comments: comments is an object [structure]',
+  },
+  {
+    what: "comments' page size that is not a whole number",
+    file: { version: 2, cards: [{ id: 'c', comments: { pageSize: 2.5 } }] },
+    found: 'cards[0].comments.pageSize: pageSize is a whole number from 1 to 100 [structure]',
+  },
+  {
+    what: "comments' page size of 0",
+    file: { version: 2, cards: [{ id: 'c', comments: { pageSize: 0 } }] },
+    found: 'cards[0].comments.pageSize: pageSize is a whole number from 1 to 100 [structure]',
   },
   {
     what: 'fields that are not a list',

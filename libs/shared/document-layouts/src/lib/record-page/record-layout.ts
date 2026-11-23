@@ -86,6 +86,41 @@ export interface RecordListEntry {
 /** What a list shows on a page when its file gives no `pageSize`. */
 export const DEFAULT_LIST_PAGE_SIZE = 10;
 
+/**
+ * The kinds of event a timeline shows when its file names none: the record's own changes
+ * (layout-v2.md, section 7). Not `download`, which Nuxeo audits for every thumbnail the app shows.
+ */
+export const DEFAULT_TIMELINE_EVENTS: readonly string[] = [
+  'documentCreated',
+  'documentModified',
+  'documentCheckedIn',
+  'lifecycle_transition_event',
+  'documentLocked',
+  'documentUnlocked',
+  'documentMoved',
+  'documentPublished',
+  'documentSecurityUpdated',
+  'documentRestored',
+  'documentTrashed',
+  'documentUntrashed',
+];
+
+/** A card's timeline (layout-v2.md, section 7): the record's history, newest first. */
+export interface RecordTimelineEntry {
+  /** The audit events it shows, by ID, each once: the file's, or {@link DEFAULT_TIMELINE_EVENTS}. */
+  readonly events: readonly string[];
+  /** Whether the reader is offered a filter by kind of event. */
+  readonly filter: boolean;
+  /** 1 to 100: how many entries show first, and how many more each "Show more" adds. */
+  readonly pageSize: number;
+}
+
+/** A card's comments (layout-v2.md, section 7): the record's comment thread. */
+export interface RecordCommentsEntry {
+  /** 1 to 100: how many of the newest comments, and of each one's replies, show first. */
+  readonly pageSize: number;
+}
+
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
@@ -98,10 +133,14 @@ export interface RecordCardEntry {
   /** How many columns it takes, at least 1 and at most the file's `columns`. */
   readonly span: number;
   readonly visibleWhen: RecordRule | null;
-  /** Its fields; empty for a card of related records. */
+  /** Its fields; empty for a card of related records, a timeline or comments. */
   readonly fields: readonly RecordFieldEntry[];
-  /** For a card of related records, the list it shows; `null` for a card of fields. */
+  /** For a card of related records, the list it shows; `null` for any other card. */
   readonly related: RecordListEntry | null;
+  /** For a timeline's card, what it shows; `null` for any other card. */
+  readonly timeline: RecordTimelineEntry | null;
+  /** For a card of comments, how it shows them; `null` for any other card. */
+  readonly comments: RecordCommentsEntry | null;
 }
 
 export interface RecordTabEntry {
@@ -480,6 +519,21 @@ export function readRecordList(
   };
 }
 
+const pageSizeOf = (raw: Json): number =>
+  typeof raw['pageSize'] === 'number' ? raw['pageSize'] : DEFAULT_LIST_PAGE_SIZE;
+
+/** A timeline as the file writes it, its defaults filled in and its events each named once. */
+function timelineOf(raw: Json): RecordTimelineEntry {
+  const events = Array.isArray(raw['events'])
+    ? raw['events'].filter((event): event is string => typeof event === 'string')
+    : DEFAULT_TIMELINE_EVENTS;
+  return {
+    events: [...new Set(events)],
+    filter: raw['filter'] === true,
+    pageSize: pageSizeOf(raw),
+  };
+}
+
 export function describe(finding: Finding): string {
   return finding.path ? `${finding.path}: ${finding.message}` : finding.message;
 }
@@ -560,16 +614,24 @@ export function readRecordLayout(
         span: typeof card['span'] === 'number' ? card['span'] : 1,
         visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
       };
+      const none = { fields: [], related: null, timeline: null, comments: null };
       if (isRecord(card['related'])) {
         const related = readRecordList(card['related'], `${place}.related`, place, reading);
-        return related ? [{ ...common, fields: [], related }] : [];
+        return related ? [{ ...common, ...none, related }] : [];
+      }
+      // Any finding inside a timeline or comments left their card out above, so what is here is sound.
+      if (isRecord(card['timeline'])) {
+        return [{ ...common, ...none, timeline: timelineOf(card['timeline']) }];
+      }
+      if (isRecord(card['comments'])) {
+        return [{ ...common, ...none, comments: { pageSize: pageSizeOf(card['comments']) } }];
       }
       const fields = (Array.isArray(card['fields']) ? card['fields'] : []).flatMap(
         (entry: unknown, position) => field(entry, `${place}.fields[${position}]`),
       );
       // A heading with nothing under it is not a card, as version 1 leaves out an empty section.
       if (fields.length === 0) return [];
-      return [{ ...common, fields, related: null }];
+      return [{ ...common, ...none, fields }];
     });
 
   const columns = typeof content['columns'] === 'number' ? content['columns'] : 1;

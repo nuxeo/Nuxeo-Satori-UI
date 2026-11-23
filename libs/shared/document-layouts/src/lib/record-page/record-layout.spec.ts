@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,6 +10,7 @@ import {
 
 import { tableColumns } from './widget-support';
 import {
+  DEFAULT_TIMELINE_EVENTS,
   MAX_RULE_LEVELS,
   entryOf,
   readRecordLayout,
@@ -188,6 +191,119 @@ describe('readRecordLayout', () => {
       sort: [],
       pageSize: 10,
       rowActions: [],
+    });
+  });
+
+  describe('a timeline and comments', () => {
+    it('reads a timeline as written, each event once, and a card of comments', () => {
+      const file = read({
+        version: 2,
+        columns: 2,
+        cards: [
+          {
+            id: 'history',
+            label: 'History',
+            span: 2,
+            visibleWhen: 'app.rules.canWrite',
+            timeline: {
+              events: ['lifecycle_transition_event', 'documentModified', 'documentModified'],
+              filter: true,
+              pageSize: 25,
+            },
+          },
+          { id: 'notes', comments: { pageSize: 3 } },
+        ],
+      });
+      expect(file.problems).toEqual([]);
+      expect(file.cards[0]).toMatchObject({
+        id: 'history',
+        span: 2,
+        visibleWhen: 'app.rules.canWrite',
+        fields: [],
+        related: null,
+        comments: null,
+        timeline: {
+          events: ['lifecycle_transition_event', 'documentModified'],
+          filter: true,
+          pageSize: 25,
+        },
+      });
+      expect(file.cards[1]).toMatchObject({
+        id: 'notes',
+        fields: [],
+        related: null,
+        timeline: null,
+        comments: { pageSize: 3 },
+      });
+    });
+
+    it("shows the record's own changes, ten at a time, with no filter, when the file says nothing", () => {
+      const file = read({
+        version: 2,
+        cards: [
+          { id: 'history', timeline: {} },
+          { id: 'notes', comments: {} },
+        ],
+      });
+      expect(file.cards[0].timeline).toEqual({
+        events: DEFAULT_TIMELINE_EVENTS,
+        filter: false,
+        pageSize: 10,
+      });
+      expect(DEFAULT_TIMELINE_EVENTS).not.toContain('download');
+      expect(file.cards[1].comments).toEqual({ pageSize: 10 });
+    });
+
+    it('shows by default the kinds of event layout-v2.md lists, in its order', () => {
+      const proposal = readFileSync(
+        join(
+          import.meta.dirname,
+          '..',
+          '..',
+          '..',
+          '..',
+          '..',
+          '..',
+          'docs',
+          'business-apps',
+          'layout-v2.md',
+        ),
+        'utf8',
+      );
+      const paragraph = /\*\*The default kinds\*\*([\s\S]*?)`download` is not one/.exec(proposal);
+      expect(paragraph).not.toBeNull();
+      const listed = [...(paragraph?.[1] ?? '').matchAll(/`([A-Za-z_]+)`/g)].map(
+        (match) => match[1],
+      );
+      expect(listed).toEqual(DEFAULT_TIMELINE_EVENTS);
+    });
+
+    it('leaves out only the card whose timeline or comments have a key this build lacks', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          { id: 'a', fields: ['dc:title'] },
+          { id: 'history', timeline: { groupBy: 'day' } },
+          { id: 'notes', comments: { readOnly: true } },
+          { id: 'more', comments: {} },
+        ],
+      });
+      expect(file.cards.map((card) => card.id)).toEqual(['a', 'more']);
+      expect(file.problems).toEqual([
+        'cards[1].timeline.groupBy: "groupBy" is not a key version 2 has; cards[1] left out',
+        'cards[2].comments.readOnly: "readOnly" is not a key version 2 has; cards[2] left out',
+      ]);
+    });
+
+    it('refuses a file whose card has both, as a structural error', () => {
+      expect(
+        readRecordLayout(
+          { version: 2, cards: [{ id: 'x', timeline: {}, comments: {} }] },
+          { rules: known },
+        ),
+      ).toEqual({
+        invalid: 'cards[0]: a card has one of "fields", "related", "timeline" or "comments"',
+      });
     });
   });
 

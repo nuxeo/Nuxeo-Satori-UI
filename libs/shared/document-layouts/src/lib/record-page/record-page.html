@@ -54,6 +54,20 @@
           [source]="related.source"
           [stateHeadingLevel]="4"
         />
+      } @else if (card.timeline; as timeline) {
+        <lib-record-timeline
+          class="record-page__timeline"
+          [document]="document()"
+          [timeline]="timeline.timeline"
+          [label]="timeline.label"
+          [stateHeadingLevel]="4"
+        />
+      } @else if (card.comments; as comments) {
+        <nxs-comments
+          class="record-page__comments"
+          [documentUid]="document().uid"
+          [pageSize]="comments.pageSize"
+        />
       } @else {
         <dl class="record-page__fields">
           @for (field of card.fields; track field.place) {

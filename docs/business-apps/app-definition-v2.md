@@ -155,7 +155,7 @@ demo/                                starter kits only; not checked
 - **The id is the file name.** `queues/unassigned-claims.json` is the queue `unassigned-claims`,
   which phase 1's menu and home name.
 - **A list of records, as a related-records card has**
-  ([layout-v2.md, section 7](layout-v2.md#7-related-records)): `pageProvider`, `parameters`,
+  ([layout-v2.md, section 7](layout-v2.md#7-related-records-the-timeline-and-comments)): `pageProvider`, `parameters`,
   `columns`, `sort`, `pageSize` and `rowActions`. The one difference is that a queue has no open
   record, so its parameters are literals. A page provider for one person's work names the person
   in its own query, on the server.
