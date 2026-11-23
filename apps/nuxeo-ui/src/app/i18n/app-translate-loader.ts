@@ -2,8 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
 import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { DocumentLayoutService } from '@agentic-ui/shared/document-layouts';
 import { TranslateLoader } from '@ngx-translate/core';
-import { Observable, catchError, forkJoin, map, of } from 'rxjs';
+import { Observable, catchError, forkJoin, map, of, switchMap, timeout } from 'rxjs';
 
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
@@ -142,6 +143,9 @@ export function packageLabelsUrl(bootstrapUrl: string, lang: string): string {
   return `${path.slice(0, path.lastIndexOf('/') + 1)}labels/${encodeURIComponent(lang)}.json`;
 }
 
+/** As long as the layouts get: the translations, and so the app's start, wait on this read. */
+const LABELS_TIMEOUT_MS = 10_000;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -181,16 +185,18 @@ export function readPackageLabels(raw: unknown, source: string): Record<string, 
  * platform's catalogue, as app-definition-v2.md section 7 asks, and a customer's relabelling still
  * wins over all of them, which is the point of Layer 0.
  *
- * A package's labels file is served at `labels/<lang>.json` beside `bootstrap.json`. Nothing on a
- * server answers there until the app registry (decisions B and E); `npm run config:dev --
- * --labels` serves it to the dev server. Where there is none, the request fails and the labels
- * are simply absent.
+ * A package's labels file is served at `labels/<lang>.json` beside `bootstrap.json`, and asked for
+ * only in a language the layouts index lists, so that nothing is asked for that cannot be there.
+ * Nothing on a server serves or lists one until the app registry (decisions B and E);
+ * `npm run config:dev -- --labels` does both for the dev server. A listed file that cannot be
+ * read is said in the console, and its labels are absent.
  */
 @Injectable({ providedIn: 'root' })
 export class AppTranslateLoader implements TranslateLoader {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
+  private readonly layouts = inject(DocumentLayoutService);
 
   getTranslation(lang: string): Observable<Record<string, string>> {
     // Only folders that ship this language. `catchError` stays on the ones that are asked: a
@@ -212,9 +218,22 @@ export class AppTranslateLoader implements TranslateLoader {
       .get<unknown>(translationUrl(lang, document.baseURI))
       .pipe(catchError(() => of(EN_FALLBACK_TRANSLATIONS)));
     const labelsUrl = packageLabelsUrl(this.bootstrapUrl, lang);
-    const package$ = this.http.get<unknown>(labelsUrl).pipe(
-      map((raw) => readPackageLabels(raw, labelsUrl)),
-      catchError(() => of({})),
+    const package$ = this.layouts.labelLanguages().pipe(
+      switchMap((languages) =>
+        languages.includes(lang)
+          ? this.http.get<unknown>(labelsUrl).pipe(
+              timeout(LABELS_TIMEOUT_MS),
+              map((raw) => readPackageLabels(raw, labelsUrl)),
+              catchError((error: unknown) => {
+                const status = (error as { status?: unknown } | null)?.status;
+                console.warn(
+                  `[agentic-ui-config] ${labelsUrl} not read: ${typeof status === 'number' && status !== 0 ? `HTTP ${status}` : String((error as { message?: unknown } | null)?.message ?? error)}`,
+                );
+                return of({});
+              }),
+            )
+          : of({}),
+      ),
     );
 
     return forkJoin([...folders$, app$, package$]).pipe(

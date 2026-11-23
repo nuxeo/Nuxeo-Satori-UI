@@ -1,8 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  type TestRequest,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
+import { DocumentLayoutService } from '@agentic-ui/shared/document-layouts';
+import { of } from 'rxjs';
 
 import {
   AppTranslateLoader,
@@ -23,7 +29,11 @@ describe('AppTranslateLoader', () => {
   let loader: AppTranslateLoader;
   let httpMock: HttpTestingController;
 
-  function configure(labels: Record<string, string> = {}): void {
+  /** `labelLanguages`: those the layouts index lists a business app's labels in; none by default. */
+  function configure(
+    labels: Record<string, string> = {},
+    labelLanguages: readonly string[] = [],
+  ): void {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withXhr()),
@@ -31,6 +41,10 @@ describe('AppTranslateLoader', () => {
         {
           provide: AppConfigService,
           useValue: { manifest: signal({ labels }) },
+        },
+        {
+          provide: DocumentLayoutService,
+          useValue: { labelLanguages: () => of(labelLanguages) },
         },
       ],
     });
@@ -41,35 +55,26 @@ describe('AppTranslateLoader', () => {
 
   /**
    * Answers every outstanding request: the upstream folders in declaration order, then the app's
-   * own catalogue, then the business app's labels, which are absent unless a test gives them.
-   * `getTranslation` issues them in one `forkJoin`, so they are all pending at once and the order
-   * of `httpMock.match` is the order the loader built them in.
+   * own catalogue. `getTranslation` issues them in one `forkJoin`, so they are all pending at
+   * once and the order of `httpMock.match` is the order the loader built them in.
    */
-  function flushCatalogues(
-    folders: CatalogueBody[],
-    app: CatalogueBody,
-    packageLabels?: CatalogueBody,
-  ): void {
+  function flushCatalogues(folders: CatalogueBody[], app: CatalogueBody): void {
     const requests = httpMock.match(() => true);
-    expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 2);
+    expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 1);
 
     requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request, index) => {
       request.flush(folders[index] ?? {});
     });
     requests[UPSTREAM_FOLDER_COUNT].flush(app);
-    const labels = requests[UPSTREAM_FOLDER_COUNT + 1];
-    if (packageLabels) labels.flush(packageLabels);
-    else labels.flush('', { status: 404, statusText: 'Not Found' });
   }
 
   afterEach(() => httpMock.verify());
 
   /**
-   * Three files per language: the app's own catalogue; satori-ui's, which names controls —
-   * `sat-platform-nav`'s toggle has an empty accessible name without it; and the business app's
-   * labels, beside `bootstrap.json`.
+   * Exactly two catalogues per language: the app's own, and satori-ui's, which names controls —
+   * `sat-platform-nav`'s toggle has an empty accessible name without it.
    */
-  it('fetches the satori-ui catalogue, the app catalogue and the business app labels, and nothing else', () => {
+  it('fetches the satori-ui catalogue and the app catalogue, and nothing else', () => {
     configure();
     loader.getTranslation('fr').subscribe();
 
@@ -85,7 +90,6 @@ describe('AppTranslateLoader', () => {
     expect(urls).toEqual([
       'assets/satori-ui/i18n/fr-FR.json',
       jasmine.stringMatching(/\/i18n\/fr\.json$/),
-      '/agentic-ui-config/labels/fr.json',
     ]);
     expect(urls[1]).not.toContain('assets/');
   });
@@ -243,11 +247,7 @@ describe('AppTranslateLoader', () => {
         return request.request.url;
       });
 
-    // The app catalogue, and the business app's labels, which are asked for in every language.
-    expect(urls).toEqual([
-      jasmine.stringMatching(/\/i18n\/ja\.json$/),
-      '/agentic-ui-config/labels/ja.json',
-    ]);
+    expect(urls).toEqual([jasmine.stringMatching(/\/i18n\/ja\.json$/)]);
     expect(urls).not.toContain('assets/satori-ui/i18n/ja.json');
   });
 
@@ -355,22 +355,46 @@ describe('AppTranslateLoader', () => {
       });
     });
 
+    /** The upstream folders and the app catalogue, then the labels file the index lists. */
+    function flushWithLabels(app: CatalogueBody, answer: (request: TestRequest) => void): void {
+      const requests = httpMock.match(() => true);
+      expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 2);
+      requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
+      requests[UPSTREAM_FOLDER_COUNT].flush(app);
+      expect(requests[UPSTREAM_FOLDER_COUNT + 1].request.url).toBe(
+        '/agentic-ui-config/labels/en.json',
+      );
+      answer(requests[UPSTREAM_FOLDER_COUNT + 1]);
+    }
+
+    it('are asked for only in a language the layouts index lists', () => {
+      configure({}, ['en']);
+      loader.getTranslation('fr').subscribe();
+      const urls = httpMock
+        .match(() => true)
+        .map((request) => {
+          request.flush({});
+          return request.request.url;
+        });
+      // French is not listed, so nothing is asked for that cannot be there.
+      expect(urls).not.toContain('/agentic-ui-config/labels/fr.json');
+      expect(urls.length).toBe(UPSTREAM_FOLDER_COUNT + 1);
+    });
+
     it('come above the platform catalogue and below the manifest labels', () => {
-      configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' });
+      configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' }, ['en']);
       let merged: Record<string, string> | undefined;
       loader.getTranslation('en').subscribe((value) => (merged = value));
 
-      flushCatalogues(
-        [{}],
-        { 'layout.field.claim:memberId': 'Member', 'only.app': 'app' },
-        {
+      flushWithLabels({ 'layout.field.claim:memberId': 'Member', 'only.app': 'app' }, (request) =>
+        request.flush({
           version: 2,
           labels: {
             'payers.member.claims': 'Claims',
             'payers.member.cases': 'Cases',
             'layout.field.claim:memberId': 'Member ID',
           },
-        },
+        }),
       );
 
       expect(merged?.['payers.member.cases']).toBe('Cases');
@@ -379,6 +403,19 @@ describe('AppTranslateLoader', () => {
       expect(merged?.['only.app']).toBe('app');
       // And a customer's relabelling still wins.
       expect(merged?.['payers.member.claims']).toBe('Claims, as the customer relabelled them');
+    });
+
+    it('say so when a listed file cannot be read, and the rest still loads', () => {
+      configure({}, ['en']);
+      let merged: Record<string, string> | undefined;
+      loader.getTranslation('en').subscribe((value) => (merged = value));
+      flushWithLabels({ 'only.app': 'app' }, (request) =>
+        request.flush('oops', { status: 500, statusText: 'Server Error' }),
+      );
+      expect(merged?.['only.app']).toBe('app');
+      expect(warnings).toEqual([
+        '[agentic-ui-config] /agentic-ui-config/labels/en.json not read: HTTP 500',
+      ]);
     });
 
     it('are read for the language asked, beside bootstrap.json', () => {
@@ -391,16 +428,8 @@ describe('AppTranslateLoader', () => {
       );
     });
 
-    it('are simply absent where none are served, and the rest still loads', () => {
-      configure();
-      let merged: Record<string, string> | undefined;
-      loader.getTranslation('en').subscribe((value) => (merged = value));
-      flushCatalogues([{}], { 'only.app': 'app' });
-      expect(merged?.['only.app']).toBe('app');
-      expect(warnings).toEqual([]);
-    });
-
     it('leave out a file that is not version 2, and each key or text the validator refuses', () => {
+      configure();
       expect(readPackageLabels({ version: 1, labels: { a: 'A' } }, 'labels/en.json')).toEqual({});
       expect(readPackageLabels('<html>', 'labels/en.json')).toEqual({});
       expect(
@@ -429,7 +458,6 @@ describe('AppTranslateLoader', () => {
     const requests = httpMock.match(() => true);
     requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
     requests[UPSTREAM_FOLDER_COUNT].flush('', { status: 404, statusText: 'Not Found' });
-    requests[UPSTREAM_FOLDER_COUNT + 1].flush('', { status: 404, statusText: 'Not Found' });
 
     expect(merged?.['app.title']).toBe(EN_FALLBACK_TRANSLATIONS['app.title']);
   });
@@ -448,7 +476,6 @@ describe('AppTranslateLoader', () => {
     const requests = httpMock.match(() => true);
     requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
     requests[UPSTREAM_FOLDER_COUNT].flush('', { status: 500, statusText: 'Server Error' });
-    requests[UPSTREAM_FOLDER_COUNT + 1].flush('', { status: 404, statusText: 'Not Found' });
 
     expect(merged?.['settings.themes.search']).toBe('Search themes');
     expect(merged?.['document-detail.hide-details']).toBe('Hide details');

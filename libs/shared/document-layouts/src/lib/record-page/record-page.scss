@@ -34,10 +34,12 @@
 }
 
 /* Scoped under the card: the theme's `html[data-app-theme] .mat-typography h3` outranks a single
-   class, and drew every card heading as a 36px display title. */
+   class, and drew every card heading as a 36px display title. Its whole `font` is set again, so
+   that no line height or letter spacing of the display style is left. */
 .record-page__card > .record-page__heading {
-  font-size: 16px;
+  font: var(--mat-sys-title-medium);
   font-weight: 600;
+  letter-spacing: normal;
   color: var(--mat-sys-on-surface);
   margin: 0 0 12px;
 }

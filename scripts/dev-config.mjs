@@ -58,20 +58,6 @@ for (let i = 0; i < args.length; i += 2) {
   extra[layer].push(layer === 'layout' || layer === 'labels' ? args[i + 1] : resolve(args[i + 1]));
 }
 
-// Each `--labels` names a language as the app names its catalogues: `en`, or one with a region,
-// such as `pt-BR`. Checked before anything is written, so a mistyped one changes nothing.
-const labels = new Map();
-for (const entry of extra.labels) {
-  const at = entry.indexOf('=');
-  const lang = entry.slice(0, at);
-  const file = entry.slice(at + 1);
-  if (at <= 0 || !/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(lang) || file === '') {
-    console.error(`--labels takes <lang>=<labels.json>, such as en=labels/en.json, not ${entry}`);
-    process.exit(2);
-  }
-  labels.set(lang, resolve(file));
-}
-
 // The servlet leaves out a fragment over this size or with a repeated key (ConfigSnapshot.java), so
 // one that only works here would vanish on a server.
 const MAX_JSON_BYTES = 1024 * 1024;
@@ -148,6 +134,22 @@ for (const spec of extra.layout) {
   });
 }
 
+// Each `--labels` names a language as the platform names its catalogues: `en`, or one with a
+// region, such as `pt-BR`. Its file is read here, before anything is written, so that a mistyped
+// language or file changes nothing.
+const labels = new Map();
+for (const entry of extra.labels) {
+  const at = entry.indexOf('=');
+  const lang = entry.slice(0, at);
+  const file = entry.slice(at + 1);
+  if (at <= 0 || !/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(lang) || file === '') {
+    console.error(`--labels takes <lang>=<labels.json>, such as en=labels/en.json, not ${entry}`);
+    process.exit(2);
+  }
+  const path = resolve(file);
+  labels.set(lang, { path, content: read(path) });
+}
+
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
   const defaults = join(DEFAULTS, `${layer}.defaults.json`);
   const fragments = [
@@ -202,7 +204,7 @@ for (const { type, mode, content, ...provenance } of layouts.values()) {
 }
 writeFileSync(
   join(TARGET, 'layouts.json'),
-  `${JSON.stringify({ format: 'nuxeo-agentic-ui-config/1', layer: 'layouts', layouts: index, diagnostics: [] }, null, 2)}\n`,
+  `${JSON.stringify({ format: 'nuxeo-agentic-ui-config/1', layer: 'layouts', layouts: index, labels: [...labels.keys()], diagnostics: [] }, null, 2)}\n`,
 );
 console.log(
   `wrote ${join(TARGET, 'layouts.json').slice(ROOT.length + 1)}: ${index.map((l) => `${l.type}/${l.mode}`).join(', ') || 'no layouts'}`,
@@ -229,12 +231,25 @@ rmSync(LABELS, { recursive: true, force: true });
 if (labels.size === 0) {
   console.log(`no labels: ${LABELS.slice(ROOT.length + 1)} not served`);
 } else {
+  // The app asks for a language's labels in the languages it offers, which the bootstrap lists:
+  // the last fragment that sets them wins, as the app merges them.
+  const offered =
+    envelopes
+      .find((envelope) => envelope.layer === 'bootstrap')
+      ?.fragments.map((fragment) => fragment.content?.availableLanguages)
+      .filter(Array.isArray)
+      .at(-1) ?? [];
   mkdirSync(LABELS, { recursive: true });
-  for (const [lang, file] of labels) {
+  for (const [lang, { path, content }] of labels) {
     const out = join(LABELS, `${lang}.json`);
-    writeFileSync(out, `${JSON.stringify(read(file), null, 2)}\n`);
+    writeFileSync(out, `${JSON.stringify(content, null, 2)}\n`);
     console.log(
-      `wrote ${out.slice(ROOT.length + 1)}: ${file.startsWith(ROOT) ? file.slice(ROOT.length + 1) : file}`,
+      `wrote ${out.slice(ROOT.length + 1)}: ${path.startsWith(ROOT) ? path.slice(ROOT.length + 1) : path}`,
     );
+    if (!offered.includes(lang)) {
+      console.warn(
+        `warning: the app offers ${offered.join(', ') || 'no languages'}, so it never asks for ${lang}'s labels`,
+      );
+    }
   }
 }

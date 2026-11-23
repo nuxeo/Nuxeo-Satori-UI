@@ -63,7 +63,7 @@ import {
 /** As for the bootstrap and manifest reads: `HttpClient` has no timeout of its own. */
 export const LAYOUT_LOAD_TIMEOUT_MS = 10_000;
 
-const EMPTY_INDEX: LayoutIndex = { entries: [], diagnostics: [] };
+const EMPTY_INDEX: LayoutIndex = { entries: [], diagnostics: [], labelLanguages: [] };
 
 /** The directory the configuration service answers from, taken from the bootstrap URL. */
 function configDirectory(bootstrapUrl: string): string {
@@ -272,6 +272,15 @@ export class DocumentLayoutService {
         );
       }),
     );
+  }
+
+  /**
+   * The languages a business app's labels are served in, as the layouts index lists them; empty
+   * when it lists none, or cannot be read. Read once per session with the rest of the index. Never
+   * errors.
+   */
+  labelLanguages(): Observable<readonly string[]> {
+    return this.index().pipe(map((index) => index.labelLanguages));
   }
 
   /**
