@@ -3905,11 +3905,12 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-323 exported symbol(s).
+327 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
 const ADMIN_ACCESS_CHECKS: InjectionToken<AdminAccessChecks>;
+const ALLOWED_TRANSITIONS_ENRICHER = "allowedTransitions";
 const ARENDER_CONFIG: InjectionToken<ARenderConfig | null>;
 interface ARenderConfig {
     viewerOrigin: string;
@@ -4313,6 +4314,7 @@ class DocumentDetailService {
     republishDocument(sourceUid: string, targetSectionId: string): Observable<NuxeoDocument>;
     lockDocument(uid: string): Observable<NuxeoDocument>;
     unlockDocument(uid: string): Observable<NuxeoDocument>;
+    followTransition(uid: string, transition: string): Observable<NuxeoDocument>;
     addToFavorites(uid: string): Observable<NuxeoDocument>;
     removeFromFavorites(uid: string): Observable<NuxeoDocument>;
     trashDocument(uid: string): Observable<NuxeoDocument>;
@@ -4601,6 +4603,11 @@ interface NuxeoAce {
 interface NuxeoAcl {
     name: string;
     aces: NuxeoAce[];
+    }
+}
+interface NuxeoAllowedTransition {
+    readonly name: string;
+    readonly destinationState: string;
     }
 }
 class NuxeoApiBase {
@@ -5302,6 +5309,7 @@ class WorkflowService {
 }
 const administrationAccessGuard: CanActivateFn;
 const administrationLandingGuard: CanActivateFn;
+function allowedTransitions(document: NuxeoDocument | null | undefined): readonly NuxeoAllowedTransition[];
 function auditActivityLabel(entry: AuditEntry, eventTypeLabels?: Map<string, string> | Record<string, string>): string;
 function auditActivityLabelKey(entry: AuditEntry): string;
 function avatarColor(name: string): AvatarColor;
@@ -5313,6 +5321,7 @@ function buildNoteDocumentPickerNxql(fulltext: string): string;
 function buildVocabularyTableColumns(propertyKeys: readonly string[]): string[];
 function canAddChildren(doc: NuxeoDocument | null | undefined): boolean;
 function canCreateDocumentVersion(doc: NuxeoDocument | null | undefined): boolean;
+function canFollowAnyTransition(document: NuxeoDocument | null | undefined): boolean;
 function canManageDocumentPermissions(doc: NuxeoDocument | null | undefined): boolean;
 function canPasteClipboard(items: ClipboardDoc[], target: NuxeoDocument | null | undefined): boolean;
 function canPublishDocument(doc: NuxeoDocument | null | undefined): boolean;
@@ -5458,7 +5467,7 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 
 ## @nuxeo/satori-platform/ui
 
-50 exported symbol(s).
+53 exported symbol(s).
 
 ```ts
 class ConfirmDialogComponent {
@@ -5759,6 +5768,28 @@ interface ExportDialogData {
     }
 }
 type ExportType = 'pdf' | 'thumbnail' | 'xml' | 'zip';
+class FollowTransitionDialogComponent {
+    protected readonly data: FollowTransitionDialogData;
+    protected readonly cancelResult: undefined;
+    protected readonly canGoBack: boolean;
+    protected readonly chosen: import("@angular/core").WritableSignal<NuxeoAllowedTransition | null>;
+    protected transitionLabel(name: string): string;
+    protected stateLabel(name: string): string;
+    protected readonly questionId: string;
+    protected confirmation(transition: NuxeoAllowedTransition): string;
+    protected choose(transition: NuxeoAllowedTransition): void;
+    protected back(): void;
+    protected confirm(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<FollowTransitionDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<FollowTransitionDialogComponent, "lib-follow-transition-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface FollowTransitionDialogData {
+    readonly documentTitle: string;
+    readonly state: string | null;
+    readonly transitions: readonly NuxeoAllowedTransition[];
+    }
+}
 interface IptcData {
     copyright?: string;
     rights?: string;
@@ -5984,6 +6015,7 @@ class WidgetGridComponent {
 }
 function canFormatDatesIn(localeId: string): boolean;
 function dateMaskFor(localeId: string, translatedMask: string): string;
+function lifecycleLabel(kind: 'state' | 'transition', name: string, translate: (key: string) => string): string;
 function observeMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 function observeStripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): MutationObserver | null;
 function openDocumentCompareDialog(dialog: MatDialog, items: DocumentCompareDialogData['items']): void;
