@@ -174,6 +174,9 @@ the member, and masking it there is decision I.
   section 11), so the Member page's claims and cases cards, the Claim page's documents and the
   Provider page's claims are left out until the lists engine lands. The page providers they name
   are installed and seeded.
+- **A reference shows its stored id, not a link:** the `document-link` widget has no lookup yet
+  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11), so the Case page's member
+  and claim, and the Claim page's member, show the record's `ecm:uuid` until it does.
 - **Labels, queues, actions and `app.json` are carried, not served:** the app registry will
   contribute them. Until then a card shows a heading only where its label is literal, and a field
   is labelled from its name, `billedAmount` as "Billed amount".

@@ -261,6 +261,10 @@ async function against(options, body) {
     seed({ NUXEO_URL: url, NUXEO_USER: user, NUXEO_PASS: password, ...env });
   try {
     await body({ server, run, user, password });
+  } catch (error) {
+    // A control that throws, because the seed left the server in a state it did not expect, is a
+    // failed control, not a crash that hides the others.
+    expect(false, `a control threw: ${error?.stack ?? error}`);
   } finally {
     server.close();
   }
@@ -398,6 +402,52 @@ await against({}, async ({ server, run }) => {
     status === 1 && /holds 2 trashed documents named prv-201/.test(output),
     'two trashed copies of one record stop the run',
     output,
+  );
+});
+
+// The same, on a server whose pages hold one entry: the second copy is on the next page.
+await against({ pageSize: 1 }, async ({ server, run }) => {
+  expect((await run()).status === 0, 'a first run, one entry a page, exits 0');
+  server.trash(at(server, 'providers/prv-201'));
+  server.add(`${ROOT}/providers/prv-201`, 'Provider');
+  server.trash(at(server, 'providers/prv-201'));
+  const { status, output } = await run();
+  expect(
+    status === 1 && /holds 2 trashed documents named prv-201/.test(output),
+    'two trashed copies stop the run when the second is on the next page',
+    output,
+  );
+});
+
+// A trashed sibling whose name only starts with the record's is not the record: LIKE's `_` and
+// `%` match it, the exact name does not.
+await against({}, async ({ server, run }) => {
+  server.add(ROOT, 'Workspace');
+  server.add(`${ROOT}/members`, 'Folder');
+  const backup = server.add(`${ROOT}/members/member-100048.backup`, 'Member', {
+    'dc:title': 'a backup, not the seed’s',
+  });
+  server.trash(backup);
+  const { status, output } = await run();
+  expect(
+    status === 0 &&
+      /0 restored from the trash/.test(output) &&
+      backup.isTrashed === true &&
+      backup.properties['dc:title'] === 'a backup, not the seed’s' &&
+      at(server, 'members/member-100048')?.uid !== backup.uid,
+    'a trashed member-100048.backup is left in the trash, untouched, and the member created',
+    output,
+  );
+  const member = at(server, 'members/member-100048');
+  server.trash(member);
+  const again = await run();
+  expect(
+    again.status === 0 &&
+      /1 restored from the trash/.test(again.output) &&
+      member.isTrashed === false &&
+      backup.isTrashed === true,
+    'with both trashed, the member is restored and the backup is not',
+    again.output,
   );
 });
 

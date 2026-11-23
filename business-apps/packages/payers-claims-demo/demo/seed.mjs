@@ -277,10 +277,15 @@ async function ensure(parent, name, type, properties, file) {
 async function trashedFrom(parent, name) {
   const folder = await find(`/path${pathOf(parent)}`);
   if (folder === null) return null;
-  const entries = await nxql(
-    `SELECT * FROM Document WHERE ecm:parentId = ${literal(folder.uid)} AND ecm:isTrashed = 1 ` +
-      `AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:name LIKE ${literal(`${name}._%_.trashed`)}`,
-  );
+  // LIKE narrows the search, but `_` and `%` are its wildcards: `member-1.backup._1_.trashed`
+  // matches `member-1._%_.trashed` too. Only this exact name, renamed, counts.
+  const renamed = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\._\\d+_\\.trashed$`);
+  const entries = (
+    await nxql(
+      `SELECT * FROM Document WHERE ecm:parentId = ${literal(folder.uid)} AND ecm:isTrashed = 1 ` +
+        `AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:name LIKE ${literal(`${name}._%_.trashed`)}`,
+    )
+  ).filter((entry) => renamed.test(entry.path.slice(entry.path.lastIndexOf('/') + 1)));
   if (entries.length > 1)
     throw new Error(
       `${parent} holds ${entries.length} trashed documents named ${name}, and the seed restores ` +
@@ -379,32 +384,38 @@ async function check({ members, providers, claims, cases, documents }) {
   console.log(`  checked  ${PAGE_PROVIDERS.join(', ')}`);
 }
 
-/** Every id a page provider returns, given one parameter or none, page after page. */
+/** Every id a page provider returns, given one parameter or none. */
 async function results(pageProvider, parameter) {
-  const ids = [];
-  for (let index = 0; index < MAX_PAGES; index++) {
-    const query = new URLSearchParams({
-      pageSize: String(PAGE_SIZE),
-      currentPageIndex: `${index}`,
-    });
-    if (parameter !== undefined) query.set('queryParams', parameter);
-    const page = await call('GET', `/search/pp/${pageProvider}/execute?${query}`);
-    ids.push(...(page.entries ?? []).map((entry) => entry.uid));
-    if (page.isNextPageAvailable !== true) return ids;
-  }
-  throw new Error(
-    `${pageProvider} returns more than ${MAX_PAGES * PAGE_SIZE} records, past which the check ` +
-      'does not read, so it cannot say what the page provider holds.',
-  );
+  const parameters = parameter === undefined ? {} : { queryParams: parameter };
+  const entries = await everyPage(`/search/pp/${pageProvider}/execute`, parameters, pageProvider);
+  return entries.map((entry) => entry.uid);
 }
 
-/** The documents an NXQL query finds, up to one page: the callers expect one or none. */
+/** Every document an NXQL query finds. */
 async function nxql(query) {
-  const page = await call(
-    'GET',
-    `/search/lang/NXQL/execute?${new URLSearchParams({ query, pageSize: `${PAGE_SIZE}` })}`,
+  return everyPage('/search/lang/NXQL/execute', { query }, 'The NXQL query');
+}
+
+/**
+ * Every entry of a paged search, page after page. A server may cap a page below the size asked
+ * for, so one page is never taken for all of them.
+ */
+async function everyPage(path, parameters, what) {
+  const entries = [];
+  for (let index = 0; index < MAX_PAGES; index++) {
+    const query = new URLSearchParams({
+      ...parameters,
+      pageSize: `${PAGE_SIZE}`,
+      currentPageIndex: `${index}`,
+    });
+    const page = await call('GET', `${path}?${query}`);
+    entries.push(...(page.entries ?? []));
+    if (page.isNextPageAvailable !== true) return entries;
+  }
+  throw new Error(
+    `${what} returns more than ${MAX_PAGES * PAGE_SIZE} records, past which the seed does not ` +
+      'read, so it cannot say what the server holds.',
   );
-  return page.entries ?? [];
 }
 
 /** An NXQL string literal. */
