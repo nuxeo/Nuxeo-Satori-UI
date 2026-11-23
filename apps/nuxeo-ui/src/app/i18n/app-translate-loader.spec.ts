@@ -391,6 +391,20 @@ describe('AppTranslateLoader', () => {
       expect(merged?.['only.app']).toBe('app');
     });
 
+    it('read the index once for every language, and say so when it cannot be read', () => {
+      configure({}, true);
+      loader.getTranslation('fr').subscribe();
+      loader.getTranslation('en').subscribe();
+      const reads = httpMock.match(INDEX);
+      expect(reads.length).toBe(1);
+      reads[0].flush({});
+      httpMock.match(() => true).forEach((request) => request.flush({}));
+      // The index answered `{}`, which is not one: nothing is listed, and the console is told.
+      expect(warnings).toEqual([
+        `[agentic-ui-config] labels not listed: ${INDEX} ignored: not a nuxeo-agentic-ui-config/1 response`,
+      ]);
+    });
+
     it('come above the platform catalogue and below the manifest labels', () => {
       configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' }, true);
       let merged: Record<string, string> | undefined;

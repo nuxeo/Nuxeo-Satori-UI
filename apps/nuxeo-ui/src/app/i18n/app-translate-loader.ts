@@ -1,10 +1,20 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
 import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { layoutsIndexUrl, readLayoutIndex } from '@agentic-ui/shared/document-layouts';
 import { TranslateLoader } from '@ngx-translate/core';
-import { Observable, TimeoutError, catchError, forkJoin, map, of, switchMap, timeout } from 'rxjs';
+import {
+  Observable,
+  TimeoutError,
+  catchError,
+  forkJoin,
+  map,
+  of,
+  shareReplay,
+  switchMap,
+  timeout,
+} from 'rxjs';
 
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
@@ -204,16 +214,21 @@ export function readPackageLabels(raw: unknown, source: string): Record<string, 
  * `npm run config:dev -- --labels` does both for the dev server. A listed file that cannot be
  * read is said in the console, and its labels are absent.
  *
- * The index is read here, with this loader's own client, and only when the configuration service
- * answered for the bootstrap: where it did not, as under a bare `nx serve`, there is no index to
- * ask for. It is not read through `DocumentLayoutService`, whose Nuxeo client would be built
- * before the configuration's Nuxeo origin is applied.
+ * The index is read here, once per session for every language, and only when the configuration
+ * service answered for the bootstrap: where it did not, as under a bare `nx serve`, there is no
+ * index to ask for. It and the labels file are read without the interceptors, as every read of the
+ * configuration's address is: no `Authorization` header, and no activity for the idle timer. It is
+ * not read through `DocumentLayoutService`, whose Nuxeo client would be built before the
+ * configuration's Nuxeo origin is applied.
  */
 @Injectable({ providedIn: 'root' })
 export class AppTranslateLoader implements TranslateLoader {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
+  /** The configuration's own address is read without the interceptors, as the layouts are. */
+  private readonly configHttp = new HttpClient(inject(HttpBackend));
+  private labelLanguages$: Observable<readonly string[]> | null = null;
 
   getTranslation(lang: string): Observable<Record<string, string>> {
     // Only folders that ship this language. `catchError` stays on the ones that are asked: a
@@ -238,7 +253,7 @@ export class AppTranslateLoader implements TranslateLoader {
     const package$ = this.labelLanguages().pipe(
       switchMap((languages) =>
         languages.includes(lang)
-          ? this.http.get<unknown>(labelsUrl).pipe(
+          ? this.configHttp.get<unknown>(labelsUrl).pipe(
               map((raw) => readPackageLabels(raw, labelsUrl)),
               catchError((error: unknown) => {
                 console.warn(`[agentic-ui-config] ${labelsUrl} not read: ${readFailure(error)}`);
@@ -274,18 +289,30 @@ export class AppTranslateLoader implements TranslateLoader {
   }
 
   /**
-   * The languages the layouts index lists a business app's labels in. None where the configuration
-   * service did not answer, or the index cannot be read: its reader says why in the record page's
-   * console lines, so nothing more is said here.
+   * The languages the layouts index lists a business app's labels in, read once per session. None
+   * where the configuration service did not answer, or the index cannot be read, which the console
+   * is told.
    */
   private labelLanguages(): Observable<readonly string[]> {
     if (this.config.diagnostics().bootstrapSource !== 'configuration-service') return of([]);
-    return this.http.get<unknown>(layoutsIndexUrl(this.bootstrapUrl)).pipe(
+    const url = layoutsIndexUrl(this.bootstrapUrl);
+    this.labelLanguages$ ??= this.configHttp.get<unknown>(url).pipe(
       map((raw) => {
         const index = readLayoutIndex(raw);
-        return 'invalid' in index ? [] : index.labelLanguages;
+        if ('invalid' in index) {
+          console.warn(`[agentic-ui-config] labels not listed: ${url} ignored: ${index.invalid}`);
+          return [];
+        }
+        return index.labelLanguages;
       }),
-      catchError(() => of([])),
+      catchError((error: unknown) => {
+        console.warn(
+          `[agentic-ui-config] labels not listed: ${url} not read: ${readFailure(error)}`,
+        );
+        return of([]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: false }),
     );
+    return this.labelLanguages$;
   }
 }
