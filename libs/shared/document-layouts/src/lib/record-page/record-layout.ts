@@ -89,7 +89,11 @@ export const DEFAULT_LIST_PAGE_SIZE = 10;
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
-  /** Its heading; `fallback` is `null`, so a card with no label shows none. */
+  /**
+   * Its heading. A card that names one, by text or by key, falls back to its id made readable,
+   * so a key with no text in the person's language still gives it a heading. A card that names
+   * none has `fallback` `null`, and shows none.
+   */
   readonly label: LayoutLabel;
   /** How many columns it takes, at least 1 and at most the file's `columns`. */
   readonly span: number;
@@ -526,7 +530,11 @@ export function readRecordLayout(
       const common = {
         id: String(card['id']),
         place,
-        label: labelOf(card, [], null),
+        label: labelOf(
+          card,
+          [],
+          'label' in card || 'labelKey' in card ? humanize(String(card['id'])) : null,
+        ),
         span: typeof card['span'] === 'number' ? card['span'] : 1,
         visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
       };
