@@ -181,6 +181,7 @@ export {
   type ClipboardPasteEvent,
 } from './lib/services/browse-context.service';
 export { ClipboardTargetService } from './lib/services/clipboard-target.service';
+export { DocumentChangesService } from './lib/services/document-changes.service';
 export {
   browseTreeContextPath,
   cumulativeNuxeoPathPrefixes,

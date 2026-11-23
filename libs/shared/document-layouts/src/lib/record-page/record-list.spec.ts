@@ -13,6 +13,7 @@ import {
   provideSatoriExtensions,
 } from '@nuxeo/satori-platform/extensions';
 import {
+  DocumentChangesService,
   type NuxeoDocument,
   type NuxeoDocumentList,
   PageProviderService,
@@ -479,6 +480,43 @@ describe('RecordListComponent', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for the page on screen again when documents change, keeping its page and order', async () => {
+    await render();
+    await answer([claim(1)], { numberOfPages: 3, isNextPageAvailable: true });
+    list().sortChange.emit({ key: 'claim:number', direction: 'asc' });
+    await settle();
+    await answer([claim(1)], { numberOfPages: 3, isNextPageAvailable: true });
+    list().pageChange.emit(1);
+    await settle();
+    await answer([claim(2)]);
+    expect(execute).toHaveBeenCalledTimes(3);
+
+    TestBed.inject(DocumentChangesService).notify();
+    await settle();
+
+    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenLastCalledWith('member_claims', {
+      parameters: ['m1'],
+      pageSize: 10,
+      pageIndex: 1,
+      sort: [{ field: 'claim:number', order: 'asc' }],
+    });
+    expect(list().loading()).toBe(true);
+    await answer([claim(3)]);
+    expect(
+      list()
+        .documents()
+        .map((row) => row.uid),
+    ).toEqual(['c3']);
+  });
+
+  it('asks nothing when documents change while a parameter has no value', async () => {
+    await render(null);
+    TestBed.inject(DocumentChangesService).notify();
+    await settle();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("opens a row's record", async () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     await render();
@@ -490,8 +528,9 @@ describe('RecordListComponent', () => {
   it('offers the listed row actions that have a handler here, while their rules pass for the row', async () => {
     await render();
     await answer([claim(1), claim(2, { 'claim:status': 'closed' })]);
-    // Flag for the open claim; nothing for the closed one; never Download, which no handler runs
-    // here, nor Other, which the file does not list.
+    // Flag for the open claim; nothing for the closed one; never Download, which nothing in this
+    // spec registers (the app does, with `providePackagedRowActions()`), nor Other, which the file
+    // does not list.
     expect(list().rowActions()).toEqual({
       c1: [{ id: 'acme.rowActions.flag', label: 'Flag', icon: undefined, disabled: false }],
     });

@@ -30,6 +30,7 @@ import {
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import {
+  DocumentChangesService,
   type NuxeoDocument,
   type NuxeoDocumentList,
   PageProviderService,
@@ -130,6 +131,7 @@ export class RecordListComponent {
   readonly source = input('');
 
   private readonly pages = inject(PageProviderService);
+  private readonly documentChanges = inject(DocumentChangesService);
   private readonly layouts = inject(DocumentLayoutService);
   private readonly extensions = inject(AppExtensionsService);
   private readonly actions = inject(ExtensionActionRegistry);
@@ -254,6 +256,11 @@ export class RecordListComponent {
     merge(this.translate.onLangChange, this.translate.onTranslationChange)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.translations.update((n) => n + 1));
+    // A row action, here or on another list, may have renamed, moved or trashed one of these rows,
+    // or copied a record into this list: the page on screen is asked for again.
+    this.documentChanges.changes
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.attempt.update((n) => n + 1));
   }
 
   protected readonly documents = computed<readonly NuxeoDocument[]>(() => {
@@ -382,7 +389,7 @@ export class RecordListComponent {
   /**
    * Whether something on this page runs the action. One with no handler here would do nothing
    * when chosen: it is not offered, and the console says so once. The platform's own row actions
-   * are registered by the browse list, so a record page has none of them yet.
+   * are registered once for the whole app, by `providePackagedRowActions()`.
    */
   private runnable(action: ExtensionActionDescriptor): boolean {
     if (this.actions.has(action.action ?? action.id)) return true;

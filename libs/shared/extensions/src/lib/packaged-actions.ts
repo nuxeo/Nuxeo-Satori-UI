@@ -342,12 +342,16 @@ export const PACKAGED_BROWSE_CONTEXT_MENU: readonly ExtensionActionDescriptor[] 
 ];
 
 /**
- * The menu on each row of browse's document list, acting on that row's document.
+ * The menu on each row of a document list, acting on that row's document: browse's list, and a
+ * record page's list of related records, which offers those its layout file names.
  *
  * Each row resolves this slot with the row's document as the focused one, so `rule` and
  * `enabledRule` read that document's own permissions and properties, not the folder's. Rename
  * changes `dc:title`, as Web UI's title edit does; Copy to and Move to choose a destination folder
  * and run `Document.Copy` and `Document.Move`; Delete moves the document to the trash.
+ *
+ * Their handlers are registered once for the whole app, by `providePackagedRowActions()` in
+ * `@nuxeo/satori-platform/ui`, so every list that offers them runs them.
  *
  * As everywhere, these rules decide what the interface offers. Nuxeo checks the permission on the
  * request itself.

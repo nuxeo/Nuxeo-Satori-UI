@@ -1,5 +1,6 @@
 import { ApplicationRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 
@@ -12,13 +13,18 @@ import {
 } from '@nuxeo/satori-platform/components';
 import {
   AppExtensionsService,
+  EMPTY_EXTENSION_RULE_CONTEXT,
   EXTENSION_SLOTS,
+  ExtensionActionRegistry,
   ExtensionComponentRegistry,
   type ExtensionActionDescriptor,
   type ExtensionRouteDescriptor,
   type ExtensionTabDescriptor,
   ExtensionRuleContextService,
+  provideSatoriExtensions,
 } from '@nuxeo/satori-platform/extensions';
+
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';
@@ -114,6 +120,21 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
     expect(ids(EXTENSION_SLOTS.contextMenu)).toContain('app.contextMenu.share');
   });
 
+  it('registers the handlers of the five packaged row actions before any list exists', async () => {
+    await loadManifest({});
+    const actions = TestBed.inject(ExtensionActionRegistry);
+    for (const id of [
+      'app.rowActions.download',
+      'app.rowActions.rename',
+      'app.rowActions.copyTo',
+      'app.rowActions.moveTo',
+      'app.rowActions.delete',
+    ]) {
+      // Before any list exists: browse used to register these itself, so a record page had none.
+      expect(actions.has(id)).withContext(id).toBe(true);
+    }
+  });
+
   it('registers the packaged permissions panel under the ID the library exports', async () => {
     await loadManifest({});
     const components = TestBed.inject(ExtensionComponentRegistry);
@@ -187,5 +208,65 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
 
     const shell = router.config.find((route) => route.path === '');
     expect(shell?.children?.some((child) => child.path === 'reports')).toBe(false);
+  });
+});
+
+/**
+ * The tier the app registers the packaged row actions in. Arrival order cannot show it: a customer
+ * registering after the app wins either way. Registered first, as a customer library listed before
+ * the app's own providers is, only the packaged tier lets the customer's handler stand.
+ */
+describe('provideAppExtensions — a customer library registered before the packaged row actions', () => {
+  const customer = jasmine.createSpy('customer');
+  const authMock = {
+    isAuthenticated: signal(true),
+    username: signal('test.user'),
+    isAdministrator: signal(false),
+    groups: signal([]),
+    isPowerUser: signal(false),
+    hasAdministrationAccess: signal(false),
+    basicCredentials: () => 'dGVzdA==',
+    shareAuthToken: () => null,
+    logout: () => undefined,
+  } as unknown as AuthService;
+
+  beforeEach(async () => {
+    customer.calls.reset();
+    await TestBed.configureTestingModule({
+      providers: [
+        provideSatoriExtensions({ actions: { 'app.rowActions.delete': { execute: customer } } }),
+        ...appConfig.providers,
+        provideHttpClientTesting(),
+      ],
+    })
+      .overrideProvider(AuthService, { useValue: authMock })
+      .compileComponents();
+  });
+
+  afterEach(() => TestBed.inject(MatDialog).closeAll());
+
+  it("runs the customer's handler, not the app's", async () => {
+    // Let the configuration load inside the test, so nothing it starts outlives the injector.
+    const done = TestBed.inject(AppConfigService).load();
+    TestBed.inject(HttpTestingController)
+      .match(() => true)
+      .forEach((request) => request.flush({}));
+    await done;
+
+    const row: NuxeoDocument = {
+      uid: 'c1',
+      title: 'Claim 1',
+      type: 'File',
+      path: '/claims/c1',
+      lastModified: '2026-11-01T00:00:00.000Z',
+      properties: {},
+    };
+    TestBed.inject(ExtensionActionRegistry).execute(
+      { id: 'app.rowActions.delete', label: 'Delete' },
+      { ...EMPTY_EXTENSION_RULE_CONTEXT, document: row },
+    );
+    expect(customer).toHaveBeenCalledTimes(1);
+    // The app's Delete would have asked for confirmation.
+    expect(TestBed.inject(MatDialog).openDialogs.length).toBe(0);
   });
 });
