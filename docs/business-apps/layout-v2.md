@@ -523,7 +523,9 @@ stored id.
 ```
 
 - **One reference, several columns:** the provider's name and its NPI above are two columns over
-  `claim:provider`.
+  `claim:provider`. A list shows a property once today (section 11), because it keys its columns by
+  property, so a column with `show` is keyed by both, the reference and the shown property, and
+  the two stand side by side.
 - **The value is shown by its schema type,** as a field with no widget shows its property, and
   links to the linked record. It has no widget of its own: an amount on the linked record shows as
   a number, not in a currency. A widget for the shown value is left for later, if a kit needs one.
@@ -557,8 +559,10 @@ where `claim:provider` is a document reference:
   no `depth` today, so it would add one.
 
 So the record page adds the reference of each `show`, and `depth: children`, to its read of the
-open record, and the lists engine adds them to its page request; `properties` names the schemas of
-the shown properties as well as the record's own. The linked records come in the same response,
+open record, and a related list (`RecordListComponent`, through `PageProviderService`, section 11)
+adds them to its page request; `properties` names the schemas of the shown properties as well as
+the record's own. That request also asks for the `permissions` enricher, and whether Nuxeo then
+runs it on each linked record too, and at what cost, is to measure. The linked records come in the same response,
 not one request per row, and Nuxeo's own `fetch-document` does the work: no enricher of ours is
 needed. A shown value that needs a label, such as a vocabulary entry, is looked up as one on the
 record itself is: one request per distinct value.
@@ -599,7 +603,8 @@ what the reader may not read, and the proposal would have to fetch it another wa
 
 ### Sorting
 
-A column showing a linked record's property cannot be sorted by it: a page provider sorts its own
+A column showing a linked record's property cannot be sorted by it, and its header does not offer
+to: a related list's headers sort on the server (section 11), and a page provider sorts its own
 records' properties. So of the Claims table's columns, which the plan calls sortable, the
 provider's name and NPI are the ones that cannot be.
 
