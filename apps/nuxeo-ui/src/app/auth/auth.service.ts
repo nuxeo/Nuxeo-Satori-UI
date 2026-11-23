@@ -32,6 +32,7 @@ import {
   NUXEO_SSO_RETURN_QUERY_PARAM,
   SelectionService,
   isPowerUserFromGroups,
+  readAllGroupsFromMe,
   readGroupsFromMe,
   type NuxeoSamlLoginEndpoint,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -45,6 +46,13 @@ interface BasicStoredSession {
   basic: string;
   isAdministrator: boolean;
   groups: string[];
+  /**
+   * Every group Nuxeo counts the user in, nested and virtual ones too. Required, so that every
+   * place that builds a session from `/me` has to keep them: two that did not left
+   * `app.rules.inGroup` reading the stored groups alone. A session stored before these were kept
+   * has none in storage, and `restoreSession()` gives it its stored groups (`Restored`).
+   */
+  allGroups: string[];
 }
 
 interface CookieStoredSession {
@@ -52,9 +60,14 @@ interface CookieStoredSession {
   username: string;
   isAdministrator: boolean;
   groups: string[];
+  /** As in `BasicStoredSession`. */
+  allGroups: string[];
 }
 
 type StoredSession = BasicStoredSession | CookieStoredSession;
+
+/** A session as read back from storage, where one stored before `allGroups` was kept lacks it. */
+type Restored<T extends StoredSession> = Omit<T, 'allGroups'> & { allGroups?: string[] };
 
 /** Legacy payload before `kind` was introduced. */
 interface LegacyStoredSession {
@@ -263,10 +276,15 @@ function isHttpUrl(url: URL): boolean {
   return url.protocol === 'http:' || url.protocol === 'https:';
 }
 
-function readSessionFlagsFromMe(me: unknown): { isAdministrator: boolean; groups: string[] } {
+function readSessionFlagsFromMe(me: unknown): {
+  isAdministrator: boolean;
+  groups: string[];
+  allGroups: string[];
+} {
   return {
     isAdministrator: readIsAdministratorFromMe(me),
     groups: readGroupsFromMe(me),
+    allGroups: readAllGroupsFromMe(me),
   };
 }
 
@@ -327,6 +345,12 @@ export class AuthService {
     return isPowerUserFromGroups(s.groups);
   });
   readonly hasAdministrationAccess = computed(() => this.isAdministrator() || this.isPowerUser());
+  /**
+   * Every group Nuxeo counts the signed-in user in, nested and virtual ones included, for the rule
+   * context's `app.rules.inGroup`; none when no one is signed in. A session stored before these
+   * were kept has the stored groups only, until `/me` is read again.
+   */
+  readonly groups = computed<readonly string[]>(() => this.state()?.allGroups ?? []);
 
   constructor() {
     this.restoreSession();
@@ -384,6 +408,7 @@ export class AuthService {
       basic: existing.basic,
       isAdministrator: flags.isAdministrator,
       groups: flags.groups,
+      allGroups: flags.allGroups,
     });
     const remember = localStorage.getItem(STORAGE_KEY) !== null;
     this.persist(this.state()!, remember);
@@ -446,19 +471,20 @@ export class AuthService {
       const parsed = JSON.parse(raw) as StoredSession | LegacyStoredSession;
       if (parsed && typeof parsed === 'object' && 'username' in parsed) {
         if ('kind' in parsed && parsed.kind === 'cookie') {
-          const c = parsed as CookieStoredSession;
+          const c = parsed as Restored<CookieStoredSession>;
           if (c.username) {
             this.state.set({
               kind: 'cookie',
               username: c.username,
               isAdministrator: c.isAdministrator ?? false,
               groups: c.groups ?? [],
+              allGroups: c.allGroups ?? c.groups ?? [],
             });
           }
           return;
         }
         if ('kind' in parsed && parsed.kind === 'basic') {
-          const b = parsed as BasicStoredSession;
+          const b = parsed as Restored<BasicStoredSession>;
           if (b.username && b.basic) {
             this.state.set({
               kind: 'basic',
@@ -466,6 +492,7 @@ export class AuthService {
               basic: b.basic,
               isAdministrator: b.isAdministrator ?? false,
               groups: b.groups ?? [],
+              allGroups: b.allGroups ?? b.groups ?? [],
             });
           }
           return;
@@ -478,6 +505,7 @@ export class AuthService {
             basic: legacy.basic,
             isAdministrator: legacy.isAdministrator ?? false,
             groups: legacy.groups ?? [],
+            allGroups: legacy.groups ?? [],
           });
         }
       }
@@ -565,6 +593,7 @@ export class AuthService {
             username: user,
             isAdministrator: flags.isAdministrator,
             groups: flags.groups,
+            allGroups: flags.allGroups,
           };
           this.state.set(cookieSession);
           this.persistCookie(cookieSession);
@@ -593,6 +622,7 @@ export class AuthService {
             username: user,
             isAdministrator: flags.isAdministrator,
             groups: flags.groups,
+            allGroups: flags.allGroups,
           };
           this.state.set(session);
           this.persistCookie(session);
@@ -679,6 +709,7 @@ export class AuthService {
             username: user,
             isAdministrator: flags.isAdministrator,
             groups: flags.groups,
+            allGroups: flags.allGroups,
           };
           this.state.set(session);
           this.persistCookie(session);
@@ -722,6 +753,7 @@ export class AuthService {
                 basic,
                 isAdministrator: flags.isAdministrator,
                 groups: flags.groups,
+                allGroups: flags.allGroups,
               };
               this.state.set(session);
               this.persist(session, remember);
@@ -805,6 +837,7 @@ export class AuthService {
           username: user,
           isAdministrator: flags.isAdministrator,
           groups: flags.groups,
+          allGroups: flags.allGroups,
         };
         this.state.set(next);
         this.persistCookie(next);
