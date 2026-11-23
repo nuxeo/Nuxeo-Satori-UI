@@ -1941,10 +1941,12 @@ list; `nxs-saved-search-actions` for the permission read.
 **Notes:**
 
 - A chosen bucket is sent as the search page sends its filters (`SearchService.search`). Measured on
-  the local server with `default_search`: `dc_creator_agg=["nxsat332-writer"]` returns that
-  author's records only, and the response echoes the choice in `aggregations.<id>.selection`. Two
-  keys of one aggregate are alternatives: `dc_nature_agg=["contract","zzz-none"]` keeps the records
-  of either. Several aggregates together keep the records in all of them.
+  the local server with `default_search`, as an administrator: `dc_creator_agg=["nxsat332-writer"]`
+  returns that author's 12 records only, and the response echoes the choice in
+  `aggregations.<id>.selection`. Two keys of one aggregate are alternatives:
+  `dc_nature_agg=["application"]` and `["article"]` return 1 record each, and
+  `["application","article"]` returns 2. Aggregates together keep the records in all of them: that
+  author and `dc_modified_agg=["last24h"]` return none.
 - `aggregations.<id>.extendedBuckets` holds the buckets and the chosen ones that now hold no
   record, at `docCount: 0`; the facets read it first, so a chosen bucket can still be cleared. An
   aggregate's own counts are worked out with the other aggregates' choices and not its own.

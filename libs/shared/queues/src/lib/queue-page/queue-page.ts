@@ -219,7 +219,9 @@ export class QueuePageComponent {
     return queue.bulkActions.filter((id, index) => {
       const action = resolved.get(id);
       if (action === undefined) {
-        this.tell(`bulkActions[${index}] "${id}" is not offered here: its rule hides it`);
+        this.tell(
+          `bulkActions[${index}] "${id}" is not offered here: the bulk-actions slot does not resolve it, so it is not registered in this build, or a manifest or its rule hides it`,
+        );
         return false;
       }
       if (this.actions.has(action.action ?? id)) return true;

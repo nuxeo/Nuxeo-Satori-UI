@@ -78,7 +78,9 @@ describe('facetBuckets', () => {
       kind: 'none',
       reason: 'the page provider returns no aggregate "claim_type_agg"',
     });
-    // Not one inherited from Object.prototype either.
+    // Not one inherited from Object.prototype either: `__proto__` is an object, so only the
+    // own-property check keeps it from being read as an aggregate with no buckets.
+    expect(facetBuckets({ dc_creator_agg: creators }, '__proto__', []).kind).toBe('none');
     expect(facetBuckets({ dc_creator_agg: creators }, 'toString', []).kind).toBe('none');
   });
 });

@@ -398,6 +398,11 @@ it — which renders a broken image beside a still-selected item.
 thumbnail batch, which drops the previews to `null` and degrades the popup to its placeholder. It
 does **not** clear the selection. Callers as of this writing: `search`, `trash`, `assets`, `browse`.
 
+**`offeredBulkActions`** is a signal of the bulk action ids the page holding the selection offers, or
+`null` for every one the `bulk-actions` slot resolves. A queue's page sets its file's `bulkActions`
+while it is shown and puts `null` back when it goes; the shell's selection topbar reads it, and then
+offers only those of them that have a handler. It is not a security control.
+
 That is deliberately the conservative half. The complete fix is for this service to own preview
 lifetime — hold the blobs, or refetch on demand — so a selection keeps its thumbnails across a
 search. That is a design change to a shared service and has not been made.
@@ -517,6 +522,37 @@ component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, {
 | `show(message: string, options?: NxsToastOptions): void`       | Something happened. Announced politely. `message` is already translated; a blank one opens nothing.                                                                                                                                                             |
 | `error(message: string, options?: NxsToastErrorOptions): void` | Something the user asked for did not happen. Announced assertively. `retry` adds a translated Retry button running it.                                                                                                                                          |
 | `NxsToastOptions`                                              | `duration` in ms: below `NXS_TOAST_DURATION` (4000, Web UI's) it is raised to it, `0` keeps the toast until dismissed. `action: { label, run }` adds one button; a toast with an action defaults to `0`. Every toast has a Dismiss button and closes on Escape. |
+
+---
+
+## PageProviderService (`page-provider.service.ts`)
+
+Runs a page provider defined on the server: `GET /api/v1/search/pp/<name>/execute`, as the user.
+The record page's related records and a queue's list read through it.
+
+```typescript
+execute(name: string, request: PageProviderRequest): Observable<PageProviderResults>
+isAggregateParameter(name: string): boolean
+```
+
+`PageProviderRequest` carries `parameters`, `pageSize`, `pageIndex`, `sort`, `properties` and
+`aggregates`: the buckets chosen in each aggregate, sent as `<aggregate>=<JSON array>` as the search
+page sends its filters. `PageProviderResults` is the page with the server's `aggregations`. It
+refuses, without a request, a name that is not a page provider's, a page size outside 1 to 1000, a
+sort that is not `<prefix>:<name>`, and an aggregate the search reads for itself (`pageSize`,
+`sortBy`, `properties` and the like) or named with a `.` or a `-`.
+
+---
+
+## QueueService (`libs/shared/queues/src/lib/queue.service.ts`)
+
+Reads an app's `queues/<id>.json` beside the layouts and the home, past the interceptors.
+
+```typescript
+load(id: string): Observable<QueueLoad>   // file | none (404, or an id that is not one) | unreadable
+queueFileUrl(bootstrapUrl: string, id: string): string
+queueLink(id: string): readonly string[]  // ['/queues', id]
+```
 
 ---
 
