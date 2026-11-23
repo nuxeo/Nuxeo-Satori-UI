@@ -15,24 +15,27 @@ import {
   fr,
   frCA,
   frCH,
+  it,
+  itCH,
   ja,
   nl,
   nlBE,
+  sv,
 } from 'date-fns/locale';
 
 /**
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The five bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The seven bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to locales
  * that are both registered and in `availableLanguages` — and a test asserts they match
  * `availableLanguages`, so adding a language cannot quietly leave its dates being parsed as
  * English. That clamp used to read `REGISTERED_LOCALES` alone, and registering `es` ahead of its
  * catalogue was enough to admit a locale this map has no entry for (#522).
  *
- * That test is why this map holds five rather than the ten the application targets. `ar`, `es`,
- * `he`, `it` and `sv` have Angular locale data registered and are requested from Crowdin, but
+ * That test is why this map holds seven rather than the ten the application targets. `ar`, `es`
+ * and `he` have Angular locale data registered, but
  * they are not advertised until their catalogues land — so they do not belong here yet either.
  * Each arrives with its catalogue, and `ar` brings the regional variants with it: date-fns'
  * `ar-DZ`, `ar-MA` and `ar-SA` are month-first while bare `ar` is day-first, so they need their
@@ -55,12 +58,13 @@ import {
  * | `fr-CA` | `yy-MM-dd` | `dd/MM/y` |
  * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
+ * | `it-CH` | `dd.MM.y` | `dd/MM/y` |
  *
  * `de-AT`, `zh-HK` and `zh-TW` are deliberately **absent**: their `P` is identical to their
  * base, so an entry would add a locale to every consumer's bundle and change no behaviour. They
  * resolve correctly through the bare-language fallback.
  *
- * The same rule decides what the five pending languages bring with them. Measured, so it does
+ * The same rule decides what additional languages bring with them. Measured, so it does
  * not have to be re-derived: `ar-DZ`, `ar-MA` and `ar-SA` are `MM/dd/yyyy` and `ar-EG` is
  * `d/MM/y` against bare `ar`'s `dd/MM/yyyy`, so all four need entries; `ar-TN` matches its base
  * and does not. `it-CH` is `dd.MM.y` against `it`'s `dd/MM/y`, so it does. date-fns ships no
@@ -87,6 +91,9 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   ja,
   nl,
   'nl-be': nlBE,
+  it,
+  'it-ch': itCH,
+  sv,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */

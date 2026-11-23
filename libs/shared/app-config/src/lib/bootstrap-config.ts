@@ -267,19 +267,14 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   // locale here that has no catalogue would advertise a language the application cannot
   // render, which `checkAdvertisedLocalesShip` fails.
   //
-  // **This is five of the ten languages the application targets.** The target set is Nuxeo Web
-  // UI's — `ar`, `nl`, `en`, `fr`, `de`, `he`, `it`, `ja`, `es`, `sv` — and `th` and `zh` were
-  // dropped from here to match it. The other five are already set up everywhere a language can
-  // be set up ahead of its translations: Angular locale data in `register-locale-data.ts`, and a
-  // `--language` in the Crowdin pull. What is missing is only the catalogue, and this list is
-  // the one touchpoint that cannot run ahead of one — advertising a language renders the English
-  // fallback throughout, which reads as broken rather than absent (D8e, `D8e-webui`).
+  // Seven of Nuxeo Web UI's ten target languages ship approved application catalogues.
+  // Italian and Swedish landed with their shipped-catalogue and date-adapter entries
+  // (NXSAT-754). Arabic and Hebrew are approved but need placeholder corrections;
+  // Spanish awaits catalogue integration. Do not advertise a language ahead of a valid
+  // catalogue, or it renders English fallback throughout (D8e-webui).
   //
-  // So each of `ar`, `es`, `he`, `it`, `sv` joins this list — and `DATE_FNS_LOCALES`, which a
-  // test holds equal to it — in the pull request that brings its catalogue. `es` needs one
-  // Crowdin string fixed first (`Seleccionado(s)`). `ar` and `he` need nothing further for
-  // layout: RTL landed in NXSAT-752, so `syncDocumentDirection` sets `<html dir>` from the
-  // active language and either one mirrors.
+  // Arabic and Hebrew already have RTL support from NXSAT-752. Once their catalogues and
+  // date-adapter entries land, the accepted language drives the document direction.
   //
   // Neither is reachable today, and that is deliberate: since NXSAT-733 `resolveStringLanguage`
   // refuses a `defaultLanguage` this build ships no catalogue for, so `ar` and `he` fall back to
@@ -297,7 +292,7 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl'],
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'it', 'sv'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},

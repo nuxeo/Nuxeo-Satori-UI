@@ -8,6 +8,25 @@ Re-measure before quoting anything here. The 16 September edition of this page c
 **23 of 23 green** while `guardrails` was failing, and put the catalogue at **1653** keys when it
 held 1968 — both figures had a command printed beside them and neither had been re-run.
 
+## Italian and Swedish enabled — 23 November 2026
+
+NXSAT-754 imports the unchanged approved Italian and Swedish catalogues from
+[diagnostic run 45185014031](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/runs/45185014031).
+Both have all 2,771 current application keys and pass the catalogue checks. Both are enabled in
+the shipped-catalogue list, both Layer 0 defaults and the date adapter, and included in ongoing
+Crowdin pulls. Italian uses day-first dates; Swedish uses year-first dates. The published adapter
+also maps Italian Switzerland separately because its separators differ from bare Italian.
+
+The live Crowdin API reports Arabic, Hebrew, Italian and Swedish **100% translated and 100%
+approved**. Arabic still fails placeholder parity in one entry, Hebrew in three; correct them in
+Crowdin and re-export. Spanish remains in translation PR #401 and is not enabled by this change.
+The older dated sections below are historical; their claims that these four languages await
+translation are superseded by this measurement.
+
+Swedish shared Satori component strings still use English fallback where the installed upstream
+package has no Swedish catalogue. Enabling the application's Swedish catalogue does not claim
+that upstream component translations are complete.
+
 ## Languages — the set is Nuxeo Web UI's, 30 October 2026
 
 The application's language set was aligned to the one Nuxeo Web UI supports. That **dropped Thai

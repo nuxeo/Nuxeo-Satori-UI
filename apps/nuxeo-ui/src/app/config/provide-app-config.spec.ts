@@ -179,7 +179,7 @@ describe('resolveStringLanguage', () => {
   });
 
   it('refuses every locale registered ahead of its catalogue', () => {
-    // The five mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
+    // The remaining mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
     // yet. Admitting them on registration alone would render English under their own `lang`.
     const registeredOnly = REGISTERED_LOCALES.filter(
       (locale) => !SHIPPED_CATALOGUE_LANGUAGES.includes(locale),
@@ -356,6 +356,17 @@ describe('the configured language at startup', () => {
     expect((await boot('de')).lang).toBe('de');
     expect((await boot('en')).lang).toBe('en');
   });
+
+  for (const language of ['it', 'sv']) {
+    it(`boots ${language}, loads its catalogue and announces its language`, async () => {
+      const { lang, urls, messages } = await boot(language);
+      expect(lang).toBe(language);
+      expect(urls.some((url) => url.endsWith(`/i18n/${language}.json`))).toBeTrue();
+      expect(document.documentElement.lang).toBe(language);
+      expect(document.documentElement.dir).toBe('ltr');
+      expect(messages.filter((message) => message.includes('defaultLanguage'))).toEqual([]);
+    });
+  }
 
   it('announces that language on <html lang> once startup has settled', async () => {
     await boot('fr');
@@ -572,7 +583,7 @@ describe('LOCALE_ID provider', () => {
    * These assert from configuration, not from the constant: `injectLocaleFor` goes through the
    * real provider from `provideAppConfig()`.
    */
-  const REGISTERED_BUT_NOT_SHIPPED = ['ar', 'es', 'he', 'it', 'sv'] as const;
+  const REGISTERED_BUT_NOT_SHIPPED = ['ar', 'es', 'he'] as const;
 
   it('does not admit a locale registered ahead of its catalogue', () => {
     // Guards the premise: if these ever stop being registered-but-unadvertised the test below
