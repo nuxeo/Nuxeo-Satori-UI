@@ -275,7 +275,7 @@ of them named the new IDs.
 ## 7. The `nxs-` components — compose, override, place
 
 `@nuxeo/satori-platform/components` is the Nuxeo-owned component library: `nxs-` selectors,
-built on Angular Material, with no ADF and no Satori import of its own. There are three things
+built on Angular Material, with no Satori import of its own. There are three things
 you can do with it, and they are different promises.
 
 ### Composable — use a component inside your own

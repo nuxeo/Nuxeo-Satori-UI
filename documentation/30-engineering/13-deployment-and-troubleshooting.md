@@ -10,11 +10,9 @@ audience: engineering
 # Deployment & Troubleshooting
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the Runtime table's i18n row was re-verified at that commit, for NXSAT-648, and its
-> `NG0201` row, about adf-hx's API ports, was removed with them. On 2026-10-14 at `d36176c`
-> (`feature/nxsat-308-remove-adf-packages`) the `E404` row was re-verified, for NXSAT-637. On 2026-10-08 at `2898046`
-> (`feature/nxsat-308-ci-cold-cache-tooling`) the repository links were made relative rather than
-> pinned to `feature/adf-hx-browse-poc`, every target present. The rest of the page as of
+> Only the Runtime table's i18n row was re-verified at that commit, for NXSAT-648. On 2026-10-14 at `d36176c`
+> the `E404` row was re-verified, for NXSAT-637. On 2026-10-08 at `2898046`
+> (`feature/nxsat-308-ci-cold-cache-tooling`) the repository links were made relative, every target present. The rest of the page as of
 > 2026-08-24 · `77265f9`.
 > Packaging detail: [`NUXEO_MARKETPLACE_GUIDE.md`](../../NUXEO_MARKETPLACE_GUIDE.md)
 

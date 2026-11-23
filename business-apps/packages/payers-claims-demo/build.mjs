@@ -25,7 +25,11 @@
  * And around them:
  *   - XML that is not UTF-8, or not well-formed as Nuxeo's namespace-aware parser reads it, which
  *     Nuxeo cannot load at all, or nested deeper than this script checks;
- *   - a `Nuxeo-Component` that names no packaged file in `bundle/`;
+ *   - a `Nuxeo-Component` that names no packaged file in `bundle/`; a manifest that names its
+ *     components in more than one such header or spells its one header another way, since the
+ *     server reads the name in any letter case and keeps the last, so it could load a component
+ *     this script never read; or one that names them only after its first blank line, where the
+ *     server does not look;
  *   - a component contributing configuration without
  *     `<require>org.nuxeo.agentic.ui.config.defaults</require>`, without which this package's
  *     fragments could register before Satori's own and lose to them;
@@ -774,11 +778,52 @@ function packageManifest(text) {
   return Buffer.from(lines.join('\r\n') + '\r\n\r\n');
 }
 
-const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(manifest)?.[1] ?? '')
-  .split(',')
-  .map((path) => path.trim())
-  .filter(Boolean);
-if (componentPaths.length === 0) problem(manifestFile, 'needs a Nuxeo-Component line');
+// The components the server loads, found the way it finds them. The Nuxeo runtime reads this
+// header through `java.util.jar.Manifest`, which ends a line at CR, LF or CRLF and nowhere else,
+// matches a header's name in any letter case, keeps the last of a repeated one, and looks for it in
+// the main section alone — the lines before the first empty one; a header in a later `Name:`
+// section belongs to that entry. The runtime then splits the value at commas, spaces, tabs, line
+// breaks and form feeds. Sections are found after unfolding, because the packaged manifest is this
+// unfolded text refolded. Reading the first header spelt exactly so, anywhere — with a pattern
+// whose `^` also matched after a U+2028 inside another header's value — checked components the
+// server does not load, while everything in bundle/ was packaged anyway.
+const manifestLines = manifest.split(/\r\n|\r|\n/);
+const mainSectionEnd = manifestLines.indexOf('');
+const isComponentHeader = (line) => /^nuxeo-component:/i.test(line);
+const componentHeaders = (
+  mainSectionEnd < 0 ? manifestLines : manifestLines.slice(0, mainSectionEnd)
+).filter(isComponentHeader);
+if (componentHeaders.length > 1) {
+  problem(
+    manifestFile,
+    `has ${componentHeaders.length} Nuxeo-Component headers, counting any letter case; the server loads only the last one's components, so list every component in a single header`,
+  );
+} else if (componentHeaders.length === 1 && !componentHeaders[0].startsWith('Nuxeo-Component:')) {
+  problem(
+    manifestFile,
+    `spells its Nuxeo-Component header "${componentHeaders[0].slice(0, componentHeaders[0].indexOf(':'))}"; the server accepts any letter case, but tools that read a manifest look for Nuxeo-Component exactly, so write it that way`,
+  );
+}
+// Every header's components are checked even when the manifest is refused, so none that the
+// server could load goes unread.
+const componentPaths = [
+  ...new Set(
+    componentHeaders.flatMap((header) =>
+      header
+        .slice(header.indexOf(':') + 1)
+        .split(/[, \t\n\r\f]+/)
+        .filter(Boolean),
+    ),
+  ),
+];
+if (componentPaths.length === 0) {
+  problem(
+    manifestFile,
+    mainSectionEnd >= 0 && manifestLines.slice(mainSectionEnd).some(isComponentHeader)
+      ? 'names its components only after its first blank line, where the server does not read them; put the Nuxeo-Component line before it'
+      : 'needs a Nuxeo-Component line',
+  );
+}
 
 /** Fragment and layout bodies named by `src`: JSON whatever the file is called. */
 const jsonBodies = new Set();
