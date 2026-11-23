@@ -156,9 +156,9 @@
     </genericPageProvider>
 
     <!-- The my-claims queue: the claims one adjuster holds, given their user name. The queue and
-         the home pass "$currentUser", which the REST API replaces with the person signed in
-         before the query runs (PageProviderHelper), so the page provider is asked for the
-         person's own claims and no one's name is written in a file. -->
+         the home pass "$currentUser", which the REST API's page provider endpoint replaces with
+         the person signed in before the query runs (measured on Nuxeo 2025.10.18, as two
+         adjusters), so each is asked for their own claims and no one's name is in a file. -->
     <genericPageProvider name="payers_my_claims"
         class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
       <searchDocumentType>PayersClaimSearch</searchDocumentType>

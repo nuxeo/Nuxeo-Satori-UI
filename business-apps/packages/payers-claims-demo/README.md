@@ -323,16 +323,16 @@ the manifest, `layouts.json` and the layouts it lists, and images. The app regis
 serve the rest of an app waits on decisions B and E
 ([decisions.md](../../../docs/business-apps/decisions.md)). So, installed on a server:
 
-| Part                         | Served by the package on a server         | Under `config:dev`                                                               |
-| ---------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
-| The model and page providers | Yes                                       | From the server                                                                  |
-| The five layouts             | Yes                                       | Yes                                                                              |
-| `home.json`                  | No: `/home` says no home is set           | Yes                                                                              |
-| `navigation.json`            | No: the platform's menu alone             | Yes                                                                              |
-| The three queues             | No: `/queues/<id>` says none              | Yes                                                                              |
-| `labels/en.json`             | No: headings named by key show their `id` | Yes                                                                              |
-| `actions.json`               | No                                        | No: nothing serves it yet, so the approve button is left out of the queues' rows |
-| `app.json`                   | No                                        | No: carried for the registry                                                     |
+| Part                         | Served by the package on a server                   | Under `config:dev`                                                               |
+| ---------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| The model and page providers | Yes                                                 | From the server                                                                  |
+| The five layouts             | Yes                                                 | Yes                                                                              |
+| `home.json`                  | No: `/home` says no home is configured              | Yes                                                                              |
+| `navigation.json`            | No: the platform's menu alone                       | Yes                                                                              |
+| The three queues             | No: `/queues/<id>` says no such queue is configured | Yes                                                                              |
+| `labels/en.json`             | No: a heading named by a key shows its card's `id`  | Yes                                                                              |
+| `actions.json`               | No                                                  | No: nothing serves it yet, so the approve button is left out of the queues' rows |
+| `app.json`                   | No                                                  | No: carried for the registry                                                     |
 
 **So a production install shows the record pages, and not the home, the menu or the queues.**
 Until the registry, the demo runs on a development server, as it does here.
