@@ -34,6 +34,17 @@ final class ContributionRegistry {
     static final Pattern ASSET_NAME = Pattern.compile(
             "[A-Za-z0-9][A-Za-z0-9_-]{0,127}(?:\\.[A-Za-z0-9_-]{1,32}){0,3}\\.(?i:svg|png|jpg|jpeg|gif|webp|ico)");
 
+    /**
+     * Where an app's {@code app.json} may be read from: a relative path in the contributing bundle,
+     * whose last part is {@code app.json}. No part starts with a dot, so none is {@code .} or
+     * {@code ..}, and none holds a backslash: the app's root, which every file of the app is read
+     * below, is a directory of the bundle, wherever the bundle is unpacked.
+     */
+    static final Pattern APP_SRC = Pattern.compile("(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}/){0,16}app\\.json");
+
+    /** More files than this, and the app is refused: an app names each of its files. */
+    static final int MAX_APP_FILES = 256;
+
     private final List<Contribution> contributions = new ArrayList<>();
 
     synchronized void add(Contribution contribution) {
@@ -85,7 +96,11 @@ final class ContributionRegistry {
                     diagnostics.add(Diagnostic.warning("disabled-nothing", contribution.scope(),
                             contribution.provenance(),
                             String.format("%s is disabled, but no earlier contribution has that %s.", key,
-                                    contribution.kind() == Contribution.Kind.LAYOUT ? "type and mode" : "name")));
+                                    switch (contribution.kind()) {
+                                    case LAYOUT -> "type and mode";
+                                    case APP -> "id";
+                                    default -> "name";
+                                    })));
                 } else {
                     inForce.remove(key);
                     diagnostics.add(displacement(previous, contribution, "removed", "removed-packaged-default",
@@ -165,6 +180,27 @@ final class ContributionRegistry {
                 return String.format(
                         "asset name \"%s\" must be a plain file name ending in .svg, .png, .jpg, .jpeg, .gif, .webp or .ico.",
                         contribution.name());
+            }
+            break;
+        case APP:
+            if (contribution.name() == null || !ConfigScope.APP_ID.matcher(contribution.name()).matches()) {
+                return String.format(
+                        "app id \"%s\" must be lower-case letters, digits and '-', starting with a letter, as app.json's is.",
+                        contribution.name());
+            }
+            if (contribution.enabled() && Provenance.INLINE.equals(contribution.provenance().source())) {
+                return String.format("app %s has no src; an app is its app.json, in the bundle that contributes it.",
+                        contribution.name());
+            }
+            if (contribution.enabled() && !APP_SRC.matcher(contribution.provenance().source()).matches()) {
+                return String.format(
+                        "app %s has src \"%s\"; it must be the app's app.json, a relative path in its bundle with no "
+                                + "part that starts with '.'.",
+                        contribution.name(), contribution.provenance().source());
+            }
+            if (contribution.files().size() > MAX_APP_FILES) {
+                return String.format("app %s names %d files; the limit is %d.", contribution.name(),
+                        contribution.files().size(), MAX_APP_FILES);
             }
             break;
         default:

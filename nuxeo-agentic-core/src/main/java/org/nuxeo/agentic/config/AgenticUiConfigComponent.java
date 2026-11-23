@@ -71,6 +71,10 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
             entry = Contribution.asset(asset.getName(), asset.isEnabled(),
                     new Provenance(component, bundle, source(asset.getSrc())),
                     content(context, asset.getSrc(), null), asset);
+        } else if (contribution instanceof AppDescriptor app) {
+            entry = Contribution.app(app.getId(), app.isEnabled(),
+                    new Provenance(component, bundle, source(app.getSrc())), content(context, app.getSrc(), null),
+                    app.getFiles(), files(context, app.getSrc()), app);
         } else {
             log.warn("Unknown contribution to {}: {}", XP_CONFIGURATION, contribution);
             return;
@@ -194,6 +198,27 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
 
     private static String source(String src) {
         return src != null && !src.isBlank() ? src : Provenance.INLINE;
+    }
+
+    /**
+     * Where an app's files are read from: below the directory that holds its {@code app.json}, in the
+     * same bundle. The registry has checked that {@code src} is a relative path with no part that
+     * starts with a dot, and each path is one of an app definition's places, before either is read
+     * ({@link ContributionRegistry#validate}, {@link ConfigSnapshot#isAppFile}).
+     */
+    private static Contribution.Files files(RuntimeContext context, String src) {
+        String root = src == null ? "" : src.substring(0, src.lastIndexOf('/') + 1);
+        return new Contribution.Files() {
+            @Override
+            public Contribution.Content file(String path) {
+                return content(context, root + path, null);
+            }
+
+            @Override
+            public String source(String path) {
+                return root + path;
+            }
+        };
     }
 
     /**

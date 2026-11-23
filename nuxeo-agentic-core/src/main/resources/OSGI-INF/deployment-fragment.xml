@@ -12,6 +12,20 @@
   </extension>
 
   <!--
+    The app registry: the apps a person may see, after sign-in. Nuxeo's authentication filter on
+    its path, as on the application's own; auth-config-agentic.xml gives the path the REST API's
+    chain, so a request that does not authenticate is answered 401 rather than sent to a login page.
+  -->
+  <extension target="web#FILTER-MAPPING">
+    <filter-mapping>
+      <filter-name>NuxeoAuthenticationFilter</filter-name>
+      <url-pattern>/agentic-ui-apps/*</url-pattern>
+      <dispatcher>REQUEST</dispatcher>
+      <dispatcher>FORWARD</dispatcher>
+    </filter-mapping>
+  </extension>
+
+  <!--
     The packaged UI configuration, served from the configuration service. No authentication
     filter is mapped on /agentic-ui-config/*: the application reads it before sign-in. The
     servlet mapping is more specific than Tomcat's default servlet, so the servlet alone answers
@@ -28,6 +42,21 @@
     <servlet-mapping>
       <servlet-name>Agentic UI Configuration</servlet-name>
       <url-pattern>/agentic-ui-config/*</url-pattern>
+    </servlet-mapping>
+  </extension>
+
+  <!-- The app registry, from the same configuration service, read after sign-in. -->
+  <extension target="web#SERVLET">
+    <servlet>
+      <servlet-name>Agentic UI App Registry</servlet-name>
+      <servlet-class>org.nuxeo.agentic.config.AgenticUiAppsServlet</servlet-class>
+    </servlet>
+  </extension>
+
+  <extension target="web#SERVLET-MAPPING">
+    <servlet-mapping>
+      <servlet-name>Agentic UI App Registry</servlet-name>
+      <url-pattern>/agentic-ui-apps/*</url-pattern>
     </servlet-mapping>
   </extension>
 
