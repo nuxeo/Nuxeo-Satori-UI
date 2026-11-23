@@ -46,7 +46,7 @@
         <h3 class="record-page__heading" [id]="'record-card-' + card.id">{{ card.heading }}</h3>
       }
       <dl class="record-page__fields">
-        @for (field of card.fields; track field.key) {
+        @for (field of card.fields; track field.place) {
           <div class="record-page__field" [attr.data-field]="field.key">
             <dt class="record-page__label">{{ field.label }}</dt>
             <dd class="record-page__value">

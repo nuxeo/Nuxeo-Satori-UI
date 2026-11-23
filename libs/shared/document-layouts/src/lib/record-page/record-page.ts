@@ -88,6 +88,12 @@ interface Lookups {
 
 /** One field as the page shows it. */
 export interface RecordFieldShown {
+  /**
+   * Where the entry is in the file, as `cards[0].fields[2]`: unique on the page, so it is what the
+   * page tracks a field by. A card may show one property twice, through two widgets.
+   */
+  readonly place: string;
+  /** The property's `<prefix>:<name>`, or a computed field's ID: what `data-field` names. */
   readonly key: string;
   readonly label: string;
   readonly value: RecordValueView;
@@ -402,7 +408,7 @@ export class RecordPageComponent {
         field.widget,
         context,
       );
-      return [this.withExtras({ key: field.xpath, label, value })];
+      return [this.withExtras({ place: field.place, key: field.xpath, label, value })];
     }
     const result = compute(field.computed, this.computationContext(layout, document, context));
     if (!result.ok) {
@@ -425,7 +431,7 @@ export class RecordPageComponent {
       field.widget,
       context,
     );
-    return [this.withExtras({ key: field.id, label, value })];
+    return [this.withExtras({ place: field.place, key: field.id, label, value })];
   }
 
   /**

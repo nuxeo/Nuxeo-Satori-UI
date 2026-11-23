@@ -673,6 +673,36 @@ describe('RecordPageComponent', () => {
     });
   });
 
+  /** The validator lets a card show one property twice, so the page tracks each by its place. */
+  it('shows one property twice, each through its own widget, each tracked apart', async () => {
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            { field: 'member:birthDate', widget: 'date', parameters: { format: 'short' } },
+            { field: 'member:birthDate', widget: 'date' },
+          ],
+        },
+      ],
+    });
+    expect(
+      [...root.querySelectorAll('[data-field="member:birthDate"] .record-page__value')].map(
+        (value) => value.textContent?.trim(),
+      ),
+    ).toEqual(['11/24/80', 'November 24, 1980']);
+    // Angular checks the keys when it reconciles a list it drew: a refetch, as a new object.
+    fixture.componentRef.setInput('document', member({ 'member:birthDate': '1981-01-02' }));
+    fixture.detectChanges();
+    expect(
+      [...root.querySelectorAll('[data-field="member:birthDate"] .record-page__value')].map(
+        (value) => value.textContent?.trim(),
+      ),
+    ).toEqual(['1/2/81', 'January 2, 1981']);
+    expect(warnings.filter((warning) => warning.includes('NG0955'))).toEqual([]);
+  });
+
   it('shows an empty value as a dash', async () => {
     const root = await render(member({ 'member:phone': null }), {
       version: 2,
