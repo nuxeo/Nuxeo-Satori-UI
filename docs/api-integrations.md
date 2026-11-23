@@ -1916,7 +1916,17 @@ list; `nxs-saved-search-actions` for the permission read.
 - The counts are the signed-in person's: a user in `members` only counted 2,167 records of
   `default_search` where an administrator counted 2,249.
 
-**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`.
+**The menu, `navigation.json`:** `HomeService.loadNavigation()` reads
+`/nuxeo/agentic-ui-config/navigation.json` (`/agentic-ui-config/navigation.json` under `nx serve`)
+the same way, without interceptors, once, at startup, from `registerAppMenu`
+(`apps/nuxeo-ui/src/app/business-apps.menu.ts`), an `APP_INITIALIZER`. Only
+`npm run config:dev -- --navigation <file>` serves it; on a server it is 404 and the platform's
+menu shows alone. For each entry that opens a queue and has no name of its own, it then reads
+`queues/<id>.json` once (section 33), for the queue's name. It never rejects: a failed read leaves
+the platform's menu, and the console says why.
+
+**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`;
+`registerAppMenu`, at startup, for the menu.
 
 ---
 

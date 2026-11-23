@@ -1,5 +1,12 @@
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
-import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom, inject } from '@angular/core';
+import {
+  APP_INITIALIZER,
+  ApplicationConfig,
+  Injector,
+  importProvidersFrom,
+  inject,
+  provideAppInitializer,
+} from '@angular/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding, withHashLocation } from '@angular/router';
 import { MAT_FAB_DEFAULT_OPTIONS } from '@angular/material/button';
@@ -50,6 +57,14 @@ export const appConfig: ApplicationConfig = {
       deps: [AppThemeService],
       multi: true,
     },
+    // The app's menu, navigation.json, joined to the platform's before the shell first reads it
+    // (docs/business-apps/app-definition-v2.md, section 9). Its code is loaded lazily, so neither
+    // engine it uses is in the first bundle, and it never rejects: an unreadable menu leaves the
+    // platform's.
+    provideAppInitializer(() => {
+      const injector = inject(Injector);
+      return import('./business-apps.menu').then((menu) => menu.registerAppMenu(injector));
+    }),
     provideAnimations(),
     provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding(), withHashLocation()),

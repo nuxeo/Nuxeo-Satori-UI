@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "entries": [
+    { "id": "home", "label": "Home", "icon": "home", "page": "home" },
+    {
+      "id": "documents",
+      "icon": "inbox",
+      "queue": "documents",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["members", "administrators"] }
+    },
+    { "id": "tasks", "label": "My tasks", "icon": "tasks", "page": "app.navbar.tasks" }
+  ]
+}

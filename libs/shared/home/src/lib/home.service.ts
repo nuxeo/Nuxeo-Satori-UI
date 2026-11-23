@@ -20,7 +20,7 @@ export const HOME_QUEUE_LINK = new InjectionToken<
   ((queue: string) => string | readonly unknown[]) | null
 >('HOME_QUEUE_LINK', { factory: () => null });
 
-/** What reading `home.json` found. */
+/** What reading `home.json`, or `navigation.json`, found. */
 export type HomeLoad =
   | { readonly kind: 'none' }
   | { readonly kind: 'unreadable'; readonly reason: string }
@@ -35,6 +35,16 @@ export type HomeLoad =
 export function homeFileUrl(bootstrapUrl: string): string {
   const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
   return `${path.slice(0, path.lastIndexOf('/') + 1)}home.json`;
+}
+
+/**
+ * `navigation.json`, the app's menu, beside `home.json` (app-definition-v2.md, section 9):
+ * `agentic-ui-config/navigation.json`. As for the home, only the development server answers there,
+ * from `npm run config:dev -- --navigation <file>`.
+ */
+export function navigationFileUrl(bootstrapUrl: string): string {
+  const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
+  return `${path.slice(0, path.lastIndexOf('/') + 1)}navigation.json`;
 }
 
 function describe(error: unknown): string {
@@ -63,7 +73,16 @@ export class HomeService {
 
   /** The home file as served; `none` when nothing is served there (404). Never errors. */
   load(): Observable<HomeLoad> {
-    return this.config.get<unknown>(homeFileUrl(this.bootstrapUrl)).pipe(
+    return this.read(homeFileUrl(this.bootstrapUrl));
+  }
+
+  /** The menu file as served; `none` when nothing is served there (404). Never errors. */
+  loadNavigation(): Observable<HomeLoad> {
+    return this.read(navigationFileUrl(this.bootstrapUrl));
+  }
+
+  private read(url: string): Observable<HomeLoad> {
+    return this.config.get<unknown>(url).pipe(
       timeout(HOME_LOAD_TIMEOUT_MS),
       map((content): HomeLoad => ({ kind: 'file', content })),
       catchError((error: unknown) =>

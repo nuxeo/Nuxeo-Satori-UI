@@ -89,7 +89,5 @@ npx ngc -p libs/shared/queues/tsconfig.lib.json
 - **The package's own actions**, from `actions.json`: phase 2 runs them, so a queue leaves them out.
 - **Serving the queues on a server.** The app registry serves them, once decisions B and E are
   taken.
-- **The menu.** `navigation.json` names queues, and is not drawn: `queueLink` is the address its
-  entries are to open.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
 - **The facets in the address.** A choice is the page's state, and a reload starts with none.
