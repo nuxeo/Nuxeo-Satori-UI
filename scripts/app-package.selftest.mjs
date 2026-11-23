@@ -481,6 +481,10 @@ for (const argv of [
   ['a', 'b'],
   [DEMO, '--colour', 'red'],
   [join(tmpdir(), 'no-such-package')],
+  // An empty value, as an unset variable gives, is refused: taken as no option, it would skip the
+  // check it asks for.
+  [DEMO, '--model', ''],
+  [DEMO, '--platform', ''],
 ]) {
   const { status } = spawnSync(process.execPath, [SCRIPT, ...argv], { encoding: 'utf8' });
   if (status !== 2) failures.push(`${JSON.stringify(argv)} exits ${status}, not 2`);

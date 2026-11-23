@@ -97,7 +97,14 @@ function parse(argv) {
   const paths = [];
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
-    if (VALUED.includes(arg) && argv[index + 1] !== undefined && !argv[index + 1].startsWith('--'))
+    // An empty value is refused, not taken as no option: `--model "$MODEL"` with the variable unset
+    // would otherwise skip the check it asks for.
+    if (
+      VALUED.includes(arg) &&
+      argv[index + 1] !== undefined &&
+      argv[index + 1] !== '' &&
+      !argv[index + 1].startsWith('--')
+    )
       options[arg.slice(2)] = argv[++index];
     else if (arg.startsWith('--')) return null;
     else paths.push(arg);

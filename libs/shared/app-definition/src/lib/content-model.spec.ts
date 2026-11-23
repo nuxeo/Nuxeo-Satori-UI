@@ -198,11 +198,16 @@ describe('readContentModel', () => {
   });
   it('reads an explicit null as malformed, not as absent', () => {
     const broken = source();
-    broken.schemas.push({ name: 'n', fields: null });
+    broken.schemas.push(
+      { name: 'n', fields: null },
+      // Read as complex only when it has no type at all, as the list answers one.
+      { name: 'm', fields: { lines: { type: null, fields: { code: 'string' } } } },
+    );
     broken.facets.push({ name: 'Nulls', schemas: null });
     Object.assign(broken.doctypes, { Nulls: { facets: null, schemas: null } });
     expect(readContentModel(broken).problems).toEqual([
       'schemas[6].fields: must be an object of fields',
+      "schemas[7].fields.lines.type: must be the field's type",
       'facets[4].schemas: must be a list of schemas',
       'doctypes.Nulls.facets: must be a list of names',
       'doctypes.Nulls.schemas: must be a list of names',

@@ -271,7 +271,7 @@ function readProperty(raw: unknown, at: string, problems: string[]): PropertyMod
   }
   const hasFields = 'fields' in raw;
   // The list answers a complex field without `type` when the schema says nothing more.
-  const type = raw['type'] ?? (hasFields ? 'complex' : undefined);
+  const type = raw['type'] === undefined ? (hasFields ? 'complex' : undefined) : raw['type'];
   if (typeof type !== 'string' || type === '') {
     problems.push(`${at}.type: must be the field's type`);
     return null;
