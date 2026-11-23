@@ -23,10 +23,11 @@ export interface MainBlobContentModel {
  *
  * Nuxeo's own content model settles it instead. A type keeps a main file when it is one of the
  * stock four, extends one of them however deep, or it or an ancestor carries the `file` schema —
- * directly, or through a facet it declares. A doctype names its facets only, so what a facet
- * contributes is read from the facet definitions; a facet that contributes no schema has no
- * `schemas` key at all. The walk stops at a type it has already visited, so a malformed `parent`
- * cycle cannot loop.
+ * among its schemas, or through a facet it declares. The local Nuxeo already lists a type's
+ * inherited and facet schemas among its own `schemas`, so there the first `file` found is the
+ * type's own; the walk and the facet definitions are read as well so that the answer does not
+ * rest on that. A facet that contributes no schema has no `schemas` key at all. The walk stops
+ * at a type it has already visited, so a malformed `parent` cycle cannot loop.
  *
  * A dynamic facet, added to one document rather than declared by its type, is outside this:
  * Create and Import decide before there is a document.

@@ -116,8 +116,9 @@ const RENTAL_CONTRACT_DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
 };
 
 /**
- * A customer type that gets the `file` schema from a facet it declares, not from its own schemas
- * or an ancestor's: `/config/types` names the facet, and only `/config/facets` says what it adds.
+ * A customer type that gets the `file` schema from a facet it declares, with the facet's schemas
+ * left out of its own. The local Nuxeo lists them there too; leaving them out proves the dialog
+ * hands the facet definitions to the check.
  */
 const SCANNED_INVOICE_MODEL: Pick<NuxeoContentModel, 'doctypes' | 'facets'> = {
   doctypes: {

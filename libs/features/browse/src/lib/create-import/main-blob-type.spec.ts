@@ -5,7 +5,11 @@ import {
 
 import { type MainBlobContentModel, typeHoldsMainBlob } from './main-blob-type';
 
-/** The shape `/config/types` answers with, trimmed to what the walk reads. */
+/**
+ * The shape `/config/types` answers with, trimmed to what the walk reads. The local Nuxeo lists a
+ * type's inherited and facet schemas among its own `schemas`; these leave them out, so each path
+ * of the walk — the type's own schemas, its ancestors, its facets — is tested on its own.
+ */
 const DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
   Document: {},
   File: { parent: 'Document', schemas: ['common', 'dublincore', 'file', 'files'] },

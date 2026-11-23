@@ -255,11 +255,10 @@ export class CreateImportDialogComponent implements OnInit {
 
   /**
    * Nuxeo's doctypes and facet definitions, to tell which types keep a main file
-   * (`typeHoldsMainBlob`): a doctype names its facets, and only the facet definitions say which
-   * of them contribute the `file` schema. The content model — `/config/types`, `/config/facets`
-   * and `/config/schemas` — is read once and cached for the application's lifetime. `null` until
-   * it has answered; empty if the server refused it, when the check falls back to the stock type
-   * names.
+   * (`typeHoldsMainBlob`), which reads a type's facets against the facet definitions as well as
+   * its own schemas. The content model — `/config/types`, `/config/facets` and `/config/schemas`
+   * — is read once and cached for the application's lifetime. `null` until it has answered; empty
+   * if the server refused it, when the check falls back to the stock type names.
    */
   private readonly answeredContentModel = toSignal(
     this.contentModel.getContentModel().pipe(
