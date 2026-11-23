@@ -43,7 +43,9 @@ export function serverBase(server) {
     return { problem: 'the address carries credentials: they come from NUXEO_USER and NUXEO_PASS' };
   if (url.search || url.hash)
     return { problem: "the address is the server's, such as https://<host>/nuxeo, with no query" };
-  const loopback = LOOPBACK.has(url.hostname) || url.hostname.endsWith('.localhost');
+  // Only names that are this machine wherever the command runs: `<name>.localhost` is left to
+  // the resolver, which need not answer loopback.
+  const loopback = LOOPBACK.has(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))
     return {
       problem:

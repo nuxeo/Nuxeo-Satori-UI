@@ -6,7 +6,7 @@
  * - **A field's property** is on the type or on a facet it declares.
  * - **A widget shows its property's type**, as its `accepts` in the registries says.
  * - **A table's columns** name subfields of its property, and each column's widget shows its
- *   subfield's type, as a field's does. So do an address's `parts`.
+ *   subfield's type, as a field's does. An address's `parts` name subfields of its property too.
  *
  * Each finding is `unknown` or `parameter`, never `structure`, so that the app, loading a file
  * tolerantly, would leave out the field it is in and show the rest. It runs once the file's own

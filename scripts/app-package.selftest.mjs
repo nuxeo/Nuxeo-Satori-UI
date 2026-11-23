@@ -531,10 +531,22 @@ await (async () => {
     password: randomBytes(12).toString('hex'),
   };
   const expected = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`;
-  const seen = { unauthorised: 0, schemas: new Set(), withoutFields: 0 };
+  const seen = { unauthorised: 0, schemas: new Set(), withoutFields: 0, elsewhere: 0 };
   let answer = (schema) => schema;
   let status = 200;
+  let redirect = null;
   const server = createServer((request, response) => {
+    if (request.url === '/elsewhere') {
+      seen.elsewhere++;
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{}');
+      return;
+    }
+    if (redirect !== null) {
+      response.writeHead(302, { location: redirect });
+      response.end();
+      return;
+    }
     const json = (body) => {
       response.writeHead(status, { 'content-type': 'application/json' });
       response.end(JSON.stringify(body));
@@ -570,13 +582,17 @@ await (async () => {
     NUXEO_PASS: credentials.password,
   };
   /** A command, run without blocking this process, which serves the model meanwhile. */
+  const outputs = [];
   const command = (argv, environment) =>
     new Promise((done) => {
       const child = spawn(process.execPath, argv, { env: environment });
       let output = '';
       child.stdout.on('data', (chunk) => (output += chunk));
       child.stderr.on('data', (chunk) => (output += chunk));
-      child.on('close', (code) => done({ status: code, output }));
+      child.on('close', (code) => {
+        outputs.push(output);
+        done({ status: code, output });
+      });
     });
   const live = (directory, out, environment = env) =>
     command([SCRIPT, directory, '--out', out, '--model-server', address], environment);
@@ -683,7 +699,22 @@ await (async () => {
       failures.push(`no credentials exits ${result.status}, not 2\n${result.output}`);
     if (seen.unauthorised !== before)
       failures.push('a run with no credentials still asked the server');
-    if (result.output.includes(credentials.password)) failures.push('a run printed the password');
+
+    // A redirect is refused, not followed: the header goes only where it was sent.
+    negative++;
+    redirect = `http://127.0.0.1:${server.address().port}/elsewhere`;
+    result = await live(DEMO, join(scratch, 'redirected'));
+    if (result.status !== 2 || !result.output.includes('/api/v1/config/'))
+      failures.push(`a server that redirects exits ${result.status}, not 2\n${result.output}`);
+    if (seen.elsewhere > 0) failures.push('a redirect was followed');
+    redirect = null;
+
+    // Every run, the ones that read and the ones that failed: none printed the credentials.
+    negative++;
+    const leaked = outputs.filter(
+      (output) => output.includes(credentials.password) || output.includes(expected.slice(6)),
+    );
+    if (leaked.length > 0) failures.push(`${leaked.length} runs printed the credentials`);
   } finally {
     server.close();
     rmSync(scratch, { recursive: true, force: true });
