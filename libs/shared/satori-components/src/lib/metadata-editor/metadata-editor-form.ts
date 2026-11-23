@@ -9,6 +9,7 @@ import {
 import type { DateAdapter } from '@angular/material/core';
 
 import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
+import { isStoredCalendarDay } from '../stored-calendar-day';
 import { NxsEditorConstraints, NxsEditorFieldType } from './metadata-editor.model';
 
 /** Deeper complex fields are shown read-only: no schema shipped with Nuxeo nests further. */
@@ -126,27 +127,63 @@ function toDate(value: unknown): Date | null {
  * The two crossings between a date field's calendar day and the instant its Nuxeo property holds,
  * and the day comparison that pairs them.
  *
- * A date field edits a **calendar day**, and a calendar day is anchored in UTC — not in whichever
- * zone the browser happens to be in (NXSAT-727). That is not a preference; it is what everything
- * around this already assumes. Nuxeo stores a day-only write (`2024-03-06`) at midnight of the
- * server's day, read back as `2024-03-06T00:00:00.000Z`. The layout `date` renderer formats such a
- * stored day in UTC, and `docs/extension-reference.md` publishes that as the field type's contract.
- * `formatCompareDate` and the two ACE formatters do the same, each with a comment saying why.
+ * A date field edits a **calendar day**, and a day the field writes is anchored in UTC, not in
+ * whichever zone the browser happens to be in (NXSAT-727). That is not a preference; it is what
+ * everything around this already assumes. Nuxeo stores a day-only write (`2024-03-06`) at midnight
+ * of the server's day, read back as `2024-03-06T00:00:00.000Z`. The layout `date` renderer formats
+ * such a stored day in UTC, and `docs/extension-reference.md` publishes that as the field type's
+ * contract. `formatCompareDate` and the two ACE formatters do the same, each with a comment saying
+ * why.
  *
  * Anchoring the day locally instead made the stored instant depend on the writer's zone — one
  * picked day became five different values across the five zones QA measured — so east of UTC it
  * named the previous UTC day and the layout row showed that day.
  *
- * The picker still works in the local calendar, because that is what a picker is: these two
- * functions are the boundary, and `nxsDateFromAdapter`/`nxsDateToAdapter` stay local on the far
- * side of it.
+ * **Reading is not writing.** A value that is not a stored day is an instant, and the layout view
+ * shows an instant on the reader's own day. The field opens it on that day too (`openingDay`), so
+ * the form and the view name the same day. Only the day a value opens on depends on what it
+ * holds. A day picked is always written at its UTC midnight, and an untouched field always writes
+ * back the instant it was given (`builtDates`).
+ *
+ * The picker still works in the local calendar, because that is what a picker is: these functions
+ * are the boundary, and `nxsDateFromAdapter`/`nxsDateToAdapter` stay local on the far side of it.
  */
 
-/** The UTC calendar day of `instant`, as a JS `Date` at local midnight for the picker. */
-function toCalendarDay(instant: Date): Date {
-  const year = instant.getUTCFullYear();
-  const month = instant.getUTCMonth();
-  const day = instant.getUTCDate();
+/** A calendar day's fields, `month` counted from 0 as `Date` counts it. */
+export interface CalendarDayFields {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+}
+
+const utcFields = (instant: Date): CalendarDayFields => ({
+  year: instant.getUTCFullYear(),
+  month: instant.getUTCMonth(),
+  day: instant.getUTCDate(),
+});
+
+/**
+ * The calendar day a date property's value opens on, or `null` when it holds no valid date. A
+ * stored day opens on its own day, the UTC one. Any other instant opens on the reader's day. This
+ * is the rule the layout `date` view formats by, through the same `isStoredCalendarDay`, so at
+ * +05:30 `2026-11-23T20:00:00Z` opens on 24 November, the day the view shows. Until 2026-11-23 it
+ * opened on its UTC day, the 23rd, so the form and the view named different days.
+ *
+ * `offset` is the reader's zone as minutes east of UTC. It is there for a test, which cannot move
+ * the suite's own zone from inside a case. A stored day opens on the same day whatever the offset,
+ * and only a zone west of UTC can show that, while the suite is pinned east of it. Absent, the
+ * reader's zone is the browser's, which is the zone the picker's calendar and the view use.
+ */
+export function openingDay(value: unknown, offset?: number): CalendarDayFields | null {
+  const instant = toDate(value);
+  if (!instant) return null;
+  if (isStoredCalendarDay(value)) return utcFields(instant);
+  if (offset !== undefined) return utcFields(new Date(instant.getTime() + offset * 60_000));
+  return { year: instant.getFullYear(), month: instant.getMonth(), day: instant.getDate() };
+}
+
+/** `fields` as a JS `Date` at local midnight, the way the picker holds a day. */
+function atLocalMidnight({ year, month, day }: CalendarDayFields): Date {
   const local = new Date(year, month, day);
   // `new Date` reads a year below 100 as 19xx, as in `nxsDateFromAdapter`.
   local.setFullYear(year, month, day);
@@ -206,7 +243,8 @@ function dateControl(
   adapter: DateAdapter<unknown>,
 ): FormControl<unknown> {
   const instant = toDate(value);
-  const given = instant && toCalendarDay(instant);
+  const day = openingDay(value);
+  const given = day && atLocalMidnight(day);
   const control = new FormControl<unknown>(
     nxsDateToAdapter(adapter, given),
     validatorFor(definition),

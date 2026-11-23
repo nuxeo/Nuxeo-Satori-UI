@@ -15,6 +15,17 @@
  * from the published platform API, which is a decision for a human and not for a bug fix. If that
  * is agreed, these two copies and the editor's should collapse into it.
  *
+ * **Its read differs from the editor's since 2026-11-23.** The editor opens a value that is not a
+ * stored day on the reader's day, as the layout `date` view shows it (`openingDay`). `calendarDayOf`
+ * opens every value on its UTC day, as the Properties panel's Expires row shows `dc:expired`, so
+ * each agrees with the surface beside it. A stored day opens on the same day in both, and every
+ * writer in this application writes one. But a stored day is not all this dialog sees: a
+ * `dc:expired` that Web UI wrote at local midnight, or that this application anchored locally
+ * before NXSAT-727, is an instant, and for one of those the editor and this dialog can open on
+ * different days. Moving this read to the editor's rule means moving every UTC reader with it —
+ * the Expires row, the Expired queue label and the version comparison — through one predicate
+ * exported from the platform API. That decision is deferred, not rejected.
+ *
  * `AGENTS/08-bug-patterns.md` pattern 29 has the full rule and the test traps.
  */
 
