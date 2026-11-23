@@ -4645,6 +4645,108 @@ const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 /** The locale manifest an upstream catalogue folder may ship beside its catalogues (DS-2803). */
 const VENDOR_LOCALES_MANIFEST = 'languages.json';
 
+/** `package-lock.json`'s `packages` map, or why it could not be read. Parsed at most once. */
+let lockedPackagesCache;
+function lockedPackages() {
+  if (lockedPackagesCache !== undefined) return lockedPackagesCache;
+  if (!fileExists('package-lock.json')) {
+    lockedPackagesCache = { problem: 'package-lock.json is not in the tree' };
+    return lockedPackagesCache;
+  }
+  try {
+    const lock = JSON.parse(read('package-lock.json'));
+    const packages = lock?.packages;
+    lockedPackagesCache =
+      packages && typeof packages === 'object'
+        ? { packages }
+        : { problem: 'package-lock.json has no `packages` map' };
+  } catch (error) {
+    lockedPackagesCache = { problem: `package-lock.json does not parse (${error.message})` };
+  }
+  return lockedPackagesCache;
+}
+
+/**
+ * Whether the package installed at `packageRoot` is the version `package-lock.json` pins.
+ *
+ * Returns `{ state: 'match' }`, `{ state: 'drift', locked, installed }`, or
+ * `{ state: 'unknown', why }` when the question cannot be answered at all.
+ *
+ * ## Why a language rule reads the lockfile
+ *
+ * `checkUpstreamCatalogueLanguages` and `checkStorybookSatoriCatalogues` both decide what a build
+ * serves by listing a directory inside `node_modules`. That makes the installed tree an *input* to
+ * their verdict — and it was the one input neither validated. `node_modules` is not checked in, so
+ * a developer whose install predates a dependency bump is judged against a package the repository
+ * does not ship.
+ *
+ * That is not hypothetical, and it was not cheap. `@hylandsoftware/satori-ui` shipped bare-named
+ * catalogues beside the regional ones (`de.json` *and* `de-DE.json`) up to `1.0.0-alpha.201`;
+ * `1.0.0` ships regional names only. With `1.0.0` locked and an alpha still on disk, every bare
+ * name was "served" while the loader — correctly, for `1.0.0` — listed none of them, so this gate
+ * failed `main` itself. `.husky/pre-push` runs it, so that rejected every `git push` from every
+ * branch, on a tree where nothing was wrong.
+ *
+ * The verdict was not merely wrong, it was dangerous. Its remedy reads "list it in `languages`",
+ * and `upstreamCatalogueFor` prefers a name in `languages` over an alias — so listing `de` makes
+ * the loader request `de.json`, which `1.0.0` does not ship. Following this gate's own advice
+ * turns three working languages into a 404 and a console error on every page load and drops the
+ * `sat.*` keys with them, the accessible name of `sat-platform-nav`'s toggle included. That is
+ * NXSAT-732, the defect these rules exist to prevent, reintroduced by obeying one of them.
+ *
+ * So a stale install is reported as a stale install, and it fails rather than warns: these rules
+ * cannot judge their subject without a faithful install, and the remedy is one command.
+ */
+function installedVersionDrift(packageRoot) {
+  const lock = lockedPackages();
+  if (lock.problem) return { state: 'unknown', why: lock.problem };
+
+  const entry = lock.packages[packageRoot];
+  if (!entry) {
+    return { state: 'unknown', why: `package-lock.json has no entry for ${packageRoot}` };
+  }
+  // A `link` entry resolves to a workspace folder, whose version is its own business.
+  if (entry.link) return { state: 'unknown', why: `package-lock.json links ${packageRoot}` };
+  if (typeof entry.version !== 'string') {
+    return { state: 'unknown', why: `package-lock.json pins no version for ${packageRoot}` };
+  }
+
+  const manifest = `${packageRoot}/package.json`;
+  if (!fileExists(manifest)) return { state: 'unknown', why: `${manifest} is not there` };
+  let installed;
+  try {
+    installed = JSON.parse(read(manifest)).version;
+  } catch (error) {
+    return { state: 'unknown', why: `${manifest} does not parse (${error.message})` };
+  }
+  if (typeof installed !== 'string') {
+    return { state: 'unknown', why: `${manifest} declares no version` };
+  }
+
+  return installed === entry.version
+    ? { state: 'match' }
+    : { state: 'drift', locked: entry.version, installed };
+}
+
+/**
+ * The shared tail of both stale-install failures: what is wrong, and why its usual remedy is not.
+ *
+ * Phrased once because the trap is the same in both rules — the languages the gate can see belong
+ * to a version the repository does not ship — and because a message that only said "versions
+ * differ" would leave the reader free to go on editing the language list, which is the move that
+ * reintroduces NXSAT-732.
+ */
+function staleInstallRemedy(packageRoot, { locked, installed }) {
+  return (
+    `${packageRoot} is installed at ${installed}, but package-lock.json pins ${locked}. The ` +
+    'catalogues this gate can see are that stale version’s, not the ones the repository ' +
+    'ships, so it cannot judge which languages are served. Run `npm ci` and re-run the ' +
+    'guardrails. Do not reconcile the language list against what is on disk: a name listed in ' +
+    '`languages` wins over an alias, so listing one the locked version does not ship is a 404 ' +
+    'and a console error on every page load, which is NXSAT-732.'
+  );
+}
+
 /**
  * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
  *
@@ -4987,6 +5089,29 @@ function checkUpstreamCatalogueLanguages() {
             readable = false;
           }
           continue;
+        }
+
+        // The directory is there, so it is about to be listed — and that listing is only evidence
+        // about this repository if the package on disk is the one the lockfile pins. Checked here
+        // rather than once per rule because it is this read, not the folder's existence, that the
+        // verdict below rests on.
+        const versionedRoot = installedPackageRoot(inputDir);
+        if (versionedRoot !== null) {
+          const drift = installedVersionDrift(versionedRoot);
+          if (drift.state === 'drift') {
+            fail(
+              `${staleInstallRemedy(versionedRoot, drift)} (The ${where} asset rule copies ` +
+                `${inputDir} to "${served}", which is where "${folderPath}" is served from.)`,
+            );
+            readable = false;
+            continue;
+          }
+          if (drift.state === 'unknown') {
+            warn(
+              `the languages "${folderPath}" claims to ship were compared against the ` +
+                `${inputDir} on disk without confirming it is the locked version: ${drift.why}.`,
+            );
+          }
         }
 
         const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
@@ -6003,13 +6128,16 @@ function checkStorybookSatoriCatalogues() {
           }
           continue;
         }
-        if (!fileExists(dir)) {
-          // A mount above the catalogue path with no catalogue folder serves nothing there.
-          if (!exact) continue;
+        const mountedPackageRoot = () => {
           const segments = dir.split('/');
           const index = segments.indexOf('node_modules');
           const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
-          const packageRoot = index === -1 ? null : segments.slice(0, index + span).join('/');
+          return index === -1 ? null : segments.slice(0, index + span).join('/');
+        };
+        if (!fileExists(dir)) {
+          // A mount above the catalogue path with no catalogue folder serves nothing there.
+          if (!exact) continue;
+          const packageRoot = mountedPackageRoot();
           if (packageRoot && !fileExists(packageRoot)) {
             warn(
               `${packageRoot} is not installed, so the languages ${main} asks Satori for were ` +
@@ -6024,6 +6152,29 @@ function checkStorybookSatoriCatalogues() {
           judgeable = false;
           continue;
         }
+        // Same stale-install trap as `checkUpstreamCatalogueLanguages`, pointing the other way:
+        // this rule fails a language the folder does not serve, so a version that ships MORE
+        // catalogues than the locked one makes it pass a request that 404s on the real install.
+        // Lenience is the dangerous direction here, and it is invisible without this check.
+        const versionedRoot = mountedPackageRoot();
+        if (versionedRoot !== null) {
+          const drift = installedVersionDrift(versionedRoot);
+          if (drift.state === 'drift') {
+            fail(
+              `${staleInstallRemedy(versionedRoot, drift)} (${main}${where} serves ` +
+                `${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}.)`,
+            );
+            judgeable = false;
+            continue;
+          }
+          if (drift.state === 'unknown') {
+            warn(
+              `the languages ${main} asks Satori for were compared against the ${dir} on disk ` +
+                `without confirming it is the locked version: ${drift.why}.`,
+            );
+          }
+        }
+
         servedFrom.push(dir);
         for (const entry of readdirSync(join(repoRoot, dir))) {
           if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
@@ -11763,7 +11914,7 @@ function checkGeneratorsEsmSafe() {
           const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
           fail(
             `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
-              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
+              "this source with Node's native type stripping, where the module is ESM and it is " +
               'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
               'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
               'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +

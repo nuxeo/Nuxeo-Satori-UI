@@ -12281,11 +12281,36 @@ const GOOD_ENTRY = "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }"
 /** Quote a list of plain language codes into source literals. */
 const literals = (codes) => codes.map((code) => `'${code}'`);
 
-/** A vendor folder shipping exactly `de`, `en` and `fr`. */
+const VENDOR_PACKAGE_JSON = 'node_modules/@hylandsoftware/satori-ui/package.json';
+
+/** `package-lock.json` pinning the vendor package, which is what `npm ci` installs from. */
+const lockPinning = (version) =>
+  `${JSON.stringify(
+    {
+      name: 'agentic-ui',
+      lockfileVersion: 3,
+      packages: { 'node_modules/@hylandsoftware/satori-ui': { version } },
+    },
+    null,
+    2,
+  )}\n`;
+
+/** The vendor package's own manifest — the version actually unpacked into `node_modules`. */
+const vendorInstalled = (version) =>
+  `${JSON.stringify({ name: '@hylandsoftware/satori-ui', version }, null, 2)}\n`;
+
+/**
+ * A vendor folder shipping exactly `de`, `en` and `fr`, from a faithful install.
+ *
+ * The lockfile pin and the unpacked manifest agree, because the rule will not judge a directory
+ * listing against the loader until they do — see the stale-install controls below.
+ */
 const VENDOR_FILES = {
   [`${VENDOR_I18N}/de.json`]: '{}\n',
   [`${VENDOR_I18N}/en.json`]: '{}\n',
   [`${VENDOR_I18N}/fr.json`]: '{}\n',
+  'package-lock.json': lockPinning('1.0.0'),
+  [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
 };
 
 expectRed(
@@ -12310,6 +12335,96 @@ expectRed(
   },
   null,
   /`options` build copies a catalogue for fr[\s\S]*does not list it in `languages`/,
+);
+
+/* --- the stale install: the defect that failed `main` itself and blocked every push ---
+ *
+ * `node_modules` is not checked in, so the installed tree is an INPUT to the verdict above — and
+ * it was the one input this rule never validated. `@hylandsoftware/satori-ui` shipped bare-named
+ * catalogues beside the regional ones up to `1.0.0-alpha.201` and regional names only from
+ * `1.0.0`. With `1.0.0` locked and an alpha on disk, every bare name was "served" while a correct
+ * loader listed none of them, so the rule blamed the loader for a stale `npm install`.
+ *
+ * `.husky/pre-push` runs the guardrails, so that rejected every `git push` from every branch on a
+ * tree where nothing was wrong. And its remedy made it worse rather than better:
+ * `upstreamCatalogueFor` prefers a name in `languages` over an alias, so listing `de` makes the
+ * loader request `de.json`, which `1.0.0` does not ship — a 404 and a console error on every page
+ * load, with the `sat.*` keys gone. That is NXSAT-732, reintroduced by obeying this gate.
+ *
+ * The regex pins BOTH halves: the stale install is named, AND the message that would send the
+ * reader to edit `languages` is absent. A control asserting only the new text would have passed
+ * while the old advice was still printed beside it.
+ */
+expectRed(
+  'an installed version that is not the one the lockfile pins',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    // The list that is correct for the locked 1.0.0, and looks wrong against the alpha on disk.
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The same drift must not be excused by the loader happening to match what is on disk: the
+// listing is not evidence about this repository either way, so the rule cannot judge from it.
+expectRed(
+  'a stale install whose languages the loader does happen to match',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
+);
+
+// The false-positive half: a faithful install must be judged exactly as before. Without this,
+// "fail when the versions differ" would have been free to fail every correct tree too.
+falsePositiveControls += 1;
+expectGreen(
+  'an installed version that matches the lockfile pin',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// A prerelease pin is not drift when it is what the lockfile asks for — the rule compares the two
+// versions, it does not prefer the higher or the stabler one.
+falsePositiveControls += 1;
+expectGreen(
+  'a prerelease installed because the lockfile pins it',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    'package-lock.json': lockPinning('1.0.0-alpha.171'),
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// And when the comparison cannot be made at all the rule still judges, but says that it did so
+// on trust. Staying silent here is how this blind spot survived in the first place.
+expectWarn(
+  'a lockfile with no entry for the vendor package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    'package-lock.json': `${JSON.stringify({ lockfileVersion: 3, packages: {} }, null, 2)}\n`,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /without confirming it is the locked version: package-lock\.json has no entry for node_modules\/@hylandsoftware\/satori-ui/,
 );
 
 // The pre-fix shape: a folder with no language list at all, which is what made every language
@@ -12726,6 +12841,47 @@ expectRed(
   },
   null,
   /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)[\s\S]*serves no en\.json/,
+);
+
+/* --- the same stale install, pointing the other way ---
+ *
+ * This rule fails a language the served folder does NOT ship, so an install that ships MORE
+ * catalogues than the locked version makes it green for a request that 404s on a faithful one.
+ * Lenience is the dangerous direction here: the control directly above is exactly the defect
+ * being hidden, and the only difference is an `en.json` left over from an older install.
+ *
+ * So the drift check belongs in both rules, and it has to be the whole verdict rather than a
+ * warning beside a green one — a gate that says "probably fine" about an input it could not read
+ * is the shape this repository has paid for three times.
+ */
+expectRed(
+  'a stale install whose extra catalogue hides a doomed Storybook request',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    // The leftover the alpha shipped, which 1.0.0 does not.
+    [`${SB_VENDOR}/en.json`]: '{}\n',
+    'package-lock.json': lockPinning('1.0.0'),
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// And a faithful install is judged as before, so the drift check cannot fail every Storybook.
+falsePositiveControls += 1;
+expectGreen(
+  'a Storybook asking only for languages a faithfully installed folder ships',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    'package-lock.json': lockPinning('1.0.0'),
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
 );
 
 // The active language is requested as well as the fallback, so fixing only one is still red.
