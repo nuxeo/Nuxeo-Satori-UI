@@ -117,10 +117,6 @@ const convertedInto = (conversion: Conversion, path: string): Set<string> =>
  */
 const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'picture', 'thumbnail'];
 
-/**
- * The first `visibleWhen` a converted file carries, in a layout's fields or an action, with a copy
- * of its file and the object holding it in that copy.
- */
 /** A rule the conversion carries: the file, the object holding it and where it sits. */
 export interface RuleHolder {
   readonly path: string;

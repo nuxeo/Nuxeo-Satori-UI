@@ -1253,15 +1253,11 @@ describe('M2: conditions become rules, held by truth tables', () => {
   it('writes nested conditions as one core.every, and holds it to both', () => {
     const input = prepare({
       bundle: {
-        // A view that declares the user its group filter reads.
+        // A view that sets the user its group filter reads, as a nuxeo-connection does.
         [view]: files[view]
           .replace(
-            'document: { type: Object }',
-            'document: { type: Object }, user: { type: Object }',
-          )
-          .replace(
             '<nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
-            '<nuxeo-filter document="[[document]]" user="[[user]]" group="adjusters"><template><nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
+            '<nuxeo-connection user="{{user}}"></nuxeo-connection><nuxeo-filter document="[[document]]" user="[[user]]" group="adjusters"><template><nuxeo-filter document="[[document]]" type="Claim">\n      <template>',
           )
           .replace(
             '</template>\n    </nuxeo-filter>',
@@ -1321,16 +1317,11 @@ describe('M2: conditions become rules, held by truth tables', () => {
   it('carries a group condition to the home and the menu, and reports one that reads a document there', () => {
     const groups = prepare({
       bundle: {
-        // A home of the customer's own, which declares the user its filter reads.
-        [home]: files[home]
-          .replace(
-            '</template>\n</dom-module>',
-            "</template>\n  <script>Polymer({ is: 'nuxeo-home', properties: { user: { type: Object } } });</script>\n</dom-module>",
-          )
-          .replace(
-            '<nuxeo-card heading="My tasks">',
-            '<nuxeo-filter user="[[user]]" group="supervisors"><template><nuxeo-card heading="Supervised"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter><nuxeo-card heading="My tasks">',
-          ),
+        // A home of the customer's own, which sets the user its filter reads.
+        [home]: files[home].replace(
+          '<nuxeo-card heading="My tasks">',
+          '<nuxeo-connection user="{{user}}"></nuxeo-connection><nuxeo-filter user="[[user]]" group="supervisors"><template><nuxeo-card heading="Supervised"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter><nuxeo-card heading="My tasks">',
+        ),
         [bundle]: files[bundle].replace(
           '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
           '<template><nuxeo-filter user="[[user]]" group="adjusters"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
@@ -1410,6 +1401,110 @@ describe('M2: where a condition cannot travel', () => {
   const files = syntheticBundleFiles();
   const outcome = (input: HarnessInput, id: string) =>
     input.conversion.report.constructs.find((entry) => entry.id === id);
+
+  it('takes a user only from what sets it, not from a declaration or a comment', () => {
+    const input = prepare({
+      bundle: {
+        [view]: files[view]
+          .replace(
+            'document: { type: Object }',
+            'document: { type: Object }, user: { type: Object }',
+          )
+          .replace(
+            '<nuxeo-filter document="[[document]]" type="Claim">',
+            '<!-- <nuxeo-connection user="{{user}}"></nuxeo-connection> --><nuxeo-filter user="[[user]]" group="adjusters">',
+          ),
+      },
+    });
+    expect(outcome(input, `condition:${view}#1`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/which its file does not hold/),
+    });
+    expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
+      'cl:reserve',
+    );
+    expect(run(input, 5)?.findings).toEqual([]);
+  });
+
+  it('holds a field to the condition around where it shows its property, not around a hint', () => {
+    const shown = (body: string) => {
+      const input = prepare({
+        bundle: {
+          [view]: files[view].replace(
+            '</template>\n  <script>',
+            `${body}\n  </template>\n  <script>`,
+          ),
+        },
+      });
+      const file = input.conversion.app['layouts/Claim/view.layout.json'] as {
+        cards: { fields: unknown[] }[];
+      };
+      return {
+        input,
+        field: file.cards[0].fields.find((field) => JSON.stringify(field).includes('cl:adjuster')),
+      };
+    };
+    const hint = shown(
+      '<div role="widget"><label>Adjuster</label><nuxeo-filter document="[[document]]" permission="Remove"><template><span>Ask a supervisor</span></template></nuxeo-filter><div>[[document.properties.cl:adjuster]]</div></div>',
+    );
+    expect(hint.field).toEqual({ field: 'cl:adjuster', label: 'Adjuster' });
+    expect(run(hint.input, 5)?.findings).toEqual([]);
+    const value = shown(
+      '<div role="widget"><label>Adjuster</label><nuxeo-filter document="[[document]]" permission="Remove"><template><div>[[document.properties.cl:adjuster]]</div></template></nuxeo-filter></div>',
+    );
+    expect(value.field).toMatchObject({ field: 'cl:adjuster', visibleWhen: 'app.rules.canRemove' });
+    expect(run(value.input, 5)?.findings).toEqual([]);
+    // Shown in two places under two conditions: which one Web UI shows is either's, so a person decides.
+    const twice = shown(
+      '<div role="widget"><label>Adjuster</label><nuxeo-filter document="[[document]]" permission="Remove"><template><div>[[document.properties.cl:adjuster]]</div></template></nuxeo-filter><nuxeo-filter document="[[document]]" state="open"><template><div>[[document.properties.cl:adjuster]]</div></template></nuxeo-filter></div>',
+    );
+    expect(twice.field).toBeUndefined();
+    expect(run(twice.input, 5)?.findings).toEqual([]);
+    // Shown under a filter, and again under one inside it: the outer one is enough.
+    const nested = shown(
+      '<div role="widget"><label>Adjuster</label><nuxeo-filter document="[[document]]" permission="Remove"><template><div>[[document.properties.cl:adjuster]]</div><nuxeo-filter document="[[document]]" state="open"><template><div>[[document.properties.cl:adjuster]]</div></template></nuxeo-filter></template></nuxeo-filter></div>',
+    );
+    expect(nested.field).toMatchObject({ visibleWhen: 'app.rules.canRemove' });
+    expect(run(nested.input, 5)?.findings).toEqual([]);
+    // Text a dom-if holds shows only while its `if` passes, so the field waits on its rule.
+    const domIf = shown(
+      '<div role="widget"><label>Adjuster</label><template is="dom-if" if="[[hasFacet(document, \'Versionable\')]]">[[document.properties.cl:adjuster]]</template></div>',
+    );
+    expect(domIf.field).toBeUndefined();
+    expect(
+      domIf.input.conversion.report.constructs.find(
+        (entry) => entry.kind === 'layout-field' && entry.property === 'cl:adjuster',
+      ),
+    ).toMatchObject({ outcome: 'proposed' });
+  });
+
+  it('holds an action to the condition around its button, and a card to the one around its list', () => {
+    const input = prepare({
+      bundle: {
+        [bundle]: files[bundle].replace(
+          'params=\'{"comment": "Approved in Web UI"}\'></nuxeo-operation-button>',
+          'params=\'{"comment": "Approved in Web UI"}\'></nuxeo-operation-button><nuxeo-filter document="[[document]]" type="Claim"><template><paper-tooltip>Claims only</paper-tooltip></template></nuxeo-filter>',
+        ),
+        [home]: files[home].replace(
+          '<nuxeo-card heading="My tasks">',
+          '<nuxeo-card heading="Hinted"><nuxeo-filter user="[[user]]" group="g"><template><span>For g</span></template></nuxeo-filter><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card>' +
+            // A filter of no test passes for everyone.
+            '<nuxeo-filter><template><nuxeo-card heading="Open"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card></template></nuxeo-filter>' +
+            '<nuxeo-card heading="My tasks">',
+        ),
+      },
+    });
+    const actions = (input.conversion.app['actions.json'] as { actions: { id: string }[] }).actions;
+    expect(actions.find((action) => action.id.endsWith('approveClaim'))).not.toHaveProperty(
+      'visibleWhen',
+    );
+    const cards = (input.conversion.app['home.json'] as { cards: { queue?: string }[] }).cards;
+    for (const queue of ['home-3-claims', 'home-4-claims']) {
+      expect(cards.find((card) => card.queue === queue)).not.toHaveProperty('visibleWhen');
+      expect(input.conversion.app[`queues/${queue}.json`]).not.toHaveProperty('visibleWhen');
+    }
+    for (const number of [2, 5, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+  });
 
   it('keeps the field that shows a property to everyone, and reports a copy under a condition', () => {
     const input = prepare({

@@ -72,9 +72,13 @@ export function checkConditions({
     const decision = decideCondition(condition);
     if (decision.kind === 'reported') continue;
     const table = chainTable([condition], decision.rule);
-    if (table.unreadable || table.disagree.length > 0)
+    if (table.unreadable)
       findings.push(
-        `condition ${condition.index + 1} of ${condition.path}: its rule decides otherwise than Web UI on ${table.disagree.length} of ${table.rows} rows`,
+        `condition ${condition.index + 1} of ${condition.path}: the truth table cannot read its rule, so it cannot be held to Web UI's condition`,
+      );
+    else if (table.disagree.length > 0)
+      findings.push(
+        `condition ${condition.index + 1} of ${condition.path}: its rule decides otherwise than Web UI on ${table.disagree.length} of ${table.rows} rows, such as ${describeSituation(table.disagree[0])}`,
       );
   }
 
@@ -129,6 +133,9 @@ export function checkConditions({
     if (!card.conditional || queue === undefined) return;
     const owner = lists.get(path);
     if (owner && (owner.kind !== 'card' || owner.card !== card)) return;
+    // A condition of no test passes for everyone, as the home card's does.
+    const guard = cardGuard(inventory, card);
+    if (guard.kind === 'rule' && guard.rule === 'core.true') return;
     if (!isRecord(queue) || !('visibleWhen' in queue))
       findings.push(
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,

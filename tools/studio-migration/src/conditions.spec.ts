@@ -152,7 +152,9 @@ describe('what a condition becomes', () => {
     ])
       expect(decideCondition(domIf(free))).toMatchObject({
         kind: 'reported',
-        note: expect.stringMatching(/no Polymer binding, so Web UI always shows what it holds/),
+        note: expect.stringMatching(
+          /no single Polymer binding, so it is a string, and Web UI always shows/,
+        ),
       });
     expect(decideCondition(domIf('document.isFolderish'))).toMatchObject({
       kind: 'reported',
@@ -212,6 +214,55 @@ describe('what a condition becomes', () => {
     expect(webUiPasses(filter({ type: ' ' }), situation({}))).toBe(false);
   });
 
+  it("reads a dom-if's `if` as Polymer binds it: either bracket, nothing around it, false when absent", () => {
+    const raw = (attributes: Record<string, string>): Condition => ({
+      ...domIf(''),
+      attributes: { is: 'dom-if', ...attributes },
+    });
+    // `{{…}}` binds as `[[…]]` does.
+    expect(decideCondition(raw({ if: "{{hasFacet(document, 'X')}}" }))).toMatchObject({
+      kind: 'proposed',
+      rule: { type: 'app.rules.hasFacet', parameters: ['X'] },
+    });
+    // Spacing around the binding makes it compound: a string, always true.
+    const spaced = raw({ if: " [[hasFacet(document, 'X')]] " });
+    expect(decideCondition(spaced)).toMatchObject({
+      kind: 'reported',
+      note: expect.stringMatching(/always shows/),
+    });
+    expect(webUiPasses(spaced, situation({}))).toBe(true);
+    // No `if` at all: it is false, and nothing shows.
+    expect(decideCondition(raw({}))).toMatchObject({
+      kind: 'reported',
+      note: expect.stringMatching(/no `if`, so Web UI never shows what it holds/),
+    });
+    expect(webUiPasses(raw({}), situation({ facets: ['X'] }))).toBe(false);
+  });
+
+  it('reports ! before indexOf, which JavaScript applies before the comparison, so it is always true', () => {
+    for (const comparison of ['!== -1', '>= 0', '> -1']) {
+      const source = `!document.facets.indexOf('X') ${comparison}`;
+      expect(parseExpression(source, { bare: false })).toMatchObject({
+        problem: expect.stringMatching(/always true/),
+      });
+      for (const facets of [['X'], [], ['Y', 'X']])
+        expect(webUiPasses(filter({ expression: source }), situation({ facets }))).toBe(true);
+    }
+    // `!` before includes negates the call itself.
+    expect(parseExpression("!document.facets.includes('X')", { bare: false })).toMatchObject({
+      rule: { type: 'core.not', parameters: [{ type: 'app.rules.hasFacet', parameters: ['X'] }] },
+    });
+  });
+
+  it('reports a condition whose truth table is too large to run, rather than writing its rule', () => {
+    const many = Array.from({ length: 18 }, (_, index) => `F${index}`).join(', ');
+    expect(decideCondition(filter({ facet: many }))).toMatchObject({
+      kind: 'reported',
+      note: expect.stringMatching(/would run 262144 rows, more than the 200000/),
+    });
+    expect(decideCondition(filter({ facet: 'F1, F2' }))).toMatchObject({ kind: 'rule' });
+  });
+
   it('reports a group test whose user its file does not hold', () => {
     expect(decideCondition({ ...filter({ group: 'g' }), userInScope: false })).toMatchObject({
       kind: 'reported',
@@ -235,6 +286,15 @@ describe('the guard of what sits in several conditions', () => {
           { type: 'app.rules.inGroup', parameters: ['g'] },
         ],
       },
+    });
+    // Each table fits alone, and the two together would not.
+    const facets = (from: number) =>
+      Array.from({ length: 9 }, (_, index) => `F${from + index}`).join(', ');
+    const wide = filter({ facet: facets(0) }, 0);
+    const wider = filter({ facet: facets(9) }, 1, 0);
+    expect(guardOfSet(inventoryOf([wide, wider]), 'layout.html', [0, 1])).toMatchObject({
+      kind: 'reported',
+      note: expect.stringMatching(/together would run \d+ rows/),
     });
     const beside = filter({ type: 'Claim' }, 1);
     expect(guardOfSet(inventoryOf([outer, beside]), 'layout.html', [0, 1])).toMatchObject({
@@ -286,6 +346,16 @@ describe('the truth tables', () => {
         .disagree,
     ).toEqual([expect.objectContaining({ groups: ['h'] })]);
     expect(truthTable(condition, 'app.rules.someOther').unreadable).toBe(true);
+    // A permission rule written as an object is the same rule, and its permissions are rows too.
+    expect(
+      truthTable(filter({ type: 'File' }), {
+        type: 'core.some',
+        parameters: [
+          { type: 'app.rules.isType', parameters: ['File'] },
+          { type: 'app.rules.canWrite', parameters: [] },
+        ],
+      }).disagree.length,
+    ).toBeGreaterThan(0);
     // A permission rule the condition does not name is tabled by its own permissions.
     expect(
       truthTable(filter({ type: 'File' }), {

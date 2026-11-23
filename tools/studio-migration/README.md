@@ -277,22 +277,35 @@ WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren`
   - a filter given another document than the open record;
   - a test of spacing alone, which never passes in Web UI;
   - a group test given no user, or given a user its file does not hold, which never passes either.
-    A bundle holds one, and so does a file whose script declares `user`; a document layout and
-    Web UI's stock home declare none.
+    A bundle holds one, from the model Web UI stamps slot contributions with. A document layout is
+    given only its document, and the stock home nothing, so there `user` is set only by what
+    writes it, a `<nuxeo-connection user="{{user}}">`. Declaring the property sets nothing;
+  - a condition whose truth table would run more than 200,000 rows, which could not hold its rule
+    to it.
 - **JavaScript in a known pattern is proposed**, with its rule in the report for a person to
   accept. What it guards is written only once they do. JavaScript sits in two places:
-  - a `dom-if`'s `if`, which Polymer binds as one path or one call. One call of a filter function
-    on `document` or `user`, such as `[[!hasFacet(document, 'Folderish')]]`, is a known pattern.
-    `&&`, `||` or a method of a value is no binding: Polymer leaves the text, which is always
-    true, so Web UI always shows what the `dom-if` holds, and that is reported. So is a path, such
-    as `[[document.isFolderish]]`;
-  - a filter's `expression`, which runs with `this` the filter: `this.` calls of its functions, or
-    `document.facets.indexOf('X') !== -1`, with `!`, joined by `&&` or by `||` but not both. A
-    call without `this.` throws, so the filter never passes, and that is reported.
+  - a `dom-if`'s `if`, which Polymer binds as one path or one call, in `[[…]]` or `{{…}}`, with
+    nothing else in the attribute. One call of a filter function on `document` or `user`, such as
+    `[[!hasFacet(document, 'Folderish')]]`, is a known pattern. Text around the binding, even
+    spacing, makes it a compound binding, a string; `&&`, `||` or a method of a value is no
+    binding at all, and the text stays. Either way `if` is a non-empty string, so Web UI always
+    shows what the `dom-if` holds, and that is reported. So is a path, such as
+    `[[document.isFolderish]]`, and a `dom-if` with no `if`, which shows nothing;
+  - a filter's `expression`, which runs with `this` the filter: `this.` calls of its functions,
+    `document.facets.indexOf('X') !== -1` and `document.facets.includes('X')`, each optionally
+    negated, joined by `&&` or by `||` but not both. A call without `this.` throws, so the filter
+    never passes, and that is reported. So is `!` before `indexOf`, which JavaScript applies to
+    the index before the comparison, so the expression is always true.
 
   `hasPermission` is a known pattern only for a permission one rule holds alone: `Remove` or
   `AddChildren`. Any other JavaScript is reported.
 
+- **What a condition guards** is what it hides:
+  - a field, where it shows its property: an attribute or text binding it. A condition around a
+    hint inside the field guards nothing. A field showing its property in two places under
+    conditions side by side is reported;
+  - an action, by its operation button, and a menu entry, by its menu icon;
+  - a home card, by its page provider and its table, which its list needs.
 - **Where a rule travels:**
   - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
   - on the home and the menu, no record is open, so only a rule on the user travels;
@@ -308,14 +321,14 @@ is reported: `app.json`'s branding takes a logo and a favicon only.
 
 Every construct of the package is in the report once, with one of these outcomes:
 
-| Outcome     | Meaning                                                                                   |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| `converted` | Done, with where it went                                                                  |
-| `proposed`  | An agent proposes it, and a person accepts it                                             |
-| `reported`  | It does not migrate, with why                                                             |
-| `generated` | Studio's own packaging, records and templates                                             |
-| `server`    | It stays on the server in the Studio package, and the new app reads it                    |
-| `pending`   | A later phase converts it, and the note says which: conditions and tabs in M2, code in M3 |
+| Outcome     | Meaning                                                                                                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `converted` | Done, with where it went                                                                                                                           |
+| `proposed`  | An agent proposes it, and a person accepts it                                                                                                      |
+| `reported`  | It does not migrate, with why                                                                                                                      |
+| `generated` | Studio's own packaging, records and templates                                                                                                      |
+| `server`    | It stays on the server in the Studio package, and the new app reads it                                                                             |
+| `pending`   | A later phase converts it, and the note says which: tabs in M2, a version 1 field under a condition once the app draws version 2 forms, code in M3 |
 
 A `reported` construct may still have been written, as a field version 1 cannot show as Web UI
 does is: its `to` then says where.
@@ -431,17 +444,16 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `drop-menu-entry`          | 7     | Drops an entry of the menu                                            |
 | `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
 
-**On the sample**, every one of the 23 controls was applied to its conversion with `mutate` and
+**On the sample**, every one of the 25 controls was applied to its conversion with `mutate` and
 checked. The 20 that find something to break each fail their check, with a finding of their own,
-`wrong-home-queue` and `drop-menu-entry` among them. The other three have nothing to break there,
-and say so: `widen-to-everyone` and `widen-column-to-everyone`,
+`wrong-home-queue` and `drop-menu-entry` among them. The other five have nothing to break there,
+and say so: `widen-to-everyone`, `widen-column-to-everyone`, `invert-rule` and `drop-rule`,
 because the sample has no condition, and `bind-other-operation`, because its one button runs no
-operation. The tests apply all three to the made-up package, which has them.
+operation. The tests apply all five to the made-up package, which has them.
 
 Section 7's "invert a rule" is `invert-rule`. It and `drop-rule` take the first rule the
-conversion carries, on a layout field, an action, a home card, a menu entry or a queue. The sample
-has no condition, so both have nothing to break there. The tests apply both to the made-up
-package, and also drop and invert each of its rules in turn: check 5 fails for every one.
+conversion carries, on a layout field, an action, a home card, a menu entry or a queue. The tests
+also drop and invert each rule of the made-up package in turn, and check 5 fails for every one.
 
 ## Tests
 

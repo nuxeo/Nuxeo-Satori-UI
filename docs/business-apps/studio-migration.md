@@ -275,9 +275,9 @@ all of them on every change:
 - **For check 10:** name a widget the platform does not have.
 
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
-something to break fails its check too. The three that do not, `widen-to-everyone`,
-`widen-column-to-everyone` and `bind-other-operation`, find no condition and no operation button
-to break there, and say so.
+something to break fails its check too. The five that do not, `widen-to-everyone`,
+`widen-column-to-everyone`, `invert-rule`, `drop-rule` and `bind-other-operation`, find no
+condition and no operation button to break there, and say so.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -361,12 +361,14 @@ These sit inside the [development plan](development-plan.md):
   decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
   one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
   calls and `document.facets.indexOf(…)` in a filter's `expression`. Anything else is reported.
-  The rule travels as the `visibleWhen` of a view field, an action, a home card, its queue, or a
-  menu entry. Check 5 holds every rule to its condition's truth table, without a server.
+  The rule travels as the `visibleWhen` of what the condition hides: a view field where it shows
+  its property, an action by its button, a menu entry by its icon, and a home card and its queue
+  by its list. Check 5 holds every rule to its condition's truth table, without a server.
 - **Reported, against the table above:** a `path` test, which no registered rule makes, and
   `hasPermission` for a permission no rule holds alone, such as `Write`. A group test whose file
-  holds no user is reported too: a document layout and the stock home have none, so it never
-  passes in Web UI.
+  holds no user is reported too: a document layout and the stock home are given none, so it never
+  passes in Web UI. So is `!document.facets.indexOf(…) !== -1`, which is always true, and a
+  condition whose truth table would be too large to run.
 - **Not yet:**
   - task forms, tabs and layout blocks;
   - conditions on version 1 fields, list columns and search tables;

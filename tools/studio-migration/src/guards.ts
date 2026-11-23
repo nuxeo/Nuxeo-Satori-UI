@@ -6,7 +6,13 @@
  * package to hold the file to it; the truth tables then hold the rule to Web UI's own reading of
  * the conditions.
  */
-import { decideCondition, type ConditionDecision, type Rule } from './conditions';
+import {
+  decideCondition,
+  MAX_ROWS,
+  tableSize,
+  type ConditionDecision,
+  type Rule,
+} from './conditions';
 import type { Condition, Inventory } from './inventory';
 
 export type Guard =
@@ -72,6 +78,14 @@ export function guardOf(conditions: readonly Condition[]): Guard {
       : rules.length === 1
         ? rules[0]
         : { type: 'core.every', parameters: rules };
+  // Each condition's own table fits; the table of them all together may not.
+  const rows = conditions.length > 1 ? tableSize(conditions, rule) : 0;
+  if (rows > MAX_ROWS)
+    return {
+      kind: 'reported',
+      note: `The truth table of its conditions together would run ${rows} rows, more than the ${MAX_ROWS} one runs, so its rule could not be held to them: a person checks it`,
+      conditions,
+    };
   return {
     kind: 'rule',
     rule,

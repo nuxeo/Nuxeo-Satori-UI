@@ -6,8 +6,10 @@
  *   predicates left empty, as Web UI's results do before anyone searches. The form and its fields
  *   are reported: letting a person fill them in needs a form the queue does not have yet.
  * - **A queue is a table.** A grid of thumbnails or a justified grid is reported.
- * - **What shows under a condition** waits for M2, as a layout's field does: a column in a
- *   condition is left out, and a table in one leaves the whole list pending.
+ * - **What shows under a condition.** A dashboard card under a rule on the user carries it, and so
+ *   does its queue (`guards.ts`); one whose rule reads a document is reported, as no record is
+ *   open on the home. A column in a condition is left out, and a table in one gets no queue: both
+ *   are reported, since M2 converts no condition there, and neither shows to everyone meanwhile.
  * - **A dashboard card** whose list becomes a queue is a card of `home.json`, naming the queue
  *   (`convert-home.ts`). The tasks and recently viewed cards wait: `home.json` has no card for
  *   either yet.

@@ -9,8 +9,9 @@
  * - **The left menu's entries** that open a search screen become entries of `navigation.json`
  *   (`convert-home.ts`); **tabs** wait for M2.
  *
- * A contribution that sits in a condition waits for M2, which converts the condition: converting
- * it alone would show it to everyone.
+ * A contribution that sits in a condition carries its rule as the `visibleWhen` of what it
+ * becomes, where that can hold one: an action, or a menu entry. Elsewhere it is pending, because
+ * converting it alone would show it to everyone.
  */
 import { own, slotEntry, type Catalogue } from './catalogue';
 import type { Rule } from './conditions';

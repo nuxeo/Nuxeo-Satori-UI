@@ -59,11 +59,13 @@ export interface LayoutField {
   readonly required: boolean;
   /** The element's attributes, which give its widget's parameters, such as `directory-name`. */
   readonly attributes: Readonly<Record<string, string>>;
-  /** The condition it sits in, by its place among its file's conditions, from 0; `null` for none. */
+  /** The first of `conditions`, by its place among its file's conditions, from 0; `null` for none. */
   readonly condition: number | null;
   /**
-   * Every condition it sits in or holds: the ones around it, and any inside it, around the element
-   * it may take its binding from. What it shows passes them all.
+   * The conditions it shows its property under: the innermost one around each place it shows it,
+   * an attribute or text binding it, reduced to the one all those places sit in when one place
+   * sits there alone. Places side by side give them all. A field that binds nothing keeps every
+   * condition it sits in or holds.
    */
   readonly conditions: readonly number[];
 }
@@ -83,9 +85,10 @@ export interface Condition {
   readonly parent: number | null;
   /**
    * True when a `[[user]]` binding in its file reaches the signed-in user. Web UI stamps a slot
-   * contribution with a model that holds the user; a document layout is given `{ document }` alone
-   * (`nuxeo-document-layout`), so there `user` is the host's own property, which Studio's template
-   * does not declare.
+   * contribution with a shared model that holds the user (`nuxeo-app.js`, `setSharedModel`). A
+   * document layout is given `{ document }` alone (`nuxeo-layout`), and `nuxeo-home` is stamped
+   * with nothing, so there `user` is the host's own property, set only by what writes it: a
+   * `<nuxeo-connection user="{{user}}">`, whose `user` notifies. Declaring the property sets nothing.
    */
   readonly userInScope: boolean;
 }
@@ -161,7 +164,10 @@ export interface SlotContribution {
     readonly element: string;
     readonly attributes: Readonly<Record<string, string>>;
   }[];
-  /** The conditions its template holds, by their place among the file's conditions. */
+  /**
+   * The conditions around its operation buttons and menu icons, which become its action or its
+   * entry, by their place among the file's conditions; with neither, every condition it holds.
+   */
   readonly conditions: readonly number[];
 }
 
@@ -180,7 +186,10 @@ export interface DashboardCard {
   readonly operation: string | null;
   /** True when it sits in a condition or holds one. */
   readonly conditional: boolean;
-  /** The conditions it sits in or holds, by their place among the dashboard's conditions. */
+  /**
+   * The conditions around its page provider and its table, both of which its list needs, by their
+   * place among the dashboard's conditions; with neither, every condition it sits in or holds.
+   */
   readonly conditions: readonly number[];
 }
 
@@ -330,6 +339,16 @@ export function inventory(pkg: StudioPackage): Inventory {
   const conditions: Condition[] = [];
   /** The condition each element of a file sits in, for the files read so far. */
   const within = new Map<Element, number>();
+  /** Each condition element's own place among its file's conditions. */
+  const conditionAt = new Map<Element, number>();
+  /** Where conditions sit in the file at `path`, for what is shown under them. */
+  const placesIn = (path: string): Places => ({
+    within,
+    conditionAt,
+    parentOf: (index) =>
+      conditions.find((condition) => condition.path === path && condition.index === index)
+        ?.parent ?? null,
+  });
   /**
    * Parses a Web UI file, counts its custom elements, records its scripts and conditions, and
    * hands its document on.
@@ -338,9 +357,9 @@ export function inventory(pkg: StudioPackage): Inventory {
     const text = read(path);
     const document = parseHtml(text);
     conditions.push(
-      ...conditionsOf(path, document, within).map((condition) => ({
+      ...conditionsOf(path, document, within, conditionAt).map((condition) => ({
         ...condition,
-        userInScope: path.endsWith('-bundle.html') || /\buser\s*:\s*\{/.test(text),
+        userInScope: path.endsWith('-bundle.html') || writesUser(document),
       })),
     );
     let index = 0;
@@ -387,7 +406,7 @@ export function inventory(pkg: StudioPackage): Inventory {
       element: moduleId(document, path),
       docType: annotation(text, 'doctype'),
       mode: /-([a-z]+)-layout\.html$/.exec(path)?.[1] ?? '',
-      fields: fieldsOf(document, within),
+      fields: fieldsOf(document, placesIn(path)),
     };
   });
 
@@ -403,7 +422,7 @@ export function inventory(pkg: StudioPackage): Inventory {
         element: moduleId(document, path),
         provider: annotation(text, 'search'),
         part,
-        fields: fieldsOf(document, within),
+        fields: fieldsOf(document, placesIn(path)),
         columns: columns.length,
         columnDetails: columns.map((column) => columnOf(column, within)),
         views: all
@@ -453,13 +472,13 @@ export function inventory(pkg: StudioPackage): Inventory {
           parts: inner
             .filter((part) => isCustomElement(part) && !CONDITIONS.has(part.localName))
             .map((part) => ({ element: part.localName, attributes: attributesOf(part) })),
-          conditions: [
-            ...new Set(
-              [element, ...inner]
-                .map((part) => within.get(part))
-                .filter((index): index is number => index !== undefined),
-            ),
-          ],
+          // What it becomes is its operation button or its menu icon: the conditions around that,
+          // not one around some other part of it, such as a tooltip.
+          conditions: conditionsAround(
+            [element, ...inner],
+            ['nuxeo-operation-button', 'nuxeo-menu-icon'],
+            within,
+          ),
         };
       }),
   );
@@ -502,13 +521,12 @@ export function inventory(pkg: StudioPackage): Inventory {
             inner.find((element) => element.localName === 'nuxeo-operation')?.getAttribute('op') ??
             null,
           conditional: [card, ...elementsOf(card)].some((element) => within.has(element)),
-          conditions: [
-            ...new Set(
-              [card, ...elementsOf(card)]
-                .map((element) => within.get(element))
-                .filter((index): index is number => index !== undefined),
-            ),
-          ],
+          // Its list shows where its page provider and its table both do.
+          conditions: conditionsAround(
+            [card, ...elementsOf(card)],
+            ['nuxeo-page-provider', 'nuxeo-data-table'],
+            within,
+          ),
         };
       });
     dashboard = { path: dashboardPath, cards };
@@ -594,42 +612,129 @@ function markupOf(element: Element): string {
   return element.outerHTML.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
+/** Where a file's conditions sit: around which elements, each one's own place, and its parent. */
+interface Places {
+  readonly within: ReadonlyMap<Element, number>;
+  readonly conditionAt: ReadonlyMap<Element, number>;
+  readonly parentOf: (index: number) => number | null;
+}
+
 /** The fields of a layout: its elements marked `role="widget"`. */
-function fieldsOf(document: Document, within: ReadonlyMap<Element, number>): LayoutField[] {
+function fieldsOf(document: Document, places: Places): LayoutField[] {
   return elementsOf(document)
     .filter((element) => element.getAttribute('role') === 'widget')
-    .map((element) => ({
-      element: element.localName,
-      binding: bindingOf(element),
-      label: element.getAttribute('label') ?? childLabel(element),
-      required: element.hasAttribute('required'),
-      attributes: attributesOf(element),
-      condition: conditionOfField(element, within),
-      conditions: [
-        ...new Set(
-          [element, ...elementsOf(element)]
-            .map((inner) => within.get(inner))
-            .filter((index): index is number => index !== undefined),
-        ),
-      ],
-    }));
+    .map((element) => {
+      const binding = bindingOf(element);
+      const shown = binding === null ? [] : placesShowing(element, binding, places);
+      // A field that binds nothing keeps every condition it sits in or holds: it is reported.
+      const conditions =
+        shown.length > 0 ? shownUnder(shown, places.parentOf) : heldConditions(element, places);
+      return {
+        element: element.localName,
+        binding,
+        label: element.getAttribute('label') ?? childLabel(element),
+        required: element.hasAttribute('required'),
+        attributes: attributesOf(element),
+        condition: conditions[0] ?? null,
+        conditions,
+      };
+    });
+}
+
+/** Every condition an element sits in or holds. */
+function heldConditions(element: Element, places: Places): number[] {
+  return [
+    ...new Set(
+      [element, ...elementsOf(element)]
+        .map((inner) => places.within.get(inner))
+        .filter((index): index is number => index !== undefined),
+    ),
+  ];
 }
 
 /**
- * The condition a field shows under: the one it sits in, or else the first one inside it. A
- * wrapper such as `<div role="widget">` can take its binding from an element inside a
- * `nuxeo-filter` it holds, and then shows that value only while the filter passes. Any condition
- * inside the field counts, whether or not the binding comes from within it: a field left pending
- * by mistake is a decision for M2, where one shown to everyone by mistake is widened access.
+ * The innermost condition around each place a field shows its property, `null` for none: an
+ * attribute that binds it, or text that does, including text a template holds, which sits in that
+ * template's condition, or in what the template sits in.
  */
-function conditionOfField(field: Element, within: ReadonlyMap<Element, number>): number | null {
-  const own = within.get(field);
-  if (own !== undefined) return own;
-  for (const inner of elementsOf(field)) {
-    const index = within.get(inner);
-    if (index !== undefined) return index;
-  }
-  return null;
+function placesShowing(field: Element, binding: string, places: Places): (number | null)[] {
+  const escaped = binding.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
+  const found: (number | null)[] = [];
+  const around = (element: Element): number | null => places.within.get(element) ?? null;
+  const binds = (element: Element): boolean =>
+    Array.from(element.attributes).some((attribute) => pattern.test(attribute.value));
+  const visit = (node: Element | DocumentFragment, host: Element): void => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        if (pattern.test(child.textContent ?? ''))
+          found.push(places.conditionAt.get(host) ?? around(host));
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      const element = child as Element;
+      if (binds(element)) found.push(around(element));
+      visit(element, element);
+      const content = (element as Partial<HTMLTemplateElement>).content;
+      if (element.localName === 'template' && content) visit(content, element);
+    }
+  };
+  if (binds(field)) found.push(around(field));
+  visit(field, field);
+  return found;
+}
+
+/**
+ * The conditions a field shows its property under, from where it shows it: it shows while any of
+ * those places does. One place in no condition shows it to everyone. A place every other sits
+ * inside gives the guard alone. Otherwise the places sit side by side, and all are given, for the
+ * guard to report.
+ */
+function shownUnder(
+  shown: readonly (number | null)[],
+  parentOf: (index: number) => number | null,
+): number[] {
+  const distinct = [...new Set(shown)];
+  if (distinct.includes(null)) return [];
+  const indexes = distinct as number[];
+  const chain = (index: number): number[] => {
+    const found: number[] = [];
+    for (let at: number | null = index; at !== null && !found.includes(at); at = parentOf(at))
+      found.push(at);
+    return found;
+  };
+  const outer = indexes.find((candidate) =>
+    indexes.every((other) => chain(other).includes(candidate)),
+  );
+  return outer === undefined ? indexes : [outer];
+}
+
+/**
+ * The conditions around the elements of `names` among `elements`, all of which must show; with
+ * none of them, every condition the elements sit in or hold.
+ */
+function conditionsAround(
+  elements: readonly Element[],
+  names: readonly string[],
+  within: ReadonlyMap<Element, number>,
+): number[] {
+  const keys = elements.filter((element) => names.includes(element.localName));
+  return [
+    ...new Set(
+      (keys.length > 0 ? keys : elements)
+        .map((element) => within.get(element))
+        .filter((index): index is number => index !== undefined),
+    ),
+  ];
+}
+
+/** True when the file writes the host's `user`: a `<nuxeo-connection user="{{user}}">`. */
+function writesUser(document: Document): boolean {
+  return elementsOf(document).some(
+    (element) =>
+      element.localName === 'nuxeo-connection' &&
+      /^\{\{\s*user\s*\}\}$/.test(element.getAttribute('user') ?? ''),
+  );
 }
 
 /** The elements that show what they hold only while a condition passes. */
@@ -651,6 +756,7 @@ function conditionsOf(
   path: string,
   document: Document,
   within: Map<Element, number>,
+  conditionAt: Map<Element, number>,
 ): Omit<Condition, 'userInScope'>[] {
   const found: Omit<Condition, 'userInScope'>[] = [];
   const visit = (node: ParentNode, current: number | null): void => {
@@ -658,6 +764,7 @@ function conditionsOf(
       let inner = current;
       if (isCondition(child)) {
         inner = found.length;
+        conditionAt.set(child, inner);
         found.push({
           path,
           index: inner,
@@ -733,10 +840,15 @@ export function sortOptionsOf(script: string): SortOption[] {
  * `value="{{document.properties.cl:number}}"`, a search form `value="{{params.cl_number}}"`.
  */
 function bindingOf(field: Element): string | null {
-  const texts = [field, ...elementsOf(field)].flatMap((element) =>
+  const elements = [field, ...elementsOf(field)];
+  const texts = elements.flatMap((element) =>
     Array.from(element.attributes).map((attribute) => attribute.value),
   );
   texts.push(field.textContent ?? '');
+  // `textContent` leaves out what a template holds, such as the value a filter inside shows.
+  for (const element of elements)
+    if (element.localName === 'template')
+      texts.push((element as HTMLTemplateElement).content?.textContent ?? '');
   const all = texts.join('\n');
   return (
     /document\.properties\.([\w-]+:[\w-]+)/.exec(all)?.[1] ??

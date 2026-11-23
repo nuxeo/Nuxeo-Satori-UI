@@ -24,11 +24,21 @@
  * only when its values are exactly one rule's permissions; `path` and `schema` have no rule. A
  * condition with any test that does not convert is reported, never guessed.
  *
- * **JavaScript.** A `dom-if`, or a filter's `expression`, is free JavaScript. One written in a
- * known pattern, a call of the filter functions above (`hasType(document, 'X')`, `isMember(user,
- * 'g')`, ...) or `document.facets.indexOf('X') !== -1`, negated with `!` or joined with `&&` or
- * `||`, is proposed as its rule: section 3 leaves it for a person to accept. Anything else is
+ * **JavaScript.** A `dom-if`'s `if` and a filter's `expression` are code, and one in a known
+ * pattern is proposed as its rule: section 3 leaves it for a person to accept. Anything else is
  * reported.
+ *
+ * - **A `dom-if`'s `if`** is a Polymer binding (`property-effects.js`): `[[…]]` or `{{…}}` around
+ *   one path or one call, optionally negated with `!`, and nothing else in the attribute. One call
+ *   of a filter function, such as `[[hasFacet(document, 'X')]]`, is a known pattern. Text around
+ *   the binding, even spacing, makes it a compound binding, whose value is a string; `&&`, `||` and
+ *   a method of a value are no binding, and the text stays as it is. Either way `if` is a
+ *   non-empty string, which is true, so Web UI always shows what the `dom-if` holds. With no `if`
+ *   at all, it shows nothing.
+ * - **A filter's `expression`** runs as `return <expression>` with `this` the filter: `this.`
+ *   calls of the filter functions above, and `document.facets.indexOf('X') !== -1` or
+ *   `document.facets.includes('X')`, each optionally negated with `!`, joined by `&&` or by `||`.
+ *   `!` before `indexOf` applies to its result, before the comparison, so that is always true.
  *
  * **Truth tables.** Both readings are implemented here, each from its own source, and
  * `truthTable` runs them over every combination of the values a condition tests and one value it
@@ -79,18 +89,39 @@ function every(rules: readonly Rule[]): Rule {
 }
 
 /**
- * A Polymer binding of `dom-if`'s `if`: a property path, or one computed call, either negated
- * with `!` (Polymer's `property-effects.js`). `&&`, `||` and method calls on a value are no
- * binding: Polymer leaves the text as it is, a string that is always true, and Web UI always shows
- * what the `dom-if` holds.
+ * A Polymer binding of `dom-if`'s `if`, and nothing else: `[[` or `{{`, a property path or one
+ * computed call, either negated with `!`, and `]]` or `}}` (`property-effects.js`, whose brackets
+ * need not pair). Anything around it, spacing included, makes the binding compound, a string.
  */
-const POLYMER_CALL = /^\s*\[\[\s*(!?)\s*(\w+)\(([^()]*)\)\s*\]\]\s*$/;
-const POLYMER_PATH = /^\s*\[\[\s*!?\s*[\w.]+\s*\]\]\s*$/;
+const POLYMER_CALL = /^(?:\[\[|\{\{)\s*(!?)\s*(\w+)\(([^()]*)\)\s*(?:\]\]|\}\})$/;
+const POLYMER_PATH = /^(?:\[\[|\{\{)\s*!?\s*[\w.:$*-]+\s*(?:\]\]|\}\})$/;
 
-/** What a condition of a package becomes. */
+/**
+ * What a condition of a package becomes. A rule whose truth table is too large to run is reported
+ * rather than written, since nothing could hold it to the condition.
+ */
 export function decideCondition(condition: Condition): ConditionDecision {
+  const decision = decideOnce(condition);
+  if (decision.kind === 'reported') return decision;
+  const rows = tableSize([condition], decision.rule);
+  return rows > MAX_ROWS
+    ? {
+        kind: 'reported',
+        note: `Its truth table would run ${rows} rows, more than the ${MAX_ROWS} one runs, so its rule could not be held to it: a person checks it`,
+      }
+    : decision;
+}
+
+function decideOnce(condition: Condition): ConditionDecision {
   if (condition.element !== 'nuxeo-filter') {
-    const test = own(condition.attributes, 'if') ?? '';
+    const given = own(condition.attributes, 'if');
+    // `if` is false until something sets it.
+    if (given === undefined)
+      return {
+        kind: 'reported',
+        note: 'It has no `if`, so Web UI never shows what it holds: a mistake to fix, not to copy',
+      };
+    const test = given;
     const call = POLYMER_CALL.exec(test);
     if (!call) {
       return POLYMER_PATH.test(test)
@@ -100,7 +131,7 @@ export function decideCondition(condition: Condition): ConditionDecision {
           }
         : {
             kind: 'reported',
-            note: `Its \`if\`, ${test}, is no Polymer binding, so Web UI always shows what it holds: a mistake to fix, not to copy`,
+            note: `Its \`if\`, ${JSON.stringify(test)}, is no single Polymer binding, so it is a string, and Web UI always shows what it holds: a mistake to fix, not to copy`,
           };
     }
     const parsed = parseExpression(`${call[1]}${call[2]}(${call[3]})`, { bare: true });
@@ -245,6 +276,9 @@ const TERM =
   /^(!?)\s*(this\.)?(hasType|hasFacet|hasState|isMember|hasPermission)\(\s*(document|user)\s*,\s*(['"])([^'"]+)\5\s*\)$/;
 const FACETS =
   /^(!?)\s*document\.facets\.(?:indexOf\(\s*(['"])([^'"]+)\2\s*\)\s*(!==\s*-1|>=\s*0|>\s*-1)|includes\(\s*(['"])([^'"]+)\5\s*\))$/;
+/** True for `!document.facets.indexOf(…) !== -1`: `!` turns the index into a boolean first. */
+const negatesIndex = (facets: RegExpExecArray): boolean =>
+  facets[1] === '!' && facets[3] !== undefined;
 
 /**
  * A known pattern's rule, or why it is none. `bare` is a Polymer binding's call, of the host's
@@ -286,6 +320,10 @@ export function parseExpression(
       document ||= known.on === 'document';
       user ||= known.on === 'user';
     } else if (facets) {
+      if (negatesIndex(facets))
+        return {
+          problem: `"${part}" applies ! to indexOf's result, before the comparison, so it is always true`,
+        };
       rule = { type: 'app.rules.hasFacet', parameters: [facets[3] ?? facets[6]] };
       negated = facets[1] === '!';
       document = true;
@@ -308,9 +346,10 @@ export interface Situation {
 /** Web UI's reading of a condition: `nuxeo-filter`'s `check`, and the filter functions. */
 export function webUiPasses(condition: Condition, situation: Situation): boolean | null {
   if (condition.element !== 'nuxeo-filter') {
-    const test = own(condition.attributes, 'if') ?? '';
+    const test = own(condition.attributes, 'if');
+    if (test === undefined) return false;
     const call = POLYMER_CALL.exec(test);
-    // Not a binding at all: Polymer leaves the text, which is always true.
+    // Not one binding alone: the text, or a compound binding's string, which is always true.
     if (!call) return POLYMER_PATH.test(test) ? null : true;
     return webUiExpression(`${call[1]}${call[2]}(${call[3]})`, situation, true);
   }
@@ -374,6 +413,8 @@ function webUiExpression(source: string, situation: Situation, bare: boolean): b
     }
     const facets = bare ? null : FACETS.exec(part);
     if (facets) {
+      // `(!index) !== -1`, `>= 0` or `> -1`: a boolean, so always true.
+      if (negatesIndex(facets)) return true;
       const result = situation.facets.includes(facets[3] ?? facets[6]);
       return facets[1] === '!' ? !result : result;
     }
@@ -453,6 +494,29 @@ export function situations(
   condition: Condition,
   extra: RuleValues = NO_VALUES,
 ): Situation[] | null {
+  const { types, states, facetPool, groupPool, permissionPool, size } = poolsOf(condition, extra);
+  if (size > MAX_ROWS) return null;
+  const subsets = (list: readonly string[]): string[][] =>
+    Array.from({ length: 2 ** list.length }, (_, mask) =>
+      list.filter((_, bit) => mask & (1 << bit)),
+    );
+  const rows: Situation[] = [];
+  for (const type of types)
+    for (const state of states)
+      for (const facets of subsets(facetPool))
+        for (const permissions of subsets(permissionPool))
+          for (const groups of subsets(groupPool))
+            rows.push({ type, state, facets, permissions, groups });
+  return rows;
+}
+
+/** How many rows the truth table of conditions that must all pass, against a rule, runs. */
+export function tableSize(conditions: readonly Condition[], rule: unknown): number {
+  return poolsOf(merged(conditions), literalsOf(rule)).size;
+}
+
+/** The values of each dimension a table runs, and how many rows they make. */
+function poolsOf(condition: Condition, extra: RuleValues) {
   const named = (attribute: string): string[] => values(own(condition.attributes, attribute) ?? '');
   const expression = `${own(condition.attributes, 'if') ?? ''} ${own(condition.attributes, 'expression') ?? ''}`;
   const called = (name: string): string[] =>
@@ -481,19 +545,24 @@ export function situations(
     types.length *
     states.length *
     2 ** (facetPool.length + groupPool.length + permissionPool.length);
-  if (size > MAX_ROWS) return null;
-  const subsets = (list: readonly string[]): string[][] =>
-    Array.from({ length: 2 ** list.length }, (_, mask) =>
-      list.filter((_, bit) => mask & (1 << bit)),
-    );
-  const rows: Situation[] = [];
-  for (const type of types)
-    for (const state of states)
-      for (const facets of subsets(facetPool))
-        for (const permissions of subsets(permissionPool))
-          for (const groups of subsets(groupPool))
-            rows.push({ type, state, facets, permissions, groups });
-  return rows;
+  return { types, states, facetPool, groupPool, permissionPool, size };
+}
+
+/** Conditions that must all pass, as one filter of all their tests, for their table's values. */
+function merged(conditions: readonly Condition[]): Condition {
+  if (conditions.length === 1) return conditions[0];
+  const attributes: Record<string, string> = {};
+  for (const condition of conditions)
+    for (const [name, value] of Object.entries(condition.attributes))
+      attributes[name] = attributes[name] ? `${attributes[name]}, ${value}` : value;
+  return {
+    path: '',
+    index: -1,
+    element: 'nuxeo-filter',
+    attributes,
+    parent: null,
+    userInScope: true,
+  };
 }
 
 /** The rows where Web UI and the rule disagree, and whether the table could be read at all. */
@@ -530,21 +599,7 @@ export function chainTable(
   readonly unreadable: boolean;
 } {
   if (conditions.length === 1) return truthTable(conditions[0], rule);
-  const merged: Record<string, string> = {};
-  for (const condition of conditions)
-    for (const [name, value] of Object.entries(condition.attributes))
-      merged[name] = merged[name] ? `${merged[name]}, ${value}` : value;
-  const rows = situations(
-    {
-      path: '',
-      index: -1,
-      element: 'nuxeo-filter',
-      attributes: merged,
-      parent: null,
-      userInScope: true,
-    },
-    literalsOf(rule),
-  );
+  const rows = situations(merged(conditions), literalsOf(rule));
   if (rows === null) return { rows: 0, disagree: [], unreadable: true };
   const disagree: Situation[] = [];
   for (const situation of rows) {
@@ -589,6 +644,8 @@ function literalsOf(rule: unknown): RuleValues {
     const { type, parameters } = value as { type?: unknown; parameters?: unknown };
     const list = Array.isArray(parameters) ? parameters : [];
     const texts = list.filter((item): item is string => typeof item === 'string');
+    // A permission rule written as an object, `{ "type": "app.rules.canWrite" }`, is the same rule.
+    if (typeof type === 'string') visit(type);
     if (type === 'app.rules.isType') found.types.push(...texts);
     else if (type === 'app.rules.hasFacet') found.facets.push(...texts);
     else if (type === 'app.rules.inState') found.states.push(...texts);

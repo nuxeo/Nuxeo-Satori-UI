@@ -86,8 +86,9 @@ export interface MenuSkip {
 /**
  * One entry per left-menu entry (`DRAWER_ITEMS`) whose page (`DRAWER_PAGES`, paired by name)
  * holds a search screen whose results own their queue, and why each other left-menu contribution
- * is none. Neither the entry nor its page may sit in a condition, which M2 converts. The first
- * entry to an id keeps it; a later one is reported.
+ * is none. An entry or a page under a condition carries its rule (`menuGuard`) when the rule reads
+ * only the user: no record is open in the menu, so one that reads a document is reported, and a
+ * proposed one waits for a person. The first entry to an id keeps it; a later one is reported.
  */
 export function menuDecisions(
   inventory: Inventory,
