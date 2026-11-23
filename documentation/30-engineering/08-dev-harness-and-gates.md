@@ -268,7 +268,7 @@ Helpers available to a steps file ([`helpers.mjs`](../../scripts/beta-harness/he
 | `phase-0-no-backend.mjs` | The app degrades honestly with no backend                                |
 | `phase-1-config.mjs`     | Configuration alone changes the app, with no rebuild                     |
 | `phase-2-registry.mjs`   | A manifest edit changes the addressable surface with no rebuild          |
-| `phase-3-*.mjs`          | Phase 3 (component adoption): the component's behaviour before and after |
+| `phase-3-*.mjs`          | Phase 3, **superseded**: the browse page, which is not adoption evidence |
 | `phase-3-search.mjs`     | Search against the real index                                            |
 | `phase-4-platform.mjs`   | The platform is an installable package a customer can fork against       |
 | `phase-5-harness.mjs`    | Generators produce **live** registrations                                |
