@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { Observable, map, tap } from 'rxjs';
 
-import { NUXEO_API_ORIGIN, readGroupsFromMe } from '@nuxeo/satori-platform/nuxeo-client';
+import { NUXEO_API_ORIGIN, readAllGroupsFromMe } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** What the template keeps about a signed-in user. */
 interface TemplateSession {
@@ -10,7 +10,10 @@ interface TemplateSession {
   /** Base64 `user:password` for `Authorization: Basic …`. */
   readonly basic: string;
   readonly isAdministrator: boolean;
-  /** The user's groups, as `/me` reports them: what `app.rules.inGroup` reads. */
+  /**
+   * Every group Nuxeo counts the user in, as `/me` reports them, nested and virtual ones included:
+   * what `app.rules.inGroup` reads.
+   */
   readonly groups: readonly string[];
 }
 
@@ -37,7 +40,8 @@ function readStoredSession(): TemplateSession | null {
     if (typeof parsed !== 'object' || parsed === null) return null;
     const { username, basic, isAdministrator, groups } = parsed as Record<string, unknown>;
     if (typeof username !== 'string' || typeof basic !== 'string') return null;
-    // A session stored before groups were kept has none, rather than none to read.
+    // A session stored before groups were kept restores with none: `inGroup` passes for no group
+    // until the user signs in again, which reads `/me` afresh.
     const known = Array.isArray(groups)
       ? groups.filter((group): group is string => typeof group === 'string')
       : [];
@@ -110,7 +114,7 @@ export class TemplateSessionService {
           username: readUsername(me) ?? username,
           basic,
           isAdministrator: readIsAdministrator(me),
-          groups: readGroupsFromMe(me),
+          groups: readAllGroupsFromMe(me),
         })),
         tap((session) => this.store(session)),
         map((session) => session.username),

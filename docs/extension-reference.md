@@ -744,9 +744,10 @@ and negate with `core.not`, or combine with `core.every` — `hasFacet("Versiona
 ([layout-v2.md](business-apps/layout-v2.md), section 5), and any manifest may use them too.
 `fieldIn` takes the property first, as a layout names one, then the values:
 `{ "type": "app.rules.fieldIn", "parameters": [{ "field": "claim:status" }, "denied", "appealed"] }`.
-The stored value is compared written as text, and for a list any of its items may match. A
-literal first parameter is compared as it is; a computation there is not evaluated by this
-library, so with one the rule does not pass.
+Texts match exactly, numbers as numbers (a stored `5000` matches `5000`, `"5000"` and
+`"5000.0"`), and booleans as booleans or as `"true"` and `"false"`; for a list, any of its items
+may match. A literal first parameter is compared as it is. A computation there is not evaluated
+by the rules' library, so it would match nothing, and the layout validator refuses one.
 
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
@@ -779,8 +780,9 @@ Do not reference those two yet.
 
 ### User rules
 
-These three **fail closed**: if one is referenced before it is registered, it
-denies rather than permits.
+`app.rules.isAdministrator`, `app.rules.isPowerUser`, `app.rules.hasAdministrationAccess` and
+`app.rules.inGroup` **fail closed**: if one is referenced before it is registered, it denies
+rather than permits. `app.rules.isExternalUser` does not.
 
 | ID                                  | True when                                                                                                            |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -790,11 +792,14 @@ denies rather than permits.
 | `app.rules.isExternalUser`          | The user is an external share recipient (`transient/`), who can open none of Browse, Favorites, Collections or Trash |
 | `app.rules.inGroup`                 | The user is in one of the groups in `parameters`                                                                     |
 
-`app.rules.inGroup` reads the groups Nuxeo's `/me` reports, which the shell puts in the rule
-context's `user.groups`; both the product app and the template fill it. It is layout version 2's,
-and does not fail closed: with no group known it answers `false`. Like every rule here it hides
-from the interface only: a field it hides is still returned by the REST API to anyone who may
-read the record.
+`app.rules.inGroup` is layout version 2's. It reads every group Nuxeo counts the user in, as
+`/me` reports them: the stored ones, and `extendedGroups`, which adds the parents of nested groups
+and the virtual ones, such as `members`. The shell puts them in the rule context's `user.groups`,
+and both the product app and the template fill it. Group names are matched exactly. Registered,
+it answers `false` while no group is known, which means a rule written as
+`core.not(app.rules.inGroup(...))` passes until the groups have loaded. Like every rule here it
+hides from the interface only: a field it hides is still returned by the REST API to anyone who
+may read the record.
 
 `rule: null` in an override still clears the gate, so a customer who genuinely
 wants an entry ungated has a Layer 1 route to it. Fail-closed is about the

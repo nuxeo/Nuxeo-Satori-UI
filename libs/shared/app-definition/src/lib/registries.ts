@@ -38,6 +38,8 @@ export interface WidgetDefinition {
 export type ParameterKind =
   /** A literal, a property (`{ "field" }`) or a computation (`{ "computed" }`). */
   | 'value'
+  /** A literal or a property, never a computation: what a rule compares, which no rule computes. */
+  | 'subject'
   /** A literal text. */
   | 'text'
   /** A literal text with `{<prefix>:<name>}` placeholders. */
@@ -182,23 +184,22 @@ export const CORE_RULES: Readonly<Record<string, Signature>> = {
 };
 
 /**
- * The rules the platform registers today, as `docs/extension-reference.md`, section 4, documents
- * them. Three take a list of texts: the types, facets or MIME types to match.
- */
-/**
- * The rules above that take parameters. Three take a list of texts, the types, facets or MIME
- * types to match; layout version 2's three (layout-v2.md, section 5) take a property then the
- * values, the lifecycle states, or the groups.
+ * The parameters of the rules in `APP_RULES` that take any: the types, facets or MIME types to
+ * match; the operations `isNotBusy` waits for, none of which it also accepts; and layout version
+ * 2's three (layout-v2.md, section 5), a property or a literal then the values, the lifecycle
+ * states, or the groups. Every other rule takes none.
  */
 const APP_RULE_SIGNATURES: Readonly<Record<string, Signature>> = {
   'app.rules.isType': { parameters: ['text'], rest: 'text' },
   'app.rules.hasFacet': { parameters: ['text'], rest: 'text' },
   'app.rules.hasMimeType': { parameters: ['text'], rest: 'text' },
-  'app.rules.fieldIn': { parameters: ['value', 'text'], rest: 'text' },
+  'app.rules.isNotBusy': { parameters: [], rest: 'text' },
+  'app.rules.fieldIn': { parameters: ['subject', 'text'], rest: 'text' },
   'app.rules.inState': { parameters: ['text'], rest: 'text' },
   'app.rules.inGroup': { parameters: ['text'], rest: 'text' },
 };
 
+/** The rules the platform registers, as `docs/extension-reference.md`, section 4, documents them. */
 export const APP_RULES: Readonly<Record<string, Signature>> = Object.fromEntries(
   [
     'app.rules.canWrite',

@@ -38,6 +38,31 @@ function subjectOf(document: NuxeoDocument | null, parameter: unknown): unknown 
 }
 
 /**
+ * Whether a stored value and one a rule names are the same: texts exactly, booleans as booleans
+ * or as `"true"` and `"false"`, and numbers as numbers, so that a stored `5000` is `5000`, `"5000"`
+ * and `"5000.0"`. A value that is none of these, such as a computation or an object, matches
+ * nothing.
+ */
+function sameValue(stored: unknown, wanted: unknown): boolean {
+  if (typeof stored === 'number') {
+    const number =
+      typeof wanted === 'number'
+        ? wanted
+        : typeof wanted === 'string' && wanted.trim() !== ''
+          ? Number(wanted)
+          : NaN;
+    return number === stored;
+  }
+  if (typeof stored === 'boolean') return wanted === stored || wanted === String(stored);
+  if (typeof stored === 'string')
+    return (
+      wanted === stored ||
+      (typeof wanted !== 'object' && wanted !== undefined && String(wanted) === stored)
+    );
+  return false;
+}
+
+/**
  * The document's type is one of `types`, matched exactly. `app.rules.isType` and
  * `app.rules.isNote` both answer through this, so they cannot disagree about a Note.
  */
@@ -93,20 +118,15 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
   /**
    * The focused record's property is one of the values (layout-v2.md, section 5): the first
    * parameter names the property, `{ "field": "<prefix>:<name>" }`, and the rest are the values,
-   * compared with the stored value written as text. For a list, any of its items may match.
-   * A literal first parameter is compared as it is. A computation there is not evaluated by this
-   * library, so with one the rule does not pass.
+   * compared as `sameValue` compares them. For a list, any of its items may match. A literal first
+   * parameter is compared as it is. A computation there is not evaluated by this library, which
+   * the validator refuses, so with one the rule does not pass.
    */
   'app.rules.fieldIn': (context, parameters) => {
-    const [subject, ...rest] = parameters;
-    const values = stringParameters(rest);
+    const [subject, ...values] = parameters;
     const value = subjectOf(context.document, subject);
     const items: readonly unknown[] = Array.isArray(value) ? value : [value];
-    return items.some(
-      (item) =>
-        (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') &&
-        values.includes(String(item)),
-    );
+    return items.some((item) => values.some((wanted) => sameValue(item, wanted)));
   },
   /** The focused record's lifecycle state is one of `parameters`, matched exactly. */
   'app.rules.inState': (context, parameters) => {

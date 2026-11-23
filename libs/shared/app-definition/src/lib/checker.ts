@@ -193,6 +193,15 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
       case 'value':
         value(item, path);
         return;
+      case 'subject':
+        // What a rule compares runs in the rules' library, which evaluates no computation: one
+        // here would never match, so a field it shows would never show.
+        if (isRecord(item) && 'computed' in item) {
+          add(path, 'parameter', `${owner} takes a property or a literal here, not a computation`);
+          return;
+        }
+        value(item, path);
+        return;
       case 'rule':
         rule(item, path);
         return;

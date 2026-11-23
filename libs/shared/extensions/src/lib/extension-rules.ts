@@ -179,6 +179,9 @@ export const SECURITY_RELEVANT_RULE_IDS: readonly string[] = [
   'app.rules.isAdministrator',
   'app.rules.isPowerUser',
   'app.rules.hasAdministrationAccess',
+  // Layout version 2's: it keeps a field away from the users outside a group, as these keep
+  // Administration away from users without it.
+  'app.rules.inGroup',
 ];
 
 /**

@@ -4,7 +4,11 @@ import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
 import { ExtensionRuleContextService } from './extension-rule-context.service';
-import { EMPTY_EXTENSION_RULE_CONTEXT, type ExtensionRuleContext } from './extension-rules';
+import {
+  EMPTY_EXTENSION_RULE_CONTEXT,
+  ExtensionRuleRegistry,
+  type ExtensionRuleContext,
+} from './extension-rules';
 
 /** Layout version 2's three rules (docs/business-apps/layout-v2.md, section 5). */
 
@@ -54,6 +58,16 @@ describe('app.rules.fieldIn', () => {
     const record = on(claim({ 'claim:amount': 5000, 'claim:urgent': true }));
     expect(evaluate('app.rules.fieldIn', record, { field: 'claim:amount' }, '5000')).toBe(true);
     expect(evaluate('app.rules.fieldIn', record, { field: 'claim:urgent' }, 'true')).toBe(true);
+  });
+
+  it('matches a number as a number and a boolean as a boolean, as a manifest may write them', () => {
+    const record = on(claim({ 'claim:amount': 5000, 'claim:urgent': true, 'claim:code': '5000' }));
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:amount' }, 5000)).toBe(true);
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:amount' }, '5000.0')).toBe(true);
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:amount' }, '50')).toBe(false);
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:urgent' }, true)).toBe(true);
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:urgent' }, 'false')).toBe(false);
+    expect(evaluate('app.rules.fieldIn', record, { field: 'claim:code' }, 5000)).toBe(true);
   });
 
   it('compares a literal first parameter as it is', () => {
@@ -107,8 +121,18 @@ describe('app.rules.inGroup', () => {
   });
 });
 
+describe('failing closed', () => {
+  /** It keeps a field from users outside a group, so unknown it denies, as isPowerUser does. */
+  it('denies app.rules.inGroup while it is not registered', () => {
+    const registry = TestBed.inject(ExtensionRuleRegistry);
+    expect(registry.has('app.rules.inGroup')).toBe(false);
+    const rule = { type: 'app.rules.inGroup', parameters: ['member-services'] };
+    expect(registry.evaluate(rule, on(claim({}), ['member-services']))).toBe(false);
+  });
+});
+
 describe('the rule context', () => {
-  it("carries the user's groups, which the shell sets", () => {
+  it('carries the groups set on it', () => {
     const service = TestBed.inject(ExtensionRuleContextService);
     expect(service.context().user.groups).toEqual([]);
     service.groups.set(['members', 'member-services']);

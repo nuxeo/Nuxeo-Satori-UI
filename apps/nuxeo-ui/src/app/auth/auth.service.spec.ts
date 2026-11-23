@@ -102,14 +102,18 @@ describe('AuthService poweruser access', () => {
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me'))
       .flush({
         id: 'poweruser01',
-        properties: { username: 'poweruser01', groups: ['members', 'member-services'] },
+        properties: { username: 'poweruser01', groups: ['claims-team'] },
+        // A subgroup's parent, and a virtual group, are Nuxeo's membership too.
+        extendedGroups: [{ name: 'claims-team' }, { name: 'member-services' }, { name: 'members' }],
         isAdministrator: false,
       });
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
       .flush({ id: 'poweruser01' });
 
-    expect(service.groups()).toEqual(['members', 'member-services']);
+    expect(service.groups()).toEqual(['claims-team', 'member-services', 'members']);
+    // The stored groups alone still decide isPowerUser, as before.
+    expect(service.isPowerUser()).toBe(false);
   });
 
   it('sets isPowerUser and hasAdministrationAccess after login', () => {

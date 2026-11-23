@@ -32,6 +32,7 @@ import {
   NUXEO_SSO_RETURN_QUERY_PARAM,
   SelectionService,
   isPowerUserFromGroups,
+  readAllGroupsFromMe,
   readGroupsFromMe,
   type NuxeoSamlLoginEndpoint,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -45,6 +46,8 @@ interface BasicStoredSession {
   basic: string;
   isAdministrator: boolean;
   groups: string[];
+  /** Every group Nuxeo counts the user in, nested and virtual ones too; absent in older sessions. */
+  allGroups?: string[];
 }
 
 interface CookieStoredSession {
@@ -52,6 +55,8 @@ interface CookieStoredSession {
   username: string;
   isAdministrator: boolean;
   groups: string[];
+  /** As in `BasicStoredSession`. */
+  allGroups?: string[];
 }
 
 type StoredSession = BasicStoredSession | CookieStoredSession;
@@ -263,10 +268,15 @@ function isHttpUrl(url: URL): boolean {
   return url.protocol === 'http:' || url.protocol === 'https:';
 }
 
-function readSessionFlagsFromMe(me: unknown): { isAdministrator: boolean; groups: string[] } {
+function readSessionFlagsFromMe(me: unknown): {
+  isAdministrator: boolean;
+  groups: string[];
+  allGroups: string[];
+} {
   return {
     isAdministrator: readIsAdministratorFromMe(me),
     groups: readGroupsFromMe(me),
+    allGroups: readAllGroupsFromMe(me),
   };
 }
 
@@ -327,8 +337,15 @@ export class AuthService {
     return isPowerUserFromGroups(s.groups);
   });
   readonly hasAdministrationAccess = computed(() => this.isAdministrator() || this.isPowerUser());
-  /** The groups `/me` reported for the signed-in user; none when no one is signed in. */
-  readonly groups = computed<readonly string[]>(() => this.state()?.groups ?? []);
+  /**
+   * Every group Nuxeo counts the signed-in user in, nested and virtual ones included, for the rule
+   * context's `app.rules.inGroup`; none when no one is signed in. A session stored before these
+   * were kept has the stored groups only, until `/me` is read again.
+   */
+  readonly groups = computed<readonly string[]>(() => {
+    const s = this.state();
+    return s?.allGroups ?? s?.groups ?? [];
+  });
 
   constructor() {
     this.restoreSession();
@@ -386,6 +403,7 @@ export class AuthService {
       basic: existing.basic,
       isAdministrator: flags.isAdministrator,
       groups: flags.groups,
+      allGroups: flags.allGroups,
     });
     const remember = localStorage.getItem(STORAGE_KEY) !== null;
     this.persist(this.state()!, remember);
@@ -455,6 +473,7 @@ export class AuthService {
               username: c.username,
               isAdministrator: c.isAdministrator ?? false,
               groups: c.groups ?? [],
+              allGroups: c.allGroups,
             });
           }
           return;
@@ -468,6 +487,7 @@ export class AuthService {
               basic: b.basic,
               isAdministrator: b.isAdministrator ?? false,
               groups: b.groups ?? [],
+              allGroups: b.allGroups,
             });
           }
           return;
@@ -567,6 +587,7 @@ export class AuthService {
             username: user,
             isAdministrator: flags.isAdministrator,
             groups: flags.groups,
+            allGroups: flags.allGroups,
           };
           this.state.set(cookieSession);
           this.persistCookie(cookieSession);
@@ -595,6 +616,7 @@ export class AuthService {
             username: user,
             isAdministrator: flags.isAdministrator,
             groups: flags.groups,
+            allGroups: flags.allGroups,
           };
           this.state.set(session);
           this.persistCookie(session);
@@ -681,6 +703,7 @@ export class AuthService {
             username: user,
             isAdministrator: flags.isAdministrator,
             groups: flags.groups,
+            allGroups: flags.allGroups,
           };
           this.state.set(session);
           this.persistCookie(session);

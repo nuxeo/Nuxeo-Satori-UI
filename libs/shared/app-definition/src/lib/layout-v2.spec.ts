@@ -291,6 +291,41 @@ describe('the validator finds', () => {
     );
   });
 
+  it("fieldIn given a computation to compare, which the rules' library never evaluates", () => {
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: {
+            type: 'app.rules.fieldIn',
+            parameters: [{ computed: { type: 'core.template', parameters: ['x'] } }, 'x'],
+          },
+        }),
+      ),
+    ).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.fieldIn" takes a property or a literal here, not a computation [parameter]',
+    ]);
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: { type: 'app.rules.fieldIn', parameters: [{ field: 'a:status' }, 'denied'] },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('isNotBusy given the operations it waits for, as the reference writes it', () => {
+    expect(
+      messages(
+        withFields({
+          field: 'a:b',
+          visibleWhen: { type: 'app.rules.isNotBusy', parameters: ['trash'] },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it('a computed field shown as rich text, which would make its text markup', () => {
     expect(
       messages(
