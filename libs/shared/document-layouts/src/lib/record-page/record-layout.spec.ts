@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { entryOf, readRecordLayout, unknownRuleIn, type RecordLayoutFile } from './record-layout';
+import {
+  EMPTY_EXTENSION_RULE_CONTEXT,
+  ExtensionRuleRegistry,
+  type ExtensionRule,
+} from '@nuxeo/satori-platform/extensions';
+
+import { tableColumns } from './widget-support';
+import {
+  MAX_RULE_LEVELS,
+  entryOf,
+  readRecordLayout,
+  refusedRule,
+  type RecordLayoutFile,
+} from './record-layout';
 
 /**
  * The rules this build registers, in these tests: some of the platform's own, a customer's own
@@ -406,6 +419,60 @@ describe('readRecordLayout', () => {
       ]);
     });
 
+    /**
+     * Past the registry's depth a rule passes whatever it says, so `core.false` would show what
+     * it hides: the tab, card, field or table it is on is left out, wherever the rule is.
+     */
+    it(`a rule nested more than ${MAX_RULE_LEVELS} levels deep, wherever it is`, () => {
+      const deep = nest(MAX_RULE_LEVELS + 1, 'app.rules.canWrite');
+      const file = read({
+        version: 2,
+        tabs: [
+          {
+            id: 'kept',
+            cards: [
+              {
+                id: 'a',
+                fields: [
+                  'dc:title',
+                  { field: 'dc:x', visibleWhen: deep },
+                  {
+                    id: 'c',
+                    computed: { type: 'core.choose', parameters: [deep, 'yes', 'no'] },
+                  },
+                  {
+                    field: 'member:lines',
+                    widget: 'table',
+                    parameters: {
+                      columns: ['line:code', { field: 'line:ssn', visibleWhen: deep }],
+                    },
+                  },
+                  // At the limit, answered as written: kept.
+                  { field: 'dc:y', visibleWhen: nest(MAX_RULE_LEVELS, 'app.rules.canWrite') },
+                ],
+              },
+              { id: 'b', visibleWhen: deep, fields: ['dc:title'] },
+            ],
+          },
+          { id: 'gone', visibleWhen: deep, cards: [{ id: 'd', fields: ['dc:title'] }] },
+        ],
+      });
+      expect(file.tabs?.map((tab) => tab.id)).toEqual(['kept']);
+      expect(file.tabs?.[0].cards.map((card) => card.id)).toEqual(['a']);
+      expect(file.tabs?.[0].cards[0].fields.map((field) => field.place)).toEqual([
+        'tabs[0].cards[0].fields[0]',
+        'tabs[0].cards[0].fields[4]',
+      ]);
+      const deeper = `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`;
+      expect(file.problems).toEqual([
+        `tabs[0].cards[0].fields[1] ${deeper}; left out`,
+        `tabs[0].cards[0].fields[2] ${deeper}; left out`,
+        `tabs[0].cards[0].fields[3].parameters.columns[1] ${deeper}; tabs[0].cards[0].fields[3] left out`,
+        `tabs[0].cards[1] ${deeper}; left out`,
+        `tabs[1] ${deeper}; left out`,
+      ]);
+    });
+
     it('a computed column, which this build does not draw yet: that column only', () => {
       const file = read({
         version: 2,
@@ -431,6 +498,52 @@ describe('readRecordLayout', () => {
       expect(file.problems).toEqual([
         'cards[0].fields[0].parameters.columns[1] is a computed column, which this build does not draw yet; that column left out',
       ]);
+    });
+
+    /**
+     * A table inside a table's column is not drawn, so a rule inside it, even one this build does
+     * not register, is never evaluated: the column goes, and the rest of the table stays.
+     */
+    it('a table inside a table, which this build does not draw yet: that column only', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'visit:note',
+                    {
+                      field: 'visit:calls',
+                      widget: 'table',
+                      parameters: {
+                        columns: [
+                          'call:by',
+                          {
+                            field: 'call:secret',
+                            visibleWhen: { type: 'app.rules.inGroup', parameters: ['g'] },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(file.cards[0].fields).toHaveLength(1);
+      expect(file.problems).toEqual([
+        'cards[0].fields[0].parameters.columns[1] is a table inside a table, which this build does not draw yet; that column left out',
+      ]);
+      expect(
+        tableColumns(file.cards[0].fields[0].parameters['columns']).map((c) => c.subfield),
+      ).toEqual(['note']);
     });
 
     it('a column of related records naming a widget nobody registered, and only that column', () => {
@@ -516,6 +629,39 @@ describe('readRecordLayout', () => {
       ]);
       expect(file.problems).toEqual([
         'cards[0].related.columns[1] shows claim:number again; that column left out',
+      ]);
+    });
+
+    it("a table in a related list's cell, which this build does not draw yet", () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: [
+                'claim:number',
+                {
+                  field: 'claim:lines',
+                  widget: 'table',
+                  parameters: {
+                    columns: [
+                      'line:code',
+                      { field: 'line:cost', visibleWhen: 'app.rules.canWrite' },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.columns.map((column) => column.xpath)).toEqual([
+        'claim:number',
+      ]);
+      expect(file.problems).toEqual([
+        "cards[0].related.columns[1] is a table in a list's cell, which this build does not draw yet; that column left out",
       ]);
     });
 
@@ -629,29 +775,56 @@ describe('entryOf', () => {
   });
 });
 
-describe('unknownRuleIn', () => {
+/** `inner` under composites, `levels` in all: `nest(1, r)` is `r`, `nest(2, r)` one `core.every` over it. */
+function nest(levels: number, inner: ExtensionRule): ExtensionRule {
+  let rule = inner;
+  for (let level = 1; level < levels; level++) rule = { type: 'core.every', parameters: [rule] };
+  return rule;
+}
+
+describe('refusedRule', () => {
   const isKnown = (id: string) => known.includes(id);
   it('names an unregistered rule, written as an ID or with parameters', () => {
-    expect(unknownRuleIn('app.rules.nope', isKnown)).toBe('app.rules.nope');
-    expect(unknownRuleIn({ type: 'app.rules.nope', parameters: [] }, isKnown)).toBe(
-      'app.rules.nope',
-    );
+    const refusal = 'names the rule "app.rules.nope", which this build does not register';
+    expect(refusedRule('app.rules.nope', isKnown)).toBe(refusal);
+    expect(refusedRule({ type: 'app.rules.nope', parameters: [] }, isKnown)).toBe(refusal);
   });
 
   it('is null for registered rules, and for no rule', () => {
-    expect(unknownRuleIn('app.rules.canWrite', isKnown)).toBeNull();
-    expect(unknownRuleIn(undefined, isKnown)).toBeNull();
+    expect(refusedRule('app.rules.canWrite', isKnown)).toBeNull();
+    expect(refusedRule(undefined, isKnown)).toBeNull();
   });
 
   it('looks inside composites, and only composites', () => {
     expect(
-      unknownRuleIn(
+      refusedRule(
         { type: 'core.some', parameters: ['app.rules.canWrite', 'app.rules.nope'] },
         isKnown,
       ),
-    ).toBe('app.rules.nope');
+    ).toBe('names the rule "app.rules.nope", which this build does not register');
     expect(
-      unknownRuleIn({ type: 'app.rules.isType', parameters: ['app.rules.nope'] }, isKnown),
+      refusedRule({ type: 'app.rules.isType', parameters: ['app.rules.nope'] }, isKnown),
     ).toBeNull();
+  });
+
+  it(`answers a rule ${MAX_RULE_LEVELS} levels deep, and refuses one a level deeper`, () => {
+    expect(refusedRule(nest(MAX_RULE_LEVELS, 'app.rules.canWrite'), isKnown)).toBeNull();
+    expect(refusedRule(nest(MAX_RULE_LEVELS + 1, 'app.rules.canWrite'), isKnown)).toBe(
+      `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`,
+    );
+  });
+
+  /**
+   * The limit is the registry's, held to it both ways: were the registry to answer less deep, a
+   * kept rule would pass where it means to hide; were it to answer deeper, a file would lose an
+   * entry for nothing.
+   */
+  it('is as deep as the rule registry answers a rule as written, and no deeper', () => {
+    const registry = new ExtensionRuleRegistry();
+    const answer = (levels: number) =>
+      registry.evaluate(nest(levels, 'core.false'), EMPTY_EXTENSION_RULE_CONTEXT);
+    expect(answer(MAX_RULE_LEVELS)).toBe(false);
+    // One level more, the registry stops descending and passes it: what the page leaves out.
+    expect(answer(MAX_RULE_LEVELS + 1)).toBe(true);
   });
 });

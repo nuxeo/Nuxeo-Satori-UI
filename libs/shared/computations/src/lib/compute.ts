@@ -6,7 +6,8 @@
  *
  * It never throws. Whatever is wrong, the result says why, and the renderer leaves the field out
  * (section 8): an evaluator that throws, or a context whose `value`, `display` or `rule` does, is
- * caught and refused too.
+ * caught and refused too, and so is a computation that throws when it is read. Explaining a
+ * refusal cannot throw either: `messageOf` and `quote` read what was thrown without trusting it.
  */
 import { isFieldReference, isRecord } from '@agentic-ui/shared/app-definition';
 import { localDayOf, written } from './dates';
@@ -40,7 +41,14 @@ export function compute(
 ): ComputationResult {
   if (!Number.isInteger(depth) || depth < 0)
     return refuse(`a computation starts at a whole depth of 0 or more, not ${quote(depth)}`);
-  return run(computation, context, evaluators, depth + 1);
+  try {
+    return run(computation, context, evaluators, depth + 1);
+  } catch (error) {
+    // What gets here was thrown reading the top computation, by a getter or a proxy, or looking its
+    // type up in evaluators that are not an object: what a nested one, an evaluator or the context
+    // throws is caught in `run`. A layout parsed from JSON has no getter and no proxy.
+    return refuse(`the computation could not be read: ${messageOf(error)}`);
+  }
 }
 
 /** One computation, at `level`: the top one of a field is at level 1. */
@@ -126,6 +134,19 @@ function property(field: string, context: ComputationContext): ComputationResult
   );
 }
 
+/**
+ * What a thrown value says, for a reason: an Error's message, cut, or any other value quoted. It
+ * never throws. `instanceof` throws for a revoked proxy and `message` can be a getter that throws,
+ * so a value that cannot be read is named by a constant, as is an Error whose message is no text.
+ */
 function messageOf(error: unknown): string {
-  return error instanceof Error ? cut(error.message) : quote(error);
+  try {
+    if (!(error instanceof Error)) return quote(error);
+    const message: unknown = error.message;
+    return typeof message === 'string' && message !== ''
+      ? cut(message)
+      : 'an error with no message';
+  } catch {
+    return 'a thrown value that cannot be read';
+  }
 }

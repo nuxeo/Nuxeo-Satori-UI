@@ -4,7 +4,6 @@ import type { DocumentLayoutService } from '../document-layout.service';
 import { type VocabularyValue, vocabularyValues } from '../document-layout/field-view';
 import type { LayoutFieldType } from '../layout.model';
 import type { RecordValueContext } from './record-field-view';
-import { tableColumns } from './widget-support';
 
 /**
  * The names a page reads for the values it shows: a vocabulary entry's label, and a user's or a
@@ -33,9 +32,6 @@ type LabelPair = [string, string | null];
 const vocabularyKey = (directory: string, id: string): string => `v\n${directory}\n${id}`;
 const principalKey = (kind: Principal['kind'], id: string): string => `${kind}\n${id}`;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /** Whether two sets of lookups read the same names: a signal's `equal`, so equal sets read nothing. */
 export function sameLookups(a: Lookups, b: Lookups): boolean {
   const key = (lookups: Lookups) =>
@@ -59,8 +55,8 @@ export class LookupCollector {
 
   /**
    * What one value shown through `widget` names: the users or groups of a `user` or `group`
-   * widget, and of a table's `user` and `group` columns; the vocabulary entries of a property
-   * with a directory, or of a `vocabulary` widget's own.
+   * widget; the vocabulary entries of a property with a directory, or of a `vocabulary` widget's
+   * own. A table's cells are each a value of their own, given with their column's widget.
    */
   value(
     widget: string | null,
@@ -68,16 +64,10 @@ export class LookupCollector {
     definition: LayoutFieldType,
     value: unknown,
   ): void {
-    if (widget === 'table') {
-      const rows = (Array.isArray(value) ? value : []).filter(isRecord);
-      for (const column of tableColumns(parameters['columns'])) {
-        const kind = column.widget;
-        if (kind !== 'user' && kind !== 'group') continue;
-        for (const row of rows) this.principal(kind, row[column.subfield]);
-      }
-    }
     if (widget === 'user' || widget === 'group') {
-      this.principal(widget, value);
+      for (const id of Array.isArray(value) ? value : [value]) {
+        if (typeof id === 'string' && id !== '') this.principals.push({ kind: widget, id });
+      }
       return;
     }
     const directory =
@@ -100,12 +90,6 @@ export class LookupCollector {
         principalKey(principal.kind, principal.id),
       ),
     };
-  }
-
-  private principal(kind: Principal['kind'], value: unknown): void {
-    for (const id of Array.isArray(value) ? value : [value]) {
-      if (typeof id === 'string' && id !== '') this.principals.push({ kind, id });
-    }
   }
 }
 

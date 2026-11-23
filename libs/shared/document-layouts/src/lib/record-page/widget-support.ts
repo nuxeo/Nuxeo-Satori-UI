@@ -36,6 +36,19 @@ export function widgetAccepts(widget: string, definition: LayoutFieldType): bool
 
 type Json = Record<string, unknown>;
 
+/**
+ * `record[key]`, when `record` has it as its own: never what every object inherits. A schema's
+ * subfields, a table's row and a widget's parameters are plain objects, and a subfield a layout
+ * names `constructor` or `toString` would otherwise find a function where it expects a value or a
+ * type, and a page that met it would throw.
+ */
+export function own<T>(
+  record: Readonly<Record<string, T>> | undefined,
+  key: string,
+): T | undefined {
+  return record !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 const isRecord = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -53,11 +66,26 @@ export interface TableColumn {
 }
 
 /**
- * The columns a `table` widget's `columns` parameter names. A computed column is not one: the
- * reader reports it and this build does not draw it.
+ * Whether a column of a table is one this build does not draw yet, and says so: a computed column,
+ * or a table inside a table's column. A cell is one line of text, and a table in it would have its
+ * own columns, rules and labels to hold to the same checks as the outer one's. Left out, none of
+ * them shows, so none needs checking.
+ */
+export function notDrawnColumn(entry: unknown): string | null {
+  if (!isRecord(entry)) return null;
+  if ('computed' in entry) return 'a computed column';
+  if (entry['widget'] === 'table') return 'a table inside a table';
+  return null;
+}
+
+/**
+ * The columns a `table` widget's `columns` parameter names, without those {@link notDrawnColumn}
+ * leaves out: the reader reports those, and nothing else reads them, the table's view, its
+ * resolution and its lookups included.
  */
 export function tableColumns(parameter: unknown): TableColumn[] {
   return (Array.isArray(parameter) ? parameter : []).flatMap((entry: unknown, index) => {
+    if (notDrawnColumn(entry)) return [];
     const field = typeof entry === 'string' ? entry : isRecord(entry) ? entry['field'] : undefined;
     if (typeof field !== 'string' || !field.includes(':')) return [];
     const subfield = field.slice(field.indexOf(':') + 1);

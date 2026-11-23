@@ -1,20 +1,84 @@
 import { formatDate, formatNumber, formatPercent } from '@angular/common';
 import { isStoredCalendarDay } from '@agentic-ui/shared/computations';
+import type { TrustedHtmlConfig } from '@nuxeo/satori-platform/nuxeo-client';
+import DOMPurify from 'dompurify';
 
 import { describeField, type FieldView } from '../document-layout/field-view';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import { humanize } from '../resolve-layout';
-import { WIDGETS_SHOWN_AS_VERSION_1, tableColumns, widgetAccepts } from './widget-support';
+import {
+  type TableColumn,
+  WIDGETS_SHOWN_AS_VERSION_1,
+  own,
+  tableColumns,
+  widgetAccepts,
+} from './widget-support';
 
 export { WIDGETS_SHOWN_AS_VERSION_1 } from './widget-support';
 
 /**
  * How the record page shows one value through a registered widget (layout-v2.md, section 3).
  *
- * Pure functions from a value to a view, so every widget is tested without a browser, as
- * version 1's `describeField` is. A field with no widget is shown by version 1's own function, so
- * the two versions show an unannotated property the same way.
+ * Functions from a value to a view, so every widget is tested without drawing a page, as version
+ * 1's `describeField` is. A field with no widget is shown by version 1's own function, so the two
+ * versions show an unannotated property the same way, except a date: see {@link asVersion1}.
  */
+
+/**
+ * What a `rich-text` value may keep: formatting, lists, quotes, code and links. Never an image,
+ * which would load from wherever the value says; a form or an input, which could ask for a
+ * password in the page's own look; a style, a frame or a script. DOMPurify also strips a
+ * `javascript:` link. The page renders a field through it, and a table's cell is its text.
+ */
+export const RICH_TEXT_HTML: TrustedHtmlConfig = {
+  ALLOWED_TAGS: [
+    'p',
+    'br',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'sub',
+    'sup',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'code',
+    'pre',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'a',
+    'span',
+  ],
+  ALLOWED_ATTR: ['href'],
+};
+
+/** The elements of rich text that part the words either side of them, as a block or a break does. */
+const PARTING = 'p, br, li, blockquote, pre, h1, h2, h3, h4, h5, h6';
+
+/**
+ * The words a `rich-text` value shows, as one line: what {@link RICH_TEXT_HTML} keeps of it, with
+ * each entity read as the character it stands for, so `&lt;10` is `<10` and `R&amp;D` is `R&D`.
+ * A paragraph, a list item, a heading or a line break parts the words either side; inline
+ * formatting does not, so `<b>R</b>&amp;D` stays one word. Text, never markup: the page binds it
+ * as text.
+ */
+export function richTextWords(html: string): string {
+  // Parsed into an inert document, which runs no script and loads nothing, and never attached.
+  const kept = DOMPurify.sanitize(html, { ...RICH_TEXT_HTML, RETURN_DOM_FRAGMENT: true });
+  for (const element of kept.querySelectorAll(PARTING)) {
+    element.before(' ');
+    element.after(' ');
+  }
+  return (kept.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
 
 export type Tone = 'positive' | 'warning' | 'negative' | 'info' | 'neutral';
 
@@ -25,8 +89,9 @@ export type RecordValueView =
   | { readonly kind: 'multiline'; readonly text: string }
   | { readonly kind: 'flag'; readonly flag: boolean }
   /**
-   * `phone` and `email`: `href` is `tel:` and digits, or `mailto:` and a plain address, so a value
-   * chooses neither the scheme nor any of the link's parameters.
+   * `phone` and `email`: `href` is `tel:` and the digits of a number written with nothing but
+   * digits and separators, or `mailto:` and a plain address, so a value chooses neither the scheme
+   * nor any of the link's parameters, nor dials a number it does not show.
    */
   | { readonly kind: 'link'; readonly text: string; readonly href: string }
   | { readonly kind: 'badge'; readonly text: string; readonly tone: Tone }
@@ -61,8 +126,9 @@ export interface RecordValueContext {
   /** Whether a rule passes for the record and the user: a table column's `visibleWhen`. */
   readonly rule: (rule: unknown) => boolean;
   /**
-   * The zone an instant is shown in: absent, the reader's own, as the page leaves it; an offset
-   * such as `+0530` in a test, so that the views are deterministic in any zone.
+   * The zone an instant is shown in: absent, the reader's own, as the page leaves it unless a test
+   * provides `RECORD_PAGE_TIME_ZONE`; an offset such as `+0530`, so that a view is the same in any
+   * zone the suite runs in.
    */
   readonly timeZone?: string;
 }
@@ -107,9 +173,14 @@ function asVersion1(
   value: unknown,
   context: RecordValueContext,
 ): RecordValueView {
+  // A date, at any depth of a complex value or in a list, as the `date` widget shows it, not in
+  // UTC as version 1 shows every date. UTC is right for a stored day and wrong for an instant
+  // such as `dc:created`, which belongs in the reader's zone (AGENTS/08-bug-patterns.md, pattern
+  // 29). So a field, a table's cell and a template's placeholder show a date on the same day.
   const field = describeField(key, label, definition, value, {
     locale: context.locale,
     vocabulary: context.vocabulary,
+    date: (date) => ({ text: dateText(date, context) }),
   });
   return field.kind === 'empty' ? EMPTY : { kind: 'layout', field };
 }
@@ -156,9 +227,18 @@ export function relativeDateText(date: Date, today: Date, locale: string): strin
 /** An address a `mailto:` link may carry: it chooses no header, and names no other scheme. */
 const PLAIN_EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
-/** The digits a `tel:` link dials: the value without its spaces, dots, dashes and brackets. */
-function dialable(value: string): string {
-  return value.replace(/[^\d+]/g, '');
+/**
+ * A number as it is written to be dialled: digits, an optional `+` first, and the spaces, dots,
+ * dashes, slashes and brackets that group them. Anything else, such as `ext. 42` or a letter, is
+ * not linked: taking it out would dial another number, as `ext. 42` would add its digits to it.
+ */
+const DIALABLE = /^\+?[\d\s()./-]+$/;
+
+/** The digits a `tel:` link dials, or `null` for a value that is not written to be dialled. */
+function dialable(value: string): string | null {
+  const written = value.trim();
+  if (!DIALABLE.test(written) || !/\d/.test(written)) return null;
+  return written.replace(/[^\d+]/g, '');
 }
 
 /** One scalar of a list widget: a vocabulary entry's label, a user's or group's name, or the text. */
@@ -194,21 +274,38 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
     case 'table':
       return view.rows.map((row) => row.join(' ')).join('; ');
     case 'html':
-      // Never markup in a cell: the text the HTML holds, with its tags and entities gone.
-      return view.html
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&[a-z#0-9]+;/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    case 'layout': {
-      const { field } = view;
-      const one = (value: { readonly text: string } | { readonly flag: boolean }): string =>
-        'text' in value ? value.text : flagText(value.flag);
-      if (field.value) return one(field.value);
-      if (field.chips) return field.chips.map(one).join(', ');
-      return '';
-    }
+      // Never markup in a cell: the words the field would show.
+      return richTextWords(view.html);
+    case 'layout':
+      return fieldText(view.field, flagText);
   }
+}
+
+/**
+ * Version 1's view of a value as one line. A complex value is its sub-fields, each written
+ * `Label: value` as the field lists them, and one value after another; a complex sub-field is
+ * bracketed, so that its own values do not read as the outer one's. Empty sub-fields are left
+ * out, as the field shows them as a dash. The depth is version 1's own, which writes a value
+ * nested deeper as text.
+ */
+function fieldText(field: FieldView, flagText: (flag: boolean) => string): string {
+  const one = (value: { readonly text: string } | { readonly flag: boolean }): string =>
+    'text' in value ? value.text : flagText(value.flag);
+  if (field.value) return one(field.value);
+  if (field.chips) return field.chips.map(one).join(', ');
+  if (!field.groups) return '';
+  return field.groups
+    .map((group) =>
+      group
+        .filter((sub) => sub.kind !== 'empty')
+        .map((sub) => {
+          const text = fieldText(sub, flagText);
+          return `${sub.label}: ${sub.kind === 'groups' ? `(${text})` : text}`;
+        })
+        .join(', '),
+    )
+    .filter((text) => text !== '')
+    .join('; ');
 }
 
 /** What a widget is given: the value, its parameters, and what its schema says the property is. */
@@ -270,7 +367,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   phone: ({ value }) => {
     const shown = textOf(value);
     const digits = dialable(shown);
-    return digits === '' ? text(shown) : { kind: 'link', text: shown, href: `tel:${digits}` };
+    return digits === null ? text(shown) : { kind: 'link', text: shown, href: `tel:${digits}` };
   },
   email: ({ value }) => {
     const shown = textOf(value).trim();
@@ -284,10 +381,10 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
     if (!isRecord(value)) return text(textOf(value));
     const parts = isRecord(parameters['parts']) ? parameters['parts'] : {};
     const part = (name: string): string => {
-      const subfield = parts[name];
-      if (typeof subfield !== 'string' || isEmpty(value[subfield])) return '';
-      const directory = definition.fields?.[subfield]?.directory;
-      const stored = textOf(value[subfield]);
+      const subfield = own(parts, name);
+      if (typeof subfield !== 'string' || isEmpty(own(value, subfield))) return '';
+      const directory = own(definition.fields, subfield)?.directory;
+      const stored = textOf(own(value, subfield));
       return directory ? context.vocabulary(directory, stored) : stored;
     };
     const lines = [
@@ -308,7 +405,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   'status-badge': ({ value, parameters, definition }, context) => {
     const stored = textOf(value);
     const tones = isRecord(parameters['tones']) ? parameters['tones'] : {};
-    const tone = tones[stored];
+    const tone = own(tones, stored);
     return {
       kind: 'badge',
       text: definition.directory ? context.vocabulary(definition.directory, stored) : stored,
@@ -328,21 +425,17 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
       headings: columns.map((column) => context.label(column.label) ?? humanize(column.subfield)),
       rows: items.map((item) =>
         columns.map((column) => {
-          const sub = definition.fields?.[column.subfield] ?? { type: 'string' };
-          // A column's widget is held to its subfield's type, as a field's is to its property's;
-          // one that does not show it leaves the cell to the subfield's own view.
-          const widget =
-            column.widget !== null && widgetAccepts(column.widget, sub) ? column.widget : null;
+          const sub = subfieldDefinition(definition, column);
           return viewText(
             showValue(
               {
                 key: column.subfield,
                 label: column.subfield,
-                value: item[column.subfield],
+                value: own(item, column.subfield),
                 parameters: column.parameters,
                 definition: sub,
               },
-              widget,
+              columnWidget(column, sub),
               context,
             ),
             context.flagText,
@@ -353,7 +446,30 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   },
 };
 
-/** Show a value through `widget`, or as version 1 would when there is none. */
+/** What a table's column holds: its subfield's type in the list's schema, or text when it has none. */
+export function subfieldDefinition(list: LayoutFieldType, column: TableColumn): LayoutFieldType {
+  return own(list.fields, column.subfield) ?? { type: 'string' };
+}
+
+/**
+ * The widget a table's cell is shown through. A column's widget is held to its subfield's type, as
+ * a field's is to its property's; one that does not show it leaves the cell to the subfield's own
+ * view. The page reads a cell's labels through the same choice, so it reads the ones it shows.
+ */
+export function columnWidget(column: TableColumn, sub: LayoutFieldType): string | null {
+  return column.widget !== null && widgetAccepts(column.widget, sub) ? column.widget : null;
+}
+
+/** A date as the `date` widget shows it, with no parameters: one rule for every date on the page. */
+function dateText(value: unknown, context: RecordValueContext): string {
+  const input = { key: '', label: '', value, parameters: {}, definition: { type: 'date' } };
+  return viewText(WIDGET_VIEWS['date'](input, context), context.flagText);
+}
+
+/**
+ * Show a value through `widget`, or as version 1 would when there is none, its dates excepted
+ * (see `asVersion1`).
+ */
 export function showValue(
   input: WidgetInput,
   widget: string | null,
@@ -367,9 +483,43 @@ export function showValue(
     : asVersion1(input.key, input.label, input.definition, input.value, context);
 }
 
-/** What a computation's result is, as a property type, so that a widget can be checked against it. */
-export function computedDefinition(value: unknown): LayoutFieldType {
+/**
+ * A date as Nuxeo writes one, the computations' rule: a day, or a date and time with its zone, `Z`
+ * or `±HH:mm`. A time with no zone names a different instant in every zone, and is not one.
+ */
+const ISO_DATE =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
+
+/** Whether a text is a date as {@link ISO_DATE} writes one, on a day that exists. */
+function isDateText(value: string): boolean {
+  const match = ISO_DATE.exec(value);
+  if (!match || Number.isNaN(new Date(value).getTime())) return false;
+  // `Date` rolls a day that does not exist into the next month: 2023-02-30 is 2 March to it.
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const written = new Date(Date.UTC(year, month - 1, day));
+  return (
+    written.getUTCFullYear() === year &&
+    written.getUTCMonth() === month - 1 &&
+    written.getUTCDate() === day
+  );
+}
+
+/**
+ * What a computation's result is, as a property type, so that its widget can be checked against
+ * it. A computation has no date type: `core.choose` gives a date property's value as its text. So
+ * a text that is a date is a `date` for a widget that shows dates, `date` or `relative-date`, and
+ * the field is not left out; for any other widget it stays the text it is.
+ */
+export function computedDefinition(value: unknown, widget: string | null = null): LayoutFieldType {
   if (typeof value === 'number') return { type: 'double' };
   if (typeof value === 'boolean') return { type: 'boolean' };
+  if (
+    widget !== null &&
+    typeof value === 'string' &&
+    widgetAccepts(widget, { type: 'date' }) &&
+    isDateText(value)
+  ) {
+    return { type: 'date' };
+  }
   return { type: 'string' };
 }

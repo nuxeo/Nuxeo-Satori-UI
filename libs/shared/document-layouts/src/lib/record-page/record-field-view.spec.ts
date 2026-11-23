@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { describeField } from '../document-layout/field-view';
 import type { LayoutFieldType } from '../layout.model';
 import {
   WIDGETS_SHOWN_AS_VERSION_1,
   WIDGET_VIEWS,
   computedDefinition,
   relativeDateText,
+  richTextWords,
   showValue,
   viewText,
   type RecordValueContext,
@@ -208,6 +210,27 @@ describe('showValue', () => {
 
     it('a phone number with no digits is text', () => {
       expect(show('phone', 'n/a')).toEqual({ kind: 'text', text: 'n/a' });
+      // Separators alone are written like a number, and are still not one.
+      expect(show('phone', '( ) - -')).toEqual({ kind: 'text', text: '( ) - -' });
+    });
+
+    /** Taking out what is not a separator would dial another number: `ext. 42` adds `42`. */
+    it.each([
+      '+1 (555) 010-0199 ext. 42',
+      '+1 555 010 0199 x42',
+      '1-800-FLOWERS',
+      '555 0100 or 555 0101',
+      '++1 555 0100',
+      '555+0100',
+    ])('%j, which holds more than digits and separators, is text', (phone) => {
+      expect(show('phone', phone)).toEqual({ kind: 'text', text: phone });
+    });
+
+    it.each([
+      ['  +44 20 7946 0958 ', 'tel:+442079460958'],
+      ['030/123.45-67', 'tel:0301234567'],
+    ])('%j dials %j', (phone, href) => {
+      expect(show('phone', phone)).toEqual({ kind: 'link', text: phone, href });
     });
 
     it('an email address writes to it', () => {
@@ -400,6 +423,58 @@ describe('showValue', () => {
       field: { key: 'k', label: 'L', kind: 'value', value: { flag: true } },
     });
   });
+
+  /**
+   * Except a date, which version 1 formats in UTC: an instant is the reader's day here, as the
+   * `date` widget shows it (pattern 29), alone, in a list, and at any depth of a complex value.
+   * 20:00 UTC on the 23rd is the 24th at +05:30.
+   */
+  describe('a date with no widget, as the date widget shows it', () => {
+    const at = (value: unknown, definition: LayoutFieldType) =>
+      viewText(
+        showValue({ key: 'k', label: 'L', value, parameters: {}, definition }, null, {
+          ...context,
+          timeZone: '+0530',
+        }),
+        context.flagText,
+      );
+
+    it('alone, and in a list', () => {
+      expect(at('2026-11-23T20:00:00.000Z', { type: 'date' })).toBe('November 24, 2026');
+      expect(at('2026-11-23T00:00:00.000Z', { type: 'date' })).toBe('November 23, 2026');
+      expect(at(['2026-11-23T20:00:00.000Z', null, '2026-11-23'], { type: 'date[]' })).toBe(
+        'November 24, 2026, November 23, 2026',
+      );
+      expect(at('soon', { type: 'date' })).toBe('soon');
+    });
+
+    it('in a complex value, and in a list of them, at any depth version 1 shows', () => {
+      const visit: LayoutFieldType = {
+        type: 'complex',
+        fields: {
+          at: { type: 'date' },
+          follow: { type: 'complex', fields: { due: { type: 'date' } } },
+        },
+      };
+      const value = {
+        at: '2026-11-23T20:00:00.000Z',
+        follow: { due: '2026-11-23T00:00:00.000Z' },
+      };
+      expect(at(value, visit)).toBe('At: November 24, 2026, Follow: (Due: November 23, 2026)');
+      expect(at([value], { ...visit, type: 'complex[]' })).toBe(
+        'At: November 24, 2026, Follow: (Due: November 23, 2026)',
+      );
+    });
+
+    /** The hook is the record page's: version 1's own view, given none, is in UTC as before. */
+    it("leaves version 1's own view in UTC", () => {
+      const field = describeField('k', 'L', { type: 'date' }, '2026-11-23T20:00:00.000Z', {
+        locale: 'en-US',
+        vocabulary: (_, id) => id,
+      });
+      expect(field.value).toEqual({ text: 'November 23, 2026' });
+    });
+  });
 });
 
 describe('viewText', () => {
@@ -407,10 +482,131 @@ describe('viewText', () => {
     expect(
       viewText({ kind: 'html', html: '<p>Hi <b>there</b>&nbsp;now</p>' }, context.flagText),
     ).toBe('Hi there now');
+    // Each entity as its character: `&lt;10` is a comparison, not a word "10".
+    expect(viewText({ kind: 'html', html: '<p>&lt;10 R&amp;D</p>' }, context.flagText)).toBe(
+      '<10 R&D',
+    );
+  });
+});
+
+describe('richTextWords', () => {
+  it.each([
+    // An entity is the character it stands for, and only once: `&amp;lt;` is `&lt;`, not `<`.
+    ['<p>&lt;10</p>', '<10'],
+    ['R&amp;D', 'R&D'],
+    ['Caf&eacute; &#8364;5 &#x2014; ok', 'Café €5 — ok'],
+    ['&amp;lt;b&amp;gt;', '&lt;b&gt;'],
+    // Escaped markup stays characters: it is never parsed again.
+    ['&lt;img src=x onerror=alert(1)&gt;', '<img src=x onerror=alert(1)>'],
+    // Blocks and breaks part words; inline formatting does not.
+    ['<p>one</p><p>two</p>', 'one two'],
+    ['one<br>two', 'one two'],
+    ['<ul><li>a</li><li>b</li></ul>', 'a b'],
+    ['<h2>Title</h2>Body', 'Title Body'],
+    ['<b>R</b>&amp;<i>D</i>', 'R&D'],
+    ['  <p>  spaced\n\tout  </p>  ', 'spaced out'],
+  ])('%j reads %j', (html, words) => {
+    expect(richTextWords(html)).toBe(words);
+  });
+
+  /**
+   * A cell says what its field says: the text the field's sanitiser drops with its element, a
+   * script's or a style's, is in neither. One it unwraps, a form's, shows in both.
+   */
+  it("leaves out a script's and a style's text, as the field's sanitiser does, and keeps a form's", () => {
+    expect(
+      richTextWords(
+        '<p>Hi<script>alert(1)</script><style>p{color:red}</style></p><template>hidden</template>',
+      ),
+    ).toBe('Hi');
+    expect(richTextWords('<form><label>Name</label></form>')).toBe('Name');
+  });
+
+  /** A complex value with no widget, as its field lists it: a cell or a placeholder is not empty. */
+  it('writes a complex value as its sub-fields, one value after another', () => {
+    const address: LayoutFieldType = {
+      type: 'complex[]',
+      fields: {
+        street: { type: 'string' },
+        city: { type: 'string' },
+        country: { type: 'string', directory: 'country' },
+        verified: { type: 'boolean' },
+      },
+    };
+    const view = showValue(
+      {
+        key: 'k',
+        label: 'L',
+        value: [
+          { street: '1 Main St', city: 'Springfield', country: 'fr', verified: true },
+          { street: null, city: 'Paris', country: null, verified: null },
+        ],
+        parameters: {},
+        definition: address,
+      },
+      null,
+      context,
+    );
+    expect(viewText(view, context.flagText)).toBe(
+      'City: Springfield, Country: France, Street: 1 Main St, Verified: Yes; City: Paris',
+    );
   });
 
   it('writes a flag in words, through the page’s translation', () => {
     expect(viewText({ kind: 'flag', flag: false }, context.flagText)).toBe('No');
+  });
+});
+
+/**
+ * A table's rows, its schema's subfields and an address's parts are plain objects: a name every
+ * object inherits is not in one. `__proto__` is the one whose inherited value shows, as `{}`; a
+ * subfield's type that is a function made the page throw.
+ */
+describe('a name every object inherits', () => {
+  it('is an empty cell, whether or not the schema lists the subfields', () => {
+    const cells = (definition: LayoutFieldType) =>
+      showValue(
+        {
+          key: 'k',
+          label: 'L',
+          value: [{ code: 'A' }],
+          parameters: { columns: ['line:code', 'line:__proto__', 'line:constructor'] },
+          definition,
+        },
+        'table',
+        context,
+      );
+    expect(cells({ type: 'complex[]' })).toMatchObject({ rows: [['A', '', '']] });
+    expect(cells({ type: 'complex[]', fields: { code: { type: 'string' } } })).toMatchObject({
+      rows: [['A', '', '']],
+    });
+  });
+
+  /** Its type is read from the schema only as the schema's own: a function there made it throw. */
+  it("shows a row's value under a name the schema does not list, as text", () => {
+    const view = showValue(
+      {
+        key: 'k',
+        label: 'L',
+        value: [{ code: 'A', constructor: 'x' }],
+        parameters: { columns: ['line:code', 'line:constructor'] },
+        definition: { type: 'complex[]', fields: { code: { type: 'string' } } },
+      },
+      'table',
+      context,
+    );
+    expect(view).toMatchObject({ rows: [['A', 'x']] });
+  });
+
+  it('is no part of an address', () => {
+    expect(
+      show(
+        'address',
+        { street: '1 Main St' },
+        { parts: { street: 'street', city: '__proto__' } },
+        { type: 'complex', fields: { street: { type: 'string' } } },
+      ),
+    ).toEqual({ kind: 'lines', lines: ['1 Main St'] });
   });
 });
 
@@ -422,5 +618,23 @@ describe('computedDefinition', () => {
     [null, 'string'],
   ])('a %s result is a %s', (value, type) => {
     expect(computedDefinition(value)).toEqual({ type });
+  });
+
+  /** `core.choose` gives a date property's value as text: a date widget shows it as a date. */
+  it.each([
+    ['2026-11-23', 'date', 'date'],
+    ['2026-11-23T20:00:00Z', 'date', 'date'],
+    ['2026-11-23T20:00:00.000+05:30', 'relative-date', 'date'],
+    ['2024-02-29', 'date', 'date'],
+    // For a widget that shows text, a text that looks like a date stays text.
+    ['2026-11-23', 'text', 'string'],
+    ['2026-11-23', null, 'string'],
+    // Not a date as Nuxeo writes one: no zone, a day that does not exist, or prose.
+    ['2026-11-23T20:00:00', 'date', 'string'],
+    ['2023-02-29', 'date', 'string'],
+    ['2026-13-01', 'date', 'string'],
+    ['23 November 2026', 'date', 'string'],
+  ])('%j for the widget %j is a %s', (value, widget, type) => {
+    expect(computedDefinition(value, widget)).toEqual({ type });
   });
 });

@@ -9,6 +9,7 @@ import {
 import type { Invalid } from '../layout-file';
 import type { LayoutLabel } from '../layout.model';
 import { fieldLabelKey, humanize } from '../resolve-layout';
+import { notDrawnColumn } from './widget-support';
 
 /**
  * Layout file version 2 in `view` mode, as the app loads it: the record page's main area
@@ -18,7 +19,8 @@ import { fieldLabelKey, humanize } from '../resolve-layout';
  * the record page is then today's document page. A card, tab or field that names something this
  * build does not have — a widget, a computation, a rule — or that gives a widget a parameter it
  * cannot take is left out, the console says why, and the rest of the file still shows. So a file
- * written for a later platform shows everything this one knows.
+ * written for a later platform shows everything this one knows. So is one whose rule nests deeper
+ * than the rule registry answers ({@link MAX_RULE_LEVELS}): it would pass, and show what it hides.
  */
 
 /** A rule as a layout writes it: an ID, or `{ "type", "parameters" }`, evaluated by the rule registry. */
@@ -164,35 +166,57 @@ export function entryOf(path: string): string | null {
   return entry;
 }
 
-/** The first rule ID in `rule` that this build does not register, or `null` when it knows them all. */
-export function unknownRuleIn(rule: unknown, isRuleKnown: (id: string) => boolean): string | null {
+/**
+ * How many levels a layout's rule may nest, the rule itself being the first: as many as the rule
+ * registry answers. `ExtensionRuleRegistry` stops descending below that, and answers `true` for any
+ * rule there that is not declared security-relevant, so `core.false` under 32 composites would show
+ * the entry it is meant to hide. A deeper rule leaves its entry out, as an unregistered one does.
+ * `record-layout.spec.ts` holds this to the registry both ways: a rule this deep is answered as
+ * written, and one level more is not.
+ */
+export const MAX_RULE_LEVELS = 32;
+
+/**
+ * Why the page could not answer `rule` as written, as the console says it, or `null` when it can:
+ * it names a rule this build does not register, or it nests deeper than {@link MAX_RULE_LEVELS}.
+ * The walk stops at that depth, so it never recurses further than the registry would.
+ */
+export function refusedRule(
+  rule: unknown,
+  isRuleKnown: (id: string) => boolean,
+  level = 1,
+): string | null {
   const id = typeof rule === 'string' ? rule : isRecord(rule) ? rule['type'] : undefined;
   if (typeof id !== 'string') return null;
-  if (!isRuleKnown(id)) return id;
+  if (!isRuleKnown(id)) return `names the rule "${id}", which this build does not register`;
+  if (level > MAX_RULE_LEVELS) {
+    return `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`;
+  }
   if (!COMPOSITE_RULES.has(id) || !isRecord(rule) || !Array.isArray(rule['parameters']))
     return null;
   for (const nested of rule['parameters']) {
-    const unknown = unknownRuleIn(nested, isRuleKnown);
-    if (unknown) return unknown;
+    const refused = refusedRule(nested, isRuleKnown, level + 1);
+    if (refused) return refused;
   }
   return null;
 }
 
-/** The first unregistered rule a computation's `core.choose`, at any depth, names. */
-function unknownRuleInComputation(
+/** Why the page could not answer the rule a computation's `core.choose`, at any depth, takes. */
+function refusedRuleInComputation(
   computation: unknown,
   isRuleKnown: (id: string) => boolean,
 ): string | null {
   if (!isRecord(computation) || !Array.isArray(computation['parameters'])) return null;
   const parameters: readonly unknown[] = computation['parameters'];
+  // `compute` hands the rule to the registry as written, which counts its levels from the first.
   if (computation['type'] === RULE_TAKING_COMPUTATION) {
-    const unknown = unknownRuleIn(parameters[0], isRuleKnown);
-    if (unknown) return unknown;
+    const refused = refusedRule(parameters[0], isRuleKnown);
+    if (refused) return refused;
   }
   for (const parameter of parameters) {
     if (isRecord(parameter) && 'computed' in parameter) {
-      const unknown = unknownRuleInComputation(parameter['computed'], isRuleKnown);
-      if (unknown) return unknown;
+      const refused = refusedRuleInComputation(parameter['computed'], isRuleKnown);
+      if (refused) return refused;
     }
   }
   return null;
@@ -276,26 +300,27 @@ export function readRecordLayout(
     problems.push(`${describe(finding)}; ${entry ? `${entry} left out` : 'ignored'}`);
   }
 
-  /** Whether the entry at `place` shows: neither a finding nor an unregistered rule leaves it out. */
+  /**
+   * Whether the entry at `place` shows: neither a finding nor a rule the page could not answer
+   * leaves it out.
+   */
   const kept = (place: string, entry: Json): boolean => {
     if (leftOut.has(place)) return false;
-    const rule = unknownRuleIn(entry['visibleWhen'], isRuleKnown);
-    const inComputation = unknownRuleInComputation(entry['computed'], isRuleKnown);
-    const unknown = rule ?? inComputation;
-    if (unknown) {
-      problems.push(
-        `${place} names the rule "${unknown}", which this build does not register; left out`,
-      );
+    const refused =
+      refusedRule(entry['visibleWhen'], isRuleKnown) ??
+      refusedRuleInComputation(entry['computed'], isRuleKnown);
+    if (refused) {
+      problems.push(`${place} ${refused}; left out`);
       return false;
     }
-    // A table's columns may each have a rule too, and one this build lacks would show its column
-    // to everyone: the whole table is left out rather than drawn without it.
+    // A table's columns may each have a rule too, and one the page cannot answer would show its
+    // column to everyone: the whole table is left out rather than drawn without it. The columns
+    // of a table inside a column are not checked: that column is never drawn (`notDrawnColumn`),
+    // so no rule in it is ever evaluated.
     for (const [index, column] of tableColumnEntries(entry).entries()) {
-      const inColumn = isRecord(column) ? unknownRuleIn(column['visibleWhen'], isRuleKnown) : null;
+      const inColumn = isRecord(column) ? refusedRule(column['visibleWhen'], isRuleKnown) : null;
       if (inColumn) {
-        problems.push(
-          `${place}.parameters.columns[${index}] names the rule "${inColumn}", which this build does not register; ${place} left out`,
-        );
+        problems.push(`${place}.parameters.columns[${index}] ${inColumn}; ${place} left out`);
         return false;
       }
     }
@@ -322,9 +347,10 @@ export function readRecordLayout(
     }
     if (!isRecord(entry)) return [];
     for (const [index, column] of tableColumnEntries(entry).entries()) {
-      if (isRecord(column) && 'computed' in column) {
+      const notDrawn = notDrawnColumn(column);
+      if (notDrawn) {
         problems.push(
-          `${place}.parameters.columns[${index}] is a computed column, which this build does not draw yet; that column left out`,
+          `${place}.parameters.columns[${index}] is ${notDrawn}, which this build does not draw yet; that column left out`,
         );
       }
     }
@@ -360,8 +386,9 @@ export function readRecordLayout(
 
   /**
    * A card's list of related records, with what this build cannot show of it left out: a column
-   * or a row action a finding names, a column whose rule is not registered, and a computed column.
-   * `null`, and the card left out, when no column is left.
+   * or a row action a finding names, a column whose rule the page cannot answer, a computed
+   * column, a table, and a column that repeats a property. `null`, and the card left out, when no
+   * column is left.
    */
   const relatedList = (raw: Json, card: string): RecordListEntry | null => {
     const place = `${card}.related`;
@@ -370,9 +397,13 @@ export function readRecordLayout(
       (entry: unknown, index): RecordPropertyField[] => {
         const at = `${place}.columns[${index}]`;
         return field(entry, at).flatMap((column) => {
-          if (column.kind !== 'property') {
+          // A cell is one line of text, so a table is not drawn in one, and no rule of its own
+          // columns is ever evaluated there.
+          if (column.kind !== 'property' || column.widget === 'table') {
+            const what =
+              column.kind === 'property' ? "a table in a list's cell" : 'a computed column';
             problems.push(
-              `${at} is a computed column, which this build does not draw yet; that column left out`,
+              `${at} is ${what}, which this build does not draw yet; that column left out`,
             );
             return [];
           }

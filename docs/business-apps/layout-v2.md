@@ -422,17 +422,34 @@ lists what each Web UI element becomes. In version 2's terms:
 - **The limits**, each said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;
-  - **a computed column** of a related list is not drawn yet, and is left out;
+  - **a computed column** of a related list is not drawn yet, nor **a table in a list's cell**:
+    that column is left out, and the rest of the list shows;
   - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run
     by the browse list today, so a record page offers none of them until they are registered for
     the whole app. A customer's own row action, registered in Layer 2 code, is offered;
-  - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, keeps its
-    own View tab, its preview or its editor: a record page beside a preview comes later;
-  - **a computed column** of a table is not drawn yet;
+  - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
+    record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
+    editor: a record page beside a preview comes later;
+  - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
+    that column is left out, and the rest of the table shows;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
     the stored id, until each has its lookup;
+  - **a rule nested more than 32 levels deep** leaves its tab, card or field out: the rule
+    registry answers no deeper, and past that it passes any rule not declared security-relevant,
+    whatever the rule says;
   - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
     layout shows.
+
+  Where this document is silent, the record page decides three things. **A template's placeholder**
+  shows its property as the first field on the page that shows it does, through that field's
+  widget and parameters, so a `user` field's id is a name there too; a property no field shows is
+  shown by its schema type. **A date with no widget**, alone, in a list or inside a complex
+  value, shows as the `date` widget shows one: a stored day as written, and an instant on the
+  reader's day ([pattern 29](../../AGENTS/08-bug-patterns.md)). Version 1's view shows every date
+  in UTC. **A computed field shown through `date` or `relative-date`** shows a result that is a
+  date as Nuxeo writes one, a day or a date and time with its zone, such as the date property a
+  `core.choose` gives; any other result is left out, and the console says why.
+
 - **Checking widgets against property types** happens wherever the content model is known. The app
   checks each field against the type's schemas when it loads the page, and leaves out one whose
   widget does not show its property. The pipeline, the designer and the migration server need

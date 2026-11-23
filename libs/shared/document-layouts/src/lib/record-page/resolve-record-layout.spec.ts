@@ -169,6 +169,26 @@ describe("a table's columns", () => {
       file([{ id: 'a', fields: [{ field: xpath, widget: 'table', parameters: { columns } }] }]),
     );
 
+  /**
+   * A schema's subfields are a plain object, so a column naming what every object inherits found
+   * a function, not an absence, and resolving the page threw. It is a subfield like any missing one.
+   */
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+    'leaves out a column naming %s, which only objects themselves have',
+    (name) => {
+      const { layout, notes } = table([
+        'line:code',
+        `line:${name}`,
+        { field: `line:${name}`, widget: 'text' },
+      ]);
+      expect(layout.cards[0].fields[0].parameters['columns']).toEqual(['line:code']);
+      expect(notes).toEqual([
+        `cards[0].fields[0].parameters.columns[1] left out: member:lines has no subfield "${name}"`,
+        `cards[0].fields[0].parameters.columns[2] left out: member:lines has no subfield "${name}"`,
+      ]);
+    },
+  );
+
   it('leaves out a column naming a subfield its property does not have, and says so', () => {
     const { layout, notes } = table(['line:code', 'line:cod']);
     expect(layout.cards[0].fields[0].parameters['columns']).toEqual(['line:code']);

@@ -17,7 +17,7 @@ import { DocumentLayoutService } from '../document-layout.service';
 import type { DocumentTypeDefinition } from '../layout.model';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
-import { RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
+import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
 import { resolveRecordLayout, type ResolvedRecordLayout } from './resolve-record-layout';
 
 const MEMBER_TYPE: DocumentTypeDefinition = {
@@ -30,6 +30,7 @@ const MEMBER_TYPE: DocumentTypeDefinition = {
         firstName: { type: 'string' },
         lastName: { type: 'string' },
         birthDate: { type: 'date' },
+        visitedAt: { type: 'date' },
         phone: { type: 'string' },
         status: { type: 'string' },
         ssn: { type: 'string' },
@@ -37,7 +38,15 @@ const MEMBER_TYPE: DocumentTypeDefinition = {
         caseManager: { type: 'string' },
         visits: {
           type: 'complex[]',
-          fields: { adjuster: { type: 'string' }, note: { type: 'string' } },
+          fields: {
+            adjuster: { type: 'string' },
+            note: { type: 'string' },
+            country: { type: 'string' },
+            calls: {
+              type: 'complex[]',
+              fields: { by: { type: 'string' }, secret: { type: 'string' } },
+            },
+          },
         },
         address: {
           type: 'complex',
@@ -59,12 +68,14 @@ const member = (overrides: Record<string, unknown> = {}): NuxeoDocument =>
       'member:firstName': 'Jane',
       'member:lastName': 'Roe',
       'member:birthDate': '1980-11-24T00:00:00Z',
+      // An instant: 01:30 on the 24th at +05:30, still the 23rd in UTC.
+      'member:visitedAt': '2026-11-23T20:00:00Z',
       'member:phone': '+1 555 0100',
       'member:status': 'active',
       'member:ssn': '000-00-0000',
       'member:notes': '<p>Prefers <b>email</b><script>alert(1)</script></p>',
       'member:caseManager': 'jdoe',
-      'member:visits': [{ adjuster: 'jdoe', note: 'Called back' }],
+      'member:visits': [{ adjuster: 'jdoe', note: 'Called back', country: 'fr' }],
       'member:address': { street: '1 Main St', city: 'Springfield', zip: '12345' },
       ...overrides,
     },
@@ -147,14 +158,33 @@ describe('RecordPageComponent', () => {
   let fixture: ComponentFixture<RecordPageComponent>;
   let rules: { memberServices: boolean; canSeeService: boolean };
   let principal: (kind: string, id: string) => Observable<string | null>;
+  let vocabularyLabel: (directory: string, id: string) => Observable<string | null>;
+  /** The zone the page shows an instant in: the process's own, unless a test chooses one. */
+  let timeZone: string | undefined;
   let warnings: string[];
   let execute: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     execute = vi.fn(() => new Subject());
     rules = { memberServices: false, canSeeService: true };
-    principal = (kind, id) => of(kind === 'user' && id === 'jdoe' ? 'Jane Doe' : null);
+    principal = (kind, id) =>
+      of(
+        kind === 'user' && id === 'jdoe'
+          ? 'Jane Doe'
+          : kind === 'group' && id === 'members'
+            ? 'Member services'
+            : null,
+      );
+    vocabularyLabel = (directory, id) =>
+      of(
+        directory === 'country' && id === 'fr'
+          ? 'France'
+          : directory === 'statuses' && id === 'active'
+            ? 'Active'
+            : null,
+      );
     warnings = [];
+    timeZone = undefined;
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
       warnings.push(String(message)),
     );
@@ -168,12 +198,13 @@ describe('RecordPageComponent', () => {
         {
           provide: DocumentLayoutService,
           useValue: {
-            vocabularyLabel: () => of(null),
+            vocabularyLabel: (directory: string, id: string) => vocabularyLabel(directory, id),
             principalLabel: (kind: string, id: string) => principal(kind, id),
             rowPropertiesOf: () => of(new Map()),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
+        { provide: RECORD_PAGE_TIME_ZONE, useFactory: () => timeZone },
       ],
     });
     TestBed.inject(ExtensionRuleRegistry).registerRules({
@@ -406,6 +437,348 @@ describe('RecordPageComponent', () => {
     expect((await render(member(), page)).querySelector('[data-field="member:ssn"]')).toBeNull();
     TestBed.inject(ExtensionRuleContextService).groups.set(['members', 'member-services']);
     expect(valueOf(await render(member(), page), 'member:ssn')).toBe('000-00-0000');
+  });
+
+  /** `core.choose` picks an id; the widget shows it by name, as a property's would be. */
+  it('names a computed result shown as a user, a group or a vocabulary entry', async () => {
+    const choose = (a: unknown, b: unknown) => ({
+      type: 'core.choose',
+      parameters: ['test.rules.canSeeService', a, b],
+    });
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            {
+              id: 'manager',
+              widget: 'user',
+              computed: choose({ field: 'member:caseManager' }, 'x'),
+            },
+            { id: 'literal', widget: 'user', computed: choose('jdoe', 'x') },
+            { id: 'team', widget: 'group', computed: choose('members', 'x') },
+            {
+              id: 'country',
+              widget: 'vocabulary',
+              parameters: { directory: 'country' },
+              computed: choose('fr', 'de'),
+            },
+          ],
+        },
+      ],
+    });
+    expect(valueOf(root, 'manager')).toBe('Jane Doe');
+    expect(valueOf(root, 'literal')).toBe('Jane Doe');
+    expect(valueOf(root, 'team')).toBe('Member services');
+    expect(valueOf(root, 'country')).toBe('France');
+  });
+
+  it("shows a table's vocabulary column by its label, from the column's own directory", async () => {
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            {
+              field: 'member:visits',
+              widget: 'table',
+              parameters: {
+                columns: [
+                  'visit:note',
+                  {
+                    field: 'visit:country',
+                    widget: 'vocabulary',
+                    parameters: { directory: 'country' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(
+      [...root.querySelectorAll('[data-field="member:visits"] td')].map((cell) => cell.textContent),
+    ).toEqual(['Called back', 'France']);
+  });
+
+  /** Its rules are never checked, so nothing in it is drawn: not a cell, not a heading. */
+  it('leaves out a table inside a table, and shows the rest of the outer one', async () => {
+    const root = await render(
+      member({
+        'member:visits': [
+          { note: 'Called back', calls: [{ by: 'jdoe', secret: 'for the group only' }] },
+        ],
+      }),
+      {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: {
+                  columns: [
+                    'visit:note',
+                    {
+                      field: 'visit:calls',
+                      widget: 'table',
+                      parameters: {
+                        columns: [
+                          'call:by',
+                          {
+                            field: 'call:secret',
+                            visibleWhen: { type: 'app.rules.inGroup', parameters: ['g'] },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const table = root.querySelector('[data-field="member:visits"]');
+    expect([...(table?.querySelectorAll('th') ?? [])].map((th) => th.textContent?.trim())).toEqual([
+      'Note',
+    ]);
+    expect([...(table?.querySelectorAll('td') ?? [])].map((td) => td.textContent)).toEqual([
+      'Called back',
+    ]);
+    expect(root.textContent).not.toContain('for the group only');
+  });
+
+  /** A cell is text: an entity is its character, and an escaped tag stays characters. */
+  it("shows a table's rich-text cell as its words, entities read, never as markup", async () => {
+    const root = await render(
+      member({
+        'member:visits': [
+          {
+            adjuster: 'jdoe',
+            note: '<p>Under &lt;10, R&amp;D</p><p>&lt;img src="https://tracker.example/p.gif"&gt;</p>',
+          },
+        ],
+      }),
+      {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: { columns: [{ field: 'visit:note', widget: 'rich-text' }] },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const cell = root.querySelector('[data-field="member:visits"] td');
+    expect(cell?.textContent).toBe('Under <10, R&D <img src="https://tracker.example/p.gif">');
+    expect(cell?.children).toHaveLength(0);
+    expect(root.querySelector('img')).toBeNull();
+  });
+
+  /** A complex value with no widget is its sub-fields, in a cell as in a placeholder. */
+  it('writes a complex value in a cell and in a placeholder, as its field lists it', async () => {
+    const root = await render(
+      member({
+        'member:visits': [{ note: 'Called back', calls: [{ by: 'jdoe', secret: null }] }],
+      }),
+      {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                id: 'where',
+                computed: { type: 'core.template', parameters: ['At {member:address}'] },
+              },
+              {
+                field: 'member:visits',
+                widget: 'table',
+                parameters: { columns: ['visit:note', 'visit:calls'] },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    expect(valueOf(root, 'where')).toBe('At City: Springfield, Street: 1 Main St, Zip: 12345');
+    expect(
+      [...root.querySelectorAll('[data-field="member:visits"] td')].map((td) => td.textContent),
+    ).toEqual(['Called back', 'By: jdoe']);
+  });
+
+  /** The validator takes a date widget on a computed field: a date the computation gives shows. */
+  it("shows a computed date through a date widget, on the reader's day", async () => {
+    timeZone = '+0530';
+    const choose = {
+      type: 'core.choose',
+      parameters: ['test.rules.canSeeService', { field: 'member:visitedAt' }, 'x'],
+    };
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            { id: 'seen', widget: 'date', computed: choose },
+            { id: 'seenAgo', widget: 'relative-date', computed: choose },
+            { id: 'seenText', widget: 'text', computed: choose },
+          ],
+        },
+      ],
+    });
+    expect(valueOf(root, 'seen')).toBe('November 24, 2026');
+    expect(valueOf(root, 'seenAgo')).toBe('in 8 hours');
+    expect(valueOf(root, 'seenText')).toBe('2026-11-23T20:00:00Z');
+    // A result that is not a date is still left out, and the console says why.
+    rules.canSeeService = false;
+    const other = await render(member(), {
+      version: 2,
+      cards: [
+        { id: 'a', fields: ['member:phone', { id: 'seen', widget: 'date', computed: choose }] },
+      ],
+    });
+    expect(other.querySelector('[data-field="seen"]')).toBeNull();
+    expect(warnings.some((warning) => warning.includes('does not show a string result'))).toBe(
+      true,
+    );
+  });
+
+  describe("a template's placeholder", () => {
+    it('shows what the field showing its property shows: a name, a label, a day', async () => {
+      // +05:30: 20:00 UTC on the 23rd is the 24th there, so a date read in UTC is a day out.
+      timeZone = '+0530';
+      const root = await render(member(), {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                id: 'summary',
+                computed: {
+                  type: 'core.template',
+                  parameters: ['{member:caseManager}, {member:status}, {member:visitedAt}'],
+                },
+              },
+              { field: 'member:caseManager', widget: 'user' },
+              {
+                field: 'member:status',
+                widget: 'vocabulary',
+                parameters: { directory: 'statuses' },
+              },
+              { field: 'member:visitedAt', widget: 'date' },
+            ],
+          },
+        ],
+      });
+      expect(valueOf(root, 'member:caseManager')).toBe('Jane Doe');
+      expect(valueOf(root, 'member:status')).toBe('Active');
+      expect(valueOf(root, 'member:visitedAt')).toBe('November 24, 2026');
+      expect(valueOf(root, 'summary')).toBe('Jane Doe, Active, November 24, 2026');
+    });
+
+    /** Its widget is what the property is, whether the field shows or its rule hides it. */
+    it('shows a property through the widget of a field its rule hides', async () => {
+      rules.canSeeService = false;
+      const root = await render(member(), {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                id: 'manager',
+                computed: { type: 'core.template', parameters: ['By {member:caseManager}'] },
+              },
+              {
+                field: 'member:caseManager',
+                widget: 'user',
+                visibleWhen: 'test.rules.canSeeService',
+              },
+            ],
+          },
+        ],
+      });
+      expect(root.querySelector('[data-field="member:caseManager"]')).toBeNull();
+      expect(valueOf(root, 'manager')).toBe('By Jane Doe');
+    });
+
+    /**
+     * Pattern 29, with no widget anywhere: a stored day is the day written, and an instant the
+     * reader's day, in a placeholder as in a field. One zone each side of UTC, each with an instant
+     * whose day there is not its UTC day: version 1's view, in UTC, is a day out in both, and a
+     * page that ignored its zone would be a day out in one of them wherever the suite runs.
+     */
+    it.each([
+      ['+0530', '2026-11-23T20:00:00Z', 'November 24, 2026'],
+      ['-0500', '2026-11-24T00:30:00Z', 'November 23, 2026'],
+    ])("shows a date no widget names, at %s, on the reader's day", async (zone, at, day) => {
+      timeZone = zone;
+      const root = await render(member({ 'member:visitedAt': at }), {
+        version: 2,
+        cards: [
+          {
+            id: 'a',
+            fields: [
+              {
+                id: 'dates',
+                computed: {
+                  type: 'core.template',
+                  parameters: ['Born {member:birthDate}, seen {member:visitedAt}'],
+                },
+              },
+              'member:visitedAt',
+            ],
+          },
+        ],
+      });
+      expect(valueOf(root, 'member:visitedAt')).toBe(day);
+      expect(valueOf(root, 'dates')).toBe(`Born November 24, 1980, seen ${day}`);
+    });
+  });
+
+  /** The validator lets a card show one property twice, so the page tracks each by its place. */
+  it('shows one property twice, each through its own widget, each tracked apart', async () => {
+    const root = await render(member(), {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          fields: [
+            { field: 'member:birthDate', widget: 'date', parameters: { format: 'short' } },
+            { field: 'member:birthDate', widget: 'date' },
+          ],
+        },
+      ],
+    });
+    expect(
+      [...root.querySelectorAll('[data-field="member:birthDate"] .record-page__value')].map(
+        (value) => value.textContent?.trim(),
+      ),
+    ).toEqual(['11/24/80', 'November 24, 1980']);
+    // Angular checks the keys when it reconciles a list it drew: a refetch, as a new object.
+    fixture.componentRef.setInput('document', member({ 'member:birthDate': '1981-01-02' }));
+    fixture.detectChanges();
+    expect(
+      [...root.querySelectorAll('[data-field="member:birthDate"] .record-page__value')].map(
+        (value) => value.textContent?.trim(),
+      ),
+    ).toEqual(['1/2/81', 'January 2, 1981']);
+    expect(warnings.filter((warning) => warning.includes('NG0955'))).toEqual([]);
   });
 
   it('shows an empty value as a dash', async () => {

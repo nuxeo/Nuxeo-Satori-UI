@@ -16,6 +16,7 @@ import {
 } from './record-layout';
 import {
   WIDGETS_SHOWN_AS_VERSION_1,
+  own,
   tableColumns,
   widgetAccepts,
   widgetPropertyType,
@@ -120,7 +121,7 @@ function resolveTableColumns(
   for (const column of tableColumns(written)) {
     const place = `${field.place}.parameters.columns[${column.index}]`;
     if (!subfields) continue;
-    const sub = subfields[column.subfield];
+    const sub = own(subfields, column.subfield);
     if (!sub) {
       left.add(column.index);
       notes.push(`${place} left out: ${field.xpath} has no subfield "${column.subfield}"`);

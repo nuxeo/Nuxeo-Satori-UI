@@ -208,9 +208,39 @@ describe('DocumentLayoutService: record pages', () => {
     expect(await first).toBeNull();
     expect(await recordLayout()).toBeNull();
     expect(warnings).toEqual([
-      '[agentic-ui-layouts] Claim/view layout not drawn: a Claim has a file or a note, which the View tab shows first; a record page beside it comes later',
+      '[agentic-ui-layouts] Claim/view layout not drawn for a Claim with a file or a note, which the View tab shows first; a record page beside it comes later',
     ]);
   });
+
+  /** A dynamic facet adds a schema to one document, which the packaged view then previews. */
+  it.each(['file', 'note'])(
+    'keeps the own view of a document whose facet adds the %s schema to a type without it',
+    async (schema) => {
+      const facetted = firstValueFrom(
+        service.recordLayoutFor('Claim', [
+          { name: 'dublincore', prefix: 'dc' },
+          { name: 'claim', prefix: 'claim' },
+          { name: schema, prefix: schema },
+        ]),
+      );
+      http.expectOne(INDEX).flush(index('Claim/view'));
+      http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+      http.expectOne(CLAIM_TYPE).flush(CLAIM);
+      expect(await facetted).toBeNull();
+      http.expectNone(`/nuxeo/api/v1/config/schemas/${schema}`);
+      expect(warnings).toEqual([
+        '[agentic-ui-layouts] Claim/view layout not drawn for a Claim with a file or a note, which the View tab shows first; a record page beside it comes later',
+      ]);
+      // Another Claim, without the facet: its record page, from the reads already made.
+      const plain = await firstValueFrom(
+        service.recordLayoutFor('Claim', [
+          { name: 'dublincore', prefix: 'dc' },
+          { name: 'claim', prefix: 'claim' },
+        ]),
+      );
+      expect(plain?.cards[0].fields).toHaveLength(2);
+    },
+  );
 
   it("tells the console what it left out of a table's columns", async () => {
     const layout = recordLayout();
