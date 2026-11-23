@@ -67,9 +67,9 @@ empty string — deliberately, to suppress a tooltip — and the component binds
 tooltip and the accessible name. An empty accessible name is invisible unless you use a screen
 reader, so it outlived every other kind of review.
 
-**Residual risk, and it is real:** the scan
-covers 8 routes plus view-mode and panel states; **dialogs, the upload flow, dark mode and the
-pre-auth login surface are not covered**. "AA met" is a claim about what was scanned, and an
+**Residual risk, and it is real:** the 2026-11-23 capture makes 14 axe scans over 9 routes,
+including view-mode and panel states. The August pass counted fifteen cases over eight routes.
+**Dialogs, the upload flow, dark mode and the pre-auth login surface are not covered**. "AA met" is a claim about what was scanned, and an
 accessibility-obligated customer will ask for exactly that scope.
 
 **Mitigation:** Phase 6 step 3. Self-contained and demoable.

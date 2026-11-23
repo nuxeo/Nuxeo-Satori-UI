@@ -314,7 +314,11 @@ checked against `/me`.
 
 `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at e27deeaa0, is **`FAIL`, 20 of 35
 checks**. WCAG 2.1 AA is **not met**. The capture ran exactly as its prerequisites document, and
-the `--no-save` install resolved `@axe-core/playwright` 4.14.0 and `axe-core` 4.14.1.
+the `--no-save` install resolved `@axe-core/playwright` 4.14.0 and `axe-core` 4.14.1. Its scope is
+14 axe scans over 9 routes, counting document detail once: landing, browse in three states, search
+in three, trash, tasks, collections, administration, knowledge discovery, and two document-detail
+states. The August pass's "fifteen cases over eight routes" was that run's count. Quote the counts
+of the run you cite.
 
 | Failed checks | What                                                                                                                                        | Verdict                                           |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
