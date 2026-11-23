@@ -8,6 +8,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Injector, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { HomeService } from '@agentic-ui/shared/home';
+import { throwError } from 'rxjs';
 import {
   APP_NAV_ITEMS,
   ExtensionRuleContextService,
@@ -225,6 +227,25 @@ describe('the app menu', () => {
       expect(warnings).toContain(
         "[agentic-ui-menu] navigation.json not loaded: HTTP 500; the platform's menu shows",
       );
+    });
+  });
+  describe('registerAppMenu, when reading throws', () => {
+    it('resolves anyway, and says why the menu was not applied', async () => {
+      const warnings: string[] = [];
+      spyOn(console, 'warn').and.callFake((message: unknown) => warnings.push(String(message)));
+      TestBed.configureTestingModule({
+        providers: [
+          {
+            provide: HomeService,
+            useValue: { loadNavigation: () => throwError(() => new Error('the network is down')) },
+          },
+          { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
+        ],
+      });
+      await expectAsync(registerAppMenu(TestBed.inject(Injector))).toBeResolved();
+      expect(warnings).toEqual([
+        '[agentic-ui-menu] navigation.json not applied: the network is down',
+      ]);
     });
   });
 });
