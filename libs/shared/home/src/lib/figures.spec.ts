@@ -115,7 +115,7 @@ describe('what a KPI shows', () => {
       'no aggregates, from a page provider that queries the repository',
       { aggregate: 'claim_state_agg' },
       { resultsCount: 4, aggregations: {} },
-      'the page provider "payers_open_claims" returns no aggregates: only one the search index serves has them',
+      'the page provider "payers_open_claims" returns no aggregates: it has them only if it defines them and the search index serves it',
     ],
     [
       'an aggregate the page provider does not have',

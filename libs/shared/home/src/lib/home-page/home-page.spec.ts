@@ -190,7 +190,7 @@ describe('HomePageComponent', () => {
     expect(cards()).toEqual(['Gone Unavailable', 'By type Unavailable']);
     expect(warn.mock.calls.map((call) => call[0])).toEqual([
       '[agentic-ui-home] card "gone": the page provider "no_such" was not read: HTTP 404',
-      '[agentic-ui-home] card "flat": the page provider "core_only" returns no aggregates: only one the search index serves has them',
+      '[agentic-ui-home] card "flat": the page provider "core_only" returns no aggregates: it has them only if it defines them and the search index serves it',
     ]);
   });
 

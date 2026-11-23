@@ -22,7 +22,7 @@ export interface Finding {
    * registered, or something the package does not have.
    * `parameter`: a registered ID with parameters it does not take.
    *
-   * What the app does with each, file by file, is in app-definition-v2.md, section 10.
+   * What the app does with each, file by file, is in app-definition-v2.md, section 12.
    */
   readonly kind: 'structure' | 'unknown' | 'parameter';
   readonly message: string;

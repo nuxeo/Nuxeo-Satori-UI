@@ -120,8 +120,8 @@ install and no transpiler.
   - write the validators' patterns;
   - list the same widgets, computations, checks and row actions as the registries.
 
-  The schemas of queues, actions and `app.json` copy the layout schema's definitions they share,
-  so that each stands alone in an editor, and a test keeps the copies equal.
+  The schemas of queues, actions, `app.json`, the menu and the home copy the layout schema's
+  definitions they share, so that each stands alone in an editor, and a test keeps the copies equal.
 
 The test target lists both proposals, the extension reference and `bootstrap-config.ts` among its
 inputs, so an edit to any of them reruns the tests.
@@ -138,7 +138,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 75 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 93 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -187,12 +187,25 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - `null` parameters;
     - a rule id that is not one;
     - a `$schema` that is not a text.
+  - **The menu and the home:**
+    - letting a rule there read a record, in either file or in the checker;
+    - a bucket with no aggregate;
+    - a KPI's parameter from a record;
+    - a figure with no name, a page with no name;
+    - a card with neither a figure nor a queue, an entry with both a queue and a page;
+    - an id twice;
+    - skipping a card's rule;
+    - accepting any page, or one the reference does not list;
+    - `withRegistered` dropping pages;
+    - a home key the schema lacks.
   - **Across files:**
     - ignoring the package's own actions in queues;
     - skipping whether `app.json` turns a module on;
     - skipping the branding images;
     - checking a file without its package;
-    - ignoring which package has an `app.json`, when a path fits two places.
+    - ignoring which package has an `app.json`, when a path fits two places;
+    - passing any queue the home or the menu names;
+    - not placing `home.json`.
   - **The command:**
     - always exiting 0;
     - not reading `assets/`;
@@ -202,7 +215,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - passing when a package file cannot be read;
     - a byte-order mark;
     - passing with nothing checked;
-    - ignoring `--registered`.
+    - ignoring `--registered`;
+    - knowing queues in a package with no `queues/`.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;

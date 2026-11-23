@@ -46,7 +46,7 @@ export function figureOf(kpi: HomeKpi, results: unknown): Figure {
   const aggregations = results['aggregations'];
   if (!isRecord(aggregations) || Object.keys(aggregations).length === 0)
     return unavailable(
-      `the page provider "${kpi.pageProvider}" returns no aggregates: only one the search index serves has them`,
+      `the page provider "${kpi.pageProvider}" returns no aggregates: it has them only if it defines them and the search index serves it`,
     );
   const aggregate = Object.hasOwn(aggregations, kpi.aggregate)
     ? aggregations[kpi.aggregate]

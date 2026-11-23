@@ -40,8 +40,9 @@ Nuxeo Server                     ← via Angular dev proxy (:8080) in dev; same-
 
 The business apps work on `integration/enterprise-grade-app` adds three tags to `eslint.config.mjs`.
 They are the tiers of [docs/business-apps/architecture.md](../docs/business-apps/architecture.md),
-section 4. Two projects carry them so far, both engines: `libs/shared/computations` and
-`libs/shared/document-layouts`, the record page. The first module arrives in phase 1.
+section 4. Three projects carry them so far, all engines: `libs/shared/computations`,
+`libs/shared/document-layouts`, the record page, and `libs/shared/home`, the home. The first module
+arrives in phase 1.
 
 | Tag                | Tier               | Carried by                                               | May depend on                                                             |
 | ------------------ | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -97,6 +98,7 @@ libs/
     document-layouts/            ← Per-type layouts: package layout files or schema-generated (NXSAT-311), and the record page, layout version 2's `view` mode (business apps, phase 1). Tagged `scope:engine`; internal, not in the platform package
     app-definition/              ← The app definition's contract, plain TypeScript: the validators and JSON Schemas of app definition version 2's files, their registries, and `app-definition:validate` (business apps, phase 0)
     computations/                ← The runtime of layout version 2's computed fields, plain TypeScript: `compute` and the six packaged evaluators, held to app-definition's signatures. The first `scope:engine` project (business apps, phase 1)
+    home/                        ← The home engine: an app's `home.json` drawn at `/home` as cards of KPIs from page provider aggregates, each shown by a rule (business apps, phase 1). Tagged `scope:engine`; internal, not in the platform package
     satori-components/           ← nxs- component library, published as @nuxeo/satori-platform/components (NXSAT-308, below)
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo/satori-platform/components-satori
 
