@@ -40,7 +40,8 @@ Nuxeo Server                     ← via Angular dev proxy (:8080) in dev; same-
 
 The business apps work on `integration/enterprise-grade-app` adds three tags to `eslint.config.mjs`.
 They are the tiers of [docs/business-apps/architecture.md](../docs/business-apps/architecture.md),
-section 4. No project carries them yet; the first engine and the first module arrive in phase 1.
+section 4. One project carries them so far: the first engine, `libs/shared/computations`. The first
+module arrives in phase 1.
 
 | Tag                | Tier               | Carried by                                               | May depend on                                                             |
 | ------------------ | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -52,10 +53,10 @@ section 4. No project carries them yet; the first engine and the first module ar
   through the module's type tag.
 - **`apps/nuxeo-ui` is not an experience yet.** It does not carry `scope:experience`, because it
   still uses the current app's features.
-- **A gate proves the rules.** Until real projects exist, lint has nothing to fail on. So
-  `npm run beta:module-boundaries` lints imports between probe projects that carry each tag, with
-  the real rule. 6 forbidden imports must be reported and 6 allowed ones must stay quiet. It runs
-  in CI's static gates.
+- **A gate proves the rules.** Until modules and experiences exist, lint has no forbidden import to
+  fail on. So `npm run beta:module-boundaries` lints imports between probe projects that carry each
+  tag, with the real rule. 6 forbidden imports must be reported and 6 allowed ones must stay quiet.
+  It runs in CI's static gates.
 
 ---
 
@@ -95,6 +96,7 @@ libs/
     ke-client/                   ← Knowledge Enrichment client via Nuxeo CIC automation
     document-layouts/            ← Per-type layouts: package layout files or schema-generated (NXSAT-311); internal, not in the platform package
     app-definition/              ← The app definition's contract, plain TypeScript: the validators and JSON Schemas of app definition version 2's files, their registries, and `app-definition:validate` (business apps, phase 0)
+    computations/                ← The runtime of layout version 2's computed fields, plain TypeScript: `compute` and the six packaged evaluators, held to app-definition's signatures. The first `scope:engine` project (business apps, phase 1)
     satori-components/           ← nxs- component library, published as @nuxeo/satori-platform/components (NXSAT-308, below)
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo/satori-platform/components-satori
 

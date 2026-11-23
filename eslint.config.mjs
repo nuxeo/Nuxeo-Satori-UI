@@ -239,9 +239,10 @@ export default [
             // the rule of its section 14. Experiences may use modules, modules may use engines,
             // and modules never use each other.
             //
-            // **No project carries these tags yet.** The first engine and the first module arrive
-            // in phase 1, so until then lint has nothing to fail on here. A rule nothing exercises
-            // is how this list once rejected nothing for months. So
+            // **One project carries these tags so far:** the first engine, `libs/shared/computations`,
+            // which imports only shared code. No module or experience exists before phase 1, so
+            // lint has no forbidden import here to fail on. A rule nothing exercises is how this
+            // list once rejected nothing for months. So
             // `scripts/beta-harness/module-boundaries.mjs` lints imports between probe projects
             // that carry each tag, with this very list. Every forbidden import must be reported,
             // and every allowed one must stay quiet. It runs in CI's static gates.
