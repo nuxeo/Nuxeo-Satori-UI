@@ -7,9 +7,9 @@ import type { ComputationContext } from './types';
 
 /**
  * 01:30 on 23 November 2026 in the zone the suite runs in, so that its local day is the 23rd in
- * any zone `SATORI_TEST_TZ` asks for. In the default, Asia/Calcutta, it is still 22 November in
- * UTC (2026-11-22T20:00:00.000Z), so a computation that read today in UTC rather than in the
- * reader's zone would be a day out, and a spec would see it. `dates.spec.ts` asserts that it is.
+ * both of the zones `zones.testing.ts` names. In Asia/Calcutta it is still 22 November in UTC
+ * (2026-11-22T20:00:00.000Z), so a computation that read today in UTC rather than in the reader's
+ * zone would be a day out, and a spec would see it. `dates.spec.ts` asserts that it is.
  */
 export const TODAY = new Date(2026, 10, 23, 1, 30);
 

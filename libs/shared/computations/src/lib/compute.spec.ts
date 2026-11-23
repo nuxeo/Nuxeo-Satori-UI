@@ -1,7 +1,12 @@
 import { compute } from './compute';
 import { PACKAGED_COMPUTATION_EVALUATORS } from './evaluators';
 import { recordOf } from './record.testing';
-import { MAX_DEPTH, type ComputationContext, type ComputationEvaluator } from './types';
+import {
+  MAX_DEPTH,
+  type ComputationContext,
+  type ComputationEvaluator,
+  type ComputationResult,
+} from './types';
 
 const record = recordOf({
   'member:birthDate': '1990-11-23T00:00:00.000Z',
@@ -106,13 +111,23 @@ describe('compute: a parameter', () => {
     });
   });
 
-  it('is the ISO 8601 text of a Date, as a form’s date picker may hold one', () => {
-    const context = recordOf({ 'member:birthDate': new Date('1990-11-24T00:00:00.000Z') });
-    expect(compute(valueOf({ field: 'member:birthDate' }), context)).toEqual({
+  it('is a Date’s local day, as a form’s date picker holds one at local midnight', () => {
+    // Local midnight on 24 November 1990 is 1990-11-23T18:30:00.000Z in Asia/Calcutta: its UTC
+    // day is the 23rd, the day before the one picked.
+    const picked = recordOf({ 'member:birthDate': new Date(1990, 10, 24) });
+    expect(compute(valueOf({ field: 'member:birthDate' }), picked)).toEqual({
       ok: true,
-      value: '1990-11-24T00:00:00.000Z',
+      value: '1990-11-24',
     });
-    expect(compute(age, context)).toEqual({ ok: true, value: 35 });
+    expect(compute(age, picked)).toEqual({ ok: true, value: 35 });
+    // 23:00 on 23 November 1990 is 1990-11-24T04:00:00.000Z in America/New_York: its UTC day is
+    // the 24th, the day after.
+    const late = recordOf({ 'member:birthDate': new Date(1990, 10, 23, 23, 0) });
+    expect(compute(valueOf({ field: 'member:birthDate' }), late)).toEqual({
+      ok: true,
+      value: '1990-11-23',
+    });
+    expect(compute(age, late)).toEqual({ ok: true, value: 36 });
   });
 
   it('is a computation, evaluated one level deeper', () => {
@@ -204,6 +219,80 @@ describe('compute: bounded work', () => {
     expect(context.rules).toHaveLength(MAX_DEPTH);
     expect(context.reads).toEqual([]);
   });
+
+  it('starts at depth 0 unless it is told otherwise', () => {
+    expect(compute(nested(MAX_DEPTH), record, undefined, 0)).toEqual({ ok: true, value: 2 });
+  });
+
+  it('continues a count its caller started', () => {
+    expect(compute(nested(1), record, undefined, MAX_DEPTH - 1)).toEqual({ ok: true, value: 2 });
+    expect(compute(nested(1), record, undefined, MAX_DEPTH)).toEqual({
+      ok: false,
+      reason: 'the computation "core.count" is nested more than 10 deep',
+    });
+    expect(compute(nested(3), record, undefined, 8)).toEqual({
+      ok: false,
+      reason: 'the computation "core.count" is nested more than 10 deep',
+    });
+  });
+
+  it.each([
+    [-1, '-1'],
+    [1.5, '1.5'],
+    [Number.NaN, 'NaN'],
+    [Number.POSITIVE_INFINITY, 'Infinity'],
+  ])('refuses to start at the depth %s, which would let the cap pass anything', (depth, quoted) => {
+    expect(compute(age, record, undefined, depth)).toEqual({
+      ok: false,
+      reason: `a computation starts at a whole depth of 0 or more, not ${quoted}`,
+    });
+  });
+
+  it('gives each rule the depth of the computation that asks it', () => {
+    const depths: (number | undefined)[] = [];
+    const context: ComputationContext = {
+      ...recordOf({ 'dc:subjects': [] }),
+      rule: (_rule, depth) => {
+        depths.push(depth);
+        return true;
+      },
+    };
+    compute(nested(3), context);
+    compute(nested(2), context, undefined, 5);
+    expect(depths).toEqual([1, 2, 6]);
+  });
+
+  it('counts through a rule that evaluates a computation and passes its depth on', () => {
+    // As app.rules.fieldIn will, with a { "computed" } parameter: each level's rule holds the next
+    // level's computation, so the chain nests only through rules.
+    const chain = (levels: number): unknown =>
+      levels === 1
+        ? { type: 'core.count', parameters: [{ field: 'dc:subjects' }] }
+        : {
+            type: 'core.choose',
+            parameters: [
+              { type: 'test.fieldIn', parameters: [{ computed: chain(levels - 1) }] },
+              'a',
+              'b',
+            ],
+          };
+    const inner: ComputationResult[] = [];
+    const context: ComputationContext = {
+      ...recordOf({ 'dc:subjects': ['art'] }),
+      rule: (rule, depth) => {
+        const [parameter] = (rule as { parameters: [{ computed: unknown }] }).parameters;
+        inner.push(compute(parameter.computed, context, undefined, depth));
+        return true;
+      },
+    };
+    compute(chain(31), context);
+    expect(inner).toHaveLength(MAX_DEPTH);
+    // The deepest rule's computation returns first: the 11th level, refused unevaluated.
+    expect(inner[0]).toEqual({
+      ok: false,
+      reason: 'the computation "core.choose" is nested more than 10 deep',
+    });
+  });
 });
 
 describe('compute: it never throws', () => {
@@ -279,5 +368,60 @@ describe('compute: the evaluators it is given', () => {
 
   it('keeps the packaged registry as it is', () => {
     expect(Object.isFrozen(PACKAGED_COMPUTATION_EVALUATORS)).toBe(true);
+  });
+});
+
+describe('compute: a reason quotes at most 60 characters of anything a file holds', () => {
+  const long = 'x'.repeat(505);
+  /** `long` as a reason quotes it: its JSON, cut at 60 characters. */
+  const quoted = `"${'x'.repeat(59)}…`;
+
+  it('quotes a type nobody registered', () => {
+    const result = compute({ type: long }, record);
+    expect(result).toEqual({ ok: false, reason: `the computation ${quoted} is not registered` });
+    // 541 characters before every value a reason names went through quote().
+    expect(!result.ok && result.reason.length).toBe(95);
+  });
+
+  it('quotes a type nested past the cap', () => {
+    const deep = (levels: number): unknown =>
+      levels === 1
+        ? { type: long }
+        : { type: 'core.choose', parameters: [true, { computed: deep(levels - 1) }, 0] };
+    expect(compute(deep(MAX_DEPTH + 1), record)).toEqual({
+      ok: false,
+      reason: `the computation ${quoted} is nested more than 10 deep`,
+    });
+  });
+
+  it('quotes a key a computation does not have', () => {
+    expect(compute({ ...age, [long]: 1 }, record)).toEqual({
+      ok: false,
+      reason: `the computation "core.age" has a key a computation does not have: ${quoted}`,
+    });
+  });
+
+  it('quotes the type of a computation with no list of parameters, or that failed', () => {
+    const evaluators = {
+      [long]: () => {
+        throw new Error('e'.repeat(300));
+      },
+    };
+    expect(compute({ type: long, parameters: null }, record, evaluators)).toEqual({
+      ok: false,
+      reason: `the computation ${quoted} has parameters that are not a list`,
+    });
+    expect(compute({ type: long }, record, evaluators)).toEqual({
+      ok: false,
+      reason: `the computation ${quoted} failed: ${'e'.repeat(60)}…`,
+    });
+  });
+
+  it('quotes a property', () => {
+    const field = `dc:${'a'.repeat(300)}`;
+    expect(compute(valueOf({ field }), recordOf({ [field]: [1] }))).toEqual({
+      ok: false,
+      reason: `the property "dc:${'a'.repeat(56)}… holds [1], not a text, a number or a boolean`,
+    });
   });
 });

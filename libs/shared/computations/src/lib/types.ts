@@ -9,11 +9,19 @@ export interface ComputationContext {
   value(field: string): unknown;
   /** Its display value: a vocabulary's label, a user's name, a formatted date. */
   display(field: string): string;
-  /** Whether a registered rule passes for the record and the user (for `core.choose`). */
-  rule(rule: unknown): boolean;
+  /**
+   * Whether a registered rule passes for the record and the user (for `core.choose`).
+   *
+   * `depth` is the level of the computation asking. A rule that evaluates a computation in turn, as
+   * `app.rules.fieldIn` will with a `{ "computed" }` parameter, passes it to `compute` as its
+   * starting depth, so that the nesting cap counts through the rule. A rule that evaluates nothing
+   * ignores it. `compute` always gives it; a caller of its own may leave it off.
+   */
+  rule(rule: unknown, depth?: number): boolean;
   /**
    * Today, injected so that tests are deterministic. Its calendar day is read in the reader's own
-   * zone, as the day the person looking at the page is living: see `src/lib/dates.ts`.
+   * zone, as the day the person looking at the page is living: see `src/lib/dates.ts`. A computation
+   * that needs it refuses a `Date` that is not valid.
    */
   readonly today: Date;
 }
@@ -41,8 +49,10 @@ export type ComputationEvaluator = (
 ) => ComputationResult;
 
 /**
- * How deep computations may nest: the top one is at depth 1, and each `{ "computed" }` parameter
- * is one deeper. Layout-v2.md's examples nest one deep; ten leaves room for a `core.choose` chain.
+ * How deep computations may nest: a field's own computation is at depth 1, each `{ "computed" }`
+ * parameter is one deeper, and a rule that evaluates a computation continues the count when it
+ * passes on its depth (`compute`). Layout-v2.md's examples nest one deep; ten leaves room for a
+ * `core.choose` chain.
  */
 export const MAX_DEPTH = 10;
 
@@ -64,9 +74,16 @@ export function refuse(reason: string): ComputationResult {
 /** How much of a value a reason quotes: enough to recognise it, not a whole list in the console. */
 export const QUOTE_LENGTH = 60;
 
+/** A text cut at `QUOTE_LENGTH` characters, with an ellipsis where it was cut. */
+export function cut(text: string): string {
+  return text.length > QUOTE_LENGTH ? `${text.slice(0, QUOTE_LENGTH)}…` : text;
+}
+
 /**
- * A value as a reason quotes it: as JSON, cut at `QUOTE_LENGTH` characters. It never throws, so
- * that explaining a refusal cannot fail: a value JSON cannot write is named by its kind.
+ * A value as a reason quotes it: as JSON, cut at `QUOTE_LENGTH` characters. Every value a reason
+ * names goes through it, a computation's type, a key and a subfield included, so a reason stays
+ * short whatever a file holds. It never throws, so that explaining a refusal cannot fail: a value
+ * JSON cannot write is named by its kind.
  */
 export function quote(value: unknown): string {
   let text: string;
@@ -81,5 +98,5 @@ export function quote(value: unknown): string {
       text = `a ${typeof value}`;
     }
   }
-  return text.length > QUOTE_LENGTH ? `${text.slice(0, QUOTE_LENGTH)}…` : text;
+  return cut(text);
 }

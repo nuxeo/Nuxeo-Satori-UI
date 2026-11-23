@@ -1,6 +1,7 @@
 import { compute } from './compute';
 import { TODAY, recordOf } from './record.testing';
 import { MAX_TEMPLATE_LENGTH } from './types';
+import { inZone } from './zones.testing';
 
 const ageOf = (birthDate: unknown, today = TODAY) =>
   compute(
@@ -29,11 +30,56 @@ describe('core.age', () => {
     expect(ageOf('2000-02-29', new Date(2004, 1, 29, 12))).toEqual({ ok: true, value: 4 });
   });
 
-  it('reads the date’s day in UTC, as the date widget shows it', () => {
-    // 01:30 on 24 November in Asia/Calcutta, but 23 November in UTC: the birthday is today.
-    expect(ageOf('1990-11-23T20:00:00.000Z')).toEqual({ ok: true, value: 36 });
-    // A day written at midnight east of UTC is the day before in UTC.
-    expect(ageOf('1990-11-24T00:00:00+02:00')).toEqual({ ok: true, value: 36 });
+  it('reads a stored day, at midnight UTC, as its day in UTC', () => {
+    // The evening of 23 November in America/New_York, where the birthday would seem to be today.
+    expect(ageOf('1990-11-24T00:00:00.000Z')).toEqual({ ok: true, value: 35 });
+    expect(ageOf('1990-11-24T00:00:00+00:00')).toEqual({ ok: true, value: 35 });
+  });
+
+  it('reads any other instant as its day in the reader’s zone', () => {
+    // 01:30 on 24 November in Asia/Calcutta, 15:00 on the 23rd in America/New_York.
+    expect(ageOf('1990-11-23T20:00:00.000Z')).toEqual({
+      ok: true,
+      value: inZone({ 'Asia/Calcutta': 35, 'America/New_York': 36 }),
+    });
+    // 1990-11-23T22:00:00.000Z: 03:30 on the 24th in Asia/Calcutta, 17:00 on the 23rd in New York.
+    expect(ageOf('1990-11-24T00:00:00+02:00')).toEqual({
+      ok: true,
+      value: inZone({ 'Asia/Calcutta': 35, 'America/New_York': 36 }),
+    });
+  });
+
+  it('reads a stamp just past midnight UTC on the reader’s day, not as a day after today', () => {
+    // In America/New_York, 2026-11-24T01:00Z is 20:00 on the 23rd, and the stamp is 19:30 on it.
+    const today = new Date('2026-11-24T01:00:00.000Z');
+    expect(ageOf('2026-11-24T00:30:00.000Z', today)).toEqual({ ok: true, value: 0 });
+  });
+
+  it('reads a Date as its local day, as a date picker gives it at local midnight', () => {
+    // In Asia/Calcutta, local midnight on 24 November is still the 23rd in UTC.
+    expect(ageOf(new Date(1990, 10, 24))).toEqual({ ok: true, value: 35 });
+    expect(ageOf(new Date(2026, 10, 24))).toEqual({
+      ok: false,
+      reason: 'the computation "core.age" takes a date that is not after today, not 2026-11-24',
+    });
+    // In America/New_York, 23:00 on 23 November is already the 24th in UTC.
+    expect(ageOf(new Date(1990, 10, 23, 23, 0))).toEqual({ ok: true, value: 36 });
+    // And 19:00 on the 23rd is exactly midnight UTC: written as an instant, it would be taken for
+    // a stored 24 November.
+    expect(ageOf(new Date(1990, 10, 23, 19, 0))).toEqual({ ok: true, value: 36 });
+  });
+
+  it('refuses a today that is not a valid Date, rather than answer NaN', () => {
+    expect(ageOf('1990-11-23', new Date(Number.NaN))).toEqual({
+      ok: false,
+      reason:
+        'the computation "core.age" reads today from its context, which gives an invalid Date, not a valid Date',
+    });
+    expect(ageOf('1990-11-23', '2026-11-23' as unknown as Date)).toEqual({
+      ok: false,
+      reason:
+        'the computation "core.age" reads today from its context, which gives "2026-11-23", not a valid Date',
+    });
   });
 
   it('reads today’s day in the reader’s zone', () => {
@@ -284,6 +330,23 @@ describe('core.sum', () => {
     });
   });
 
+  it('quotes at most 60 characters of a subfield it names', () => {
+    const subfield = 's'.repeat(300);
+    const quoted = `"${'s'.repeat(59)}…`;
+    expect(sum([{}], subfield)).toEqual({
+      ok: false,
+      reason: `the computation "core.sum" reads ${quoted} in each item, and item 0 has no ${quoted}`,
+    });
+    expect(sum([1], subfield)).toEqual({
+      ok: false,
+      reason: `the computation "core.sum" reads ${quoted} in each item, and item 0 is 1, not a complex value`,
+    });
+    expect(sum([{ [subfield]: 'x' }], subfield)).toEqual({
+      ok: false,
+      reason: `the computation "core.sum" adds numbers, and ${quoted} in item 0 is "x"`,
+    });
+  });
+
   it.each([
     ['a text', 'abc', '"abc"'],
     ['a number', 5, '5'],
@@ -416,11 +479,58 @@ describe('core.dateDiff', () => {
     expect(diff('2026-12-25', 'today', 'days')).toEqual({ ok: true, value: -32 });
   });
 
-  it('reads the dates’ days in UTC', () => {
-    expect(diff('2026-11-01T20:00:00.000Z', '2026-11-02T00:00:00.000Z', 'days')).toEqual({
+  it('reads stored days in UTC', () => {
+    // In America/New_York both are the evening before; read there, the difference would not move,
+    // but each would be a day out against "today" and against an instant.
+    expect(diff('2026-11-01T00:00:00.000Z', '2026-11-02T00:00:00.000Z', 'days')).toEqual({
       ok: true,
       value: 1,
     });
+    expect(diff('2026-11-01T00:00:00.000Z', 'today', 'days')).toEqual({ ok: true, value: 22 });
+  });
+
+  it('reads other instants as their days in the reader’s zone', () => {
+    // 2 November in Asia/Calcutta, both 1 November in America/New_York: the same day either way,
+    // where their days in UTC are a day apart.
+    expect(diff('2026-11-01T20:00:00.000Z', '2026-11-02T03:00:00.000Z', 'days')).toEqual({
+      ok: true,
+      value: 0,
+    });
+  });
+
+  it('reads a stamp just past midnight UTC on the reader’s day, the day today is', () => {
+    // In America/New_York, 2026-11-24T01:00Z is 20:00 on the 23rd, and the stamp 19:30 on it.
+    const created = { 'dc:created': '2026-11-24T00:30:00.000Z' };
+    expect(
+      compute(
+        { type: 'core.dateDiff', parameters: [{ field: 'dc:created' }, 'today', 'days'] },
+        recordOf(created, { today: new Date('2026-11-24T01:00:00.000Z') }),
+      ),
+    ).toEqual({ ok: true, value: 0 });
+  });
+
+  it('reads a Date as its local day, as a literal of that day is read', () => {
+    // In Asia/Calcutta, local midnight on 1 November is still 31 October in UTC.
+    const picked = { 'claim:start': new Date(2026, 10, 1) };
+    expect(diff({ field: 'claim:start' }, 'today', 'days', picked)).toEqual({
+      ok: true,
+      value: 22,
+    });
+    expect(diff('2026-11-01', 'today', 'days')).toEqual({ ok: true, value: 22 });
+  });
+
+  it('refuses a today that is not a valid Date, and needs none without "today"', () => {
+    const broken = recordOf({}, { today: new Date(Number.NaN) });
+    expect(
+      compute({ type: 'core.dateDiff', parameters: ['2026-11-01', 'today', 'days'] }, broken),
+    ).toEqual({
+      ok: false,
+      reason:
+        'the computation "core.dateDiff" reads today from its context, which gives an invalid Date, not a valid Date',
+    });
+    expect(
+      compute({ type: 'core.dateDiff', parameters: ['2026-11-01', '2026-11-02', 'days'] }, broken),
+    ).toEqual({ ok: true, value: 1 });
   });
 
   it('gives null when either date is missing', () => {

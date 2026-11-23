@@ -1,13 +1,16 @@
 import {
   dayNumber,
   difference,
+  isStoredCalendarDay,
   localDayOf,
   parseDay,
   utcDayOf,
+  written,
   type CalendarDay,
   type Unit,
 } from './dates';
 import { TODAY } from './record.testing';
+import { inZone } from './zones.testing';
 
 const day = (year: number, month: number, date: number): CalendarDay => ({
   year,
@@ -15,24 +18,50 @@ const day = (year: number, month: number, date: number): CalendarDay => ({
   day: date,
 });
 
+// The suite runs in Asia/Calcutta and in America/New_York (zones.testing.ts). Where a day differs
+// between them, `inZone` gives each its literal, as pattern 29 asks.
+
 describe('parseDay', () => {
   it.each([
     ['2024-03-06', day(2024, 3, 6)],
     ['2024-02-29', day(2024, 2, 29)],
     ['2000-02-29', day(2000, 2, 29)],
-    ['2024-03-06T00:00:00.000Z', day(2024, 3, 6)],
-    ['2024-03-06T23:59:59.999Z', day(2024, 3, 6)],
-    ['2024-03-06T10:15Z', day(2024, 3, 6)],
-    ['2024-03-06T10:15:30Z', day(2024, 3, 6)],
-    ['2024-03-06T10:15:30.5Z', day(2024, 3, 6)],
-    // Instants whose day in UTC is not their day in Asia/Calcutta, nor in a zone west of UTC.
-    ['2024-03-06T20:00:00.000Z', day(2024, 3, 6)],
-    ['2024-03-07T00:00:00.000Z', day(2024, 3, 7)],
-    // A time with a zone is the instant it names: its day is that instant's day in UTC.
-    ['2024-03-06T01:00:00+05:30', day(2024, 3, 5)],
-    ['2024-03-06T22:00:00-05:00', day(2024, 3, 7)],
-  ])('reads %s as its day in UTC', (text, expected) => {
+  ])('reads %s, a day, as that day', (text, expected) => {
     expect(parseDay(text)).toEqual(expected);
+  });
+
+  it.each([
+    '2024-03-06T00:00:00.000Z',
+    '2024-03-06T00:00:00Z',
+    '2024-03-06T00:00Z',
+    '2024-03-06T00:00:00.0Z',
+    '2024-03-06T00:00:00.00Z',
+    '2024-03-06T00:00:00+00:00',
+    '2024-03-06T00:00:00.000+00:00',
+  ])('reads %s, a stored day at midnight UTC, as its day in UTC', (text) => {
+    // In New York this is the evening of 5 March: read in the reader's zone, it would be a day out.
+    expect(parseDay(text)).toEqual(day(2024, 3, 6));
+  });
+
+  it.each<[string, CalendarDay, CalendarDay]>([
+    // The text, then its day in Asia/Calcutta and in America/New_York.
+    ['2024-03-06T20:00:00.000Z', day(2024, 3, 7), day(2024, 3, 6)],
+    ['2024-03-07T03:00:00.000Z', day(2024, 3, 7), day(2024, 3, 6)],
+    ['2024-03-06T12:00:00.000Z', day(2024, 3, 6), day(2024, 3, 6)],
+    ['2024-03-06T23:59:59.999Z', day(2024, 3, 7), day(2024, 3, 6)],
+    ['2024-03-06T10:15Z', day(2024, 3, 6), day(2024, 3, 6)],
+    ['2024-03-06T10:15:30.5Z', day(2024, 3, 6), day(2024, 3, 6)],
+    // Just past midnight UTC, or midnight written another way, is an instant, not a stored day.
+    ['2024-03-06T00:00:00.001Z', day(2024, 3, 6), day(2024, 3, 5)],
+    ['2024-03-06T00:00:01Z', day(2024, 3, 6), day(2024, 3, 5)],
+    ['2024-03-06T00:00:00-00:00', day(2024, 3, 6), day(2024, 3, 5)],
+    ['2024-03-06T00:00:00+05:30', day(2024, 3, 6), day(2024, 3, 5)],
+    ['2024-03-06T01:00:00+05:30', day(2024, 3, 6), day(2024, 3, 5)],
+    ['2024-03-06T22:00:00-05:00', day(2024, 3, 7), day(2024, 3, 6)],
+  ])('reads %s, an instant, as its day in the reader’s zone', (text, calcutta, newYork) => {
+    expect(parseDay(text)).toEqual(
+      inZone({ 'Asia/Calcutta': calcutta, 'America/New_York': newYork }),
+    );
   });
 
   it.each([
@@ -65,18 +94,68 @@ describe('parseDay', () => {
   });
 });
 
-describe('the two readings of an instant', () => {
-  it('reads a record’s date in UTC and today in the reader’s zone', () => {
-    const instant = new Date('2024-03-06T20:00:00.000Z');
-    expect(utcDayOf(instant)).toEqual(day(2024, 3, 6));
-    // 01:30 on 7 March in Asia/Calcutta, the zone vite.config.mts pins.
-    expect(localDayOf(instant)).toEqual(day(2024, 3, 7));
+describe('isStoredCalendarDay', () => {
+  it.each([
+    '2024-03-06',
+    '2024-03-06T00:00:00.000Z',
+    '2024-03-06T00:00:00Z',
+    '2024-03-06T00:00Z',
+    '2024-03-06T00:00:00.00Z',
+    '2024-03-06T00:00:00+00:00',
+  ])('is true for %s, a stored day', (text) => {
+    expect(isStoredCalendarDay(text)).toBe(true);
   });
 
-  it('gives the suite’s today a different day in UTC, so a spec can tell the readings apart', () => {
+  it.each<[unknown, string]>([
+    ['2024-03-06T00:00:00.001Z', 'a millisecond past midnight UTC'],
+    ['2024-03-06T00:00:01Z', 'a second past'],
+    ['2024-03-06T00:01:00Z', 'a minute past'],
+    ['2024-03-06T00:00:00-00:00', 'midnight with an unknown offset'],
+    ['2024-03-06T00:00:00+05:30', 'midnight in another zone'],
+    ['2024-03-06T20:00:00.000Z', 'an evening'],
+    [new Date('2024-03-06T00:00:00.000Z'), 'a Date, which is read in the reader’s zone'],
+    ['2023-02-29', 'a day that does not exist'],
+    ['2024-03-06T00:00:00', 'a time with no zone'],
+    ['yesterday', 'a word'],
+    [20240306, 'a number'],
+    [null, 'null'],
+    [undefined, 'undefined'],
+  ])('is false for %j: %s', (value) => {
+    expect(isStoredCalendarDay(value)).toBe(false);
+  });
+
+  it('takes an instant at exactly midnight UTC for a stored day: the one known misreading', () => {
+    // A dc:created stamped at 00:00:00.000Z is the evening of 23 November in New York, but nothing
+    // in the text tells it from a day Nuxeo stored, so it is read as 24 November everywhere.
+    expect(isStoredCalendarDay('2026-11-24T00:00:00.000Z')).toBe(true);
+    expect(parseDay('2026-11-24T00:00:00.000Z')).toEqual(day(2026, 11, 24));
+  });
+});
+
+describe('the two readings of an instant', () => {
+  it('reads an instant’s day in UTC, or in the reader’s zone', () => {
+    const evening = new Date('2024-03-06T20:00:00.000Z');
+    expect(utcDayOf(evening)).toEqual(day(2024, 3, 6));
+    expect(localDayOf(evening)).toEqual(
+      inZone({ 'Asia/Calcutta': day(2024, 3, 7), 'America/New_York': day(2024, 3, 6) }),
+    );
+    const early = new Date('2024-03-07T03:00:00.000Z');
+    expect(utcDayOf(early)).toEqual(day(2024, 3, 7));
+    expect(localDayOf(early)).toEqual(
+      inZone({ 'Asia/Calcutta': day(2024, 3, 7), 'America/New_York': day(2024, 3, 6) }),
+    );
+  });
+
+  it('gives the suite’s today a different day in UTC east of it, so a spec can tell them apart', () => {
     expect(localDayOf(TODAY)).toEqual(day(2026, 11, 23));
-    // True in any zone more than an hour and a half ahead of UTC, as the default pin is.
-    expect(utcDayOf(TODAY)).toEqual(day(2026, 11, 22));
+    expect(utcDayOf(TODAY)).toEqual(
+      inZone({ 'Asia/Calcutta': day(2026, 11, 22), 'America/New_York': day(2026, 11, 23) }),
+    );
+  });
+
+  it('writes a day as ISO 8601 does', () => {
+    expect(written(day(2024, 3, 6))).toBe('2024-03-06');
+    expect(written(day(50, 1, 1))).toBe('0050-01-01');
   });
 });
 
