@@ -276,6 +276,18 @@ async function runStory(context, story) {
       const path = new URL(response.url()).pathname;
       if (path.includes(SATORI_CATALOGUES)) catalogues.push({ path, status: response.status() });
     });
+    // A transport failure — refused, reset, aborted — emits `requestfailed` and no `response`, so
+    // without this a catalogue that never arrived was simply absent from the record (review on #602).
+    page.on('requestfailed', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.includes(SATORI_CATALOGUES)) {
+        catalogues.push({
+          path,
+          status: 0,
+          error: request.failure()?.errorText ?? 'request failed',
+        });
+      }
+    });
   }
   try {
     const events = await openStory(page, story, failures);
@@ -314,10 +326,13 @@ async function runStory(context, story) {
  * is fine only if that fallback then loaded; and a Satori Storybook must load at least one.
  */
 function satoriCatalogueFailures(catalogues) {
-  const loaded = new Set(catalogues.filter((c) => c.status < 400).map((c) => c.path));
+  /** Served: an HTTP answer below 400. A transport failure is recorded as status 0. */
+  const ok = (status) => status >= 200 && status < 400;
+  const loaded = new Set(catalogues.filter((c) => ok(c.status)).map((c) => c.path));
   const failures = [];
-  for (const { path, status } of catalogues) {
-    if (status < 400) continue;
+  for (const { path, status, error } of catalogues) {
+    // Served on another attempt — the preview and a story can each ask — means the strings arrived.
+    if (ok(status) || loaded.has(path)) continue;
     const file = path.slice(path.lastIndexOf('/') + 1);
     const lang = file.replace(/\.json$/, '');
     const parts = lang.split(/[-_]/);
@@ -325,7 +340,7 @@ function satoriCatalogueFailures(catalogues) {
       parts.length > 1 ? path.replace(new RegExp(`${file}$`), `${parts[0]}.json`) : null;
     if (fallback && loaded.has(fallback)) continue;
     failures.push(
-      `Satori's catalogue ${path} answered ${status}` +
+      `Satori's catalogue ${path} ${status ? `answered ${status}` : `failed in transport (${error})`}` +
         (fallback ? ` and its fallback ${fallback} did not load` : '') +
         ', so its sat.* strings are missing',
     );

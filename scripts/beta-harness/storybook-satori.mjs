@@ -51,12 +51,25 @@ if (!existsSync(join(ROOT, 'node_modules', '@hylandsoftware', 'satori-ui', 'pack
       'installs from GitHub Packages with SATORI_GH_READONLY_TOKEN.',
   );
 }
+let chromium;
 try {
-  await import('@playwright/test');
+  ({ chromium } = await import('@playwright/test'));
 } catch {
   notRun(
     '@playwright/test is not installed. Install it without touching the lockfile: ' +
       'npm install --no-save @playwright/test && npx playwright install chromium',
+  );
+}
+// The package is not the browser: with Chromium's binary missing the import succeeds, the build
+// runs, and the runner then fails — a FAIL that stops later gates, for an environment that simply
+// cannot run this one (review on #602). Launch it before building, and say NOT RUN if it cannot.
+try {
+  const browser = await chromium.launch();
+  await browser.close();
+} catch (error) {
+  notRun(
+    `Chromium cannot be launched (${String(error?.message ?? error).split('\n')[0]}). Install it: ` +
+      'npx playwright install chromium',
   );
 }
 
