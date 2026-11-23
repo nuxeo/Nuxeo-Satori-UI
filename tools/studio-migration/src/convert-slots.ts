@@ -6,13 +6,14 @@
  *   deployment's allow-list (decision 3). A button with no operation, or one off the list, is
  *   reported.
  * - **A theme** becomes the app's `branding.theme`, with its tokens in `themes/<name>.json`.
- * - **The left menu and its pages** wait for phase 1's `navigation.json`, and **tabs** for M2.
+ * - **The left menu's entries** that open a search screen become entries of `navigation.json`
+ *   (`convert-home.ts`); **tabs** wait for M2.
  *
  * A contribution that sits in a condition waits for M2, which converts the condition: converting
  * it alone would show it to everyone.
  */
 import { own, slotEntry, type Catalogue } from './catalogue';
-import { menuEntries } from './convert-home';
+import { menuDecisions } from './convert-home';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
 import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
@@ -126,7 +127,8 @@ export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
   const owners = actionOwners(inventory, catalogue, context.appId, context.allowList);
-  const entries = menuEntries(inventory, catalogue);
+  const menus = menuDecisions(inventory, catalogue);
+  const entries = menus.entries;
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const id = `slot-contribution:${contribution.path}#${index}`;
     const entry = slotEntry(catalogue, contribution.slot);
@@ -216,10 +218,10 @@ export function convertSlots(context: ConvertContext): void {
       context.decide(
         id,
         menu === undefined
-          ? {
+          ? (menus.skipped.get(contribution) ?? {
               outcome: 'pending',
-              note: 'It opens no queue this conversion writes, and an entry of navigation.json opens a queue or a page: the mapping agent proposes the page (section 5)',
-            }
+              note: 'No entry of the left menu opens it, so it is no entry of navigation.json: the mapping agent proposes where it goes (section 5)',
+            })
           : menu.item === contribution
             ? { outcome: 'converted', to: `navigation.json ${menu.id}` }
             : {

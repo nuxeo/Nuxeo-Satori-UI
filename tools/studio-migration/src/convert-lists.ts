@@ -18,6 +18,7 @@ import type { DashboardCard, Inventory, ResultColumn, SearchLayout } from './inv
 import {
   homeQueueId,
   labelOf,
+  slug,
   PAGE_SIZE_LIMIT,
   queuePageSize,
   queuePath,
@@ -245,22 +246,33 @@ export function menuLabel(
   search: SearchLayout,
 ): string | null {
   const contributions = context.inventory.slotContributions;
-  const page = contributions.find(
-    (contribution) =>
-      contribution.slot === 'DRAWER_PAGES' &&
-      contribution.parts.some(
-        (part) =>
-          part.element === 'nuxeo-search-form' &&
-          (own(part.attributes, 'provider') === search.provider ||
-            own(part.attributes, 'search-name') === searchQueueId(search)),
-      ),
-  );
+  const page = contributions.find((contribution) => {
+    if (contribution.slot !== 'DRAWER_PAGES') return false;
+    const form = contribution.parts.find((part) => part.element === 'nuxeo-search-form');
+    return form !== undefined && searchOfForm(context.inventory, form.attributes) === search;
+  });
   if (!page) return null;
   const item = contributions.find(
     (contribution) => contribution.slot === 'DRAWER_ITEMS' && contribution.name === page.name,
   );
   const icon = item?.parts.find((part) => part.element === 'nuxeo-menu-icon');
   return (icon && own(icon.attributes, 'label')) ?? null;
+}
+
+/**
+ * The search screen's results a `nuxeo-search-form` opens: the one its `search-name` names, by
+ * the screen's folder; only for a form that names none, the first on its `provider`. Two screens
+ * can search one page provider, and a provider alone would take the first for both.
+ */
+export function searchOfForm(
+  inventory: Pick<Inventory, 'searches'>,
+  form: Readonly<Record<string, string>>,
+): SearchLayout | undefined {
+  const results = inventory.searches.filter((search) => search.part === 'results');
+  const name = own(form, 'search-name')?.trim();
+  if (name) return results.find((search) => searchQueueId(search) === slug(name));
+  const provider = own(form, 'provider')?.trim();
+  return provider ? results.find((search) => search.provider === provider) : undefined;
 }
 
 function machineLabel(label: string | null): string {

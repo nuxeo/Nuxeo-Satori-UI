@@ -10,7 +10,8 @@
  *   the configuration among them;
  * - **nothing is widened to everyone.** A field, button or dashboard card Web UI shows only while
  *   a condition passes must not be converted without it: a field written without a
- *   `visibleWhen`, an action without one, or a queue written for the card at all.
+ *   `visibleWhen`, an action without one, a queue written for the card at all, or a card of
+ *   `home.json` or an entry of `navigation.json` for what shows only under a condition.
  *
  * The truth tables wait for M2 and the migration server. With conditions in the package, that part
  * has not run, and the check says so; with none, there is nothing for a table to decide.
@@ -25,11 +26,10 @@ import {
   placed,
   queuePath,
   searchQueueId,
-  slug,
 } from './app-files';
 import { layoutFields, listColumns, rulesIn } from './app-walk';
 import { recordedAllowList } from './convert';
-import { homeCards, menuEntries } from './convert-home';
+import { homeCards, menuEntries, menuEntryId } from './convert-home';
 import { isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -140,8 +140,13 @@ export function checkConditions({
   const menuList =
     isRecord(menuFile) && Array.isArray(menuFile['entries']) ? menuFile['entries'] : [];
   for (const item of inventory.slotContributions) {
-    if (item.slot !== 'DRAWER_ITEMS' || item.conditions.length === 0) continue;
-    const id = slug(item.name || 'entry');
+    if (item.slot !== 'DRAWER_ITEMS') continue;
+    // The entry under a condition, or the page it opens.
+    const page = inventory.slotContributions.find(
+      (other) => other.slot === 'DRAWER_PAGES' && other.name === item.name,
+    );
+    if (item.conditions.length === 0 && (page?.conditions.length ?? 0) === 0) continue;
+    const id = menuEntryId(item);
     const written = menuList.find((entry) => isRecord(entry) && entry['id'] === id);
     if (!menuIds.has(id) && isRecord(written) && !('visibleWhen' in written))
       findings.push(

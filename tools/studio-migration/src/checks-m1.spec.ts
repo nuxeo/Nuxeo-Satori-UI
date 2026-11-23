@@ -1082,6 +1082,116 @@ describe('the home and the menu', () => {
   });
 });
 
+// Found by the independent review of the home and the menu.
+describe('what the review of the home and the menu found', () => {
+  const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+  const files = syntheticBundleFiles();
+  const form = `${UI}/search/claims/nuxeo-claims-search-form.html`;
+  const results = `${UI}/search/claims/nuxeo-claims-search-results.html`;
+
+  it('opens the search screen a form names, not the first on its page provider', () => {
+    const input = prepare({
+      bundle: {
+        [`${UI}/search/archived/nuxeo-archived-search-form.html`]: files[form],
+        [`${UI}/search/archived/nuxeo-archived-search-results.html`]: files[results],
+        [bundle]:
+          `<nuxeo-slot-content name="archivedSearch" slot="DRAWER_ITEMS" order="2"><template><nuxeo-menu-icon name="archivedsearch" label="Archived" icon="icons:archive"></nuxeo-menu-icon></template></nuxeo-slot-content>
+          <nuxeo-slot-content name="archivedSearch" slot="DRAWER_PAGES"><template><nuxeo-search-form provider="claims" search-name="archived"></nuxeo-search-form></template></nuxeo-slot-content>` +
+          files[bundle],
+      },
+    });
+    expect(input.conversion.app['navigation.json']).toMatchObject({
+      entries: [
+        { id: 'archivedsearch', label: 'Archived', queue: 'archived' },
+        { id: 'claimssearch', label: 'Claims', queue: 'claims' },
+      ],
+    });
+    expect(input.conversion.app['queues/archived.json']).toMatchObject({ label: 'Archived' });
+    expect(input.conversion.app['queues/claims.json']).toMatchObject({ label: 'Claims' });
+    for (const number of [5, 6, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it('fails a home card that asks for a KPI, or a card or entry written twice', () => {
+    const input = prepare();
+    const kpi = edit(input, 'home.json', (file) => {
+      file.cards[0].kpi = { pageProvider: 'some_other_pp' };
+      return file;
+    });
+    expect(run(kpi, 7)?.findings).toEqual([
+      "home.json: card-1 asks for a KPI, which Web UI's dashboard card 1 does not show",
+    ]);
+    const twice = edit(input, 'navigation.json', (file) => {
+      file.entries.push({ ...file.entries[0], queue: 'home-1-claims' });
+      return file;
+    });
+    expect(run(twice, 7)?.findings).toEqual([
+      'navigation.json: claimssearch is there 2 times, not once',
+    ]);
+  });
+
+  it('says why a menu entry is none: a page under a condition waits, a repeated name is reported', () => {
+    const conditional = prepare({
+      bundle: {
+        [bundle]: files[bundle].replace(
+          '<template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template>',
+          '<template><nuxeo-filter group="x"><template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template></nuxeo-filter></template>',
+        ),
+      },
+    });
+    const entry = (input: HarnessInput, index: number) =>
+      input.conversion.report.constructs.find(
+        (candidate) => candidate.id === `slot-contribution:${bundle}#${index}`,
+      );
+    expect(conditional.conversion.app['navigation.json']).toBeUndefined();
+    expect(entry(conditional, 3)).toMatchObject({
+      outcome: 'pending',
+      note: expect.stringMatching(/condition/),
+    });
+    const widened = edit(conditional, 'navigation.json', () => ({
+      version: 2,
+      entries: [{ id: 'claimssearch', queue: 'claims' }],
+    }));
+    expect(run(widened, 5)?.findings).toEqual([
+      'navigation.json: claimssearch shows to everyone, though Web UI shows the menu entry "claimsSearch" only while a condition passes',
+    ]);
+    const repeated = prepare({
+      bundle: {
+        [bundle]: files[bundle].replace(
+          '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_PAGES">',
+          '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_ITEMS" order="2"><template><nuxeo-menu-icon name="again" label="Again" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-slot-content><nuxeo-slot-content name="claimsSearch" slot="DRAWER_PAGES">',
+        ),
+      },
+    });
+    expect(entry(repeated, 4)).toMatchObject({
+      outcome: 'reported',
+      note: 'Another menu entry already became navigation.json claimssearch',
+    });
+  });
+
+  it('finds the entry an unnamed menu item under a condition would become, by its icon', () => {
+    const input = prepare({
+      bundle: {
+        [bundle]: files[bundle]
+          .replace(
+            '<nuxeo-slot-content name="claimsSearch" slot="DRAWER_ITEMS" order="1">\n  <template><nuxeo-menu-icon',
+            '<nuxeo-slot-content name="" slot="DRAWER_ITEMS" order="1">\n  <template><nuxeo-filter group="x"><template><nuxeo-menu-icon',
+          )
+          .replace(
+            'icon="icons:search"></nuxeo-menu-icon></template>',
+            'icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
+          ),
+      },
+    });
+    const widened = edit(input, 'navigation.json', () => ({
+      version: 2,
+      entries: [{ id: 'claimssearch', queue: 'claims' }],
+    }));
+    expect(run(widened, 5)?.findings).toEqual([
+      'navigation.json: claimssearch shows to everyone, though Web UI shows the menu entry "" only while a condition passes',
+    ]);
+  });
+});
+
 describe('the verdict', () => {
   it('counts a partial check as a blocker, never as a pass', () => {
     const result = runHarness(prepare());

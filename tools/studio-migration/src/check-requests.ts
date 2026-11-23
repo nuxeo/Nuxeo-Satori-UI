@@ -8,6 +8,8 @@
  * - **a list** asks the same page provider, with the same parameters, the same opening sort and,
  *   for a dashboard card, the same page size;
  * - **an action** runs the same operation, with the same parameters;
+ * - **the home and the menu** open the same lists as Web UI's dashboard and left menu, each card
+ *   and entry once, and ask for no KPI;
  * - **nothing is asked that Web UI does not ask:** every queue and action comes from the package.
  *
  * Recording the requests both apps send, and comparing the result counts once search has caught up
@@ -188,7 +190,13 @@ function opened(
       );
       continue;
     }
+    if (matches.length > 1)
+      findings.push(`${file}: ${want.id} is there ${matches.length} times, not once`);
     const [item] = matches as Record<string, unknown>[];
+    // Web UI's dashboard shows a list, never a figure: a KPI asks a page provider for a count
+    // nothing in the package asks for.
+    if ('kpi' in item)
+      findings.push(`${file}: ${want.id} asks for a KPI, which ${want.source} does not show`);
     if (item['queue'] !== want.queue)
       findings.push(
         `${file}: ${want.id} opens ${JSON.stringify(item['queue'] ?? item['page'] ?? null)}, where ${want.source} opens queues/${want.queue}.json`,

@@ -317,7 +317,8 @@ For the sample, M1's report lists:
 - the dashboard's 5 cards:
   - the repeated one, reported;
   - the favourites card, which reads an operation, proposed;
-  - the first card, converted to a card of `home.json` that opens its list, written as a queue;
+  - the first card, converted to a card of `home.json` that opens its list, written as a queue. The
+    app does not draw a card that is only a link to a queue until phase 1's queue page exists;
   - the tasks and recently viewed cards, pending: `home.json` has no card for either yet;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts

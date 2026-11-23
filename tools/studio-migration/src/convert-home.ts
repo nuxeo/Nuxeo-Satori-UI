@@ -12,7 +12,7 @@
  */
 import { homeQueueId, iconOf, labelOf, placed, queuePath, searchQueueId, slug } from './app-files';
 import { own, slotEntry, type Catalogue } from './catalogue';
-import { queueOwners } from './convert-lists';
+import { queueOwners, searchOfForm } from './convert-lists';
 import type { Inventory, SlotContribution } from './inventory';
 
 /** A card of `home.json`, from a dashboard card whose list is a queue. */
@@ -56,43 +56,74 @@ export function homeCards(inventory: Inventory): HomeCard[] {
   return cards;
 }
 
+/** The id a left-menu entry takes in `navigation.json`: its name, or its icon's, made an id. */
+export function menuEntryId(item: SlotContribution): string {
+  const icon = item.parts.find((part) => part.element === 'nuxeo-menu-icon');
+  return slug(item.name || (icon && own(icon.attributes, 'name')) || 'entry');
+}
+
+/** Why a left-menu contribution is no entry of `navigation.json`, as its report entry says. */
+export interface MenuSkip {
+  readonly outcome: 'pending' | 'reported';
+  readonly note: string;
+}
+
 /**
  * One entry per left-menu entry (`DRAWER_ITEMS`) whose page (`DRAWER_PAGES`, paired by name)
- * holds a search screen whose results own their queue. Neither may sit in a condition, which M2
- * converts. Each id is the entry's name, made an id; the first entry to an id keeps it.
+ * holds a search screen whose results own their queue, and why each other left-menu contribution
+ * is none. Neither the entry nor its page may sit in a condition, which M2 converts. The first
+ * entry to an id keeps it; a later one is reported.
  */
-export function menuEntries(inventory: Inventory, catalogue: Catalogue): MenuEntry[] {
+export function menuDecisions(
+  inventory: Inventory,
+  catalogue: Catalogue,
+): { readonly entries: MenuEntry[]; readonly skipped: Map<SlotContribution, MenuSkip> } {
   const owners = queueOwners(inventory);
   const contributions = inventory.slotContributions;
   const entries: MenuEntry[] = [];
+  const skipped = new Map<SlotContribution, MenuSkip>();
+  const none = (item: SlotContribution, page: SlotContribution | undefined, skip: MenuSkip) => {
+    skipped.set(item, skip);
+    if (page && !skipped.has(page)) skipped.set(page, skip);
+  };
   for (const { contribution: item } of placed(contributions)) {
-    if (item.slot !== 'DRAWER_ITEMS' || item.conditions.length > 0) continue;
+    if (item.slot !== 'DRAWER_ITEMS') continue;
     if (slotEntry(catalogue, item.slot)?.how !== 'automatic') continue;
-    const icon = item.parts.find((part) => part.element === 'nuxeo-menu-icon');
-    if (!icon) continue;
     const page = contributions.find(
-      (other) =>
-        other.slot === 'DRAWER_PAGES' && other.name === item.name && other.conditions.length === 0,
+      (other) => other.slot === 'DRAWER_PAGES' && other.name === item.name,
     );
+    if (item.conditions.length > 0 || (page?.conditions.length ?? 0) > 0) {
+      none(item, page, {
+        outcome: 'pending',
+        note: 'It shows only while a condition passes: M2 converts the condition, with truth tables, so it is not shown to everyone meanwhile',
+      });
+      continue;
+    }
+    const icon = item.parts.find((part) => part.element === 'nuxeo-menu-icon');
     const form = page?.parts.find((part) => part.element === 'nuxeo-search-form');
-    if (!page || !form) continue;
-    const search = inventory.searches.find(
-      (candidate) =>
-        candidate.part === 'results' &&
-        (candidate.provider === own(form.attributes, 'provider') ||
-          searchQueueId(candidate) === own(form.attributes, 'search-name')),
-    );
-    if (!search) continue;
-    const path = queuePath(searchQueueId(search));
-    const owner = owners.get(path);
-    if (owner?.kind !== 'search' || owner.search !== search) continue;
-    const id = slug(item.name || own(icon.attributes, 'name') || 'entry');
-    if (entries.some((other) => other.id === id)) continue;
+    const search = form ? searchOfForm(inventory, form.attributes) : undefined;
+    const path = search ? queuePath(searchQueueId(search)) : undefined;
+    const owner = path ? owners.get(path) : undefined;
+    if (!icon || !search || !path || owner?.kind !== 'search' || owner.search !== search) {
+      none(item, page, {
+        outcome: 'pending',
+        note: 'It opens no queue this conversion writes, and an entry of navigation.json opens a queue or a page: the mapping agent proposes the page (section 5)',
+      });
+      continue;
+    }
+    const id = menuEntryId(item);
+    if (entries.some((other) => other.id === id)) {
+      none(item, undefined, {
+        outcome: 'reported',
+        note: `Another menu entry already became navigation.json ${id}`,
+      });
+      continue;
+    }
     const queue = queueIdOf(path);
     const symbol = iconOf(own(icon.attributes, 'icon'));
     entries.push({
       item,
-      page,
+      page: page as SlotContribution,
       id,
       queue,
       entry: {
@@ -104,5 +135,10 @@ export function menuEntries(inventory: Inventory, catalogue: Catalogue): MenuEnt
       },
     });
   }
-  return entries;
+  return { entries, skipped };
+}
+
+/** The entries of `navigation.json` the package's left menu gives. */
+export function menuEntries(inventory: Inventory, catalogue: Catalogue): MenuEntry[] {
+  return menuDecisions(inventory, catalogue).entries;
 }

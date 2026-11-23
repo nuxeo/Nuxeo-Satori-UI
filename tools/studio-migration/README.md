@@ -369,10 +369,10 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `drop-menu-entry`          | 7     | Drops an entry of the menu                                            |
 | `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
 
-**On the sample**, every control was applied to its conversion with `mutate` and checked: the 18
-that find something to break each fail their check, with a finding of their own. On the sample that
-is 20 of the 23. The other three
-have nothing to break there, and say so: `widen-to-everyone` and `widen-column-to-everyone`,
+**On the sample**, every one of the 23 controls was applied to its conversion with `mutate` and
+checked. The 20 that find something to break each fail their check, with a finding of their own,
+`wrong-home-queue` and `drop-menu-entry` among them. The other three have nothing to break there,
+and say so: `widen-to-everyone` and `widen-column-to-everyone`,
 because the sample has no condition, and `bind-other-operation`, because its one button runs no
 operation. The tests apply all three to the made-up package, which has them.
 
@@ -465,9 +465,14 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **Conditions, tabs, task forms and layout blocks** are M2's. Until then a field, button or card
   under a condition is pending, and tabs are pending.
 - **The home and the menu, as the app draws them.** The conversion writes `home.json` and
-  `navigation.json`, which the validator checks, but the app does not read `navigation.json` yet
-  (app-definition-v2.md, section 9). The tasks and recently viewed cards wait for card kinds of
-  their own.
+  `navigation.json`, which the validator checks, but the app draws neither of what M1 writes yet:
+  - it does not read `navigation.json` (app-definition-v2.md, section 9);
+  - it leaves out a home card that is only a link to a queue, until phase 1's queue page exists
+    (`HOME_QUEUE_LINK` in `libs/shared/home`). Every card M1 writes is one, because Web UI's
+    dashboard shows a list where `home.json` would show a figure, and M1 invents no figure.
+
+  The tasks and recently viewed cards wait for card kinds of their own.
+
 - **A search form.** A queue has none, so a search screen's form and its fields are reported.
 - **Web UI's own label keys.** A dashboard card's heading and its columns are Web UI's translation
   keys, such as `home.latestDocumentsEdited`. The queue names them as `labelKey`, which the app's
