@@ -200,10 +200,12 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
   test's title, a fixture, the value under test, or a matcher under `.not` or `expect.not`, asserts
   nothing and does not count, and a second test holds that. A reason written with no literal text
   to look for, as a variable, a `+` or a `?:`, is reported as having no control, and a third test
-  holds that. Every refusal is built by `refuse()`, and a fourth test fails when one is built any
-  other way, so that a reason cannot slip past the first. It proves that
-  every reason has a control, not that every guard has one. The mutation checks are for guards.
-- **Mutation checks:** taking out any one of these 56 guards made a test fail. The helper that ran
+  holds that. A result is built by `accept()` or `refuse()` alone: an object with an `ok` key,
+  however the key is written (`ok`, `'ok'`, `['ok']` or the shorthand `{ ok }`), is found nowhere
+  else, and a fourth and a fifth test hold that, so that a reason cannot slip past the first. It
+  proves that every reason has a control, not that every guard has one. The mutation checks are for
+  guards.
+- **Mutation checks:** taking out any one of these 59 guards made a test fail. The helper that ran
   them refused a mutation that did not apply exactly once, and one that broke a suite instead of
   failing a test.
   - the depth cap, and the depth cap off by one;
@@ -230,7 +232,8 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
   - telling a boxed value by its `valueOf` rather than `instanceof`, and unboxing a bigint;
   - an evaluator's number of parameters drifting from its signature, and an ID missing from the
     evaluators;
-  - a new refusal with no control, and a refusal built without `refuse()`;
+  - a new refusal with no control, and a refusal built without `refuse()`, its `ok` key written
+    quoted, computed or as a shorthand;
   - counting as a control only a matcher's argument, not the value under test, not a matcher under
     `.not`, nor an `expect.not` inside one, only one expectation holding all of a reason, and
     reporting a reason with no text to look for;
