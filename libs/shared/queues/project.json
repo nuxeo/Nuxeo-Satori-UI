@@ -1,0 +1,27 @@
+{
+  "name": "shared-queues",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/queues/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:shared", "scope:engine", "type:ui"],
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the queue engine, which draws an app's queues/<id>.json (app-definition-v2.md, section 4). An engine is shared code, so it carries scope:shared as well as scope:engine, and imports only shared code and other engines.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the proposal whose queue example a spec reads: without it an edit to the example would replay a cached pass.",
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/docs/business-apps/app-definition-v2.md"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/shared/queues"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

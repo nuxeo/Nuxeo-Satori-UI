@@ -48,7 +48,7 @@ import { trashDocumentConfirmData } from '../confirm-dialog/trash-confirm.utils'
 
 /**
  * What the platform's row actions do, on whichever list offered them: browse's, a record page's
- * list of related records, or any other list that resolves the `rowActions` slot.
+ * list of related records, a queue's, or any other list that resolves the `rowActions` slot.
  *
  * One instance for the whole app, provided with its registration by
  * {@link providePackagedRowActions}. Its dialogs open from the root `MatDialog`, so they need

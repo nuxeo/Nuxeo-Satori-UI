@@ -1,6 +1,6 @@
 # Studio migration
 
-Phases M0 and M1 of the migration in
+Phases M0, M1 and the conditions of M2 of the migration in
 [docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It reads a
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
 declarative track (M1) into an app definition the package pipeline's validator accepts, and runs the
@@ -200,8 +200,10 @@ gives the same conversion. A conversion directory holds:
 - **`import`** has no place in the app, whose import step reads no layout. It is reported, with its
   fields.
 - **Not written:**
-  - a field that sits in a condition (`nuxeo-filter`, `dom-if`) is pending: M2 converts the
-    condition, and until then the field is not shown to everyone;
+  - a field that sits in a condition (`nuxeo-filter`, `dom-if`) is written with the condition's
+    rule only in `view` (see **Conditions**, below). In version 1 it is pending, as version 1 has
+    no rules; where its condition does not convert it is reported, and where the rule is proposed
+    it waits for a person;
   - an element the catalogue does not know as a field is reported;
   - a field that binds a property another field already shows is reported, and the property is
     kept once. A field under a condition, or of an unknown element, shows nothing, so a later
@@ -218,8 +220,9 @@ gives the same conversion. A conversion directory holds:
 - **Reported:** a queue has no search form. The form and its fields are reported, because the
   queue lists what the page provider returns with the predicates left empty, as Web UI does before
   anyone searches. A grid or justified-grid view is reported too: a queue is a table.
-- **Pending:** a column under a condition, which the queue leaves out, and a list whose table sits
-  in one, which gets no queue: M2 converts the condition, as for a layout's field.
+- **Reported, too:** a column under a condition, which the queue leaves out, and a list whose
+  table sits in one, which gets no queue. M2 converts no condition there, so a person decides
+  each, and neither is shown to everyone meanwhile.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
 size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns.
@@ -231,6 +234,8 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
 - **Proposed:** a card fed by an operation, such as the favourites one, which an agent proposes a
   page provider for.
 - **Reported:** a card that repeats another.
+- **Left out:** a column under a condition its table is not in, which the card's note names. M2
+  converts no condition on a list's column, and it is not shown to everyone meanwhile.
 
 **Slot contributions:**
 
@@ -251,7 +256,70 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
   proposes which. `navigation.json` holds only the package's own entries; Web UI's stock ones are
   the app's.
 - **Pending:** tabs wait for M2.
-- **Conditions.** A contribution that sits in a condition is pending, whatever the allow-list says.
+- **Conditions.** A button under a condition becomes an action whose `visibleWhen` is the
+  condition's rule. A bulk action whose condition reads the open record is reported. A menu entry
+  under a condition carries its rule too, where the rule reads only the user.
+
+**Conditions (M2).** A Web UI condition becomes the registered rule that decides exactly as it
+does ([`conditions.ts`](src/conditions.ts)).
+
+- **What each side decides is read from its own code.** Web UI's side comes from nuxeo-elements'
+  `nuxeo-filter.js` and `nuxeo-filters-behavior.js`. The app's side comes from the registered rules
+  in `libs/shared/extensions` and `libs/shared/nuxeo-client`.
+- **A `nuxeo-filter`'s tests** convert one by one, joined by `core.every`. A nested filter joins its
+  parent's the same way ([`guards.ts`](src/guards.ts)):
+  - `type`, `facet`, `state` and `group` become `isType`, `hasFacet`, `inState` and `inGroup`;
+  - `permission` converts only when its values are exactly one rule's permissions: `Write,
+WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren` becomes
+    `canAddChildren`, and `WriteSecurity, Everything` becomes `canManagePermissions`.
+- **Reported, never guessed:**
+  - `path` and `schema`, which no registered rule tests;
+  - a single permission no rule matches exactly, such as `Write`, which `canWrite` would widen to
+    `WriteProperties`;
+  - a filter given another document than the open record;
+  - a test of spacing alone, which never passes in Web UI;
+  - a group test given no user, or given a user its file does not hold, which never passes either.
+    A bundle holds one, from the model Web UI stamps slot contributions with. A document layout is
+    given only its document, and the stock home nothing, so there `user` is set only by what
+    writes it, a `<nuxeo-connection user="{{user}}">`. Declaring the property sets nothing;
+  - a condition whose truth table would run more than 200,000 rows, which could not hold its rule
+    to it.
+- **JavaScript in a known pattern is proposed**, with its rule in the report for a person to
+  accept. What it guards is written only once they do. JavaScript sits in two places:
+  - a `dom-if`'s `if`, which Polymer binds as one path or one call, in `[[…]]` or `{{…}}`, with
+    nothing else in the attribute. One call of a filter function on `document` or `user`, such as
+    `[[!hasFacet(document, 'Folderish')]]`, is a known pattern. Text around the binding, even
+    spacing, makes it a compound binding, a string; `&&`, `||` or a method of a value is no
+    binding at all, and the text stays. Either way `if` is a non-empty string, so Web UI always
+    shows what the `dom-if` holds, and that is reported. So is a path, such as
+    `[[document.isFolderish]]`, and a `dom-if` with no `if`, which shows nothing;
+  - a filter's `expression`, which runs with `this` the filter: `this.` calls of its functions,
+    `document.facets.indexOf('X') !== -1` and `document.facets.includes('X')`, each optionally
+    negated, joined by `&&` or by `||` but not both. A call without `this.` throws, so the filter
+    never passes, and that is reported. So is `!` before `indexOf`, which JavaScript applies to
+    the index before the comparison, so the expression is always true.
+
+  `hasPermission` is a known pattern only for a permission one rule holds alone: `Remove` or
+  `AddChildren`. Any other JavaScript is reported.
+
+- **What a condition guards** is what it hides:
+  - a field, where it names its property, in an attribute or in text. A condition around a hint
+    inside the field guards nothing. A field naming its property in two places under conditions
+    side by side is reported. So is one naming it both in a condition and outside every one, as
+    `hidden$="[[!document.properties.x]]"` does: which place shows the value, and which only reads
+    it, cannot be told from the markup. So is one holding a condition that binds something or
+    holds an element, but where it does not name its property: it may show the value another way,
+    as a widget's `xpath` does;
+  - an action, by its operation button, and a menu entry, by its menu icon and its page's search
+    form;
+  - a home card, by its page provider and its table, which its list needs.
+- **Where a rule travels:**
+  - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
+  - on the home and the menu, no record is open, so only a rule on the user travels;
+  - not to a version 1 field, which waits for the app to draw version 2 forms;
+  - not to a list's column, which is left out, or a search screen's table, which is reported.
+- **A condition is `converted` only where its rule was written**, and the report says where.
+  Otherwise it is pending, and each thing it guards says why.
 
 **The theme.** M0's tokens and files, and its name in `app.json`'s `branding.theme`.
 
@@ -260,14 +328,14 @@ is reported: `app.json`'s branding takes a logo and a favicon only.
 
 Every construct of the package is in the report once, with one of these outcomes:
 
-| Outcome     | Meaning                                                                                   |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| `converted` | Done, with where it went                                                                  |
-| `proposed`  | An agent proposes it, and a person accepts it                                             |
-| `reported`  | It does not migrate, with why                                                             |
-| `generated` | Studio's own packaging, records and templates                                             |
-| `server`    | It stays on the server in the Studio package, and the new app reads it                    |
-| `pending`   | A later phase converts it, and the note says which: conditions and tabs in M2, code in M3 |
+| Outcome     | Meaning                                                                                                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `converted` | Done, with where it went                                                                                                                           |
+| `proposed`  | An agent proposes it, and a person accepts it                                                                                                      |
+| `reported`  | It does not migrate, with why                                                                                                                      |
+| `generated` | Studio's own packaging, records and templates                                                                                                      |
+| `server`    | It stays on the server in the Studio package, and the new app reads it                                                                             |
+| `pending`   | A later phase converts it, and the note says which: tabs in M2, a version 1 field under a condition once the app draws version 2 forms, code in M3 |
 
 A `reported` construct may still have been written, as a field version 1 cannot show as Web UI
 does is: its `to` then says where.
@@ -321,10 +389,22 @@ check that did not run does.
     lacks fails. What rests on the platform's model is listed: Dublin Core, and stock types,
     vocabularies and page providers. `/config/types`, `/config/schemas`, the directories and the
     page provider definitions confirm it.
-  - **5, conditions.** No rule is invented: M1 converts no condition, so any rule in the package
-    fails, a free JavaScript one slipped in among them. Nothing Web UI shows under a condition is
-    shown to everyone. The truth tables wait for M2, in Web UI on the migration server. A package
-    with no condition passes: there is nothing for a table to decide.
+  - **5, conditions.**
+    - Every rule in the package sits on something a condition of the package guards, worked out
+      from the inventory.
+    - Each rule decides as Web UI's reading of those conditions does on every row of their truth
+      table. The rows are:
+      - each value tested, and one value that is not;
+      - every subset of the facets, permissions and groups named;
+      - the rule's own values.
+    - So an inverted rule, a widened one, a rule on the wrong field and a free JavaScript one
+      slipped in all fail. A rule written differently that decides the same passes.
+    - Each condition's own rule is held to the same table.
+    - Nothing Web UI shows under a condition is shown to everyone: no field, action, home card,
+      queue or menu entry loses its rule.
+    - The tables prove the mapping against the two sources as written. Evaluating each original
+      in Web UI itself, on the migration server, has not run. A package with no condition passes,
+      because there is nothing for a table to decide.
   - **6, what people see.** Each field, column and list is named as Web UI names it, the app's
     label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
     made readable. A label that rests on a catalogue the package does not hold is listed. The values
@@ -361,6 +441,8 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `slip-free-javascript`     | 5     | Slips a free JavaScript condition into the configuration              |
 | `widen-to-everyone`        | 5     | Shows a field Web UI shows only under a condition to every user       |
 | `widen-column-to-everyone` | 5     | Shows a list column Web UI shows only under a condition to every user |
+| `invert-rule`              | 5     | Inverts the rule a converted condition became                         |
+| `drop-rule`                | 5     | Drops the rule of something Web UI shows only under a condition       |
 | `change-label`             | 6     | Changes the label of a converted field                                |
 | `wrong-page-provider`      | 7     | Points a list at a different page provider                            |
 | `change-parameter`         | 7     | Changes one parameter of a list or an action                          |
@@ -369,15 +451,16 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `drop-menu-entry`          | 7     | Drops an entry of the menu                                            |
 | `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
 
-**On the sample**, every one of the 23 controls was applied to its conversion with `mutate` and
+**On the sample**, every one of the 25 controls was applied to its conversion with `mutate` and
 checked. The 20 that find something to break each fail their check, with a finding of their own,
-`wrong-home-queue` and `drop-menu-entry` among them. The other three have nothing to break there,
-and say so: `widen-to-everyone` and `widen-column-to-everyone`,
+`wrong-home-queue` and `drop-menu-entry` among them. The other five have nothing to break there,
+and say so: `widen-to-everyone`, `widen-column-to-everyone`, `invert-rule` and `drop-rule`,
 because the sample has no condition, and `bind-other-operation`, because its one button runs no
-operation. The tests apply all three to the made-up package, which has them.
+operation. The tests apply all five to the made-up package, which has them.
 
-Section 7's "invert a rule" waits for M2, which converts the first rules: until then there is no
-rule to invert, and any rule at all fails check 5.
+Section 7's "invert a rule" is `invert-rule`. It and `drop-rule` take the first rule the
+conversion carries, on a layout field, an action, a home card, a menu entry or a queue. The tests
+also drop and invert each rule of the made-up package in turn, and check 5 fails for every one.
 
 ## Tests
 
@@ -462,8 +545,11 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   package installed and Web UI beside the new app (development plan, phase 4). Neither local server
   has it, and no code reads a server yet: those halves say they did not run.
 - **Check 9** needs plugins, in M3.
-- **Conditions, tabs, task forms and layout blocks** are M2's. Until then a field, button or card
-  under a condition is pending, and tabs are pending.
+- **The rest of M2: task forms, tabs and layout blocks.** Tabs are pending. Task forms target
+  app-definition-v2.md, section 6, and need Studio's task-layout file format read from Web UI's
+  own sources first.
+- **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
+  screen's table. The server half of check 5 needs the migration server.
 - **The home and the menu, as the app draws them.** The conversion writes `home.json` and
   `navigation.json`, which the validator checks, but the app draws neither of what M1 writes yet:
   - it does not read `navigation.json` (app-definition-v2.md, section 9);

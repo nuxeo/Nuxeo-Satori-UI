@@ -127,9 +127,9 @@ Path helpers: `libs/shared/nuxeo-client/src/lib/utils/browse-path.utils.ts`
 ## DocumentChangesService (`document-changes.service.ts`)
 
 Says that documents changed, so the lists following it read their page again: browse's listing
-and each `RecordListComponent`. The platform's row actions notify it after a rename, copy,
-move or delete, since they run from one app-wide registration and cannot reload the list they came
-from. Every list follows every change. Each follower hears of it before `notify()` returns: browse
+and each `RecordListComponent`, a record page's related records and a queue's. The platform's row
+actions notify it after a rename, copy, move or delete, since they run from one app-wide
+registration and cannot reload the list they came from. Every list follows every change. Each follower hears of it before `notify()` returns: browse
 reloads at once, a record list on the next change detection. `BrowseContextService
 .requestContentRefresh()` instead asks browse alone, through an effect.
 
@@ -414,6 +414,12 @@ it — which renders a broken image beside a still-selected item.
 thumbnail batch, which drops the previews to `null` and degrades the popup to its placeholder. It
 does **not** clear the selection. Callers as of this writing: `search`, `trash`, `assets`, `browse`.
 
+**`offeredBulkActions`** is a signal of the bulk action ids the page holding the selection offers, or
+`null` for every one the `bulk-actions` slot resolves. A queue's page sets those of its file's
+`bulkActions` that have a handler, `[]` while it shows no queue, and puts `null` back when it goes;
+the shell's selection topbar reads it, and offers those of them the slot resolves for the rows
+selected. It is not a security control.
+
 That is deliberately the conservative half. The complete fix is for this service to own preview
 lifetime — hold the blobs, or refetch on demand — so a selection keeps its thumbnails across a
 search. That is a design change to a shared service and has not been made.
@@ -554,6 +560,37 @@ in `providers`, with `{ provide: NxsToastService, useValue }` to hear its messag
 | `copyTo(doc)`, `moveTo(doc)` | `nxs-folder-picker-dialog`, opened on the folder the document is in; a move does not offer that folder, and no folder can be its own destination. Then `Document.Copy` or `.Move`. |
 | `delete(doc): void`          | Confirms, then trashes. A collection goes through the collection's own confirmation; a Collections folder still holding collections is refused.                                    |
 | After a change that succeeds | Asks the folder tree to reload, takes a moved or trashed document out of the selection (all of it, for a collection), and calls `DocumentChangesService.notify()`.                 |
+
+---
+
+## PageProviderService (`page-provider.service.ts`)
+
+Runs a page provider defined on the server: `GET /api/v1/search/pp/<name>/execute`, as the user.
+The record page's related records and a queue's list read through it.
+
+```typescript
+execute(name: string, request: PageProviderRequest): Observable<PageProviderResults>
+isAggregateParameter(name: string): boolean
+```
+
+`PageProviderRequest` carries `parameters`, `pageSize`, `pageIndex`, `sort`, `properties` and
+`aggregates`: the buckets chosen in each aggregate, sent as `<aggregate>=<JSON array>` as the search
+page sends its filters. `PageProviderResults` is the page with the server's `aggregations`. It
+refuses, without a request, a name that is not a page provider's, a page size outside 1 to 1000, a
+sort that is not `<prefix>:<name>`, and an aggregate the search reads for itself (`pageSize`,
+`sortBy`, `properties` and the like) or named with a `.` or a `-`.
+
+---
+
+## QueueService (`libs/shared/queues/src/lib/queue.service.ts`)
+
+Reads an app's `queues/<id>.json` beside the layouts and the home, past the interceptors.
+
+```typescript
+load(id: string): Observable<QueueLoad>   // file | none (404, or an id that is not one) | unreadable
+queueFileUrl(bootstrapUrl: string, id: string): string
+queueLink(id: string): readonly string[]  // ['/queues', id]
+```
 
 ---
 

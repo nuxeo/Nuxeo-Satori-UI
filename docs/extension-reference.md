@@ -967,6 +967,12 @@ The descriptor decides where and when; a registered handler decides what. A
 descriptor with no handler renders and is inert rather than throwing, so a
 manifest can be written before the Layer 2 library that backs it ships.
 
+**On a queue's page** (`/queues/<id>`, app-definition-v2.md, section 4) the topbar offers only the
+queue file's `bulkActions`: those this slot resolves **and** that have a registered handler, in this
+slot's order. The page names them in `SelectionService.offeredBulkActions` while it is shown, and
+puts `null`, every action, back when it goes. A queue's own action with no handler is not offered
+there, since it would do nothing. Offering fewer actions is not a security control either.
+
 ```ts
 import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
@@ -1995,11 +2001,13 @@ is a separate slot, `rowActions` — section 10a.
 ## 10a. `rowActions` — the menu on each row of a list of documents
 
 Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
-rendered as the "Actions for …" menu at the end of each row of two lists:
+rendered as the "Actions for …" menu at the end of each row of three lists:
 
 - **browse's document list**, which offers every entry of the slot;
 - **a record page's list of related records**, which offers only the IDs its layout file lists
-  under `rowActions`, and only those with a handler (`docs/business-apps/layout-v2.md`, section 7).
+  under `rowActions`, and only those with a handler (`docs/business-apps/layout-v2.md`, section 7);
+- **a queue's list** (`/queues/<id>`), the same list as the related records', for the IDs its queue
+  file lists (`docs/business-apps/app-definition-v2.md`, section 4).
 
 Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
 document rules of section 4 read the row's own permissions and properties, not the folder's. A
@@ -2043,8 +2051,8 @@ context's focused document, the row's, so the same handler serves every list. A 
 
 **After a change, the lists read again.** A rename, copy, move or delete that succeeds calls
 `DocumentChangesService.notify()`, from `@nuxeo/satori-platform/nuxeo-client`, and every list
-following it reloads the page on screen: browse's, and each list of related records on a record
-page. Every list follows every change, since a copy or a move can add a row to another list. A
+following it reloads the page on screen: browse's, each list of related records on a record page,
+and a queue's, which keeps its chosen buckets. Every list follows every change, since a copy or a move can add a row to another list. A
 download changes nothing and reloads nothing. A handler of your own that changes documents, for one
 of your IDs or in place of one of these, calls it too:
 

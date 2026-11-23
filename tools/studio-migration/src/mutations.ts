@@ -117,6 +117,63 @@ const convertedInto = (conversion: Conversion, path: string): Set<string> =>
  */
 const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'picture', 'thumbnail'];
 
+/** A rule the conversion carries: the file, the object holding it and where it sits. */
+export interface RuleHolder {
+  readonly path: string;
+  readonly file: Json;
+  readonly holder: Json;
+  readonly at: string;
+}
+
+/**
+ * Every rule the conversion carries, each in its own copy of its file: on a layout field, an
+ * action, a home card, a menu entry or a queue.
+ */
+export function ruleHolders(conversion: Conversion): RuleHolder[] {
+  const found: RuleHolder[] = [];
+  const listed = (path: string, key: string) => {
+    const entries = (conversion.app[path] as Json | undefined)?.[key];
+    if (!Array.isArray(entries)) return;
+    entries.forEach((entry, index) => {
+      if (!isRecord(entry) || !('visibleWhen' in entry)) return;
+      const file = clone(conversion.app[path]) as Json;
+      found.push({
+        path,
+        file,
+        holder: (file[key] as Json[])[index],
+        at: `${key}.${index}.visibleWhen`,
+      });
+    });
+  };
+  for (const path of Object.keys(conversion.app).sort()) {
+    if (path.startsWith('layouts/')) {
+      for (const shown of layoutFields(conversion.app[path] as Json)) {
+        if (!isRecord(shown.entry) || !('visibleWhen' in shown.entry)) continue;
+        const file = clone(conversion.app[path]) as Json;
+        // The same entry in the copy, by its place: `cards.0.fields.3`, `tabs.1.cards.0.fields.2`.
+        const entry = shown.at
+          .split('.')
+          .reduce<unknown>(
+            (at, key) => (isRecord(at) || Array.isArray(at) ? (at as Json)[key] : undefined),
+            file,
+          );
+        if (isRecord(entry))
+          found.push({ path, file, holder: entry, at: `${shown.at}.visibleWhen` });
+      }
+    }
+    if (path === 'actions.json') listed(path, 'actions');
+    if (path === 'home.json') listed(path, 'cards');
+    if (path === 'navigation.json') listed(path, 'entries');
+    if (path.startsWith('queues/') && isRecord(conversion.app[path])) {
+      const file = clone(conversion.app[path]) as Json;
+      if ('visibleWhen' in file) found.push({ path, file, holder: file, at: 'visibleWhen' });
+    }
+  }
+  return found;
+}
+
+const findRule = (conversion: Conversion): RuleHolder | null => ruleHolders(conversion)[0] ?? null;
+
 /** The entry as an object, so that a key can be set on it. */
 const asObject = (entry: unknown): Json =>
   typeof entry === 'string' ? { field: entry } : (entry as Json);
@@ -405,6 +462,34 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
   {
+    name: 'invert-rule',
+    description: 'Invert the rule a converted condition became',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findRule(conversion);
+      if (!found) throw new MutationError('the conversion carries no rule to invert');
+      found.holder['visibleWhen'] = { type: 'core.not', parameters: [found.holder['visibleWhen']] };
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `inverted the rule at ${found.at} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-rule',
+    description: 'Drop the rule of something Web UI shows only under a condition',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findRule(conversion);
+      if (!found) throw new MutationError('the conversion carries no rule to drop');
+      delete found.holder['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule at ${found.at} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
     name: 'widen-column-to-everyone',
     description: 'Show a list column Web UI shows only under a condition to every user',
     caughtBy: 5,
@@ -413,7 +498,7 @@ export const MUTATIONS: readonly Mutation[] = [
       const column = entries.find(
         (entry) =>
           entry.kind === 'search-column' &&
-          entry.outcome === 'pending' &&
+          entry.outcome !== 'converted' &&
           entry.property &&
           /condition/.test(entry.note ?? ''),
       );

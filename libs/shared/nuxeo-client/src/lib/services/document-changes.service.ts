@@ -7,7 +7,7 @@ import { Subject, type Observable } from 'rxjs';
  * An action can run from a surface other than the list it changed: the platform's row actions run
  * from one registration for the whole app, whichever list offered them. So the action does not
  * reload the list itself. It notifies this service, and each list that follows it asks again:
- * browse's listing, and each list of records on a record page.
+ * browse's listing, and each `RecordListComponent`: a record page's related records and a queue.
  *
  * Every list follows every change, not only the one the action came from. A copy or a move can add
  * a row to another list on the same page, and a list cannot tell from a uid whether its query

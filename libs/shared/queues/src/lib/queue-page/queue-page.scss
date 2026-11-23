@@ -1,0 +1,80 @@
+:host {
+  display: block;
+}
+
+.queue-page {
+  padding: 16px;
+}
+
+// Headings and paragraphs are doubled to outrank the app theme's
+// `html[data-app-theme] .mat-typography h1`–`h6` and `p`, which would otherwise draw them at
+// display size and with the theme's margins, as the home page's say.
+.queue-page__title.queue-page__title {
+  margin: 0 0 16px;
+  font: var(--mat-sys-headline-small);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.queue-page__message.queue-page__message {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.queue-page__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+// Beside the list where there is room for both; above it on a narrow screen.
+@media (min-width: 840px) {
+  .queue-page__body--with-facets {
+    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  }
+}
+
+.queue-page__facets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.queue-page__list {
+  display: block;
+  min-width: 0;
+}
+
+.queue-facet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+}
+
+.queue-facet__label {
+  padding: 0 4px;
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface);
+}
+
+.queue-facet__bucket {
+  overflow-wrap: anywhere;
+}
+
+.queue-facet__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.queue-facet__note.queue-facet__note {
+  margin: 4px 0 0;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}

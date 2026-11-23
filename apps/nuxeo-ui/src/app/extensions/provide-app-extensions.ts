@@ -137,7 +137,7 @@ function provideAppContributions(): EnvironmentProviders {
         // The menu on each row of a list. Its handlers act on the row alone, so
         // they are registered once for the whole app, by
         // `providePackagedRowActions()` below, and run from every list that
-        // offers them: browse's, and a record page's list of related records.
+        // offers them: browse's, a record page's related records, and a queue's.
         [EXTENSION_SLOTS.rowActions]: PACKAGED_ROW_ACTIONS,
       },
 

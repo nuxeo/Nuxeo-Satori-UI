@@ -18,8 +18,8 @@ every file, and every JSON example here is one of its tests: together they are o
 the Payers Claims app, checked as a whole.
 
 Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1.
-The app draws the home (section 10). Nothing reads the other files yet. Phase 1 renders queues,
-and phase 2 the actions and task forms.
+The app draws the home (section 10) and the queues (section 4). Nothing reads the other files yet.
+Phase 2 renders the actions and task forms.
 
 ## The short version
 
@@ -167,6 +167,63 @@ demo/                                starter kits only; not checked
 - **`visibleWhen`** decides who sees the queue. Hiding a queue is not a security control: the page
   provider still returns only what the person may read.
 - **A queue needs a name:** `label` or `labelKey`.
+
+### Where the app reads it
+
+As the home (section 10): at `agentic-ui-config/queues/<id>.json`, beside the layouts, as the
+package writes it, with no envelope, until the app registry serves the app. Only the development
+server answers there:
+
+```bash
+npm run config:dev -- --queue path/to/queues/unassigned-claims.json
+```
+
+`--queue` may be given once for each queue. On a server the address is 404, and the queue's page
+says that no queue of that name is configured.
+
+### What the app does with it
+
+The app's page `/queues/<id>` reads the file, checks it with the validator, and draws it under its
+name. The home's links to queues open it. The engine is `libs/shared/queues`, and its
+`samples/documents/queues/documents.json` is a queue on the platform's own `default_search` page
+provider, for the development server.
+
+- **A `structure` finding** draws no queue: the page says the queue could not be read, and the
+  console names the findings.
+- **An `unknown` or a `parameter` finding** leaves out the column, facet, row action or bulk action
+  it is in, and the console says why; one of the file's own keys is ignored. A column the list
+  cannot draw is left out as in a related-records card, and a queue with no column left is one
+  that could not be read.
+- **The list** is the record page's (layout-v2.md, section 7): the page provider's records page by
+  page, the columns through their widgets, the order sorted on the server from a header, a row
+  opening its record, and the row actions that have a handler on the page, the platform's five
+  among them, which the app registers once for every list. After one of them changes a record, the
+  list reads its page again, with its buckets chosen. A column with a rule
+  shows to the people it passes for, answered as the queue's own rule is; a queue none of whose
+  columns is for the person signed in is hidden from them.
+- **An empty parameter** refuses the queue, as a related list is not asked with one: a page
+  provider asked with an empty value matches what its author did not mean, or nothing.
+- **A facet** is drawn from the page provider's `aggregations` in the results, a bucket per value
+  with its count, and choosing one sends it back as the search page sends its filters: a parameter
+  named after the aggregate, its chosen keys a JSON array, such as
+  `claim_type_agg=["medical","dental"]`. The list keeps the records in any chosen bucket of one
+  aggregate and in every aggregate chosen in, and starts again on its first page. A facet the
+  results have no aggregate for is not drawn, and the console says why: a page provider that
+  queries the repository has none. An aggregate named as the search's own parameters are, such as
+  `pageSize`, or with a `.` or a `-`, cannot be sent back, and its facet is left out.
+- **Selecting rows** offers the queue's bulk actions in the app's selection bar: those that the
+  `bulk-actions` slot resolves and that have a handler on the page, as row actions are offered.
+  Choosing a bucket clears the selection. Rows cannot be selected when no bulk action is offered.
+- **An action of the package's own**, from `actions.json`, is one the app does not register yet, so
+  it is left out of the rows and the selection bar. Phase 2 runs them.
+- **The rule** is the rule registry's, evaluated with the person, their groups and no record. The
+  page is hidden while it does not pass, and asks the page provider for nothing. A rule this build
+  does not register, one nested deeper than the registry answers, or a finding in it, hides the
+  queue from everyone: the registry would pass it, and show the queue to everyone.
+- **Hiding a queue is not a security control.** The address still answers, and the page provider
+  returns only what the person may read.
+- **Not here:** a bulk action over every result of the query rather than the rows selected, which
+  is the Bulk Action Framework's, in phase 2.
 
 ## 5. Actions
 
@@ -405,8 +462,8 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **Hiding an entry is not a security control.** The route still answers, and the page provider
   behind a queue still returns only what the person may read.
 - **Not drawn yet.** The file is proposed and checked. The shell's menu is still the manifest's
-  `navbar` slot, and phase 1's queue page is not in the app yet, so the app does not read
-  `navigation.json` (section 13).
+  `navbar` slot, so the app does not read `navigation.json` (section 13). A queue's entry is to open
+  the queue's page, `/queues/<id>`, as the home's links do.
 
 ## 10. The home
 
@@ -530,9 +587,8 @@ The app's page `/home` reads the file, checks it with the validator, and draws i
   unregistered `app.rules.inGroup` hides its card, as the registry's security-relevant rules do;
 - **a page provider the server does not have,** or a request it refuses, shows the card's title
   with no figure, and the console says why;
-- **links to queues** wait for phase 1's queue page. The app gives the home no queue address yet,
-  so a link alone is left out, and a KPI's link is not drawn. The app does not read queues either,
-  so a link with no name of its own shows the queue's id, not its name, until it does.
+- **a link to a queue** opens the queue's page, `/queues/<id>` (section 4). The home reads no queue
+  file, so a link with no name of its own shows the queue's id, not its name.
 
 The engine is `libs/shared/home`, and its `samples/documents/home.json` is a home on the
 platform's own `default_search` page provider, for the development server.
@@ -588,8 +644,9 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   start form.
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
-- **Serving the menu and the home.** The app registry serves them, once decisions B and E are
-  taken. Until then only the development server answers `home.json` (section 10).
+- **Serving the menu, the home and the queues.** The app registry serves them, once decisions B and
+  E are taken. Until then only the development server answers `home.json` and `queues/<id>.json`
+  (sections 4 and 10).
 - **Drawing the menu.** `navigation.json` is checked, and the shell's menu is still the manifest's
   `navbar` slot. Whether an app's entries replace the platform's or join them is for the shell
   that switches apps, with the registry.

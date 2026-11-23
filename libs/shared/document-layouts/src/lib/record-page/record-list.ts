@@ -6,6 +6,8 @@ import {
   inject,
   input,
   linkedSignal,
+  model,
+  output,
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
@@ -36,10 +38,11 @@ import {
   type NuxeoDocument,
   type NuxeoDocumentList,
   PageProviderService,
+  type PageProviderResults,
   type PageProviderSort,
   documentNavigationUrl,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { catchError, forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
+import { catchError, forkJoin, map, merge, of, startWith, switchMap, tap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
@@ -83,6 +86,8 @@ interface ListRequest {
   readonly pageSize: number;
   readonly pageIndex: number;
   readonly sort: readonly PageProviderSort[];
+  /** The buckets chosen, by aggregate, in a stable order; none chosen is none sent. */
+  readonly aggregates: Readonly<Record<string, readonly string[]>>;
   /** Not sent: a column that appears needs its rows' definitions read, which a response brings. */
   readonly columns: readonly string[];
   readonly attempt: number;
@@ -100,6 +105,18 @@ const SORTABLE_TYPES: ReadonlySet<string> = new Set([
 
 const sameRequest = (a: ListRequest | null, b: ListRequest | null): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
+
+/** The aggregates with a bucket chosen, in the order of their ids, each one's keys sorted. */
+function chosenBuckets(
+  aggregates: Readonly<Record<string, readonly string[]>>,
+): Readonly<Record<string, readonly string[]>> {
+  return Object.fromEntries(
+    Object.keys(aggregates)
+      .sort()
+      .filter((aggregate) => aggregates[aggregate].length > 0)
+      .map((aggregate) => [aggregate, [...new Set(aggregates[aggregate])].sort()]),
+  );
+}
 
 /**
  * The rules that answer from what the page publishes about its own record, the one in focus
@@ -132,10 +149,11 @@ const rowContext = (base: ExtensionRuleContext, row: NuxeoDocument): ExtensionRu
 /**
  * A list of records: one page of a page provider's results at a time, one row per record, each
  * column a property shown through its widget (layout-v2.md, section 7). A related-records card
- * shows one, and a queue will.
+ * shows one, and so does a queue (app-definition-v2.md, section 4).
  *
  * A row opens its record. The headers sort, on the server; the list opens in the file's order.
  * A row offers the row actions the file lists that are registered here, while their rules pass.
+ * A queue also filters the list by the buckets chosen in its facets, and lets rows be selected.
  * The page provider returns only what the user may read: nothing here is a security control.
  */
 @Component({
@@ -158,6 +176,20 @@ export class RecordListComponent {
   readonly stateHeadingLevel = input<NxsHeadingLevel>(4);
   /** Where the list is written, for the console: `Member/view layout: cards[2]`. */
   readonly source = input('');
+  /**
+   * The buckets chosen in the page provider's aggregates, by aggregate id: a queue's facets. The
+   * list keeps the records in any chosen bucket of an aggregate, and starts again on its first
+   * page when they change.
+   */
+  readonly aggregates = input<Readonly<Record<string, readonly string[]>>>({});
+  /** Whether rows can be selected, for a queue's bulk actions. */
+  readonly selectable = input(false);
+  /** The selected rows' ids, on every page. Two-way: `[(selectedIds)]`. */
+  readonly selectedIds = model<readonly string[]>([]);
+  /** What an empty list says; the related-records card's text when `null`. */
+  readonly emptyHeading = input<string | null>(null);
+  /** Each page as the server returned it, with its aggregates: what a queue's facets show. */
+  readonly loaded = output<PageProviderResults>();
 
   private readonly pages = inject(PageProviderService);
   private readonly documentChanges = inject(DocumentChangesService);
@@ -179,7 +211,16 @@ export class RecordListComponent {
     JSON.stringify([this.list().pageProvider, this.parameters(), this.list().sort]),
   );
 
-  protected readonly pageIndex = linkedSignal({ source: this.identity, computation: () => 0 });
+  /** The buckets chosen, written the same way for the same choice. */
+  private readonly chosen = computed(() => chosenBuckets(this.aggregates()), {
+    equal: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  });
+
+  /** Another list, or other buckets chosen, starts on the first page; the order chosen stays. */
+  protected readonly pageIndex = linkedSignal({
+    source: computed(() => JSON.stringify([this.identity(), this.chosen()])),
+    computation: () => 0,
+  });
 
   /** The order chosen from a header; `null`, the file's. */
   protected readonly chosenSort = linkedSignal<string, NxsDocumentListSort | null>({
@@ -214,6 +255,7 @@ export class RecordListComponent {
         pageSize: list.pageSize,
         pageIndex: this.pageIndex(),
         sort: chosen ? [{ field: chosen.key, order: chosen.direction }] : list.sort,
+        aggregates: this.chosen(),
         columns: this.shownColumns().map((column) => column.xpath),
         attempt: this.attempt(),
       };
@@ -236,8 +278,12 @@ export class RecordListComponent {
                 pageSize: request.pageSize,
                 pageIndex: request.pageIndex,
                 sort: request.sort,
+                ...(Object.keys(request.aggregates).length > 0
+                  ? { aggregates: request.aggregates }
+                  : {}),
               })
               .pipe(
+                tap((page) => this.loaded.emit(page)),
                 switchMap((page) => this.withProperties(page)),
                 startWith(LOADING),
                 catchError((error: unknown) => {

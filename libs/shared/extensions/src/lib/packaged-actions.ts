@@ -342,8 +342,9 @@ export const PACKAGED_BROWSE_CONTEXT_MENU: readonly ExtensionActionDescriptor[] 
 ];
 
 /**
- * The menu on each row of a document list, acting on that row's document: browse's list, and a
- * record page's list of related records, which offers those its layout file names.
+ * The menu on each row of a document list, acting on that row's document: browse's list, and the
+ * list of records that a record page's related records and a queue draw, which offers those its
+ * file names.
  *
  * Each row resolves this slot with the row's document as the focused one, so `rule` and
  * `enabledRule` read that document's own permissions and properties, not the folder's. Rename
