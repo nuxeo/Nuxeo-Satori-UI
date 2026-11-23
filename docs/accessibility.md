@@ -338,8 +338,9 @@ speech-input user who says what they see therefore does not name the control. Th
 is visible.
 
 **What fixing it would show.** It would clear this capture's axe checks, and nothing more. The
-Health 404 failed this record too. The check's ignore list now names it (below), so with that
-fix the capture can pass in the local environment it documents.
+Health 404 failed this record too. The check's ignore list now names it (below), but a later
+capture failed Health for other reasons, so the capture does not pass locally yet; see
+[Re-measured with the pin](#re-measured-with-the-pin).
 [Storybook observations](#storybook-observations--triaged-2026-10-15) above records failures
 under the same tags in states the capture does not reach, among them the viewer placeholder for
 a File without a main file. [What nothing covers](#what-nothing-covers) lists what no layer
@@ -375,7 +376,7 @@ diagnostics stay on 4.13.0, so one `node_modules` holds one layer's install at a
 
 | Control                                                                                            | Result                                                                                                                                                   |
 | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The real steps, on 4.14.0 under the same wrapper                                                   | Refused at step 1 with exit 2: `axe-core is 4.14.0, pinned 4.14.1`                                                                                       |
+| The real steps, on 4.14.0 under the same wrapper, with and without a live backend                  | Refused at step 1 with exit 2: `axe-core is 4.14.0, pinned 4.14.1`                                                                                       |
 | The real steps, on a11y-scout's install (4.13.0 for both)                                          | Refused at step 1 with exit 2, naming both packages                                                                                                      |
 | A scan that must have run 4.13.0, on 4.14.1                                                        | That check fails and names the engine axe reports. The same scan with the pin, and with no engine named, passes                                          |
 | The installed-version lookup, in five throwaway trees, two with an engine nested under the wrapper | Agrees in all five with what the wrapper's own import loads. Reading the root copy instead disagrees in both nested trees, and passes one it must refuse |
@@ -388,6 +389,27 @@ generated layouts by design. The check's ignore list named the sibling `bootstra
 the entry. A 500 on the index, the same file under the production base href, or a per-type layout
 file still fails the check. Run through the list before and after the entry, this record's own
 eleven console errors fail Health and then pass it.
+
+### Re-measured with the pin
+
+`phase-6-a11y/2026-11-23T17-42-07` ran the change that pins the engine, on `main` at 63376d1de,
+as the prerequisites now document it. It is **`FAIL`, 21 of 36 checks**. Its manifest records
+axe-core 4.14.1 through `@axe-core/playwright` 4.14.0, and the new first step passes. The 14 axe
+failures are the same `label-content-name-mismatch` node as above, and nothing else. Health
+ignored the `layouts.json` 404 and still failed, on two kinds of error the morning record did not
+have:
+
+| Errors | What                                                                     | Known                                                                            |
+| ------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 51     | `HTTP 404 /nuxeo/api/v1/id/<uid>/@rendition/thumbnail`, for 23 documents | 14 follow the landing page and 37 come before knowledge discovery. Not diagnosed |
+| 1      | `HTTP 404 /nuxeo/agentic-ui/`                                            | Not diagnosed                                                                    |
+
+No code in this repository that requests a thumbnail changed between the two captures. Two other
+things did: the Satori package moved from 1.0.0-alpha.201 to 1.0.0 (#602), and other work wrote to
+the shared local server. Which explains the errors is not known. The documents were not read,
+because the guest account may not read them. Neither error is in the ignore list, because neither
+has been verified as designed. The same capture on axe-core 4.14.0 is kept under
+`agentic-ui-evidence/a11y-engine-pin-controls-2026-11-23/` and stopped at step 1 with exit 2.
 
 ## The disagreement — resolved 2026-09-11, against phase-6
 
