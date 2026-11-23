@@ -77,12 +77,31 @@ function isPainted(el: Element): boolean {
   return el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
 }
 
-/** Whether a text node covers more than a pixel. Visually hidden (clipped) text does not. */
-function hasArea(text: Text): boolean {
+/**
+ * Whether a text node inside `root` shows more than a pixel once it is cut to the box of every
+ * element from its parent up to `root` that clips: `overflow` other than `visible`, or a `clip`
+ * or `clip-path`. Visually hidden text, clipped inside a one-pixel box, does not. Clipping by
+ * elements outside `root` is not measured.
+ */
+function hasVisibleArea(text: Text, root: Element): boolean {
   const range = document.createRange();
   range.selectNodeContents(text);
-  const { width, height } = range.getBoundingClientRect();
-  return width > 1 && height > 1;
+  let { left, top, right, bottom } = range.getBoundingClientRect();
+  for (let el = text.parentElement; el; el = el === root ? null : el.parentElement) {
+    const style = getComputedStyle(el);
+    const clips =
+      style.overflowX !== 'visible' ||
+      style.overflowY !== 'visible' ||
+      style.clip !== 'auto' ||
+      style.clipPath !== 'none';
+    if (!clips) continue;
+    const box = el.getBoundingClientRect();
+    left = Math.max(left, box.left);
+    top = Math.max(top, box.top);
+    right = Math.min(right, box.right);
+    bottom = Math.min(bottom, box.bottom);
+  }
+  return right - left > 1 && bottom - top > 1;
 }
 
 /** The text `root` shows on screen, in document order, `aria-hidden` text included. */
@@ -91,16 +110,18 @@ function paintedText(root: Element): string {
   const parts: string[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = node as Text;
-    if (text.parentElement && isPainted(text.parentElement) && hasArea(text)) parts.push(text.data);
+    const parent = text.parentElement;
+    if (parent && isPainted(parent) && hasVisibleArea(text, root)) parts.push(text.data);
   }
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
- * The words of `text`, case-folded, with parenthesised text dropped and anything that is not a
- * letter or a digit treated as a space. axe-core 4.14's `label-content-name-mismatch` compares
- * words this way. 4.13 compared characters, which let the initials "AD" pass as a substring of
- * "Administrator".
+ * The words of `text`: NFKD-normalised and case-folded, with parenthesised text dropped and
+ * anything that is not a letter or a digit read as a space. That is how axe-core 4.14's
+ * `label-content-name-mismatch` prepares text, although it splits words with `Intl.Segmenter`
+ * where this splits on spaces, which differs only for scripts written without them. 4.13
+ * compared characters, which let the initials "AD" pass as a substring of "Administrator".
  */
 function words(text: string): string[] {
   let folded = text.normalize('NFKD').toLowerCase();
@@ -127,9 +148,10 @@ function containsWords(name: string, label: string): boolean {
 /**
  * WCAG 2.5.3 / IBM `label_name_visible` (Issue 2972081309 on `#sat-platform-nav-user-profile`).
  *
- * The vendor profile button sets `aria-label` to the display name while also rendering
- * auto-generated avatar initials as visible text. Those initials are not part of the
- * accessible name, so the visible label and the name diverge.
+ * The upstream profile button sets `aria-label` to the display name, and the avatar beside it
+ * draws initials as visible text. Unless the accessible name contains those initials, the
+ * visible label and the name diverge. The shell names the control with `aria-labelledby`, the
+ * initials and then the display name, and the cases below hold it to what is painted.
  */
 describe('platform sidebar — user profile label in name (NXENG-894)', () => {
   const username = signal('Administrator');
