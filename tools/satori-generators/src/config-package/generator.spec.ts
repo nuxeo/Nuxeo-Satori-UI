@@ -1034,6 +1034,124 @@ describe('the generated build.mjs', () => {
     expect(build().status).toBe(0);
   });
 
+  // The server reads `Nuxeo-Component` through `java.util.jar.Manifest`, which matches the name in
+  // any letter case, keeps the last of a repeated header, and ends a line only at CR or LF; the
+  // runtime then splits the value at commas and whitespace. The build read the first header spelt
+  // exactly so, split at commas alone, and packaged all of bundle/ whatever it had read — so each
+  // manifest below built a jar whose server loaded a component the build never looked at.
+  describe('reads the components the server loads, or refuses', () => {
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const configComponent = 'OSGI-INF/acme-config-config.xml';
+    const editManifest = (edit: (manifest: string) => string) =>
+      write(manifestPath, edit(readFileSync(join(dir, manifestPath), 'utf8')));
+    /** A second component no build passes once it reads it: its inline layout does not parse. */
+    const writeUnchecked = () =>
+      write(
+        'bundle/OSGI-INF/unchecked.xml',
+        '<?xml version="1.0"?>\n<component name="acme.config.unchecked" version="1.0">\n' +
+          '  <require>org.nuxeo.agentic.ui.config.defaults</require>\n' +
+          '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+          '    <layout type="Claim" mode="view"><json>{ not json</json></layout>\n' +
+          '  </extension>\n</component>\n',
+      );
+    const uncheckedRead = 'bundle/OSGI-INF/unchecked.xml: inline JSON of layout Claim/view';
+
+    it.each([
+      ['a second Nuxeo-Component header', 'Nuxeo-Component'],
+      ['a second header spelt nuxeo-component', 'nuxeo-component'],
+    ])('refuses %s, and still reads the components of both', async (_case, name) => {
+      await generate();
+      writeUnchecked();
+      editManifest((manifest) => `${manifest}${name}: OSGI-INF/unchecked.xml\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'bundle/META-INF/MANIFEST.MF: has 2 Nuxeo-Component headers, counting any letter case;',
+      );
+      // The server loads the last header's component, so it is read even though the first is too.
+      expect(output).toContain(uncheckedRead);
+    });
+
+    it('refuses its one Nuxeo-Component header spelt another way, and reads it', async () => {
+      await generate();
+      editManifest((manifest) => manifest.replace('Nuxeo-Component:', 'nuxeo-component:'));
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'bundle/META-INF/MANIFEST.MF: spells its Nuxeo-Component header "nuxeo-component";',
+      );
+      expect(output).not.toContain('needs a Nuxeo-Component line');
+    });
+
+    // `^` in a multiline pattern also matches after U+2028, which Java reads as part of a value.
+    it('reads the real header, not a lookalike after a U+2028 inside another header', async () => {
+      await generate();
+      writeUnchecked();
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          `X-Note: see\u2028Nuxeo-Component: ${configComponent}\n` +
+            'Nuxeo-Component: OSGI-INF/unchecked.xml',
+        ),
+      );
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(uncheckedRead);
+      expect(output).not.toContain('Nuxeo-Component headers');
+    });
+
+    // And the other way round: text in a header's value is not a header, however it reads.
+    it('builds a manifest with a lookalike after a U+2028 inside another header', async () => {
+      await generate();
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          'X-Note: see\u2028Nuxeo-Component: OSGI-INF/missing.xml\n' +
+            `Nuxeo-Component: ${configComponent}`,
+        ),
+      );
+      expect(build().status).toBe(0);
+    });
+
+    // One packaged file to a split at commas; two paths to the server, neither of them that file.
+    it('splits the component list at whitespace, as the server does, not only at commas', async () => {
+      await generate();
+      write(
+        'bundle/OSGI-INF/acme config.xml',
+        readFileSync(join(dir, `bundle/${configComponent}`), 'utf8'),
+      );
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          'Nuxeo-Component: OSGI-INF/acme config.xml',
+        ),
+      );
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'Nuxeo-Component names OSGI-INF/acme, which is not a packaged file in bundle/',
+      );
+      expect(output).toContain(
+        'Nuxeo-Component names config.xml, which is not a packaged file in bundle/',
+      );
+    });
+
+    it('builds two components separated by whitespace alone, which the server reads as two', async () => {
+      await generate();
+      write(
+        'bundle/OSGI-INF/acme-operations.xml',
+        '<?xml version="1.0"?>\n<component name="acme.config.operations" version="1.0" />\n',
+      );
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          `Nuxeo-Component: ${configComponent}\tOSGI-INF/acme-operations.xml`,
+        ),
+      );
+      expect(build().status).toBe(0);
+    });
+  });
+
   it.each([
     [
       'an unclosed element',
