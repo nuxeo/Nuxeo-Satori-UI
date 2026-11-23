@@ -102,6 +102,8 @@ export interface RecordPageShown {
 }
 
 type Labels = ReadonlyMap<string, string>;
+/** A label read for a lookup's key, or `null` where it could not be read. */
+type LabelPair = [string, string | null];
 const NO_LABELS: Labels = new Map();
 
 function sameLookups(a: Lookups, b: Lookups): boolean {
@@ -227,19 +229,17 @@ export class RecordPageComponent {
               ...vocabulary.map(({ directory, id }) =>
                 this.layouts
                   .vocabularyLabel(directory, id)
-                  .pipe(map((label) => [`v\n${directory}\n${id}`, label] as const)),
+                  .pipe(map((label): LabelPair => [`v\n${directory}\n${id}`, label])),
               ),
               ...principals.map(({ kind, id }) =>
                 this.layouts
                   .principalLabel(kind, id)
-                  .pipe(map((label) => [`${kind}\n${id}`, label] as const)),
+                  .pipe(map((label): LabelPair => [`${kind}\n${id}`, label])),
               ),
             ]).pipe(
               map(
                 (pairs): Labels =>
-                  new Map(
-                    pairs.filter((pair): pair is readonly [string, string] => pair[1] !== null),
-                  ),
+                  new Map(pairs.filter((pair): pair is [string, string] => pair[1] !== null)),
               ),
               startWith(NO_LABELS),
             ),
