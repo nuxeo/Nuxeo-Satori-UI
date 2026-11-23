@@ -29,7 +29,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readServerModel } from './nuxeo-content-model.mjs';
+import { readServerModel, withoutCredentials } from './nuxeo-content-model.mjs';
 import { attribute, withoutCommentsOrInstructions } from './verify-package-zip.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -493,10 +493,25 @@ for (const argv of [
 const SECRET = randomBytes(9).toString('hex');
 /** Made-up credentials, so that a refusal below is for the address, not for credentials missing. */
 const madeUp = () => ({
-  ...process.env,
+  ...withoutCredentials(process.env),
   NUXEO_USER: randomBytes(6).toString('hex'),
   NUXEO_PASS: randomBytes(12).toString('hex'),
 });
+
+// The children that read no server are run without the credentials, however their names are
+// written: Windows reads `nuxeo_pass` as NUXEO_PASS.
+negative++;
+{
+  const kept = withoutCredentials({
+    NUXEO_USER: 'a',
+    nuxeo_pass: 'b',
+    Nuxeo_User: 'c',
+    NUXEO_PASSWORD: 'd',
+    PATH: 'e',
+  });
+  if (JSON.stringify(kept) !== JSON.stringify({ NUXEO_PASSWORD: 'd', PATH: 'e' }))
+    failures.push(`withoutCredentials kept ${JSON.stringify(Object.keys(kept))}`);
+}
 // One content model, a file or the server's: both is the command's usage, before any read.
 negative++;
 {
@@ -594,8 +609,9 @@ await (async () => {
   });
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   const address = `http://127.0.0.1:${server.address().port}/nuxeo`;
+  // The run's own credentials, and no other spelling of them the machine already had.
   const env = {
-    ...process.env,
+    ...withoutCredentials(process.env),
     NUXEO_USER: credentials.username,
     NUXEO_PASS: credentials.password,
   };
@@ -614,12 +630,7 @@ await (async () => {
     });
   const live = (directory, out, environment = env) =>
     command([SCRIPT, directory, '--out', out, '--model-server', address], environment);
-  const bareEnv = () => {
-    const bare = { ...process.env };
-    delete bare.NUXEO_USER;
-    delete bare.NUXEO_PASS;
-    return bare;
-  };
+  const bareEnv = () => withoutCredentials(process.env);
   const scratch = mkdtempSync(join(tmpdir(), 'app-package-live-'));
   try {
     positive++;

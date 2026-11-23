@@ -170,10 +170,10 @@ export async function readServerModel(
  * @param {NodeJS.ProcessEnv} env
  */
 export function withoutCredentials(env) {
-  const rest = { ...env };
-  delete rest[NUXEO_USER_ENV];
-  delete rest[NUXEO_PASS_ENV];
-  return rest;
+  // In any letter case: Windows reads an environment's names without it, so a child there sees
+  // `nuxeo_pass` as NUXEO_PASS, and `process.env` answers either spelling.
+  const names = new Set([NUXEO_USER_ENV, NUXEO_PASS_ENV]);
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !names.has(name.toUpperCase())));
 }
 
 function isRecord(value) {
