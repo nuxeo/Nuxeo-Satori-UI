@@ -182,7 +182,8 @@ export class HomePageComponent {
         } catch (error) {
           // Whatever a file does to the reader, the page says it could not be read, rather than
           // stay loading.
-          warn(`home.json refused: it could not be read: ${(error as Error).message}`);
+          const reason = error instanceof Error ? error.message : String(error);
+          warn(`home.json refused: it could not be read: ${reason}`);
           this.state.set({ kind: 'refused' });
           return;
         }

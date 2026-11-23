@@ -332,6 +332,20 @@ describe('HomePageComponent', () => {
     );
   });
 
+  it('says the home could not be read whatever is thrown, an error or not', () => {
+    create({ groups: [] });
+    vi.spyOn(TestBed.inject(ExtensionRuleRegistry), 'registeredRuleIds').mockImplementation(() => {
+      throw undefined;
+    });
+    home({ version: 2, cards: [{ id: 'b', label: 'B', kpi: { pageProvider: 'pp_b' } }] });
+    expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      'The home could not be read.',
+    );
+    expect(warn).toHaveBeenCalledWith(
+      '[agentic-ui-home] home.json refused: it could not be read: undefined',
+    );
+  });
+
   it('draws no home, and says so, for a file it refuses', () => {
     create({ groups: [] });
     home({ version: 2, cards: [{ id: 'a' }] });

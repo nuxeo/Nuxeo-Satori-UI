@@ -20,7 +20,8 @@ export interface Finding {
    * `structure`: not version 2's shape.
    * `unknown`: it names a widget, computation, check, rule, action, module or key nobody
    * registered, or something the package does not have.
-   * `parameter`: a registered ID with parameters it does not take.
+   * `parameter`: a registered ID with parameters it does not take, a property where no record is
+   * open, or rules, computations or fields nested deeper than {@link MAX_NESTING}.
    *
    * What the app does with each, file by file, is in app-definition-v2.md, section 12.
    */
@@ -59,6 +60,16 @@ export function isLiteral(value: unknown): value is string | number | boolean {
 }
 
 /**
+ * A value as a message shows it: a literal or `null` as JSON, a list as `[…]` and an object as
+ * `{…}`. Writing either out whole would be a second walk of it, as deep as the file nests it, and a
+ * message as long as the file.
+ */
+export function shown(value: unknown): string {
+  if (value === null || isLiteral(value)) return JSON.stringify(value);
+  return Array.isArray(value) ? '[…]' : '{…}';
+}
+
+/**
  * The checks every file starts with: an object, in version 2. Returns the findings that stop the
  * file being read further, or `null` when it may be.
  */
@@ -70,7 +81,7 @@ export function unreadable(content: unknown, what: string): Finding[] | null {
       {
         path: 'version',
         kind: 'structure',
-        message: `version must be 2, not ${JSON.stringify(content['version'] ?? null)}`,
+        message: `version must be 2, not ${shown(content['version'] ?? null)}`,
       },
     ];
   }
@@ -92,9 +103,10 @@ export const ICON = /^[a-z0-9_]{1,64}$/;
 
 /**
  * How many levels of rules, computations, a customer's rule's parameters and fields (a table's
- * columns are fields, which may be tables) the validator reads, the outermost being the first. JSON can nest further than a recursive walk has stack for, so
- * past this a walk stops with a `parameter` finding: the entry it is in is left out, or the
- * package refused, rather than the check overflowing its stack. Far above what any file needs, and
+ * columns are fields, which may be tables) the validator reads, the outermost being the first.
+ * JSON can nest further than a recursive walk has stack for, so past this a walk stops with a
+ * `parameter` finding: the entry it is in is left out, or the package refused, rather than the
+ * check overflowing its stack. Far above what any file needs, and
  * above the 32 levels the rule registry answers, which the engines enforce on their own.
  */
 export const MAX_NESTING = 256;
@@ -216,7 +228,8 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   };
 
   /**
-   * The parameters of a customer's own rule, at any depth, which this library cannot type. A
+   * The parameters of a customer's own rule, as deep as {@link MAX_NESTING}, which this library
+   * cannot type. A
    * customer's composite may resolve a rule among them, as `core.every` does, so a `{ "type" }`
    * naming a registered rule is checked as one, its signature included. Where no record is open,
    * a `{ "field" }` is refused. Anything else is the customer's to read: a text is a value, such
@@ -527,11 +540,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     }
     item.forEach((action, index) => {
       if (typeof action !== 'string' || !known.has(action)) {
-        add(
-          join(path, index),
-          'unknown',
-          `the ${what} ${JSON.stringify(action)} is not registered`,
-        );
+        add(join(path, index), 'unknown', `the ${what} ${shown(action)} is not registered`);
       }
     });
   };

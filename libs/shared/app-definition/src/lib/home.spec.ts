@@ -1,6 +1,8 @@
 import { MAX_NESTING, type Finding } from './checker';
 import { validateHome, validateNavigation } from './home';
+import { validateActions } from './actions';
 import { validateLayoutV2 } from './layout-v2';
+import { validateQueue } from './queue';
 import { PACKAGED_REGISTRIES, withRegistered } from './registries';
 
 // The validators of the menu and the home (docs/business-apps/app-definition-v2.md, sections 9
@@ -509,6 +511,32 @@ describe('nesting deeper than the validator reads', () => {
       column = { field: 'dc:contributors', widget: 'table', parameters: { columns: [column] } };
     const layout = { version: 2, cards: [{ id: 'c', fields: [column] }] };
     expect(deepest(validateLayoutV2(layout, { mode: 'view' }))).toEqual([tooDeep]);
+  });
+
+  it('names a value it refuses by its kind, rather than writing it out as deep as it nests', () => {
+    expect(deepest(validateHome({ version: nestedValue(), cards: [] }))).toEqual([
+      'version must be 2, not {…} [structure]',
+    ]);
+    expect(deepest(validateHome({ version: [[2]], cards: [] }))).toEqual([
+      'version must be 2, not […] [structure]',
+    ]);
+    const queue = {
+      version: 2,
+      label: 'Open',
+      pageProvider: 'payers_open',
+      columns: ['dc:title'],
+      rowActions: [nestedValue()],
+    };
+    expect(deepest(validateQueue(queue))).toEqual([
+      'the row action {…} is not registered [unknown]',
+    ]);
+    const actions = {
+      version: 2,
+      actions: [{ id: 'a', label: 'A', transition: 'go', on: [nestedValue()] }],
+    };
+    expect(deepest(validateActions(actions))).toEqual([
+      '{…} is not "record", "row" or "bulk" [structure]',
+    ]);
   });
 
   it('reads as deep as the limit', () => {

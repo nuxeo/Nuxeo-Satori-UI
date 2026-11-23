@@ -9,7 +9,7 @@
  */
 export { ACTIONS_V2_KEYS, PLACEMENTS, validateActions, type ActionsOptions } from './lib/actions';
 export { APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
-export { type Finding } from './lib/checker';
+export { MAX_NESTING, type Finding } from './lib/checker';
 export {
   HOME_PAGE,
   HOME_V2_KEYS,
