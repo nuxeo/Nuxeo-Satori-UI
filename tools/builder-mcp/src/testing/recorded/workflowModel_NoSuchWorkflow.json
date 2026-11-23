@@ -1,0 +1,7 @@
+{
+  "request": {
+    "path": "/workflowModel/NoSuchWorkflow"
+  },
+  "status": 404,
+  "message": "/nuxeo/api/v1/workflowModel/NoSuchWorkflow answered 404: No route found for id: NoSuchWorkflow"
+}

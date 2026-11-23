@@ -1,0 +1,39 @@
+{
+  "request": {
+    "path": "/search/pp/tree_children"
+  },
+  "status": 200,
+  "body": {
+    "name": "tree_children",
+    "enabled": true,
+    "properties": {
+      "maxResults": "PAGE_SIZE"
+    },
+    "queryParameters": [],
+    "pageSize": 50,
+    "pageSizeBinding": null,
+    "maxPageSize": null,
+    "pageSizeOptions": [5, 10, 20, 30, 40, 50],
+    "sortable": true,
+    "sortInfos": [
+      {
+        "sortColumn": "ecm:pos",
+        "sortAscending": true
+      },
+      {
+        "sortColumn": "dc:title",
+        "sortAscending": true
+      }
+    ],
+    "sortInfosBinding": null,
+    "pattern": "SELECT * FROM Document WHERE ecm:parentId = ? AND ecm:isProxy = 0 AND ecm:mixinType = 'Folderish' AND ecm:mixinType != 'HiddenInNavigation' AND ecm:isVersion = 0 AND ecm:isTrashed = 0",
+    "quotePatternParameters": true,
+    "escapePatternParameters": true,
+    "whereClause": null,
+    "searchDocumentType": null,
+    "quickFilters": [],
+    "aggregates": [],
+    "id": "tree_children",
+    "usageTrackingEnabled": false
+  }
+}

@@ -1,0 +1,272 @@
+{
+  "request": {
+    "path": "/automation"
+  },
+  "status": 200,
+  "body": {
+    "paths": {
+      "login": "login"
+    },
+    "codecs": [],
+    "operations": [
+      {
+        "id": "Document.Create",
+        "label": "Create",
+        "category": "Document",
+        "requires": null,
+        "description": "Create a new document in the input folder. You can initialize the document properties using the 'properties' parameter. The properties are specified as <i>key=value</i> pairs separated by a new line. The key used for a property is the property xpath. To specify multi-line values, you can use a \\ character followed by a new line. <p>Example:<pre>dc:title=The Document Title<br>dc:description=foo bar</pre>. Returns the created document.",
+        "url": "Document.Create",
+        "signature": ["document", "document", "documents", "documents"],
+        "params": [
+          {
+            "name": "type",
+            "description": "",
+            "type": "string",
+            "required": true,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "name",
+            "description": "",
+            "type": "string",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "properties",
+            "description": "",
+            "type": "properties",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          }
+        ]
+      },
+      {
+        "id": "Document.FetchByProperty",
+        "label": "Fetch By Property",
+        "category": "Fetch",
+        "requires": null,
+        "description": "For each specified string property value, fetch all documents that match the property and the optional where clause. Matching documents are collected into a list and the returned to the next operation. The operation has no input.",
+        "url": "Document.FetchByProperty",
+        "signature": ["void", "documents"],
+        "params": [
+          {
+            "name": "property",
+            "description": "",
+            "type": "string",
+            "required": true,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "values",
+            "description": "",
+            "type": "stringlist",
+            "required": true,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "query",
+            "description": "",
+            "type": "string",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          }
+        ]
+      },
+      {
+        "id": "Repository.Query",
+        "aliases": ["Document.Query"],
+        "label": "Query",
+        "category": "Fetch",
+        "requires": null,
+        "description": "Perform a query on the repository. The document list returned will become the input for the next operation.If no provider name is given, a query returning all the documents that the user has access to will be executed.",
+        "since": "6.0",
+        "url": "Repository.Query",
+        "signature": ["void", "documents"],
+        "params": [
+          {
+            "name": "currentPageIndex",
+            "description": "Target listing page.",
+            "type": "integer",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "escapePatternParameters",
+            "description": "",
+            "type": "boolean",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "language",
+            "description": "The query language.",
+            "type": "string",
+            "required": false,
+            "widget": "Option",
+            "order": 0,
+            "values": ["NXQL"]
+          },
+          {
+            "name": "maxResults",
+            "description": "",
+            "type": "integer",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "namedParameters",
+            "description": "Named parameters to pass to the page provider to fill in query variables.",
+            "type": "properties",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "pageSize",
+            "description": "Entries number per page.",
+            "type": "integer",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "query",
+            "description": "The query to perform.",
+            "type": "string",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "queryParams",
+            "description": "Ordered query parameters.",
+            "type": "stringlist",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "quotePatternParameters",
+            "description": "",
+            "type": "boolean",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "sortBy",
+            "description": "Sort by properties (separated by comma)",
+            "type": "stringlist",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "sortOrder",
+            "description": "Sort order, ASC or DESC",
+            "type": "stringlist",
+            "required": false,
+            "widget": "Option",
+            "order": 0,
+            "values": ["ASC", "DESC"]
+          }
+        ]
+      },
+      {
+        "id": "Document.Update",
+        "label": "Update Properties",
+        "category": "Document",
+        "requires": null,
+        "description": "Set multiple properties on the input document. The properties are specified as <i>key=value</i> pairs separated by a new line. The key used for a property is the property xpath. To specify multi-line values you can use a \\ character followed by a new line. <p>Example:<pre>dc:title=The Document Title<br>dc:description=foo bar</pre>For updating a date, you will need to expose the value as ISO 8601 format, for instance : <p>Example:<pre>dc:title=The Document Title<br>dc:issued=@{org.nuxeo.ecm.core.schema.utils.DateParser.formatW3CDateTime(CurrentDate.date)}</pre><p>Returns back the updated document.<p>To update a multi-valued field with multiple values:<pre>custom:multivalued=a,b,c,d</pre><p>Save parameter automatically saves the document in the database. It has to be turned off when this operation is used in the context of the empty document created, about to create, before document modification, document modified events.</p>",
+        "url": "Document.Update",
+        "signature": ["document", "document", "documents", "documents"],
+        "params": [
+          {
+            "name": "properties",
+            "description": "",
+            "type": "properties",
+            "required": true,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "changeToken",
+            "description": "",
+            "type": "string",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "propertiesBehaviors",
+            "description": "",
+            "type": "properties",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": []
+          },
+          {
+            "name": "save",
+            "description": "",
+            "type": "boolean",
+            "required": false,
+            "widget": null,
+            "order": 0,
+            "values": ["true"]
+          }
+        ]
+      }
+    ],
+    "chains": [
+      {
+        "id": "AttachFiles",
+        "label": "AttachFiles",
+        "category": "Chain",
+        "requires": null,
+        "description": null,
+        "url": "Chain.AttachFiles",
+        "signature": ["bloblist", "document", "blob", "document"],
+        "params": []
+      },
+      {
+        "id": "FileManager.ImportWithMetaData",
+        "label": "FileManager.ImportWithMetaData",
+        "category": "Chain",
+        "requires": null,
+        "description": null,
+        "url": "Chain.FileManager.ImportWithMetaData",
+        "signature": ["bloblist", "documents", "blob", "document"],
+        "params": []
+      }
+    ]
+  },
+  "trimmed": "operations: 4 of 313 kept (Document.Create, Document.Update, Document.FetchByProperty, Repository.Query); chains: 2 of 29"
+}
