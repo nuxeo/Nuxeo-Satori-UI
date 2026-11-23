@@ -28,22 +28,30 @@ Updating this file is **step 10 of the `beta-phase` skill**, not an optional cou
 
 | Phase                                   | Status                                                                              | Evidence                                                                                  |
 | --------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 0 — Unblock and verify                  | **complete**                                                                        | `phase-0-baseline` 14/14                                                                  |
-| 1 — Layer 0: upgrade-safe configuration | **complete**, with one caveat below                                                 | `phase-1-config` 39/39                                                                    |
-| 2 — Layer 1: extension registry         | **complete**, carry-forward named                                                   | `phase-2-registry` 46/46                                                                  |
-| 3 — Component adoption                  | **complete**                                                                        | 55/55                                                                                     |
-| 4 — Layer 2: publishable platform       | **complete**, 10 deviations recorded                                                | `phase-4-platform` 25/25                                                                  |
+| 0 — Unblock and verify                  | **complete**                                                                        | `phase-0-baseline` 14/14 at sign-off; re-captured 12/12 on the browse page                |
+| 1 — Layer 0: upgrade-safe configuration | **in progress** 2026-11-02 (NXSAT-660): an unexplained request fails; caveat below  | `phase-1-config` 39/39 at sign-off; now 39/40                                             |
+| 2 — Layer 1: extension registry         | **in progress** 2026-11-02 (NXSAT-660): the same request fails; carry-forward named | `phase-2-registry` 46/46 at sign-off; now 42/43                                           |
+| 3 — Component adoption                  | **superseded** 2026-11-02 (NXSAT-660): the adopted components were removed          | 55/55 at sign-off; now 29/29 on the browse page, which is **not adoption evidence**       |
+| 4 — Layer 2: publishable platform       | **complete with deviations**, 12 recorded; narrowed 2026-11-02 (NXSAT-660)          | `phase-4-platform` 25/25 at sign-off; now 18/18 on the signed-out template                |
 | 5 — Layer 3: agent harness              | **complete**                                                                        | `phase-5-harness` 27/27                                                                   |
-| 6 — Beta quality bar                    | **in progress** — 5 of 7; step 6 reopened 2026-09-22, step 3 in question 2026-09-23 | `phase-6-a11y` 27/27 on `2026-08-24T14-40-16`; **3 failed on every run since 2026-09-15** |
+| 6 — Beta quality bar                    | **in progress** — 5 of 7; step 6 reopened 2026-09-22, step 3 **not met** 2026-11-23 | `phase-6-a11y` **20/35** on `2026-11-23T08-09-11` (one 2.5.3 defect); 27/27 on 2026-08-24 |
 
 This table was three phases stale for a day — it read Phase 3 "in progress", Phase 4 "not
 started", Phase 5 "partial" after all three had shipped. `npm run beta:state` is the
 machine-checked version and is red whenever a phase claims more than its evidence supports;
 prefer it to this table.
 
-**Phase 1's caveat:** it is recorded complete, but i18n extraction covers only three
-templates. That is real remaining work sitting inside a closed phase, and it should be
-reopened rather than quietly carried.
+**Phases 1 and 2** have been back in progress since 2026-11-02 (NXSAT-660). The latest run
+`phases.json` records for each fails one check: a request the app sends to
+`/nuxeo/agentic-ui/` from the browse and themes pages fails, and its source is not yet
+identified.
+
+**Phase 4's claim** was narrowed the same day: its template is now checked signed out only,
+and the signed-in checks, which need Nuxeo, are recorded as notes rather than assertions.
+
+**Phase 1's caveat:** i18n extraction covers only three templates. That is real remaining
+work, and it was carried inside the phase while the phase was recorded complete. It is not
+why the phase reopened; `phases.json` still lists it under what the phase does not cover.
 
 ---
 
@@ -190,13 +198,14 @@ pinned major).
 
 ---
 
-### Phase 6: 5 of 7 steps done; steps 3 and 6 open as of 2026-09-23
+### Phase 6: 5 of 7 steps done; step 6 open since 2026-09-22, step 3 not met as of 2026-11-23
 
 **This section is dated 2026-09-22 and the paragraphs below it are older.** It said "opened, two
 steps done of seven" and "barely started", which was true when written and is not now — steps 0–2, 4
 and 5 are done, and **two** are open: step 6 (the 90% bar), reopened 2026-09-22 because
-`shared-ai-client` entered the measurement at 15.98%; and step 3 (WCAG 2.1 AA), in question since
-2026-09-23 because five consecutive `phase-6-a11y` captures fail 3 `button-name` checks. (Phase 6 has seven steps numbered **0–6**;
+`shared-ai-client` entered the measurement at 15.98%; and step 3 (WCAG 2.1 AA), in question from
+2026-09-23 and **not met** as of 2026-11-23. That day's capture fails `label-content-name-mismatch`
+on the navigation's user-profile control, on every screen; see the WCAG row below. (Phase 6 has seven steps numbered **0–6**;
 an earlier revision of this sentence referred to a step 7, which does not exist.) Where a figure below disagrees with the
 table at the end of this section, the table is the later measurement.
 
@@ -265,13 +274,13 @@ Three corrections came out of this step, and two were defects in work from the d
 
 **Still open, with the real numbers:**
 
-| Requirement         | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit coverage ≥ 90% | **10 of 11 in-scope projects** as of 2026-09-22, `shared-ai-client` short at 15.98%. Two earlier figures on this row were each true when written: "5 of 17" until 2026-08-24, when the gate stopped scoring 0/0 statements as 100%; then "3 of 15" before the Phase 6 coverage work took `search` 22.76% → 93.41% and `document-detail` 29.8% → 92.56%. Re-measure with `nvm use 20 && npm run beta:coverage -- --run` rather than quoting any of them. Re-measured 2026-10-24 on Angular 21 (NXSAT-669), whose Vitest 4 counts statements by syntax rather than by line: 11 of 16 in-scope projects ≥90%, `document-detail` 88.03%, with no covered line lost ([record](./angular-21-migration.md#coverage))          |
-| Playwright E2E      | **done** — 12 specs, 9 credential-sensitive; not in PR CI (needs Docker Nuxeo)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| WCAG 2.1 AA         | **RE-CHECK BEFORE QUOTING — the five most recent captures fail.** `phase-6-a11y` manifests from 2026-09-15T00-32-51 through 2026-09-16T08-51-23 each report `{steps:13, checks:27, failed:3}`: `button-name` (axe **serious/critical** — a button with no accessible name) on **browse**, **browse cards** and the **browse column panel**. The last passing capture is `2026-08-24T14-40-16`, 27/27. Not yet diagnosed, and not caused by the i18n work in PR #227, whose changes postdate these runs. Everything after this sentence describes that August pass: **met** on the 15 cases scanned — 7 rule classes fixed, `KNOWN_VIOLATIONS` empty. Dialogs, upload, dark mode and pre-auth login are **not** covered |
-| SAST                | **done, and the premise was wrong** — CodeQL default setup had run since 2026-07-24 and was reporting 21 open alerts, 6 high, that nothing read. All fixed; 14 of them from one HTML escaper missing the double quote. Two gates now consume the output: `supply-chain` (production `high`/`critical`, dated acceptances, unimported deps) and `code-scanning` (fails if the ref was never analysed). Production audit 1 low (quill, accepted to 2026-11-30); dev-inclusive 9 high, reported not gated                                                                                                                                                                                                                 |
-| Safari              | **WebKit verified, not Safari** — `apps/nuxeo-ui-e2e/playwright.config.ts` registers a `webkit` project alongside `chromium`, and that file records the rule that it is "registered only once the suite passed on it", so its presence is the evidence. WebKit is the engine Safari ships; it is not Safari, and shares neither its UI nor iOS's stricter storage rules. This row read "never run; Chromium only" after that stopped being true                                                                                                                                                                                                                                                                        |
+| Requirement         | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit coverage ≥ 90% | **10 of 11 in-scope projects** as of 2026-09-22, `shared-ai-client` short at 15.98%. Two earlier figures on this row were each true when written: "5 of 17" until 2026-08-24, when the gate stopped scoring 0/0 statements as 100%; then "3 of 15" before the Phase 6 coverage work took `search` 22.76% → 93.41% and `document-detail` 29.8% → 92.56%. Re-measure with `nvm use 20 && npm run beta:coverage -- --run` rather than quoting any of them. Re-measured 2026-10-24 on Angular 21 (NXSAT-669), whose Vitest 4 counts statements by syntax rather than by line: 11 of 16 in-scope projects ≥90%, `document-detail` 88.03%, with no covered line lost ([record](./angular-21-migration.md#coverage))                                                                                                                                                                                                                                                                                                                                                     |
+| Playwright E2E      | **done** — 12 specs, 9 credential-sensitive; not in PR CI (needs Docker Nuxeo)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| WCAG 2.1 AA         | **NOT MET as of 2026-11-23.** `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at e27deeaa0 with axe-core 4.14.1, reports `{steps:14, checks:35, failed:15}`. Fourteen failures are one node: `label-content-name-mismatch` (2.5.3 Label in Name, Level A, serious) on the navigation's user-profile control. With the rail collapsed it shows only the avatar initials NXSAT-673 added on 2026-10-26, and it is in the shell, so every surface fails. The fifteenth is a Health 404 on an optional configuration file the local server does not serve, which is an environment condition. The 35/35 of 2026-10-22 used axe-core 4.13.0, which does not run that rule under the WCAG tags. The 2026-09-15/16 `button-name` failures do not reproduce. The diagnosis is in `docs/accessibility.md`. The sign-off pass is `2026-08-24T14-40-16`, 27/27: **met** on the 15 cases scanned, with 7 rule classes fixed, `KNOWN_VIOLATIONS` empty and three upstream nodes excluded on one step. Dialogs, upload, dark mode and pre-auth login are **not** covered |
+| SAST                | **done, and the premise was wrong** — CodeQL default setup had run since 2026-07-24 and was reporting 21 open alerts, 6 high, that nothing read. All fixed; 14 of them from one HTML escaper missing the double quote. Two gates now consume the output: `supply-chain` (production `high`/`critical`, dated acceptances, unimported deps) and `code-scanning` (fails if the ref was never analysed). Production audit 1 low (quill, accepted to 2026-11-30); dev-inclusive 9 high, reported not gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Safari              | **WebKit verified, not Safari** — `apps/nuxeo-ui-e2e/playwright.config.ts` registers a `webkit` project alongside `chromium`, and that file records the rule that it is "registered only once the suite passed on it", so its presence is the evidence. WebKit is the engine Safari ships; it is not Safari, and shares neither its UI nor iOS's stricter storage rules. This row read "never run; Chromium only" after that stopped being true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 Coverage alone is most of the phase's 20-30 day estimate.
 
@@ -304,8 +313,12 @@ Three of those gates exist because something got through:
   could not observe". One compared `"main.js"` to `"main.js"`; the review's own words were
   that it "could not fail — and notably it did not catch defect 1, which is precisely the
   failure it appeared to guard".
-- **`bundle`** — fails the build when the initial bundle exceeds its budget, and when a test-mocking
-  library reaches the shipped runtime bundle.
+- **`bundle`** — Phase 3's spike found a dependency importing `ng-mocks`, a **test-mocking
+  library**, from its shipped runtime bundle; with the real library installed it reached a 1.6 MB
+  customer-facing chunk carrying two `eval()` calls. The gate reads the built bytes for both, and
+  checks that the required assets ship non-empty. It does not measure size: the initial bundle's
+  budget belongs to Angular's production build (`angular.json`), which fails `nx build nuxeo-ui`
+  above `maximumError`.
 
 A completed phase now cites a **specific** manifest rather than `latest`: a stale local dev server
 turned Phase 0's newest capture red and invalidated a `complete` claim that was never in doubt.
@@ -336,8 +349,11 @@ section of `docs/beta-plan.md`.
 
 Measured 2026-10-14 (NXSAT-638) on a production build on Node 20 with the Nx cache off: an initial
 bundle of **2.96 MB** (616 kB transfer). `maximumError` is 4.0 MB, leaving 1.04 MB of headroom;
-`maximumWarning` is 2.5 MB, which the build exceeds by 456 kB. The `bundle` gate enforces the
-budget — read the current number from it rather than from this file.
+`maximumWarning` is 2.5 MB, which the build exceeds by 456 kB. Angular's production build
+enforces the budget (`angular.json`): it warns above `maximumWarning`, fails above `maximumError`,
+and prints the initial total — read the current number from `nx build nuxeo-ui`'s output rather
+than from this file. The `bundle` gate checks what the bundle contains, not its size, and CI's 6 MiB
+ceiling on all shipped JS and CSS is a separate step, "Check bundle size (nuxeo-ui)" in `ci.yml`.
 
 ### Unit test coverage, measured for the first time
 
@@ -360,24 +376,33 @@ A **ratchet** gate stops these worsening; closing the gap is Phase 6 and it is l
 `nuxeo-ui` is excluded — its Karma builder takes a different coverage flag — and says so on
 every run.
 
-### Accessibility — the bar is met, and the baseline was wrong
+### Accessibility — the bar was met on 2026-08-24, and the baseline was wrong
 
-WCAG 2.1 AA is **met on the fifteen cases scanned**. The number that
-matters more than the fixes: the previous capture scanned **three** surfaces and ratcheted **four**
-rule ids. Widening it to fifteen cases found **seven** rule classes and **77** violating nodes.
-Three of the classes existed only in view-mode and column-panel states that a single visit per route
-never reaches — so the ratchet was reporting "no new violations" over a scan that could not see half
-the violations.
+On 2026-08-24 WCAG 2.1 AA was **met on the fifteen cases scanned**, with one upstream exception:
+three `aria-required-children` nodes in an upstream component library's markup, excluded on the
+step that scanned that library's surface alone. The library and its route were removed in October
+2026, and the nodes left with them unfixed and never re-scanned. This is a dated result. Phase 6
+step 3 was in question from 2026-09-23, and on 2026-11-23 the bar is **not met**:
+`phase-6-a11y/2026-11-23T08-09-11` fails one WCAG 2.5.3 rule on one control, on every screen (the
+WCAG row of "Still open", above). Before quoting a later verdict, re-run `phase-6-a11y` and
+record the axe-core version.
 
-| Rule                          | Nodes | Now | Owner |
-| ----------------------------- | ----- | --- | ----- |
-| `label`                       | 42    | 0   | ours  |
-| `nested-interactive`          | 40    | 0   | ours  |
-| `button-name`                 | 21    | 0   | ours  |
-| `role-img-alt`                | 12    | 0   | ours  |
-| `color-contrast`              | 7     | 0   | ours  |
-| `scrollable-region-focusable` | 2     | 0   | ours  |
-| `aria-progressbar-name`       | 2     | 0   | ours  |
+The number that matters more than the fixes: the previous capture scanned **three** surfaces and
+ratcheted **four** rule ids. Widening it to fifteen cases found **seven** rule classes and **77**
+violating nodes. Three of the classes existed only in view-mode and column-panel states that a
+single visit per route never reaches — so the ratchet was reporting "no new violations" over a scan
+that could not see half the violations.
+
+| Rule                          | Nodes | Now | Owner                                             |
+| ----------------------------- | ----- | --- | ------------------------------------------------- |
+| `label`                       | 42    | 0   | ours                                              |
+| `nested-interactive`          | 40    | 0   | ours                                              |
+| `button-name`                 | 21    | 0   | ours                                              |
+| `role-img-alt`                | 12    | 0   | ours                                              |
+| `color-contrast`              | 7     | 0   | ours                                              |
+| `scrollable-region-focusable` | 2     | 0   | ours                                              |
+| `aria-progressbar-name`       | 2     | 0   | ours                                              |
+| `aria-required-children`      | 3     | 3   | upstream; excluded, and its surface since removed |
 
 Three findings worth more than the counts:
 
@@ -398,7 +423,9 @@ Three findings worth more than the counts:
   been missed — `en-fallback.ts` still carried the empty strings, so a failed catalogue fetch would
   have silently restored the defect.
 
-`KNOWN_VIOLATIONS` is now **empty**.
+`KNOWN_VIOLATIONS` is now **empty**. The one exclusion was scoped to the upstream library's step
+alone, not to `KNOWN_VIOLATIONS`, so the same rule failing on a surface we own still failed the
+capture.
 
 **Not covered, stated rather than implied:** dialogs, the upload flow, dark mode, and the pre-auth
 login surface — the last a harness limitation, because the runner sets `httpCredentials` and the app
@@ -420,7 +447,7 @@ Nothing here is a surprise later.
    **Closed** — each gained a host; `toolbar`, `contextMenu` and `tabs` carry packaged entries
    and `routes` resolves contributions. NXSAT-316 added a ninth, `documentView`. The gated
    inventory is section 2 of `docs/extension-reference.md`.
-2. **i18n covers three templates.** Inside a phase recorded complete.
+2. **i18n covers three templates.** Inside Phase 1, which was recorded complete until 2026-11-02.
 3. ~~**`nuxeo-ui` has no `typecheck` target.**~~ **Closed** — added and proven by
    reintroducing the exact typo that escaped twice.
 4. ~~**The marketplace package has never been installed or upgraded on a real server.**~~

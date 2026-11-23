@@ -762,7 +762,8 @@
             !createFormReady() ||
             locationRestricted() ||
             createMissingMainFile() ||
-            mainFileUploadPending()
+            mainFileUploadPending() ||
+            mainFileUnsettled()
           "
           (click)="createDocument()"
         >
@@ -773,7 +774,7 @@
           mat-stroked-button
           type="button"
           class="btn-add-properties"
-          [disabled]="busy() || importRestricted()"
+          [disabled]="busy() || importRestricted() || importTypesUnsettled()"
           (click)="startImportProperties()"
         >
           {{ 'browse.create-import-dialog.add-properties' | translate }}

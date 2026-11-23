@@ -1,13 +1,20 @@
 import { FieldView, ValueContext, describeField, vocabularyValues } from './field-view';
 
+// Every case names its zone, as an offset, rather than inheriting the suite's. CI runs in UTC,
+// where an instant's UTC day and its day in the reader's zone are the same day, so a date case that
+// left the zone to the host would pass whichever way the view formatted (pattern 29).
 const context: ValueContext = {
   locale: 'en-US',
   vocabulary: (directory, id) =>
     directory === 'claim_status' && id === 'pending' ? 'Pending review' : id,
+  timeZone: '+0530',
 };
 
 const describe1 = (type: string, value: unknown, extra: Record<string, unknown> = {}): FieldView =>
   describeField('x:f', 'F', { type, ...extra }, value, context);
+
+const dateIn = (timeZone: string, value: unknown): FieldView =>
+  describeField('x:f', 'F', { type: 'date' }, value, { ...context, timeZone });
 
 describe('describeField', () => {
   it('shows a list of only empty entries as empty, not as an empty chip list', () => {
@@ -63,13 +70,51 @@ describe('describeField', () => {
     });
   });
 
-  it('shows a date in UTC, so a calendar date is the same day in every timezone', () => {
-    // Outside UTC, local formatting moves one of these two across a day boundary.
-    expect(describe1('date', '2026-09-14T00:00:00.000Z').value).toEqual({
-      text: 'September 14, 2026',
-    });
-    expect(describe1('date', '2026-09-14T23:59:00.000Z').value).toEqual({
-      text: 'September 14, 2026',
+  it.each<[string, string, string]>([
+    // The value, the reader's zone, and the day shown: in that zone it would be the day before.
+    ['2026-11-24T00:00:00.000Z', '-0500', 'November 24, 2026'],
+    ['2026-11-24T00:00:00Z', '-0800', 'November 24, 2026'],
+    ['2026-11-24T00:00Z', '-0300', 'November 24, 2026'],
+    ['2026-11-24T00:00:00+00:00', '-1000', 'November 24, 2026'],
+    ['2026-11-24', '-0500', 'November 24, 2026'],
+  ])('shows %s, a stored day, on its UTC day for a reader at %s', (value, zone, expected) => {
+    expect(dateIn(zone, value).value).toEqual({ text: expected });
+  });
+
+  it.each<[string, string, string]>([
+    // The value, the reader's zone, and the day shown there. Each one's UTC day is the other day.
+    ['2026-11-23T20:00:00Z', '+0530', 'November 24, 2026'],
+    ['2026-11-23T20:00:00.000Z', '+0900', 'November 24, 2026'],
+    ['2026-11-24T03:00:00.000Z', '-0500', 'November 23, 2026'],
+    ['2026-11-24T00:00:00.001Z', '-0500', 'November 23, 2026'],
+    ['2026-11-24T00:00:00-00:00', '-0500', 'November 23, 2026'],
+    ['2026-11-24T00:00:00+05:30', '+0530', 'November 24, 2026'],
+  ])('shows %s, an instant, on the reader’s day at %s', (value, zone, expected) => {
+    expect(dateIn(zone, value).value).toEqual({ text: expected });
+  });
+
+  it('shows the same instant on a different day to readers west and east of UTC', () => {
+    // dc:created at 20:00 UTC: still the 23rd in New York, already the 24th in Kolkata.
+    expect(dateIn('-0500', '2026-11-23T20:00:00Z').value).toEqual({ text: 'November 23, 2026' });
+    expect(dateIn('+0530', '2026-11-23T20:00:00Z').value).toEqual({ text: 'November 24, 2026' });
+  });
+
+  it('shows a stored day and an instant in one list each in its own zone', () => {
+    const view = describeField(
+      'x:f',
+      'F',
+      { type: 'date[]' },
+      ['2026-11-24T00:00:00.000Z', '2026-11-24T03:00:00.000Z'],
+      { ...context, timeZone: '-0500' },
+    );
+    expect(view.chips).toEqual([{ text: 'November 24, 2026' }, { text: 'November 23, 2026' }]);
+  });
+
+  it('shows an instant at exactly midnight UTC as a stored day: the one known misreading', () => {
+    // A dc:created stamped at 00:00:00.000Z is the evening of the 23rd in New York, but nothing in
+    // the value tells it from a day Nuxeo stored.
+    expect(dateIn('-0500', '2026-11-24T00:00:00.000Z').value).toEqual({
+      text: 'November 24, 2026',
     });
   });
 
@@ -177,6 +222,23 @@ describe('describeField', () => {
       [
         { key: 'name', label: 'Name', kind: 'value', value: { text: 'Priya Raman' } },
         { key: 'since', label: 'Since', kind: 'value', value: { text: 'January 2, 2024' } },
+      ],
+    ]);
+  });
+
+  it('shows a date sub-field by the same rule, in the zone the field was given', () => {
+    const view = describeField(
+      'claim:adjuster',
+      'Adjuster',
+      { type: 'complex', fields: { assigned: { type: 'date' }, since: { type: 'date' } } },
+      // West of UTC, where each of the two would be the other day under the other's rule.
+      { assigned: '2024-01-03T03:00:00.000Z', since: '2024-01-03T00:00:00.000Z' },
+      { ...context, timeZone: '-0500' },
+    );
+    expect(view.groups).toEqual([
+      [
+        { key: 'assigned', label: 'Assigned', kind: 'value', value: { text: 'January 2, 2024' } },
+        { key: 'since', label: 'Since', kind: 'value', value: { text: 'January 3, 2024' } },
       ],
     ]);
   });
