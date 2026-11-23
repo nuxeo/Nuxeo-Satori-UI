@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { By } from '@angular/platform-browser';
@@ -121,7 +121,7 @@ function paintedText(root: Element): string {
  * anything that is not a letter or a digit read as a space. That is how axe-core 4.14's
  * `label-content-name-mismatch` prepares text, although it splits words with `Intl.Segmenter`
  * where this splits on spaces, which differs only for scripts written without them. 4.13
- * compared characters, which let the initials "AD" pass as a substring of "Administrator".
+ * compared characters, which let initials pass whenever they are a substring of the name.
  */
 function words(text: string): string[] {
   let folded = text.normalize('NFKD').toLowerCase();
@@ -154,21 +154,23 @@ function containsWords(name: string, label: string): boolean {
  * initials and then the display name, and the cases below hold it to what is painted.
  */
 describe('platform sidebar — user profile label in name (NXENG-894)', () => {
-  const username = signal('Administrator');
   const authMock = {
     isAuthenticated: signal(true),
-    username,
+    username: signal('Administrator'),
     hasAdministrationAccess: signal(true),
     isAdministrator: signal(true),
     basicCredentials: () => null,
     shareAuthToken: () => null,
     logout: () => undefined,
   } as unknown as AuthService;
+  /** The mock's username, writable, and the display name every case starts from. */
+  const username = authMock.username as WritableSignal<string>;
+  const displayName = username();
 
   let http: HttpTestingController;
 
   beforeEach(async () => {
-    username.set('Administrator');
+    username.set(displayName);
     await TestBed.configureTestingModule({
       imports: [AppShellComponent],
       providers: [...appConfig.providers, provideHttpClientTesting()],
@@ -299,7 +301,7 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
 
     expect(shown)
       .withContext('expanded, the control must show the avatar initials, then the display name')
-      .toBe(`${profileProjectedIconText(button)} Administrator`);
+      .toBe(`${profileProjectedIconText(button)} ${displayName}`);
     const name = accessibleName(button);
     expect(containsWords(name, shown))
       .withContext(`accessible name "${name}" must contain the shown text "${shown}" as words`)
@@ -314,7 +316,7 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
 
     expect(tooltip.message)
       .withContext('collapsed, the tooltip must give the display name alone')
-      .toBe('Administrator');
+      .toBe(displayName);
     expect(button.getAttribute('aria-haspopup')).toBe('menu');
 
     TestBed.inject(SatPlatformNavState).toggleCollapsed();
