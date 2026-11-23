@@ -82,21 +82,104 @@ export function cut(text: string): string {
 /**
  * A value as a reason quotes it: as JSON, cut at `QUOTE_LENGTH` characters. Every value a reason
  * names goes through it, a computation's type, a key and a subfield included, so a reason stays
- * short whatever a file holds. It never throws, so that explaining a refusal cannot fail: a value
- * JSON cannot write is named by its kind.
+ * short whatever a file holds. Only what the cut keeps is written, so quoting a list of a million
+ * items reads about thirty of them (`jsonPrefix`). It never throws, so that explaining a refusal
+ * cannot fail: a value JSON cannot write, or that throws when it is read, is named by its kind.
  */
 export function quote(value: unknown): string {
-  let text: string;
-  if (value === undefined) text = 'undefined';
-  else if (typeof value === 'number' && !Number.isFinite(value)) text = String(value);
-  // An invalid date's JSON is `null`, which would read as a missing value.
-  else if (value instanceof Date && Number.isNaN(value.getTime())) text = 'an invalid Date';
-  else {
-    try {
-      text = JSON.stringify(value) ?? `a ${typeof value}`;
-    } catch {
-      text = `a ${typeof value}`;
-    }
+  try {
+    if (value === undefined) return 'undefined';
+    if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
+    // An invalid date's JSON is `null`, which would read as a missing value.
+    if (value instanceof Date && Number.isNaN(value.getTime())) return 'an invalid Date';
+    return cut(jsonPrefix(value, QUOTE_LENGTH + 1) ?? kindOf(value));
+  } catch {
+    // A getter or a proxy that throws, a cycle, or a bigint, which JSON has no text for.
+    return kindOf(value);
   }
-  return cut(text);
+}
+
+/** Whether `value` is a boxed primitive of `unbox`'s kind: `unbox` throws for any other. */
+function boxed(value: object, unbox: (this: unknown) => unknown): boolean {
+  try {
+    unbox.call(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** "a function", "an object": `typeof`, which never throws, whatever the value. */
+function kindOf(value: unknown): string {
+  const kind = typeof value;
+  return /^[aeiou]/.test(kind) ? `an ${kind}` : `a ${kind}`;
+}
+
+/**
+ * What `JSON.stringify(value)` begins with, written up to `limit` characters and no further: no
+ * item of a list and no value in an object is read once that many are written, and a text or a key
+ * is cut before it is escaped. An object it opens still has its keys listed, by `Object.keys`, as
+ * JSON.stringify lists them. Its first `limit` characters are JSON.stringify's, toJSON and boxed
+ * values included, and it is shorter than `limit` only when it is all of it. Undefined where
+ * JSON.stringify gives nothing. It throws where JSON.stringify would, on a cycle or a bigint, if it
+ * gets that far before the cut.
+ */
+function jsonPrefix(value: unknown, limit: number): string | undefined {
+  let text = '';
+  const open: unknown[] = [];
+  // False when JSON has no text for the value, which a list then writes as null and an object
+  // leaves out with its key.
+  const write = (value: unknown, key: string): boolean => {
+    if (
+      (typeof value === 'object' && value !== null) ||
+      typeof value === 'function' ||
+      typeof value === 'bigint'
+    ) {
+      const toJSON: unknown = (value as { toJSON?: unknown }).toJSON;
+      if (typeof toJSON === 'function') value = toJSON.call(value, key);
+    }
+    // A boxed value is its primitive, told by its `valueOf`, which takes only its own kind:
+    // `instanceof` would take an object that only inherits from `Number.prototype`.
+    if (typeof value === 'object' && value !== null) {
+      if (boxed(value, Number.prototype.valueOf)) value = Number(value);
+      else if (boxed(value, String.prototype.valueOf)) value = String(value);
+      else if (boxed(value, Boolean.prototype.valueOf))
+        value = Boolean.prototype.valueOf.call(value);
+      else if (boxed(value, BigInt.prototype.valueOf)) value = BigInt.prototype.valueOf.call(value);
+    }
+    if (value === null) text += 'null';
+    else if (typeof value === 'boolean') text += String(value);
+    // A cut text's own first `limit` characters write at least the first `limit` of its JSON.
+    else if (typeof value === 'string') text += JSON.stringify(value.slice(0, limit));
+    else if (typeof value === 'number') text += Number.isFinite(value) ? String(value) : 'null';
+    else if (typeof value === 'bigint') throw new TypeError('JSON has no text for a bigint');
+    else if (typeof value !== 'object') return false;
+    else if (open.includes(value)) throw new TypeError('JSON has no text for a cycle');
+    else {
+      open.push(value);
+      if (Array.isArray(value)) {
+        text += '[';
+        for (let index = 0; index < value.length && text.length < limit; index += 1) {
+          if (index > 0) text += ',';
+          if (!write(value[index], String(index))) text += 'null';
+        }
+        text += ']';
+      } else {
+        const object = value as Record<string, unknown>;
+        let first = true;
+        text += '{';
+        for (const name of Object.keys(object)) {
+          if (text.length >= limit) break;
+          const before = text.length;
+          text += `${first ? '' : ','}${JSON.stringify(name.slice(0, limit))}:`;
+          if (write(object[name], name)) first = false;
+          else text = text.slice(0, before);
+        }
+        text += '}';
+      }
+      open.pop();
+    }
+    return true;
+  };
+  return write(value, '') ? text : undefined;
 }

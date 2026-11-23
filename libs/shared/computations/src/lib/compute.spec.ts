@@ -3,6 +3,8 @@ import { PACKAGED_COMPUTATION_EVALUATORS } from './evaluators';
 import { recordOf } from './record.testing';
 import {
   MAX_DEPTH,
+  cut,
+  quote,
   type ComputationContext,
   type ComputationEvaluator,
   type ComputationResult,
@@ -339,6 +341,78 @@ describe('compute: it never throws', () => {
       reason: 'the computation "acme.broken" failed: "out of order"',
     });
   });
+
+  const failing = (thrown: () => unknown) => ({
+    'acme.broken': () => {
+      throw thrown();
+    },
+  });
+  const revoked = () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    return proxy;
+  };
+
+  it.each([
+    [
+      'an Error whose message cannot be read',
+      () =>
+        Object.defineProperty(new Error(), 'message', {
+          get() {
+            throw new Error('no message');
+          },
+        }),
+      'a thrown value that cannot be read',
+    ],
+    // `instanceof` throws for a revoked proxy, before anything else is read.
+    ['a revoked proxy', revoked, 'a thrown value that cannot be read'],
+    ['an Error with no message', () => new Error(), 'an error with no message'],
+    [
+      'an Error whose message is not a text',
+      () => Object.assign(new Error(), { message: undefined }),
+      'an error with no message',
+    ],
+    // `getTime()` throws for an object that is a Date only by its prototype.
+    ['an object that passes for a Date', () => Object.create(Date.prototype), 'an object'],
+    [
+      'an object whose JSON throws',
+      () => ({
+        toJSON() {
+          throw new Error('no JSON');
+        },
+      }),
+      'an object',
+    ],
+  ])('refuses when an evaluator throws %s, without throwing itself', (_what, thrown, said) => {
+    expect(compute({ type: 'acme.broken' }, record, failing(thrown))).toEqual({
+      ok: false,
+      reason: `the computation "acme.broken" failed: ${said}`,
+    });
+  });
+
+  it('refuses a computation that cannot be read', () => {
+    const computation = {
+      get type(): string {
+        throw new Error('the layout is gone');
+      },
+    };
+    expect(compute(computation, record)).toEqual({
+      ok: false,
+      reason: 'the computation could not be read: the layout is gone',
+    });
+    const unreadable = new Proxy(
+      {},
+      {
+        get() {
+          throw revoked();
+        },
+      },
+    );
+    expect(compute(unreadable, record)).toEqual({
+      ok: false,
+      reason: 'the computation could not be read: a thrown value that cannot be read',
+    });
+  });
 });
 
 describe('compute: the evaluators it is given', () => {
@@ -423,5 +497,102 @@ describe('compute: a reason quotes at most 60 characters of anything a file hold
       ok: false,
       reason: `the property "dc:${'a'.repeat(56)}… holds [1], not a text, a number or a boolean`,
     });
+  });
+
+  /** `value`, with a count of the items or properties read from it. */
+  const counted = <T extends object>(value: T) => {
+    const read = { count: 0 };
+    const proxy = new Proxy(value, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && key !== 'length' && key !== 'toJSON') read.count += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    return { proxy, read };
+  };
+
+  it('reads no more of a list than it quotes', () => {
+    const { proxy, read } = counted(new Array(100_000).fill(1));
+    expect(compute(valueOf({ field: 'claim:lines' }), recordOf({ 'claim:lines': proxy }))).toEqual({
+      ok: false,
+      reason: `the property "claim:lines" holds ${JSON.stringify(new Array(40).fill(1)).slice(0, 60)}…, not a text, a number or a boolean`,
+    });
+    // "[1,1,…": 31 items fill 61 characters, one past the cut. JSON.stringify read all 100,000.
+    expect(read.count).toBe(31);
+  });
+
+  it('reads no more of a complex value than it quotes', () => {
+    const wide = Object.fromEntries(Array.from({ length: 10_000 }, (_, i) => [`k${i}`, i]));
+    const { proxy, read } = counted(wide);
+    const result = compute(valueOf({ field: 'claim:totals' }), recordOf({ 'claim:totals': proxy }));
+    expect(result).toEqual({
+      ok: false,
+      reason: `the property "claim:totals" holds ${JSON.stringify(wide).slice(0, 60)}…, not a text, a number or a boolean`,
+    });
+    expect(read.count).toBeLessThan(20);
+  });
+});
+
+describe('quote: a value as a reason names it', () => {
+  // Written as JSON.stringify writes it, without writing more than the cut keeps.
+  it.each([
+    ['a short object', { field: 'dc:title', widget: 'text' }],
+    ['lists and objects inside each other', { a: [1, { b: [true, null, 'x'] }], c: {}, d: [] }],
+    ['a list holding what JSON has no text for', [undefined, () => 1, Symbol('s'), NaN, -0]],
+    [
+      'an object holding what JSON has no text for',
+      { a: undefined, b: () => 1, c: Symbol(), d: 1 },
+    ],
+    ['a list with holes', new Array(3)],
+    ['a Date inside an object', { at: new Date(Date.UTC(2024, 2, 6)) }],
+    ['boxed values', [Object(1), Object('a'), Object(false)]],
+    ['an object that only inherits from Number.prototype', Object.create(Number.prototype)],
+    ['a toJSON, given its key', { a: { toJSON: (key: string) => `key ${key}` } }],
+    ['a toJSON that gives nothing', { a: { toJSON: () => undefined }, b: 1 }],
+    ['numbers', [1e21, 1e-7, -1.5, 0.1 + 0.2, Number.MAX_VALUE]],
+    ['escapes', 'quote " backslash \\ newline \n tab \t \u0001   \u{1F600}'],
+    ['a lone surrogate', '\uD83D'],
+    ['an emoji the cut falls inside', `${'x'.repeat(60)}\u{1F600}`],
+    ['an escape the cut falls inside', `${'x'.repeat(57)}\n${'y'.repeat(10)}`],
+    ['a long key', { ['k'.repeat(100)]: 1 }],
+    ['a long text in a list', ['x'.repeat(200), 'never written']],
+    ['a text of 60 characters as JSON', 'x'.repeat(58)],
+    ['a text of 61 characters as JSON', 'x'.repeat(59)],
+    ['a list of 60 characters as JSON', [`${'x'.repeat(55)}`]],
+    ['a list of 61 characters as JSON', [`${'x'.repeat(56)}`]],
+  ])('quotes %s as its JSON, cut', (_what, value) => {
+    expect(quote(value)).toBe(cut(JSON.stringify(value)));
+  });
+
+  it('escapes no more of a text or a key than it quotes', () => {
+    const long = 'x'.repeat(100_000);
+    const values = [long, [long], { [long]: 1 }, { key: long }];
+    const expected = values.map((value) => cut(JSON.stringify(value)));
+    const stringify = vi.spyOn(JSON, 'stringify');
+    try {
+      expect(values.map(quote)).toEqual(expected);
+      // Each call is given a text of at most 61 characters: never the value, never the whole text.
+      const given = stringify.mock.calls.map(([value]) =>
+        typeof value === 'string' ? value.length : Number.POSITIVE_INFINITY,
+      );
+      expect(given.length).toBeGreaterThan(0);
+      expect(Math.max(...given)).toBeLessThanOrEqual(61);
+    } finally {
+      stringify.mockRestore();
+    }
+  });
+
+  it('names by its kind what JSON cannot write', () => {
+    const cycle: unknown[] = [];
+    cycle.push(cycle);
+    expect(quote(undefined)).toBe('undefined');
+    expect(quote(Number.NaN)).toBe('NaN');
+    expect(quote(new Date(Number.NaN))).toBe('an invalid Date');
+    expect(quote(() => 1)).toBe('a function');
+    expect(quote(Symbol('s'))).toBe('a symbol');
+    expect(quote(10n)).toBe('a bigint');
+    expect(quote([10n])).toBe('an object');
+    expect(quote(Object(10n))).toBe('an object');
+    expect(quote(cycle)).toBe('an object');
   });
 });
