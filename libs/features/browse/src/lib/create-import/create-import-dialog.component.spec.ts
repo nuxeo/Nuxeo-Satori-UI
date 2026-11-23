@@ -30,6 +30,7 @@ import {
   type L10nDirectoryEntry,
   type NuxeoContentModel,
   type NuxeoDoctypeDefinition,
+  type NuxeoFacetDefinition,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -114,10 +115,22 @@ const RENTAL_CONTRACT_DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
   RentalContract: { parent: 'File' },
 };
 
-function useDoctypes(doctypes: Record<string, NuxeoDoctypeDefinition>): void {
-  mockContentModelService.getContentModel.mockReturnValue(
-    of({ doctypes, facets: [], schemas: [] }),
-  );
+/**
+ * A customer type that gets the `file` schema from a facet it declares, not from its own schemas
+ * or an ancestor's: `/config/types` names the facet, and only `/config/facets` says what it adds.
+ */
+const SCANNED_INVOICE_MODEL: Pick<NuxeoContentModel, 'doctypes' | 'facets'> = {
+  doctypes: {
+    Invoice: { parent: 'Document', facets: ['Folderish', 'Scanned'], schemas: ['common'] },
+  },
+  facets: [{ name: 'Folderish' }, { name: 'Scanned', schemas: [{ name: 'file', '@prefix': '' }] }],
+};
+
+function useDoctypes(
+  doctypes: Record<string, NuxeoDoctypeDefinition>,
+  facets: NuxeoFacetDefinition[] = [],
+): void {
+  mockContentModelService.getContentModel.mockReturnValue(of({ doctypes, facets, schemas: [] }));
 }
 
 /** A content model that has not answered yet; call the result to make it answer. */
@@ -2062,6 +2075,29 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.uploads.stage([jpegFile('lease.jpg')]);
       component.startImportProperties();
       expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    });
+
+    it('exposes a content field for a type whose facet contributes the file schema', async () => {
+      useDoctypes(SCANNED_INVOICE_MODEL.doctypes, SCANNED_INVOICE_MODEL.facets);
+      await createDialog();
+
+      component.startCreateFromType({ type: 'Invoice', label: 'Invoice' });
+      expect(component.hasContentField()).toBe(true);
+      expect(component.createMissingMainFile()).toBe(true);
+    });
+
+    it('offers a type whose facet contributes the file schema for imported files', async () => {
+      useDoctypes(SCANNED_INVOICE_MODEL.doctypes, SCANNED_INVOICE_MODEL.facets);
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'Invoice', label: 'Invoice' },
+        { type: 'Folder', label: 'Folder' },
+      ]);
+      expect(component.importBlobTypeNames()).toEqual(['Invoice']);
+
+      component.uploads.stage([jpegFile('invoice.jpg')]);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['Invoice']);
     });
 
     it('decides on a type outside the stock four only once the content model answers', async () => {

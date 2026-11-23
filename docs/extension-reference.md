@@ -1589,9 +1589,11 @@ modes:
   any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
   checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
   the location, the main file of a File, Picture, Audio or Video, and a Note's format. A type that
-  extends File, Picture, Audio or Video, or carries the `file` schema itself, gets the same
-  main-file field, and Import offers it for files; the dialog reads the type's ancestry from
-  Nuxeo's content model (`/config/types`). The import wizard's properties step is not this form.
+  extends File, Picture, Audio or Video, or carries the `file` schema itself or through a facet it
+  or an ancestor declares, gets the same main-file field, and Import offers it for files; the
+  dialog reads the type's ancestry and facets from Nuxeo's content model (`/config/types`), and
+  what each facet contributes from `/config/facets`. The import wizard's properties step is not
+  this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
