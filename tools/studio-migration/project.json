@@ -4,7 +4,7 @@
   "sourceRoot": "tools/studio-migration/src",
   "projectType": "library",
   "tags": ["type:tool"],
-  "$tagsComment": "A Node tool, and nothing may import it: no depConstraint in eslint.config.mjs lists `type:tool`. It imports one project of the workspace, libs/shared/app-definition, whose validators it writes configuration packages for and checks them with (harness check 10); its own rule there lets it use shared code and nothing else.",
+  "$tagsComment": "A Node tool, and nothing may import it: no depConstraint in eslint.config.mjs lists `type:tool`. It imports one project of the workspace, libs/shared/app-definition, whose validators it writes configuration packages for and checks them with (harness check 10); its own rule there lets it use shared code and the core, and nothing else.",
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",

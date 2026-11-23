@@ -14,7 +14,15 @@
 import { own, slotEntry } from './catalogue';
 import type { ConvertContext } from './convert';
 import type { SlotContribution } from './inventory';
-import { actionIdOf, iconOf, labelOf, queuePath, searchQueueId } from './app-files';
+import {
+  actionIdOf,
+  iconOf,
+  isBound,
+  labelOf,
+  placed,
+  queuePath,
+  searchQueueId,
+} from './app-files';
 
 /** The operation an action converted from a button runs, and its parameters, or why it cannot. */
 export function buttonAction(contribution: SlotContribution):
@@ -50,6 +58,10 @@ export function buttonAction(contribution: SlotContribution):
   const values = Object.values(parsed as Record<string, unknown>);
   if (values.some((value) => typeof value === 'object' && value !== null))
     return { problem: `Its parameters, ${raw}, hold more than literals: a person maps them` };
+  if (values.some((value) => typeof value === 'string' && isBound(value)))
+    return {
+      problem: `Its parameters, ${raw}, are bound to the page, which a written action cannot be: a person maps them`,
+    };
   return {
     operation,
     parameters: parsed as Record<string, unknown>,
@@ -60,10 +72,7 @@ export function buttonAction(contribution: SlotContribution):
 export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
-  const byFile = new Map<string, number>();
-  for (const contribution of inventory.slotContributions) {
-    const index = (byFile.get(contribution.path) ?? 0) + 1;
-    byFile.set(contribution.path, index);
+  for (const { contribution, index } of placed(inventory.slotContributions)) {
     const id = `slot-contribution:${contribution.path}#${index}`;
     const entry = slotEntry(catalogue, contribution.slot);
     if (!entry) {
@@ -98,7 +107,7 @@ export function convertSlots(context: ConvertContext): void {
         });
         continue;
       }
-      const actionId = actionIdOf(context.appId, contribution.name || `action-${index}`);
+      const actionId = actionIdOf(context.appId, contribution.name, index);
       if (actions.some((other) => other['id'] === actionId)) {
         context.decide(id, {
           outcome: 'reported',

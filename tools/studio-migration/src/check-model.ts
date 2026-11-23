@@ -97,12 +97,16 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
     }
     if (path === 'actions.json' && isRecord(file) && Array.isArray(file['actions'])) {
       file['actions'].forEach((action, index) => {
+        // Only `{ "field": … }` names a property: a literal text is a literal, colon or not.
         for (const [name, value] of Object.entries(parametersOf(action)))
-          entry(`${path} actions.${index}.parameters.${name}`, value, null);
+          if (isRecord(value)) entry(`${path} actions.${index}.parameters.${name}`, value, null);
       });
     }
   }
 
+  // A contribution or schema that cannot be read leaves its part of the model unknown, and what it
+  // would have defined would otherwise be taken for the platform's.
+  findings.push(...model.problems.map((problem) => `the model: ${problem}`));
   return {
     findings,
     ...(platform.size > 0

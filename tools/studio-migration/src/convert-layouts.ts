@@ -63,13 +63,15 @@ export function planFields(
     const binding = field.binding;
     if (binding === null || !binding.includes(':'))
       return { kind: 'skip', outcome: 'reported', note: 'It binds no property of the document' };
+    // A property counts as shown once a field shows it, not when a field merely names it: a
+    // field under a condition, or of an element the catalogue does not know, leaves the next
+    // field binding the same property to show it.
     if (seen.has(binding))
       return {
         kind: 'skip',
         outcome: 'reported',
         note: `It binds ${binding} again, and is kept once`,
       };
-    seen.add(binding);
     if (field.condition !== null)
       return {
         kind: 'skip',
@@ -83,6 +85,7 @@ export function planFields(
         outcome: 'reported',
         note: `${field.element} is not a field element the catalogue knows`,
       };
+    seen.add(binding);
     if (mode === 'metadata' && PANEL_ROWS.has(binding)) return { kind: 'panel', binding };
     const required = (mode === 'edit' || mode === 'create') && field.required;
     const entry = version === 2 ? viewField(field, choice) : formField(field, required);

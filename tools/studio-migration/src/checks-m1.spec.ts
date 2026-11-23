@@ -3,6 +3,7 @@ import { versionOne } from './check-package';
 import { readable } from './check-seen';
 import { convert, type Conversion } from './convert';
 import { runHarness, type HarnessInput } from './harness';
+import { MUTATIONS } from './mutations';
 import { inventory } from './inventory';
 import { readStudioPackage } from './studio-package';
 import {
@@ -397,6 +398,246 @@ describe('check 10, package', () => {
       'sections.2.id is 1 to 64 letters, digits, ".", "_" or "-", starting with a letter or digit',
       'sections.2.fields must be a list',
     ]);
+  });
+});
+
+// Found by the independent review of this change: each was a way to drop, widen or misread
+// something that every check still passed.
+describe('what the review found', () => {
+  const view = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
+  const edit2 = `${UI}/document/claim/nuxeo-claim-edit-layout.html`;
+  const layoutFile = (name: string, body: string, type = 'Claim'): string =>
+    `<dom-module id="${name}"><template>${body}</template><script>
+    Polymer({ is: '${name}', behaviors: [Nuxeo.LayoutBehavior],
+      properties: { /** @doctype ${type} */ document: { type: Object } } });
+  </script></dom-module>`;
+
+  it('shows a property Web UI shows to everyone, though an earlier field binds it under a condition', () => {
+    const input = prepare({
+      bundle: {
+        [view]: layoutFile(
+          'nuxeo-claim-view-layout',
+          `<nuxeo-filter group="adjusters"><template><div role="widget"><label>Reserve</label><div>[[document.properties.cl:reserve]]</div></div></template></nuxeo-filter>
+           <div role="widget"><label>Reserve</label><div>[[document.properties.cl:reserve]]</div></div>`,
+        ),
+      },
+    });
+    expect(input.conversion.app['layouts/Claim/view.layout.json']).toEqual({
+      version: 2,
+      cards: [{ id: 'fields', fields: [{ field: 'cl:reserve', label: 'Reserve' }] }],
+    });
+    expect(run(input, 2)?.findings).toEqual([]);
+    expect(run(input, 5)?.findings).toEqual([]);
+    const dropped = edit(input, 'layouts/Claim/view.layout.json', () => undefined);
+    expect(run(dropped, 2)?.findings).toEqual([
+      "layouts/Claim/view.layout.json: cl:reserve is missing, though Web UI's view layout of Claim shows it",
+    ]);
+  });
+
+  it('shows a property through the first field the catalogue knows, with its required flag', () => {
+    const input = prepare({
+      bundle: {
+        [edit2]: layoutFile(
+          'nuxeo-claim-edit-layout',
+          `<acme-fancy-input role="widget" value="{{document.properties.cl:number}}"></acme-fancy-input>
+           <nuxeo-input role="widget" value="{{document.properties.cl:number}}" label="Claim number" required></nuxeo-input>`,
+        ),
+      },
+    });
+    expect(input.conversion.app['layouts/Claim/edit.layout.json']).toEqual({
+      version: 1,
+      sections: [
+        { id: 'fields', fields: [{ field: 'cl:number', label: 'Claim number', required: true }] },
+      ],
+    });
+    expect(run(input, 2)?.findings).toEqual([]);
+    expect(run(input, 6)?.findings).toEqual([]);
+  });
+
+  it('drops a field the report says was converted, so drop-field always breaks something check 2 holds', () => {
+    const input = prepare({
+      bundle: {
+        [edit2]: syntheticBundleFiles()
+          [edit2].replace(/<nuxeo-user-suggestion[^>]*><\/nuxeo-user-suggestion>/, '')
+          .replace(
+            '<template>',
+            '<template><nuxeo-user-suggestion role="widget" value="{{document.properties.cl:adjuster}}" label="Adjuster"></nuxeo-user-suggestion>',
+          ),
+      },
+    });
+    const mutation = MUTATIONS.find((m) => m.name === 'drop-field');
+    const broken = mutation?.apply(input.conversion);
+    expect(broken?.changed).toMatch(/^dropped cl:number /);
+    expect(run({ ...input, conversion: broken!.conversion }, 2)?.status).toBe('fail');
+  });
+
+  it('fails a queue written for a card Web UI shows only under a condition', () => {
+    const home = `${UI}/nuxeo-home.html`;
+    const input = prepare({
+      bundle: {
+        [home]: `<dom-module id="nuxeo-home"><template>
+          <nuxeo-filter group="managers"><template>
+            <nuxeo-card heading="Managers"><nuxeo-page-provider provider="claims"></nuxeo-page-provider></nuxeo-card>
+          </template></nuxeo-filter>
+        </template></dom-module>`,
+      },
+    });
+    expect(input.conversion.app['queues/home-1-claims.json']).toBeUndefined();
+    const widened = edit(input, 'queues/home-1-claims.json', () => ({
+      version: 2,
+      label: 'Managers',
+      pageProvider: 'claims',
+    }));
+    expect(run(widened, 5)?.findings).toEqual([
+      "queues/home-1-claims.json: it lists card 1's records for everyone, though Web UI shows the card only while a condition passes",
+    ]);
+    expect(run(widened, 7)?.findings).toEqual([
+      'queues/home-1-claims.json: it asks for a list that no screen or card of the package asks for',
+    ]);
+  });
+
+  it('finds the action an unnamed button under a condition would become', () => {
+    const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+    const input = prepare({
+      bundle: {
+        [bundle]: syntheticBundleFiles()[bundle].replace(
+          '<nuxeo-slot-content name="closeClaim"',
+          '<nuxeo-slot-content name=""',
+        ),
+      },
+    });
+    const widened = edit(input, 'actions.json', (file) => {
+      file.actions.push({ id: 'acme-claims.action-2', label: 'Close', operation: 'Claim.Close' });
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      'actions.json: acme-claims.action-2 shows to everyone, though Web UI shows "" only while a condition passes',
+    ]);
+  });
+
+  it('reports a button whose parameter is bound to the page, rather than writing the binding', () => {
+    const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+    const input = prepare({
+      bundle: {
+        [bundle]: syntheticBundleFiles()[bundle].replace(
+          `params='{"comment": "Approved in Web UI"}'`,
+          `params='{"target": "[[document.uid]]"}'`,
+        ),
+      },
+    });
+    expect(input.conversion.app['actions.json']).toBeUndefined();
+    expect(
+      input.conversion.report.constructs.find((entry) => entry.label.includes('approveClaim')),
+    ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/bound to the page/) });
+  });
+
+  it('writes no label bound to the page as text, and check 6 lists it', () => {
+    const input = prepare({
+      bundle: {
+        [view]: syntheticBundleFiles()[view].replace(
+          'label="Incident date"',
+          `label="[[i18n('label.claim.incident', 'Incident')]]"`,
+        ),
+      },
+    });
+    expect(input.conversion.app['layouts/Claim/view.layout.json']).toMatchObject({
+      cards: [{ fields: [{}, {}, { field: 'cl:incidentDate', widget: 'date' }] }],
+    });
+    expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
+      '[[',
+    );
+    expect(run(input, 6)).toMatchObject({
+      findings: [],
+      reason: expect.stringMatching(
+        /\[\[i18n\('label\.claim\.incident', 'Incident'\)\]\] \(Web UI's binding\)/,
+      ),
+    });
+  });
+
+  it("fails check 3 when a model contribution cannot be read, rather than calling its types the platform's", () => {
+    const input = prepare({
+      bundle: {
+        'OSGI-INF/extensions.xml': syntheticBundleFiles()['OSGI-INF/extensions.xml'].replace(
+          '</component>',
+          '',
+        ),
+      },
+    });
+    expect(run(input, 3)?.findings).toContain(
+      'the model: OSGI-INF/extensions.xml is not well-formed XML, so its part of the model is unknown',
+    );
+  });
+
+  it("keeps a card's page size only when a queue takes it, and check 7 agrees", () => {
+    const home = `${UI}/nuxeo-home.html`;
+    for (const size of ['500', '0']) {
+      const input = prepare({
+        bundle: {
+          [home]: syntheticBundleFiles()[home].replaceAll('page-size="20"', `page-size="${size}"`),
+        },
+      });
+      expect(input.conversion.app['queues/home-1-claims.json']).not.toHaveProperty('pageSize');
+      expect(run(input, 7)?.findings).toEqual([]);
+    }
+    const large = prepare({
+      bundle: {
+        [home]: syntheticBundleFiles()[home].replaceAll('page-size="20"', 'page-size="500"'),
+      },
+    });
+    expect(
+      large.conversion.report.constructs.find((entry) => entry.id === `dashboard-card:${home}#1`)
+        ?.note,
+    ).toMatch(/Its page size, 500, is not one a queue takes/);
+  });
+
+  it('holds only the first layout of a type and mode to its file, as the converter writes it', () => {
+    const second = `${UI}/document/claim2/nuxeo-claim2-view-layout.html`;
+    const input = prepare({
+      bundle: {
+        [second]: layoutFile(
+          'nuxeo-claim2-view-layout',
+          '<div role="widget"><label>Reserve</label><div>[[document.properties.cl:reserve]]</div></div>',
+        ),
+      },
+    });
+    expect(
+      input.conversion.report.constructs.find((entry) => entry.id === `layout:${second}#layout`),
+    ).toMatchObject({ outcome: 'reported', note: expect.stringMatching(/comes first/) });
+    for (const number of [2, 5, 6]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it("does not take an action's literal parameter for a property", () => {
+    const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+    const input = prepare({
+      bundle: {
+        [bundle]: syntheticBundleFiles()[bundle].replace(
+          `params='{"comment": "Approved in Web UI"}'`,
+          `params='{"comment": "Note: approved"}'`,
+        ),
+      },
+    });
+    expect(run(input, 3)?.reason).not.toContain('Note');
+  });
+
+  it("reports a card whose queue's name another list already has", () => {
+    const form = `${UI}/search/claims/nuxeo-claims-search-form.html`;
+    const results = `${UI}/search/claims/nuxeo-claims-search-results.html`;
+    const files = syntheticBundleFiles();
+    const input = prepare({
+      without: [form, results],
+      bundle: {
+        [`${UI}/search/home-1-claims/nuxeo-home-1-claims-search-form.html`]: files[form],
+        [`${UI}/search/home-1-claims/nuxeo-home-1-claims-search-results.html`]: files[results],
+      },
+    });
+    expect(
+      input.conversion.report.constructs.find(
+        (entry) => entry.id === `dashboard-card:${UI}/nuxeo-home.html#1`,
+      ),
+    ).toMatchObject({
+      outcome: 'reported',
+      note: 'Another list is already written as queues/home-1-claims.json',
+    });
   });
 });
 

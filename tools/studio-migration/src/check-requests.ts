@@ -14,10 +14,18 @@
  * with recent writes, needs the migration server: that half has not run, and the check says so.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { actionIdOf, appIdOf, homeQueueId, queuePath, searchQueueId } from './app-files';
+import {
+  actionIdOf,
+  appIdOf,
+  homeQueueId,
+  placed,
+  queuePageSize,
+  queuePath,
+  searchQueueId,
+} from './app-files';
 import { sameJson } from './app-walk';
 import { slotEntry } from './catalogue';
-import { cardParameters, openingSort } from './convert-lists';
+import { cardParameters, isListCard, openingSort } from './convert-lists';
 import { buttonAction } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
 
@@ -56,9 +64,9 @@ export function checkRequests({
       findings.push(
         `${path}: it sorts by ${JSON.stringify(sorted)}, where Web UI opens sorted by ${JSON.stringify(sort)}`,
       );
-    if (pageSize !== null && pageSize <= 100 && queue['pageSize'] !== pageSize)
+    if ((queue['pageSize'] ?? null) !== pageSize)
       findings.push(
-        `${path}: it asks for pages of ${JSON.stringify(queue['pageSize'] ?? 10)}, where Web UI asks for ${pageSize}`,
+        `${path}: it asks for pages of ${JSON.stringify(queue['pageSize'] ?? 10)}, where Web UI asks for ${pageSize ?? "the page provider's own size"}`,
       );
   };
 
@@ -68,16 +76,17 @@ export function checkRequests({
     list(queuePath(searchQueueId(search)), search.provider, [], openingSort(search), null);
   }
   inventory.dashboard?.cards.forEach((card, index) => {
-    if (card.provider === null || card.repeatOf !== null) return;
+    if (!isListCard(card) || card.provider === null) return;
     const parameters = cardParameters(card);
     if ('problem' in parameters) return;
-    // Web UI's data table asks a card's provider for its own page size.
+    // Web UI's data table asks a card's provider for its own page size, which a queue keeps when
+    // it is one a queue takes.
     list(
       queuePath(homeQueueId(card, index)),
       card.provider,
       parameters.parameters,
       [],
-      card.pageSize,
+      queuePageSize(card),
     );
   });
   for (const path of Object.keys(app))
@@ -88,15 +97,12 @@ export function checkRequests({
   const written = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
   const appId = appIdOf(pkg);
   const expectedActions = new Set<string>();
-  const byFile = new Map<string, number>();
-  for (const contribution of inventory.slotContributions) {
-    const index = (byFile.get(contribution.path) ?? 0) + 1;
-    byFile.set(contribution.path, index);
+  for (const { contribution, index } of placed(inventory.slotContributions)) {
     const slot = slotEntry(catalogue, contribution.slot)?.slot;
     if (slot !== 'toolbar' && slot !== 'bulk-actions') continue;
     const button = buttonAction(contribution);
     if ('problem' in button) continue;
-    const id = actionIdOf(appId, contribution.name || `action-${index}`);
+    const id = actionIdOf(appId, contribution.name, index);
     expectedActions.add(id);
     const action = written.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (!isRecord(action)) {

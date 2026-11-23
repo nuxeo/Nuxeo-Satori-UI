@@ -8,8 +8,9 @@
  * stock types, vocabularies and page providers, is the server's to say: what rests on it is
  * listed, and checking it waits for the migration server.
  *
- * Read as data: the XML is parsed, nothing in it is run, and a file that cannot be read leaves its
- * part of the model out, which makes check 3 fail on whatever needed it.
+ * Read as data: the XML is parsed, and nothing in it is run. A file that cannot be read leaves its
+ * part of the model out and is listed in `problems`, each of which check 3 reports as a finding,
+ * so that what the file defined is never taken for the platform's.
  */
 import type { PropertyType } from '@agentic-ui/shared/app-definition';
 import type { Inventory } from './inventory';
@@ -78,7 +79,12 @@ export function packageModel(pkg: StudioPackage, inventory: Inventory): PackageM
   const directories = new Set<string>();
   const problems: string[] = [];
 
-  for (const path of [...new Set(inventory.model.map((contribution) => contribution.path))]) {
+  // Every file of model contributions, not only those the inventory could read: one it could not
+  // is a problem here too.
+  const files = inventory.files.filter(
+    (file) => file.location === 'bundle' && file.kind === 'model-contributions',
+  );
+  for (const { path } of files) {
     let root: Element;
     try {
       root = parseXml(pkg.bundleFiles.get(path)?.toString('utf8') ?? '').documentElement;

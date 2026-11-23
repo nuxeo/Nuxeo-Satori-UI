@@ -96,6 +96,23 @@ function findField(
   return null;
 }
 
+/**
+ * The properties the report says were converted into a file: a control that breaks one of them
+ * breaks something the conversion claims, never a field it reports and the check excuses.
+ */
+const convertedInto = (conversion: Conversion, path: string): Set<string> =>
+  new Set(
+    conversion.report.constructs
+      .filter(
+        (entry) =>
+          entry.kind === 'layout-field' && entry.outcome === 'converted' && entry.to === path,
+      )
+      .flatMap((entry) => (entry.property ? [entry.property] : [])),
+  );
+
+/** Prefixes of the platform's own schemas, which check 3 cannot hold to the package. */
+const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'picture', 'thumbnail'];
+
 /** The entry as an object, so that a key can be set on it. */
 const asObject = (entry: unknown): Json =>
   typeof entry === 'string' ? { field: entry } : (entry as Json);
@@ -255,7 +272,9 @@ export const MUTATIONS: readonly Mutation[] = [
     description: 'Drop a field from a converted layout',
     caughtBy: 2,
     apply: (conversion) => {
-      const found = findField(conversion, () => true);
+      const found = findField(conversion, (entry, path) =>
+        convertedInto(conversion, path).has(fieldOf(entry) ?? ''),
+      );
       if (!found) throw new MutationError('no converted layout has a field to drop');
       const [dropped] = found.holder.splice(found.index, 1);
       return {
@@ -315,9 +334,14 @@ export const MUTATIONS: readonly Mutation[] = [
     apply: (conversion) => {
       // Dublin Core is the platform's: a field of the package's own schema is what can be held
       // to the package without a server.
-      const found = findField(conversion, (entry) => {
+      const found = findField(conversion, (entry, path) => {
         const field = fieldOf(entry);
-        return field !== null && field.includes(':') && !field.startsWith('dc:');
+        return (
+          field !== null &&
+          field.includes(':') &&
+          !PLATFORM_PREFIXES.includes(field.slice(0, field.indexOf(':'))) &&
+          convertedInto(conversion, path).has(field)
+        );
       });
       if (!found)
         throw new MutationError("no converted layout shows a field of the package's own schemas");

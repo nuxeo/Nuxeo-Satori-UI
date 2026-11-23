@@ -642,9 +642,10 @@ function columnOf(column: Element): ResultColumn {
 
 /**
  * The sorts a results layout's script offers: Studio's template writes them as
- * `this.sortOptions = [{field: 'dc:title', label: …, order: 'asc', selected: true}, …]`. The
- * script's shape tells Studio's template from customer code; only the template's literals are
- * read here, and nothing is run.
+ * `this.sortOptions = [{field: 'dc:title', label: …, order: 'asc', selected: true}, …]`. They are
+ * read from the script's text by pattern, and nothing is run. Whether the script is Studio's
+ * template is its own construct's to say, by its shape: one that is not is customer code, pending
+ * M3, and its sorts are read by the same pattern all the same.
  */
 export function sortOptionsOf(script: string): SortOption[] {
   const start = script.search(/\bsortOptions\s*=\s*\[/);

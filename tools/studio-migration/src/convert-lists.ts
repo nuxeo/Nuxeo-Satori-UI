@@ -12,11 +12,15 @@
 import { own } from './catalogue';
 import type { ConvertContext } from './convert';
 import type { DashboardCard, ResultColumn, SearchLayout } from './inventory';
-import { homeQueueId, labelOf, queuePath, searchQueueId } from './app-files';
+import {
+  homeQueueId,
+  labelOf,
+  PAGE_SIZE_LIMIT,
+  queuePageSize,
+  queuePath,
+  searchQueueId,
+} from './app-files';
 import { columnWidget } from './widgets';
-
-/** The largest page a queue may ask for (layout-v2.md, section 7). */
-const PAGE_SIZE_LIMIT = 100;
 
 /** A column, as a queue writes it: the property alone, or with its heading and widget. */
 export function queueColumn(column: ResultColumn): unknown {
@@ -135,10 +139,11 @@ export function convertSearches(context: ConvertContext): void {
       ),
     );
     const sort = openingSort(search);
-    const label = menuLabel(context, search) ?? search.provider;
+    // A queue needs a name: the menu's, or else its page provider's.
+    const named = labelOf(menuLabel(context, search));
     context.files[path] = {
       version: 2,
-      ...labelOf(label),
+      ...(Object.keys(named).length > 0 ? named : { label: search.provider }),
       pageProvider: search.provider,
       ...(columns.length > 0 ? { columns } : {}),
       ...(sort.length > 0 ? { sort } : {}),
@@ -179,6 +184,22 @@ function machineLabel(label: string | null): string {
   return label && /\s{2}|\b[A-Z]\b/.test(label)
     ? `. Its label, "${label.replace(/\s+/g, ' ').trim()}", is machine-generated: an agent proposes a tidy one when it moves`
     : '';
+}
+
+/**
+ * True when a card's list becomes a queue: a page provider's list, in no condition, fed by no
+ * operation, and not the tasks or recently viewed card. Check 7 asks for a queue for these and no
+ * other card.
+ */
+export function isListCard(card: DashboardCard): boolean {
+  return (
+    card.repeatOf === null &&
+    !card.conditional &&
+    card.operation === null &&
+    !card.elements.includes('nuxeo-tasks-list') &&
+    !card.elements.includes('nuxeo-document-storage') &&
+    card.provider !== null
+  );
 }
 
 export function convertDashboard(context: ConvertContext): void {
@@ -234,7 +255,15 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     const path = queuePath(homeQueueId(card, index));
+    if (Object.hasOwn(context.files, path)) {
+      context.decide(id, {
+        outcome: 'reported',
+        note: `Another list is already written as ${path}`,
+      });
+      return;
+    }
     const columns = card.columns.filter((column) => column.field !== null).map(queueColumn);
+    const pageSize = queuePageSize(card);
     const label = labelOf(card.heading);
     context.files[path] = {
       version: 2,
@@ -242,13 +271,15 @@ export function convertDashboard(context: ConvertContext): void {
       pageProvider: card.provider,
       ...(parameters.parameters.length > 0 ? { parameters: parameters.parameters } : {}),
       ...(columns.length > 0 ? { columns } : {}),
-      ...(card.pageSize !== null && card.pageSize >= 1 && card.pageSize <= PAGE_SIZE_LIMIT
-        ? { pageSize: card.pageSize }
-        : {}),
+      ...(pageSize !== null ? { pageSize } : {}),
     };
+    const unkept =
+      card.pageSize !== null && pageSize === null
+        ? `. Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`
+        : '';
     context.decide(id, {
       outcome: 'pending',
-      note: `Its list is written as ${path}; its place on the home is phase 1's home.json, which is not in the app definition yet`,
+      note: `Its list is written as ${path}; its place on the home is phase 1's home.json, which is not in the app definition yet${unkept}`,
     });
   });
 }

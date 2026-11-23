@@ -8,14 +8,23 @@
  * - **no rule is invented.** Every rule in the converted package must come from a condition of
  *   the package, and in M1 none does, so any rule fails: a free JavaScript condition slipped into
  *   the configuration among them;
- * - **nothing is widened to everyone.** A field, button or card Web UI shows only while a
- *   condition passes must not be converted without it.
+ * - **nothing is widened to everyone.** A field, button or dashboard card Web UI shows only while
+ *   a condition passes must not be converted without it: a field written without a
+ *   `visibleWhen`, an action without one, or a queue written for the card at all.
  *
  * The truth tables wait for M2 and the migration server. With conditions in the package, that part
  * has not run, and the check says so; with none, there is nothing for a table to decide.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { LAYOUT_VERSION, actionIdOf, appIdOf, layoutPath } from './app-files';
+import {
+  LAYOUT_VERSION,
+  actionIdOf,
+  appIdOf,
+  homeQueueId,
+  layoutPath,
+  placed,
+  queuePath,
+} from './app-files';
 import { layoutFields, rulesIn } from './app-walk';
 import type { CheckOutcome, HarnessInput } from './harness';
 
@@ -28,9 +37,13 @@ export function checkConditions({ pkg, inventory, conversion }: HarnessInput): C
       );
   }
 
+  const compared = new Set<string>();
   for (const layout of inventory.layouts) {
     if (layout.docType === null || !Object.hasOwn(LAYOUT_VERSION, layout.mode)) continue;
     const path = layoutPath(layout.docType, layout.mode);
+    // The first layout of a type and mode is the one written; a later one is reported.
+    if (compared.has(path)) continue;
+    compared.add(path);
     const shown = layoutFields(conversion.app[path]);
     const always = new Set(
       layout.fields.filter((field) => field.condition === null).map((field) => field.binding),
@@ -49,15 +62,23 @@ export function checkConditions({ pkg, inventory, conversion }: HarnessInput): C
   const actions = conversion.app['actions.json'];
   const list = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
   const appId = appIdOf(pkg);
-  for (const contribution of inventory.slotContributions) {
+  for (const { contribution, index } of placed(inventory.slotContributions)) {
     if (contribution.conditions.length === 0) continue;
-    const id = actionIdOf(appId, contribution.name);
+    const id = actionIdOf(appId, contribution.name, index);
     const action = list.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (action && !('visibleWhen' in (action as Record<string, unknown>)))
       findings.push(
         `actions.json: ${id} shows to everyone, though Web UI shows "${contribution.name}" only while a condition passes`,
       );
   }
+
+  inventory.dashboard?.cards.forEach((card, index) => {
+    const path = queuePath(homeQueueId(card, index));
+    if (card.conditional && conversion.app[path] !== undefined)
+      findings.push(
+        `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
+      );
+  });
 
   const conditions = inventory.conditions.length;
   return {

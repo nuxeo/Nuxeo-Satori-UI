@@ -16,6 +16,7 @@ import { isRecord } from '@agentic-ui/shared/app-definition';
 import {
   LAYOUT_VERSION,
   homeQueueId,
+  isBound,
   labelOf,
   layoutPath,
   queuePath,
@@ -27,12 +28,13 @@ import { labelsOf, readCatalogue } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
 import { menuLabel } from './convert-lists';
 import type { CheckOutcome, HarnessInput } from './harness';
+import { fieldWidget } from './widgets';
 
 /** A label the comparison cannot settle, because its text is in a catalogue not in hand. */
 const UNKNOWN = Symbol('unknown');
 type Resolved = string | typeof UNKNOWN | null;
 
-export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOutcome {
+export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInput): CheckOutcome {
   const findings: string[] = [];
   /** Each translation key whose text is in a catalogue not in hand, with whose catalogue. */
   const unsettled = new Map<string, Set<string>>();
@@ -58,6 +60,11 @@ export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOu
       unsettle(label.labelKey, "Web UI's");
       return UNKNOWN;
     }
+    // Bound to the page some other way: only Web UI can say what it shows.
+    if (text !== null && isBound(text)) {
+      unsettle(normal(text), "Web UI's binding");
+      return UNKNOWN;
+    }
     return null;
   };
   /** What the new app shows for an entry, a list or a field, as it works the label out. */
@@ -81,13 +88,20 @@ export function checkSeen({ pkg, inventory, conversion }: HarnessInput): CheckOu
       );
   };
 
+  const compared = new Set<string>();
   for (const layout of inventory.layouts) {
     if (layout.docType === null || !Object.hasOwn(LAYOUT_VERSION, layout.mode)) continue;
     const path = layoutPath(layout.docType, layout.mode);
+    // The first layout of a type and mode is the one written; a later one is reported.
+    if (compared.has(path)) continue;
+    compared.add(path);
     const fields = layoutFields(conversion.app[path]);
     const seen = new Set<string>();
     for (const field of layout.fields) {
-      if (field.binding === null || seen.has(field.binding)) continue;
+      // The field that shows a property is the first one in no condition and of an element the
+      // catalogue knows, as check 2 reads it.
+      if (field.binding === null || seen.has(field.binding) || field.condition !== null) continue;
+      if (fieldWidget(catalogue, field.element, field.attributes) === null) continue;
       seen.add(field.binding);
       if (layout.mode === 'metadata' && PANEL_ROWS.has(field.binding)) continue;
       const match = fields.find((candidate) => candidate.field === field.binding);

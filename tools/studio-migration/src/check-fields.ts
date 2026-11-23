@@ -29,11 +29,15 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
     return entry !== undefined && entry.outcome !== 'converted' && Boolean(entry.note?.trim());
   };
   const layoutFiles = new Set(Object.keys(app).filter((path) => path.startsWith('layouts/')));
+  const compared = new Set<string>();
 
   for (const layout of inventory.layouts) {
     const type = layout.docType;
     if (type === null || !Object.hasOwn(LAYOUT_VERSION, layout.mode)) continue;
     const path = layoutPath(type, layout.mode);
+    // The first layout of a type and mode is the one written; a later one is reported.
+    if (compared.has(path)) continue;
+    compared.add(path);
     layoutFiles.delete(path);
     const version = LAYOUT_VERSION[layout.mode];
     const file = app[path];
@@ -54,10 +58,12 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
       const binding = field.binding;
       if (field.element === 'nuxeo-document-viewer') return;
       if (binding === null || !XPATH.test(binding) || seen.has(binding)) return;
-      seen.add(binding);
+      // Shown once a field shows it: a field under a condition, or of an element the catalogue
+      // does not know, leaves the next one binding the same property to show it.
       if (field.condition !== null) return;
       const choice = fieldWidget(catalogue, field.element, field.attributes);
       if (choice === null) return;
+      seen.add(binding);
       const matches = shown.filter((candidate) => candidate.field === binding);
       if (layout.mode === 'metadata' && PANEL_ROWS.has(binding)) {
         if (matches.length > 0)
