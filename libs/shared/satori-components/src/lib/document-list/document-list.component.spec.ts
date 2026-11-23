@@ -52,6 +52,7 @@ const COLUMNS: readonly NxsDocumentListColumn[] = [
       [columns]="columns()"
       label="Contents of Reports"
       [sort]="sort()"
+      [defaultSort]="defaultSort()"
       [(selectedIds)]="selected"
       [selectable]="selectable()"
       [pageIndex]="pageIndex()"
@@ -77,6 +78,7 @@ class HostComponent {
   readonly documents = signal<readonly NuxeoDocument[]>([doc(1), doc(2), doc(3), doc(4)]);
   readonly columns = signal(COLUMNS);
   readonly sort = signal<NxsDocumentListSort | null>(null);
+  readonly defaultSort = signal<NxsDocumentListSort | null>(null);
   readonly selected = signal<readonly string[]>([]);
   readonly selectable = signal(true);
   readonly pageIndex = signal(0);
@@ -319,6 +321,53 @@ describe('NxsDocumentListComponent', () => {
         'Sort cleared, showing the default order',
         'polite',
       );
+    });
+
+    it("shows the source's own order on its header, and turns it round rather than clearing it", async () => {
+      host.defaultSort.set({ key: 'modified', direction: 'desc' });
+      await render();
+      expect(header('Modified').getAttribute('aria-sort')).toBe('descending');
+      const control = header('Modified').querySelector('.mat-sort-header-container') as HTMLElement;
+      control.click();
+      await render();
+      expect(host.sorts.at(-1)).toEqual({ key: 'modified', direction: 'asc' });
+      expect(announce).toHaveBeenLastCalledWith('Sorted by Modified, ascending', 'polite');
+
+      host.sort.set({ key: 'modified', direction: 'asc' });
+      await render();
+      control.click();
+      await render();
+      expect(host.sorts.at(-1)).toEqual({ key: 'modified', direction: 'desc' });
+
+      // Chosen in the source's own direction: round again, never cleared.
+      host.sort.set({ key: 'modified', direction: 'desc' });
+      await render();
+      control.click();
+      await render();
+      expect(host.sorts.at(-1)).toEqual({ key: 'modified', direction: 'asc' });
+      expect(host.sorts).not.toContain(null);
+      expect(announce).not.toHaveBeenCalledWith(
+        'Sort cleared, showing the default order',
+        'polite',
+      );
+    });
+
+    it("clears another column's order, and its header then shows the source's own", async () => {
+      host.defaultSort.set({ key: 'modified', direction: 'desc' });
+      host.sort.set({ key: 'title', direction: 'desc' });
+      await render();
+      expect(header('Modified').getAttribute('aria-sort')).toBe('none');
+      (header('Title').querySelector('.mat-sort-header-container') as HTMLElement).click();
+      await render();
+      expect(host.sorts.at(-1)).toBeNull();
+      expect(announce).toHaveBeenLastCalledWith(
+        'Sort cleared, showing the default order',
+        'polite',
+      );
+      host.sort.set(null);
+      await render();
+      expect(header('Modified').getAttribute('aria-sort')).toBe('descending');
+      expect(header('Title').getAttribute('aria-sort')).toBe('none');
     });
 
     it('describes each sort control by the column it sorts', () => {

@@ -1,0 +1,98 @@
+{
+  "doctypes": {
+    "Document": { "parent": "None!!!", "facets": [], "schemas": [] },
+    "Contract": {
+      "parent": "Document",
+      "facets": ["Versionable", "Reviewable"],
+      "schemas": ["common", "dublincore", "uid", "contract"]
+    },
+    "Counterparty": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "counterparty"]
+    },
+    "Memo": { "parent": "Document", "facets": [], "schemas": ["common", "dublincore"] }
+  },
+  "facets": [
+    { "name": "Versionable" },
+    {
+      "name": "Reviewable",
+      "schemas": [
+        {
+          "name": "review",
+          "@prefix": "rev",
+          "fields": { "reviewer": "string", "reviewed": "date" }
+        }
+      ]
+    }
+  ],
+  "schemas": [
+    { "name": "common", "@prefix": "", "fields": { "icon": "string", "size": "long" } },
+    {
+      "name": "dublincore",
+      "@prefix": "dc",
+      "fields": {
+        "title": "string",
+        "description": "string",
+        "created": "date",
+        "modified": "date"
+      }
+    },
+    {
+      "name": "uid",
+      "@prefix": "uid",
+      "fields": { "major_version": "long", "minor_version": "long" }
+    },
+    {
+      "name": "contract",
+      "@prefix": "contract",
+      "fields": {
+        "number": { "type": "string" },
+        "counterparty": {
+          "type": "string",
+          "constraints": [
+            { "name": "string", "parameters": {} },
+            { "name": "documentResolver", "parameters": { "store": "id" } }
+          ]
+        },
+        "category": {
+          "type": "string",
+          "constraints": [
+            { "name": "directoryResolver", "parameters": { "directory": "contract_category" } }
+          ]
+        },
+        "regions": {
+          "type": "string[]",
+          "itemConstraints": [
+            { "name": "directoryResolver", "parameters": { "directory": "country" } }
+          ]
+        },
+        "value": { "type": "double" },
+        "signed": { "type": "boolean" },
+        "start": { "type": "date" },
+        "end": { "type": "date" },
+        "keywords": { "type": "string[]" },
+        "billingAddress": {
+          "type": "complex",
+          "fields": { "street": "string", "city": "string", "zip": "string", "country": "string" }
+        },
+        "lines": {
+          "type": "complex[]",
+          "fields": {
+            "description": "string",
+            "amount": "double",
+            "due": "date",
+            "attachment": "blob"
+          }
+        },
+        "scan": { "type": "blob" },
+        "notes": { "type": "string" }
+      }
+    },
+    {
+      "name": "counterparty",
+      "@prefix": "cpty",
+      "fields": { "name": "string", "registration": "string" }
+    }
+  ]
+}

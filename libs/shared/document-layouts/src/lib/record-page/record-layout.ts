@@ -89,7 +89,11 @@ export const DEFAULT_LIST_PAGE_SIZE = 10;
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
-  /** Its heading; `fallback` is `null`, so a card with no label shows none. */
+  /**
+   * Its heading. A card that names one, by text or by key, falls back to its id made readable,
+   * so a key with no text in the person's language still gives it a heading. A card that names
+   * none has `fallback` `null`, and shows none.
+   */
   readonly label: LayoutLabel;
   /** How many columns it takes, at least 1 and at most the file's `columns`. */
   readonly span: number;
@@ -186,17 +190,35 @@ export function refusedRule(
   isRuleKnown: (id: string) => boolean,
   level = 1,
 ): string | null {
+  return ruleRefusal(
+    rule,
+    (id) => (isRuleKnown(id) ? null : `names the rule "${id}", which this build does not register`),
+    level,
+  );
+}
+
+/**
+ * The first reason `refuse` gives for a rule `rule` names, itself or nested in a composite, as the
+ * console says it, or that it nests deeper than {@link MAX_RULE_LEVELS}; `null` when neither. The
+ * walk stops at that depth, so it never recurses further than the registry would.
+ */
+export function ruleRefusal(
+  rule: unknown,
+  refuse: (id: string) => string | null,
+  level = 1,
+): string | null {
   const id = typeof rule === 'string' ? rule : isRecord(rule) ? rule['type'] : undefined;
   if (typeof id !== 'string') return null;
-  if (!isRuleKnown(id)) return `names the rule "${id}", which this build does not register`;
+  const refused = refuse(id);
+  if (refused) return refused;
   if (level > MAX_RULE_LEVELS) {
     return `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`;
   }
   if (!COMPOSITE_RULES.has(id) || !isRecord(rule) || !Array.isArray(rule['parameters']))
     return null;
   for (const nested of rule['parameters']) {
-    const refused = refusedRule(nested, isRuleKnown, level + 1);
-    if (refused) return refused;
+    const inner = ruleRefusal(nested, refuse, level + 1);
+    if (inner) return inner;
   }
   return null;
 }
@@ -495,7 +517,11 @@ export function readRecordLayout(
       const common = {
         id: String(card['id']),
         place,
-        label: labelOf(card, [], null),
+        label: labelOf(
+          card,
+          [],
+          'label' in card || 'labelKey' in card ? humanize(String(card['id'])) : null,
+        ),
         span: typeof card['span'] === 'number' ? card['span'] : 1,
         visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
       };
