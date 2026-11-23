@@ -133,6 +133,14 @@ describe('readQueue', () => {
       expect('refused' in read(content)).toBe(true);
     });
 
+    it('a queue with an empty parameter, as a related list is not asked with one', () => {
+      expect(read(queue({ parameters: ['open', ''] }))).toEqual({
+        refused: [
+          'parameters[1] is empty: a page provider asked with an empty parameter matches what its author did not mean, or nothing',
+        ],
+      });
+    });
+
     it('a queue with no column this build can show', () => {
       const result = read(queue({ columns: [{ field: 'claim:number', widget: 'sparkline' }] }));
       expect(result).toEqual({

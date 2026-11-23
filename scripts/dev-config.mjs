@@ -156,6 +156,25 @@ for (const entry of extra.labels) {
   labels.set(lang, { path, content: read(path) });
 }
 
+// Each queue is served as the package writes it, at its id, which is its file's name; the app
+// checks it with the validator when it reads it, and the pipeline when the package is built.
+// app-definition-v2.md, section 2: an id is 1 to 64 letters, digits, `.`, `_` or `-`. Read here,
+// as the labels are, before anything is written, so that a mistyped name or file changes nothing.
+const QUEUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const QUEUES = join(TARGET, 'queues');
+const queues = new Map();
+for (const path of extra.queue) {
+  const id = basename(path).replace(/\.json$/, '');
+  if (!path.endsWith('.json') || !QUEUE_ID.test(id)) {
+    console.error(
+      `--queue ${path}: expected <id>.json, the id 1 to 64 letters, digits, ".", "_" or "-", ` +
+        'starting with a letter or a digit, as a queue file is named in a package',
+    );
+    process.exit(2);
+  }
+  queues.set(id, { path, content: read(path) });
+}
+
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
   const defaults = join(DEFAULTS, `${layer}.defaults.json`);
   const fragments = [
@@ -263,23 +282,7 @@ if (labels.size === 0) {
   }
 }
 
-// Each queue is served as the package writes it, at its id, which is its file's name; the app
-// checks it with the validator when it reads it, and the pipeline when the package is built.
-// app-definition-v2.md, section 2: an id is 1 to 64 letters, digits, `.`, `_` or `-`.
-const QUEUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-const QUEUES = join(TARGET, 'queues');
-const queues = new Map();
-for (const path of extra.queue) {
-  const id = basename(path).replace(/\.json$/, '');
-  if (!path.endsWith('.json') || !QUEUE_ID.test(id)) {
-    console.error(
-      `--queue ${path}: expected <id>.json, the id 1 to 64 letters, digits, ".", "_" or "-", ` +
-        'starting with a letter or a digit, as a queue file is named in a package',
-    );
-    process.exit(2);
-  }
-  queues.set(id, { path, content: read(path) });
-}
+// The queues, served at the end, as the package writes them.
 rmSync(QUEUES, { recursive: true, force: true });
 if (queues.size > 0) mkdirSync(QUEUES, { recursive: true });
 for (const [id, { content }] of queues) {

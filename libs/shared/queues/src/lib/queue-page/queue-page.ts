@@ -13,7 +13,7 @@ import {
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { RecordListComponent } from '@agentic-ui/shared/document-layouts';
+import { RecordListComponent, type RecordListEntry } from '@agentic-ui/shared/document-layouts';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
@@ -22,6 +22,7 @@ import {
   ExtensionRuleRegistry,
   ExtensionSlotRegistry,
   type ExtensionActionDescriptor,
+  type ExtensionRule,
   type ExtensionRuleContext,
 } from '@nuxeo/satori-platform/extensions';
 import {
@@ -129,20 +130,48 @@ export class QueuePageComponent {
     selectionCount: 0,
   }));
 
-  /** What the page shows: the queue, or why there is none. */
+  /**
+   * The queue's list as this person sees it: each column's rule answered, as the record page
+   * answers a related list's, with the same context as the queue's own. The list draws no column
+   * whose rule it was not given an answer for.
+   */
+  private readonly list = computed<RecordListEntry | null>(() => {
+    const queue = this.queue();
+    if (queue === null) return null;
+    const context = this.context();
+    return {
+      ...queue.list,
+      columns: queue.list.columns
+        .filter(
+          (column) =>
+            column.visibleWhen === null ||
+            this.rules.evaluate(column.visibleWhen as ExtensionRule, context),
+        )
+        .map((column) => ({ ...column, visibleWhen: null })),
+    };
+  });
+
+  /**
+   * What the page shows: the queue, or why there is none. A queue none of whose columns is for
+   * this person is hidden, as one whose own rule does not pass is: there is no list to draw.
+   */
   protected readonly view = computed<State['kind'] | 'hidden'>(() => {
     const state = this.state();
     if (state.kind !== 'queue') return state.kind;
     const { queue } = state;
     if (queue.alwaysHidden || !this.rules.evaluate(queue.visibleWhen, this.context()))
       return 'hidden';
+    if ((this.list()?.columns.length ?? 0) === 0) return 'hidden';
     return 'queue';
   });
 
-  /** The queue, while the page shows it. */
+  /** The queue and its list as this person sees it, while the page shows it. */
   protected readonly shown = computed(() => {
     const state = this.state();
-    return state.kind === 'queue' && this.view() === 'queue' ? state : null;
+    const list = this.list();
+    return state.kind === 'queue' && list !== null && this.view() === 'queue'
+      ? { ...state, list }
+      : null;
   });
 
   /** The queue's name, or the page's own while there is no queue to show. */
@@ -199,22 +228,28 @@ export class QueuePageComponent {
   });
 
   /**
-   * The queue's bulk actions that a selection offers: those the `bulk-actions` slot resolves with
-   * a selection of at least one row, and that have a handler here. One with nothing to run it
-   * would do nothing when chosen, so it is not offered, and the console says so once.
+   * The queue's bulk actions that a selection may offer: those the `bulk-actions` slot resolves for
+   * a selection of one row or of several, and that have a handler here. The selection bar then
+   * offers those of them whose rules pass for the rows actually selected. One with nothing to run
+   * it would do nothing when chosen, so it is not offered, and the console says so once.
    */
   protected readonly bulkActions = computed<readonly string[]>(() => {
     const queue = this.queue();
     if (queue === null || queue.bulkActions.length === 0) return [];
-    const context = {
-      ...this.ruleContext.context(),
-      document: null,
-      selectionCount: Math.max(1, this.selection.selectedCount()),
-    };
+    const base = this.ruleContext.context();
+    const count = this.selection.selectedCount();
+    // Both: a rule may ask for a single row, or for several, and rows must be selectable for
+    // either to be reached.
     const resolved = new Map(
-      this.extensions
-        .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS['bulk-actions'], context)
-        .map((action) => [action.id, action]),
+      [Math.max(1, count), Math.max(2, count)].flatMap((selectionCount) =>
+        this.extensions
+          .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS['bulk-actions'], {
+            ...base,
+            document: null,
+            selectionCount,
+          })
+          .map((action): [string, ExtensionActionDescriptor] => [action.id, action]),
+      ),
     );
     return queue.bulkActions.filter((id, index) => {
       const action = resolved.get(id);

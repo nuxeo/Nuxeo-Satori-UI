@@ -38,6 +38,9 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
     nested deeper than the rule registry answers, or a finding in `visibleWhen`.
 - **Evaluates the rule** with `ExtensionRuleRegistry`, as the person signed in, with their groups
   and no record, and shows nothing, asking the page provider for nothing, while it does not pass.
+  Each column's rule is answered the same way, as the record page answers a related list's, and a
+  queue none of whose columns is for the person is hidden from them too. An empty parameter refuses
+  the queue.
 - **Draws the list** with `RecordListComponent`, the record page's: the page provider's records,
   page by page, sorted on the server from a header, a row opening its record, and the row actions
   that have a handler on the page. The platform's own row actions are registered by the browse
@@ -48,7 +51,8 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
   clears the selection too.
 - **Offers bulk actions** in the app's selection bar: those of the queue's that the `bulk-actions`
   slot resolves and that have a handler, through `SelectionService.offeredBulkActions`, which it
-  puts back to `null` when it goes. Rows are selectable only when one is offered.
+  puts back to `null` when it goes. Rows are selectable only when one is offered, for one row or
+  for several: the bar then offers those whose rules pass for the rows actually selected.
 
 Nothing here is a security control. The page provider returns only what the person may read,
 hiding a queue hides the page and not the address, and offering fewer actions decides nothing
@@ -92,4 +96,5 @@ npx ngc -p libs/shared/queues/tsconfig.lib.json
 - **The menu.** `navigation.json` names queues, and is not drawn: `queueLink` is the address its
   entries are to open.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
-- **The facets in the address.** A choice is the page's state, and a reload starts with none.
+- **The facets in the address.** A choice is the page's state: a reload, or going back to the
+  queue from a record, starts with none.
