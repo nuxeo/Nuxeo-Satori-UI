@@ -141,6 +141,25 @@ export function checkConditions({
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
       );
   });
+  // A card's column under a condition, which its queue shows, shows to everyone what Web UI shows
+  // only while the condition passes.
+  inventory.dashboard?.cards.forEach((card, index) => {
+    const path = queuePath(homeQueueId(card, index));
+    const queue = conversion.app[path];
+    if (queue === undefined) return;
+    const owner = lists.get(path);
+    if (owner?.kind !== 'card' || owner.card !== card) return;
+    const always = new Set(
+      card.columns.filter((column) => !column.conditional).map((column) => column.field),
+    );
+    for (const column of card.columns) {
+      if (!column.conditional || column.field === null || always.has(column.field)) continue;
+      if (listColumns(queue).some((shown) => shown.field === column.field))
+        findings.push(
+          `${path}: it shows the column ${column.field} to everyone, though Web UI shows it only while a condition passes`,
+        );
+    }
+  });
   for (const search of inventory.searches) {
     if (search.part !== 'results') continue;
     const path = queuePath(searchQueueId(search));

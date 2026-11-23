@@ -62,12 +62,18 @@ export interface LayoutField {
   /** The first of `conditions`, by its place among its file's conditions, from 0; `null` for none. */
   readonly condition: number | null;
   /**
-   * The conditions it shows its property under: the innermost one around each place it shows it,
-   * an attribute or text binding it, reduced to the one all those places sit in when one place
-   * sits there alone. Places side by side give them all. A field that binds nothing keeps every
+   * The conditions it shows its property under: the innermost one around each place in a
+   * condition that names it, in an attribute or text, reduced to the one all those places sit in
+   * when one place sits there alone. Places side by side give them all. A field that binds nothing keeps every
    * condition it sits in or holds.
    */
   readonly conditions: readonly number[];
+  /**
+   * True when it names its property both in a condition and outside every one. Which of those
+   * places shows the value, and which only reads it, as `hidden$="[[!…]]"` does, cannot be told
+   * from the markup, so whether everyone sees it is a person's call.
+   */
+  readonly shownOutside: boolean;
 }
 
 /**
@@ -106,7 +112,10 @@ export interface ResultColumn {
   readonly dateFormat: string | null;
   /** True when its template writes the value through `formatDate`. */
   readonly formatsDate: boolean;
-  /** True when it sits in a condition, or its template holds one: it then shows only to some. */
+  /**
+   * True when it sits in a condition its table does not, or its template holds one: it then shows
+   * only to some of those who see the list.
+   */
   readonly conditional: boolean;
 }
 
@@ -628,7 +637,12 @@ function fieldsOf(document: Document, places: Places): LayoutField[] {
       const shown = binding === null ? [] : placesShowing(element, binding, places);
       // A field that binds nothing keeps every condition it sits in or holds: it is reported.
       const conditions =
-        shown.length > 0 ? shownUnder(shown, places.parentOf) : heldConditions(element, places);
+        shown.length > 0
+          ? shownUnder(
+              shown.filter((place) => place !== null),
+              places.parentOf,
+            )
+          : heldConditions(element, places);
       return {
         element: element.localName,
         binding,
@@ -637,6 +651,7 @@ function fieldsOf(document: Document, places: Places): LayoutField[] {
         attributes: attributesOf(element),
         condition: conditions[0] ?? null,
         conditions,
+        shownOutside: shown.includes(null) && shown.some((place) => place !== null),
       };
     });
 }
@@ -685,18 +700,16 @@ function placesShowing(field: Element, binding: string, places: Places): (number
 }
 
 /**
- * The conditions a field shows its property under, from where it shows it: it shows while any of
- * those places does. One place in no condition shows it to everyone. A place every other sits
- * inside gives the guard alone. Otherwise the places sit side by side, and all are given, for the
- * guard to report.
+ * The conditions a field shows its property under, from the places in a condition where it names
+ * it: it shows while any of those places does. A place every other sits inside gives the guard
+ * alone. Otherwise the places sit side by side, and all are given, for the guard to report. None
+ * gives none: the field shows to everyone.
  */
 function shownUnder(
-  shown: readonly (number | null)[],
+  shown: readonly number[],
   parentOf: (index: number) => number | null,
 ): number[] {
-  const distinct = [...new Set(shown)];
-  if (distinct.includes(null)) return [];
-  const indexes = distinct as number[];
+  const indexes = [...new Set(shown)];
   const chain = (index: number): number[] => {
     const found: number[] = [];
     for (let at: number | null = index; at !== null && !found.includes(at); at = parentOf(at))
@@ -790,6 +803,8 @@ function conditionsOf(
  */
 function columnOf(column: Element, within: ReadonlyMap<Element, number>): ResultColumn {
   const inside = elementsOf(column);
+  const table = column.closest('nuxeo-data-table');
+  const base = table ? within.get(table) : undefined;
   const texts = [column, ...inside].flatMap((element) => [
     ...Array.from(element.attributes, (attribute) => attribute.value),
     element.localName === 'template'
@@ -808,7 +823,9 @@ function columnOf(column: Element, within: ReadonlyMap<Element, number>): Result
     dateFormat:
       inside.find((element) => element.localName === 'nuxeo-date')?.getAttribute('format') ?? null,
     formatsDate: /\bformatDate\s*\(/.test(all),
-    conditional: [column, ...inside].some((element) => within.has(element)),
+    // Relative to its table: a column of a list shown only under a condition is not hidden on its
+    // own, and the list's own guard covers it.
+    conditional: [column, ...inside].some((element) => within.get(element) !== base),
   };
 }
 

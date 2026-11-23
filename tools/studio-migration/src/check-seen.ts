@@ -117,7 +117,7 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     const sources =
       owner.kind === 'search'
         ? owner.search.columnDetails.filter((column) => !column.conditional)
-        : owner.card.columns;
+        : owner.card.columns.filter((column) => !column.conditional);
     const name =
       owner.kind === 'search' ? menuLabel({ inventory }, owner.search) : owner.card.heading;
     if (name !== null) compare(`${path}: its name`, web(name), shown(queue, null, null));

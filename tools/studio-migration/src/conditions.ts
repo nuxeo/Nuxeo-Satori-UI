@@ -93,7 +93,9 @@ function every(rules: readonly Rule[]): Rule {
  * computed call, either negated with `!`, and `]]` or `}}` (`property-effects.js`, whose brackets
  * need not pair). Anything around it, spacing included, makes the binding compound, a string.
  */
-const POLYMER_CALL = /^(?:\[\[|\{\{)\s*(!?)\s*(\w+)\(([^()]*)\)\s*(?:\]\]|\}\})$/;
+const POLYMER_CALL = /^(?:\[\[|\{\{)\s*(!?)\s*([a-zA-Z_$][\w.:$*-]*)\(([^()]*)\)\s*(?:\]\]|\}\})$/;
+/** A method name Polymer looks up on the host as it is: `this.hasType` is no method there. */
+const NAMED = /^\w+$/;
 const POLYMER_PATH = /^(?:\[\[|\{\{)\s*!?\s*[\w.:$*-]+\s*(?:\]\]|\}\})$/;
 
 /**
@@ -134,6 +136,11 @@ function decideOnce(condition: Condition): ConditionDecision {
             note: `Its \`if\`, ${JSON.stringify(test)}, is no single Polymer binding, so it is a string, and Web UI always shows what it holds: a mistake to fix, not to copy`,
           };
     }
+    if (!NAMED.test(call[2]))
+      return {
+        kind: 'reported',
+        note: `Its \`if\`, ${test}, calls ${call[2]}, which the host has no method of that name for, so its value is undefined, and Web UI never shows what it holds: a mistake to fix, not to copy`,
+      };
     const parsed = parseExpression(`${call[1]}${call[2]}(${call[3]})`, { bare: true });
     if ('problem' in parsed)
       return {
@@ -351,6 +358,8 @@ export function webUiPasses(condition: Condition, situation: Situation): boolean
     const call = POLYMER_CALL.exec(test);
     // Not one binding alone: the text, or a compound binding's string, which is always true.
     if (!call) return POLYMER_PATH.test(test) ? null : true;
+    // A name the host has no method under leaves the value undefined: false.
+    if (!NAMED.test(call[2])) return false;
     return webUiExpression(`${call[1]}${call[2]}(${call[3]})`, situation, true);
   }
   for (const [name, value] of Object.entries(condition.attributes)) {

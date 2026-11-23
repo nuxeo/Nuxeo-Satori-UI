@@ -135,17 +135,21 @@ export function menuGuard(
   const second = guardOfSet(inventory, page.path, page.conditions);
   if (second.kind !== 'rule') return second;
   const rules = [first.rule, second.rule].filter((rule) => rule !== 'core.true');
-  return {
-    kind: 'rule',
-    rule:
-      rules.length === 0
-        ? 'core.true'
-        : rules.length === 1
-          ? rules[0]
-          : { type: 'core.every', parameters: rules },
-    document: first.document || second.document,
-    conditions: [...first.conditions, ...second.conditions],
-  };
+  const rule: Rule =
+    rules.length === 0
+      ? 'core.true'
+      : rules.length === 1
+        ? rules[0]
+        : { type: 'core.every', parameters: rules };
+  const conditions = [...first.conditions, ...second.conditions];
+  const rows = tableSize(conditions, rule);
+  if (rows > MAX_ROWS)
+    return {
+      kind: 'reported',
+      note: `The truth table of its entry's and its page's conditions together would run ${rows} rows, more than the ${MAX_ROWS} one runs, so its rule could not be held to them: a person checks it`,
+      conditions,
+    };
+  return { kind: 'rule', rule, document: first.document || second.document, conditions };
 }
 
 /** Records that a guard's rule was written at `where`, for each of its conditions. */

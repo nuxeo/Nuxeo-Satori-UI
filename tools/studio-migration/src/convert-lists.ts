@@ -8,8 +8,9 @@
  * - **A queue is a table.** A grid of thumbnails or a justified grid is reported.
  * - **What shows under a condition.** A dashboard card under a rule on the user carries it, and so
  *   does its queue (`guards.ts`); one whose rule reads a document is reported, as no record is
- *   open on the home. A column in a condition is left out, and a table in one gets no queue: both
- *   are reported, since M2 converts no condition there, and neither shows to everyone meanwhile.
+ *   open on the home. A column in a condition its table is not in is left out: reported for a
+ *   search screen, and named in a card's note. A search screen's table in one gets no queue and is
+ *   reported. M2 converts no condition there, and none shows to everyone meanwhile.
  * - **A dashboard card** whose list becomes a queue is a card of `home.json`, naming the queue
  *   (`convert-home.ts`). The tasks and recently viewed cards wait: `home.json` has no card for
  *   either yet.
@@ -374,7 +375,12 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     const path = queuePath(homeQueueId(card, index));
-    const columns = card.columns.filter((column) => column.field !== null).map(queueColumn);
+    // A column under a condition is left out, as a search screen's is: M2 converts no condition
+    // on a list's column, and it is not shown to everyone meanwhile.
+    const hidden = card.columns.filter((column) => column.field !== null && column.conditional);
+    const columns = card.columns
+      .filter((column) => column.field !== null && !column.conditional)
+      .map(queueColumn);
     if (columns.length === 0) {
       context.decide(id, {
         outcome: 'reported',
@@ -403,14 +409,22 @@ export function convertDashboard(context: ConvertContext): void {
       ...(guard?.kind === 'rule' && guard.rule !== 'core.true' ? { visibleWhen: guard.rule } : {}),
     };
     const home = cards.find((candidate) => candidate.index === index);
+    const notes = [
+      ...(card.pageSize !== null && pageSize === null
+        ? [
+            `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
+          ]
+        : []),
+      ...(hidden.length > 0
+        ? [
+            `Its columns ${hidden.map((column) => column.field).join(', ')} show only while a condition passes, and are left out: M2 converts no condition on a list's column, and a person decides them`,
+          ]
+        : []),
+    ];
     context.decide(id, {
       outcome: 'converted',
       to: `home.json ${home?.id ?? `card-${index + 1}`}, its list in ${path}`,
-      ...(card.pageSize !== null && pageSize === null
-        ? {
-            note: `Its page size, ${card.pageSize}, is not one a queue takes (1 to ${PAGE_SIZE_LIMIT}), so the queue asks for its own`,
-          }
-        : {}),
+      ...(notes.length > 0 ? { note: notes.join('. ') } : {}),
     });
   });
   if (cards.length > 0) {

@@ -237,6 +237,13 @@ describe('what a condition becomes', () => {
       note: expect.stringMatching(/no `if`, so Web UI never shows what it holds/),
     });
     expect(webUiPasses(raw({}), situation({ facets: ['X'] }))).toBe(false);
+    // Polymer looks a method up by its name as written: the host has none called `this.hasType`.
+    const dotted = raw({ if: "[[this.hasType(document, 'X')]]" });
+    expect(decideCondition(dotted)).toMatchObject({
+      kind: 'reported',
+      note: expect.stringMatching(/no method of that name for, so its value is undefined/),
+    });
+    expect(webUiPasses(dotted, situation({ type: 'X' }))).toBe(false);
   });
 
   it('reports ! before indexOf, which JavaScript applies before the comparison, so it is always true', () => {

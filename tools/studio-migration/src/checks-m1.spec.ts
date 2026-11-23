@@ -1506,6 +1506,106 @@ describe('M2: where a condition cannot travel', () => {
     for (const number of [2, 5, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
   });
 
+  it("leaves out a card's column under a condition, and fails a queue that shows it", () => {
+    const input = prepare({
+      bundle: {
+        [home]: files[home].replace(
+          '<nuxeo-card heading="My tasks">',
+          '<nuxeo-card heading="Reserves"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Title"><template>[[item.title]]</template></nuxeo-data-table-column><nuxeo-data-table-column name="Reserve"><template><nuxeo-filter document="[[item]]" permission="Write"><template>[[item.properties.cl:reserve]]</template></nuxeo-filter></template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card><nuxeo-card heading="My tasks">',
+        ),
+      },
+    });
+    const queue = input.conversion.app['queues/home-3-claims.json'];
+    expect(JSON.stringify(queue)).not.toContain('cl:reserve');
+    expect(queue).not.toHaveProperty('visibleWhen');
+    expect(outcome(input, `dashboard-card:${home}#3`)).toMatchObject({
+      outcome: 'converted',
+      note: expect.stringMatching(
+        /columns cl:reserve show only while a condition passes, and are left out/,
+      ),
+    });
+    for (const number of [2, 5, 6, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+    const widened = edit(input, 'queues/home-3-claims.json', (file) => {
+      file.columns.push({ field: 'cl:reserve' });
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      'queues/home-3-claims.json: it shows the column cl:reserve to everyone, though Web UI shows it only while a condition passes',
+    ]);
+    // The same property again, in a column of its own in no condition: the queue shows that one,
+    // and check 6 names it as that column, not as the one left out.
+    const both = prepare({
+      bundle: {
+        [home]: files[home].replace(
+          '<nuxeo-card heading="My tasks">',
+          '<nuxeo-card heading="Reserves"><nuxeo-page-provider provider="claims"></nuxeo-page-provider><nuxeo-data-table><nuxeo-data-table-column name="Reserve (adjusters)"><template><nuxeo-filter document="[[item]]" permission="Write"><template>[[item.properties.cl:reserve]]</template></nuxeo-filter></template></nuxeo-data-table-column><nuxeo-data-table-column name="Reserve"><template>[[item.properties.cl:reserve]]</template></nuxeo-data-table-column></nuxeo-data-table></nuxeo-card><nuxeo-card heading="My tasks">',
+        ),
+      },
+    });
+    expect(both.conversion.app['queues/home-3-claims.json']).toMatchObject({
+      columns: [{ field: 'cl:reserve', label: 'Reserve' }],
+    });
+    for (const number of [2, 5, 6]) expect(run(both, number)?.findings).toEqual([]);
+  });
+
+  it('reports a field that names its property both in a condition and outside it', () => {
+    const input = prepare({
+      bundle: {
+        [view]: files[view].replace(
+          '</template>\n  <script>',
+          '<div role="widget" hidden$="[[!document.properties.cl:adjuster]]"><label>Adjuster</label><nuxeo-filter document="[[document]]" permission="Write, WriteProperties"><template><span>[[document.properties.cl:adjuster]]</span></template></nuxeo-filter></div>\n  </template>\n  <script>',
+        ),
+      },
+    });
+    expect(JSON.stringify(input.conversion.app['layouts/Claim/view.layout.json'])).not.toContain(
+      'cl:adjuster',
+    );
+    expect(
+      input.conversion.report.constructs.find(
+        (entry) => entry.kind === 'layout-field' && entry.property === 'cl:adjuster',
+      ),
+    ).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(
+        /names cl:adjuster inside condition \d+ of its file and outside it too/,
+      ),
+    });
+    expect(run(input, 5)?.findings).toEqual([]);
+    const widened = edit(input, 'layouts/Claim/view.layout.json', (file) => {
+      file.cards[0].fields.push({ field: 'cl:adjuster' });
+      return file;
+    });
+    expect(run(widened, 5)?.findings).toEqual([
+      expect.stringMatching(
+        /it shows cl:adjuster to everyone, though Web UI shows it only while condition \d+ passes/,
+      ),
+    ]);
+  });
+
+  it("reports a menu entry whose and whose page's conditions together are too large to table", () => {
+    const groups = (prefix: string) =>
+      Array.from({ length: 9 }, (_, index) => `${prefix}${index}`).join(', ');
+    const input = prepare({
+      bundle: {
+        [bundle]: files[bundle]
+          .replace(
+            '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
+            `<template><nuxeo-filter user="[[user]]" group="${groups('g')}"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>`,
+          )
+          .replace(
+            '<template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template>',
+            `<template><nuxeo-filter user="[[user]]" group="${groups('h')}"><template><nuxeo-search-form provider="claims" search-name="claims" name="claimssearch"></nuxeo-search-form></template></nuxeo-filter></template>`,
+          ),
+      },
+    });
+    expect(input.conversion.app['navigation.json']).toBeUndefined();
+    expect(outcome(input, `slot-contribution:${bundle}#3`)).toMatchObject({
+      outcome: 'reported',
+      note: expect.stringMatching(/together would run \d+ rows/),
+    });
+    expect(run(input, 5)?.findings).toEqual([]);
+  });
+
   it('keeps the field that shows a property to everyone, and reports a copy under a condition', () => {
     const input = prepare({
       bundle: {

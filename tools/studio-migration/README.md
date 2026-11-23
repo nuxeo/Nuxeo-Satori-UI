@@ -234,6 +234,8 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
 - **Proposed:** a card fed by an operation, such as the favourites one, which an agent proposes a
   page provider for.
 - **Reported:** a card that repeats another.
+- **Left out:** a column under a condition its table is not in, which the card's note names. M2
+  converts no condition on a list's column, and it is not shown to everyone meanwhile.
 
 **Slot contributions:**
 
@@ -301,16 +303,18 @@ WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren`
   `AddChildren`. Any other JavaScript is reported.
 
 - **What a condition guards** is what it hides:
-  - a field, where it shows its property: an attribute or text binding it. A condition around a
-    hint inside the field guards nothing. A field showing its property in two places under
-    conditions side by side is reported;
+  - a field, where it names its property, in an attribute or in text. A condition around a hint
+    inside the field guards nothing. A field naming its property in two places under conditions
+    side by side is reported. So is one naming it both in a condition and outside every one, as
+    `hidden$="[[!document.properties.x]]"` does: which place shows the value, and which only reads
+    it, cannot be told from the markup;
   - an action, by its operation button, and a menu entry, by its menu icon;
   - a home card, by its page provider and its table, which its list needs.
 - **Where a rule travels:**
   - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
   - on the home and the menu, no record is open, so only a rule on the user travels;
   - not to a version 1 field, which waits for the app to draw version 2 forms;
-  - not to a list's column or a search screen's table, which are reported.
+  - not to a list's column, which is left out, or a search screen's table, which is reported.
 - **A condition is `converted` only where its rule was written**, and the report says where.
   Otherwise it is pending, and each thing it guards says why.
 
