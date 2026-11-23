@@ -5490,28 +5490,20 @@ function checkStorybookSatoriCatalogues() {
         node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
         node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
         ts.isElementAccessExpression(node.left) &&
-        !ts.isStringLiteralLike(node.left.argumentExpression)
+        !ts.isStringLiteralLike(node.left.argumentExpression) &&
+        reachesConfiguration(node.left.expression)
       ) {
         hiddenWrite = node;
       } else if (
         ts.isCallExpression(node) &&
         ts.isPropertyAccessExpression(node.expression) &&
-        REFLECTIVE_WRITERS.has(node.expression.getText())
+        REFLECTIVE_WRITERS.has(node.expression.getText()) &&
+        reachesConfiguration(node.arguments[0])
       ) {
         hiddenWrite = node;
       }
       ts.forEachChild(node, findHiddenWrites);
     };
-    findHiddenWrites(mainSource);
-    if (hiddenWrite) {
-      fail(
-        `${main} writes a property this gate cannot name ` +
-          `(\`${hiddenWrite.getText().slice(0, 60)}\`), which may set \`staticDirs\`, so ` +
-          '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Set ' +
-          '`staticDirs` once, as a literal property of the exported configuration.',
-      );
-      legible = false;
-    }
 
     /**
      * The object literal `main` exports as its configuration: `export default <object>`, or a
@@ -5604,6 +5596,67 @@ function checkStorybookSatoriCatalogues() {
       }
       return expression && ts.isObjectLiteralExpression(expression) ? expression : null;
     })();
+
+    /**
+     * The names that refer to the exported configuration: the `const` the export resolves to, any
+     * variable initialised from one of those names (`const c = config`), and `module.exports`. A
+     * hidden write counts only when its target is rooted at one of them, or at something this gate
+     * cannot name (a call result may return the configuration). A hook writing to its own
+     * parameter — `Object.assign(webpackConfig.resolve.alias, …)` in `webpackFinal` — cannot reach
+     * the exported `staticDirs`, and was refused before this was scoped (review on #602).
+     */
+    const configurationNames = new Set(['module.exports']);
+    const visitDeclarations = (visit) => {
+      const walk = (node) => {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) visit(node);
+        ts.forEachChild(node, walk);
+      };
+      walk(mainSource);
+    };
+    if (exportedConfiguration) {
+      visitDeclarations((declaration) => {
+        if (objectOf(declaration.initializer) === exportedConfiguration) {
+          configurationNames.add(declaration.name.text);
+        }
+      });
+      for (let grew = true; grew;) {
+        grew = false;
+        visitDeclarations((declaration) => {
+          const init = unwrap(declaration.initializer);
+          if (
+            init &&
+            ts.isIdentifier(init) &&
+            configurationNames.has(init.text) &&
+            !configurationNames.has(declaration.name.text)
+          ) {
+            configurationNames.add(declaration.name.text);
+            grew = true;
+          }
+        });
+      }
+    }
+    /** Whether a write to `target` (or to something inside it) can reach the exported configuration. */
+    const reachesConfiguration = (target) => {
+      let node = unwrap(target);
+      while (node && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
+        if (node.getText() === 'module.exports') return true;
+        node = unwrap(node.expression);
+      }
+      if (!node) return false;
+      if (ts.isIdentifier(node)) return configurationNames.has(node.text);
+      if (node.kind === ts.SyntaxKind.ThisKeyword) return false;
+      return true; // a call result or other expression this gate cannot name
+    };
+    findHiddenWrites(mainSource);
+    if (hiddenWrite) {
+      fail(
+        `${main} writes a property this gate cannot name ` +
+          `(\`${hiddenWrite.getText().slice(0, 60)}\`), which may set \`staticDirs\`, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Set ' +
+          '`staticDirs` once, as a literal property of the exported configuration.',
+      );
+      legible = false;
+    }
 
     let staticDirs;
     if (definitions.length > 0 && exportedConfiguration === null) {

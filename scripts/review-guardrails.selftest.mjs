@@ -13330,6 +13330,46 @@ export default config;
   /writes a property this gate cannot name \(`Object\.assign\(config/,
 );
 
+// Eleventh round: the hidden-write rule ignored its target, so a hook writing to its own
+// parameter failed. Only writes that can reach the exported configuration count now…
+falsePositiveControls += 1;
+expectGreen(
+  'a webpackFinal hook assigning to its own webpack config',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = {
+  staticDirs: [${SB_SATORI_DIR}],
+  webpackFinal: async (webpackConfig) => {
+    Object.assign(webpackConfig.resolve.alias, { '@app': 'src' });
+    webpackConfig.resolve.alias[name] = 'src';
+    return webpackConfig;
+  },
+};
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+);
+
+// …including one through a variable that aliases the configuration.
+expectRed(
+  'a computed write through an alias of the exported configuration',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const key = 'staticDirs';
+const config = { staticDirs: [${SB_SATORI_DIR}] };
+const same = config;
+same[key] = [];
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /writes a property this gate cannot name \(`same\[key\] = \[\]`\)/,
+);
+
 // A computed write with a literal key naming something else cannot reach `staticDirs`.
 falsePositiveControls += 1;
 expectGreen('a literal-key write to another property', 'checkStorybookSatoriCatalogues', {
