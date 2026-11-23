@@ -32,17 +32,21 @@ is an open string, so neither is a schema change — but a consumer that matched
 ### Fixed (generators) — a configuration package's components are the ones the server loads
 
 A generated package's `build.mjs` read `bundle/META-INF/MANIFEST.MF`'s components from the first
-header spelt exactly `Nuxeo-Component`, split at commas. The server reads that header through
-`java.util.jar.Manifest` — the name in any letter case, the last of a repeated header, a line ended
-only at CR or LF — and its runtime splits the value at commas and whitespace. Everything under
-`bundle/` is packaged whatever the build read, so a second `Nuxeo-Component` header, one spelt
-`nuxeo-component`, a lookalike after a U+2028 inside another header's value, or a path with a space
-in it each built a jar whose server loaded a component the build had never checked.
+header spelt exactly `Nuxeo-Component`, anywhere in the file, split at commas. The server reads that
+header through `java.util.jar.Manifest` — from the main section alone, above the first blank line;
+the name in any letter case; the last of a repeated header; a line ended only at CR or LF — and its
+runtime splits the value at commas and whitespace. Everything under `bundle/` is packaged whatever
+the build read, so a second `Nuxeo-Component` header, one spelt `nuxeo-component`, a lookalike after
+a U+2028 inside another header's value, or a path with a space in it each built a jar whose server
+loaded a component the build had never checked.
 
 `build.mjs` now finds the header as the server does, splits it as the server does, refuses a
-manifest with more than one such header or another spelling, and checks the components of every
-one it found. `scripts/verify-package-zip.mjs` applies the same rules to the packaged jar. The
-scaffold's manifest, and any that lists comma-separated paths without spaces in one header spelt
+manifest with more than one such header in its main section or another spelling, and checks the
+components of every one it found there. A header in a later `Name:` section is an entry attribute
+the server ignores, so it is ignored here too; a manifest that names its components only below its
+first blank line, which used to build a package that configured nothing, is refused.
+`scripts/verify-package-zip.mjs` applies the same rules to the packaged jar. The scaffold's
+manifest, and any that lists comma-separated paths without spaces in one header spelt
 `Nuxeo-Component`, reads as before. Every copy of `build.mjs` made before this change keeps the old
 reading until it is replaced with the template's.
 

@@ -1150,6 +1150,50 @@ describe('the generated build.mjs', () => {
       );
       expect(build().status).toBe(0);
     });
+
+    // Java reads the header from the main section alone, the lines before the first empty one. In
+    // a later `Name:` section it is that entry's attribute, and names nothing the server loads.
+    it('builds a manifest that repeats the header in a later Name: section, and ignores that one', async () => {
+      await generate();
+      editManifest(
+        (manifest) =>
+          `${manifest}\nName: OSGI-INF/missing.xml\nNuxeo-Component: OSGI-INF/missing.xml\n`,
+      );
+      const { status, output } = build();
+      expect(output).not.toContain('missing.xml');
+      expect(status).toBe(0);
+    });
+
+    // Sections are found after unfolding, because the package holds the unfolded text refolded: a
+    // continuation after a blank line joins that line, so its header lands in the packaged main
+    // section, where the server reads it. Splitting first would check only the header above.
+    it('reads a header that a continuation after a blank line folds into the main section', async () => {
+      await generate();
+      writeUnchecked();
+      editManifest((manifest) => `${manifest}\n Nuxeo-Component: OSGI-INF/unchecked.xml\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/META-INF/MANIFEST.MF: has 2 Nuxeo-Component headers');
+      expect(output).toContain(uncheckedRead);
+    });
+
+    it.each([
+      [
+        'in a later Name: section',
+        `\nName: ${configComponent}\nNuxeo-Component: ${configComponent}`,
+      ],
+      ['after a blank line', `\nNuxeo-Component: ${configComponent}`],
+    ])('refuses a manifest that names its components only %s', async (_case, replacement) => {
+      await generate();
+      editManifest((manifest) =>
+        manifest.replace(`Nuxeo-Component: ${configComponent}`, replacement),
+      );
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'bundle/META-INF/MANIFEST.MF: names its components only after its first blank line, where the server does not read them',
+      );
+    });
   });
 
   it.each([

@@ -138,8 +138,9 @@ does not parse, is not an object, repeats a key or nests too deeply; a fragment 
 asset over 2 MiB; a fragment name, layer, layout type or mode the server would reject; a `src` that
 names no packaged file; XML that is not well-formed; a symbolic link, which would package bytes you
 did not review; a component missing the `<require>` that orders your fragments after ours; and a
-manifest that repeats its `Nuxeo-Component` header or spells it another way, which the server reads
-in any letter case, keeping only the last.
+manifest that repeats its `Nuxeo-Component` header, spells it another way or puts it after a blank
+line. The server reads that name in any letter case, keeps only the last, and looks only above the
+manifest's first blank line.
 
 The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
 wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
