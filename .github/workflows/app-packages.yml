@@ -7,7 +7,11 @@ name: App definition packages
 #   package under business-apps/packages/ is checked, built and verified by
 #   scripts/app-package.mjs, with Node and the system's unzip, and no install or credential. So a
 #   package whose layout names a widget the platform
-#   does not have fails here, and the log names the widget: phase 0's demo, step 1.
+#   does not have fails here, and the log names the widget: phase 0's demo, step 1. Each package
+#   is also compared with what it was: a pull request's base, the commit before a push, or for a
+#   tag the package's last release below it. Its version must have moved as far as its changes need
+#   (package-pipeline.md, section 8), and what changed is written beside the zip and in the job's
+#   summary.
 # - `sign-and-publish`, only for a tag `app-package/<name>/<version>`, which someone pushes on
 #   purpose: a build provenance attestation for the zip, then Nuxeo Marketplace preprod, the way
 #   build-marketplace.yml publishes the platform's own package. Nothing publishes on a merge,
@@ -99,19 +103,51 @@ jobs:
         run: node scripts/app-package.selftest.mjs
 
       - name: Check, build and verify each package
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           platform=$(node -p "require('./libs/platform/package.json').version")
           tag=''
           if [[ "$GITHUB_REF" == refs/tags/app-package/* ]]; then tag="${GITHUB_REF#refs/tags/}"; fi
+          # What each package's version is held to: the commit a pull request is based on, the one
+          # before a push (none for a new branch), or for a tag the package's last release, below.
+          base=''
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then base="$PR_BASE"
+          elif [ -z "$tag" ] && [[ ! "${BEFORE:-0}" =~ ^0+$ ]]; then base="$BEFORE"; fi
+          if [ -n "$base" ] && ! git fetch --no-tags --depth=1 origin "$base"; then
+            echo "::warning::$base could not be fetched, so no version is held to what it was."
+            base=''
+          fi
+          previous_root=$(mktemp -d)
           built=0
           for dir in business-apps/packages/*/; do
+            dir="${dir%/}"
             name=$(basename "$dir")
             args=(--out dist/app-packages --platform "$platform")
             if [ -n "$tag" ]; then
               # A tag publishes the one package it names.
               [[ "$tag" == "app-package/$name/"* ]] || continue
               args+=(--tag "$tag")
+              # Held to the last release below it, a prerelease's tag as a release's: the first tag
+              # after this one in descending version order (a prerelease before its release, as
+              # versionsort.suffix says) whose version has no prerelease, a "-" before any "+"
+              # build metadata. Held to the prerelease
+              # just before it instead, a release could carry through its prereleases what the
+              # release before it would refuse.
+              if ! git fetch --no-tags --depth=1 origin "+refs/tags/app-package/$name/*:refs/tags/app-package/$name/*"; then
+                echo "::warning::the tags of $name could not be fetched, so its version is held to no earlier tag."
+              fi
+              base=$(git -c versionsort.suffix=- tag --list "app-package/$name/*" --sort=-v:refname \
+                | awk -v tag="$tag" 'seen && $0 !~ /\/[^\/+]*-[^\/]*$/ { print; exit } $0 == tag { seen = 1 }')
+            fi
+            if [ -n "$base" ] && git cat-file -e "$base:$dir/package/package.xml" 2>/dev/null; then
+              git archive "$base" "$dir" | tar -x -C "$previous_root"
+              args+=(--previous "$previous_root/$dir")
+              echo "$name: its version is held to $dir at $base."
+            else
+              echo "$name: nothing to hold its version to${base:+ at $base}, so it is a new package."
             fi
             node scripts/app-package.mjs "$dir" "${args[@]}"
             built=$((built + 1))
@@ -120,6 +156,9 @@ jobs:
             echo "::error::No package was built${tag:+: $tag names no directory under business-apps/packages/}."
             exit 1
           fi
+          for changes in dist/app-packages/*.changes.md; do
+            if [ -f "$changes" ]; then cat "$changes" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:

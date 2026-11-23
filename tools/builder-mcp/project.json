@@ -9,7 +9,7 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo package it validates and the identity guard. Without them an edit to any would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo package it validates, the identity guard, and config:dev's script with the defaults it serves. Without them an edit to any would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
@@ -17,6 +17,8 @@
         "{workspaceRoot}/scripts/app-package.mjs",
         "{workspaceRoot}/scripts/verify-package-zip.mjs",
         "{workspaceRoot}/scripts/beta-harness/identity-guard.mjs",
+        "{workspaceRoot}/scripts/dev-config.mjs",
+        "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/agentic-ui-config/*.defaults.json",
         "{workspaceRoot}/libs/shared/app-definition/src/**/*",
         "{workspaceRoot}/tools/satori-generators/src/config-package/files/build.mjs__tmpl__",
         "{workspaceRoot}/business-apps/packages/payers-claims-demo/**/*",

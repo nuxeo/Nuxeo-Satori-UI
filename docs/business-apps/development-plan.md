@@ -263,13 +263,11 @@ faxes wait for capture, in phase 7.
 
 - **The MCP server:** reads the model, page providers, workflows, vocabularies and operations
   with their parameters; validates a package; previews it in dev mode; publishes to
-  pre-production. The reads and the validation are in
-  [`tools/builder-mcp`](../../tools/builder-mcp/README.md); previewing and publishing are not
-  built yet.
+  pre-production. The reads, the validation and the preview, on the local development server, are
+  in [`tools/builder-mcp`](../../tools/builder-mcp/README.md); publishing is not built yet.
 - **The app builder skill**, written under `.cursor/skills/` and mirrored. It is
   [`.cursor/skills/app-builder/SKILL.md`](../../.cursor/skills/app-builder/SKILL.md), and says
-  which of its steps are not built: previewing covers record pages and the home only, by hand,
-  and publishing is a person's tag.
+  which of its steps are not built: publishing is a person's tag.
 - **The generators**, updated for app definition version 2: `app-package`, `app-layout`,
   `app-queue` and `app-action`, in [`tools/satori-generators`](../../tools/satori-generators). A
   record page is laid out from the type's schemas in a content model, from a file or read live.
@@ -277,6 +275,9 @@ faxes wait for capture, in phase 7.
   allow-list for its operation, and broken copies are refused. They are internal: they write
   packages this repository's pipeline checks.
 - **The pipeline**, completed: versions, signatures, and promotion after a person approves.
+  Versions are built ([package-pipeline.md](package-pipeline.md), section 8): a version that did
+  not move as far as the changes need is refused, and each build writes what changed. Signatures
+  and promotion are a proposal there, section 9, for the user to decide.
 
 **Demo:**
 
