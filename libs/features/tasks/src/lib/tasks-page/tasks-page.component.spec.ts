@@ -1,8 +1,15 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import {
+  ActivatedRoute,
+  Router,
+  convertToParamMap,
+  provideRouter,
+  type ParamMap,
+} from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { HttpClient } from '@angular/common/http';
-import { Subject, of, throwError } from 'rxjs';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import {
   vi,
   describe,
@@ -15,6 +22,7 @@ import {
 } from 'vitest';
 
 import { TasksPageComponent } from './tasks-page.component';
+import { tasksRoutes } from '../lib.routes';
 import {
   TaskService,
   UserService,
@@ -93,6 +101,28 @@ type ServiceMock<T, K extends keyof T> = {
   [P in K]: T[P] extends (...args: infer A) => infer R ? MockInstance<(...args: A) => R> : T[P];
 };
 
+/**
+ * The slice of `ActivatedRoute` this component reads, moving the way the router's own does when it
+ * reuses an instance for a new `:taskId`: `snapshot` is replaced first, then `paramMap` emits.
+ *
+ * Both move, rather than only the one the component reads, so a component that went back to reading
+ * `snapshot` once still passes every first-load spec here and fails only the ones that change the
+ * route on a live component — the failure points at the defect, not at a missing mock property.
+ */
+class FakeTaskRoute {
+  readonly paramMap = new BehaviorSubject<ParamMap>(convertToParamMap({}));
+  snapshot: { paramMap: ParamMap } = { paramMap: this.paramMap.value };
+
+  /** Route to `/tasks/<taskId>`, or to `/tasks` for `null`. */
+  routeTo(taskId: string | null): void {
+    // The router emits only when the params change; a navigation to the current URL emits nothing.
+    if (this.snapshot.paramMap.get('taskId') === taskId) return;
+    const params = convertToParamMap(taskId ? { taskId } : {});
+    this.snapshot = { paramMap: params };
+    this.paramMap.next(params);
+  }
+}
+
 describe('TasksPageComponent', () => {
   let component: TasksPageComponent;
   let fixture: ComponentFixture<TasksPageComponent>;
@@ -101,10 +131,7 @@ describe('TasksPageComponent', () => {
   let mockNuxeoApi: ServiceMock<NuxeoApiBase, 'apiUrl'>;
   let mockHttp: ServiceMock<HttpClient, 'get'>;
   let mockRouter: ServiceMock<Router, 'navigate' | 'navigateByUrl'>;
-  /** Only the slice of `ActivatedRoute` this component reads. */
-  let mockActivatedRoute: {
-    snapshot: { paramMap: { get: MockInstance<(key: string) => string | null> } };
-  };
+  let mockActivatedRoute: FakeTaskRoute;
 
   // Typed as the real models, not left as object literals: `test` runs through esbuild, which
   // strips types, so only `typecheck`/`spec-types` would catch a fixture that has drifted from the
@@ -178,13 +205,7 @@ describe('TasksPageComponent', () => {
       navigateByUrl: vi.fn<Router['navigateByUrl']>().mockResolvedValue(true),
     };
 
-    mockActivatedRoute = {
-      snapshot: {
-        paramMap: {
-          get: vi.fn<(key: string) => string | null>().mockReturnValue(null),
-        },
-      },
-    };
+    mockActivatedRoute = new FakeTaskRoute();
 
     TestBed.configureTestingModule({
       imports: [testTranslateModule(), TasksPageComponent],
@@ -507,7 +528,7 @@ describe('TasksPageComponent', () => {
 
     it('keeps a newer routed fetch loading when an older one fails after it', () => {
       const older = new Subject<NuxeoTask>();
-      mockActivatedRoute.snapshot.paramMap.get.mockReturnValue('task-99');
+      mockActivatedRoute.routeTo('task-99');
       mockTaskService.getUserTasks.mockReturnValue(of([]));
       mockTaskService.getTask.mockReturnValueOnce(older).mockReturnValueOnce(new Subject());
       fixture.detectChanges();
@@ -547,7 +568,7 @@ describe('TasksPageComponent', () => {
 
   describe('Route-driven selection', () => {
     it('should select the routed task from the list it just loaded', () => {
-      mockActivatedRoute.snapshot.paramMap.get.mockReturnValue('task-1');
+      mockActivatedRoute.routeTo('task-1');
 
       fixture.detectChanges();
 
@@ -557,7 +578,7 @@ describe('TasksPageComponent', () => {
     });
 
     it('should fetch a routed task that is not in the list', () => {
-      mockActivatedRoute.snapshot.paramMap.get.mockReturnValue('task-99');
+      mockActivatedRoute.routeTo('task-99');
       mockTaskService.getTask.mockReturnValue(of({ ...mockTask, id: 'task-99' }));
 
       fixture.detectChanges();
@@ -568,13 +589,94 @@ describe('TasksPageComponent', () => {
     });
 
     it('should clear taskLoading when the routed task cannot be fetched', () => {
-      mockActivatedRoute.snapshot.paramMap.get.mockReturnValue('task-99');
+      mockActivatedRoute.routeTo('task-99');
       mockTaskService.getTask.mockReturnValue(throwError(() => new Error('gone')));
 
       fixture.detectChanges();
 
       expect(component.taskLoading()).toBe(false);
       expect(component.selectedTask()).toBeNull();
+    });
+
+    describe('when the route names another task on a live page', () => {
+      const secondTask: NuxeoTask = {
+        ...mockTask,
+        id: 'task-2',
+        targetDocumentIds: [{ id: 'doc-2', uid: 'doc-2' }],
+      };
+
+      beforeEach(() => {
+        mockTaskService.getUserTasks.mockReturnValue(of([mockTask, secondTask]));
+        mockActivatedRoute.routeTo('task-1');
+        fixture.detectChanges();
+        expect(component.selectedTask()?.id).toBe('task-1');
+        mockTaskService.getUserTasks.mockClear();
+        mockDocService.getById.mockClear();
+        mockRouter.navigate.mockClear();
+      });
+
+      it('selects it from the loaded list', () => {
+        mockActivatedRoute.routeTo('task-2');
+
+        expect(component.selectedTask()?.id).toBe('task-2');
+        expect(mockDocService.getById).toHaveBeenCalledWith('doc-2');
+        // Taken from the list: neither the inbox nor the task is fetched again.
+        expect(mockTaskService.getUserTasks).not.toHaveBeenCalled();
+        expect(mockTaskService.getTask).not.toHaveBeenCalled();
+      });
+
+      it('fetches it when it is not in the list', () => {
+        mockTaskService.getTask.mockReturnValue(of({ ...mockTask, id: 'task-99' }));
+
+        mockActivatedRoute.routeTo('task-99');
+
+        expect(mockTaskService.getTask).toHaveBeenCalledWith('task-99');
+        expect(component.selectedTask()?.id).toBe('task-99');
+        expect(component.taskLoading()).toBe(false);
+      });
+
+      it('does not select again on the navigation its own selection makes', () => {
+        // `selectTask` navigates to the task it selected, which the router reports as a route change.
+        mockRouter.navigate.mockImplementation((commands) => {
+          mockActivatedRoute.routeTo(String(commands[1]));
+          return Promise.resolve(true);
+        });
+
+        component.selectTask(secondTask);
+
+        expect(mockActivatedRoute.snapshot.paramMap.get('taskId')).toBe('task-2');
+        expect(mockRouter.navigate).toHaveBeenCalledTimes(1);
+        expect(mockDocService.getById).toHaveBeenCalledTimes(1);
+      });
+
+      it('lets a route back to the shown task win over a routed fetch still in flight', () => {
+        const pending = new Subject<NuxeoTask>();
+        mockTaskService.getTask.mockReturnValue(pending);
+        mockActivatedRoute.routeTo('task-99');
+        // The panel keeps the shown task while the routed one loads.
+        expect(component.selectedTask()?.id).toBe('task-1');
+
+        mockActivatedRoute.routeTo('task-1');
+        pending.next({ ...mockTask, id: 'task-99' });
+
+        expect(component.selectedTask()?.id).toBe('task-1');
+        expect(component.taskLoading()).toBe(false);
+      });
+
+      it('leaves a route change made while the list reloads to the reloaded list', () => {
+        const reload = new Subject<NuxeoTask[]>();
+        mockTaskService.getUserTasks.mockReturnValue(reload);
+        component.loadTasks();
+
+        mockActivatedRoute.routeTo('task-3');
+        // Not in the list on screen, but the reload may bring it: nothing is fetched alone yet.
+        expect(mockTaskService.getTask).not.toHaveBeenCalled();
+
+        reload.next([mockTask, secondTask, { ...mockTask, id: 'task-3' }]);
+
+        expect(component.selectedTask()?.id).toBe('task-3');
+        expect(mockTaskService.getTask).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -611,6 +713,65 @@ describe('TasksPageComponent', () => {
       expect(mockTaskService.getTask).toHaveBeenCalledWith('task-1');
       expect(mockTaskService.getUserTasks).toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * The suite above stands in for the router, so it can only assert what the page does with a route
+ * change it is handed. This one drives the feature's real routes, which is what shows the defect
+ * happens at all: `/tasks/a` to `/tasks/b` reuses the instance, so `ngOnInit` does not run again.
+ */
+describe('TasksPageComponent under its own routes', () => {
+  const task = (id: string): NuxeoTask => ({
+    id,
+    name: 'wf.serialDocumentReview.reviewTask',
+    directive: 'Please review',
+    dueDate: '',
+    nodeName: 'reviewNode',
+    state: 'opened',
+    targetDocumentIds: [],
+    actors: [{ id: 'user:admin' }],
+    comments: [],
+    delegatedActors: [],
+    taskInfo: { taskActions: [] },
+    variables: {},
+    workflowInstanceId: 'wf-1',
+    workflowModelName: 'SerialDocumentReview',
+    workflowTitle: 'Document Review',
+    created: '',
+  });
+
+  it('selects the task a new id names on the instance it reuses', async () => {
+    const getUserTasks = vi
+      .fn<TaskService['getUserTasks']>()
+      .mockReturnValue(of([task('task-1'), task('task-2')]));
+    const getTask = vi.fn<TaskService['getTask']>();
+    TestBed.configureTestingModule({
+      imports: [testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([{ path: 'tasks', children: tasksRoutes }]),
+        { provide: TaskService, useValue: { getUserTasks, getTask } },
+        { provide: UserService, useValue: {} },
+        { provide: WorkflowService, useValue: {} },
+        { provide: DocumentDetailService, useValue: {} },
+        { provide: DocumentService, useValue: { getById: () => of(null) } },
+        { provide: NuxeoApiBase, useValue: { apiUrl: (path: string) => path } },
+        { provide: HttpClient, useValue: { get: () => of(new Blob()) } },
+        { provide: CURRENT_USERNAME, useValue: signal('Administrator') },
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    const page = await harness.navigateByUrl('/tasks/task-1', TasksPageComponent);
+    expect(page.selectedTask()?.id).toBe('task-1');
+
+    await harness.navigateByUrl('/tasks/task-2');
+
+    expect(harness.routeDebugElement?.componentInstance).toBe(page);
+    expect(page.selectedTask()?.id).toBe('task-2');
+    expect(TestBed.inject(Router).url).toBe('/tasks/task-2');
+    expect(getUserTasks).toHaveBeenCalledTimes(1);
+    expect(getTask).not.toHaveBeenCalled();
   });
 });
 
@@ -656,7 +817,7 @@ describe('TasksPageComponent with the task panel re-registered', () => {
         { provide: NuxeoApiBase, useValue: { apiUrl: (path: string) => path } },
         { provide: HttpClient, useValue: { get: () => of(new Blob()) } },
         { provide: Router, useValue: { navigate: () => Promise.resolve(true), url: '/tasks' } },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => null } } } },
+        { provide: ActivatedRoute, useValue: new FakeTaskRoute() },
         { provide: CURRENT_USERNAME, useValue: signal('Administrator') },
       ],
     });

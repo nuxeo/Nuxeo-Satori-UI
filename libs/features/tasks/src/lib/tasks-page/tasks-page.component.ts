@@ -105,6 +105,17 @@ export class TasksPageComponent implements OnInit {
    */
   private selectionGeneration = 0;
 
+  /** The `taskId` route param as of its latest emission; `null` on `/tasks`. */
+  private routedTaskId: string | null = null;
+
+  /**
+   * The task the latest selection is for: the one `selectTask` showed, or the one
+   * `loadAndSelectTask` is still fetching. `followRoute` compares against this, not against
+   * `selectedTask()`, which still holds the previous task while a routed fetch is in flight —
+   * so a route back to that previous task would otherwise be skipped and the fetch would land.
+   */
+  private claimedTaskId: string | null = null;
+
   /** The task panel renders by ID, so an override of `nxs.components.taskDetail` reaches it. */
   protected readonly taskDetailId = NXS_TASK_DETAIL_ID;
 
@@ -153,7 +164,34 @@ export class TasksPageComponent implements OnInit {
      ════════════════════════════════════════════════════════ */
 
   ngOnInit(): void {
+    // The router reuses this instance from `/tasks/a` to `/tasks/b` (one route config), so
+    // `ngOnInit` does not run again and the param has to be followed. It was read once off
+    // `route.snapshot` in `loadTasks`, and choosing another task in the drawer, or editing the id
+    // in the URL, left the panel on the first task until a reload. `paramMap` emits the current
+    // params on subscribe, so subscribing before `loadTasks` gives it the routed id to select.
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      this.routedTaskId = params.get('taskId');
+      this.followRoute();
+    });
     this.loadTasks();
+  }
+
+  /** Select the task a changed route names, unless the page already shows or is fetching it. */
+  private followRoute(): void {
+    const taskId = this.routedTaskId;
+    // `null` is `/tasks`, a route config of its own, so the param of that instance never changes
+    // and `loadTasks` picks the first task. While the list loads, its response selects whatever the
+    // route names by then. And `selectTask` navigates to the task it selected: that emission names
+    // the claimed task, so it stops here instead of selecting it again.
+    if (!taskId || this.listLoading() || taskId === this.claimedTaskId) return;
+    this.selectRoutedTask(taskId, this.tasks());
+  }
+
+  /** Select `taskId` from `entries` when it is there, or fetch it when it is not. */
+  private selectRoutedTask(taskId: string, entries: NuxeoTask[]): void {
+    const found = entries.find((t) => t.id === taskId);
+    if (found) this.selectTask(found);
+    else this.loadAndSelectTask(taskId);
   }
 
   /* ════════════════════════════════════════════════════════
@@ -173,11 +211,9 @@ export class TasksPageComponent implements OnInit {
           this.tasks.set(entries);
           this.listLoading.set(false);
 
-          const taskId = this.route.snapshot.paramMap.get('taskId');
+          const taskId = this.routedTaskId;
           if (taskId) {
-            const found = entries.find((t) => t.id === taskId);
-            if (found) this.selectTask(found);
-            else this.loadAndSelectTask(taskId);
+            this.selectRoutedTask(taskId, entries);
           } else if (entries.length > 0) {
             this.selectTask(entries[0]);
           }
@@ -191,6 +227,7 @@ export class TasksPageComponent implements OnInit {
 
   selectTask(task: NuxeoTask): void {
     const gen = ++this.selectionGeneration;
+    this.claimedTaskId = task.id;
     this.selectedTask.set(task);
     this.targetDoc.set(null);
     this.clearPreviewBlob();
@@ -258,6 +295,7 @@ export class TasksPageComponent implements OnInit {
     // task B while A is still loading, then A's response lands and calls `selectTask(A)` — silently
     // switching the user back to a task they had navigated away from.
     const gen = ++this.selectionGeneration;
+    this.claimedTaskId = taskId;
     this.taskLoading.set(true);
     this.taskService
       .getTask(taskId)
