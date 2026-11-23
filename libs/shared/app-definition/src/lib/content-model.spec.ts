@@ -88,7 +88,16 @@ const dublincore = {
     },
   },
 };
-const source = () => ({
+/** What the server answers, loosely typed: the controls break it in ways no answer would. */
+interface Source {
+  doctypes: { File: { parent?: string; facets: string[]; schemas: string[] } } & Record<
+    string,
+    unknown
+  >;
+  facets: Record<string, unknown>[];
+  schemas: ({ name?: string; fields?: unknown } & Record<string, unknown>)[];
+}
+const source = (): Source => ({
   doctypes: structuredClone(doctypes),
   facets: structuredClone(facets),
   schemas: [...structuredClone(listed), structuredClone(dublincore)],
@@ -190,14 +199,14 @@ describe('readContentModel', () => {
   it('names the place of each entry it cannot read: a schema, a field, a facet, a type', () => {
     const broken = source();
     broken.schemas.push(
-      { fields: {} } as never,
-      { name: 'z', fields: [] } as never,
+      { fields: {} },
+      { name: 'z', fields: [] },
       {
         name: 'y',
         fields: { untyped: { constraints: [] }, nested: { type: 'complex', fields: 'x' } },
-      } as never,
+      },
     );
-    broken.facets.push({} as never, { name: 'X', schemas: {} } as never, { name: 'NXTag' });
+    broken.facets.push({}, { name: 'X', schemas: {} }, { name: 'NXTag' });
     Object.assign(broken.doctypes, {
       Broken: 'x',
       Odd: { parent: 3, facets: 'x', schemas: [''] },
