@@ -8,6 +8,17 @@
 const esc = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+/**
+ * Escapes text for a Markdown table cell or list item. The backslash goes FIRST: escaping `|` as
+ * `\|` and leaving backslashes alone lets a value ending in `\` turn the escape into an escaped
+ * backslash, freeing the pipe. Job names and error messages come from the API, so treat them as input.
+ */
+export const mdCell = (v) =>
+  String(v ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/[|`<>*_[\]]/g, (c) => `\\${c}`)
+    .replace(/\r?\n/g, ' ');
+
 const NO = 'no data';
 const num = (v, suffix = '') => (v == null ? NO : `${Number.isInteger(v) ? v : v.toFixed(1)}${suffix}`);
 const hours = (v) => (v == null ? NO : v >= 48 ? `${(v / 24).toFixed(1)} d` : `${v.toFixed(1)} h`);
@@ -123,7 +134,7 @@ ${sections.join('\n')}
 export function renderSummary(s) {
   const L = [];
   const row = (...c) => `| ${c.join(' | ')} |`;
-  L.push(`## Dev analytics — ${s.repo ?? 'repository'}`, '', `Window: last ${s.windowDays} days · generated ${s.generatedAt}`, '');
+  L.push(`## Dev analytics — ${mdCell(s.repo ?? 'repository')}`, '', `Window: last ${s.windowDays} days · generated ${s.generatedAt}`, '');
   if (s.prs) {
     L.push('### Delivery and review', '', row('Metric', 'Median', 'p90'), row('---', '---', '---'),
       row('Lead time (first commit → merge)', hours(s.prs.leadHours.median), hours(s.prs.leadHours.p90)),
@@ -135,11 +146,11 @@ export function renderSummary(s) {
   }
   if (s.ci) {
     L.push('### CI', '', `${s.ci.runs} runs · pass ${num(s.ci.passRatePct, '%')} · first attempt ${num(s.ci.firstAttemptPassRatePct, '%')} · ${s.ci.passedOnRerun} green only on rerun`, '');
-    if (s.ci.jobs.length) L.push(row('Job', 'Failures', 'Rate'), row('---', '---', '---'), ...s.ci.jobs.slice(0, 8).map((j) => row(j.name.replace(/\|/g, '\\|'), `${j.failures}/${j.runs}`, num(j.failureRatePct, '%'))), '');
+    if (s.ci.jobs.length) L.push(row('Job', 'Failures', 'Rate'), row('---', '---', '---'), ...s.ci.jobs.slice(0, 8).map((j) => row(mdCell(j.name), `${j.failures}/${j.runs}`, num(j.failureRatePct, '%'))), '');
   }
   if (s.unit) L.push('### Unit tests', '', `${s.unit.declared} declared (${s.unit.skipped} skipped) across ${s.unit.files} spec files · ${num(s.unit.expectsPerTest)} expects/test · ${s.unit.withoutAssertions} files with tests but no expect()`, '');
   if (s.coverage) L.push('### Coverage', '', `Lines ${num(s.coverage.overall.lines, '%')} · branches ${num(s.coverage.overall.branches, '%')} · functions ${num(s.coverage.overall.functions, '%')}`, '');
   if (s.e2e) L.push('### E2E', '', `${s.e2e.total} scenarios · ${s.e2e.passed} passed · ${s.e2e.failed} failed · ${s.e2e.flaky} flaky · first-attempt ${num(s.e2e.firstAttemptPassRatePct, '%')}`, '');
-  if (s.gaps.length) L.push('### Not measured this run', '', ...s.gaps.map((g) => `- ${g}`), '');
+  if (s.gaps.length) L.push('### Not measured this run', '', ...s.gaps.map((g) => `- ${mdCell(g)}`), '');
   return L.join('\n');
 }

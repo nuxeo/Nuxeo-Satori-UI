@@ -6,6 +6,7 @@ import {
   byWeek, countSpec, dateWindows, kpis, median, p90, parseLcov, parsePlaywright, prTimings, projectOf,
   summariseJobs, summarisePrs, summariseRuns, summariseSpecs, weekStart,
 } from './lib.mjs';
+import { mdCell } from './render.mjs';
 
 // statistics: nearest rank, and "no data" is null rather than 0
 assert.equal(median([1, 2, 3, 4]), 2);
@@ -154,5 +155,13 @@ assert.equal(pw.projects.find((p) => p.project === 'webkit').failed, 1);
 
 // kpis tolerate missing sections
 assert.equal(kpis({ generatedAt: '2026-11-23T00:00:00Z' }).coverageLines, null);
+
+// Markdown escaping: backslash first, so a trailing backslash cannot free the pipe after it
+assert.equal(mdCell('a|b'), 'a\\|b');
+assert.equal(mdCell('evil\\'), 'evil\\\\');
+assert.equal(mdCell('x\\|y'), 'x\\\\\\|y'); // \| in -> \\ then \| out: the pipe stays escaped
+assert.equal(mdCell('<b>*_`'), '\\<b\\>\\*\\_\\`');
+assert.equal(mdCell('line1\nline2'), 'line1 line2');
+assert.equal(mdCell(null), '');
 
 console.log('dev-analytics lib selftest: ok');
