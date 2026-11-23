@@ -50,7 +50,7 @@ today.
   The personas were inferred from the code, not from customer research, and the page says so
   ([personas](../../documentation/20-product/03-personas.md)). The Beta scope decision of record is
   "browse, folder tree, search, document detail, metadata, permissions, versions, upload/CRUD",
-  with workflow out ([plan of record](../adf-hx-beta-plan.md#decisions-locked)). The `satori-beta`
+  with workflow out ([plan of record](../beta-plan.md#decisions-locked)). The `satori-beta`
   demo package brands the app as "Acme Claims", but what it contains, as
   [our status page](../phase-1-improvements.md) lists it, is branding, theme, languages, sign-in,
   presets and navigation. Nothing about claims.
