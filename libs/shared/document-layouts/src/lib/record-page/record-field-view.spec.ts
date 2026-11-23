@@ -191,12 +191,18 @@ describe('showValue', () => {
       });
     });
 
-    it.each(['javascript:alert(1)@x', 'a b@example.com', 'a@b@example.com', 'https://example.com'])(
-      'anything else in an email field is text, never a link: %s',
-      (value) => {
-        expect(show('email', value)).toEqual({ kind: 'text', text: value });
-      },
-    );
+    it.each([
+      'javascript:alert(1)@x',
+      'a b@example.com',
+      'a@b@example.com',
+      'https://example.com',
+      'a?cc=someone@example.com',
+      'a&body=x@example.com',
+      'a%0Abcc:x@example.com',
+      'jane@localhost',
+    ])('anything else in an email field is text, never a link: %s', (value) => {
+      expect(show('email', value)).toEqual({ kind: 'text', text: value });
+    });
   });
 
   describe('address', () => {
@@ -316,6 +322,20 @@ describe('showValue', () => {
         ['A1', '$10.00', 'Yes'],
         ['B2', '$2.50', 'No'],
       ],
+    });
+  });
+
+  it("shows a cell through its column's widget only where the widget shows the subfield's type", () => {
+    const definition: LayoutFieldType = {
+      type: 'complex[]',
+      fields: { amount: { type: 'double' } },
+    };
+    // `date` on a number would read 10 as a year; the cell shows the number instead.
+    const columns = [{ field: 'line:amount', widget: 'date' }];
+    expect(show('table', [{ amount: 10 }], { columns }, definition)).toEqual({
+      kind: 'table',
+      headings: ['Amount'],
+      rows: [['10']],
     });
   });
 

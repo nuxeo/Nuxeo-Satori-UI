@@ -3,6 +3,7 @@ import { formatDate, formatNumber, formatPercent } from '@angular/common';
 import { describeField, type FieldView } from '../document-layout/field-view';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import { humanize } from '../resolve-layout';
+import { widgetAccepts } from './resolve-record-layout';
 
 /**
  * How the record page shows one value through a registered widget (layout-v2.md, section 3).
@@ -20,7 +21,10 @@ export type RecordValueView =
   /** Text whose line breaks show: `long-text`. */
   | { readonly kind: 'multiline'; readonly text: string }
   | { readonly kind: 'flag'; readonly flag: boolean }
-  /** `phone` and `email`: `href` is `tel:` or `mailto:`, never anything a value could choose. */
+  /**
+   * `phone` and `email`: `href` is `tel:` and digits, or `mailto:` and a plain address, so a value
+   * chooses neither the scheme nor any of the link's parameters.
+   */
   | { readonly kind: 'link'; readonly text: string; readonly href: string }
   | { readonly kind: 'badge'; readonly text: string; readonly tone: Tone }
   | { readonly kind: 'chips'; readonly chips: readonly string[] }
@@ -149,6 +153,9 @@ export function relativeDateText(date: Date, today: Date, locale: string): strin
   }
   return format.format(0, 'second');
 }
+
+/** An address a `mailto:` link may carry: it chooses no header, and names no other scheme. */
+const PLAIN_EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 /** The digits a `tel:` link dials: the value without its spaces, dots, dashes and brackets. */
 function dialable(value: string): string {
@@ -299,8 +306,9 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
   },
   email: ({ value }) => {
     const shown = textOf(value).trim();
-    // Only an address: anything with a scheme, a space or a second `@` is shown, never linked.
-    return /^[^\s@:/]+@[^\s@:/]+$/.test(shown)
+    // Only a plain address is linked: no scheme, no `?`, `&` or `%` to add mail headers, nothing
+    // but letters, digits and `._+-` before the `@`. Anything else is shown as text.
+    return PLAIN_EMAIL.test(shown)
       ? { kind: 'link', text: shown, href: `mailto:${shown}` }
       : text(shown);
   },
@@ -349,6 +357,10 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
       rows: items.map((item) =>
         columns.map((column) => {
           const sub = definition.fields?.[column.subfield] ?? { type: 'string' };
+          // A column's widget is held to its subfield's type, as a field's is to its property's;
+          // one that does not show it leaves the cell to the subfield's own view.
+          const widget =
+            column.widget !== null && widgetAccepts(column.widget, sub) ? column.widget : null;
           return viewText(
             showValue(
               {
@@ -358,7 +370,7 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
                 parameters: column.parameters,
                 definition: sub,
               },
-              column.widget,
+              widget,
               context,
             ),
             context.flagText,
