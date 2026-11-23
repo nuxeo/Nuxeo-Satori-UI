@@ -9,12 +9,53 @@
  * - Telephone numbers are in 555-0100 to 555-0199, set aside for fiction.
  * - Provider NPIs start with 0; every real one starts with 1 or 2.
  * - E-mail addresses are at example.com.
- * - Adjusters and case specialists are user names no server needs to have.
+ * - The people who work the claims and cases are `USERS`, in the groups the kit's rules name
+ *   (`GROUPS`). The seed creates them, so the demo can sign in as an adjuster and as member
+ *   services. Their password is the one in PAYERS_DEMO_PASSWORD, never one written here.
  *
  * Each record is found again by its number, which names its document, so `seed.mjs` updates it
  * rather than adding another when run twice. A member, provider or claim is referred to by its
  * number here; the seed writes the document's id in its place.
  */
+
+/** The groups the kit's layouts, queues, home and menu name in `app.rules.inGroup`. */
+export const GROUPS = [
+  { name: 'claims-adjusters', label: 'Claims adjusters' },
+  { name: 'claims-supervisors', label: 'Claims supervisors' },
+  { name: 'member-services', label: 'Member services' },
+];
+
+/**
+ * What each group may do, by place in the seeded workspace: `''` is the workspace, which its
+ * folders inherit, and `claims` its claims folder. Hiding something from a group is not a control;
+ * a permission is. Every group reads every record, and adjusters and supervisors may also change
+ * claims, which approving one needs. No demo group may change a member, so none of the demo's
+ * people is offered a member's Edit form, which lists every property, the social security number
+ * among them.
+ */
+export const GRANTS = [
+  { place: '', group: 'claims-adjusters', permission: 'Read' },
+  { place: '', group: 'claims-supervisors', permission: 'Read' },
+  { place: '', group: 'member-services', permission: 'Read' },
+  { place: 'claims', group: 'claims-adjusters', permission: 'ReadWrite' },
+  { place: 'claims', group: 'claims-supervisors', permission: 'ReadWrite' },
+];
+
+/**
+ * The demo's people: the claims' adjusters and the cases' assignees below. Morgan Chen
+ * supervises as well as adjusts.
+ */
+export const USERS = [
+  { username: 'dana.lee', firstName: 'Dana', lastName: 'Lee', groups: ['claims-adjusters'] },
+  {
+    username: 'morgan.chen',
+    firstName: 'Morgan',
+    lastName: 'Chen',
+    groups: ['claims-adjusters', 'claims-supervisors'],
+  },
+  { username: 'riley.brooks', firstName: 'Riley', lastName: 'Brooks', groups: ['member-services'] },
+  { username: 'sam.patel', firstName: 'Sam', lastName: 'Patel', groups: ['member-services'] },
+];
 
 export const MEMBERS = [
   {

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "member",
+      "labelKey": "payers.member.card",
+      "fields": [
+        "member:number",
+        "member:firstName",
+        "member:lastName",
+        "member:birthDate",
+        "member:address",
+        "member:phone",
+        "member:email",
+        "member:plan",
+        "member:status"
+      ]
+    }
+  ]
+}

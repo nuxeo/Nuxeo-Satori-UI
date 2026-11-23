@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "payers.queue.pending",
+  "pageProvider": "payers_pending_claims",
+  "columns": [
+    "claim:number",
+    { "field": "claim:member", "widget": "document-link" },
+    { "field": "claim:billedAmount", "widget": "currency", "parameters": { "currency": "USD" } },
+    { "field": "claim:allowedAmount", "widget": "currency", "parameters": { "currency": "USD" } },
+    { "field": "claim:received", "widget": "relative-date" }
+  ],
+  "sort": [{ "field": "claim:received", "order": "asc" }],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "claim_status_agg", "labelKey": "payers.facet.status" },
+    { "aggregate": "claim_adjuster_agg", "labelKey": "payers.facet.adjuster" }
+  ],
+  "visibleWhen": {
+    "type": "app.rules.inGroup",
+    "parameters": ["claims-supervisors", "member-services"]
+  }
+}

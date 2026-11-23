@@ -1,39 +1,54 @@
 # Payers Claims (demo)
 
-The Payers kit, version 0 ([development plan](../../../docs/business-apps/development-plan.md),
+The Payers kit, version 1 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 1), and the package pipeline's demo app definition
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)). All its data is
-fictional. Phase 0's demo runs on it, and the pipeline's controls
-(`scripts/app-package.selftest.mjs`) break copies of it.
+fictional. Phase 0's demo runs on it, phase 1's demo script runs on it (below), and the pipeline's
+controls (`scripts/app-package.selftest.mjs`) break copies of it.
 
 ## The short version
 
 - **Four record pages, as layout files:** Member, Claim, Case and Provider. The Member page is
   [layout-v2.md](../../../docs/business-apps/layout-v2.md)'s section 9, word for word.
+- **Three queues, a home for two groups, a menu and labels:** claims adjusters see the unassigned
+  claims and their own; member services, and supervisors, see the claims pending determination.
+  The home's KPIs count from the queues' page providers, through their aggregates.
 - **A stand-in model,** until the presales Payers model arrives: the types, schemas and page
-  providers those pages and the queue name. It is fictional, and replaced whole when theirs comes.
-- **A seed script** writes a few members, with their claims and cases, so the pages have something
-  to show. Run it twice and nothing is added the second time.
+  providers those files name. It is fictional, and replaced whole when theirs comes.
+- **A seed script** writes a few members, with their claims and cases, and the four people who
+  work them, in the groups the files' rules name. Run it twice and nothing is added the second
+  time.
+- **The demo script,** phase 1's five steps, as a steps file of the beta harness:
+  [`scripts/beta-harness/steps/payers-claims-demo.mjs`](../../../scripts/beta-harness/steps/payers-claims-demo.mjs).
+- **What a production install cannot show yet:** the home, the menu, the queues and the labels
+  wait on the app registry. Installed on a server, the package serves its record pages and model,
+  and nothing serves the rest: only the development server does, through `npm run config:dev`
+  ([below](#what-a-server-shows-and-what-only-the-dev-server-does)).
 
 ## What is in it
 
-| File                                                         | What it is                                                            |
-| ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `bundle/agentic-ui-config/app.json`                          | The app: its name, version, platform range and groups                 |
-| `bundle/agentic-ui-config/layouts/Member/view.layout.json`   | The Member record page: section 9's                                   |
-| `bundle/agentic-ui-config/layouts/Claim/view.layout.json`    | The Claim record page                                                 |
-| `bundle/agentic-ui-config/layouts/Case/view.layout.json`     | The Case record page                                                  |
-| `bundle/agentic-ui-config/layouts/Provider/view.layout.json` | The Provider record page, with the claims it billed                   |
-| `bundle/agentic-ui-config/queues/unassigned-claims.json`     | A queue                                                               |
-| `bundle/agentic-ui-config/actions.json`                      | An approve button: a lifecycle transition                             |
-| `bundle/agentic-ui-config/labels/en.json`                    | Its labels, in English                                                |
-| `bundle/OSGI-INF/payers-claims-demo-config.xml`              | The component that contributes the four layouts                       |
-| `bundle/OSGI-INF/payers-claims-demo-model.xml`               | **The stand-in model:** document types, lifecycles, page providers    |
-| `bundle/schemas/*.xsd`                                       | **The stand-in model's** schemas                                      |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`   | The seed script, its fictional records and its controls. Not packaged |
-| `package/package.xml`                                        | The Marketplace package: name, version, and what it depends on        |
-| `build.mjs`                                                  | Version 1's builder: the generator's, byte for byte                   |
-| `content-model.json`                                         | The stand-in model as the server answers it, for `--model`            |
+| File                                                           | What it is                                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `bundle/agentic-ui-config/app.json`                            | The app: its name, version, platform range and groups                                      |
+| `bundle/agentic-ui-config/layouts/Member/view.layout.json`     | The Member record page: section 9's                                                        |
+| `bundle/agentic-ui-config/layouts/Claim/view.layout.json`      | The Claim record page                                                                      |
+| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page                                                                       |
+| `bundle/agentic-ui-config/layouts/Provider/view.layout.json`   | The Provider record page, with the claims it billed                                        |
+| `bundle/agentic-ui-config/layouts/Member/metadata.layout.json` | Version 1: the Properties panel beside the Member page, without the social security number |
+| `bundle/agentic-ui-config/queues/unassigned-claims.json`       | Adjusters: claims no one holds yet, with a Status facet                                    |
+| `bundle/agentic-ui-config/queues/my-claims.json`               | Adjusters: the claims they hold, through `$currentUser`                                    |
+| `bundle/agentic-ui-config/queues/pending-determination.json`   | Member services and supervisors: claims in review or pended                                |
+| `bundle/agentic-ui-config/home.json`                           | The home: KPI cards for adjusters and for member services                                  |
+| `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the three queues, and two platform pages                               |
+| `bundle/agentic-ui-config/actions.json`                        | An approve button: a lifecycle transition                                                  |
+| `bundle/agentic-ui-config/labels/en.json`                      | Its labels, in English: every key the files above name                                     |
+| `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts                                            |
+| `bundle/OSGI-INF/payers-claims-demo-model.xml`                 | **The stand-in model:** document types, lifecycles, page providers                         |
+| `bundle/schemas/*.xsd`                                         | **The stand-in model's** schemas                                                           |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`     | The seed script, its fictional records and people, and its controls. Not packaged          |
+| `package/package.xml`                                          | The Marketplace package: name, version, and what it depends on                             |
+| `build.mjs`                                                    | Version 1's builder: the generator's, byte for byte                                        |
+| `content-model.json`                                           | The stand-in model as the server answers it, for `--model`                                 |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No operation button.** Decision 3 is open, so the pipeline refuses every operation.
@@ -46,13 +61,14 @@ The presales Payers model has not arrived. Until it does, the package carries a 
 a component of its own so that it can be replaced whole: `payers-claims-demo-model.xml` and
 `bundle/schemas/`.
 
-| Type            | Schema (prefix)       | What it holds                                                                                                                                               |
-| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Member`        | `member`              | `number`, `firstName`, `lastName`, `birthDate`, `address` (`street`, `city`, `zip`, `country`), `phone`, `email`, `plan`, `status`, `ssn`                   |
-| `Claim`         | `claim`               | `number`, `member`, `provider`, `serviceDate`, `serviceStart`, `serviceEnd`, `received`, `billedAmount`, `allowedAmount`, `status`, `adjuster`, `diagnosis` |
-| `Case`          | `case`                | `number`, `member`, `claim`, `category`, `state`, `received`, `due`, `assignee`, `summary`                                                                  |
-| `Provider`      | `provider`            | `number`, `npi`, `specialty`, `network`, `phone`, `address`. Its name is its `dc:title`                                                                     |
-| `ClaimDocument` | `claimdoc`, on a File | `claim`, the claim's number, and `category`                                                                                                                 |
+| Type                | Schema (prefix)                       | What it holds                                                                                                                                               |
+| ------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Member`            | `member`                              | `number`, `firstName`, `lastName`, `birthDate`, `address` (`street`, `city`, `zip`, `country`), `phone`, `email`, `plan`, `status`, `ssn`                   |
+| `Claim`             | `claim`                               | `number`, `member`, `provider`, `serviceDate`, `serviceStart`, `serviceEnd`, `received`, `billedAmount`, `allowedAmount`, `status`, `adjuster`, `diagnosis` |
+| `Case`              | `case`                                | `number`, `member`, `claim`, `category`, `state`, `received`, `due`, `assignee`, `summary`                                                                  |
+| `Provider`          | `provider`                            | `number`, `npi`, `specialty`, `network`, `phone`, `address`. Its name is its `dc:title`                                                                     |
+| `ClaimDocument`     | `claimdoc`, on a File                 | `claim`, the claim's number, and `category`                                                                                                                 |
+| `PayersClaimSearch` | `payers_claim_search` (`claimsearch`) | The claim queues' search document, never saved: `claim_status_agg` and `claim_adjuster_agg`, the facets a queue sends back. Hidden                          |
 
 - **A reference is the document's id.** `claim:member`, `claim:provider`, `case:member` and
   `case:claim` hold the `ecm:uuid` of what they point to, through Nuxeo's document resolver. That
@@ -66,16 +82,28 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
 - **The names are plain:** `Member`, `Claim`, `member_claims` and the rest. On a server shared with
   another model that uses them, the two would collide. The presales model sets the real ones.
 
-| Page provider              | Given                    | Returns                                                       |
-| -------------------------- | ------------------------ | ------------------------------------------------------------- |
-| `member_claims`            | A member's `ecm:uuid`    | The member's claims, latest service first                     |
-| `member_cases`             | A member's `ecm:uuid`    | The member's cases, latest change first                       |
-| `provider_claims`          | A provider's `ecm:uuid`  | The claims the provider billed                                |
-| `payers_claim_documents`   | A claim's `claim:number` | The claim's documents                                         |
-| `payers_unassigned_claims` | Nothing                  | Claims with no adjuster, submitted or in review, oldest first |
+| Page provider              | Given                    | Returns                                                                                        |
+| -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `member_claims`            | A member's `ecm:uuid`    | The member's claims, latest service first                                                      |
+| `member_cases`             | A member's `ecm:uuid`    | The member's cases, latest change first                                                        |
+| `provider_claims`          | A provider's `ecm:uuid`  | The claims the provider billed                                                                 |
+| `payers_claim_documents`   | A claim's `claim:number` | The claim's documents                                                                          |
+| `payers_unassigned_claims` | Nothing                  | Claims with no adjuster, submitted or in review, oldest first. Aggregate: `claim_status_agg`   |
+| `payers_my_claims`         | An adjuster's user name  | The claims they hold, latest service first. Aggregate: `claim_status_agg`                      |
+| `payers_pending_claims`    | Nothing                  | Claims in review or pended, oldest first. Aggregates: `claim_status_agg`, `claim_adjuster_agg` |
 
 Each binds what it is given as a quoted literal, and leaves out versions, proxies and trashed
 records.
+
+- **The three queue page providers read the search index,** not the repository: a queue's facets
+  and a KPI's buckets are aggregates, which only the index answers. They are
+  `SearchServicePageProvider`, the class Nuxeo 2025 gives `default_search`, each with the search
+  document `PayersClaimSearch`. An aggregate's id, its field there and the parameter the app sends
+  back, such as `claim_status_agg=["paid"]`, are one name. The index is written a moment after the
+  repository, so they lag a change by about a second.
+- **`payers_my_claims` is given `$currentUser`,** by the queue and by the home: the REST API puts
+  the name of the person signed in in its place before the query runs. So no one's name is in a
+  file, and each adjuster is asked for their own claims. The seed checks it, as each adjuster.
 
 ## Building it
 
@@ -83,7 +111,7 @@ records.
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.2.0.zip`.
+It writes `dist/payers-claims-demo-0.3.0.zip`.
 
 Held to its content model ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md),
 section 4): `content-model.json` is the stand-in model as a local Nuxeo with this package installed
@@ -128,11 +156,11 @@ docker cp nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-2026.0.2-SNAP
 ```
 
 ```bash
-docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.3.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-ui.zip /tmp/payers-claims-demo-0.2.0.zip --accept=true > /var/log/nuxeo/payers-kit-install.log 2>&1 || echo "payers kit: install failed, see /var/log/nuxeo/payers-kit-install.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-install.sh && chmod 755 /tmp/zz-payers-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-ui.zip /tmp/payers-claims-demo-0.3.0.zip --accept=true > /var/log/nuxeo/payers-kit-install.log 2>&1 || echo "payers kit: install failed, see /var/log/nuxeo/payers-kit-install.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-install.sh && chmod 755 /tmp/zz-payers-kit-install.sh
 ```
 
 ```bash
@@ -141,7 +169,13 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 
 **3. Check it.** `/var/log/nuxeo/payers-kit-install.log` in the container lists both packages
 installed, and the server log's `Component Loading Status` has nothing pending or missing.
-`/nuxeo/agentic-ui-config/layouts.json` lists the four `view` layouts.
+`/nuxeo/agentic-ui-config/layouts.json` lists the four `view` layouts and Member's `metadata` one.
+
+**Over version 0.2.0,** install only this package: `mp-install` upgrades it, removing 0.2.0 first,
+and the records stay. Version 0.3.0 adds a type and page providers, and removes none, so nothing
+needs deleting first. Run on 23 November 2026, as above, with `nuxeo-agentic-ui` already installed.
+A rebuild of a version already installed is skipped as unchanged: in the one-off script, run
+`nuxeoctl mp-remove payers-claims-demo --accept=true` before `mp-install`, as was done here.
 
 ### Removing it
 
@@ -167,7 +201,14 @@ docker cp /tmp/zz-payers-kit-remove.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && 
 With the package installed and Nuxeo running, from the repository's root:
 
 ```bash
-export NUXEO_USER=<user> NUXEO_PASS=<password>
+export NUXEO_USER=<administrator> NUXEO_PASS=<password>
+```
+
+The demo's people are given a password of your choosing, for this server, which the seed puts back
+on every run:
+
+```bash
+export PAYERS_DEMO_PASSWORD=<a password for the demo users>
 ```
 
 ```bash
@@ -176,14 +217,34 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
 
 - **What it writes:** four members, three providers, eight claims, three cases and four claim
   documents, under `/default-domain/workspaces/payers-demo`.
+- **And the people:** four fictional users, in the three groups the kit's rules name.
+
+  | User           | Groups                                   | Works              |
+  | -------------- | ---------------------------------------- | ------------------ |
+  | `dana.lee`     | `claims-adjusters`                       | Most of the claims |
+  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | One pended claim   |
+  | `riley.brooks` | `member-services`                        | Two cases          |
+  | `sam.patel`    | `member-services`                        | The appeal         |
+
+  Every group may read the workspace; adjusters and supervisors may also change claims, which
+  approving one needs. No demo group may change a member, so none of the demo's people is offered
+  the Member edit form,
+  which would list the social security number.
+
 - **Safe to run twice.** A record already there is put back to `data.mjs`'s values, a trashed one
-  is restored, and a place that holds a document of another type stops the run untouched.
-- **It checks what it wrote:** last, it runs the five page providers and compares what they
-  return with what it seeded.
-- **What it needs:** Node 24, nothing to install. `NUXEO_USER` and `NUXEO_PASS` have no default;
-  `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a precondition is not met: no
-  credentials, no server, credentials refused, the package not installed, or no
-  `/default-domain/workspaces`.
+  is restored, and a place that holds a document of another type stops the run untouched. A user
+  is put back to its name, groups and the demo password, and the demo's groups to their
+  permissions. A user or a group of the same name that the seed did not create, which it knows by
+  its marker (a user's `company`, a group's `description`), stops the run untouched.
+- **It checks what it wrote:** last, it runs the seven page providers and compares what they
+  return, and the queues' aggregates, with what it seeded; it signs in as each user, and asks
+  `payers_my_claims` for each adjuster's claims as that adjuster. The search index lags the
+  repository, so it asks again, once a second, for up to `NUXEO_INDEX_WAIT_MS` (60 seconds).
+- **What it needs:** Node 24, nothing to install. `NUXEO_USER`, `NUXEO_PASS` and
+  `PAYERS_DEMO_PASSWORD` have no default, and `NUXEO_USER` must be an administrator: only one may
+  create users and groups. `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a
+  precondition is not met: no credentials, no demo password, no server, credentials refused or not
+  an administrator's, the package not installed, or no `/default-domain/workspaces`.
 
 It prints a member's and a provider's record page, on the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).
@@ -193,35 +254,104 @@ It prints a member's and a provider's record page, on the app at `APP_URL`
 Installed on a server, the app reads its layouts from `/nuxeo/agentic-ui-config/`, which the
 package fills. Under `npx nx serve nuxeo-ui` it reads `/agentic-ui-config/` on its own port
 instead (`app-config.tokens.ts`), served from the git-ignored
-`apps/nuxeo-ui/public/agentic-ui-config/`. Until that folder holds the server's layouts, every
-record shows today's document page. Copy them there, from the repository's root, then start the
-dev server, or restart it: it reads the folder when it starts.
+`apps/nuxeo-ui/public/agentic-ui-config/`, which `npm run config:dev` writes. This serves the
+kit's layouts, home, menu, queues and labels there, from the repository's root:
 
 ```bash
-for f in layouts.json layouts/Claim/view.layout.json layouts/Member/view.layout.json layouts/Case/view.layout.json layouts/Provider/view.layout.json; do curl -sf --create-dirs "http://localhost:8080/nuxeo/agentic-ui-config/$f" -o "apps/nuxeo-ui/public/agentic-ui-config/$f"; done
+C=business-apps/packages/payers-claims-demo/bundle/agentic-ui-config && npm run config:dev -- --layout Member/view=$C/layouts/Member/view.layout.json --layout Member/metadata=$C/layouts/Member/metadata.layout.json --layout Claim/view=$C/layouts/Claim/view.layout.json --layout Case/view=$C/layouts/Case/view.layout.json --layout Provider/view=$C/layouts/Provider/view.layout.json --home $C/home.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/unassigned-claims.json --queue $C/queues/my-claims.json --queue $C/queues/pending-determination.json
 ```
 
+Then start the dev server, or restart it: it serves only the files that were there when it
+started.
+
+```bash
+npx nx serve nuxeo-ui
+```
+
+Sign in as one of the demo's people, with the demo password: `dana.lee` for an adjuster's home,
+`riley.brooks` for member services'. An administrator is in none of the kit's groups, so sees an
+empty home and none of the queues.
+
 **The social security number** shows only to members of the group `member-services`
-(`app.rules.inGroup`). An administrator is not in it, so to see it, add yourself to a group of that
-name. Hiding it is a convenience, not a control: the API still returns it to anyone who may read
-the member, and masking it there is decision I.
+(`app.rules.inGroup`), on the Member page. The Properties panel beside it lists the member's
+properties from `layouts/Member/metadata.layout.json`, which leaves the number out for everyone:
+version 1 has no rules, and without the file the panel lists the whole schema, the number
+included, to everyone the page hides it from. Hiding it is a convenience, not a control: the API
+still returns it to anyone who may read the member, and masking it there is decision I.
+
+## Running the demo
+
+Phase 1's demo script, as a steps file of the beta harness
+([`scripts/beta-harness/README.md`](../../../scripts/beta-harness/README.md)), end to end:
+
+1. an adjuster's home, with KPIs from the page providers' aggregates;
+2. a queue opened, its rows sorted, and narrowed by a facet on the server;
+3. a member, with age, combined address, and the claims and cases lists;
+4. member services seeing the social security number, which the adjuster does not, anywhere on
+   screen;
+5. the layout file behind the page, beside it.
+
+Every figure, row and value it expects is read from `data.mjs` and the kit's files; which cards
+each group's home shows is the demo's story, written in the script. **What it
+needs:** the package installed and seeded (above), the dev server serving the kit's files (above),
+and Playwright (`scripts/beta-harness/README.md`, "Prerequisites"). It signs in as an adjuster, the
+run's own user, then switches the browser to member services, which the identity guard is told of.
+
+```bash
+NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-claims-demo
+```
+
+`APP_URL` names the dev server if it is not on `http://localhost:4200`. The evidence, screenshots,
+a video and `INDEX.md`, goes to `~/Desktop/agentic-ui-evidence/beta/payers-claims-demo/`, outside
+the repository. Exit 2 means a precondition is not met, and says which: the run's user is not an
+adjuster, `PAYERS_DEMO_PASSWORD` is unset or refused, the package or the seed is missing, or the
+dev server serves something other than the kit's files.
+
+Run on 23 November 2026, against Nuxeo 2025.10.18 with this package installed and seeded: 34 of 34
+checks passed, on six distinct screenshots. With the kit broken on purpose, in six runs, 20 of its
+26 checks outside the preconditions were each seen failing: every home figure and card set, both
+menus, the queue's order, facet, request and narrowing, the member's name, age, address, claims and
+cases, the SSN hidden from the adjuster (by its rule, and by the Properties panel) and shown to
+member services, and the page drawn as its file says. Not seen failing: the queue's address and
+title, the record page's three cards, the Properties panel drawn, the served layout being the
+kit's, the bundle holding no code, and the console.
+
+## What a server shows, and what only the dev server does
+
+The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses: the bootstrap,
+the manifest, `layouts.json` and the layouts it lists, and images. The app registry that would
+serve the rest of an app waits on decisions B and E
+([decisions.md](../../../docs/business-apps/decisions.md)). So, installed on a server:
+
+| Part                         | Served by the package on a server         | Under `config:dev`                                                               |
+| ---------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| The model and page providers | Yes                                       | From the server                                                                  |
+| The five layouts             | Yes                                       | Yes                                                                              |
+| `home.json`                  | No: `/home` says no home is set           | Yes                                                                              |
+| `navigation.json`            | No: the platform's menu alone             | Yes                                                                              |
+| The three queues             | No: `/queues/<id>` says none              | Yes                                                                              |
+| `labels/en.json`             | No: headings named by key show their `id` | Yes                                                                              |
+| `actions.json`               | No                                        | No: nothing serves it yet, so the approve button is left out of the queues' rows |
+| `app.json`                   | No                                        | No: carried for the registry                                                     |
+
+**So a production install shows the record pages, and not the home, the menu or the queues.**
+Until the registry, the demo runs on a development server, as it does here.
 
 ## Not done yet
 
-- **Related records are not drawn yet** ([layout-v2.md](../../../docs/business-apps/layout-v2.md),
-  section 11), so the Member page's claims and cases cards, the Claim page's documents and the
-  Provider page's claims are left out until the lists engine lands. The page providers they name
-  are installed and seeded.
 - **A reference shows its stored id, not a link:** the `document-link` widget has no lookup yet
-  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11), so the Case page's member
-  and claim, and the Claim page's member, show the record's `ecm:uuid` until it does.
-- **Labels, queues, actions and `app.json` are carried, not served:** the app registry will
-  contribute them. Until then a card shows a heading only where its label is literal, and a field
-  is labelled from its name, `billedAmount` as "Billed amount".
-- **Phase 1's kit has more:** three queues and a home for two groups. This version has one queue
-  and no home.
-- **Not seen in the app yet:** the install and the seed have run on a local Nuxeo, and the server
-  serves the four layouts, but the record pages themselves have not been looked at in a browser.
-- **The seed's controls are not in CI:**
-  `node business-apps/packages/payers-claims-demo/demo/seed.selftest.mjs` checks its logic against
-  a stand-in for the REST API it calls, so it proves the script, not the server.
+  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11), so a queue's member
+  column, the Case page's member and claim, and the Claim page's member show the record's
+  `ecm:uuid`. The demo opens the member by its address for that reason.
+- **The approve button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
+  and not served, and the queue leaves out an action the app does not register, saying so in the
+  console.
+- **The menu's two platform entries are not added:** `app.navbar.tasks` and `app.navbar.search`
+  are in the platform's menu already, and the console says so. They are there for when an app's
+  entries may replace the platform's (app-definition-v2.md, section 13).
+- **`content-model.json` does not list `PayersClaimSearch`:** no layout names it, and the
+  pipeline holds only layouts to the model.
+- **The seed's and the demo's controls are not in CI:**
+  `node business-apps/packages/payers-claims-demo/demo/seed.selftest.mjs` checks the seed's logic
+  against a stand-in for the REST API it calls, so it proves the script, not the server; the demo
+  needs a server and a dev server, and runs by hand.

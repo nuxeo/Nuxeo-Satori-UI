@@ -10,12 +10,19 @@
     <layout type="Member" mode="view" src="agentic-ui-config/layouts/Member/view.layout.json" />
     <layout type="Case" mode="view" src="agentic-ui-config/layouts/Case/view.layout.json" />
     <layout type="Provider" mode="view" src="agentic-ui-config/layouts/Provider/view.layout.json" />
+    <!-- Version 1, for the Properties panel beside the Member page: every member property but the
+         social security number. Without it the panel lists the member schema whole, and shows the
+         number to everyone the Member page hides it from. Version 1 has no rules, so it is left
+         out of the panel for everyone; member services read it on the page. -->
+    <layout type="Member" mode="metadata" src="agentic-ui-config/layouts/Member/metadata.layout.json" />
   </extension>
 
   <!-- The types these layouts are for come from the stand-in model, the bundle's other
        component (payers-claims-demo-model.xml), until the presales Payers model replaces it. -->
 
-  <!-- app.json, actions.json, queues/ and labels/ travel in this package, and nothing contributes
-       them yet: the app registry in nuxeo-agentic-core will (docs/business-apps/package-pipeline.md).
+  <!-- app.json, home.json, navigation.json, actions.json, queues/ and labels/ travel in this
+       package, and nothing contributes them yet: the app registry in nuxeo-agentic-core will
+       (docs/business-apps/package-pipeline.md). Until then only `npm run config:dev` serves them,
+       to the development server (the kit's README, "Seeing it under nx serve").
        There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
 </component>
