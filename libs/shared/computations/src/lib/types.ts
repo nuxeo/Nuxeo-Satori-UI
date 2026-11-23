@@ -84,7 +84,8 @@ export function cut(text: string): string {
  * names goes through it, a computation's type, a key and a subfield included, so a reason stays
  * short whatever a file holds. Only what the cut keeps is written, so quoting a list of a million
  * items reads about thirty of them (`jsonPrefix`). It never throws, so that explaining a refusal
- * cannot fail: a value JSON cannot write, or that throws when it is read, is named by its kind.
+ * cannot fail: a value JSON cannot write, that throws when it is read, or that holds more values
+ * JSON leaves out than it reads, is named by its kind.
  */
 export function quote(value: unknown): string {
   try {
@@ -94,7 +95,8 @@ export function quote(value: unknown): string {
     if (value instanceof Date && Number.isNaN(value.getTime())) return 'an invalid Date';
     return cut(jsonPrefix(value, QUOTE_LENGTH + 1) ?? kindOf(value));
   } catch {
-    // A getter or a proxy that throws, a cycle, or a bigint, which JSON has no text for.
+    // A getter or a proxy that throws, a cycle or a bigint, which JSON has no text for, or more
+    // values JSON leaves out than `jsonPrefix` reads.
     return kindOf(value);
   }
 }
@@ -118,15 +120,27 @@ function kindOf(value: unknown): string {
 /**
  * What `JSON.stringify(value)` begins with, written up to `limit` characters and no further: no
  * item of a list and no value in an object is read once that many are written, and a text or a key
- * is cut before it is escaped. An object it opens still has its keys listed, by `Object.keys`, as
- * JSON.stringify lists them. Its first `limit` characters are JSON.stringify's, toJSON and boxed
- * values included, and it is shorter than `limit` only when it is all of it. Undefined where
- * JSON.stringify gives nothing. It throws where JSON.stringify would, on a cycle or a bigint, if it
- * gets that far before the cut.
+ * is cut before it is escaped. It reads at most twice `limit` items and values, so a value it could
+ * not write in that many, because JSON leaves them out, throws. An object it opens still has its
+ * keys listed, by `Object.keys`, as JSON.stringify lists them. Its first `limit` characters are
+ * JSON.stringify's, toJSON and boxed values included, and it is shorter than `limit` only when it
+ * is all of it. Undefined where JSON.stringify gives nothing. It throws where JSON.stringify would,
+ * on a cycle or a bigint, if it gets that far before the cut.
  */
 function jsonPrefix(value: unknown, limit: number): string | undefined {
   let text = '';
   const open: unknown[] = [];
+  // A value it writes adds a character at least, so `limit` reads reach the cut unless JSON leaves
+  // values out, and an object's are left out with their keys, writing nothing. So reads have a
+  // budget of their own, twice `limit`. Spent before the cut, the text would not be all of the
+  // JSON, so it throws, and `quote` names the value by its kind.
+  let reads = 0;
+  const more = (): boolean => {
+    if (text.length >= limit) return false;
+    if (reads >= 2 * limit) throw new RangeError('too much JSON leaves out to read before the cut');
+    reads += 1;
+    return true;
+  };
   // False when JSON has no text for the value, which a list then writes as null and an object
   // leaves out with its key.
   const write = (value: unknown, key: string): boolean => {
@@ -159,7 +173,7 @@ function jsonPrefix(value: unknown, limit: number): string | undefined {
       open.push(value);
       if (Array.isArray(value)) {
         text += '[';
-        for (let index = 0; index < value.length && text.length < limit; index += 1) {
+        for (let index = 0; index < value.length && more(); index += 1) {
           if (index > 0) text += ',';
           if (!write(value[index], String(index))) text += 'null';
         }
@@ -169,7 +183,7 @@ function jsonPrefix(value: unknown, limit: number): string | undefined {
         let first = true;
         text += '{';
         for (const name of Object.keys(object)) {
-          if (text.length >= limit) break;
+          if (!more()) break;
           const before = text.length;
           text += `${first ? '' : ','}${JSON.stringify(name.slice(0, limit))}:`;
           if (write(object[name], name)) first = false;
