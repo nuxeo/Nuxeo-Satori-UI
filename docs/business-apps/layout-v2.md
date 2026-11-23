@@ -524,7 +524,14 @@ becomes. In version 2's terms:
     which is read once per type;
   - a column's `visibleWhen` is evaluated for the open record, as a field's is;
   - the headers sort on the server, and a row opens its record;
-  - a row offers the row actions the file lists, while their rules pass for that row.
+  - a row offers the row actions the file lists, while their rules pass for that row. The
+    platform's five, `app.rowActions.download`, `.rename`, `.copyTo`, `.moveTo` and `.delete`, are
+    registered once for the whole app, so a record page offers them as browse does, with the same
+    dialogs; a customer's own, registered in Layer 2 code, is offered too
+    ([extension reference](../extension-reference.md), section 10a);
+  - after one of the platform's row actions renames, copies, moves or deletes a record, every
+    list on the page reads its page again, keeping its page and its order. A customer's own row
+    action does the same when its handler calls `DocumentChangesService.notify()`.
 - **A timeline's card** draws `RecordTimelineComponent`, in the same library:
   - it asks the record's audit, through `DocumentDetailService.getAuditLog`, for the card's kinds of
     event, newest first, `pageSize` entries at a time; "Show more" asks for the next page;
@@ -555,9 +562,7 @@ becomes. In version 2's terms:
     back to the file's order;
   - **a computed column** of a related list is not drawn yet, nor **a table in a list's cell**:
     that column is left out, and the rest of the list shows;
-  - **a row action needs a handler where the list is.** The platform's `app.rowActions.*` are run
-    by the browse list today, so a record page offers none of them until they are registered for
-    the whole app. A customer's own row action, registered in Layer 2 code, is offered;
+  - **a row action needs a handler.** One the file lists that nothing registers is not offered;
   - **a row action's rules answer for the row, not the page's record.** A row action whose rule
     or `enabledRule` names a rule that answers from the state the page publishes about its own
     record, such as `app.rules.isLocked` or `app.rules.isNotBusy`, itself or inside `core.every`,

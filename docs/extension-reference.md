@@ -667,6 +667,10 @@ Entries dropped for an unreachable `path` are reported the same way, on
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
+An app definition's menu, `navigation.json`, adds its entries for queues and its home to this slot
+at startup, as `appMenu.<id>`, after the entries below unless their `order` places them among them
+(app-definition-v2.md, section 9). The prefix keeps a file from replacing one of these IDs.
+
 | ID                              | Label               | Path                   | Order | Rule                                 | Notes    |
 | ------------------------------- | ------------------- | ---------------------- | ----- | ------------------------------------ | -------- |
 | `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                    | Disabled |
@@ -2007,27 +2011,33 @@ is a separate slot, `rowActions` — section 10a.
 ## 10a. `rowActions` — the menu on each row of a list of documents
 
 Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
-rendered as the "Actions for …" menu at the end of each row of browse's document list.
+rendered as the "Actions for …" menu at the end of each row of three lists:
+
+- **browse's document list**, which offers every entry of the slot;
+- **a record page's list of related records**, which offers only the IDs its layout file lists
+  under `rowActions`, and only those with a handler (`docs/business-apps/layout-v2.md`, section 7);
+- **a queue's list** (`/queues/<id>`), the same list as the related records', for the IDs its queue
+  file lists (`docs/business-apps/app-definition-v2.md`, section 4).
 
 Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
 document rules of section 4 read the row's own permissions and properties, not the folder's. A
 row whose entries are all hidden has no menu button.
 
 A record page's list of related records ([layout-v2.md](business-apps/layout-v2.md), section 7)
-resolves the same slot for the row actions its file lists, with two differences. A row's context
+differs in two more ways. A row's context
 there has none of the flags the page publishes about its own record. A row action whose `rule` or
 `enabledRule` names a surface-state rule (section 4) other than `app.rules.isNote`, itself or inside
 `core.every`, `core.some` or `core.not`, is not offered there, nor one whose rule nests more than 32
 levels deep, and the console says why. Those rules are refused by ID, so a customer's own evaluator
 registered under one is refused too.
 
-| ID                        | Label    | Icon                        | Order | Shown when                                |
-| ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |
-| `app.rowActions.download` | Download | `download`                  | 10    | not trashed, holds a file                 |
-| `app.rowActions.rename`   | Rename   | `drive_file_rename_outline` | 20    | not trashed, `canWrite`, not `Immutable`¹ |
-| `app.rowActions.copyTo`   | Copy to… | `file_copy`                 | 30    | not trashed                               |
-| `app.rowActions.moveTo`   | Move to… | `drive_file_move`           | 40    | not trashed, `canRemove`                  |
-| `app.rowActions.delete`   | Delete   | `delete`                    | 50    | not trashed, `canRemove`                  |
+| ID                        | Label    | Icon           | Order | Shown when                                |
+| ------------------------- | -------- | -------------- | ----- | ----------------------------------------- |
+| `app.rowActions.download` | Download | `download`     | 10    | not trashed, holds a file                 |
+| `app.rowActions.rename`   | Rename   | `note_edit`    | 20    | not trashed, `canWrite`, not `Immutable`¹ |
+| `app.rowActions.copyTo`   | Copy to… | `copy`         | 30    | not trashed                               |
+| `app.rowActions.moveTo`   | Move to… | `add_to_drive` | 40    | not trashed, `canRemove`                  |
+| `app.rowActions.delete`   | Delete   | `trash`        | 50    | not trashed, `canRemove`                  |
 
 ¹ As Edit in section 8: Nuxeo marks versions and publications `Immutable`, and their
 `permissions` enricher still lists `Write` while the server refuses to change them, so a
@@ -2042,6 +2052,34 @@ trash, as the header's Delete does; a collection goes through the collection's o
 
 A collection listed in browse also keeps its **Edit** entry, first in its menu. That entry is not a
 slot descriptor, and a manifest cannot hide it.
+
+**Where the behaviour is registered.** `providePackagedRowActions()`, from
+`@nuxeo/satori-platform/ui`, registers the five handlers once for the whole app, in the packaged
+tier (`registerPackaged`), and the app's `provideAppExtensions()` calls it. Each handler runs on the
+context's focused document, the row's, so the same handler serves every list. A customer's
+`register()` for one of these IDs outranks it, whichever registers first.
+
+**After a change, the lists read again.** A rename, copy, move or delete that succeeds calls
+`DocumentChangesService.notify()`, from `@nuxeo/satori-platform/nuxeo-client`, and every list
+following it reloads the page on screen: browse's, each list of related records on a record page,
+and a queue's, which keeps its chosen buckets. Every list follows every change, since a copy or a move can add a row to another list. A
+download changes nothing and reloads nothing. A handler of your own that changes documents, for one
+of your IDs or in place of one of these, calls it too:
+
+```ts
+const changes = inject(DocumentChangesService);
+const destroyRef = inject(DestroyRef);
+inject(ExtensionActionRegistry).register({
+  'acme.rowActions.archive': {
+    execute: ({ document }) => {
+      if (!document) return;
+      archive(document)
+        .pipe(takeUntilDestroyed(destroyRef))
+        .subscribe(() => changes.notify());
+    },
+  },
+});
+```
 
 Add your own entry the same way as to any action slot, with a handler that reads the row from the
 context it receives:

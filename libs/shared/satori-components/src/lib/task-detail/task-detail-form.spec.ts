@@ -312,6 +312,17 @@ describe('NxsTaskDetailComponent, with a task form', () => {
     expect(given.headingLevels.at(-1)).toBe(3);
   });
 
+  it('forgets the last task’s form as soon as the host shows another, until that one hands its own', async () => {
+    await render();
+    await hand();
+    expect(el().querySelector('nxs-user-group-picker')).toBeNull();
+    // The new task's component has not handed a form yet, and the last one's still stands.
+    await render(makeTask({ id: 'task-2' }));
+    expect(el().querySelector('nxs-user-group-picker')).not.toBeNull();
+    await click('Start Review');
+    expect(form.validate).not.toHaveBeenCalled();
+  });
+
   it('goes back to its own fields when the form is withdrawn', async () => {
     await render();
     await hand();

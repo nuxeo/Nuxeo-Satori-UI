@@ -44,6 +44,20 @@ Additive: no existing call changes.
   those that the `bulk-actions` slot resolves and that have a handler. Neither is a security
   control.
 
+### Added (`@nuxeo-satori/platform/nuxeo-client`, `@nuxeo-satori/platform/ui`) — row actions on every list
+
+The platform's row actions, `app.rowActions.download`, `.rename`, `.copyTo`, `.moveTo` and
+`.delete`, run from every list that offers them: browse's, a record page's related records and a
+queue's (docs/extension-reference.md, section 10a). Additive: no existing call changes.
+
+- `providePackagedRowActions()` and `RowActionsService` (`ui`): the five handlers, registered once
+  for the app with `registerPackaged`, so a customer's `register()` for one of these IDs still
+  outranks them. The app's `provideAppExtensions()` calls it. Browse no longer registers them.
+- `DocumentChangesService` (`nuxeo-client`): `notify()` says documents changed, and `changes`
+  emits once for each. The row actions notify it after a change that succeeds, and browse's list
+  and `RecordListComponent` follow it and read their page again. A customer's own action that
+  changes documents calls it too.
+
 ### Fixed (generators) — a configuration package's manifest is one Java can read
 
 A generated package's `build.mjs` packaged a `bundle/META-INF/MANIFEST.MF` that Java's

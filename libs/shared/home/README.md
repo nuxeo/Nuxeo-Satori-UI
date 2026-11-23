@@ -11,13 +11,15 @@ It is an engine (tier 3 of [architecture.md](../../../docs/business-apps/archite
 
 ## What is in it
 
-| File                          | What it does                                                                                   |
-| ----------------------------- | ---------------------------------------------------------------------------------------------- |
-| `home-page/home-page.ts`      | `HomePageComponent`, the page the app serves at `/home`                                        |
-| `home-file.ts`                | `readHome`: the file checked with `validateHome`, refused or with cards left out               |
-| `figures.ts`                  | `figureOf`: what a KPI shows, from a page provider's results                                   |
-| `home.service.ts`             | `HomeService`: the file's read and the page providers' reads; `HOME_QUEUE_LINK`; `homeFileUrl` |
-| `samples/documents/home.json` | A home on the platform's own `default_search` page provider, for the development server        |
+| File                                | What it does                                                                                   |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `home-page/home-page.ts`            | `HomePageComponent`, the page the app serves at `/home`                                        |
+| `home-file.ts`                      | `readHome`: the file checked with `validateHome`, refused or with cards left out               |
+| `figures.ts`                        | `figureOf`: what a KPI shows, from a page provider's results                                   |
+| `home.service.ts`                   | `HomeService`: the file's read and the page providers' reads; `HOME_QUEUE_LINK`; `homeFileUrl` |
+| `navigation-file.ts`                | `readNavigation`: the menu, `navigation.json`, checked with `validateNavigation`               |
+| `samples/documents/home.json`       | A home on the platform's own `default_search` page provider, for the development server        |
+| `samples/documents/navigation.json` | A menu with the home, the sample queue and a platform page, for the development server         |
 
 ## What the page does
 
@@ -46,10 +48,19 @@ It is an engine (tier 3 of [architecture.md](../../../docs/business-apps/archite
 Nothing here is a security control. A figure counts what the page provider returns to the person,
 and hiding a card hides the figure, not the records.
 
+## The menu
+
+`navigation.json` is read the same way, by `HomeService.loadNavigation`, and checked by
+`readNavigation`: a `structure` finding refuses it, a finding in an entry or a rule this build
+cannot answer leaves the entry out. The app, not this library, adds the entries to its menu at
+startup (`apps/nuxeo-ui/src/app/business-apps.menu.ts`; app-definition-v2.md, section 9).
+
 ## Running it
 
 ```bash
-npm run config:dev -- --home libs/shared/home/samples/documents/home.json
+npm run config:dev -- --home libs/shared/home/samples/documents/home.json \
+  --navigation libs/shared/home/samples/documents/navigation.json \
+  --queue libs/shared/queues/samples/documents/queues/documents.json
 npx nx serve nuxeo-ui
 ```
 
@@ -76,5 +87,7 @@ npx ngc -p libs/shared/home/tsconfig.lib.json
 - **Serving `home.json` on a server.** The app registry serves it, once decisions B and E are taken.
 - **The home as the app's first page.** `/` still opens the dashboard.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
-- **The menu.** `navigation.json` is proposed and validated, and not drawn.
+- **Replacing the platform's menu.** `navigation.json`'s entries for queues and the home are joined
+  to the platform's (`readNavigation`, read by the app at startup); whether an app's menu replaces
+  the platform's is still open.
 - **Sums**, which the plan's KPI tiles ask for: a KPI counts only.

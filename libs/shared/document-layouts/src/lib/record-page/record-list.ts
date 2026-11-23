@@ -34,6 +34,7 @@ import {
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import {
+  DocumentChangesService,
   type NuxeoDocument,
   type NuxeoDocumentList,
   PageProviderService,
@@ -191,6 +192,7 @@ export class RecordListComponent {
   readonly loaded = output<PageProviderResults>();
 
   private readonly pages = inject(PageProviderService);
+  private readonly documentChanges = inject(DocumentChangesService);
   private readonly layouts = inject(DocumentLayoutService);
   private readonly extensions = inject(AppExtensionsService);
   private readonly actions = inject(ExtensionActionRegistry);
@@ -329,6 +331,11 @@ export class RecordListComponent {
     merge(this.translate.onLangChange, this.translate.onTranslationChange)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.translations.update((n) => n + 1));
+    // A row action, here or on another list, may have renamed, moved or trashed one of these rows,
+    // or copied a record into this list: the page on screen is asked for again.
+    this.documentChanges.changes
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.attempt.update((n) => n + 1));
   }
 
   protected readonly documents = computed<readonly NuxeoDocument[]>(() => {
@@ -463,7 +470,7 @@ export class RecordListComponent {
    * can answer its rules. Otherwise it is not offered, and the console says why once.
    *
    * - One with no handler here would do nothing when chosen. The platform's own row actions are
-   *   registered by the browse list, so a record page has none of them yet.
+   *   registered once for the whole app, by `providePackagedRowActions()`.
    * - One whose `rule` or `enabledRule` names a rule that answers for the page's own record
    *   ({@link PAGE_STATE_RULES}), itself or inside `core.every`, `core.some` or `core.not`, would
    *   show or run on that record's state, not the row's. A customer's own composite is not looked

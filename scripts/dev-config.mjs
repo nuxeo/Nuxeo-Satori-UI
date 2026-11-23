@@ -14,6 +14,7 @@
  *   npm run config:dev -- --home home.json
  *   npm run config:dev -- --labels en=labels/en.json --labels fr=labels/fr.json
  *   npm run config:dev -- --queue queues/unassigned-claims.json
+ *   npm run config:dev -- --navigation navigation.json
  *   npm run config:dev -- --task claimDetermination.determine=determine.layout.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
@@ -37,6 +38,10 @@
  * the package writes it, with no envelope (app-definition-v2.md, section 4). The servlet does not
  * answer there either, for the same reason as the home. Without `--queue`, no queue is served, and
  * any written before are removed. A later `--queue` for the same id replaces an earlier one.
+ *
+ * `--navigation <file>` serves an app's menu at `navigation.json`, as `--home` serves its home
+ * (app-definition-v2.md, section 9). Without it, any `navigation.json` written before is removed, so
+ * the platform's menu shows alone, as on a server. A later `--navigation` replaces an earlier one.
  *
  * `--task <workflow>.<step>=<file>` serves a workflow step's task form at
  * `tasks/<workflow>.<step>.layout.json`, as the package writes it, with no envelope
@@ -64,6 +69,7 @@ const extra = {
   home: [],
   labels: [],
   queue: [],
+  navigation: [],
   task: [],
 };
 const args = process.argv.slice(2);
@@ -74,7 +80,7 @@ for (let i = 0; i < args.length; i += 2) {
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
         '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>] ' +
         '[--labels <lang>=<labels.json>]... [--queue <queues/<id>.json>]... ' +
-        '[--task <workflow>.<step>=<layout.json>]...',
+        '[--navigation <navigation.json>] [--task <workflow>.<step>=<layout.json>]...',
     );
     process.exit(2);
   }
@@ -195,6 +201,10 @@ for (const path of extra.queue) {
   }
   queues.set(id, { path, content: read(path) });
 }
+
+// The menu's file, read here too, before anything is written.
+const navigation = extra.navigation.at(-1);
+const navigationContent = navigation === undefined ? undefined : read(navigation);
 
 // A task form is served as the package writes it, as the home is; the app reads it with the
 // validator when the task opens. The parts are those `placeFile` in libs/shared/app-definition
@@ -333,6 +343,18 @@ console.log(
     ? `no queues: ${QUEUES.slice(ROOT.length + 1)} not served`
     : `wrote ${QUEUES.slice(ROOT.length + 1)}: ${[...queues.keys()].join(', ')}`,
 );
+
+// The menu is served as the package writes it, as the home is.
+const NAVIGATION = join(TARGET, 'navigation.json');
+if (navigation === undefined) {
+  rmSync(NAVIGATION, { force: true });
+  console.log(`no menu: ${NAVIGATION.slice(ROOT.length + 1)} not served`);
+} else {
+  writeFileSync(NAVIGATION, `${JSON.stringify(navigationContent, null, 2)}\n`);
+  console.log(
+    `wrote ${NAVIGATION.slice(ROOT.length + 1)}: ${navigation.startsWith(ROOT) ? navigation.slice(ROOT.length + 1) : navigation}`,
+  );
+}
 
 const TASKS = join(TARGET, 'tasks');
 rmSync(TASKS, { recursive: true, force: true });

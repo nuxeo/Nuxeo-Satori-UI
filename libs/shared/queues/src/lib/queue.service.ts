@@ -16,8 +16,7 @@ export function isQueueId(id: string): boolean {
 
 /**
  * Where the queue `id` opens: the router link of the app's queue page, `/queues/<id>`. The home's
- * links to queues use it, and the menu's entries for queues are to, once the app draws
- * `navigation.json`.
+ * links to queues use it, and so do the menu's entries for queues, from `navigation.json`.
  */
 export function queueLink(id: string): readonly string[] {
   return ['/queues', id];

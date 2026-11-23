@@ -2,7 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute, provideRouter, withDisabledInitialNavigation } from '@angular/router';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  provideRouter,
+  withDisabledInitialNavigation,
+} from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
@@ -133,7 +138,12 @@ describe('TasksPageComponent — the MIME type bound to the viewer', () => {
         provideRouter([{ path: 'tasks', children: tasksRoutes }], withDisabledInitialNavigation()),
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { paramMap: new Map() }, params: of({}) },
+          // `paramMap` is what the page follows for the routed task; `/tasks`, so it names none.
+          useValue: {
+            snapshot: { paramMap: new Map() },
+            params: of({}),
+            paramMap: of(convertToParamMap({})),
+          },
         },
         {
           // Every method the component reaches for, because rendering the real template exercises

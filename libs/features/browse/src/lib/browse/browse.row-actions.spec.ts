@@ -30,7 +30,11 @@ import {
   NxsRenameDialogComponent,
   NxsToastService,
 } from '@nuxeo/satori-platform/components';
-import { ConfirmDialogComponent } from '@nuxeo/satori-platform/ui';
+import {
+  ConfirmDialogComponent,
+  RowActionsService,
+  providePackagedRowActions,
+} from '@nuxeo/satori-platform/ui';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { BrowseComponent } from './browse';
@@ -154,6 +158,12 @@ describe('BrowseComponent — row actions', () => {
         { provide: DocumentImportService, useValue: importService },
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         provideSatoriExtensions({ slots: { [EXTENSION_SLOTS.rowActions]: PACKAGED_ROW_ACTIONS } }),
+        // Browse no longer registers the row actions' handlers: the app registers them once, for
+        // every list, and this page reloads when they change a document. Provided here as the app
+        // provides them, so these tests still run browse's rows through the real handlers. Their
+        // messages go through an environment toast when there is one, so the same mock hears them.
+        providePackagedRowActions(),
+        { provide: NxsToastService, useValue: toast },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(BrowseComponent);
@@ -187,7 +197,8 @@ describe('BrowseComponent — row actions', () => {
   });
 
   it('refuses to rename an Immutable row even when a manifest clears the rule', () => {
-    component.renameEntry(publication);
+    // The guard moved with the action, from browse's `renameEntry` to the app's row actions.
+    TestBed.inject(RowActionsService).rename(publication);
     expect(dialogOpen).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledTimes(1);
   });

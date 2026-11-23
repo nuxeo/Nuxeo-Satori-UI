@@ -124,6 +124,22 @@ Path helpers: `libs/shared/nuxeo-client/src/lib/utils/browse-path.utils.ts`
 
 ---
 
+## DocumentChangesService (`document-changes.service.ts`)
+
+Says that documents changed, so the lists following it read their page again: browse's listing
+and each `RecordListComponent`, a record page's related records and a queue's. The platform's row
+actions notify it after a rename, copy, move or delete, since they run from one app-wide
+registration and cannot reload the list they came from. Every list follows every change. Each follower hears of it before `notify()` returns: browse
+reloads at once, a record list on the next change detection. `BrowseContextService
+.requestContentRefresh()` instead asks browse alone, through an effect.
+
+```typescript
+readonly changes: Observable<void>  // one emission per change; follow with takeUntilDestroyed()
+notify(): void  // documents were renamed, copied, moved, trashed or otherwise changed
+```
+
+---
+
 ## ClipboardTargetService (`clipboard-target.service.ts`)
 
 Tracks the current browse folder used as the paste target for clipboard Copy/Move (Web UI `target-document`).
@@ -523,6 +539,27 @@ component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, {
 | `show(message: string, options?: NxsToastOptions): void`       | Something happened. Announced politely. `message` is already translated; a blank one opens nothing.                                                                                                                                                             |
 | `error(message: string, options?: NxsToastErrorOptions): void` | Something the user asked for did not happen. Announced assertively. `retry` adds a translated Retry button running it.                                                                                                                                          |
 | `NxsToastOptions`                                              | `duration` in ms: below `NXS_TOAST_DURATION` (4000, Web UI's) it is raised to it, `0` keeps the toast until dismissed. `action: { label, run }` adds one button; a toast with an action defaults to `0`. Every toast has a Dismiss button and closes on Escape. |
+
+---
+
+## RowActionsService (`libs/shared/ui/src/lib/row-actions/row-actions.service.ts`)
+
+What the platform's row actions do, `app.rowActions.download`, `.rename`, `.copyTo`, `.moveTo` and
+`.delete`, on whichever list offered them. Import: `@nuxeo/satori-platform/ui`. Not provided in
+root: `providePackagedRowActions()` provides it and registers the five handlers once with
+`registerPackaged`, so a customer's `register()` outranks them. `provideAppExtensions()` calls it.
+Its messages go through an environment `NxsToastService` when one is provided, and otherwise
+through its own: it does not provide one to the environment, so a component that forgets
+`provideNxsToast()` still fails. A spec that runs these actions lists `providePackagedRowActions()`
+in `providers`, with `{ provide: NxsToastService, useValue }` to hear its messages.
+
+| Member                       | Notes                                                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `download(doc): void`        | Saves the main file under its own name, through a blob URL revoked at once.                                                                                                        |
+| `rename(doc): void`          | `nxs-rename-dialog`, refused on an `Immutable` document even if a manifest clears the rule.                                                                                        |
+| `copyTo(doc)`, `moveTo(doc)` | `nxs-folder-picker-dialog`, opened on the folder the document is in; a move does not offer that folder, and no folder can be its own destination. Then `Document.Copy` or `.Move`. |
+| `delete(doc): void`          | Confirms, then trashes. A collection goes through the collection's own confirmation; a Collections folder still holding collections is refused.                                    |
+| After a change that succeeds | Asks the folder tree to reload, takes a moved or trashed document out of the selection (all of it, for a collection), and calls `DocumentChangesService.notify()`.                 |
 
 ---
 
