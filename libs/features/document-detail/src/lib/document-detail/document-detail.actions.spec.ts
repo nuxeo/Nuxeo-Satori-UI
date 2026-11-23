@@ -512,6 +512,29 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.show).toHaveBeenCalledWith('The document is now Obsolete.');
     });
 
+    it('names the state the server reports, over the one the policy declared', async () => {
+      // A listener on the transition event may move the document on again; the response says
+      // where it ended up.
+      await build(withTransitions([APPROVE]));
+      confirmInDialog(APPROVE);
+      mockDetailService.followTransition.mockReturnValue(of(doc({ state: 'obsolete' })));
+
+      component.runToolbarAction(offered('app.toolbar.followTransition'));
+
+      expect(toast.show).toHaveBeenCalledWith('The document is now Obsolete.');
+    });
+
+    it('says only that the state changed when neither the server nor the policy names it', async () => {
+      const unplaced = { name: 'archive', destinationState: null };
+      await build(withTransitions([unplaced]));
+      confirmInDialog(unplaced);
+      mockDetailService.followTransition.mockReturnValue(of(doc({ state: undefined })));
+
+      component.runToolbarAction(offered('app.toolbar.followTransition'));
+
+      expect(toast.show).toHaveBeenCalledWith("The document's state has changed.");
+    });
+
     it('follows nothing when the dialog is closed without a choice', async () => {
       await build(withTransitions([APPROVE]));
       mockDetailService.getFullDocument.mockClear();
