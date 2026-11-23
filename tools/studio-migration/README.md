@@ -197,10 +197,16 @@ gives the same conversion. A conversion directory holds:
 - **`import`** has no place in the app, whose import step reads no layout. It is reported, with its
   fields.
 - **Not written:**
-  - a field bound a second time is reported, and kept once;
   - a field that sits in a condition (`nuxeo-filter`, `dom-if`) is pending: M2 converts the
     condition, and until then the field is not shown to everyone;
-  - an element the catalogue does not know as a field is reported.
+  - an element the catalogue does not know as a field is reported;
+  - a field that binds a property another field already shows is reported, and the property is
+    kept once. A field under a condition, or of an unknown element, shows nothing, so a later
+    field binding the same property still shows it;
+  - a label bound to the page other than as `[[i18n('key')]]` is not written as text: the field
+    has no label of its own, and check 6 lists the binding.
+- **A second layout of the same type and mode** is reported: the first is the one written, and the
+  checks hold only that one to the file.
 
 **Search screens** become queues over the same page provider:
 
@@ -211,7 +217,7 @@ gives the same conversion. A conversion directory holds:
   anyone searches. A grid or justified-grid view is reported too: a queue is a table.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
-size and its columns. The card itself is pending, naming its queue: its place on the home is phase
+size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns. The card itself is pending, naming its queue: its place on the home is phase
 1's `home.json`, which is not in the app definition yet, so the app-definition validator would
 refuse the file as out of place.
 
@@ -224,7 +230,9 @@ refuse the file as out of place.
 
 - **Actions.** An operation button on a document's page or over a selection becomes an action, with
   its operation, its literal parameters, its icon (Polymer's `icons` set shares Material's names)
-  and its order. It needs the operation on the allow-list; without one, the button is reported.
+  and its order. It needs the operation on the allow-list; without one, the button is reported. A
+  button whose parameters are bound to the page is reported: a written action has no page to read
+  them from.
 - **Pending:** the left menu and its pages wait for phase 1's `navigation.json`, and the note names
   the queue they open. Tabs wait for M2.
 - **Conditions.** A contribution that sits in a condition is pending, whatever the allow-list says.
@@ -388,7 +396,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 
   - Elsewhere: string-aware comment stripping in the theme, and listing reported and proposed
     items as decisions.
-  - **In M1, 35 guards**, each broken in turn by a script that runs the suite and restores it, and
+  - **In M1, 36 guards**, each broken in turn by a script that runs the suite and restores it, and
     each seen turning it red:
     - **In the converter:** the repeat kept once; a field under a condition left pending; the
       panel's rows left out; a widget version 1 cannot show reported; a button under a condition
@@ -402,13 +410,19 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     - **In check 7:** the page provider, a list's parameters and sort, the operation and its
       parameters, an invented list, an invented action.
     - **In check 10:** a file out of place; the validator; a field listed twice in a version 1
-      section.
+      section; partial on the conversion's own allow-list.
     - **Elsewhere:** `partial` never read as a pass; the inventory finding conditions; the second
       count counting them.
 
     The first round found three that did not turn the suite red. No test sent a repeated field
     through the conversion. No test changed a list's parameters: `change-parameter` changes an
     action's first. The third was a mistake in the round itself. Each now has its test.
+
+  - **An independent review** then found twelve ways to drop, widen or misread something that
+    every check still passed. Examples: a property shown to everyone, dropped because an earlier
+    field bound it under a condition; a queue written for a card under a condition; a bound label
+    copied as text. Each is fixed, with a test in `checks-m1.spec.ts` that was run against the code
+    before the fix and failed there.
 - **The two counts were seen disagreeing for real.** On the sample, a viewer element writes
   `role="widget"` twice. The parser keeps one attribute; the first second count counted two
   fields. A field is an element, so the second count now counts tags marked as widgets, and a
