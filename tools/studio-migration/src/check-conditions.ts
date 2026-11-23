@@ -29,6 +29,7 @@ import { recordedAllowList } from './convert';
 import { homeCards, menuEntries, menuEntryId } from './convert-home';
 import { planFields } from './convert-layouts';
 import { formPlaces, shownIn, tabOf } from './forms';
+import { ALWAYS } from './widgets';
 import { cardGuard, isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -44,6 +45,9 @@ export function checkConditions({
   // shows under in Web UI, and must decide as they do on every row of their truth table.
   for (const [path, file] of Object.entries(conversion.app)) {
     for (const { at, rule } of rulesIn(path, file)) {
+      // A form's field Web UI only shows is read-only always: no condition gives that, and
+      // check 2 holds it to Web UI's element.
+      if (at.endsWith('.readOnlyWhen') && rule === ALWAYS) continue;
       const guard = guardFor(inventory, catalogue, pkg, conversion, path, file, at);
       if (!guard || guard.kind !== 'rule' || guard.conditions.length === 0) {
         findings.push(`${path}: ${at} holds a rule that no condition of the package gives`);

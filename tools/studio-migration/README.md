@@ -1,10 +1,11 @@
 # Studio migration
 
-Phases M0, M1 and the conditions of M2 of the migration in
+Phases M0, M1 and M2 of the migration in
 [docs/business-apps/studio-migration.md](../../docs/business-apps/studio-migration.md). It reads a
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
-declarative track (M1) into an app definition the package pipeline's validator accepts, and runs the
-verification harness over the result.
+declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) into an app
+definition the package pipeline's validator accepts, and runs the verification harness over the
+result.
 
 ```bash
 npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
@@ -83,13 +84,14 @@ Section 2 of the migration document describes what a package holds. Given one, t
 1. **Reads the package:** `package.xml` must declare a `studio` package, and the bundle is the JAR
    that `install.xml` installs.
 2. **Gives every file a kind:**
-   - **Layouts and screens:** document layouts, search forms and results, slot contributions,
-     custom code, the dashboard, themes.
+   - **Layouts and screens:** document layouts, workflow task layouts, layout blocks, search
+     forms and results, slot contributions, custom code, the dashboard, themes.
    - **Model and translations:** model contributions and schemas, translations.
    - **Other files:** images, Studio's own `.metadata` records.
    - **Anything else is `unrecognised`.** It is listed, never skipped.
 3. **Reads each kind:**
-   - each layout's type, mode and bound fields;
+   - each layout's type, mode and bound fields, and the layout blocks it uses;
+   - each task layout's workflow and step, and the task variables its fields bind;
    - each search screen's provider, columns and views;
    - each slot contribution's slot and elements, including any operation button that runs no
      operation;
@@ -169,6 +171,7 @@ gives the same conversion. A conversion directory holds:
   - `layouts/<Type>/<mode>.layout.json`, one per document layout (below).
   - `queues/<id>.json`: a search screen's results as `queues/<search folder>.json`, and a dashboard
     card's list as `queues/home-<n>-<provider>.json`.
+  - `tasks/<workflow>.<step>.layout.json`, one per workflow task layout (M2, below).
   - `home.json`: a card for each dashboard card whose list is a queue, naming it.
   - `navigation.json`: an entry for each left-menu entry that opens a search screen, naming its
     queue.
@@ -255,7 +258,7 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
   else is pending: `navigation.json` opens a queue or a platform page, and the mapping agent
   proposes which. `navigation.json` holds only the package's own entries; Web UI's stock ones are
   the app's.
-- **Pending:** tabs wait for M2.
+- **Tabs** become tabs of a type's view file (M2, below).
 - **Conditions.** A button under a condition becomes an action whose `visibleWhen` is the
   condition's rule. A bulk action whose condition reads the open record is reported. A menu entry
   under a condition carries its rule too, where the rule reads only the user.
@@ -321,6 +324,67 @@ WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren`
 - **A condition is `converted` only where its rule was written**, and the report says where.
   Otherwise it is pending, and each thing it guards says why.
 
+**Task forms (M2).** A workflow task layout becomes the task form of its step
+([app-definition-v2.md](../../docs/business-apps/app-definition-v2.md), section 6), read from Web
+UI's own task page (`nuxeo-document-task.js`) and its stock layouts:
+
+- **Where it is.** Web UI loads a step's layout from
+  `ui/workflow/<workflow>/nuxeo-<step>-layout.html`, both names in lower case. The app reads
+  `tasks/<workflowModelName>.<nodeName>.layout.json`, with the names as the server writes them, so
+  their case comes from the package: the variables schemas Nuxeo names after a workflow and a step,
+  `var_<workflow>` and `var_<step>` (read on the reference server: `var_SerialDocumentReview`,
+  `var_Task38e`), and the workflows it imports (`routeModelImporter`). A name the package does not
+  give, or gives twice in different cases, is reported, and so is the layout.
+- **What it holds.** A field bound to `task.variables.<name>` becomes `var:<name>`, with its
+  widget, label and required flag, as an edit form's field. A step whose layout shows no field gets
+  a form with no card, as Web UI shows none; with no file the app would show its own form of the
+  step's variables.
+- **The document.** Web UI gives a task layout the task's first target by its id alone
+  (`targetDocumentIds[0]`). So a field bound to the document shows nothing there and is reported,
+  and so is a layout block, which shows the document's properties. A condition that tests that
+  document decides on nothing a rule would, and is reported too: its truth table would not hold.
+  A group test converts where the layout writes the user, as everywhere.
+- **The buttons** are the step's own, from the workflow on the server: Web UI's task page and the
+  app's task panel both draw `taskInfo.taskActions`, so a form has none to write.
+
+**Layout blocks (M2).** A layout block is a Polymer element of the package that layouts use by
+its name, as Studio Designer's layout blocks are. No package in hand shows where Studio writes
+them, so a block is known by what it is rather than by its folder: a Web UI file of no other kind
+that defines one `dom-module` with `Nuxeo.LayoutBehavior`.
+
+- **Where it is used, it becomes a card.** Web UI shows a block's fields where it sits among the
+  layout's own, so the block is a card of its own fields there, in version 1 a section, between
+  the cards of the layout's own fields before and after it: `fields`, the block's name,
+  `fields-2`. Each use, and each of the block's fields there, is a construct of the file that
+  uses it, so a block used twice shows its fields twice, each decided where it shows.
+- **A block under a condition** gives its card the condition's rule in version 2. In version 1 it
+  is pending, as a field under a condition is. A field under a condition inside the block carries
+  its own rule.
+- **Reported:** a block given no document (`document="[[document]]"`), whose fields show nothing
+  in Web UI; a block inside another block, since a card holds no card; a block in a search screen,
+  the dashboard or a slot contribution that is not a tab's page; a block no layout uses.
+
+**Tabs (M2).** A tab of Web UI's document page is a `nuxeo-page-item` contributed to
+`DOCUMENT_VIEWS_ITEMS` and the page of the same `name` contributed to `DOCUMENT_VIEWS_PAGES`
+(`nuxeo-browser.js`, `nuxeo-web-ui-bundle.html`). It becomes a tab of layout version 2
+([layout-v2.md](../../docs/business-apps/layout-v2.md), section 2):
+
+- **In each type it shows on.** A layout file is a type's own, so the tab goes into the view file
+  of each type every `type` test of its conditions names. The record page's own cards become the
+  first tab, `view`, as Web UI's View tab, and the tabs follow in Web UI's order, the View tab at
+  its order of 10. A tab's cards are named after it, `<tab>.<card>`, because a card's id is unique
+  in its file.
+- **What it holds** is its page's layout block, as one card.
+- **Its rule** is the item's and the page's conditions together, through M2's conditions, as its
+  `visibleWhen`.
+- **Its label.** Web UI translates the item's label as a key, and shows the key itself when no
+  catalogue holds it. A key the package translates becomes `labelKey`; any other is written as it
+  is, and check 6 lists it as resting on Web UI's catalogue.
+- **Reported, never guessed:** a tab whose conditions test no type, so it shows on every type; a
+  condition that does not convert; an item with no page, or more than one; a page no item opens; a
+  page that is not a layout block of the package; a tab named as one of Web UI's own; a tab on a
+  type the package writes no view file of.
+
 **The theme.** M0's tokens and files, and its name in `app.json`'s `branding.theme`.
 
 **An image.** One the model names, such as the sample's type icon, stays on the server. Any other
@@ -328,14 +392,14 @@ is reported: `app.json`'s branding takes a logo and a favicon only.
 
 Every construct of the package is in the report once, with one of these outcomes:
 
-| Outcome     | Meaning                                                                                                                                            |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `converted` | Done, with where it went                                                                                                                           |
-| `proposed`  | An agent proposes it, and a person accepts it                                                                                                      |
-| `reported`  | It does not migrate, with why                                                                                                                      |
-| `generated` | Studio's own packaging, records and templates                                                                                                      |
-| `server`    | It stays on the server in the Studio package, and the new app reads it                                                                             |
-| `pending`   | A later phase converts it, and the note says which: tabs in M2, a version 1 field under a condition once the app draws version 2 forms, code in M3 |
+| Outcome     | Meaning                                                                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `converted` | Done, with where it went                                                                                                                      |
+| `proposed`  | An agent proposes it, and a person accepts it                                                                                                 |
+| `reported`  | It does not migrate, with why                                                                                                                 |
+| `generated` | Studio's own packaging, records and templates                                                                                                 |
+| `server`    | It stays on the server in the Studio package, and the new app reads it                                                                        |
+| `pending`   | A later phase converts it, and the note says which: a version 1 field under a condition once the converter writes version 2 forms, code in M3 |
 
 A `reported` construct may still have been written, as a field version 1 cannot show as Web UI
 does is: its `to` then says where.
@@ -358,10 +422,12 @@ check that did not run does.
     harness read the same parse.
 
   - **2, fields.** Each converted layout shows the fields its Web UI layout binds: each once, in
-    the same mode, with the same required flag and the expected widget. Each list shows its
-    columns, in order, with theirs. What Web UI shows is read from the package. The report only
-    excuses a missing field it reports or leaves pending, with its reason. A field that sits in a
-    condition is check 5's.
+    the same mode, with the same required flag and the expected widget. M2 adds the fields of the
+    layout blocks each layout uses; each tab of a view file, which shows its block's fields; and
+    each task form, which shows its task layout's variables. A tab or a task form no Web UI one
+    gives fails. Each list shows its columns, in order, with theirs. What Web UI shows is read
+    from the package. The report only excuses a missing field it reports or leaves pending, with
+    its reason. A field that sits in a condition, its own or its block's, is check 5's.
   - **4, labels.** Every translation is in its language's labels file, word for word, and nothing
     else is. One the labels file refuses is reported.
   - **8, theme.** Each mapped property sets its token to its own resolved value. Nothing sets a
@@ -384,7 +450,8 @@ check that did not run does.
     9b) instead.
 - **Run in part: what needs no server runs, and the rest needs the migration server:**
   - **3, model.** Every field, type, vocabulary and page provider the conversion names exists, and
-    every widget shows its property's type. The package's own model is read from its contributions
+    every widget shows its property's type. A task form's variable is held to its step's and its
+    workflow's variables schemas, when the package holds them. The package's own model is read from its contributions
     and XSDs ([`model.ts`](src/model.ts)), and checked in full: a field the package's own schema
     lacks fails. What rests on the platform's model is listed: Dublin Core, and stock types,
     vocabularies and page providers. `/config/types`, `/config/schemas`, the directories and the
@@ -401,12 +468,15 @@ check that did not run does.
       slipped in all fail. A rule written differently that decides the same passes.
     - Each condition's own rule is held to the same table.
     - Nothing Web UI shows under a condition is shown to everyone: no field, action, home card,
-      queue or menu entry loses its rule.
+      queue, menu entry, layout block's card or tab loses its rule, and no field of a block under a
+      condition moves out of its card.
+    - A rule of a layout or a task form is found by what it sits on: a tab by its id, a block's
+      card by its id, and a field by its property in its card.
     - The tables prove the mapping against the two sources as written. Evaluating each original
       in Web UI itself, on the migration server, has not run. A package with no condition passes,
       because there is nothing for a table to decide.
-  - **6, what people see.** Each field, column and list is named as Web UI names it, the app's
-    label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
+  - **6, what people see.** Each field, column, list and tab is named as Web UI names it, the
+    app's label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
     made readable. A label that rests on a catalogue the package does not hold is listed. The values
     need both apps on the same records.
   - **7, what the server is asked.** Each list asks the same page provider with the same parameters,
@@ -450,6 +520,14 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `wrong-home-queue`         | 7     | Points a card of the home at another queue                            |
 | `drop-menu-entry`          | 7     | Drops an entry of the menu                                            |
 | `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
+| `drop-task-field`          | 2     | Drops a field from a converted task form                              |
+| `rename-task-variable`     | 3     | Names a variable the task's step and workflow do not have             |
+| `var-in-layout`            | 10    | Puts a task's variable into a document's layout                       |
+| `drop-block-card`          | 2     | Drops a layout block's card from a converted layout                   |
+| `drop-tab`                 | 2     | Drops a tab from a converted view layout                              |
+| `drop-tab-rule`            | 5     | Shows a tab Web UI shows only under a condition to every user         |
+| `change-tab-label`         | 6     | Changes the label of a converted tab                                  |
+| `drop-block-use-entry`     | 1     | Drops a use of a layout block from the report without a word          |
 
 **On the sample**, every one of the 25 controls was applied to its conversion with `mutate` and
 checked. The 20 that find something to break each fail their check, with a finding of their own,
@@ -545,11 +623,14 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   package installed and Web UI beside the new app (development plan, phase 4). Neither local server
   has it, and no code reads a server yet: those halves say they did not run.
 - **Check 9** needs plugins, in M3.
-- **The rest of M2: task forms, tabs and layout blocks.** Tabs are pending. Task forms target
-  app-definition-v2.md, section 6, and need Studio's task-layout file format read from Web UI's
-  own sources first.
 - **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
   screen's table. The server half of check 5 needs the migration server.
+- **Version 2 forms.** The app now draws `edit` and `create` files of version 2 (layout-v2.md,
+  section 11), and the converter still writes version 1 there, so a field, or a layout block,
+  under a condition in a form stays pending. Writing those modes in version 2 is the next step.
+- **A tab's listing.** A tab whose page is a page provider and a table, rather than a layout block,
+  is reported: section 3's "a list over the page provider" would be a card of related records
+  (layout-v2.md, section 7), and is not written yet.
 - **The home and the menu, as the app draws them.** The conversion writes `home.json` and
   `navigation.json`, which the validator checks, but the app draws neither of what M1 writes yet:
   - it does not read `navigation.json` (app-definition-v2.md, section 9);
@@ -573,8 +654,20 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   A pair the theme sets only half of is not checked yet. Checking it needs the compiled palette's
   values, which are Sass and not JSON.
 - **Waiting on real packages.** Only the sample is in hand, and it has no condition, no custom code,
-  no task layout, no tab, no second language and no button that runs an operation. Real packages
-  will show:
+  no task layout, no tab, no layout block, no second language and no button that runs an
+  operation. M2's task forms, tabs and blocks are read from Web UI's own sources and tested on the
+  made-up corpus alone. Real packages will show:
+  - **the folder Studio writes layout blocks to**, and whether every block is an element with
+    `Nuxeo.LayoutBehavior`, as the documentation's tutorial writes one: a block is known by what
+    it is until then, and one of another make is a file of no known kind, reported;
+  - **what Studio writes for a workflow:** whether it contributes the variables schemas
+    `var_<workflow>` and `var_<step>`, as the reference server holds them, and how it imports the
+    workflow, whose model file is of no known kind until then. A task layout whose names' case the
+    package does not give is reported;
+  - **the script Studio generates for a task layout**, whose shape the catalogue does not know, so
+    each such script is customer code, pending M3, until it does;
+  - **what Studio Designer writes for a tab:** its item and page, and whether the page is a layout
+    block or an element of its own;
   - the elements, slots and widgets they use that the catalogue does not know yet;
   - Studio's forms of condition, for M2 and check 5;
   - operation buttons with parameters, for actions and check 7;

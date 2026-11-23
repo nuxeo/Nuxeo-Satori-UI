@@ -34,7 +34,7 @@ export { blockFieldId, blockOf, blockUseId, layoutCards } from './blocks';
 export type { LayoutSource, PlacedField, PlannedCard } from './blocks';
 import { LAYOUT_VERSION, labelOf, layoutPath } from './app-files';
 import { carry, guardOfSet, type Guard } from './guards';
-import { VERSION_ONE_WIDGETS, fieldWidget } from './widgets';
+import { ALWAYS, VERSION_ONE_WIDGETS, displaysOnly, fieldWidget } from './widgets';
 import { tabDecisions, type TabPlan } from './convert-tabs';
 
 /** The document types a layout path may name: as the configuration service accepts them. */
@@ -222,7 +222,9 @@ export function planFields(
     if (mode === 'metadata' && PANEL_ROWS.has(binding)) return { kind: 'panel', binding };
     const required = options.form && field.required;
     const written =
-      version === 2 ? versionTwoField(field, choice, required) : formField(field, required);
+      version === 2
+        ? versionTwoField(field, choice, required, options.form && displaysOnly(field.element))
+        : formField(field, required);
     const entry =
       guard?.kind === 'rule'
         ? {
@@ -285,15 +287,19 @@ function versionTwoField(
   field: LayoutField,
   choice: ReturnType<typeof fieldWidget> & object,
   required: boolean,
+  readOnly: boolean,
 ): unknown {
   const label = labelOf(field.label);
-  if (choice.widget === null && Object.keys(label).length === 0 && !required) return field.binding;
+  if (choice.widget === null && Object.keys(label).length === 0 && !required && !readOnly)
+    return field.binding;
   return {
     field: field.binding,
     ...label,
     ...(choice.widget !== null ? { widget: choice.widget } : {}),
     ...(choice.parameters ? { parameters: choice.parameters } : {}),
     ...(required ? { required: true } : {}),
+    // Web UI's element only shows the value: the form shows it read-only, and sends none.
+    ...(readOnly ? { readOnlyWhen: ALWAYS } : {}),
   };
 }
 

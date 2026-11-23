@@ -58,3 +58,22 @@ export function columnWidget(column: ResultColumn): string | null {
  * a date, chips for a list. Version 1 cannot name any other (extension-reference.md, section 9b).
  */
 export const VERSION_ONE_WIDGETS: ReadonlySet<string> = new Set(['date', 'chips']);
+
+/** Web UI's elements that show a value and cannot change it: a date, a user, chips. */
+const DISPLAY_ELEMENTS: ReadonlySet<string> = new Set([
+  'nuxeo-date',
+  'nuxeo-user-tag',
+  'nuxeo-tag',
+]);
+
+/**
+ * True when Web UI's element only shows its value: one of those, or a label beside a bound value,
+ * as a view layout writes a field. In a form of version 2 such a field is read-only, written
+ * `readOnlyWhen: "core.true"`: the app sends no value of a read-only field, as Web UI changes none.
+ */
+export function displaysOnly(element: string): boolean {
+  return !element.includes('-') || DISPLAY_ELEMENTS.has(element);
+}
+
+/** The rule a read-only field of a form carries: it passes always. */
+export const ALWAYS = 'core.true';

@@ -15,8 +15,9 @@
  *
  * It holds the traps a converter must not fall for:
  *
- * - a task layout's field bound to the document, which Web UI gives as an id alone, and one under
- *   a test of that document;
+ * - a task layout's field bound to the document, which Web UI gives as an id alone, and fields
+ *   under a filter and a dom-if testing that document;
+ * - a task layout's field that only shows a variable, which a form must not let anyone change;
  * - a task layout whose workflow the package names in no schema, so its file's case is unknown;
  * - a block used without the document, a block inside a block, and a block used nowhere;
  * - a tab on every type, a tab whose condition does not convert, a tab with no page, a page with
@@ -79,6 +80,7 @@ export function m2CorpusFiles(): Record<string, string> {
   <xs:element name="notes" type="xs:string"/>
   <xs:element name="reviewer" type="xs:string"/>
   <xs:element name="override" type="xs:string"/>
+  <xs:element name="versionNote" type="xs:string"/>
 </xs:schema>`,
     'data/i18n/messages.json': JSON.stringify(
       {
@@ -118,6 +120,10 @@ export function m2CorpusFiles(): Record<string, string> {
         <nuxeo-input role="widget" label="Override" value="{{task.variables.override}}"></nuxeo-input>
       </template>
     </nuxeo-filter>
+    <template is="dom-if" if="[[hasFacet(document, 'Versionable')]]">
+      <nuxeo-input role="widget" label="Version note" value="{{task.variables.versionNote}}"></nuxeo-input>
+    </template>
+    <div role="widget"><label>Claim number</label><div>[[task.variables.claimNumber]]</div></div>
   </template>
   <script>
     Polymer({

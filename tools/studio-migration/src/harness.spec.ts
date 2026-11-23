@@ -20,6 +20,7 @@ import {
   syntheticPackage,
   type SyntheticPackageOptions,
 } from './testing/synthetic-package';
+import { m2CorpusFiles } from './testing/m2-corpus';
 
 const UI = 'web/nuxeo.war/ui';
 const catalogue = loadCatalogue();
@@ -141,9 +142,11 @@ describe('the harness on a sound conversion', () => {
 // The negative controls of docs/business-apps/studio-migration.md, section 7, for the checks the
 // harness runs: each mutation must make the check it names fail.
 describe('each deliberate breakage fails the check that guards it', () => {
+  // The made-up package with M2's corpus, which holds what each control breaks: task forms, tabs
+  // and layout blocks besides M1's.
   for (const mutation of MUTATIONS) {
     it(`${mutation.name}: ${mutation.description}`, () => {
-      const input = prepare();
+      const input = prepare({ bundle: m2CorpusFiles() });
       const broken = mutation.apply(input.conversion).conversion;
       const result = check({ ...input, conversion: broken }, mutation.caughtBy);
       expect(result?.status).toBe('fail');
