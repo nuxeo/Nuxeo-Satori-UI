@@ -93,12 +93,26 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
     it('passes the demo package, as CI does, writing nothing into it', async () => {
       const root = demoWith('sound');
       const before = everyFile(root);
-      // A work folder of this test's own: the system's temporary folder is shared with the other
-      // spec files, which run the pipeline at the same time, so a folder one of them has just made
-      // would read as this run's leftover.
+      // The default, the system's temporary folder, pointed at one of this test's own: the real one
+      // is shared with the other spec files, which run the pipeline at the same time, so a folder
+      // one of them has just made would read as this run's leftover.
       const workIn = join(scratch, 'sound-work');
       mkdirSync(workIn);
-      const check = await validatePackage({ directory: root }, { ...SCRATCH, workIn });
+      const saved = {
+        TMPDIR: process.env['TMPDIR'],
+        TEMP: process.env['TEMP'],
+        TMP: process.env['TMP'],
+      };
+      for (const key of Object.keys(saved)) process.env[key] = workIn;
+      let check;
+      try {
+        expect(tmpdir()).toBe(workIn);
+        check = await validatePackage({ directory: root }, SCRATCH);
+      } finally {
+        for (const [key, value] of Object.entries(saved))
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+      }
       expect(check.passed).toBe(true);
       expect(check.exitCode).toBe(0);
       expect(check.refusedAt).toBeNull();

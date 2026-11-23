@@ -30,7 +30,8 @@
  *
  * The version itself is not content: `app.json`'s `packageVersion` and `package.xml`'s version are
  * left out of the comparison, and so is the manifest's `Bundle-Version` while it is the package's
- * version. One that is not is compared, so a `Bundle-Version` changed alone is a change.
+ * version. One that is not is compared, so a `Bundle-Version` moved alone is a change; one left
+ * behind while the version moved is not a change of content, and the pipeline's step 3 refuses it.
  *
  * A prerelease is held to the release its core is: `1.0.1-rc.2` is on the way to a patch, so,
  * coming from `1.0.1-rc.1`, it may carry what a patch may carry and no more. A release or a
@@ -87,11 +88,14 @@ export function changesBetween(
   for (const file of paths) {
     const before = previous.get(file);
     const after = current.get(file);
+    // A file whose packaged text did not move is no change, whatever the versions did: a
+    // Bundle-Version left behind is step 3's to refuse, not a change of content.
     if (
       before !== undefined &&
       after !== undefined &&
-      withoutVersion(file, packagedText(file, before), was) ===
-        withoutVersion(file, packagedText(file, after), is)
+      (packagedText(file, before) === packagedText(file, after) ||
+        withoutVersion(file, packagedText(file, before), was) ===
+          withoutVersion(file, packagedText(file, after), is))
     )
       continue;
     if (!file.startsWith(DEFINITION_ROOT)) {
@@ -166,10 +170,14 @@ export function judgeVersion(
     if (rank(implied) >= rank(required)) return judged(null);
     const why = changes.find((change) => levelNeeds(change.level, was) === required);
     const coreText = `${core.major}.${core.minor}.${core.patch}`;
+    const said =
+      is.prerelease.length > 0
+        ? `${version} is a prerelease of ${coreText}, which raises the ${implied}`
+        : `${version}, the release ${previous} was a prerelease of, raises the ${implied}`;
     return judged(
-      `the changes since ${previous} need a ${required} version, and ${version} is on the way to` +
-        ` ${coreText}, which raises the ${implied}. ${why ? `For one: ${why.what} ` : ''}Make it` +
-        ` ${suggested(core, required)} or a prerelease of it, at least.`,
+      `the changes since ${previous} need a ${required} version, and ${said}.` +
+        ` ${why ? `For one: ${why.what} ` : ''}Make it ${suggested(core, required)} or a prerelease` +
+        ' of it, at least.',
     );
   }
   if (rank(raised) < rank(required)) {
@@ -300,7 +308,11 @@ export function packagedText(file: string, text: string): string {
     return JSON.stringify(content);
   }
   if (file === 'bundle/META-INF/MANIFEST.MF')
-    return text.replace(/\r\n?/g, '\n').replace(/\n /g, '').replace(/\n+$/, '');
+    return text
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n /g, '')
+      .replace(/\n+$/, '');
   return text;
 }
 

@@ -19,7 +19,12 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { DEV_CONFIG_SCRIPT, previewPackage, type PreviewOptions } from './preview-package.ts';
+import {
+  DEV_CONFIG_SCRIPT,
+  SERVED,
+  previewPackage,
+  type PreviewOptions,
+} from './preview-package.ts';
 import { REPO_ROOT } from './validate-package.ts';
 import { PIPELINE_TESTS_RUN } from './testing/unzip.ts';
 
@@ -423,6 +428,24 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
     });
   },
 );
+
+describe('the names previewPackage passes to config:dev', () => {
+  it('are the ones scripts/dev-config.mjs accepts, as it writes them', () => {
+    const script = readFileSync(DEV_CONFIG_SCRIPT, 'utf8');
+    const constant = (name: string): string => {
+      const match = new RegExp(`const ${name} = /(.+)/;`).exec(script);
+      if (!match) throw new Error(`dev-config.mjs has no ${name}`);
+      return match[1];
+    };
+    const language = /!\/(\^\[a-z\][^/]*)\/\.test\(lang\)/.exec(script)?.[1];
+    expect(SERVED.layoutType.source).toBe(constant('LAYOUT_TYPE'));
+    expect(SERVED.layoutMode.source).toBe(constant('LAYOUT_MODE'));
+    expect(SERVED.queue.source).toBe(constant('QUEUE_ID'));
+    expect(SERVED.language.source).toBe(language);
+    const part = constant('TASK_PART');
+    expect(SERVED.task.source).toBe(`${part.slice(0, -1)}\\.${part.slice(1)}`);
+  });
+});
 
 describe('previewPackage refuses before running anything', () => {
   it('a package outside the repository', async () => {

@@ -22,7 +22,8 @@
  *      read them in: none inline, none from elsewhere. A component path that leaves `bundle/` or
  *      names a folder or a hard link is refused before it is read (a missing one is the builder's
  *      to refuse, at step 4);
- *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
+ *   3. `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s
+ *      version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package; given the package as it was before,
  *      `--previous`, the version moved as far as what changed needs (the validator's `changes`,
  *      `libs/shared/app-definition/src/lib/changes.ts`), and the package's name did not change;
@@ -287,6 +288,22 @@ function run({
       `app.json's packageVersion is ${app.packageVersion}, and package.xml's version is ${version}.` +
         ' They are one version: raise both together.',
     );
+  // The third place: the manifest's Bundle-Version, its lines unfolded as the builder unfolds
+  // them. A manifest that names no Bundle-Version has nothing to disagree with.
+  const manifestFile = join(directory, 'bundle', 'META-INF', 'MANIFEST.MF');
+  if (existsSync(manifestFile)) {
+    const headers = readFileSync(manifestFile, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n /g, '');
+    const bundleVersion = /^Bundle-Version:[ \t]*([^\n]*)$/im.exec(headers)?.[1]?.trim();
+    if (bundleVersion !== undefined && bundleVersion !== version)
+      return refuse(
+        3,
+        `the manifest's Bundle-Version is ${bundleVersion}, and package.xml's version is ${version}.` +
+          " They are one version: raise package.xml's, app.json's and the manifest's together.",
+      );
+  }
   if (tag !== undefined && tag !== `app-package/${name}/${version}`)
     return refuse(
       3,

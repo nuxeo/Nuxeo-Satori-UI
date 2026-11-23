@@ -212,6 +212,13 @@ expectRefused(
   `app.json's packageVersion is ${OTHER}, and package.xml's version is ${VERSION}`,
 );
 expectRefused(
+  "the manifest's Bundle-Version apart from package.xml's",
+  ({ edit }) =>
+    edit('bundle/META-INF/MANIFEST.MF', `Bundle-Version: ${VERSION}`, `Bundle-Version: ${OTHER}`),
+  3,
+  `the manifest's Bundle-Version is ${OTHER}, and package.xml's version is ${VERSION}`,
+);
+expectRefused(
   'a tag for another version',
   unchanged,
   3,
@@ -843,7 +850,8 @@ expectVersion(
   'a breaking change in a later prerelease of a patch version',
   { from: '1.0.1-rc.1', to: '1.0.1-rc.2', after: removeQueue },
   {
-    refused: 'need a major version, and 1.0.1-rc.2 is on the way to 1.0.1, which raises the patch.',
+    refused:
+      'need a major version, and 1.0.1-rc.2 is a prerelease of 1.0.1, which raises the patch.',
   },
 );
 expectVersion(
@@ -862,7 +870,7 @@ expectVersion(
       );
     },
   },
-  { refused: `and the version is still ${VERSION}` },
+  { refused: `the manifest's Bundle-Version is 9.9.9, and package.xml's version is ${VERSION}` },
 );
 
 expectVersion(

@@ -129,8 +129,10 @@ describe('changesBetween', () => {
     expect(levels(at('1.0.0', '1.0.0'), at('1.0.0', '9.9.9'))).toEqual(['judge']);
     // A Bundle-Version that never followed the package's is compared as it is.
     expect(levels(at('1.0.0', '7.0.0'), at('1.0.1', '7.0.0'))).toEqual([]);
+    // One left behind when the version moved is no change of content: step 3 refuses it.
+    expect(levels(at('1.0.0', '1.0.0'), at('1.0.1', '1.0.0'))).toEqual([]);
     // Its lines as the builder writes them: unfolded, one kind of line end.
-    expect(packagedText('bundle/META-INF/MANIFEST.MF', 'A: b\r\n c\r\nD: e\n\n')).toBe(
+    expect(packagedText('bundle/META-INF/MANIFEST.MF', '\uFEFFA: b\r\n c\r\nD: e\n\n')).toBe(
       'A: bc\nD: e',
     );
   });
@@ -302,8 +304,11 @@ describe('judgeVersion', () => {
     });
     // 1.0.1's are on the way to a patch: a breaking change cannot reach a patch release through them.
     expect(judgeVersion('1.0.1-rc.1', '1.0.1-rc.2', [change('breaking')]).refused).toBe(
-      'the changes since 1.0.1-rc.1 need a major version, and 1.0.1-rc.2 is on the way to 1.0.1,' +
+      'the changes since 1.0.1-rc.1 need a major version, and 1.0.1-rc.2 is a prerelease of 1.0.1,' +
         ' which raises the patch. For one: A breaking. Make it 2.0.0 or a prerelease of it, at least.',
+    );
+    expect(judgeVersion('1.0.1-rc.2', '1.0.1', [change('breaking')]).refused).toContain(
+      '1.0.1, the release 1.0.1-rc.2 was a prerelease of, raises the patch.',
     );
     expect(judgeVersion('1.0.1-rc.2', '1.0.1', [change('addition')]).refused).toContain(
       'Make it 1.1.0 or a prerelease of it',

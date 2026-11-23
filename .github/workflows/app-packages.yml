@@ -132,14 +132,15 @@ jobs:
               args+=(--tag "$tag")
               # Held to the last release below it, a prerelease's tag as a release's: the first tag
               # after this one in descending version order (a prerelease before its release, as
-              # versionsort.suffix says) whose version has no prerelease. Held to the prerelease
+              # versionsort.suffix says) whose version has no prerelease, a "-" before any "+"
+              # build metadata. Held to the prerelease
               # just before it instead, a release could carry through its prereleases what the
               # release before it would refuse.
               if ! git fetch --no-tags --depth=1 origin "+refs/tags/app-package/$name/*:refs/tags/app-package/$name/*"; then
                 echo "::warning::the tags of $name could not be fetched, so its version is held to no earlier tag."
               fi
               base=$(git -c versionsort.suffix=- tag --list "app-package/$name/*" --sort=-v:refname \
-                | awk -v tag="$tag" 'seen && $0 !~ /\/[^\/]*-[^\/]*$/ { print; exit } $0 == tag { seen = 1 }')
+                | awk -v tag="$tag" 'seen && $0 !~ /\/[^\/+]*-[^\/]*$/ { print; exit } $0 == tag { seen = 1 }')
             fi
             if [ -n "$base" ] && git cat-file -e "$base:$dir/package/package.xml" 2>/dev/null; then
               git archive "$base" "$dir" | tar -x -C "$previous_root"

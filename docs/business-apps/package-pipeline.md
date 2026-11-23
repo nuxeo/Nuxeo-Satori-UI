@@ -55,16 +55,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                  |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4)               |
-| 3. The version    | `app.json`'s `packageVersion` is `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8) |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                              |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                        |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`            |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                      |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                    |
+| Step              | What is checked or done                                                                                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                                                       |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4)                                                    |
+| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8) |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                   |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                             |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`                                                 |
+| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                           |
+| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                         |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -168,8 +168,9 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 
 ## 5. Publishing a package
 
-1. Raise the version in `package/package.xml` and `app.json`'s `packageVersion`, together, as far
-   as section 8 says the changes need, and merge. The pull request's check refuses less.
+1. Raise the version in `package/package.xml`, `app.json`'s `packageVersion` and the manifest's
+   `Bundle-Version`, together, as far as section 8 says the changes need, and merge. The pull
+   request's check refuses less.
 2. Tag the merged commit `app-package/<name>/<version>`, and push the tag.
 3. The workflow checks and builds the package again at that commit, held to its last release,
    signs the zip and publishes it, with what changed since in the run's summary.
@@ -234,10 +235,10 @@ on. It does not measure how much changed.
   range is read ([app-definition-v2.md](app-definition-v2.md), section 3).
 - **Raising more is allowed.** A large redesign may be a minor. The pipeline refuses less than the
   changes need, never more.
-- **The version is not a change.** `app.json`'s `packageVersion` and `package.xml`'s `version` are
-  left out of the comparison, and so is the manifest's `Bundle-Version` while it is the package's
-  version: a version raised in all three with nothing else changed passes, and its changelog says
-  so. A `Bundle-Version` moved alone is a change, since the zip's bytes move with it.
+- **The version is written in three places, and is not a change.** Step 3 refuses a manifest's
+  `Bundle-Version` that is not `package.xml`'s version, as it refuses an `app.json` whose
+  `packageVersion` is not. The comparison leaves all three out: a version raised in the three
+  with nothing else changed passes, and its changelog says so.
 - **An app keeps its id, and a package its name.** A changed one is another app or package, not a
   new version, and is refused.
 - **A prerelease carries what its release may.** `1.0.1-rc.2` is on the way to 1.0.1, a patch, so
@@ -294,7 +295,8 @@ job's summary and the artifact. The base is fetched by its commit, at depth 1, w
 anonymous access, which a public repository allows; a private one would need the job's token for
 that fetch.
 
-**Its controls:** `npm run app-package:selftest` breaks the demo once per rule, 14 times, each
+**Its controls:** `npm run app-package:selftest` refuses a `Bundle-Version` apart from the
+package's version at step 3, and breaks the demo once per version rule, 14 times, each
 refused at step 3 for its own reason with no zip and no changelog left, an earlier run's changelog
 included; builds 8 sound ones with the changelog each should have, among them a Markdown file and
 a re-spaced JSON file that change nothing the zip holds; and checks that a `--previous` that is

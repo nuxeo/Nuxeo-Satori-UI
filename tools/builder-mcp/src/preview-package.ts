@@ -328,7 +328,7 @@ function place(root: string): Placed {
  * run, so a file named otherwise is left out and named instead. Kept beside the script's own; a
  * name the script refuses all the same is reported as its refusal.
  */
-const SERVED = {
+export const SERVED = {
   layoutType: /^[A-Za-z][A-Za-z0-9_-]{0,127}$/,
   layoutMode: /^[a-z][a-z0-9-]{0,31}$/,
   queue: /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/,
