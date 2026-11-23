@@ -131,10 +131,10 @@ Stated plainly, because a comparison that finds no weaknesses is not credible.
    2.1 AA**. One 2.5.3 (Level A) defect fails on every screen: the navigation's user-profile
    control, whose accessible name does not contain the initials it shows. On 2026-08-24 it met the
    bar on the fifteen cases scanned, excluding three nodes in an upstream component library that
-   has since been removed. The Web UI's position is **Not verified**. Once that control is fixed
-   and the capture is re-run, this would be a strength rather than a weakness. The honest form of
-   the claim also names its scope: dialogs, the upload flow, dark mode and the pre-auth login
-   surface are not covered.
+   has since been removed. The Web UI's position is **Not verified**. Fixing that control would
+   clear this capture, not establish conformance: `docs/accessibility.md` records further failures
+   in states the capture does not reach. The honest form of the claim also names its scope:
+   dialogs, the upload flow, dark mode and the pre-auth login surface are not covered.
 4. **Studio integration.** Nuxeo Studio's relationship to Satori is **Not verified in
    repository** — no Studio integration exists here. For a customer whose configuration lives
    in Studio, this is a material open question.

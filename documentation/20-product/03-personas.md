@@ -120,5 +120,5 @@ those assist a human; they do not replace one.
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | No customer validation of any persona          | Interview The Church and one other account against the Layer 0/1 assumption specifically                  |
 | The 52 IDs may be the wrong 52                 | Take 10 real customer requests and attempt each as Layer 0/1 only. Count how many fall through to Layer 2 |
-| Accessibility blocks Knowledge Worker adoption | Phase 6 step 3: fix the user-profile control's 2.5.3 failure, the one violation found on 2026-11-23       |
+| Accessibility blocks Knowledge Worker adoption | Phase 6 step 3: fix the capture's 2.5.3 failure, then those it cannot see (`docs/accessibility.md`)       |
 | Highest-traffic code is least tested           | Phase 6 step 6, worst-first: `search` 22.8%, `document-detail` 29.8%                                      |
