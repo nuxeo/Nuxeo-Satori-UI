@@ -260,8 +260,17 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
     one as left out, and one a change moves to other slots for a person to map. One with no
     template and no earlier one of its name changes one of Web UI's own, and is reported for a
     person to decide;
-  - `priority` and `order` are read as Polymer reads a Number, so `2.5` is a priority. An order
-    that is not whole is left out of the file, which takes whole numbers, and kept by the place.
+  - `priority` and `order` are read as Polymer reads a Number, `2.5`, `NaN` and `Infinity`
+    included, and compared as Web UI compares them. An order that is not whole is left out of the
+    file, which takes whole numbers, and the action or entry is reported: the app shows one with no
+    order after every ordered one;
+  - a contribution to several slots, `slot="A,B"`, takes part in each one's registration, so it can
+    hide or replace a button of A, but becomes nothing itself: it is a slot the catalogue does not
+    know, and is reported.
+
+  A button's and a menu icon's label are translated by Web UI as a key
+  (`nuxeo-operation-button`, `nuxeo-menu-icon`: `i18n(label)`), as a tab's is: a key the package
+  translates becomes `labelKey`, and any other is written as it is, which is what Web UI shows.
 
   The custom bundle's contributions are read too, before the bundle's, as Studio's bundle imports
   it first: a project's hand-written change, such as hiding a button, goes there.
@@ -522,7 +531,9 @@ check that did not run does.
       in Web UI itself, on the migration server, has not run. A package with no condition passes,
       because there is nothing for a table to decide.
   - **6, what people see.** Each action and menu entry is at the order Web UI's slot gives it,
-    a later contribution of its name included. Each field, column, list and tab is named as Web
+    a later contribution of its name included, and two of one order are listed in the places Web
+    UI shows them in. Each action is named as its button is, a menu entry as its icon is, and a tab
+    as its page item is, each translated as Web UI translates it. Each field, column, list and tab is named as Web
     UI names it, the app's label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
     made readable. A label that rests on a catalogue the package does not hold is listed. The values
     need both apps on the same records.
@@ -716,7 +727,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     a required record field through the conversion unreported. Each now has its test, and the
     second sort is gone.
 
-  - **For the slot registration, 31 guards**, broken the same way, each seen turning the suite
+  - **For the slot registration, 42 guards**, broken the same way, each seen turning the suite
     red: in the registry, a disabled contribution, one with no template and one a change moves
     showing nothing, a lower priority ignored, a later one of the name replacing in the earlier
     one's place, a change moving the earlier one or taking it to another slot, the slot sorting
@@ -726,8 +737,13 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     only what the slot keeps owning one, what it leaves out reported, the slot's order, Web UI's
     order and its default order written; for the menu, a left-out entry being none, the page the
     slot keeps, the slot's order and Web UI's order; check 5's left-out entry and the page it
-    keeps; and check 6's order of an action and of a menu entry, and an action's label. Two rounds
-    found four no test reached, each now tested.
+    keeps; and check 6's order of an action and of a menu entry, and an action's label. After the
+    second review, eleven more: a tab only of a contribution to the tab slot, a priority compared
+    as Web UI compares it, moved and disabled read as disabled, Polymer's `NaN`, the slot sorting
+    after each registration rather than once, an order that is no whole number reported for an
+    action and a menu entry, a button's and a menu icon's translated label, check 6's translated
+    label, and check 6's equals in Web UI's places. Three rounds found five no test reached, each
+    now tested.
 
   - **An independent review of the slot registration** found eleven things. Fixed, each with a
     test: a contribution with no template that comes first was not registered, so its priority did
@@ -737,7 +753,12 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     order was written for a change and not for the rest; check 5's two new lines had no test; and
     an action's label was not checked. The rest are limits, under **Not done yet**: Web UI's own
     contributions, the order Web UI loads files in, a menu entry's page paired by the
-    contribution's name, and what the checks share with the converter.
+    contribution's name, and what the checks share with the converter. A second round confirmed
+    them and found six more, fixed the same way: a tab item contributed to two slots was written as
+    a tab and reported; no test held the sort after each registration; a fractional order was left
+    out of the file without a word; Web UI translates a button's and a menu icon's label, which
+    the converter and check 6 read as text; a `NaN` or `Infinity` priority was read as 0; and
+    check 6 did not look at equals' places.
 
   - **An independent review of M2** found twelve things. Fixed, each with a test: a guarded
     block's field moved under another block's rule passed check 5; a block given no document hid
@@ -793,9 +814,12 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   it. A contribution to several slots at once, `slot="A,B"`, takes part in each slot's
   registration, but is itself a slot the catalogue does not know, and is reported.
 - **The order Web UI loads files in.** The registration reads the custom bundle, then each
-  slot-contributions file, as the bundle lists them. Web UI loads the bundle its web resources
-  register, and the files it imports; where it loads two files of contributions in the other order,
-  two of one name at one priority resolve the other way. Only the server's resources say.
+  slot-contributions file, as the bundle lists them. Web UI loads the bundle the package's own
+  web resources register (`OSGI-INF/extensions.xml`), and the files its `<link rel="import">`
+  names, in that order; both could be read from the package, and are not yet. So a
+  `nuxeo-*-bundle.html` that is neither registered nor imported is read as if Web UI loaded it, as
+  the made-up corpus's slots and tabs bundles are, and where Web UI loads two files in the other
+  order, two of one name at one priority resolve the other way.
 - **A menu entry's page** is paired with the entry by the contribution's `name`, as M1 does. Web UI
   pairs the menu icon with the page by the stamped elements' own `name` (`nuxeo-app.js`,
   `attr-for-selected`); Studio writes the two the same, but a package that does not would open a
