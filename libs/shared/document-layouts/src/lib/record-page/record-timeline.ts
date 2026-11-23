@@ -137,8 +137,10 @@ const sameList = (a: TimelineQuery, b: TimelineQuery): boolean =>
  *
  * When the record it is given changes, the timeline is refreshed in place: asked again at once,
  * and once more {@link RECORD_TIMELINE_AUDIT_DELAY} later, since Nuxeo writes its audit a moment
- * after the change. A timeline drawn anew is asked once more after that delay too, as its host
- * may have drawn it for a change. What a refresh brings joins the entries shown, which stay.
+ * after the change. A timeline drawn anew, or given another record, is asked once more after that
+ * delay too, as its host may have drawn it for a change; another kind chosen in the filter is not.
+ * What a refresh brings joins the entries shown, which stay, unless more was recorded than a page
+ * holds: the timeline then starts again from that first page.
  *
  * The audit returns only what the user may read: nothing here is a security control.
  */
@@ -317,16 +319,19 @@ export class RecordTimelineComponent {
       .subscribe((query) => {
         const previous = this.asked;
         this.asked = query;
-        // The same list for a changed record: refreshed in place. Any other list starts again,
-        // and is asked once more after the audit's delay too, since the host may have drawn this
-        // timeline anew for a change: the document page draws its record page again after each
-        // reload of the record.
+        // The same list for a changed record: refreshed in place. Any other list starts again.
         if (previous && sameList(previous, query) && this.state().status === 'loaded') {
           this.refreshes.next({ query, now: true });
           return;
         }
         this.ask(query);
-        this.refreshes.next({ query, now: false });
+        // A timeline drawn anew, or given another record, is asked once more after the audit's
+        // delay, since its host may have drawn it for a change: the document page draws its record
+        // page again after each reload of the record. Another kind chosen in the filter is not:
+        // the record is the same.
+        const anotherKind =
+          previous !== null && previous.uid === query.uid && previous.revision === query.revision;
+        this.refreshes.next(anotherKind ? null : { query, now: false });
       });
   }
 
@@ -402,24 +407,45 @@ export class RecordTimelineComponent {
   }
 
   /**
-   * A refresh's first page: the entries it has that are not shown join them, newest first, as the
-   * audit orders them. One that fails leaves the timeline as it is, since what it shows is still
-   * the record's history, and the next refresh asks again.
+   * A refresh's first page. Where it shares an entry with those shown, what it has that is not
+   * shown joins them, newest first, as the audit orders them, and the pages shown stay: a later
+   * page repeats the entries it was pushed by, and they are shown once. Where it shares none, more
+   * was recorded than a page holds, or nothing was shown: it takes their place as the first page,
+   * so that no entry between is skipped. One that fails leaves the timeline as it is, since what
+   * it shows is still the record's history.
    */
   private refreshed(result: PageResult): void {
     const state = this.state();
     if (!this.current(result) || 'error' in result || state.status !== 'loaded') return;
+    const fresh = result.page.entries ?? [];
     const seen = new Set(state.entries.map((entry) => entry.id));
-    const added = (result.page.entries ?? []).filter((entry) => !seen.has(entry.id));
+    if (!fresh.some((entry) => seen.has(entry.id))) {
+      if (fresh.length > 0) this.received({ ...result, index: 0 });
+      return;
+    }
+    const added = fresh.filter((entry) => !seen.has(entry.id));
     if (added.length === 0) return;
     const time = (entry: AuditEntry): number => new Date(entry.eventDate).getTime() || 0;
     const entries = [...added, ...state.entries].sort((a, b) => time(b) - time(a) || b.id - a.id);
     this.state.set({ ...state, entries });
   }
 
+  /**
+   * Focuses an entry "Show more" added, while the reader is still where they pressed it: on the
+   * button, or nowhere once it went with the last page. A reader who has moved on keeps their
+   * focus.
+   */
   private focusEntry(id: number): void {
     afterNextRender(
-      () => this.host.nativeElement.querySelector<HTMLElement>(`[data-entry-id="${id}"]`)?.focus(),
+      () => {
+        const host = this.host.nativeElement;
+        const active = host.ownerDocument.activeElement;
+        const stayed =
+          active === null ||
+          active === host.ownerDocument.body ||
+          (host.contains(active) && active.classList.contains('record-timeline__more'));
+        if (stayed) host.querySelector<HTMLElement>(`[data-entry-id="${id}"]`)?.focus();
+      },
       { injector: this.injector },
     );
   }

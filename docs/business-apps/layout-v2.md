@@ -499,11 +499,14 @@ becomes. In version 2's terms:
   - it is refreshed in place when the page is given the record with another modification date,
     state or lock, or checked in or out, or put in or out of the trash: asked at once, and again
     2.5 seconds later, since Nuxeo writes its audit a moment after the change (0.8 to 1.4 seconds,
-    measured). What a refresh brings joins the entries shown, which stay;
-  - a timeline drawn anew is asked once more 2.5 seconds after it first is, too. That is the
-    refresh a reader of the document page sees: it draws the record page anew each time it
-    reloads the record, after an edit or a transition and not after a lock, so the timeline starts
-    again from its first page, and a comment half written in a comments card is lost.
+    measured). What a refresh brings joins the entries shown, which stay, unless more was
+    recorded than a page holds: the timeline then starts again from that first page;
+  - a timeline drawn anew, or given another record, is asked once more 2.5 seconds after it first
+    is, too; another kind chosen in the filter is not. That is the refresh a reader of the
+    document page sees: it draws the record page anew each time it reloads the record, after an
+    edit or a transition and not after a lock, so the timeline starts again from its first page
+    with every kind shown, and a comment half written in a comments card is lost. An audit slower
+    than 2.5 seconds still lacks the change, until the record next reloads.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:

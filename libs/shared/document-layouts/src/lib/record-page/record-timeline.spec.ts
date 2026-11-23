@@ -336,6 +336,59 @@ describe('RecordTimelineComponent', () => {
       ]);
     });
 
+    it('starts again from what a refresh finds, when more was recorded than a page holds', async () => {
+      const e4 = entry('documentModified', '2026-11-23T21:00:00.000Z', 'approved', { id: 500 });
+      getAuditLog.mockReturnValueOnce(of(page([modified], true)));
+      getAuditLog.mockReturnValueOnce(of(page([modified], true)));
+      const root = await render({ ...TIMELINE, pageSize: 1 });
+      expect(lines(root).map((line) => line.split(' · ')[0])).toEqual(['Modified']);
+
+      // Two entries were recorded since, a transition and then e4: the refresh's one-entry page
+      // shares nothing with what is shown, so it takes its place, and the transition is not
+      // skipped but is the next page.
+      getAuditLog.mockReturnValue(of(page([e4], true)));
+      fixture.componentRef.setInput('document', claim({ state: 'closed' }));
+      await settle();
+      expect(lines(root)).toEqual(['Modified · Jane Doe · Nov 24, 2026, 2:30:00 AM']);
+      getAuditLog.mockReturnValueOnce(of(page([transition], true)));
+      button(root, 'Show more')?.click();
+      await settle();
+      expect(getAuditLog).toHaveBeenLastCalledWith('c1', 1, 1, expect.anything());
+      getAuditLog.mockReturnValueOnce(of(page([modified], false)));
+      button(root, 'Show more')?.click();
+      await settle();
+      expect(lines(root).map((line) => line.split(' · ')[0])).toEqual([
+        'Modified',
+        'State changed from Project to Approved',
+        'Modified',
+      ]);
+    });
+
+    it('offers "Show more" when the second ask finds a full page where the first found none', async () => {
+      getAuditLog.mockReturnValueOnce(of(page([])));
+      getAuditLog.mockReturnValueOnce(of(page([transition], true)));
+      const root = await render({ ...TIMELINE, pageSize: 1 });
+      expect(lines(root).map((line) => line.split(' · ')[0])).toEqual([
+        'State changed to Approved',
+      ]);
+      expect(button(root, 'Show more')).toBeDefined();
+    });
+
+    it('does not ask twice for another kind chosen in the filter: the record is the same', async () => {
+      const root = await render({ ...TIMELINE, filter: true });
+      const calls = getAuditLog.mock.calls.length;
+      root.querySelector<HTMLElement>('.mat-mdc-select-trigger')?.click();
+      await settle();
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-container mat-option')[2].click();
+      await settle();
+      expect(getAuditLog.mock.calls.length).toBe(calls + 1);
+      expect(getAuditLog).toHaveBeenLastCalledWith('c1', 20, 0, {
+        eventIds: ['documentModified'],
+        sortBy: 'eventDate',
+        sortOrder: 'desc',
+      });
+    });
+
     it('is refreshed in place, and again once the audit has written the change', async () => {
       getAuditLog.mockReturnValue(of(page([modified, created])));
       const root = await render();
@@ -366,20 +419,23 @@ describe('RecordTimelineComponent', () => {
     });
 
     it('keeps the pages "Show more" loaded, adding the new entries on top', async () => {
-      getAuditLog.mockReturnValueOnce(of(page([modified], true)));
+      const earlier = entry('documentModified', '2026-11-21T12:00:00.000Z', 'project', { id: 501 });
+      getAuditLog.mockReturnValueOnce(of(page([modified, earlier], true)));
       // Its second ask, after the delay, finds nothing new.
-      getAuditLog.mockReturnValueOnce(of(page([modified], true)));
-      const root = await render({ ...TIMELINE, pageSize: 1 });
+      getAuditLog.mockReturnValueOnce(of(page([modified, earlier], true)));
+      const root = await render({ ...TIMELINE, pageSize: 2 });
       getAuditLog.mockReturnValueOnce(of(page([created], false)));
       button(root, 'Show more')?.click();
       await settle();
-      expect(lines(root)).toHaveLength(2);
+      expect(lines(root)).toHaveLength(3);
 
-      getAuditLog.mockReturnValue(of(page([transition], true)));
+      // The refresh's page shares an entry with those shown: what it adds goes on top.
+      getAuditLog.mockReturnValue(of(page([transition, modified], true)));
       fixture.componentRef.setInput('document', claim({ state: 'closed' }));
       await settle();
       expect(lines(root).map((line) => line.split(' · ')[0])).toEqual([
         'State changed from Project to Approved',
+        'Modified',
         'Modified',
         'Created',
       ]);
@@ -428,6 +484,27 @@ describe('RecordTimelineComponent', () => {
     root.remove();
   });
 
+  it('leaves the focus where the reader moved it while the next page loaded', async () => {
+    const [transition, modified] = transitioned();
+    getAuditLog.mockReturnValueOnce(of(page([transition], true)));
+    const root = await render({ ...TIMELINE, pageSize: 1 });
+    document.body.appendChild(root);
+    const elsewhere = document.createElement('textarea');
+    document.body.appendChild(elsewhere);
+    const late = new Subject<AuditLogList>();
+    getAuditLog.mockReturnValueOnce(late);
+    button(root, 'Show more')?.click();
+    fixture.detectChanges();
+    elsewhere.focus();
+    late.next(page([modified], false));
+    late.complete();
+    await settle();
+    expect(lines(root)).toHaveLength(2);
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+    root.remove();
+  });
+
   it('keeps the names it has read while it reads a new one', async () => {
     const [transition, , created] = transitioned();
     const later = new Subject<string | null>();
@@ -455,7 +532,7 @@ describe('RecordTimelineComponent', () => {
     getAuditLog.mockReturnValueOnce(late);
     const root = await render();
     getAuditLog.mockReturnValueOnce(
-      of(page([entry('documentCreated', '2026-11-20T09:00:00.000Z', 'project')])),
+      of(page([entry('documentCreated', '2026-11-20T09:00:00.000Z', 'project', { id: 502 })])),
     );
     fixture.componentRef.setInput('document', claim({ uid: 'c2' }));
     await settle();
