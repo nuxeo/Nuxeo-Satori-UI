@@ -1,6 +1,10 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideNxsComponents } from '@nuxeo/satori-platform/components';
-import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
+import {
+  DOCUMENT_RULE_EVALUATORS,
+  ExtensionRuleContextService,
+  ExtensionRuleRegistry,
+} from '@nuxeo/satori-platform/extensions';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, type Observable } from 'rxjs';
 
@@ -396,6 +400,60 @@ describe('RecordPageComponent', () => {
     const heading = card?.querySelector('h3');
     expect(card?.getAttribute('aria-labelledby')).toBe(heading?.id);
     expect(card?.hasAttribute('aria-label')).toBe(false);
+  });
+
+  /** Phase 1's demo step 4: member services see the member's social security number, others do not. */
+  it("shows the Member page's SSN to member services, through the platform's app.rules.inGroup", async () => {
+    TestBed.inject(ExtensionRuleRegistry).registerRules(DOCUMENT_RULE_EVALUATORS);
+    const page = {
+      version: 2,
+      cards: [
+        {
+          id: 'member',
+          fields: [
+            'member:phone',
+            {
+              field: 'member:ssn',
+              visibleWhen: { type: 'app.rules.inGroup', parameters: ['member-services'] },
+            },
+          ],
+        },
+      ],
+    };
+    TestBed.inject(ExtensionRuleContextService).groups.set(['members']);
+    expect((await render(member(), page)).querySelector('[data-field="member:ssn"]')).toBeNull();
+    TestBed.inject(ExtensionRuleContextService).groups.set(['members', 'member-services']);
+    expect(valueOf(await render(member(), page), 'member:ssn')).toBe('000-00-0000');
+  });
+
+  /** The reader keeps a field `fieldIn` shows by a number or a boolean, and the rule decides it. */
+  it('shows a field by the number or the boolean that app.rules.fieldIn matches', async () => {
+    TestBed.inject(ExtensionRuleRegistry).registerRules(DOCUMENT_RULE_EVALUATORS);
+    const page = (property: string, value: unknown) => ({
+      version: 2,
+      cards: [
+        {
+          id: 'member',
+          fields: [
+            'member:phone',
+            {
+              field: 'member:ssn',
+              visibleWhen: { type: 'app.rules.fieldIn', parameters: [{ field: property }, value] },
+            },
+          ],
+        },
+      ],
+    });
+    const ssn = async (document: NuxeoDocument, content: Record<string, unknown>) =>
+      valueOf(await render(document, content), 'member:ssn');
+
+    expect(await ssn(member({ 'member:dues': 5000 }), page('member:dues', 5000))).toBe(
+      '000-00-0000',
+    );
+    expect(await ssn(member({ 'member:dues': 4000 }), page('member:dues', 5000))).toBeUndefined();
+    expect(await ssn(member({ 'member:vip': true }), page('member:vip', true))).toBe('000-00-0000');
+    expect(await ssn(member({ 'member:vip': false }), page('member:vip', true))).toBeUndefined();
+    expect(warnings.filter((warning) => warning.includes('left out'))).toEqual([]);
   });
 
   /** `core.choose` picks an id; the widget shows it by name, as a property's would be. */

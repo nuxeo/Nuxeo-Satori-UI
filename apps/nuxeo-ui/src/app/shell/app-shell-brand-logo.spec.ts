@@ -24,6 +24,8 @@ describe('AppShellComponent — configured logo (branding.logo)', () => {
     username: signal('test.user'),
     hasAdministrationAccess: signal(true),
     isAdministrator: signal(true),
+    // Read by provideAppExtensions() for the rule context's app.rules.inGroup.
+    groups: signal([]),
     basicCredentials: () => null,
     shareAuthToken: () => null,
     logout: () => undefined,

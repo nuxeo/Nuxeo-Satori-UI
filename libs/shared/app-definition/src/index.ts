@@ -41,7 +41,6 @@ export {
   PACKAGED_REGISTRIES,
   PACKAGED_ROW_ACTIONS,
   PACKAGED_WIDGETS,
-  PROPOSED_RULES,
   XPATH,
   isFieldReference,
   isRecord,

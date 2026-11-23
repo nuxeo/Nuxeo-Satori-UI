@@ -38,8 +38,12 @@ export interface WidgetDefinition {
 export type ParameterKind =
   /** A literal, a property (`{ "field" }`) or a computation (`{ "computed" }`). */
   | 'value'
+  /** A literal or a property, never a computation: what a rule compares, which no rule computes. */
+  | 'subject'
   /** A literal text. */
   | 'text'
+  /** A literal text, number or boolean: a value a rule matches, as `fieldIn` compares one. */
+  | 'literal'
   /** A literal text with `{<prefix>:<name>}` placeholders. */
   | 'template'
   /** `days`, `months` or `years`. */
@@ -182,9 +186,24 @@ export const CORE_RULES: Readonly<Record<string, Signature>> = {
 };
 
 /**
- * The rules the platform registers today, as `docs/extension-reference.md`, section 4, documents
- * them. Three take a list of texts: the types, facets or MIME types to match.
+ * The parameters of the rules in `APP_RULES` that take any: the types, facets or MIME types to
+ * match; the operations `isNotBusy` waits for, none of which it also accepts; and layout version
+ * 2's three (layout-v2.md, section 5), a property or a literal then the values, the lifecycle
+ * states, or the groups. `fieldIn`'s values are texts, numbers or booleans, as its evaluator in
+ * `libs/shared/extensions` compares them; the rest are names, so texts. Every other rule takes
+ * none.
  */
+const APP_RULE_SIGNATURES: Readonly<Record<string, Signature>> = {
+  'app.rules.isType': { parameters: ['text'], rest: 'text' },
+  'app.rules.hasFacet': { parameters: ['text'], rest: 'text' },
+  'app.rules.hasMimeType': { parameters: ['text'], rest: 'text' },
+  'app.rules.isNotBusy': { parameters: [], rest: 'text' },
+  'app.rules.fieldIn': { parameters: ['subject', 'literal'], rest: 'literal' },
+  'app.rules.inState': { parameters: ['text'], rest: 'text' },
+  'app.rules.inGroup': { parameters: ['text'], rest: 'text' },
+};
+
+/** The rules the platform registers, as `docs/extension-reference.md`, section 4, documents them. */
 export const APP_RULES: Readonly<Record<string, Signature>> = Object.fromEntries(
   [
     'app.rules.canWrite',
@@ -216,24 +235,11 @@ export const APP_RULES: Readonly<Record<string, Signature>> = Object.fromEntries
     'app.rules.isAiEnabled',
     'app.rules.isNote',
     'app.rules.isNotBusy',
-  ].map((id): [string, Signature] => [
-    id,
-    ['app.rules.isType', 'app.rules.hasFacet', 'app.rules.hasMimeType'].includes(id)
-      ? { parameters: ['text'], rest: 'text' }
-      : { parameters: [] },
-  ]),
+    'app.rules.fieldIn',
+    'app.rules.inState',
+    'app.rules.inGroup',
+  ].map((id): [string, Signature] => [id, APP_RULE_SIGNATURES[id] ?? { parameters: [] }]),
 );
-
-/**
- * The three rules layout version 2 adds (layout-v2.md, section 5). Proposed, not implemented:
- * phase 1 registers them in `libs/shared/extensions` and documents them, and the test that holds
- * `APP_RULES` to the reference then has them move there.
- */
-export const PROPOSED_RULES: Readonly<Record<string, Signature>> = {
-  'app.rules.fieldIn': { parameters: ['value', 'text'], rest: 'text' },
-  'app.rules.inState': { parameters: ['text'], rest: 'text' },
-  'app.rules.inGroup': { parameters: ['text'], rest: 'text' },
-};
 
 /** The row actions a related-records list may offer (extension-reference.md, section 10a). */
 export const PACKAGED_ROW_ACTIONS: ReadonlySet<string> = new Set([
@@ -264,7 +270,7 @@ export const PACKAGED_REGISTRIES: Registries = {
   widgets: PACKAGED_WIDGETS,
   computations: PACKAGED_COMPUTATIONS,
   checks: PACKAGED_CHECKS,
-  rules: { ...CORE_RULES, ...APP_RULES, ...PROPOSED_RULES },
+  rules: { ...CORE_RULES, ...APP_RULES },
   rowActions: PACKAGED_ROW_ACTIONS,
   bulkActions: PACKAGED_BULK_ACTIONS,
   actions: new Set(),

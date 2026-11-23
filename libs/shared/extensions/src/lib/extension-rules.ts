@@ -41,6 +41,12 @@ export interface ExtensionRuleContext {
   readonly user: {
     readonly username: string | null;
     readonly isAdministrator: boolean;
+    /**
+     * The groups the user is in, as Nuxeo's `/me` reports them: what `app.rules.inGroup` reads.
+     * Optional, so that a context a customer builds without it still type-checks; absent, the
+     * user is in no group.
+     */
+    readonly groups?: readonly string[];
   };
   /** Router URL without query string, for route-scoped rules. */
   readonly url: string;
@@ -68,7 +74,7 @@ export const EMPTY_EXTENSION_RULE_CONTEXT: ExtensionRuleContext = {
   document: null,
   selection: [],
   selectionCount: 0,
-  user: { username: null, isAdministrator: false },
+  user: { username: null, isAdministrator: false, groups: [] },
   url: '',
   flags: {},
 };
@@ -173,6 +179,9 @@ export const SECURITY_RELEVANT_RULE_IDS: readonly string[] = [
   'app.rules.isAdministrator',
   'app.rules.isPowerUser',
   'app.rules.hasAdministrationAccess',
+  // Layout version 2's: it keeps a field away from the users outside a group, as these keep
+  // Administration away from users without it.
+  'app.rules.inGroup',
 ];
 
 /**

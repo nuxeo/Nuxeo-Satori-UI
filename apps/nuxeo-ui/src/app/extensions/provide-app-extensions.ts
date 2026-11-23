@@ -272,6 +272,7 @@ function provideRuleContextWiring(): Provider {
           () => {
             ruleContext.username.set(auth.username());
             ruleContext.isAdministrator.set(auth.isAdministrator());
+            ruleContext.groups.set(auth.groups());
             ruleContext.selectionCount.set(selection.selectedCount());
           },
           { injector },

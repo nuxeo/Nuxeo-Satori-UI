@@ -16,7 +16,6 @@ import {
   PACKAGED_REGISTRIES,
   PACKAGED_ROW_ACTIONS,
   PACKAGED_WIDGETS,
-  PROPOSED_RULES,
   withRegistered,
   XPATH,
 } from './registries';
@@ -48,13 +47,6 @@ describe('the registries, held to the extension reference', () => {
     );
     expect(rules.length).toBeGreaterThan(30);
     expect(Object.keys({ ...CORE_RULES, ...APP_RULES }).sort()).toEqual(rules);
-  });
-
-  it('list the three proposed rules apart until the reference documents them', () => {
-    for (const id of Object.keys(PROPOSED_RULES)) {
-      // Once phase 1 implements and documents one, it moves into APP_RULES and this stops failing.
-      expect(reference).not.toContain(`\`${id}\``);
-    }
   });
 
   it('know exactly the row actions the reference documents', () => {
