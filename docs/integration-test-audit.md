@@ -106,7 +106,7 @@ Unknown argument: coverage`. The SonarCloud workflow runs exactly that command o
 ### 1.4 What is genuinely good
 
 Stated because an audit that only lists faults misleads about where effort should go. The
-`adf-hx-bridge` API-port specs, the `nuxeo-client` service specs for `document-detail` and
+`nuxeo-client` service specs for `document-detail` and
 `browse`, the `libs/shared/extensions` Layer 0/1 specs and the three auth specs in
 `apps/nuxeo-ui` are assertion-bearing, comment _why_ each assertion can fail, and in several
 places record the negative control that proved it. `e2e-preflight.mjs` is a well-designed
@@ -246,9 +246,9 @@ outside the repo). Summary: `audit/logs/inventory.txt`.
 
 ### 3.1 Counts
 
-- **184 `*.spec.ts` files** — 179 in-process, 5 Playwright.
+- **184 `*.spec.ts` files** — 179 in-process, 5 Playwright. The per-project list below covers the 152 files in projects that still exist; the other 32 files (453 tests) belonged to a project since retired, so the list does not sum to 184.
 - **Per project** (files / static case count / lines): `nuxeo-client` 45/665/10,204 ·
-  `adf-hx-bridge` 32/444/6,703 · `document-detail` 22/554/10,334 · `nuxeo-ui` 18/120/2,699 ·
+  `document-detail` 22/554/10,334 · `nuxeo-ui` 18/120/2,699 ·
   `browse` 12/403/8,219 · `ui` 11/141/2,289 · `shared-extensions` 10/93/1,595 ·
   `nuxeo-ui-e2e` 5/19/545 · `shared-app-config` 4/58/731 · `shared-kd-client` 4/88/2,033 ·
   `administration` 3/25/641 · `knowledge-discovery` 3/25/709 · `permission-dialogs` 3/18/494 ·
@@ -263,7 +263,7 @@ outside the repo). Summary: `audit/logs/inventory.txt`.
 Applied across all 184 files.
 
 - **complete** — 96 files. Multiple collaborators or a full method surface exercised, error
-  paths present, assertions tied to observable state. Concentrated in `adf-hx-bridge/api/*`,
+  paths present, assertions tied to observable state. Concentrated in
   `nuxeo-client/services/document-detail.*`, `browse.service.*`, `shared/extensions/*`,
   `apps/nuxeo-ui/src/app/auth/*`, `apps/nuxeo-ui/src/app/i18n/*`.
 - **partial** — 54 files. Happy paths only, or a subset of the unit's surface. Includes every
@@ -330,10 +330,9 @@ stderr for every command is in `~/Desktop/agentic-ui-evidence/NXSAT-286/audit/lo
 
 **161 files, 2,881 tests, 2,881 passed, 0 failed, 0 skipped.**
 
-Per project (files / tests / Vitest-reported duration):
+Per project (files / tests / Vitest-reported duration). This breakdown excludes a project since retired (32 files, 453 tests), which the headline totals still include:
 
 - `nuxeo-client` 45 / 724 / 12.56 s
-- `adf-hx-bridge` 32 / 453 / 13.02 s
 - `document-detail` 22 / 560 / 6.80 s
 - `browse` 12 / 403 / 6.93 s
 - `ui` 11 / 151 / 4.11 s
@@ -395,8 +394,8 @@ workflow runs it.
 - **Why it fails:** 3 unratcheted projects (`assets`, `shared-ai-client`, `tasks` are measured
   but absent from the baseline, so their coverage could fall to zero unnoticed), 8 unlisted
   uninstrumented files, 5 stale allowlist entries naming files now covered or gone.
-- **Four projects improved** since the baseline and have never been locked in: `adf-hx-bridge`
-  +8.02 pp, `search` +3.40 pp, `collections` +0.91 pp, `knowledge-discovery` +0.91 pp.
+- **Three projects improved** since the baseline and have never been locked in: `search`
+  +3.40 pp, `collections` +0.91 pp, `knowledge-discovery` +0.91 pp.
 - The gate's own output is worth quoting because it pre-empts the misreading: "_8,819 line(s)
   are in that state… A percentage in this table is a statement about the measured subset, not
   about the project._" And: "_14 of 19 measured project(s) meet 90%… Of those, 1 clears the bar
@@ -475,7 +474,7 @@ Recorded in the format the plan requires. There is exactly one item.
   - _Blocker:_ not a missing dependency — a scope and safety judgement. Several steps mutate
     state the audit must not touch: `phase-1-config` and `phase-2-registry` rewrite
     `bootstrap.json` and the runtime manifest in the working tree and hash the built bundle;
-    `phase-3-adf-hx` creates a versions fixture in the shared Nuxeo; `phase-4-platform` and
+    Phase 3 (component adoption) creates a versions fixture in the shared Nuxeo; `phase-4-platform` and
     `phase-5-harness` require `nx build platform` output and serve on ports 4321/4322, which are
     not this worktree's reservation. Running them would have written files in the repository,
     contradicting the one-file constraint, and would have contended with six other live
@@ -682,8 +681,6 @@ behind it.
 - `login` (`:13`) → `LoginPageComponent`, `loginGuard` — spec ✓ (Karma).
 - `''` (`:18`) → `AppShellComponent`, `authGuard` — spec ✓ (`app-shell-header-a11y.spec.ts`).
 - `dashboard` (`:24`) → `DashboardPageComponent` — **NO SPEC.** Visited by E2E only incidentally.
-- `browse-adf-hx` (`:28`) → `BrowseAdfHxPocComponent` — **NO SPEC.** A Beta deliverable.
-- `search-adf-hx` (`:33`) → `SearchAdfHxComponent` — **NO SPEC.** A Beta deliverable.
 - `browse` (`:38`) → see §6.1.
 - `contracts` (`:42`) → `ContractsPageComponent` — **NO SPEC.**
 - `recently-viewed` (`:47`), `expired-queue` (`:60`), `favorites` (`:80`), `clipboard` (`:96`) →

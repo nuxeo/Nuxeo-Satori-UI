@@ -6,9 +6,9 @@ Thanks for the feedback. It came from a few different places, so I've put it all
 
 ## Status
 
-**1. The generator needed `npm ci` and access to the @alfresco packages**
+**1. The generator needed `npm ci` and access to a private package registry**
 
-- Done. adf-hx and all the @alfresco packages are gone. We built our own component library, and it works with or without Satori.
+- Done. The generator no longer depends on any third-party UI packages. We built our own component library, and it works with or without Satori.
 - To make a config package you only need Node.js now. You don't need `npm ci`, a token or an account.
 - Config packages have moved to their own public repo, nuxeo/Nuxeo-Satori-Config. It builds every PR and can publish to the pre-prod Marketplace. It also sets the version number for you.
 - What's left: installing the full UI repo still needs a GitHub token, because Satori UI comes from GitHub Packages. The Nx generator needs that full install too. The easy way around it is to copy `presales-demo` in the config repo.

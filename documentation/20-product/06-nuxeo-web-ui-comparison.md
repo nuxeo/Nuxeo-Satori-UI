@@ -130,8 +130,7 @@ Stated plainly, because a comparison that finds no weaknesses is not credible.
 3. **Accessibility.** Satori has _measured_ itself and **meets WCAG 2.1 AA on the fifteen cases
    scanned** (2026-08-24). The Web UI's position is **Not verified**. This is now a strength
    rather than a weakness — but the honest form of the claim names its scope: dialogs, the upload
-   flow, dark mode and the pre-auth login surface are not covered, and one remaining violation
-   belongs to `@alfresco/adf-core`.
+   flow, dark mode and the pre-auth login surface are not covered.
 4. **Studio integration.** Nuxeo Studio's relationship to Satori is **Not verified in
    repository** — no Studio integration exists here. For a customer whose configuration lives
    in Studio, this is a material open question.

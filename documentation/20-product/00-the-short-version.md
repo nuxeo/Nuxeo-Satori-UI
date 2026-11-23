@@ -181,12 +181,6 @@ shows Administration to administrators only:
   pre-production Marketplace. The developer package your own code builds against,
   `@nuxeo/satori-platform`, is not on any npm registry yet.
 - **Run your own code inside the shipped application.** See the next section.
-- **Edit every permission level on the rail's Browse page.** That page is still the adf-hx proof
-  of concept, and its Permissions tab handles only Nuxeo's Read, ReadWrite and Everything. On a
-  folder that also carries any other permission it refuses to save rather than delete that entry.
-  The Permissions tab on a document's own page, and on `/browse`, offers all of Nuxeo's standard
-  permissions and the others the server reports
-  ([extension reference, section 13](../../docs/extension-reference.md#13-what-beta-does-not-yet-address)).
 
 ## What needs code
 
@@ -239,5 +233,5 @@ the package is not published yet, you build it from this repository. Publishing 
 | Understand the product case and the layers in depth    | [Product Overview](01-product-overview.md)                                                                            |
 | Install and troubleshoot the Marketplace package       | [Deployment & Troubleshooting](../30-engineering/13-deployment-and-troubleshooting.md)                                |
 | Write your own code against the package                | [Platform package README](../../libs/platform/README.md) and [its guide for extenders](../../libs/platform/AGENTS.md) |
-| Know where the programme stands                        | [Programme status](../../docs/adf-hx-beta-plan.md#programme-status) in the Beta plan                                  |
+| Know where the programme stands                        | [Programme status](../../docs/beta-plan.md#programme-status) in the Beta plan                                         |
 | Customise it with an AI coding agent                   | [Prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts)                                           |

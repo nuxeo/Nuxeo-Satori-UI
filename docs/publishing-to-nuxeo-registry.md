@@ -20,12 +20,12 @@ registry  https://packages.nuxeo.com/repository/npm-public/
 This is not a new arrangement — it is exactly what `nuxeo-elements` already does, and
 the reason it is the right answer is the read side:
 
-|                           | Nuxeo Nexus `npm-public` | GitHub Packages      | Public npm            |
-| ------------------------- | ------------------------ | -------------------- | --------------------- |
-| **Install**               | **anonymous, no token**  | token required       | anonymous             |
-| **Publish**               | `NPM_PACKAGES_TOKEN`     | `GITHUB_TOKEN` / PAT | npm org rights        |
-| **Scope owned today**     | yes — `@nuxeo`           | `@hylandsoftware`    | `@nuxeo`, legacy only |
-| **Precedent in this org** | `nuxeo-elements`, live   | `adf-hx` consumption | 3.x era, abandoned    |
+|                           | Nuxeo Nexus `npm-public` | GitHub Packages         | Public npm            |
+| ------------------------- | ------------------------ | ----------------------- | --------------------- |
+| **Install**               | **anonymous, no token**  | token required          | anonymous             |
+| **Publish**               | `NPM_PACKAGES_TOKEN`     | `GITHUB_TOKEN` / PAT    | npm org rights        |
+| **Scope owned today**     | yes — `@nuxeo`           | `@hylandsoftware`       | `@nuxeo`, legacy only |
+| **Precedent in this org** | `nuxeo-elements`, live   | `satori-ui` consumption | 3.x era, abandoned    |
 
 Verified against the live registry, unauthenticated:
 

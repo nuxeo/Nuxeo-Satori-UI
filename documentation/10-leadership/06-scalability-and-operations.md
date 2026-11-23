@@ -35,15 +35,15 @@ own.
 
 ## 2. Scalability
 
-| Dimension                | Position                                                                                                                                                                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Client scaling**       | Per-browser. Scales with users trivially — it is a static bundle                                                                                                                                         |
-| **Nuxeo API load**       | The real dimension. Every user action is one or more Nuxeo calls, and **there is no client-side caching layer.** Load scales linearly with active users                                                  |
-| **Search load**          | OpenSearch, sized by the customer's existing estate                                                                                                                                                      |
-| **Initial page weight**  | 2.86 MB eager (up from 1.71 MB when adf-core became eager). Total shipped 4.90 MB against a 6 MiB ceiling. **Matters on constrained networks** and the real fix — lazy adf-core — is explicitly deferred |
-| **Agent scaling**        | **Not applicable.** No agent runtime exists here                                                                                                                                                         |
-| **LLM scaling**          | **Not applicable to this repository.** The 12 `AI.*` operations scale wherever that backend runs                                                                                                         |
-| **Concurrent workloads** | No server-side component of ours, so no concurrency model of ours                                                                                                                                        |
+| Dimension                | Position                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Client scaling**       | Per-browser. Scales with users trivially — it is a static bundle                                                                                        |
+| **Nuxeo API load**       | The real dimension. Every user action is one or more Nuxeo calls, and **there is no client-side caching layer.** Load scales linearly with active users |
+| **Search load**          | OpenSearch, sized by the customer's existing estate                                                                                                     |
+| **Initial page weight**  | Eager initial bundle held to a size budget. Total shipped 4.90 MB against a 6 MiB ceiling. **Matters on constrained networks**                          |
+| **Agent scaling**        | **Not applicable.** No agent runtime exists here                                                                                                        |
+| **LLM scaling**          | **Not applicable to this repository.** The 12 `AI.*` operations scale wherever that backend runs                                                        |
+| **Concurrent workloads** | No server-side component of ours, so no concurrency model of ours                                                                                       |
 
 **The honest scaling statement:** this UI does not introduce a scaling bottleneck of its own. It
 increases load on the customer's existing Nuxeo and OpenSearch, and the absence of client-side
@@ -114,20 +114,12 @@ not currently in any phase of the plan.
 
 ## 6. Supportability
 
-| Capability                         | Status                                                                                                                                       |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reproducing a customer issue       | **Partly** — ~20 per-ticket evidence runners (`NXSAT-*`) exist as a pattern for capturing before/after against a live Nuxeo                  |
-| Knowing the customer's version     | Their installed package version; no phone-home                                                                                               |
-| Knowing their configuration        | Their configuration package — readable **if** they share it                                                                                  |
-| Distinguishing our bug from theirs | The support boundary is architecturally clear (their library, their repo) — **untested in practice**                                         |
-| Escalation path for adf-hx defects | Established — `docs/adf-hx-upstream-findings.md`, written to be sent to the adf-hx team, requiring a version, a file path and a reproduction |
-
-The escalation path is a genuinely good practice: an upstream defect is reported with enough
-detail that the other team can act on it without a round trip.
-
-A workaround register sat beside it until 2026-11, gated in both directions against markers in
-the code. It was deleted once adf-hx was gone and the last marker with it: a gate over an empty
-set reads as a live control and is not one.
+| Capability                         | Status                                                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Reproducing a customer issue       | **Partly** — ~20 per-ticket evidence runners (`NXSAT-*`) exist as a pattern for capturing before/after against a live Nuxeo |
+| Knowing the customer's version     | Their installed package version; no phone-home                                                                              |
+| Knowing their configuration        | Their configuration package — readable **if** they share it                                                                 |
+| Distinguishing our bug from theirs | The support boundary is architecturally clear (their library, their repo) — **untested in practice**                        |
 
 ---
 
@@ -157,14 +149,13 @@ the edited file and leaving **no version installed** — the app 404 until fixed
 
 Ranked.
 
-| #   | Investment                                          | Why                                                                                                                                  |
-| --- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **Error reporting + basic RUM**                     | Without it we learn about incidents from the customer, and cannot diagnose them                                                      |
-| 2   | **Structured client logging with a correlation id** | Ties a user report to Nuxeo server logs                                                                                              |
-| 3   | **A support runbook**                               | Which config to collect, how to reproduce, how to tell our bug from theirs                                                           |
-| 4   | **Rollback rehearsal**                              | The upgrade path is tested; the _rollback_ path is not                                                                               |
-| 5   | **Client-side caching for repeated reads**          | Damps Nuxeo load; also improves perceived performance                                                                                |
-| 6   | **Lazy adf-core**                                   | Recovers ~1.15 MB of eager bundle. Explicitly deferred, and the ceiling note says do not raise the limit again without attempting it |
+| #   | Investment                                          | Why                                                                             |
+| --- | --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1   | **Error reporting + basic RUM**                     | Without it we learn about incidents from the customer, and cannot diagnose them |
+| 2   | **Structured client logging with a correlation id** | Ties a user report to Nuxeo server logs                                         |
+| 3   | **A support runbook**                               | Which config to collect, how to reproduce, how to tell our bug from theirs      |
+| 4   | **Rollback rehearsal**                              | The upgrade path is tested; the _rollback_ path is not                          |
+| 5   | **Client-side caching for repeated reads**          | Damps Nuxeo load; also improves perceived performance                           |
 
 Items 1–3 are the difference between "a Beta we can support" and "a Beta we hope nobody has
 trouble with".

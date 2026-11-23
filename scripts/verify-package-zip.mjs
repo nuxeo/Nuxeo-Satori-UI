@@ -14,7 +14,8 @@
  * installer looks for them, that the package name and version the zip is named after are the ones
  * `package.xml` declares, that every path `install.xml` copies exists in the zip and that one of
  * them deploys the bundle into `${env.bundles}`, and that the bundle is a readable jar whose
- * `Nuxeo-Component`, `<require>` and contribution `src` targets resolve to entries in it.
+ * manifest names its components in a single header spelt `Nuxeo-Component` in its main section,
+ * and whose `Nuxeo-Component`, `<require>` and contribution `src` targets resolve to entries in it.
  *
  * **Where it stops, on purpose.** It does not check that a contribution with no `src` carries a
  * body: reading inline `<json>` means parsing element content, which `build.mjs` already does
@@ -234,48 +235,58 @@ export function attribute(xml, name, attributeName) {
   return tag ? (attributesOf(tag[1])[attributeName] ?? null) : null;
 }
 
+const isComponentHeader = (line) => /^nuxeo-component:/i.test(line);
+
 /**
- * Check one package zip. Returns the problems; an empty array is a pass.
- *
- * Takes the archive apart in a temp directory rather than in place, so nothing here can write into
- * a workspace or follow a path out of the zip into one.
+ * A jar manifest's logical lines, divided where Java ends its main section. Continuations are
+ * unfolded — headers wrap at 72 bytes with a leading space on the continuation, and a long
+ * component path is exactly where that happens — and a line ends at CR, LF or CRLF and nowhere
+ * else. The main section is the lines before the first empty one; the rest are entry sections.
  */
+function manifestSectionsOf(manifest) {
+  const lines = manifest.replace(/(?:\r\n|\r|\n) /g, '').split(/\r\n|\r|\n/);
+  const end = lines.indexOf('');
+  return end < 0
+    ? { main: lines, rest: [] }
+    : { main: lines.slice(0, end), rest: lines.slice(end) };
+}
+
 /**
- * The components a bundle's `MANIFEST.MF` names in `Nuxeo-Component`.
+ * Every header of a jar manifest named `Nuxeo-Component` in any letter case, found as the server
+ * finds it. The Nuxeo runtime reads it through `java.util.jar.Manifest`, which matches a header's
+ * name in any letter case, keeps the last of a repeated one, and looks in the main section alone:
+ * a header in a later `Name:` section is that entry's attribute and names nothing the server loads.
  *
- * Manifest headers wrap at 72 bytes with a leading space on the continuation; unwrapped here
- * because a long component path is exactly where that happens. `Nuxeo-Component` is a
- * comma-separated list, and `build.mjs` reads it as one — `.split(',').map(trim).filter(Boolean)`,
- * then a loop. Treating the whole header as a single file name rejects a bundle that carries a
- * configuration component beside an unrelated one, which is a legitimate shape for a customer whose
- * package grew past JSON.
+ * The multiline pattern this used to be read with took the first header spelt exactly
+ * `Nuxeo-Component`, in any section, and its `^` also matched after a U+2028 inside another
+ * header's value, which Java reads as part of that value. Each was a way for the jar to load a
+ * component this script never resolved, or for this script to resolve one the server never loads.
+ */
+function componentHeadersOf(manifest) {
+  return manifestSectionsOf(manifest).main.filter(isComponentHeader);
+}
+
+/**
+ * The component paths those headers name, split where the runtime splits them. `Nuxeo-Component`
+ * is a list, and `OSGiRuntimeService` tokenises it at commas, spaces, tabs, line breaks and form
+ * feeds, so `OSGI-INF/a b.xml` names two paths there rather than one file. Treating the whole
+ * header as a single file name would reject a bundle that carries a configuration component
+ * beside an unrelated one, which is a legitimate shape for a customer whose package grew past JSON.
+ *
+ * Exported for the package pipeline (`app-package.mjs`), whose step 2 checks the layouts of the
+ * components it finds, so that it finds the ones `build.mjs`, this script and the server find.
  */
 export function componentPathsOf(manifest) {
-  const headers = unfoldedManifest(manifest);
-  return (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
-    .split(',')
-    .map((path) => path.trim())
-    .filter(Boolean);
-}
-
-/**
- * A manifest as the builder reads it: no byte-order mark, which its TextDecoder drops, and a
- * continuation unfolded after any line ending the manifest format allows, CR alone included.
- */
-function unfoldedManifest(manifest) {
-  return manifest.replace(/^\uFEFF/, '').replace(/(?:\r\n|\r|\n) /g, '');
-}
-
-/**
- * Every header of a manifest named `Nuxeo-Component` in any letter case, unfolded. Java's manifest
- * reader, which the server's runtime uses, matches a header's name whatever its case and keeps the
- * last of a repeated one, where the builder and `componentPathsOf` take the first spelt exactly
- * so. More than one, or another spelling, is where the two would load different components.
- */
-export function componentHeadersOf(manifest) {
-  return unfoldedManifest(manifest)
-    .split(/\r\n|\r|\n/)
-    .filter((line) => /^nuxeo-component:/i.test(line));
+  return [
+    ...new Set(
+      componentHeadersOf(manifest).flatMap((header) =>
+        header
+          .slice(header.indexOf(':') + 1)
+          .split(/[, \t\n\r\f]+/)
+          .filter(Boolean),
+      ),
+    ),
+  ];
 }
 
 /**
@@ -287,6 +298,12 @@ export function componentXmlOf(xml) {
   return withoutCdata(withoutDocumentation(withoutCommentsOrInstructions(xml)));
 }
 
+/**
+ * Check one package zip. Returns the problems; an empty array is a pass.
+ *
+ * Takes the archive apart in a temp directory rather than in place, so nothing here can write into
+ * a workspace or follow a path out of the zip into one.
+ */
 export function verifyPackageZip(archive) {
   const problems = [];
   const problem = (message) => problems.push(message);
@@ -438,9 +455,35 @@ export function verifyPackageZip(archive) {
       problem(`${manifest} could not be read out of ${jars[0]}.`);
       return problems;
     }
-    const componentPaths = componentPathsOf(manifestRead.stdout.toString('utf8'));
+    const manifestText = manifestRead.stdout.toString('utf8');
+    // More than one header, or another spelling, is a manifest two readers take differently: the
+    // server loads the last header's components, a check that reads the first passes the others.
+    // The components of every header are still resolved below, so each problem is reported.
+    const componentHeaders = componentHeadersOf(manifestText);
+    if (componentHeaders.length > 1) {
+      problem(
+        `${manifest} has ${componentHeaders.length} Nuxeo-Component headers, counting any letter ` +
+          "case. The server loads only the last one's components; a manifest lists every " +
+          'component in a single header.',
+      );
+    } else if (
+      componentHeaders.length === 1 &&
+      !componentHeaders[0].startsWith('Nuxeo-Component:')
+    ) {
+      const spelt = componentHeaders[0].slice(0, componentHeaders[0].indexOf(':'));
+      problem(
+        `${manifest} spells its Nuxeo-Component header "${spelt}". The server accepts any letter ` +
+          'case, but tools that read a manifest look for Nuxeo-Component exactly.',
+      );
+    }
+    const componentPaths = componentPathsOf(manifestText);
     if (componentPaths.length === 0) {
-      problem(`${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`);
+      problem(
+        manifestSectionsOf(manifestText).rest.some(isComponentHeader)
+          ? `${manifest} names components only after its first blank line, where the server ` +
+              'does not read them, so the bundle contributes nothing.'
+          : `${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`,
+      );
       return problems;
     }
 
