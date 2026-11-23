@@ -6,6 +6,7 @@ import {
   WIDGET_VIEWS,
   computedDefinition,
   relativeDateText,
+  richTextWords,
   showValue,
   viewText,
   type RecordValueContext,
@@ -400,6 +401,31 @@ describe('showValue', () => {
       field: { key: 'k', label: 'L', kind: 'value', value: { flag: true } },
     });
   });
+
+  /**
+   * Except a date, which version 1 formats in UTC: an instant is the reader's day here, as the
+   * `date` widget shows it (pattern 29). 20:00 UTC on the 23rd is the 24th at +05:30.
+   */
+  it('shows a date with no widget as the date widget does, and a list of them', () => {
+    const at = (value: unknown, type: string) =>
+      showValue({ key: 'k', label: 'L', value, parameters: {}, definition: { type } }, null, {
+        ...context,
+        timeZone: '+0530',
+      });
+    expect(at('2026-11-23T20:00:00.000Z', 'date')).toEqual({
+      kind: 'text',
+      text: 'November 24, 2026',
+    });
+    expect(at('2026-11-23T00:00:00.000Z', 'date')).toEqual({
+      kind: 'text',
+      text: 'November 23, 2026',
+    });
+    expect(at(['2026-11-23T20:00:00.000Z', null, '2026-11-23'], 'date[]')).toEqual({
+      kind: 'chips',
+      chips: ['November 24, 2026', 'November 23, 2026'],
+    });
+    expect(at('soon', 'date')).toEqual({ kind: 'text', text: 'soon' });
+  });
 });
 
 describe('viewText', () => {
@@ -407,6 +433,44 @@ describe('viewText', () => {
     expect(
       viewText({ kind: 'html', html: '<p>Hi <b>there</b>&nbsp;now</p>' }, context.flagText),
     ).toBe('Hi there now');
+    // Each entity as its character: `&lt;10` is a comparison, not a word "10".
+    expect(viewText({ kind: 'html', html: '<p>&lt;10 R&amp;D</p>' }, context.flagText)).toBe(
+      '<10 R&D',
+    );
+  });
+});
+
+describe('richTextWords', () => {
+  it.each([
+    // An entity is the character it stands for, and only once: `&amp;lt;` is `&lt;`, not `<`.
+    ['<p>&lt;10</p>', '<10'],
+    ['R&amp;D', 'R&D'],
+    ['Caf&eacute; &#8364;5 &#x2014; ok', 'Café €5 — ok'],
+    ['&amp;lt;b&amp;gt;', '&lt;b&gt;'],
+    // Escaped markup stays characters: it is never parsed again.
+    ['&lt;img src=x onerror=alert(1)&gt;', '<img src=x onerror=alert(1)>'],
+    // Blocks and breaks part words; inline formatting does not.
+    ['<p>one</p><p>two</p>', 'one two'],
+    ['one<br>two', 'one two'],
+    ['<ul><li>a</li><li>b</li></ul>', 'a b'],
+    ['<h2>Title</h2>Body', 'Title Body'],
+    ['<b>R</b>&amp;<i>D</i>', 'R&D'],
+    ['  <p>  spaced\n\tout  </p>  ', 'spaced out'],
+  ])('%j reads %j', (html, words) => {
+    expect(richTextWords(html)).toBe(words);
+  });
+
+  /**
+   * A cell says what its field says: the text the field's sanitiser drops with its element, a
+   * script's or a style's, is in neither. One it unwraps, a form's, shows in both.
+   */
+  it("leaves out a script's and a style's text, as the field's sanitiser does, and keeps a form's", () => {
+    expect(
+      richTextWords(
+        '<p>Hi<script>alert(1)</script><style>p{color:red}</style></p><template>hidden</template>',
+      ),
+    ).toBe('Hi');
+    expect(richTextWords('<form><label>Name</label></form>')).toBe('Name');
   });
 
   it('writes a flag in words, through the page’s translation', () => {

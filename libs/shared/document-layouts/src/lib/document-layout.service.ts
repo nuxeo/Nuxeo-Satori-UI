@@ -212,7 +212,10 @@ export class DocumentLayoutService {
           ? this.documentType(type).pipe(
               switchMap((definition) => {
                 if (!definition) return of(null);
-                if (definition.schemas.some((schema) => OWN_VIEW_SCHEMAS.has(schema.name))) {
+                // The type's schemas and the document's own: a dynamic facet can add `file` or
+                // `note` to one record of a type that has neither, and its preview shows first too.
+                const schemas = [...definition.schemas, ...documentSchemas];
+                if (schemas.some((schema) => OWN_VIEW_SCHEMAS.has(schema.name))) {
                   return this.ownViewFirst(type);
                 }
                 return this.resolveRecord(definition, file, documentSchemas);
@@ -258,14 +261,14 @@ export class DocumentLayoutService {
 
   /**
    * A file's preview and a note's editor show first (layout-v2.md, section 10), and a record
-   * page beside them comes later: until then such a type's View tab is today's, and the console
-   * says so once per type.
+   * page beside them comes later: until then the View tab of a record with either, through its
+   * type or through a facet, is today's, and the console says so once per type.
    */
   private ownViewFirst(type: string): Observable<null> {
     if (!this.ownView.has(type)) {
       this.ownView.add(type);
       warn(
-        `${type}/view layout not drawn: a ${type} has a file or a note, which the View tab shows first; a record page beside it comes later`,
+        `${type}/view layout not drawn for a ${type} with a file or a note, which the View tab shows first; a record page beside it comes later`,
       );
     }
     return of(null);
