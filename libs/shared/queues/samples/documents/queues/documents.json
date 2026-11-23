@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "label": "Documents",
+  "pageProvider": "default_search",
+  "columns": ["dc:title", "dc:creator", { "field": "dc:modified", "widget": "relative-date" }],
+  "sort": [{ "field": "dc:modified", "order": "desc" }],
+  "pageSize": 20,
+  "facets": [
+    { "aggregate": "dc_nature_agg", "label": "Nature" },
+    { "aggregate": "dc_creator_agg", "label": "Author" },
+    { "aggregate": "dc_modified_agg", "label": "Modified" }
+  ],
+  "rowActions": ["app.rowActions.download"],
+  "bulkActions": ["app.bulkActions.addToClipboard", "app.bulkActions.downloadZip"],
+  "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["members", "administrators"] }
+}

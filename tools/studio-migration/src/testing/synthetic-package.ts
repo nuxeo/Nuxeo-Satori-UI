@@ -72,6 +72,12 @@ export function syntheticBundleFiles(): Record<string, string> {
     <div role="widget"><label>Claim number</label><div name="number">[[document.properties.cl:number]]</div></div>
     <div role="widget"><label>Amount</label><div name="amount">[[document.properties.cl:amount]]</div></div>
     <nuxeo-date role="widget" datetime="[[document.properties.cl:incidentDate]]" label="Incident date"></nuxeo-date>
+    <nuxeo-filter document="[[document]]" type="Claim">
+      <template><div role="widget"><label>Reserve</label><div name="reserve">[[document.properties.cl:reserve]]</div></div></template>
+    </nuxeo-filter>
+    <template is="dom-if" if="[[hasFacet(document, 'Versionable')]]">
+      <div role="widget"><label>Tags</label><div name="tags">[[document.properties.cl:tags]]</div></div>
+    </template>
   </template>
   <script>
     Polymer({ is: 'nuxeo-claim-view-layout', behaviors: [Nuxeo.LayoutBehavior],
@@ -93,7 +99,7 @@ export function syntheticBundleFiles(): Record<string, string> {
   <template>
     <div role="widget"><label>Title</label><div name="title">[[document.properties.dc:title]]</div></div>
     <div role="widget"><label>Claim number</label><div name="number">[[document.properties.cl:number]]</div></div>
-    <nuxeo-filter document="[[document]]" group="adjusters">
+    <nuxeo-filter document="[[document]]" user="[[user]]" group="adjusters">
       <template>
         <div role="widget"><label>Reserve</label><div name="reserve">[[document.properties.cl:reserve]]</div></div>
       </template>
@@ -185,7 +191,7 @@ STUDIO CODE SPACE
 </nuxeo-slot-content>
 <nuxeo-slot-content name="closeClaim" slot="DOCUMENT_ACTIONS" order="20">
   <template>
-    <nuxeo-filter document="[[document]]" permission="WriteProperties">
+    <nuxeo-filter document="[[document]]" permission="Write, WriteProperties">
       <template><nuxeo-operation-button icon="icons:close" label="Close" operation="Claim.Close" input="[[document]]"></nuxeo-operation-button></template>
     </nuxeo-filter>
   </template>

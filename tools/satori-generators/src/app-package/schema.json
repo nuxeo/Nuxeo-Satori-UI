@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppPackage",
+  "title": "Satori business app package",
+  "description": "Scaffolds an app definition package, version 2: app.json, labels/en.json, the OSGi component that contributes its layouts, and version 1's package files with the generator's build.mjs. With type and a content model it writes the first record page: the pipeline refuses a package that contributes nothing. app-layout, app-queue and app-action add to it.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Marketplace package name, kebab-case, at most 128 characters. Also the directory and the component's file name.",
+      "maxLength": 128,
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "Package name (kebab-case, e.g. acme-contracts)?",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Owner prefix for the Nuxeo component and bundle, as in <owner>.config.<name>. Component names must be unique on a server.",
+      "x-prompt": "Owner prefix (e.g. acme)?",
+      "pattern": "^[a-z][a-z0-9]*$"
+    },
+    "appId": {
+      "type": "string",
+      "description": "The app's id in the registry, app.json's id: lower-case letters, digits and '-', at most 63 characters. It stays the same from one version to the next, and begins the labels' keys. Defaults to the package name.",
+      "pattern": "^[a-z][a-z0-9-]{0,62}$"
+    },
+    "title": {
+      "type": "string",
+      "description": "The app's name, as 'Switch app' lists it, and the Marketplace title. Defaults to the name in title case."
+    },
+    "vendor": {
+      "type": "string",
+      "description": "Vendor shown in the Marketplace listing. Defaults to the title."
+    },
+    "version": {
+      "type": "string",
+      "description": "The package version, written in package.xml, app.json's packageVersion and the manifest's Bundle-Version.",
+      "default": "0.1.0",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?$"
+    },
+    "platform": {
+      "type": "string",
+      "description": "The platform versions the app runs on, as a range: '>=0.2.0 <1.0.0', '^1.2.0' or '~1.2.0'. Defaults to libs/platform's version up to its next major."
+    },
+    "groups": {
+      "type": "string",
+      "description": "The groups the app is for, separated by commas. 'members' is everyone, and the default. Not a security control: Nuxeo's permissions still decide what anyone reads."
+    },
+    "directory": {
+      "type": "string",
+      "description": "Parent directory for the package: a relative path of letters, digits, '.', '_' and '-'. The package pipeline's workflow checks every package under business-apps/packages/.",
+      "default": "business-apps/packages",
+      "pattern": "^[A-Za-z0-9._][A-Za-z0-9._-]*(/[A-Za-z0-9._][A-Za-z0-9._-]*)*$"
+    },
+    "type": {
+      "type": "string",
+      "description": "The document type of the first record page, written as app-layout writes it. The pipeline refuses a package that contributes nothing, so without it the package passes only once app-layout has added a layout.",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$"
+    },
+    "model": {
+      "type": "string",
+      "description": "With type: the content model, a file `npm run app-package:model` exported."
+    },
+    "modelServer": {
+      "type": "string",
+      "description": "With type: read the content model live from this Nuxeo instead, with NUXEO_USER and NUXEO_PASS from the environment."
+    },
+    "schemas": {
+      "type": "string",
+      "description": "With type: the schemas to show, separated by commas, as app-layout takes them."
+    }
+  },
+  "required": ["name", "owner"]
+}

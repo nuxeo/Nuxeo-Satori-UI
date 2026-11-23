@@ -267,17 +267,17 @@ all of them on every change:
 - **For check 2:** drop a field, turn a date widget into text, make a required field optional.
 - **For check 3:** name a field the package's own schema lacks.
 - **For check 5:** slip a free JavaScript condition in, or show a field or a list column Web UI
-  shows only under a condition to everyone. "Invert a rule" waits for M2, which converts the
-  first rules.
+  shows only under a condition to everyone. M2 adds inverting a converted rule (`invert-rule`)
+  and dropping one (`drop-rule`).
 - **For check 6:** change a field's label.
-- **For check 7:** point a list at another page provider, change one parameter, or bind a button
-  to another operation.
+- **For check 7:** point a list at another page provider, change one parameter, bind a button to
+  another operation, point a home card at another queue, or drop a menu entry.
 - **For check 10:** name a widget the platform does not have.
 
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
-something to break fails its check too. The three that do not, `widen-to-everyone`,
-`widen-column-to-everyone` and `bind-other-operation`, find no condition and no operation button
-to break there, and say so.
+something to break fails its check too. The five that do not, `widen-to-everyone`,
+`widen-column-to-everyone`, `invert-rule`, `drop-rule` and `bind-other-operation`, find no
+condition and no operation button to break there, and say so.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -311,12 +311,15 @@ For the sample, M1's report lists:
   has neither;
 - 4 slot contributions:
   - the button with no operation, reported;
-  - the menu entry and its page, pending phase 1's `navigation.json`;
+  - the menu entry, converted to an entry of `navigation.json` that opens the search screen's queue,
+    and its page, converted to that queue;
   - the theme, converted;
 - the dashboard's 5 cards:
   - the repeated one, reported;
   - the favourites card, which reads an operation, proposed;
-  - the other three, pending phase 1's `home.json`, the first with its list written as a queue;
+  - the first card, converted to a card of `home.json` that opens its list, written as a queue. The
+    app does not draw a card that is only a link to a queue until phase 1's queue page exists;
+  - the tasks and recently viewed cards, pending: `home.json` has no card for either yet;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts
   of 4.43 and 4.17;
@@ -352,22 +355,44 @@ These sit inside the [development plan](development-plan.md):
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
 
+**Where M2 stands, 23 November 2026:**
+
+- **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
+  decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
+  one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
+  calls and `document.facets.indexOf(…)` in a filter's `expression`. Anything else is reported.
+  The rule travels as the `visibleWhen` of what the condition hides: a view field where it shows
+  its property, an action by its button, a menu entry by its icon and its page's search form, and
+  a home card and its queue by its list. Check 5 holds every rule to its condition's truth table,
+  without a server.
+- **Reported, against the table above:** a `path` test, which no registered rule makes, and
+  `hasPermission` for a permission no rule holds alone, such as `Write`. A group test whose file
+  holds no user is reported too: a document layout and the stock home are given none, so it never
+  passes in Web UI. So is `!document.facets.indexOf(…) !== -1`, which is always true, and a
+  condition whose truth table would be too large to run.
+- **Not yet:**
+  - task forms, tabs and layout blocks;
+  - conditions on version 1 fields, list columns and search tables;
+  - the truth tables' server half, which evaluates each original in Web UI on the migration
+    server.
+
 **Where M1 stands, 23 November 2026:**
 
 - **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md), the
   declarative track:
-  - layouts, search screens as queues, the dashboard's lists as queues, operation buttons as
-    actions, the theme and the translations, written as an app definition the package pipeline's
-    validator accepts;
+  - layouts, search screens as queues, the dashboard's lists as queues and cards of
+    `home.json`, the left menu's search entries as entries of `navigation.json`, operation buttons
+    as actions, the theme and the translations, written as an app definition the package
+    pipeline's validator accepts;
   - checks 2, 3, 5, 6, 7 and 10. Checks 3, 5, 6 and 7 run in part until the migration server
-    exists. With M0's, there are twenty-one negative controls.
+    exists. With M0's, there are twenty-three negative controls.
 - **On the sample:**
   - checks 1, 2, 4, 5 and 10 pass;
   - checks 3, 6 and 7 run in part;
   - check 8 finds the two colours below AA.
 - **Waiting:**
   - the migration lab server, for the server halves of checks 3, 5, 6 and 7;
-  - phase 1's `home.json` and `navigation.json`, for the dashboard's cards and the drawer;
+  - card kinds of `home.json` for the tasks and recently viewed cards;
   - M2, for conditions, tabs, task forms and layout blocks;
   - real packages: only the sample has arrived, and phase 4 needs three.
 

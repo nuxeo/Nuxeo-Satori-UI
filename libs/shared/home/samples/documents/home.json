@@ -5,7 +5,8 @@
     {
       "id": "all",
       "label": "Documents",
-      "kpi": { "pageProvider": "default_search" }
+      "kpi": { "pageProvider": "default_search" },
+      "queue": "documents"
     },
     {
       "id": "contracts",

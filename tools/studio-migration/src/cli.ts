@@ -221,7 +221,7 @@ export function conversionSummary(conversion: Conversion, directory: string): st
       .filter(([, n]) => n > 0)
       .map(([outcome, n]) => `${outcome} ${n}`)
       .join(', ')}`,
-    `  app/: ${plural(files.length, 'file')}: app.json, ${plural(count('layouts/'), 'layout')}, ${plural(count('queues/'), 'queue')}, ${count('actions.json') ? 'actions.json, ' : ''}${plural(count('labels/'), 'labels file')}`,
+    `  app/: ${plural(files.length, 'file')}: app.json, ${plural(count('layouts/'), 'layout')}, ${plural(count('queues/'), 'queue')}, ${count('home.json') ? 'home.json, ' : ''}${count('navigation.json') ? 'navigation.json, ' : ''}${count('actions.json') ? 'actions.json, ' : ''}${plural(count('labels/'), 'labels file')}`,
     `  labels: ${labels.join(', ') || 'none'}`,
     `  themes: ${themes.join(', ') || 'none'}`,
     '',

@@ -166,8 +166,12 @@ export {
 } from './lib/services/document-import.service';
 export { TaskService } from './lib/services/task.service';
 export { CollectionService } from './lib/services/collection.service';
-export { PageProviderService } from './lib/services/page-provider.service';
-export type { PageProviderRequest, PageProviderSort } from './lib/services/page-provider.service';
+export { PageProviderService, isAggregateParameter } from './lib/services/page-provider.service';
+export type {
+  PageProviderRequest,
+  PageProviderResults,
+  PageProviderSort,
+} from './lib/services/page-provider.service';
 export {
   BrowseService,
   BROWSE_TYPE_OPTION_LIMIT,

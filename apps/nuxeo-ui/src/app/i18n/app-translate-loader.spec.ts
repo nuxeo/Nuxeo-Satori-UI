@@ -1,10 +1,20 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  type TestRequest,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
 
-import { AppTranslateLoader, UPSTREAM_FOLDERS, upstreamCatalogueFor } from './app-translate-loader';
+import {
+  AppTranslateLoader,
+  UPSTREAM_FOLDERS,
+  packageLabelsUrl,
+  readPackageLabels,
+  upstreamCatalogueFor,
+} from './app-translate-loader';
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
 /** The one upstream folder `UPSTREAM_FOLDERS` declares, then the app's own catalogue last. */
@@ -17,14 +27,24 @@ describe('AppTranslateLoader', () => {
   let loader: AppTranslateLoader;
   let httpMock: HttpTestingController;
 
-  function configure(labels: Record<string, string> = {}): void {
+  /**
+   * `fromService`: the configuration service answered for the bootstrap, so the layouts index is
+   * read for the languages a business app's labels are listed in. By default it did not, as under
+   * a bare `nx serve`, and nothing more is asked for.
+   */
+  function configure(labels: Record<string, string> = {}, fromService = false): void {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: AppConfigService,
-          useValue: { manifest: signal({ labels }) },
+          useValue: {
+            manifest: signal({ labels }),
+            diagnostics: signal({
+              bootstrapSource: fromService ? 'configuration-service' : 'packaged-default',
+            }),
+          },
         },
       ],
     });
@@ -323,6 +343,151 @@ describe('AppTranslateLoader', () => {
     expect(merged?.['a.key']).toBe('from manifest');
     expect(merged?.['only.folder']).toBe('folder');
     expect(merged?.['only.app']).toBe('app');
+  });
+
+  describe("the business app's labels", () => {
+    let warnings: string[];
+
+    beforeEach(() => {
+      warnings = [];
+      spyOn(console, 'warn').and.callFake((message: unknown) => {
+        warnings.push(String(message));
+      });
+    });
+
+    const INDEX = '/agentic-ui-config/layouts.json';
+    const index = (labels: readonly string[]) => ({
+      format: 'nuxeo-agentic-ui-config/1',
+      layer: 'layouts',
+      layouts: [],
+      labels,
+    });
+
+    /**
+     * The upstream folders and the app catalogue, then the index, then the labels file it lists:
+     * the file is asked for only once the index has answered.
+     */
+    function flushWithLabels(
+      app: CatalogueBody,
+      listed: readonly string[],
+      answer?: (request: TestRequest) => void,
+    ): void {
+      const requests = httpMock.match(() => true);
+      expect(requests.map((request) => request.request.url).at(-1)).toBe(INDEX);
+      requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
+      requests[UPSTREAM_FOLDER_COUNT].flush(app);
+      requests[UPSTREAM_FOLDER_COUNT + 1].flush(index(listed));
+      const labels = httpMock.match('/agentic-ui-config/labels/en.json');
+      expect(labels.length).toBe(answer ? 1 : 0);
+      if (answer) answer(labels[0]);
+    }
+
+    it('are asked for only in a language the layouts index lists', () => {
+      configure({}, true);
+      let merged: Record<string, string> | undefined;
+      loader.getTranslation('en').subscribe((value) => (merged = value));
+      // The index lists French only, so nothing is asked for in English.
+      flushWithLabels({ 'only.app': 'app' }, ['fr']);
+      expect(merged?.['only.app']).toBe('app');
+    });
+
+    it('read the index once for every language, and say so when it cannot be read', () => {
+      configure({}, true);
+      loader.getTranslation('fr').subscribe();
+      loader.getTranslation('en').subscribe();
+      const reads = httpMock.match(INDEX);
+      expect(reads.length).toBe(1);
+      reads[0].flush({});
+      httpMock.match(() => true).forEach((request) => request.flush({}));
+      // The index answered `{}`, which is not one: nothing is listed, and the console is told.
+      expect(warnings).toEqual([
+        `[agentic-ui-config] labels not listed: ${INDEX} ignored: not a nuxeo-agentic-ui-config/1 response`,
+      ]);
+    });
+
+    it('come above the platform catalogue and below the manifest labels', () => {
+      configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' }, true);
+      let merged: Record<string, string> | undefined;
+      loader.getTranslation('en').subscribe((value) => (merged = value));
+
+      flushWithLabels(
+        { 'layout.field.claim:memberId': 'Member', 'only.app': 'app' },
+        ['en'],
+        (request) =>
+          request.flush({
+            version: 2,
+            labels: {
+              'payers.member.claims': 'Claims',
+              'payers.member.cases': 'Cases',
+              'layout.field.claim:memberId': 'Member ID',
+            },
+          }),
+      );
+
+      expect(merged?.['payers.member.cases']).toBe('Cases');
+      // The package replaces the platform's own key in its language, as section 7 says.
+      expect(merged?.['layout.field.claim:memberId']).toBe('Member ID');
+      expect(merged?.['only.app']).toBe('app');
+      // And a customer's relabelling still wins.
+      expect(merged?.['payers.member.claims']).toBe('Claims, as the customer relabelled them');
+    });
+
+    it('say so when a listed file cannot be read, or is not JSON, and the rest still loads', () => {
+      for (const [answer, reason] of [
+        [
+          (r: TestRequest) => r.flush('oops', { status: 500, statusText: 'Server Error' }),
+          'HTTP 500',
+        ],
+        // A body that does not parse fails with its 200 status, as a browser reports it.
+        [
+          (r: TestRequest) =>
+            r.error(new ProgressEvent('error'), { status: 200, statusText: 'OK' }),
+          'it is not JSON',
+        ],
+      ] as const) {
+        TestBed.resetTestingModule();
+        warnings.length = 0;
+        configure({}, true);
+        let merged: Record<string, string> | undefined;
+        loader.getTranslation('en').subscribe((value) => (merged = value));
+        flushWithLabels({ 'only.app': 'app' }, ['en'], answer);
+        expect(merged?.['only.app']).toBe('app');
+        expect(warnings).toEqual([
+          `[agentic-ui-config] /agentic-ui-config/labels/en.json not read: ${reason}`,
+        ]);
+      }
+    });
+
+    it('are read for the language asked, beside bootstrap.json', () => {
+      configure();
+      expect(packageLabelsUrl('/agentic-ui-config/bootstrap.json', 'en')).toBe(
+        '/agentic-ui-config/labels/en.json',
+      );
+      expect(packageLabelsUrl('/nuxeo/agentic-ui-config/bootstrap.json?v=2', 'pt-BR')).toBe(
+        '/nuxeo/agentic-ui-config/labels/pt-BR.json',
+      );
+    });
+
+    it('leave out a file that is not version 2, and each key or text the validator refuses', () => {
+      configure();
+      expect(readPackageLabels({ version: 1, labels: { a: 'A' } }, 'labels/en.json')).toEqual({});
+      expect(readPackageLabels('<html>', 'labels/en.json')).toEqual({});
+      expect(
+        readPackageLabels(
+          { version: 2, labels: { 'payers.ok': 'Fine', 'payers.empty': '  ', 'bad key!': 'X' } },
+          'labels/en.json',
+        ),
+      ).toEqual({ 'payers.ok': 'Fine' });
+      expect(warnings).toContain(
+        '[agentic-ui-config] labels/en.json ignored: it is not a version 2 labels file',
+      );
+      expect(
+        warnings.some((w) => w.includes('labels["payers.empty"]') && w.endsWith('left out')),
+      ).toBe(true);
+      expect(warnings.some((w) => w.includes('labels["bad key!"]') && w.endsWith('left out'))).toBe(
+        true,
+      );
+    });
   });
 
   it('falls back to the compiled-in English map when the app catalogue cannot be fetched', () => {

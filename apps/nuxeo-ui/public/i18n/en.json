@@ -1880,6 +1880,17 @@
       "update-mail-failed": "Permission could not be updated. Configure outbound mail (SMTP) on the Nuxeo server."
     }
   },
+  "queues": {
+    "empty": "Nothing in this queue",
+    "filters": "Filters",
+    "hidden": "This queue is not shown to you.",
+    "largest-only": "The largest only",
+    "loading": "Loading the queue",
+    "no-buckets": "No values",
+    "none": "No queue is configured with this name.",
+    "refused": "The queue could not be read.",
+    "title": "Queue"
+  },
   "rendition": {
     "pdf": "PDF",
     "thumbnail": "Thumbnail",

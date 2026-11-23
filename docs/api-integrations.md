@@ -1597,7 +1597,12 @@ They are not anonymous, though: being same-origin, they carry the browser's cook
 session's included. The server answers every user with the same files either way.
 
 `layouts.json` lists `{ type, mode, url, component, bundle, source }` per layout in force, plus the
-server's `diagnostics`. A layout file is fetched only when the index lists its type and mode, and
+server's `diagnostics`, and may list in `labels` the languages a business app's labels are served
+in (`docs/business-apps/app-definition-v2.md`, section 7). `AppTranslateLoader` reads the index for
+that list at startup, once per session and without the interceptors like every other read of this
+address, only when the configuration service answered for the bootstrap; it then asks for
+`labels/<lang>.json` only in a language the list names.
+Today's servlet lists none; `npm run config:dev -- --labels` lists those it serves. A layout file is fetched only when the index lists its type and mode, and
 answers `{ format, layer: "layout", type, mode, component, bundle, source, content }`, where
 `content` is the layout file itself — format in `docs/extension-reference.md` §9b. A missing or
 malformed index or file, or no answer within 10 s (`LAYOUT_LOAD_TIMEOUT_MS`), falls back to the
@@ -1912,6 +1917,52 @@ list; `nxs-saved-search-actions` for the permission read.
   `default_search` where an administrator counted 2,249.
 
 **Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`.
+
+---
+
+## 33. Queues — `queues/<id>.json` and the Queue's Page Provider
+
+| Field           | Value                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `QueueService` (`libs/shared/queues/src/lib/queue.service.ts`) for the file; `PageProviderService` (`libs/shared/nuxeo-client/src/lib/services/page-provider.service.ts`) for the list |
+| **Method**      | `load(id)`, once per visit of `/queues/<id>`; `execute(pageProvider, request)`, once per page, order or choice of buckets while the queue is shown                                     |
+| **HTTP Method** | `GET`                                                                                                                                                                                  |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/queues/<id>.json` (`/agentic-ui-config/queues/<id>.json` under `nx serve`) — without interceptors, no `Authorization` header                                 |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                               |
+| **Server side** | None for the file: the configuration servlet does not answer there (404), and only `npm run config:dev -- --queue <file>` serves it. Nuxeo's page provider for the list                |
+
+**Query parameters of the page provider read:**
+
+| Parameter                | Value                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pageSize`               | The queue's `pageSize`, 10 when it has none                                                                                      |
+| `currentPageIndex`       | The page on screen, from 0                                                                                                       |
+| `queryParams`            | The queue's literal `parameters`, one each, in order; none when it has none                                                      |
+| `sortBy`, `sortOrder`    | The queue's `sort`, or the header chosen; none when neither                                                                      |
+| `<aggregate>`, per facet | The buckets chosen in that facet's aggregate, as a JSON array: `dc_creator_agg=["nxsat332-writer"]`; none when nothing is chosen |
+
+**Request headers:** `properties: *`, `enrichers.document: permissions`.
+
+**Notes:**
+
+- A chosen bucket is sent as the search page sends its filters (`SearchService.search`). Measured on
+  the local server with `default_search`, as an administrator: `dc_creator_agg=["nxsat332-writer"]`
+  returns that author's 12 records only, and the response echoes the choice in
+  `aggregations.<id>.selection`. Two keys of one aggregate are alternatives:
+  `dc_nature_agg=["application"]` and `["article"]` return 1 record each, and
+  `["application","article"]` returns 2. Aggregates together keep the records in all of them: that
+  author and `dc_modified_agg=["last24h"]` return none.
+- `aggregations.<id>.extendedBuckets` holds the buckets and the chosen ones that now hold no
+  record, at `docCount: 0`; the facets read it first, so a chosen bucket can still be cleared. An
+  aggregate's own counts are worked out with the other aggregates' choices and not its own.
+- `PageProviderService` refuses, without a request, an aggregate named as the search's own
+  parameters (`pageSize`, `sortBy`, `queryParams`, `properties` and others), or with a `.` or a
+  `-`, which the rendering parameters use: it would change the request rather than filter it.
+- A page provider that queries the repository answers no aggregates, so its facets are not drawn.
+
+**Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), at
+`/queues/<id>`, through `RecordListComponent`
+(`libs/shared/document-layouts/src/lib/record-page/record-list.ts`).
 
 ---
 
