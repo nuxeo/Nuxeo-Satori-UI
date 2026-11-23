@@ -1,0 +1,109 @@
+{
+  "request": {
+    "path": "/directory/continent",
+    "query": {
+      "pageSize": "100",
+      "currentPageIndex": "0"
+    }
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "directoryEntries",
+    "isPaginable": true,
+    "resultsCount": 7,
+    "pageSize": 100,
+    "maxPageSize": 1000,
+    "resultsCountLimit": 0,
+    "currentPageSize": 7,
+    "currentPageIndex": 0,
+    "currentPageOffset": 0,
+    "numberOfPages": 1,
+    "isPreviousPageAvailable": false,
+    "isNextPageAvailable": false,
+    "isLastPageAvailable": false,
+    "isSortable": true,
+    "hasError": false,
+    "errorMessage": null,
+    "pageIndex": 0,
+    "pageCount": 1,
+    "entries": [
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "europe",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "europe",
+          "label": "label.directories.continent.europe"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "africa",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "africa",
+          "label": "label.directories.continent.africa"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "north-america",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "north-america",
+          "label": "label.directories.continent.north-america"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "south-america",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "south-america",
+          "label": "label.directories.continent.south-america"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "asia",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "asia",
+          "label": "label.directories.continent.asia"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "oceania",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "oceania",
+          "label": "label.directories.continent.oceania"
+        }
+      },
+      {
+        "entity-type": "directoryEntry",
+        "directoryName": "continent",
+        "id": "antarctica",
+        "properties": {
+          "ordering": 10000000,
+          "obsolete": 0,
+          "id": "antarctica",
+          "label": "label.directories.continent.antarctica"
+        }
+      }
+    ]
+  }
+}

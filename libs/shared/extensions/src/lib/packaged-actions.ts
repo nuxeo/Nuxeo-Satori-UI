@@ -105,6 +105,9 @@ export const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[] = [
  * Each toggle is **two descriptors gated by opposite rules** rather than one
  * whose label the component swaps, so a customer relabelling "Notify Me"
  * without relabelling "Unsubscribe" gets exactly that.
+ *
+ * Change state, last, was never markup: it is phase 2's lifecycle button, and
+ * reads the `allowedTransitions` enricher that `nuxeo-agentic-core` adds.
  */
 export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescriptor[] = [
   {
@@ -279,6 +282,19 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     order: 110,
     overflow: true,
     rule: 'app.rules.isNotTrashed',
+  },
+  {
+    // One entry for every lifecycle: it opens a dialog with a button per transition the
+    // `allowedTransitions` enricher lists, so its rule needs at least one. Nuxeo still checks
+    // `WriteLifeCycle` and the lifecycle when the transition is followed.
+    id: 'app.toolbar.followTransition',
+    labelKey: 'action.toolbar-follow-transition',
+    label: 'Change state',
+    icon: 'steps',
+    order: 120,
+    overflow: true,
+    rule: every('app.rules.isNotTrashed', 'app.rules.canFollowTransition'),
+    enabledRule: notBusy('transition'),
   },
 ];
 

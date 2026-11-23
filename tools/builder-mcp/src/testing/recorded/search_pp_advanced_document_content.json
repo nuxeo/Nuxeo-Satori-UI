@@ -1,0 +1,175 @@
+{
+  "request": {
+    "path": "/search/pp/advanced_document_content"
+  },
+  "status": 200,
+  "body": {
+    "name": "advanced_document_content",
+    "enabled": true,
+    "properties": {
+      "maxResults": "DEFAULT_NAVIGATION_RESULTS"
+    },
+    "queryParameters": [],
+    "pageSize": 20,
+    "pageSizeBinding": null,
+    "maxPageSize": null,
+    "pageSizeOptions": [5, 10, 20, 30, 40, 50],
+    "sortable": true,
+    "sortInfos": [
+      {
+        "sortColumn": "dc:modified",
+        "sortAscending": false
+      }
+    ],
+    "sortInfosBinding": null,
+    "pattern": null,
+    "quotePatternParameters": true,
+    "escapePatternParameters": true,
+    "whereClause": {
+      "escaperClass": null,
+      "predicates": [
+        {
+          "parameter": "dc:title",
+          "type": "atomic",
+          "operator": "FULLTEXT",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "title",
+              "schema": "advanced_content",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "ecm:parentId",
+          "type": "atomic",
+          "operator": "=",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "ecm_parentId",
+              "schema": "advanced_content",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "ecm:isTrashed",
+          "type": "atomic",
+          "operator": "=",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "ecm_trashed",
+              "schema": "advanced_content",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        }
+      ],
+      "fixedPart": "ecm:isVersion = 0 AND ecm:mixinType != 'HiddenInNavigation'",
+      "selectStatement": null,
+      "quoteFixedPartParameters": true,
+      "escapeFixedPartParameters": true
+    },
+    "searchDocumentType": "AdvancedContent",
+    "quickFilters": [],
+    "aggregates": [
+      {
+        "aggregateDateRangeDefinitionOrderMap": {},
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_last_contributor_agg",
+        "type": "terms",
+        "properties": {
+          "size": "10"
+        },
+        "ranges": [],
+        "dateRanges": [],
+        "searchField": {
+          "name": "dc_last_contributor_agg",
+          "schema": "advanced_content",
+          "xpath": null
+        },
+        "documentField": "dc:lastContributor"
+      },
+      {
+        "aggregateDateRangeDefinitionOrderMap": {
+          "last24h": 0,
+          "lastMonth": 2,
+          "priorToLastYear": 4,
+          "lastWeek": 1,
+          "lastYear": 3
+        },
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_modified_agg",
+        "type": "date_range",
+        "properties": {
+          "format": "\"dd-MM-yyyy\""
+        },
+        "ranges": [],
+        "dateRanges": [
+          {
+            "key": "last24h",
+            "from": null,
+            "to": null,
+            "fromDate": "now-24H",
+            "toDate": "now",
+            "fromAsString": "now-24H",
+            "toAsString": "now"
+          },
+          {
+            "key": "lastWeek",
+            "from": null,
+            "to": null,
+            "fromDate": "now-7d",
+            "toDate": "now-24H",
+            "fromAsString": "now-7d",
+            "toAsString": "now-24H"
+          },
+          {
+            "key": "lastMonth",
+            "from": null,
+            "to": null,
+            "fromDate": "now-1M",
+            "toDate": "now-7d",
+            "fromAsString": "now-1M",
+            "toAsString": "now-7d"
+          },
+          {
+            "key": "lastYear",
+            "from": null,
+            "to": null,
+            "fromDate": "now-1y",
+            "toDate": "now-1M",
+            "fromAsString": "now-1y",
+            "toAsString": "now-1M"
+          },
+          {
+            "key": "priorToLastYear",
+            "from": null,
+            "to": null,
+            "fromDate": null,
+            "toDate": "now-1y",
+            "fromAsString": null,
+            "toAsString": "now-1y"
+          }
+        ],
+        "searchField": {
+          "name": "dc_modified_agg",
+          "schema": "advanced_content",
+          "xpath": null
+        },
+        "documentField": "dc:modified"
+      }
+    ],
+    "id": "advanced_document_content",
+    "usageTrackingEnabled": true
+  }
+}

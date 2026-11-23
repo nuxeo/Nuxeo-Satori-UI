@@ -1,0 +1,84 @@
+{
+  "request": {
+    "path": "/directory"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "directories",
+    "entries": [
+      {
+        "entity-type": "directory",
+        "name": "continent",
+        "schema": "vocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": null
+      },
+      {
+        "entity-type": "directory",
+        "name": "country",
+        "schema": "xvocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": "continent"
+      },
+      {
+        "entity-type": "directory",
+        "name": "l10ncoverage",
+        "schema": "l10nxvocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": "l10ncoverage"
+      },
+      {
+        "entity-type": "directory",
+        "name": "language",
+        "schema": "vocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": null
+      },
+      {
+        "entity-type": "directory",
+        "name": "l10nsubjects",
+        "schema": "l10nxvocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": "l10nsubjects"
+      },
+      {
+        "entity-type": "directory",
+        "name": "subtopic",
+        "schema": "xvocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": "topic"
+      },
+      {
+        "entity-type": "directory",
+        "name": "nature",
+        "schema": "vocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": null
+      },
+      {
+        "entity-type": "directory",
+        "name": "WorkflowType",
+        "schema": "vocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": null
+      },
+      {
+        "entity-type": "directory",
+        "name": "topic",
+        "schema": "vocabulary",
+        "idField": "id",
+        "readOnly": false,
+        "parent": null
+      }
+    ]
+  },
+  "trimmed": "entries: 9 of 11 kept: continent, country, language, nature, topic, subtopic, l10ncoverage, l10nsubjects, WorkflowType"
+}

@@ -1,0 +1,407 @@
+{
+  "request": {
+    "path": "/search/pp/default_search"
+  },
+  "status": 200,
+  "body": {
+    "name": "default_search",
+    "enabled": true,
+    "properties": {},
+    "queryParameters": [],
+    "pageSize": 20,
+    "pageSizeBinding": null,
+    "maxPageSize": null,
+    "pageSizeOptions": [5, 10, 20, 30, 40, 50],
+    "sortable": true,
+    "sortInfos": [],
+    "sortInfosBinding": null,
+    "pattern": null,
+    "quotePatternParameters": true,
+    "escapePatternParameters": true,
+    "whereClause": {
+      "escaperClass": null,
+      "predicates": [
+        {
+          "parameter": "ecm:fulltext",
+          "type": "atomic",
+          "operator": "FULLTEXT",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "ecm_fulltext",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:creator",
+          "type": "atomic",
+          "operator": "IN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "dc_creator",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:created",
+          "type": "atomic",
+          "operator": "BETWEEN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "dc_created_min",
+              "schema": "default_search",
+              "xpath": null
+            },
+            {
+              "name": "dc_created_max",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:modified",
+          "type": "atomic",
+          "operator": "BETWEEN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "dc_modified_min",
+              "schema": "default_search",
+              "xpath": null
+            },
+            {
+              "name": "dc_modified_max",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:nature",
+          "type": "atomic",
+          "operator": "IN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "dc_nature",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:subjects",
+          "type": "atomic",
+          "operator": "STARTSWITH",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "dc_subjects",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "dc:coverage",
+          "type": "atomic",
+          "operator": "STARTSWITH",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "dc_coverage",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "ecm:path",
+          "type": "atomic",
+          "operator": "STARTSWITH",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "ecm_path",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "ecm:tag",
+          "type": "atomic",
+          "operator": "IN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "ecm_tags",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        },
+        {
+          "parameter": "collectionMember:collectionIds",
+          "type": "atomic",
+          "operator": "IN",
+          "operatorField": null,
+          "operatorSchema": null,
+          "values": [
+            {
+              "name": "ecm_collections",
+              "schema": "default_search",
+              "xpath": null
+            }
+          ],
+          "hint": null
+        }
+      ],
+      "fixedPart": "ecm:primaryType NOT IN ('Domain', 'SectionRoot', 'TemplateRoot', 'WorkspaceRoot', 'Favorites') AND ecm:mixinType != 'HiddenInNavigation' AND NOT (ecm:mixinType = 'Collection' AND ecm:name = 'Locally Edited') AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND ecm:parentId IS NOT NULL AND SORTED_COLUMN IS NOT NULL",
+      "selectStatement": null,
+      "quoteFixedPartParameters": true,
+      "escapeFixedPartParameters": true
+    },
+    "searchDocumentType": "DefaultSearch",
+    "quickFilters": [
+      {
+        "name": "noFolder",
+        "clause": "ecm:mixinType != 'Folderish'",
+        "sortInfos": []
+      },
+      {
+        "name": "mostRecent",
+        "clause": null,
+        "sortInfos": [
+          {
+            "sortColumn": "dc:modified",
+            "sortAscending": false
+          }
+        ]
+      },
+      {
+        "name": "onlyValidated",
+        "clause": "ecm:currentLifeCycleState = 'approved'",
+        "sortInfos": [
+          {
+            "sortColumn": "dc:modified",
+            "sortAscending": false
+          }
+        ]
+      }
+    ],
+    "aggregates": [
+      {
+        "aggregateDateRangeDefinitionOrderMap": {},
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_nature_agg",
+        "type": "terms",
+        "properties": {
+          "size": "10"
+        },
+        "ranges": [],
+        "dateRanges": [],
+        "searchField": {
+          "name": "dc_nature_agg",
+          "schema": "default_search",
+          "xpath": null
+        },
+        "documentField": "dc:nature"
+      },
+      {
+        "aggregateDateRangeDefinitionOrderMap": {},
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_subjects_agg",
+        "type": "terms",
+        "properties": {
+          "size": "10"
+        },
+        "ranges": [],
+        "dateRanges": [],
+        "searchField": {
+          "name": "dc_subjects_agg",
+          "schema": "default_search",
+          "xpath": null
+        },
+        "documentField": "dc:subjects"
+      },
+      {
+        "aggregateDateRangeDefinitionOrderMap": {},
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_coverage_agg",
+        "type": "terms",
+        "properties": {
+          "size": "10"
+        },
+        "ranges": [],
+        "dateRanges": [],
+        "searchField": {
+          "name": "dc_coverage_agg",
+          "schema": "default_search",
+          "xpath": null
+        },
+        "documentField": "dc:coverage"
+      },
+      {
+        "aggregateDateRangeDefinitionOrderMap": {},
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_creator_agg",
+        "type": "terms",
+        "properties": {
+          "size": "10"
+        },
+        "ranges": [],
+        "dateRanges": [],
+        "searchField": {
+          "name": "dc_creator_agg",
+          "schema": "default_search",
+          "xpath": null
+        },
+        "documentField": "dc:creator"
+      },
+      {
+        "aggregateDateRangeDefinitionOrderMap": {},
+        "aggregateRangeDefinitionOrderMap": {
+          "small": 1,
+          "big": 3,
+          "huge": 4,
+          "medium": 2,
+          "tiny": 0
+        },
+        "id": "common_size_agg",
+        "type": "range",
+        "properties": {},
+        "ranges": [
+          {
+            "key": "tiny",
+            "from": null,
+            "to": 102400
+          },
+          {
+            "key": "small",
+            "from": 102401,
+            "to": 1048576
+          },
+          {
+            "key": "medium",
+            "from": 1048577,
+            "to": 10485760
+          },
+          {
+            "key": "big",
+            "from": 10485761,
+            "to": 104857600
+          },
+          {
+            "key": "huge",
+            "from": 104857601,
+            "to": null
+          }
+        ],
+        "dateRanges": [],
+        "searchField": {
+          "name": "common_size_agg",
+          "schema": "default_search",
+          "xpath": null
+        },
+        "documentField": "file:content/length"
+      },
+      {
+        "aggregateDateRangeDefinitionOrderMap": {
+          "last24h": 0,
+          "lastMonth": 2,
+          "priorToLastYear": 4,
+          "lastWeek": 1,
+          "lastYear": 3
+        },
+        "aggregateRangeDefinitionOrderMap": {},
+        "id": "dc_modified_agg",
+        "type": "date_range",
+        "properties": {
+          "format": "\"dd-MM-yyyy\""
+        },
+        "ranges": [],
+        "dateRanges": [
+          {
+            "key": "last24h",
+            "from": null,
+            "to": null,
+            "fromDate": "now-24H",
+            "toDate": "now",
+            "fromAsString": "now-24H",
+            "toAsString": "now"
+          },
+          {
+            "key": "lastWeek",
+            "from": null,
+            "to": null,
+            "fromDate": "now-7d",
+            "toDate": "now-24H",
+            "fromAsString": "now-7d",
+            "toAsString": "now-24H"
+          },
+          {
+            "key": "lastMonth",
+            "from": null,
+            "to": null,
+            "fromDate": "now-1M",
+            "toDate": "now-7d",
+            "fromAsString": "now-1M",
+            "toAsString": "now-7d"
+          },
+          {
+            "key": "lastYear",
+            "from": null,
+            "to": null,
+            "fromDate": "now-1y",
+            "toDate": "now-1M",
+            "fromAsString": "now-1y",
+            "toAsString": "now-1M"
+          },
+          {
+            "key": "priorToLastYear",
+            "from": null,
+            "to": null,
+            "fromDate": null,
+            "toDate": "now-1y",
+            "fromAsString": null,
+            "toAsString": "now-1y"
+          }
+        ],
+        "searchField": {
+          "name": "dc_modified_agg",
+          "schema": "default_search",
+          "xpath": null
+        },
+        "documentField": "dc:modified"
+      }
+    ],
+    "id": "default_search",
+    "usageTrackingEnabled": true
+  }
+}

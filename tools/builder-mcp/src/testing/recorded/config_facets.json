@@ -1,0 +1,249 @@
+{
+  "request": {
+    "path": "/config/facets"
+  },
+  "status": 200,
+  "body": [
+    {
+      "name": "NXTag",
+      "schemas": [
+        {
+          "name": "facetedTag",
+          "@prefix": "nxtag",
+          "fields": {
+            "tags": {
+              "fields": {
+                "label": "string",
+                "username": "string"
+              },
+              "type": "complex[]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Publishable"
+    },
+    {
+      "name": "HasRelatedText",
+      "schemas": [
+        {
+          "name": "relatedtext",
+          "@prefix": "",
+          "fields": {
+            "relatedtextresources": {
+              "fields": {
+                "relatedtextid": "string",
+                "relatedtext": "string"
+              },
+              "type": "complex[]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Versionable"
+    },
+    {
+      "name": "SystemDocument"
+    },
+    {
+      "name": "NotFulltextIndexable"
+    },
+    {
+      "name": "facet-var_Task22b4",
+      "schemas": [
+        {
+          "name": "var_Task22b4",
+          "@prefix": "var_Task22b4",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "facet-var_SerialDocumentReview",
+      "schemas": [
+        {
+          "name": "var_SerialDocumentReview",
+          "@prefix": "var_SerialDocumentReview",
+          "fields": {
+            "participants": "string[]",
+            "validationOrReview": "string",
+            "initiatorComment": "string",
+            "index": "long"
+          }
+        }
+      ]
+    },
+    {
+      "name": "facet-var_Task328d",
+      "schemas": [
+        {
+          "name": "var_Task328d",
+          "@prefix": "var_Task328d",
+          "fields": {
+            "assignees": "string[]",
+            "comment": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orderable"
+    },
+    {
+      "name": "DocumentRoute"
+    },
+    {
+      "name": "facet-var_Task2169",
+      "schemas": [
+        {
+          "name": "var_Task2169",
+          "@prefix": "var_Task2169",
+          "fields": {
+            "assignees": "string[]",
+            "comment": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "facet-var_Task375f",
+      "schemas": [
+        {
+          "name": "var_Task375f",
+          "@prefix": "var_Task375f",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "facet-var_ParallelDocumentReview",
+      "schemas": [
+        {
+          "name": "var_ParallelDocumentReview",
+          "@prefix": "var_ParallelDocumentReview",
+          "fields": {
+            "end_date": "date",
+            "initiatorComment": "string",
+            "participants": "string[]",
+            "review_result": "string",
+            "review_result_file": "blob",
+            "validationOrReview": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "facet-var_Task542",
+      "schemas": [
+        {
+          "name": "var_Task542",
+          "@prefix": "var_Task542",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "Commentable"
+    },
+    {
+      "name": "NotCollectionMember"
+    },
+    {
+      "name": "facet-var_Task2556",
+      "schemas": [
+        {
+          "name": "var_Task2556",
+          "@prefix": "var_Task2556",
+          "fields": {
+            "comment": "string",
+            "assignees": "string[]"
+          }
+        }
+      ]
+    },
+    {
+      "name": "facet-var_Task6d8",
+      "schemas": [
+        {
+          "name": "var_Task6d8",
+          "@prefix": "var_Task6d8",
+          "fields": {
+            "comment": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Folderish"
+    },
+    {
+      "name": "SuperSpace"
+    },
+    {
+      "name": "ForceAudit"
+    },
+    {
+      "name": "facet-var_Task38e",
+      "schemas": [
+        {
+          "name": "var_Task38e",
+          "@prefix": "var_Task38e",
+          "fields": {
+            "comment": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Downloadable"
+    },
+    {
+      "name": "facet-var_Task2225",
+      "schemas": [
+        {
+          "name": "var_Task2225",
+          "@prefix": "var_Task2225",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "HiddenInNavigation"
+    },
+    {
+      "name": "facet-var_Task5c1",
+      "schemas": [
+        {
+          "name": "var_Task5c1",
+          "@prefix": "var_Task5c1",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "facet-var_Task21a0",
+      "schemas": [
+        {
+          "name": "var_Task21a0",
+          "@prefix": "var_Task21a0",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "facet-var_Task232e",
+      "schemas": [
+        {
+          "name": "var_Task232e",
+          "@prefix": "var_Task232e",
+          "fields": {}
+        }
+      ]
+    }
+  ],
+  "trimmed": "29 of 65 kept: those the kept types and workflows use"
+}

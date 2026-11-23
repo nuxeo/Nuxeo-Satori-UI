@@ -1,0 +1,32 @@
+{
+  "request": {
+    "path": "/id/0907ccd2-f60f-4471-b084-b3e3e5b6e626",
+    "properties": "document_route_instance"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "DocumentRoute",
+    "path": "/document-route-models-root/SerialDocumentReview",
+    "facets": [
+      "SystemDocument",
+      "facet-var_SerialDocumentReview",
+      "Folderish",
+      "ForceAudit",
+      "NXTag",
+      "HiddenInNavigation",
+      "Orderable",
+      "DocumentRoute"
+    ],
+    "properties": {
+      "docri:variablesFacet": "facet-var_SerialDocumentReview",
+      "docri:availabilityFilter": "filter@SerialDocumentReview",
+      "docri:initiator": null,
+      "docri:parentRouteInstanceId": null,
+      "docri:modelId": null,
+      "docri:participatingDocuments": [],
+      "docri:parentRouteNodeId": null
+    }
+  },
+  "trimmed": "properties: 7 of 7 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

@@ -1,0 +1,199 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/SerialDocumentReview/Task6d8",
+    "properties": "route_node"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/SerialDocumentReview/Task6d8",
+    "facets": ["facet-var_Task6d8", "SystemDocument", "NotFulltextIndexable", "HiddenInNavigation"],
+    "properties": {
+      "rnode:taskDocType": "TaskDoc",
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [
+        {
+          "filter": "",
+          "name": "reject",
+          "label": "wf.serialDocumentReview.Reject",
+          "validate": true
+        },
+        {
+          "filter": "",
+          "name": "validate",
+          "label": "wf.serialDocumentReview.Validate",
+          "validate": true
+        }
+      ],
+      "rnode:transitions": [
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 0,
+              "y": 129.99998474121094
+            },
+            {
+              "x": 200,
+              "y": 129.99998474121094
+            },
+            {
+              "x": 200,
+              "y": 259.9999694824219
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] == \"validate\" && WorkflowVariables[\"index\"] == WorkflowVariables[\"participants\"].length",
+          "chain": "terminateWorkflow",
+          "targetId": "Task5c1",
+          "name": "sdr_finishTask6d8",
+          "description": null,
+          "label": "sdr_finish"
+        },
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 0,
+              "y": 80
+            },
+            {
+              "x": 0,
+              "y": 125
+            },
+            {
+              "x": -151,
+              "y": 125
+            },
+            {
+              "x": -151,
+              "y": -76
+            },
+            {
+              "x": 20,
+              "y": -76
+            },
+            {
+              "x": 20,
+              "y": 0
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] ==\"reject\" && WorkflowVariables[\"index\"] >= 0",
+          "chain": "logInAudit",
+          "targetId": "Task6d8",
+          "name": "sdr_rejectionTask6d8",
+          "description": null,
+          "label": "sdr_rejection"
+        },
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 0,
+              "y": 80
+            },
+            {
+              "x": 0,
+              "y": 123
+            },
+            {
+              "x": 190,
+              "y": 123
+            },
+            {
+              "x": 190,
+              "y": -30
+            },
+            {
+              "x": 380,
+              "y": -30
+            },
+            {
+              "x": 380,
+              "y": 0
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] ==\"reject\" && WorkflowVariables[\"index\"] ==-1",
+          "chain": "logInAudit",
+          "targetId": "Task542",
+          "name": "sdr_update_requestTask6d8",
+          "description": null,
+          "label": "sdr_update_request"
+        },
+        {
+          "result": null,
+          "path": [
+            {
+              "x": 20,
+              "y": 80
+            },
+            {
+              "x": 20,
+              "y": 164
+            },
+            {
+              "x": -125,
+              "y": 164
+            },
+            {
+              "x": -125,
+              "y": -30
+            },
+            {
+              "x": 0,
+              "y": -30
+            },
+            {
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "condition": "NodeVariables[\"button\"] == \"validate\" && WorkflowVariables[\"index\"] < WorkflowVariables[\"participants\"].length",
+          "chain": "logInAudit",
+          "targetId": "Task6d8",
+          "name": "sdr_validationTask6d8",
+          "description": null,
+          "label": "sdr_validation"
+        }
+      ],
+      "rnode:taskLayout": "Task6d8@taskLayout",
+      "rnode:startDate": null,
+      "rnode:taskY": "280",
+      "rnode:variablesFacet": "facet-var_Task6d8",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "240",
+      "rnode:inputChain": "reinitAssigneeComment",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": false,
+      "rnode:taskNotificationTemplate": "workflowTaskAssigned",
+      "rnode:allowTaskReassignment": true,
+      "rnode:stop": false,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": "CurrentDate.days(5)",
+      "rnode:hasTask": true,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "nextAssignee",
+      "rnode:taskDirective": "wf.serialDocumentReview.AcceptReject",
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": "WorkflowVariables[\"participants\"][(int)WorkflowVariables.index]",
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task6d8",
+      "rnode:merge": null,
+      "rnode:start": false,
+      "rnode:taskAssigneesPermission": "ReadWrite"
+    }
+  },
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

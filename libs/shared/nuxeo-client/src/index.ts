@@ -285,6 +285,12 @@ export {
   READ_WRITE_DOCUMENT,
 } from './lib/utils/document-permissions';
 export {
+  ALLOWED_TRANSITIONS_ENRICHER,
+  allowedTransitions,
+  canFollowAnyTransition,
+  type NuxeoAllowedTransition,
+} from './lib/utils/allowed-transitions';
+export {
   buildDocumentCompareSections,
   formatCompareDate,
   formatCompareValue,

@@ -1,0 +1,32 @@
+{
+  "request": {
+    "path": "/id/59e3b7f5-0e98-423b-8b49-bd3f63a1c0f6",
+    "properties": "document_route_instance"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "DocumentRoute",
+    "path": "/document-route-models-root/ParallelDocumentReview",
+    "facets": [
+      "SystemDocument",
+      "Folderish",
+      "ForceAudit",
+      "NXTag",
+      "HiddenInNavigation",
+      "Orderable",
+      "DocumentRoute",
+      "facet-var_ParallelDocumentReview"
+    ],
+    "properties": {
+      "docri:variablesFacet": "facet-var_ParallelDocumentReview",
+      "docri:availabilityFilter": "filter@wf@ParallelDocumentReview",
+      "docri:initiator": null,
+      "docri:parentRouteInstanceId": null,
+      "docri:modelId": null,
+      "docri:participatingDocuments": [],
+      "docri:parentRouteNodeId": null
+    }
+  },
+  "trimmed": "properties: 7 of 7 kept (rnode, docri and var_ ones); the document's other keys left out"
+}

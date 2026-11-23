@@ -1,0 +1,161 @@
+{
+  "request": {
+    "path": "/workflowModel/ParallelDocumentReview/graph"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "graph",
+    "nodes": [
+      {
+        "x": 360,
+        "y": 320,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": false,
+        "id": "Task2169",
+        "title": "Consolidate the Review",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": false
+      },
+      {
+        "x": 360,
+        "y": 20,
+        "isForkNode": false,
+        "isStartNode": true,
+        "isEndNode": false,
+        "id": "Task21a0",
+        "title": "Start",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": true,
+        "endNode": false
+      },
+      {
+        "x": 580,
+        "y": 240,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": true,
+        "id": "Task2225",
+        "title": "Stop",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": true
+      },
+      {
+        "x": 580,
+        "y": 480,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": true,
+        "id": "Task22b4",
+        "title": "Stop",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": true
+      },
+      {
+        "x": 160,
+        "y": 480,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": true,
+        "id": "Task232e",
+        "title": "Stop",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": true
+      },
+      {
+        "x": 340,
+        "y": 120,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": false,
+        "id": "Task2556",
+        "title": "Choose Participants",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": false,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": false
+      },
+      {
+        "x": 140,
+        "y": 240,
+        "isForkNode": false,
+        "isStartNode": false,
+        "isEndNode": false,
+        "id": "Task328d",
+        "title": "Give your Opinion",
+        "state": "validated",
+        "isMerge": false,
+        "isMultiTask": true,
+        "hasSubWorkflow": false,
+        "forkNode": false,
+        "startNode": false,
+        "endNode": false
+      }
+    ],
+    "transitions": [
+      {
+        "nodeSourceId": "Task2169",
+        "nodeTargetId": "Task22b4",
+        "label": "Validation",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task2169",
+        "nodeTargetId": "Task232e",
+        "label": "Rejection",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task21a0",
+        "nodeTargetId": "Task2556",
+        "label": "",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task2556",
+        "nodeTargetId": "Task2225",
+        "label": "Cancelation",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task2556",
+        "nodeTargetId": "Task328d",
+        "label": "Review start",
+        "path": []
+      },
+      {
+        "nodeSourceId": "Task328d",
+        "nodeTargetId": "Task2169",
+        "label": "",
+        "path": []
+      }
+    ]
+  }
+}

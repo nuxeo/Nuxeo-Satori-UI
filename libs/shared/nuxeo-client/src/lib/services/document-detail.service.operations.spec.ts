@@ -58,6 +58,8 @@ describe('DocumentDetailService', () => {
         'collections',
         'preview',
         'thumbnail',
+        // nuxeo-agentic-core's: the lifecycle buttons read it, and with none they are not offered.
+        'allowedTransitions',
       ]) {
         expect(enrichers).toContain(enricher);
       }
@@ -342,6 +344,11 @@ describe('DocumentDetailService', () => {
         url: '/nuxeo/api/v1/id/ver-1/@op/Document.RestoreVersion',
         call: () => firstValueFrom(service.restoreVersion('ver-1')),
       },
+      {
+        name: 'followTransition',
+        url: '/nuxeo/api/v1/id/doc-1/@op/Document.FollowLifecycleTransition',
+        call: () => firstValueFrom(service.followTransition('doc-1', 'approve')),
+      },
     ];
 
     for (const { name, url, call } of cases) {
@@ -370,6 +377,18 @@ describe('DocumentDetailService', () => {
       expect(req.request.headers.get('fetch-document')).toBe('lock');
       req.flush(doc({ lockOwner: null, lockCreated: null }));
       expect(await pending).toMatchObject({ lockOwner: null });
+    });
+
+    it('follows the transition it is given, as the operation names its parameter', async () => {
+      const pending = firstValueFrom(service.followTransition('doc-1', 'backToProject'));
+      const req = httpMock.expectOne(
+        '/nuxeo/api/v1/id/doc-1/@op/Document.FollowLifecycleTransition',
+      );
+      // `value` is the operation's one parameter; any other name is ignored and the server answers
+      // that no transition was given.
+      expect(req.request.body).toEqual({ params: { value: 'backToProject' }, context: {} });
+      req.flush(doc({ state: 'project' }));
+      expect(await pending).toMatchObject({ state: 'project' });
     });
 
     it('subscribes with the default notification set', async () => {

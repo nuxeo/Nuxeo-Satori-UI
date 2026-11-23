@@ -72,8 +72,9 @@ today.
 - **Said:** Satori lacks the Nuxeo basics of data modelling, the platform's biggest strength.
   Ideally we'd point a tool at the model and generate the UI from it.
 - **Today:** a type's model appears as lists of fields (the Properties panel, and the edit and
-  create forms) and in type and facet rules. Vocabulary values show their labels. No lifecycle
-  transition is offered anywhere. Layouts have no handling for document references, so a reference is not a link to the record. The app
+  create forms) and in type and facet rules. Vocabulary values show their labels. Lifecycle
+  transitions are offered only by the document page's Change state action, from
+  `nuxeo-agentic-core`'s `allowedTransitions` enricher. Layouts have no handling for document references, so a reference is not a link to the record. The app
   queries three stock page providers (`default_search`, `assets_search`, `default_trash_search`)
   and never a customer's own. `ContentModelService` reads types, schemas and facets, but nothing
   in the app calls it

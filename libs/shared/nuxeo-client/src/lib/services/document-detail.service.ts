@@ -15,6 +15,7 @@ import { NuxeoDocument, NuxeoDocumentList } from '../models/document.model';
 import { NuxeoWorkflowModel } from '../models/workflow.model';
 import type { AuditLogList, AuditLogQuery } from '../models/audit.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
+import { ALLOWED_TRANSITIONS_ENRICHER } from '../utils/allowed-transitions';
 import { normalizeDocumentAcls } from '../utils/ace-principal';
 import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-client-reason';
 
@@ -27,8 +28,8 @@ export class DocumentDetailService {
   getFullDocument(uid: string): Observable<NuxeoDocument> {
     return this.api.get<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}`, undefined, {
       properties: '*',
-      'enrichers.document':
-        'acls,permissions,renditions,favorites,subscribedNotifications,collections,preview,thumbnail',
+      // `allowedTransitions` is nuxeo-agentic-core's; a server without it ignores the name.
+      'enrichers.document': `acls,permissions,renditions,favorites,subscribedNotifications,collections,preview,thumbnail,${ALLOWED_TRANSITIONS_ENRICHER}`,
       // Nuxeo omits `lockOwner` / `lockCreated` unless asked, so a locked document reads as unlocked.
       'fetch-document': 'lock',
     });
@@ -38,7 +39,8 @@ export class DocumentDetailService {
     return this.api
       .get<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}`, undefined, {
         properties: '*',
-        'enrichers.document': 'acls,permissions,userVisiblePermissions',
+        // `allowedTransitions` too: a permission change changes the transitions the user may follow.
+        'enrichers.document': `acls,permissions,userVisiblePermissions,${ALLOWED_TRANSITIONS_ENRICHER}`,
         'fetch-acls': 'username,creator,extended',
         depth: 'children',
         time: String(Date.now()),
@@ -179,6 +181,18 @@ export class DocumentDetailService {
       `/nuxeo/api/v1/id/${uid}/@op/Document.Unlock`,
       { params: {}, context: {} },
       { 'fetch-document': 'lock' },
+    );
+  }
+
+  /**
+   * Follow a lifecycle transition, `Document.FollowLifecycleTransition` with the transition as its
+   * `value`. The server checks `WriteLifeCycle`, and that the document's lifecycle allows the
+   * transition from its current state, whatever the interface offered.
+   */
+  followTransition(uid: string, transition: string): Observable<NuxeoDocument> {
+    return this.api.post<NuxeoDocument>(
+      `/nuxeo/api/v1/id/${uid}/@op/Document.FollowLifecycleTransition`,
+      { params: { value: transition }, context: {} },
     );
   }
 
