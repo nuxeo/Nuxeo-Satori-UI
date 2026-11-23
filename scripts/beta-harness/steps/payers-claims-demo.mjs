@@ -4,26 +4,34 @@
  * `business-apps/packages/payers-claims-demo`.
  *
  *   1. An adjuster's home, with KPIs from the page providers' aggregates.
- *   2. A queue opened, its rows sorted and filtered on the server.
+ *   2. A queue opened, its rows in the server's order, and narrowed by a facet on the server.
  *   3. A member: age, combined address, and the member's claims and cases.
  *   4. Member services see the social security number, which an adjuster does not.
  *   5. The layout file behind the page: configuration, no code.
  *
- * Every figure, row and value it expects is read from the kit's own files, `demo/data.mjs` and
- * `bundle/agentic-ui-config/`, not written here, so a change to the records is a change to what the
- * demo asserts. Which cards each group's home shows is the demo's story, so it is written here
- * (`ADJUSTER_CARDS`, `SERVICES_CARDS`): a rule changed in `home.json` fails the demo.
+ * Step 4 follows the Member page the kit has, layout-v2.md's section 9: the number shows to member
+ * services alone, and is left out, not masked, for everyone else. The plan's wording, "the
+ * protected fields are masked on screen", was written before that page; masking the value itself
+ * is decision I.
+ *
+ * The figures, rows and values it expects are read from the kit's own files, `demo/data.mjs` and
+ * `bundle/agentic-ui-config/`, so a change to the records is a change to what the demo asserts.
+ * The demo's own choices are written here: which cards each group's home shows (`ADJUSTER_CARDS`,
+ * `SERVICES_CARDS`, so a rule changed in `home.json` fails the demo), the member it opens
+ * (`MEMBER`) and the facet bucket it picks, one of the adjuster's statuses.
  *
  * What it needs, and refuses to run without (exit 2):
  *
  * - The kit installed on the local Nuxeo, version 0.3.0 or later (its queue page providers), and
  *   seeded with `demo/seed.mjs`, which creates the demo's people.
  * - The dev server with `npm run config:dev` serving the kit's files (the kit's README, "Seeing
- *   it under nx serve"). The home, the menu, the queues and the labels are served in dev mode only, until the
- *   app registry.
- * - **The run's own user is an adjuster:** `NUXEO_USER` one of `data.mjs`'s users in
- *   `claims-adjusters` and not in `member-services`, such as `dana.lee`, and `NUXEO_PASS` the demo
- *   password. Step 1 signs in as them.
+ *   it under nx serve"). The home, the menu, the queues and the labels are served in dev mode
+ *   only, until the app registry.
+ * - **The run's own user is an adjuster, and only that:** `NUXEO_USER` one of `data.mjs`'s users
+ *   whose one group is `claims-adjusters`, such as `dana.lee`, and `NUXEO_PASS` the demo password.
+ *   Step 1 signs in as them. A supervisor's home has member services' cards too.
+ * - **No claim the seed did not write is in what the demo counts:** the figures are counted
+ *   exactly, so such a claim in a queue, or a seeded member's, would change them.
  * - `PAYERS_DEMO_PASSWORD`, the password the seed gave the demo's people: step 4 signs the browser
  *   in as a member of `member-services` with it, declared with `h.signedInAs`.
  *
@@ -31,10 +39,11 @@
  *
  * Load-bearing checks, by step: the home's cards and their figures as the seed implies them, the
  * other group's cards absent; the queue's rows in the server's order, and narrowed by a facet on
- * the server; the member's age, address and related lists; the SSN nowhere on the adjuster's screen
- * with the Properties panel drawn, and on member services' Member card; the served layout file the
- * kit's own, and the page drawn as it says. Negative ones: the other group's cards, queues and menu
- * entries, and the SSN, absent.
+ * the server; the member's age, address and related lists; the SSN nowhere on the adjuster's
+ * Member page with the Properties panel drawn, and the adjuster unable to change the member, whose
+ * Edit form would list it; the SSN on member services' Member card; the served layout file the
+ * kit's own, and the page drawn as it says. Negative ones: the other group's cards and menu
+ * entries, the SSN, and the adjuster's right to change a member, absent.
  *
  * Not covered, and said in notes: the server's own install (the dev server reads the layouts from
  * `config:dev`, not from the package), and the package's own actions (`actions.json` is not served
@@ -251,13 +260,14 @@ export default async function run(page, h) {
   await h.step('Preconditions: the kit installed and seeded, its files served, its people');
   const { username: adjuster } = requireStepCredentials('sign the demo in as an adjuster');
   const adjusterRecord = USERS.find((user) => user.username === adjuster);
+  const adjustersOnly = (user) =>
+    JSON.stringify(user?.groups) === JSON.stringify(['claims-adjusters']);
   h.requirePrecondition(
-    'the run signs in as one of the demo adjusters',
-    adjusterRecord?.groups.includes('claims-adjusters') &&
-      !adjusterRecord.groups.includes('member-services'),
-    `NUXEO_USER is ${adjuster}: set it to an adjuster of data.mjs who is not in member-services, ` +
-      `such as ${USERS.find((u) => u.groups.includes('claims-adjusters'))?.username}, and ` +
-      'NUXEO_PASS to the demo password',
+    'the run signs in as one of the demo adjusters, in no other group',
+    adjustersOnly(adjusterRecord),
+    `NUXEO_USER is ${adjuster}: set it to a user of data.mjs whose one group is ` +
+      `claims-adjusters, such as ${USERS.find(adjustersOnly)?.username}, and NUXEO_PASS to the ` +
+      'demo password',
   );
   const me = await page.request
     .get(`${h.baseUrl}/nuxeo/api/v1/me`)
@@ -265,10 +275,11 @@ export default async function run(page, h) {
     .catch(unread);
   const myGroups = (me?.extendedGroups ?? []).map((group) => group.name);
   h.requirePrecondition(
-    'the server has the adjuster, in claims-adjusters and not in member-services',
+    'the server has the adjuster, in claims-adjusters and in neither other demo group',
     me?.id === adjuster &&
       myGroups.includes('claims-adjusters') &&
-      !myGroups.includes('member-services'),
+      !myGroups.includes('member-services') &&
+      !myGroups.includes('claims-supervisors'),
     `/me answered ${me?.id} in ${JSON.stringify(myGroups)}: run demo/seed.mjs first`,
   );
 
@@ -308,6 +319,45 @@ export default async function run(page, h) {
     'run demo/seed.mjs against this server',
   );
 
+  // The figures are counted exactly, so no claim the seed did not write may be in what they count:
+  // a queue's, or a seeded member's. Another claim the adjuster can read, in none of them, changes
+  // nothing. The repository is asked, not the index, which can still hold a trashed one.
+  const readable = await page.request
+    .post(`${h.baseUrl}/nuxeo/api/v1/automation/Repository.Query`, {
+      headers: { 'Content-Type': 'application/json', properties: 'claim' },
+      data: {
+        params: {
+          query:
+            "SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND ecm:isVersion = 0 " +
+            'AND ecm:isProxy = 0 AND ecm:isTrashed = 0',
+          pageSize: 1000,
+        },
+      },
+    })
+    .then((r) => (r.ok() ? r.json() : null))
+    .catch(unread);
+  const seededPath = (entry) =>
+    CLAIMS.some(
+      (claim) =>
+        entry.path ===
+        `/default-domain/workspaces/payers-demo/claims/${claim.number.toLowerCase()}`,
+    );
+  const counted = (claim) =>
+    ((claim['claim:adjuster'] ?? null) === null &&
+      ['submitted', 'inReview'].includes(claim['claim:status'])) ||
+    ['inReview', 'pended'].includes(claim['claim:status']) ||
+    claim['claim:adjuster'] === adjuster ||
+    claim['claim:member'] === memberDoc?.uid;
+  const intruders = (readable?.entries ?? [])
+    .filter((entry) => !seededPath(entry) && counted(entry.properties ?? {}))
+    .map((entry) => entry.path);
+  h.requirePrecondition(
+    'no claim the seed did not write is in what the demo counts',
+    readable !== null && readable.isNextPageAvailable !== true && intruders.length === 0,
+    `${intruders.length} claim(s) not seeded would change the demo's figures: ` +
+      `${intruders.slice(0, 3).join(', ')}. Run it on a server without them`,
+  );
+
   // What the dev server serves at /agentic-ui-config/ must be the kit's own files: they are what
   // the rest of this run asserts the page was drawn from.
   const served = [
@@ -322,7 +372,7 @@ export default async function run(page, h) {
   for (const path of served) {
     const answer = await page.request.get(`${h.baseUrl}/agentic-ui-config/${path}`);
     const { content, source } = unwrap(answer.ok() ? await answer.json().catch(unread) : null);
-    // config:dev records the path it was given, relative to where it ran: the repository's root.
+    // config:dev records each layout's path relative to the repository's root.
     const fromKit = source === null || resolve(REPO, source) === join(CONFIG, path);
     if (!sameJson(content, kitFile(path)) || !fromKit)
       differing.push(`${path} (${answer.status()}${source ? `, from ${source}` : ''})`);
@@ -426,7 +476,12 @@ export default async function run(page, h) {
     ),
     `drawn ${JSON.stringify(facet)}`,
   );
-  const chosen = 'paid';
+  // A status some, not all, of the adjuster's claims have, so that choosing it narrows the queue.
+  const statuses = countBy(mine, (c) => c.status);
+  const chosen =
+    statuses.paid < mine.length
+      ? 'paid'
+      : Object.keys(statuses).find((key) => statuses[key] < mine.length);
   const filtered = page
     .waitForRequest(
       (request) =>
@@ -535,12 +590,28 @@ export default async function run(page, h) {
       !adjusterPage.some((c) => c.fields.some((f) => f.key === 'member:ssn')),
     'the SSN is on the screen',
   );
+  const memberRights = await page.request
+    .get(`${h.baseUrl}/nuxeo/api/v1/id/${memberDoc.uid}`, {
+      headers: { 'enrichers-document': 'permissions' },
+    })
+    .then((r) => (r.ok() ? r.json() : null))
+    .catch(unread);
+  const adjusterRights = memberRights?.contextParameters?.permissions ?? null;
+  h.check(
+    'the adjuster may not change the member, so is offered no Edit form, which would list the SSN',
+    Array.isArray(adjusterRights) &&
+      adjusterRights.includes('Read') &&
+      !adjusterRights.includes('WriteProperties'),
+    `the adjuster's permissions on the member: ${JSON.stringify(adjusterRights)}`,
+  );
 
   // Declared before the new session is installed, and the adjuster's cookie dropped first: a
   // JSESSIONID Nuxeo has answered on beats a Basic header, so it would keep the browser the
   // adjuster's whatever the session says. Until the reload below, the app still holds the
   // adjuster's session in memory, so every request a frame sends to Nuxeo is given member
-  // services' header here; page.request, the run's own channel, keeps the adjuster's.
+  // services' header here, and the route is removed once the reload has loaded: from then on the
+  // header is the app's own, from the session it restored, and the identity guard judges that.
+  // page.request, the run's own channel, is not routed here and keeps the adjuster's.
   await h.signedInAs(services.username, 'member services read the member the adjuster just read');
   const servicesBasic = Buffer.from(`${services.username}:${demoPassword}`).toString('base64');
   await page.route('**/nuxeo/**', (route) => {
@@ -548,7 +619,7 @@ export default async function run(page, h) {
     try {
       fromFrame = Boolean(route.request().frame());
     } catch {
-      // Not a frame's request: page.request, which keeps the run's own identity.
+      // A service worker's request has no frame, and keeps its own header.
       fromFrame = false;
     }
     return fromFrame
@@ -577,6 +648,7 @@ export default async function run(page, h) {
     },
   );
   await page.reload({ waitUntil: 'load', timeout: 120_000 });
+  await page.unroute('**/nuxeo/**');
   await h.goTo('/#/home');
   await homeSettled(page);
   const servicesHome = await readHome(page);

@@ -11,10 +11,11 @@
  * `Document.RemovePermission`, a search index that lags behind the repository, NXQL through
  * `Repository.Query`, a search endpoint whose index has not yet seen what was trashed, as
  * OpenSearch's can lag, and trash renaming a document to `<name>._<time>_.trashed` (the document
- * alone: its children are neither flagged nor moved, which Nuxeo may do differently). So a pass proves the script's logic: preconditions, a second run that
- * adds nothing, a trashed record restored, a document of another type left alone, a user or a
- * group the seed did not create left alone, the demo's people put back, and checks that fail when
- * a page provider or its aggregates are wrong. It says nothing about whether a real server accepts
+ * alone: its children are neither flagged nor moved, which Nuxeo may do differently). So a pass
+ * proves the script's logic: preconditions, a second run that adds nothing, a trashed record
+ * restored, a document of another type left alone, a user or a group the seed did not create left
+ * alone, the demo's people put back, and checks that fail when a page provider, its aggregates or
+ * a user's rights are wrong. It says nothing about whether a real server accepts
  * the stand-in model or answers as the stand-in does: only a run against one shows that.
  *
  * It runs the real `seed.mjs` as a command, against a server on 127.0.0.1, with a user and a
@@ -57,7 +58,9 @@ function expect(condition, what, output = '') {
  * provider that queries the repository does, with none; `guestFor` answers that user's `/me` as
  * `Anonymous`, as a server that lets guests in does when a password is refused; `groupless` answers
  * that user's `/me` with none of their groups; `indexLag` answers the queue page providers, which
- * read the search index, with nothing for that many requests, as an index not yet caught up does.
+ * read the search index, with nothing for that many requests, as an index not yet caught up does;
+ * `membersWrite` gives the platform's `members` group, which every user is in, ReadWrite
+ * everywhere, as a server configured so would.
  */
 function standIn({
   user,
@@ -67,7 +70,8 @@ function standIn({
   guestFor = null,
   groupless = null,
   indexLag = 0,
-  types = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument'],
+  membersWrite = false,
+  types = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'],
   brokenProvider = null,
   renameOnTrash = true,
   pageSize = 3,
@@ -126,6 +130,25 @@ function standIn({
     if (header === authorization) return user;
     for (const [id, entry] of users) if (header === basic(id, entry.password)) return id;
     return null;
+  };
+  /**
+   * What `asking` may do on a document, as the `permissions` enricher lists it: read, and change
+   * when an ACE on the document or above it gives one of their groups ReadWrite.
+   */
+  const rights = (document, asking) => {
+    const write = ['WriteProperties', 'WriteLifeCycle', 'ReadWrite'];
+    if (asking === user) return ['Read', ...write];
+    const theirs = [...(users.get(asking)?.properties.groups ?? []), 'members'];
+    const segments = document.path.split('/').filter(Boolean);
+    const above = segments.map((_, i) => byPath.get(`/${segments.slice(0, i + 1).join('/')}`));
+    const writes =
+      membersWrite ||
+      above.some((place) =>
+        (acls.get(place?.uid) ?? []).some(
+          (ace) => theirs.includes(ace.username) && ace.permission === 'ReadWrite',
+        ),
+      );
+    return ['Read', ...(writes ? write : [])];
   };
   const view = (document) => {
     const properties = { ...document.properties };
@@ -322,6 +345,9 @@ function standIn({
                   },
                 }
               : {}),
+            ...(request.headers['enrichers-document'] === 'permissions'
+              ? { contextParameters: { permissions: rights(document, asking) } }
+              : {}),
           });
         if (method === 'PUT') {
           write(document, { ...JSON.parse(raw).properties });
@@ -386,13 +412,18 @@ function standIn({
         // A provider that always says there is another page.
         if (endlessProvider === execute[1])
           return send(200, { ...page(found, index), isNextPageAvailable: true });
-        const aggregations =
-          execute[1] === 'payers_pending_claims' && !noAggregations
-            ? {
-                claim_status_agg: terms(found, 'claim:status'),
-                claim_adjuster_agg: terms(found, 'claim:adjuster'),
-              }
-            : {};
+        // The three queue page providers answer their aggregates, as the search index does.
+        const queues = {
+          payers_unassigned_claims: ['claim_status_agg'],
+          payers_my_claims: ['claim_status_agg'],
+          payers_pending_claims: ['claim_status_agg', 'claim_adjuster_agg'],
+        };
+        const property = { claim_status_agg: 'claim:status', claim_adjuster_agg: 'claim:adjuster' };
+        const aggregations = Object.fromEntries(
+          noAggregations === execute[1] || noAggregations === true
+            ? []
+            : (queues[execute[1]] ?? []).map((id) => [id, terms(found, property[id])]),
+        );
         return send(200, { ...page(found, index), aggregations });
       }
       return send(404, { message: `the stand-in does not answer ${method} ${path}` });
@@ -492,11 +523,24 @@ await against({}, async ({ run, user }) => {
 await against({ types: ['Member'] }, async ({ run }) => {
   const { status, output } = await run();
   expect(
-    status === 2 && /no Claim, Case, Provider, ClaimDocument type/.test(output),
+    status === 2 && /no Claim, Case, Provider, ClaimDocument, PayersClaimSearch type/.test(output),
     'the package not installed is exit 2, naming the types it lacks',
     output,
   );
 });
+await against(
+  { types: ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument'] },
+  async ({ server, run }) => {
+    const { status, output } = await run();
+    expect(
+      status === 2 &&
+        /no PayersClaimSearch type/.test(output) &&
+        server.calls.every((call) => call.startsWith('GET ')),
+      'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
+      output,
+    );
+  },
+);
 
 await against({ hangUpOnFirstWrite: true }, async ({ run }) => {
   const { status, output } = await run();
@@ -674,15 +718,17 @@ await against({}, async ({ server, run, demoPassword }) => {
   );
 });
 
-// A user or a group of the demo's names that the seed did not create is left alone.
+// A user or a group of the demo's names that the seed did not create is left alone, and found
+// before anything is written.
 await against({}, async ({ server, run }) => {
   server.groups.set('member-services', { groupname: 'member-services', properties: {} });
   const { status, output } = await run();
   expect(
-    status === 1 &&
+    status === 2 &&
       /a group member-services that the seed did not create/.test(output) &&
-      server.groups.get('member-services').properties.description === undefined,
-    'a member-services group the seed did not create stops the run, untouched',
+      server.groups.get('member-services').properties.description === undefined &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'a member-services group the seed did not create is exit 2, with nothing written',
     output,
   );
 });
@@ -695,11 +741,23 @@ await against({}, async ({ server, run }) => {
   const { status, output } = await run();
   const sam = server.users.get('sam.patel');
   expect(
-    status === 1 &&
+    status === 2 &&
       /a user sam.patel that the seed did not create/.test(output) &&
       sam.password === 'theirs' &&
       sam.properties.groups.length === 0,
-    'a sam.patel the seed did not create stops the run, untouched',
+    'a sam.patel the seed did not create is exit 2, untouched',
+    output,
+  );
+});
+
+// What each user may do is checked as them, wherever the permission comes from.
+await against({ membersWrite: true }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 &&
+      /riley.brooks may change a member/.test(output) &&
+      /riley.brooks holds WriteProperties on a claim/.test(output),
+    'a server that lets every member change records fails the run: member services may not',
     output,
   );
 });
@@ -733,15 +791,22 @@ await against({ indexLag: 3 }, async ({ run }) => {
   );
 });
 
-// The aggregates the queues' facets and the home's KPIs read must be answered.
-await against({ noAggregations: true }, async ({ run }) => {
-  const { status, output } = await run();
-  expect(
-    status === 1 && /payers_pending_claims answered no claim_status_agg/.test(output),
-    'a pending-claims page provider that answers no aggregates fails the run',
-    output,
-  );
-});
+// The aggregates the queues' facets and the home's KPIs read must be answered, by each queue.
+for (const pageProvider of [
+  'payers_unassigned_claims',
+  'payers_my_claims',
+  'payers_pending_claims',
+]) {
+  await against({ noAggregations: pageProvider }, async ({ run }) => {
+    const { status, output } = await run();
+    expect(
+      status === 1 &&
+        new RegExp(`${pageProvider}( as \\S+)? answered no claim_status_agg`).test(output),
+      `${pageProvider} answering no aggregates fails the run`,
+      output,
+    );
+  });
+}
 
 // Two trashed copies of one record: the seed restores only one, so it stops.
 await against({}, async ({ server, run }) => {

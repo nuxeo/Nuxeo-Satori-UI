@@ -102,8 +102,11 @@ records.
   back, such as `claim_status_agg=["paid"]`, are one name. The index is written a moment after the
   repository, so they lag a change by about a second.
 - **`payers_my_claims` is given `$currentUser`,** by the queue and by the home: the REST API puts
-  the name of the person signed in in its place before the query runs. So no one's name is in a
-  file, and each adjuster is asked for their own claims. The seed checks it, as each adjuster.
+  the name of the person signed in in its place before the query runs (`QueryExecutor` in
+  `nuxeo-search-rest-api`). So no one's name is in a file, and each adjuster is asked for their own
+  claims. The seed checks it, as each adjuster. **The kit relies on that server behaviour:** whether
+  version 2 of the app definition says a literal may name the person this way is still open
+  ([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), section 13).
 
 ## Building it
 
@@ -228,23 +231,28 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
 
   Every group may read the workspace; adjusters and supervisors may also change claims, which
   approving one needs. No demo group may change a member, so none of the demo's people is offered
-  the Member edit form,
-  which would list the social security number.
+  the Member edit form, which would list the social security number. The seed checks both as each
+  user, wherever the permission comes from.
 
 - **Safe to run twice.** A record already there is put back to `data.mjs`'s values, a trashed one
   is restored, and a place that holds a document of another type stops the run untouched. A user
   is put back to its name, groups and the demo password, and the demo's groups to their
   permissions. A user or a group of the same name that the seed did not create, which it knows by
-  its marker (a user's `company`, a group's `description`), stops the run untouched.
-- **It checks what it wrote:** last, it runs the seven page providers and compares what they
-  return, and the queues' aggregates, with what it seeded; it signs in as each user, and asks
-  `payers_my_claims` for each adjuster's claims as that adjuster. The search index lags the
-  repository, so it asks again, once a second, for up to `NUXEO_INDEX_WAIT_MS` (60 seconds).
+  its marker (a user's `company`, a group's `description`), is found before anything is written,
+  and stops the run with exit 2.
+- **It checks what it wrote:** last, it signs in as each user, and checks their groups and what
+  they may change, once. Then it runs the seven page providers and compares what they return with
+  what it seeded, each queue's aggregates included, asking `payers_my_claims` for each adjuster's
+  claims as that adjuster. A queue may hold claims the seed did not write: the seed checks its
+  own, and the demo refuses such a server. The search index lags the repository, so the page
+  providers are asked again, once a second, for up to `NUXEO_INDEX_WAIT_MS` (60 seconds).
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER`, `NUXEO_PASS` and
   `PAYERS_DEMO_PASSWORD` have no default, and `NUXEO_USER` must be an administrator: only one may
   create users and groups. `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a
   precondition is not met: no credentials, no demo password, no server, credentials refused or not
-  an administrator's, the package not installed, or no `/default-domain/workspaces`.
+  an administrator's, the package not installed or older than 0.3.0, no
+  `/default-domain/workspaces`, or a user or a group of the demo's names that the seed did not
+  create.
 
 It prints a member's and a provider's record page, on the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).
@@ -285,15 +293,19 @@ Phase 1's demo script, as a steps file of the beta harness
 ([`scripts/beta-harness/README.md`](../../../scripts/beta-harness/README.md)), end to end:
 
 1. an adjuster's home, with KPIs from the page providers' aggregates;
-2. a queue opened, its rows sorted, and narrowed by a facet on the server;
+2. a queue opened, its rows in the server's order, and narrowed by a facet on the server;
 3. a member, with age, combined address, and the claims and cases lists;
 4. member services seeing the social security number, which the adjuster does not, anywhere on
-   screen;
+   the Member page, the Properties panel included, and may not change;
 5. the layout file behind the page, beside it.
 
-Every figure, row and value it expects is read from `data.mjs` and the kit's files; which cards
-each group's home shows is the demo's story, written in the script. **What it
-needs:** the package installed and seeded (above), the dev server serving the kit's files (above),
+Step 4 differs from the plan's words, "the protected fields are masked on screen": it follows the
+Member page this kit has, layout-v2.md's section 9, which shows the number to member services
+alone and leaves it out, not masked, for everyone else. Masking the value itself is decision I.
+
+Its figures, rows and values are read from `data.mjs` and the kit's files; the demo's own choices,
+which cards each group's home shows, the member and the facet bucket, are written in the script.
+**What it needs:** the package installed and seeded (above), the dev server serving the kit's files (above),
 and Playwright (`scripts/beta-harness/README.md`, "Prerequisites"). It signs in as an adjuster, the
 run's own user, then switches the browser to member services, which the identity guard is told of.
 
@@ -304,17 +316,21 @@ NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- 
 `APP_URL` names the dev server if it is not on `http://localhost:4200`. The evidence, screenshots,
 a video and `INDEX.md`, goes to `~/Desktop/agentic-ui-evidence/beta/payers-claims-demo/`, outside
 the repository. Exit 2 means a precondition is not met, and says which: the run's user is not an
-adjuster, `PAYERS_DEMO_PASSWORD` is unset or refused, the package or the seed is missing, or the
-dev server serves something other than the kit's files.
+adjuster in no other group, `PAYERS_DEMO_PASSWORD` is unset or refused, the package or the seed is
+missing, a claim the seed did not write is in what the demo counts, or the dev server serves
+something other than the kit's files.
 
-Run on 23 November 2026, against Nuxeo 2025.10.18 with this package installed and seeded: 34 of 34
-checks passed, on six distinct screenshots. With the kit broken on purpose, in six runs, 20 of its
-26 checks outside the preconditions were each seen failing: every home figure and card set, both
-menus, the queue's order, facet, request and narrowing, the member's name, age, address, claims and
-cases, the SSN hidden from the adjuster (by its rule, and by the Properties panel) and shown to
-member services, and the page drawn as its file says. Not seen failing: the queue's address and
-title, the record page's three cards, the Properties panel drawn, the served layout being the
-kit's, the bundle holding no code, and the console.
+Run on 24 November 2026, against Nuxeo 2025.10.18 with this package installed and seeded: 36 of 36
+checks passed, on six distinct screenshots. With the kit, or once the file a step reads, broken on
+purpose, in seven runs, 21 of its 27 checks outside the preconditions were each seen failing: every
+home figure and card set, both menus, the queue's order, facet, request and narrowing, the member's
+name, age, address, claims and cases, the SSN hidden from the adjuster (by its rule, and by the
+Properties panel) and shown to member services, the adjuster's right to change the member, and the
+page drawn as its file says. Not seen failing: the queue's address and title, the record page's
+three cards, the Properties panel drawn, the served layout being the kit's, the bundle holding no
+code, and the console. Of the preconditions, these were seen refusing a real environment: the dev
+server serving other files, a supervisor as the run's user, and, with its test widened on purpose, a
+claim another session had left on the server, which the demo's figures do not count.
 
 ## What a server shows, and what only the dev server does
 

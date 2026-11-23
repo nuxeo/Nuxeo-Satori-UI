@@ -51,8 +51,8 @@
       <schema name="claimdoc" />
     </doctype>
     <!-- The claim queues' search document, as DefaultSearch is default_search's: never saved, it
-         holds the facets a queue sends back (schemas/claimsearch.xsd). Hidden, so that nothing
-         offers to create one. -->
+         holds the facets a queue sends back (schemas/claimsearch.xsd). No folder lists it among
+         its subtypes, so nothing offers to create one, and it is hidden from navigation. -->
     <doctype name="PayersClaimSearch" extends="Document">
       <facet name="HiddenInNavigation" />
       <schema name="payers_claim_search" />
@@ -157,8 +157,10 @@
 
     <!-- The my-claims queue: the claims one adjuster holds, given their user name. The queue and
          the home pass "$currentUser", which the REST API's page provider endpoint replaces with
-         the person signed in before the query runs (measured on Nuxeo 2025.10.18, as two
-         adjusters), so each is asked for their own claims and no one's name is in a file. -->
+         the person signed in before the query runs (QueryExecutor in nuxeo-search-rest-api;
+         measured on Nuxeo 2025.10.18, as two adjusters), so each is asked for their own claims
+         and no one's name is in a file. Whether version 2 says so is open
+         (app-definition-v2.md, section 13). -->
     <genericPageProvider name="payers_my_claims"
         class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
       <searchDocumentType>PayersClaimSearch</searchDocumentType>
