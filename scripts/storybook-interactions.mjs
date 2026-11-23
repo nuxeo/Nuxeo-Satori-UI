@@ -59,7 +59,7 @@
  * Usage:
  *   node scripts/storybook-interactions.mjs [--dir dist/storybook/satori-components]
  *     [--port 6231] [--story-timeout 20000] [--budget 900000] [--only <id-part>] [--json <file>]
- *     [--satori]
+ *     [--satori] [--catalogue-timeout 10000]
  *
  * Exit 0 all stories passed, 1 a story failed or the budget ran out, 2 nothing could be run.
  */
@@ -92,6 +92,8 @@ const only = option('--only', null);
 const jsonOut = option('--json', null);
 /** Accept a Satori Storybook and check what Satori's own translation loader is served. */
 const satori = argv.includes('--satori');
+/** How long a Satori catalogue request may take to finish, after the story has, before it fails. */
+const catalogueTimeout = Number(option('--catalogue-timeout', '10000'));
 
 /** Events after which a story has said all it will. */
 const TERMINAL = ['storyFinished', 'storyErrored', 'storyMissing', 'storyThrewException'];
@@ -271,7 +273,19 @@ async function runStory(context, story) {
   page.on('pageerror', (error) => failures.push(`uncaught on the page: ${error.message}`));
   /** Every response to Satori's loader, by path: what the built Storybook actually serves. */
   const catalogues = [];
+  /**
+   * Satori catalogue requests not yet finished. The preview starts loading translations in an
+   * `ENVIRONMENT_INITIALIZER` that does not block the story, so a catalogue can still be on its
+   * way when the story reports finished; judging then failed a healthy story (review on #602).
+   */
+  const inFlight = new Set();
   if (satori) {
+    const isCatalogue = (request) => new URL(request.url()).pathname.includes(SATORI_CATALOGUES);
+    page.on('request', (request) => {
+      if (isCatalogue(request)) inFlight.add(request);
+    });
+    page.on('requestfinished', (request) => inFlight.delete(request));
+    page.on('requestfailed', (request) => inFlight.delete(request));
     page.on('response', (response) => {
       const path = new URL(response.url()).pathname;
       if (path.includes(SATORI_CATALOGUES)) catalogues.push({ path, status: response.status() });
@@ -291,7 +305,12 @@ async function runStory(context, story) {
   }
   try {
     const events = await openStory(page, story, failures);
-    if (satori) failures.push(...satoriCatalogueFailures(catalogues));
+    if (satori) {
+      // Still pending is its own verdict; judging a record that has not arrived yet would add a
+      // misleading "requested nothing".
+      const pending = await settleCatalogues(page, inFlight);
+      failures.push(...(pending.length ? pending : satoriCatalogueFailures(catalogues)));
+    }
     const finished = events.find((event) => event.name === 'storyFinished');
     const a11y = (finished?.payload?.reporters ?? [])
       .filter((reporter) => reporter?.type === 'a11y')
@@ -318,6 +337,34 @@ async function runStory(context, story) {
   } finally {
     await page.close();
   }
+}
+
+/**
+ * Waits until no Satori catalogue request is in flight and none has started for a short quiet
+ * period — a failed request can start its base-language fallback after it — then lets the page
+ * render what arrived. Returns a failure for any request still unfinished at the timeout.
+ */
+async function settleCatalogues(page, inFlight) {
+  const QUIET_MS = 250;
+  const deadline = Date.now() + catalogueTimeout;
+  let quietSince = inFlight.size === 0 ? Date.now() : null;
+  while (Date.now() < deadline) {
+    if (inFlight.size > 0) quietSince = null;
+    else if (quietSince === null) quietSince = Date.now();
+    else if (Date.now() - quietSince >= QUIET_MS) break;
+    await page.waitForTimeout(25);
+  }
+  if (inFlight.size > 0) {
+    const paths = [...new Set([...inFlight].map((request) => new URL(request.url()).pathname))];
+    return paths.map(
+      (path) =>
+        `Satori's catalogue ${path} had not finished ${catalogueTimeout} ms ` +
+        'after the story did',
+    );
+  }
+  // Translations arrive through change detection; give it a frame before reading the screen.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+  return [];
 }
 
 /**

@@ -259,11 +259,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "pinned @playwright/test: $version"
 
-      # `--no-save`, so the lockfile is untouched, as in ci.yml.
+      # `--no-save`, so the lockfile is untouched, as in ci.yml. Both token variables: the
+      # repository's `.npmrc` reads `SATORI_GH_READONLY_TOKEN`, takes precedence over setup-node's
+      # user config, and a step's `env:` does not carry over from the install step above.
       - name: Install Playwright and Chromium
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
           PLAYWRIGHT_TEST_VERSION: ${{ steps.playwright.outputs.version }}
         run: |
           set -euo pipefail
