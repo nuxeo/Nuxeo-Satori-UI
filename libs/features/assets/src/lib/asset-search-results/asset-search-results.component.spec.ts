@@ -9,7 +9,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { BehaviorSubject, of } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';
 import { NXS_ASSET_GRID_ID, type NxsAssetCard } from '@nuxeo/satori-platform/components';
@@ -178,5 +178,69 @@ describe('AssetSearchResultsComponent — the grid it renders by ID', () => {
       thumbnailUrl: null,
     });
     expect(navigate).toHaveBeenCalledWith(['/doc', '2']);
+  });
+
+  describe('Export CSV', () => {
+    let blobs: Blob[];
+    let revoke: ReturnType<typeof vi.fn>;
+    let clicks: HTMLAnchorElement[];
+
+    beforeEach(() => {
+      blobs = [];
+      clicks = [];
+      revoke = vi.fn();
+      Object.assign(URL, {
+        createObjectURL: vi.fn((blob: Blob) => {
+          blobs.push(blob);
+          return 'blob:assets';
+        }),
+        revokeObjectURL: revoke,
+      });
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        clicks.push(this);
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      Object.assign(URL, { createObjectURL: undefined, revokeObjectURL: undefined });
+    });
+
+    it('downloads assets.csv, one row per asset, empty cells left empty', async () => {
+      component.exportCsv();
+
+      expect(clicks[0]?.download).toBe('assets.csv');
+      expect(revoke).toHaveBeenCalledWith('blob:assets');
+      const lines = (await blobs[0].text()).split('\r\n');
+      expect(lines).toHaveLength(3);
+      expect(lines[0]).toBe(
+        '"Title","Type","Modified","Last Contributor","State","Version","Created","Author","Nature","Coverage","Subjects","Flags"',
+      );
+      expect(lines[1]).toContain('"Beach.png","Picture"');
+      expect(lines[1]).not.toContain('—');
+    });
+
+    it('starts with the UTF-8 byte order mark and writes a formula title as plain text', async () => {
+      searchAssets.mockReturnValue(
+        of({
+          entries: [doc('3', '=HYPERLINK("http://x","y")'), doc('4', 'Café')],
+          aggregations: {},
+          resultsCount: 2,
+        }),
+      );
+      fixture = TestBed.createComponent(AssetSearchResultsComponent);
+      component = fixture.componentInstance;
+      await render();
+
+      component.exportCsv();
+
+      const bytes = new Uint8Array(await blobs[0].arrayBuffer());
+      expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      const text = await blobs[0].text();
+      expect(text).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
+      expect(text).toContain('"Café"');
+    });
   });
 });

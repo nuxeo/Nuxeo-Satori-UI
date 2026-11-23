@@ -212,6 +212,77 @@ describe('NxsTaskDetailComponent', () => {
       expect(plain?.classList).not.toContain('nxs-task-detail__action--warn');
     });
 
+    // Nuxeo refuses to reassign a task whose workflow step does not allow it, and reports the
+    // refusal as a 500. The step says so in `taskInfo.allowTaskReassignment`.
+    it('offers no Reassign for a task whose step does not allow reassignment, but still Delegate', async () => {
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+      expect(button('Reassign')).toBeUndefined();
+      expect(button('Delegate')).toBeDefined();
+    });
+
+    it('offers Reassign for a task whose step allows it', async () => {
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: true } }));
+      expect(button('Reassign')).toBeDefined();
+    });
+
+    it('keeps Reassign for a task that says nothing about it', async () => {
+      await render();
+      expect(button('Reassign')).toBeDefined();
+      await render(makeTask({ taskInfo: undefined as unknown as NuxeoTask['taskInfo'] }));
+      expect(button('Reassign')).toBeDefined();
+    });
+
+    it('takes Reassign away when the host shows a task that does not allow it', async () => {
+      await render();
+      await click('Reassign');
+      expect(el().querySelector('[data-panel="reassign"]')).toBeTruthy();
+      await render(
+        makeTask({
+          id: 'task-2',
+          taskInfo: { taskActions: [], allowTaskReassignment: false },
+        }),
+      );
+      expect(button('Reassign')).toBeUndefined();
+      expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
+    });
+
+    it('closes an open Reassign form when the same task is fetched again and no longer allows it', async () => {
+      await render();
+      await click('Reassign');
+      expect(el().querySelector('[data-panel="reassign"]')).toBeTruthy();
+      pickers()[0].value.set([principal('user', 'asmith')]);
+      fixture.detectChanges();
+
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+
+      expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
+      expect(button('Reassign')).toBeUndefined();
+      // Nothing is left to confirm, so the request Nuxeo refuses cannot be sent.
+      detail()['confirmPanel']();
+      expect(tasks['reassignTask']).not.toHaveBeenCalled();
+    });
+
+    it('keeps an open Delegate form through a refresh that removes Reassign', async () => {
+      await render();
+      await click('Delegate');
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+      expect(el().querySelector('[data-panel="delegate"]')).toBeTruthy();
+    });
+
+    it('keeps an open Reassign form through a refresh of the same task that still allows it', async () => {
+      await render();
+      await click('Reassign');
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: true } }));
+      expect(el().querySelector('[data-panel="reassign"]')).toBeTruthy();
+    });
+
+    it('does not open Reassign for a task that does not allow it, even when asked directly', async () => {
+      await render(makeTask({ taskInfo: { taskActions: [], allowTaskReassignment: false } }));
+      detail()['openPanel']('reassign');
+      fixture.detectChanges();
+      expect(el().querySelector('[data-panel="reassign"]')).toBeNull();
+    });
+
     it('offers no action button when the task lists none', async () => {
       await render(makeTask({ taskInfo: undefined as unknown as NuxeoTask['taskInfo'] }));
       expect(el().querySelectorAll('.nxs-task-detail__actions button')).toHaveLength(0);

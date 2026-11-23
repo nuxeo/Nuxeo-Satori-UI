@@ -68,6 +68,8 @@ import {
   NxsSpinnerComponent,
   NxsTagComponent,
   NxsThumbnailComponent,
+  nxsCsvText,
+  nxsDownloadCsv,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsErrorStatus,
@@ -644,33 +646,24 @@ export class SearchComponent {
       'Subjects',
       'Flags',
     ];
-    const escape = (value: string): string => `"${value.replaceAll('"', '""')}"`;
+    // An empty cell is written empty: the "—" this used to write is not ASCII, and Excel showed it
+    // as `â€”` for want of a UTF-8 marker; a blank is also what a spreadsheet user expects.
     const rows = this.sortedResults().map((row) => [
       row.name,
       row.type,
       row.modifiedDate,
       row.lastContributor,
-      row.state ?? '—',
-      row.version ?? '—',
-      row.createdDate ?? '—',
+      row.state,
+      row.version,
+      row.createdDate,
       row.author,
-      row.nature ?? '—',
-      row.coverage ?? '—',
-      row.subjects ?? '—',
-      row.flags ?? '—',
+      row.nature,
+      row.coverage,
+      row.subjects,
+      row.flags,
     ]);
 
-    const csv = [headers, ...rows]
-      .map((line) => line.map((cell) => escape(cell ?? '')).join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'search-results.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    nxsDownloadCsv('search-results.csv', nxsCsvText([headers, ...rows]));
   }
 
   /** A result's star confirmed a change: keep the page's view of it in step. */

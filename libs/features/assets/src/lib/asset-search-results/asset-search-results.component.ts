@@ -11,6 +11,8 @@ import { DescriptorLabelPipe, ExtensionOutletComponent } from '@nuxeo/satori-pla
 import {
   NXS_ASSET_GRID_ID,
   NxsAssetGridComponent,
+  nxsCsvText,
+  nxsDownloadCsv,
   type NxsAssetCard,
 } from '@nuxeo/satori-platform/components';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -757,31 +759,21 @@ export class AssetSearchResultsComponent {
       'Subjects',
       'Flags',
     ];
-    const escape = (value: string): string => `"${value.replaceAll('"', '""')}"`;
     const rows = this.filteredAssets().map((a) => [
       a.name,
       a.type,
       a.modifiedDate,
       a.lastContributor,
-      a.state ?? '',
-      a.version ?? '',
-      a.createdDate ?? '',
-      a.author ?? '',
-      a.nature ?? '',
-      a.coverage ?? '',
-      a.subjects ?? '',
-      a.flags ?? '',
+      a.state,
+      a.version,
+      a.createdDate,
+      a.author,
+      a.nature,
+      a.coverage,
+      a.subjects,
+      a.flags,
     ]);
-    const csv = [headers, ...rows]
-      .map((r) => r.map((cell) => escape(cell ?? '')).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'assets.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    nxsDownloadCsv('assets.csv', nxsCsvText([headers, ...rows]));
   }
 
   openSaveAsDialog(): void {

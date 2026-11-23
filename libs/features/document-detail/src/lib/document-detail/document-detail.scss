@@ -300,6 +300,11 @@
     width: 30px !important;
     height: 30px !important;
     line-height: 30px !important;
+    // NXSAT-809 — centre the icon: Material's 8px padding is left over from the 40px button.
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     color: #555;
 
     mat-icon {

@@ -1,7 +1,7 @@
 # i18n and Localization Plan — NXSAT-227
 
 **Ticket:** [NXSAT-227](https://hyland.atlassian.net/browse/NXSAT-227) — "Complete i18n string
-extraction and wire adf-hx translation assets" · Epic
+extraction" · Epic
 [NXENG-615](https://hyland.atlassian.net/browse/NXENG-615) · duplicate/related
 [NXSAT-280](https://hyland.atlassian.net/browse/NXSAT-280) (identical summary — close one).
 
@@ -38,23 +38,22 @@ still owed, is **`D8-standard`**. The GA extraction is
 
 | Slice | Delivered                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S1    | The `DOCUMENT_TREE.TOGGLE_ARIA-LABEL` alias (W13) and the missing `settings.themes.search` fallback. Its catalogue value was literally `"Search (placeholder)"`, shipping as a real accessible name.                                                                                                                                                                                                                                                                      |
+| S1    | The missing `settings.themes.search` fallback. Its catalogue value was literally `"Search (placeholder)"`, shipping as a real accessible name.                                                                                                                                                                                                                                                                      |
 | S2    | `checkTranslationCatalogues` and `checkAccessibleNameFallbacks`.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | S3    | `checkNoHardcodedUiText`, plus `review-guardrails.selftest.mjs`, registered as gate `guardrails-selftest`, an npm script, in `review:preflight` and in CI. It is the first negative-control suite any guardrail in this repository has had; eleven shipped before it with none. **No count here on purpose** — `npm run review:guardrails-selftest` prints its own totals, and this line carried a stale one through three rounds (58, then 71, while the suite held 78). |
 | S3a   | `checkTranslationContext`, and `checkAngularDevAssets` extended to compare `ignore`.                                                                                                                                                                                                                                                                                                                                                                                      |
 | S4    | 48 occurrences extracted across `apps/nuxeo-ui`, with `en.context.json`.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | S5    | `fr` and `de` catalogues at full key parity, and `steps/nxsat-227-i18n.mjs`. **No total here** — `npm run beta:evidence -- nxsat-227-i18n` prints one and writes it to `manifest.json`, and this cell previously said 29/29, a figure matching neither the attached report nor the steps file. Read it from the run.                                                                                                                                                      |
-| S5a   | `W14` — adf-core no longer resets the language on adf-hx surfaces — plus Angular locale data for `fr`/`de`, `checkLocaleDataRegistered`, and a formatting-locale guard so an unshipped locale degrades instead of throwing. All three found by running the application, not by the gates.                                                                                                                                                                                 |
 
 **Two defects in this work were found by writing its own controls, not by review:** an unguarded
 `JSON.parse` that crashed the guardrail script and discarded every other guardrail's
 diagnostics, and a parity branch that reported "no en.json" for a file that was present but
-unparseable. A third — a fragile `.first()` selector that read an adf-hx input instead of the
+unparseable. A third — a fragile `.first()` selector that read the wrong input instead of the
 header search box — was found because the instrumentation separated "the swap never reached the
 browser" from "the locale did not apply".
 
 **Read the French and German screenshots as proof of the mechanism, not of a localised
-application.** The header search is French; the nav labels, column headers and adf-hx toolbar are
+application.** The header search is French; the nav labels, column headers and toolbar are
 still English, because those strings live in `libs/` and are NXSAT-284. The capture says so in
 its own notes.
 
@@ -79,7 +78,7 @@ against the Hyland localization standard rather than a locally invented one.
 | [Crowdin Integration (i18n)](https://hyland.atlassian.net/wiki/spaces/NuxEng/pages/3148546309)                                         | The Nuxeo platform (Java) side. **Contains a live Crowdin API token in plaintext — see the security note below.**                                                                                                                                                                                                       |
 | [The State of Localization in Satori / CIC](https://hyland.atlassian.net/wiki/spaces/HDF/pages/4194568689)                             | The RTL maturity spectrum and the honest position: Satori is a foundation, not a switch. Tracked as [DS-2277](https://hyland.atlassian.net/browse/DS-2277).                                                                                                                                                             |
 | [Satori Components Consumers](https://hyland.atlassian.net/wiki/spaces/HDF/pages/3803285020)                                           | `ngx-translate` 16/17 is the de-facto provider across the CIC portfolio. We are already aligned.                                                                                                                                                                                                                        |
-| `docs/adf-hx-beta-plan.md` (plan of record)                                                                                            | The 21 Aug 2026 decision that descopes translations from Beta.                                                                                                                                                                                                                                                          |
+| `docs/beta-plan.md` (plan of record)                                                                                            | The 21 Aug 2026 decision that descopes translations from Beta.                                                                                                                                                                                                                                                          |
 | `AGENTS/11-beta-program.md` §3                                                                                                         | Verified facts, including four about `AppTranslateLoader` that this ticket must not re-litigate.                                                                                                                                                                                                                        |
 
 There is **no** Hyland-wide standard for the _internationalization_ half — locale detection,
@@ -100,55 +99,6 @@ gone stale. Measured on `main` at `829feae`:
 | ---------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `en.json` holds 16 keys in three namespaces                                  | **True**                         | `apps/nuxeo-ui/public/i18n/en.json` — `app`, `browse`, `settings`.                                                                                                                                                     |
 | `\| translate` appears 7 times across ~90 templates                          | **True**                         | 7 call sites in 3 templates; 92 templates, 89 tracked.                                                                                                                                                                 |
-| "Upstream adf-hx translations are not wired"                                 | **Stale — already done**         | `SEEDED_FOLDERS` in `apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts:62-93` seeds `adf-core`, both adf-hx catalogues and `@hylandsoftware/satori-ui`. The `bundle` gate asserts all three ship. Phase 3 fixed this. |
-| The raw `DOCUMENT_TREE.TOGGLE_ARIA-LABEL` key is a symptom of unwired assets | **False — different root cause** | See below.                                                                                                                                                                                                             |
-
-### The accessible-name defect has a different root cause than the ticket states
-
-The key **exists** in the shipped catalogue:
-
-```json
-"DOCUMENT_TREE": { "TOGGLE_ARIA-LABEL": "Toggle" }
-```
-
-`node_modules/@alfresco/adf-hx-content-services/ui/assets/adf-enterprise-adf-hx-content-services-ui/i18n/en.json`
-
-But upstream's own template asks for a different key — there is a **trailing space inside the
-key literal**:
-
-```html
-[attr.aria-label]="('DOCUMENT_TREE.TOGGLE_ARIA-LABEL ' | translate) + node.name"
-```
-
-`HxpDocumentTreeComponent`, compiled into
-`node_modules/@alfresco/adf-hx-content-services/fesm2022/alfresco-adf-hx-content-services-ui.mjs`.
-
-So the lookup misses a catalogue entry that is present, ngx-translate falls through to its key
-passthrough. The button's accessible name became `DOCUMENT_TREE.TOGGLE_ARIA-LABEL undefined` —
-`undefined`, not the node name, because upstream appends `node.name` and its node wrapper has no
-such property. **No amount of asset wiring fixes this.** It is an upstream typo in the same class as
-finding 4.6 in `docs/adf-hx-upstream-findings.md`, and it renders on every surface because the
-tree is the app shell's nav drawer (`libs/shared/adf-hx-bridge/src/lib/ui/hxp-browse-nav-drawer/`).
-
-This matters for sizing, but **not as much as this paragraph originally claimed.** It said the
-visible defect "needs a one-line Layer 0 entry, not an integration". The one-line entry — the W13
-alias — stops the raw key and does not produce a usable name, because there is a **third** defect
-in the same binding: upstream appends `node.name`, and `node` is a wrapper carrying
-`node.document`, `node.isLoading` and `node.isSelectable`, with no `name` on it at all. Measured
-with the alias in place and nothing else:
-
-```
-tree aria-labels: ["Toggleundefined", "Toggleundefined"]
-```
-
-So the accessible name needs the alias **and** W15, a directive that derives the name from the row
-the tree already renders — see `docs/adf-hx-workarounds.md` and
-`hxp-document-tree-toggle-name.directive.ts`. Still not an integration, and still small; but a
-one-line catalogue entry was never going to be the whole of it, and sizing the slice from this
-sentence would have under-read it.
-
-The rest holds: the ticket's headline deliverable "wire adf-hx translation assets" is already
-delivered, and no amount of asset wiring touches any of the three defects.
 
 ### The scope question the ticket asks is already answered
 
@@ -160,7 +110,7 @@ or a GA one before committing to it."_ It was confirmed, and recorded in the pla
 > a Layer 0 capability — a customer relabels without a rebuild. Extraction beyond the slice
 > chrome moves to GA.
 >
-> — `docs/adf-hx-beta-plan.md`, "Decisions taken 21 August 2026"
+> — `docs/beta-plan.md`, "Decisions taken 21 August 2026"
 
 **Recommendation: split NXSAT-227 along that line rather than run it as one story.** As
 written it is a single ticket whose acceptance criteria straddle a scope boundary that has
@@ -187,7 +137,7 @@ Tagged `[ticket]` for verbatim, `[derived]` where the ticket implies but does no
 | #   | Criterion                                                                                                                                                                                                                                                           | Source                                                                                     |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | A1  | No control in the running application has an accessible name matching `/^[A-Z][A-Z0-9_]*\.[A-Z0-9_.-]+$/`, asserted over `aria-label`, `title` and rendered text on all eight routes.                                                                               | `[ticket]` AC 2, made measurable                                                           |
-| A2  | `apps/nuxeo-ui/public/i18n/en.json` and `en-fallback.ts` blank no key that upstream uses as an accessible name.                                                                                                                                                     | `[derived]` — extends the existing `phase-6-a11y.mjs` check from `sat.*` to all namespaces |
+| A2  | `apps/nuxeo-ui/public/i18n/en.json` and `en-fallback.ts` blank no key that a component uses as an accessible name.                                                                                                                                                     | `[derived]` — extends the existing `phase-6-a11y.mjs` check from `sat.*` to all namespaces |
 | A3  | A new hard-coded user-facing string added to the core slice fails `npm run review:guardrails`, demonstrated by a deliberate red run.                                                                                                                                | `[ticket]` AC 3                                                                            |
 | A4  | Setting Layer 0 `defaultLanguage: 'fr'` and reloading renders French in the shell chrome, with a screenshot and a passing check.                                                                                                                                    | `[ticket]` AC 4                                                                            |
 | A5  | `crowdin.yml` exists, a Crowdin project is created for this repository, and push/pull workflows run green with the source catalogue uploaded.                                                                                                                       | `[derived]` — required by the HXP standard, which the ticket does not mention at all       |
@@ -212,7 +162,7 @@ Q3 blocks any RTL commitment.
 | ID  | Question                                    | Answer                                                                                                                                                                                                                                                                                                                                                                           |
 | --- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Q1  | Is full extraction Beta or GA?              | **GA — decided. Split the ticket** into 227a (Beta) and a new GA ticket, per the table above. This confirms the 21 Aug decision rather than overturning it.                                                                                                                                                                                                                      |
-| Q2  | Which target locales?                       | **`fr` and `de` — decided.** Both are covered by every upstream catalogue we seed (adf-core, both adf-hx bundles, satori-ui), so a locale switch exercises the whole stack rather than our own file alone. Web UI ships 16; matching that at Beta is not credible.                                                                                                               |
+| Q2  | Which target locales?                       | **`fr` and `de` — decided.** Both are covered by the `satori-ui` catalogue we seed, so a locale switch exercises the whole stack rather than our own file alone. Web UI ships 16; matching that at Beta is not credible.                                                                                                               |
 | Q3  | Is RTL in scope?                            | **Open.** Recommendation: no, for neither Beta nor the GA extraction. Track against [DS-2277](https://hyland.atlassian.net/browse/DS-2277) and target the "good enough" level from the Satori spectrum. Arabic and Hebrew are Web UI release-blocking locales, so this will return.                                                                                              |
 | Q4  | Who reviews the Crowdin PR when it appears? | **Answered 20 Sep 2026 — it does not block S6.** The question was posed as "who owns the _daily_ PR", on the premise that an unowned one rots. Both halves were wrong; D8b below records the measurement, and the query to reproduce it, because the first version of that table stated four counts that no query produced. It is a release-checklist line, not a standing role. |
 
@@ -274,14 +224,6 @@ exclusion is itself gated: `checkAngularDevAssets` now compares the `ignore` lis
 not before — an entry excluding a file in the base array and not in `development` read as
 identical while the two configurations served different files.
 
-### D0c — Concatenated strings are forbidden, and upstream does it
-
-INFO-144: _"Strings MUST NOT be built from concatenated substrings or values."_ Upstream's
-document tree does exactly that — `('DOCUMENT_TREE.TOGGLE_ARIA-LABEL ' | translate) + node.name`
-— so even with the key resolved, no translator can reorder for a language that needs the noun
-first. Our alias fixes the key; it cannot fix the word order. Both halves are finding 1.3 in
-`docs/adf-hx-upstream-findings.md`, with the ask being an interpolation parameter rather than a
-`+`.
 
 ### D1 — Keep `ngx-translate` and `AppTranslateLoader`; do not replace either
 
@@ -289,10 +231,9 @@ Already correct and already aligned with the portfolio: `@ngx-translate/core@17.
 one hoisted copy, matching the `ngx-translate 16/17` norm in
 [Satori Components Consumers](https://hyland.atlassian.net/wiki/spaces/HDF/pages/3803285020).
 
-`AGENTS/11-beta-program.md` §3 records why the loader must not be swapped for adf-core's
+`AGENTS/11-beta-program.md` §3 records why the loader must not be swapped for a stock
 `TranslateLoaderService`: doing so deletes the manifest-`labels` layering, which is a shipped
-Layer 0 capability, and pulling `@alfresco/adf-core` onto an import chain from `app.config.ts`
-moved the initial bundle 1.71 MB → 2.86 MB. That is a verified fact. Do not re-litigate it.
+Layer 0 capability. That is a verified fact. Do not re-litigate it.
 
 The loader's existing merge order is the design, and it is already right:
 
@@ -343,9 +284,8 @@ later.
 
 ### D4 — Key naming: keep lowercase dotted, do not adopt SCREAMING_CASE
 
-Our keys are lowercase dotted (`browse.details.show`); every upstream catalogue we seed uses
-SCREAMING_CASE (`DOCUMENT_TREE.ROOT`, `MANAGE_VERSIONS.DIALOG.TITLE`). Keeping the two
-distinguishable is worth more than consistency with upstream, for three reasons: a raw key
+Our keys are lowercase dotted (`browse.details.show`); the upstream catalogues we seed use
+their own key shapes. Keeping the two distinguishable is worth more than consistency with upstream, for three reasons: a raw key
 rendered on screen tells you immediately whose catalogue is at fault; the guardrail in D6 can
 use case to tell "an untranslated upstream key leaked" from "one of ours is missing"; and
 there is no collision risk when the merge is flat.
@@ -361,17 +301,6 @@ Convention, matching what is already in `en.json`:
 Namespace per feature library, plus `app` for the shell. Alphabetically sorted. Placeholders
 use ngx-translate's `{{ }}` interpolation.
 
-### D5 — The accessible-name fix: three options
-
-| Option                         | Mechanism                                                                                        | Verdict                                                                                                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **a. Manifest `labels` entry** | Layer 0 entry keyed on the literal `'DOCUMENT_TREE.TOGGLE_ARIA-LABEL '`, trailing space and all. | Ugly, but no rebuild, and it is precisely what the `labels` layer exists for.                                                                                                                                                                          |
-| **b. Seeded-catalogue shim**   | Add the trailing-space alias to the merged folder catalogue in `app-translate-loader.ts`.        | **Recommended.** It belongs with the other adf-hx workarounds, gets a `WORKAROUND(adf-hx): W#` marker and a row in `docs/adf-hx-workarounds.md`, so the `checkAdfHxWorkaroundIds` guardrail keeps it from being orphaned when upstream fixes the typo. |
-| **c. Wait for upstream**       | File the finding and live with it.                                                               | Not acceptable — it is a live WCAG 4.1.2 / 2.4.6 defect on every surface.                                                                                                                                                                              |
-
-Take (b), and file the upstream finding alongside 4.6 in `docs/adf-hx-upstream-findings.md`
-regardless of which is chosen. There has been no stable adf-hx release in twelve months, so
-"upstream will fix it" is not a plan.
 
 ### D6 — The guardrail: diff-scoped first, with a selftest
 
@@ -419,7 +348,7 @@ and it makes AC 4 ambiguous. Two ways to satisfy it:
 | Option                                                     | What it proves                                                                                                                        | Cost                                                                                                                                                                                          |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bootstrap override + full reload**                       | `defaultLanguage` works, which is the literal AC.                                                                                     | Low. But note `withHashLocation()` makes `goto('/#/x')` same-document, so the evidence capture **must** call `page.reload()` or `APP_INITIALIZER` never re-runs and the assertion is vacuous. |
-| **Minimal language picker driven by `availableLanguages`** | Both keys work, and the config surface stops being half-dead. adf-core already ships `LanguagePickerComponent` and `LanguageService`. | Higher — a new UI surface, a new a11y surface, and a decision about where it lives in the shell.                                                                                              |
+| **Minimal language picker driven by `availableLanguages`** | Both keys work, and the config surface stops being half-dead. | Higher — a new UI surface, a new a11y surface, and a decision about where it lives in the shell.                                                                                              |
 
 **Recommendation for 227a: the bootstrap override**, and file the picker as its own story.
 AC 4 says "the Layer 0 `defaultLanguage` key does something visible", which the override
@@ -505,8 +434,8 @@ while they differ: the ID is what the workflows use.
 ```
 
 > **The trap: do not copy the standard's `/**/**/i18n/en.json` glob verbatim.** With
-> `base_path: "."` it sweeps `node_modules`, which in this repo contains **48 upstream
-> `i18n/en.json` catalogues** — adf-core's 19 locales, both adf-hx bundles, and satori-ui's 15. Uploading those would push Alfresco's and Satori's strings into our Crowdin project and
+> `base_path: "."` it sweeps `node_modules`, which in this repo contains **upstream
+> `i18n/en.json` catalogues** — satori-ui's 15, for one. Uploading those would push Satori's strings into our Crowdin project and
 > bill the translation crew for work another team already paid for. Scope the globs to `apps/`
 > and `libs/`, and verify with a `crowdin upload sources --dryrun` before the first real push (one word — the CLI rejects `--dry-run`).
 
@@ -1082,7 +1011,6 @@ each leaving `main` green, each closed before the next opens.
 
 | Slice                            | Deliverable                                                                                                                                                        | Gate for the slice                                                                             |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **S1** Accessible-name fix       | Trailing-space alias in the seeded catalogue, `WORKAROUND(adf-hx): W#` marker, row in `docs/adf-hx-workarounds.md`, finding in `docs/adf-hx-upstream-findings.md`. | `guardrails` (`checkAdfHxWorkaroundIds` is bidirectional — it fails if either half is missing) |
 | **S2** Catalogue validation      | `checkTranslationCatalogues` guardrail + unit test over every `i18n/*.json`.                                                                                       | `guardrails`, `test`                                                                           |
 | **S3** Hard-coded-text guardrail | `checkNoHardcodedUiText`, diff-scoped, with `review-guardrails.selftest.mjs` registered as a gate.                                                                 | `guardrails`, deliberate red run captured                                                      |
 | **S4** Chrome extraction top-up  | Extract the shell, nav and settings strings that S3 would now reject, so the guardrail is not born red. Bounded: `apps/nuxeo-ui` only, ~94 text nodes.             | `lint`, `test`, `build`                                                                        |
@@ -1140,10 +1068,6 @@ strips types through esbuild — so a green `test` proves nothing about type saf
 | Fallback parity    | Every key bound as an accessible name is present and non-empty in `en-fallback.ts`, enforced by `checkAccessibleNameFallbacks`. **Delivered, and the gaps it was written for are closed** — `settings.themes.search` was the one this row named; `shell.search.placeholder` and `shell.ai.input-placeholder` were two more, found later because the gate read only `aria-label` and `title` while those two inputs are named by their `placeholder` alone. `placeholder` is in scope now. A key in our own lowercase shape that no catalogue defines also fails, so a typo cannot pass as an upstream key.                                                                                                                                             |
 | Guardrail selftest | Each new guardrail fires on a crafted violation and stays silent on a crafted near-miss. Negative controls counted separately from positive ones.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-Note for whoever touches `AppTranslateLoader`: `upstream-permissions-panel.spec.ts` defines a
-`StubAdfTranslateLoader` duck-typing all five adf-core methods. **Add a method to the loader
-and that stub must grow it too**, or the spec fails in a way that looks unrelated.
-
 ### Evidence capture
 
 New steps file, `scripts/beta-harness/steps/nxsat-227-i18n.mjs`, run via
@@ -1153,11 +1077,10 @@ condition is a constant**. Do not record a limitation as `h.check(name, true)` �
 
 | Step                   | Load-bearing assertion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Raw-key sweep          | On each of the eight routes, no `aria-label`, `title`, **`placeholder`**, **`alt`** or text node **is** one of our catalogue keys, **contains** one as a word, or matches the upstream shape `/\b[A-Z][A-Z0-9_]*(\.[A-Z0-9_-]+)+\b/`. Not a single anchored regex: a word-dot-word pattern cannot separate `nav.refresh` from `report.pdf`, and the founding regression was the concatenated form `DOCUMENT_TREE.TOGGLE_ARIA-LABEL undefined`, which anchoring cannot match. **`placeholder` remains load-bearing for the AI assistant input** (still placeholder-named). **Global header search** (NXENG-798) names via an associated visible `<label>` — the French/German/fallback locale steps read that label text, not `placeholder`. The sweep walks **text nodes** via `rawKeysOnPage` (not leaf-element `textContent` alone), including label copy beside icons — e.g. `<button><mat-icon>…</mat-icon> nav.refresh</button>`. |
-| Document tree          | The toggle's accessible name **contains that row's own visible label**, and contains neither a raw key nor the word `undefined`. Read from the DOM. Not `startsWith('Toggle')`: that passed on `Toggleundefined`, which is what the tree announced until W15, because upstream appends a `node.name` its node wrapper does not have.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Raw-key sweep          | On each of the eight routes, no `aria-label`, `title`, **`placeholder`**, **`alt`** or text node **is** one of our catalogue keys, **contains** one as a word, or matches the upstream shape `/\b[A-Z][A-Z0-9_]*(\.[A-Z0-9_-]+)+\b/`. Not a single anchored regex: a word-dot-word pattern cannot separate `nav.refresh` from `report.pdf`, and a concatenated form such as `DOCUMENT_TREE.TOGGLE_ARIA-LABEL undefined` is one anchoring cannot match. **`placeholder` remains load-bearing for the AI assistant input** (still placeholder-named). **Global header search** (NXENG-798) names via an associated visible `<label>` — the French/German/fallback locale steps read that label text, not `placeholder`. The sweep walks **text nodes** via `rawKeysOnPage` (not leaf-element `textContent` alone), including label copy beside icons — e.g. `<button><mat-icon>…</mat-icon> nav.refresh</button>`. |
 | French locale          | Bootstrap set to `fr`, **`page.reload()` called**, shell chrome renders French. Without the reload `APP_INITIALIZER` never re-runs and the check is vacuous — this has caught people here before.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Empty accessible names | Two assertions, and the scope is narrower than "anywhere". **(a)** No `aria-label=""` on an interactive control — `button, a[href], input, select, textarea, [role=button], [role=link]` — which is the regression test for the `sat.*` critical finding. **(b)** No interactive control left with nothing naming it: no `aria-label`, no resolvable `aria-labelledby`, no `<label>`, no `title`, no `placeholder`, no text of its own once `aria-hidden` content is removed. Upstream's `<adf-datatable-row aria-label="">` is **excluded on purpose** — a row is not a control, cannot fail axe `button-name`, and is upstream finding 1.2. So this proves controls, not every node on the page.                                                                                                                                                                                                                                     |
-| axe, French            | `h.expectNoA11yViolations` on the French shell, with **no** ignore list and `failOn` set to every impact including `minor` and `moderate`. The helper defaults to serious and critical only, which would have let a minor finding produce a PASS under a check named "no WCAG 2.1 AA violations". Phase 6 passed the same surfaces in English with `KNOWN_VIOLATIONS` empty as of 2026-08-24, which is what makes anything found here attributable to translation. **That premise is currently unsound:** five consecutive `phase-6-a11y` captures from 2026-09-15 to 2026-09-16 fail 3 `button-name` checks (browse, browse cards, column panel), so an English failure could be misread as a French one. Re-establish the English baseline before trusting a finding from this check.                                                                                                                                                |
+| Empty accessible names | Two assertions, and the scope is narrower than "anywhere". **(a)** No `aria-label=""` on an interactive control — `button, a[href], input, select, textarea, [role=button], [role=link]` — which is the regression test for the `sat.*` critical finding. **(b)** No interactive control left with nothing naming it: no `aria-label`, no resolvable `aria-labelledby`, no `<label>`, no `title`, no `placeholder`, no text of its own once `aria-hidden` content is removed. So this proves controls, not every node on the page.                                                                                                                                                                                                                                     |
+| axe, French            | `h.expectNoA11yViolations` on the French shell, with **no** ignore list and `failOn` set to every impact including `minor` and `moderate`. The helper defaults to serious and critical only, which would have let a minor finding produce a PASS under a check named "no WCAG 2.1 AA violations". Phase 6 passed the same surfaces in English with `KNOWN_VIOLATIONS` empty as of 2026-08-24, which is what makes anything found here attributable to translation. **That premise is unsound as of 2026-11-23:** the English capture fails `label-content-name-mismatch` on the navigation's user-profile control on every screen, so that rule failing on the French shell says nothing about translation until the control is fixed. The September `button-name` failures do not reproduce.                                                                                                                                          |
 
 Negative controls to run before trusting any of it: blank a catalogue key and confirm the
 raw-key sweep goes red; remove the `fr.json` file and confirm the locale step goes red;
@@ -1193,7 +1116,6 @@ say so in the report rather than leaving it unstated.
 | Per PR                    | Review and merge the translation PR. Not a standing duty: a release-checklist line, per Q4 and the measurement in D8b. The claim that "a rotting translation PR is the main failure mode of this setup" was **not measured before being repeated** and does not survive being checked — of the 99 such pull requests `nuxeo-web-ui` has had, 39 merged at a median lag of one day and none is open. | Release owner |
 | Per feature PR            | New keys go in `en.json` **only**. Tag the Jira ticket `translation`, per the Web UI process.                                                                                                                                                                                                                                                                                                       | Author        |
 | 3 business days before QA | Manual check of `translation`-labelled tickets, so missing translations can still be requested in time. Adopted from the Web UI process, which documents this exact gap.                                                                                                                                                                                                                            | Release owner |
-| Per adf-hx bump           | Confirm the new component's keys resolve — not merely that it renders. Registering a catalogue is not the same as loading it, which is what made the versions panel render `MANAGE_VERSIONS.DIALOG.TITLE`.                                                                                                                                                                                          | Whoever bumps |
 
 ### Standing rules
 
@@ -1288,10 +1210,6 @@ before; each of these fails if it leads.
    ls node_modules/@hylandsoftware/satori-ui/i18n/*.json | xargs -n1 basename | sed 's/.json//'
    ```
 
-   This item used to cite adf-core's 19 locales and adf-hx's seven beside that count. Both are
-   gone — no `@alfresco` package has been installed since NXSAT-637 and the adf-hx bridge went with
-   NXSAT-635 — so only the satori-ui half still describes anything that runs.
-
 4. Add it to the evidence capture's locale matrix.
 
 The gap between steps is however long translation and approval take, and a language sitting in it is in
@@ -1302,7 +1220,7 @@ its normal state rather than a half-finished one.
 | Item                                 | Why it is being left                                                                                                                                                                                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | RTL                                  | Separate initiative, [DS-2277](https://hyland.atlassian.net/browse/DS-2277). Satori needs 4–6 weeks of its own work before an app can start. Arabic and Hebrew are Web UI release-blocking locales, so this returns at GA.                                           |
-| Language picker                      | `availableLanguages` stays validated-but-unconsumed after 227a. Own story; adf-core ships the component.                                                                                                                                                             |
+| Language picker                      | `availableLanguages` stays validated-but-unconsumed after 227a. Own story.                                                                                                                                                             |
 | Strings in `.ts` files               | Not surveyed, not counted, not scoped. Discovery pass in 227b/B1.                                                                                                                                                                                                    |
 | Date, number and currency formatting | Angular's `DatePipe`/`DecimalPipe` need `LOCALE_ID` wired to the selected language and the locale data registered. Untouched — a French UI currently renders English-formatted dates. Small, but it is not free, and it is the most commonly forgotten half of i18n. |
 | Pluralisation                        | No `{count, plural, ...}` usage anywhere. ngx-translate needs `ngx-translate-messageformat-compiler` for ICU. Defer until a real plural string appears.                                                                                                              |
@@ -1312,9 +1230,6 @@ its normal state rather than a half-finished one.
 
 - `AGENTS/03-angular-conventions.md` — the key-naming convention and the "never hand-edit a
   locale file" rule, so the next agent follows it without being told.
-- `docs/adf-hx-workarounds.md` — the trailing-space alias row. The `checkAdfHxWorkaroundIds`
-  guardrail is bidirectional and will fail without it.
-- `docs/adf-hx-upstream-findings.md` — the upstream typo, alongside finding 4.6.
-- `docs/adf-hx-beta-plan.md` — amend the 21 Aug decision to record what 227a delivered inside
+- `docs/beta-plan.md` — amend the 21 Aug decision to record what 227a delivered inside
   the descoped position, so the two do not read as contradicting each other.
 - This file — as decisions Q1–Q4 are answered.

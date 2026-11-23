@@ -10,8 +10,7 @@ audience: product
 # Feature Catalog
 
 > **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Only the repository links were re-verified at that commit. The rest of the page as of 2026-08-24 · `77265f9`.
 > Derived from the 23 application routes, the 9 feature libraries and the 25 Nuxeo services.
 > Every row is traceable to code. Where a capability is present but limited, the limit is
 > stated rather than omitted.
@@ -31,22 +30,21 @@ audience: product
 
 ## 1. Content — browse, organise, act
 
-| Feature              | Description                                                                  | User        | Problem solved                            | Customer value                                                            | Depends on                              | Status      |
-| -------------------- | ---------------------------------------------------------------------------- | ----------- | ----------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------- | ----------- |
-| Repository browse    | Folder navigation with breadcrumbs, grid/list/simple views, sortable columns | All         | Find content in a hierarchy               | Familiar navigation without Web UI's Polymer stack                        | `browse.service`, OpenSearch            | **Shipped** |
-| adf-hx browse        | The same surface on the real `HxpDocumentListComponent`                      | All         | Shared component investment with Alfresco | Less bespoke UI to maintain                                               | 12 adf-hx API ports                     | **Shipped** |
-| Folder tree          | Secondary nav tree, synced with the main view                                | All         | Orient within deep hierarchies            |                                                                           | `browse-context.service`                | **Shipped** |
-| Configurable columns | 12 packaged columns, per-user column settings dialog                         | All         | See the metadata that matters             | **Layer 1 addressable** — a manifest can change columns without a rebuild | `documentList` slot                     | **Shipped** |
-| Create & import      | Create documents; single and bulk import with properties                     | Contributor | Get content in                            |                                                                           | `document-import.service` (1,054 lines) | **Shipped** |
-| Drag-and-drop upload |                                                                              | Contributor |                                           |                                                                           |                                         | **Shipped** |
-| Bulk actions         | Multi-select, bulk delete with confirmation                                  | Contributor | Act on many at once                       | **Layer 1 addressable** via `bulk-actions`                                | `selection.service`                     | **Shipped** |
-| Clipboard            | Copy/move across the repository                                              | Contributor | Reorganise                                |                                                                           | `clipboard-target.service`              | **Shipped** |
-| Trash                | Browse, filter and restore deleted content                                   | Contributor | Recover mistakes                          |                                                                           | `trash.service`, `trash-filter.service` | **Shipped** |
-| Collections          | Create collections, add documents, collection detail                         | All         | Ad-hoc grouping across the hierarchy      |                                                                           | `collection.service`                    | **Shipped** |
-| Favorites            |                                                                              | All         | Quick return                              |                                                                           |                                         | **Shipped** |
-| Personal space       | Per-user workspace                                                           | All         | Private drafting                          |                                                                           |                                         | **Shipped** |
-| Recently viewed      |                                                                              | All         | Resume work                               |                                                                           |                                         | **Shipped** |
-| Folder picker        | Reusable destination chooser                                                 | Contributor | Move/copy targeting                       |                                                                           |                                         | **Shipped** |
+| Feature              | Description                                                                  | User        | Problem solved                       | Customer value                                                            | Depends on                              | Status      |
+| -------------------- | ---------------------------------------------------------------------------- | ----------- | ------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------- | ----------- |
+| Repository browse    | Folder navigation with breadcrumbs, grid/list/simple views, sortable columns | All         | Find content in a hierarchy          | Familiar navigation without Web UI's Polymer stack                        | `browse.service`, OpenSearch            | **Shipped** |
+| Folder tree          | Secondary nav tree, synced with the main view                                | All         | Orient within deep hierarchies       |                                                                           | `browse-context.service`                | **Shipped** |
+| Configurable columns | 12 packaged columns, per-user column settings dialog                         | All         | See the metadata that matters        | **Layer 1 addressable** — a manifest can change columns without a rebuild | `documentList` slot                     | **Shipped** |
+| Create & import      | Create documents; single and bulk import with properties                     | Contributor | Get content in                       |                                                                           | `document-import.service` (1,054 lines) | **Shipped** |
+| Drag-and-drop upload |                                                                              | Contributor |                                      |                                                                           |                                         | **Shipped** |
+| Bulk actions         | Multi-select, bulk delete with confirmation                                  | Contributor | Act on many at once                  | **Layer 1 addressable** via `bulk-actions`                                | `selection.service`                     | **Shipped** |
+| Clipboard            | Copy/move across the repository                                              | Contributor | Reorganise                           |                                                                           | `clipboard-target.service`              | **Shipped** |
+| Trash                | Browse, filter and restore deleted content                                   | Contributor | Recover mistakes                     |                                                                           | `trash.service`, `trash-filter.service` | **Shipped** |
+| Collections          | Create collections, add documents, collection detail                         | All         | Ad-hoc grouping across the hierarchy |                                                                           | `collection.service`                    | **Shipped** |
+| Favorites            |                                                                              | All         | Quick return                         |                                                                           |                                         | **Shipped** |
+| Personal space       | Per-user workspace                                                           | All         | Private drafting                     |                                                                           |                                         | **Shipped** |
+| Recently viewed      |                                                                              | All         | Resume work                          |                                                                           |                                         | **Shipped** |
+| Folder picker        | Reusable destination chooser                                                 | Contributor | Move/copy targeting                  |                                                                           |                                         | **Shipped** |
 
 ## 2. Document detail
 
@@ -56,7 +54,7 @@ audience: product
 | Per-type layouts     | The Properties panel shows each type's own schema fields: a layout file a configuration package contributes per type (sections or tabs), or one generated from the schemas | A Claim shows its claim fields    | A configuration package (NXSAT-312)        | **Shipped, read-only**           |
 | Preview / viewer     | Inline preview; ARender integration for rich formats                                                                                                                       | Read without downloading          | ARender (Docker), `arender.service`        | **Shipped**                      |
 | Per-type View        | A manifest `documentView` entry replaces the View tab body for the documents its rule matches                                                                              | One type opens on its own view    | A Layer 2 registered component             | **Shipped, no packaged entries** |
-| Versions             | Create a version, restore, manage-versions dialog                                                                                                                          | Audit and rollback                | adf-hx version ports                       | **Shipped**                      |
+| Versions             | Create a version, restore, manage-versions dialog                                                                                                                          | Audit and rollback                | `nuxeo-client` version services            | **Shipped**                      |
 | Permissions          | View local ACLs, add/update/delete permissions, external sharing, notification email                                                                                       | Control access                    | `principal-permissions.service`, 4 dialogs | **Shipped, limited** — see below |
 | History / audit      | Activity log with event labels                                                                                                                                             | Who did what                      | `administration.service` audit APIs        | **Shipped**                      |
 | Comments             | Threaded comments with edit/delete on replies                                                                                                                              | Collaborate                       |                                            | **Shipped**                      |
@@ -82,12 +80,11 @@ audience: product
 | Faceted search              | Aggregations, filters drawer                       | Narrow results             | **Shipped**                        |
 | Saved searches              |                                                    | Repeat a query             | **Shipped**                        |
 | Search queue                | Queue results for batch action                     | Work through a result set  | **Shipped**                        |
-| adf-hx search               | Search on the adf-hx surface                       | Shared components          | **Shipped**                        |
 | NXQL admin search           | Raw NXQL console for administrators                | Diagnose                   | **Shipped**                        |
 | **Natural-language search** | "documents I edited last week" → NXQL              | No query language to learn | **Backend absent** — `AI.NlToNxql` |
 
 > **Search hardening.** The query path escapes literals before interpolation
-> (`hxql-literal.ts`, removed with the adf-hx routes; NXQL literals go through
+> (NXQL literals go through
 > [`nxql.utils.ts`](../../libs/shared/nuxeo-client/src/lib/utils/nxql.utils.ts)).
 > An adversarial review found an injection that returned 155 documents against 0 for the
 > plain term, defeating the `isVersion`/`isTrashed` hygiene filters. Nuxeo's ACL filter
@@ -177,15 +174,15 @@ the backend, not availability.
 
 ## 9. Cross-cutting
 
-| Feature                                                                            | Status                                                                                     |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Authentication — Basic, SSO-cookie detection, share tokens, session-expiry warning | **Shipped**                                                                                |
-| Authorisation — route guards, admin guard, power-user detection                    | **Shipped**                                                                                |
-| i18n — `@ngx-translate`, layered catalogues incl. adf-core and adf-hx              | **Shipped**                                                                                |
-| Runtime theming from Layer 0 tokens                                                | **Shipped**                                                                                |
-| Accessibility                                                                      | **Shipped** — WCAG 2.1 AA met on 15 scanned cases; `KNOWN_VIOLATIONS` empty                |
-| Notification email on permission grant                                             | **Shipped** — Mailpit locally                                                              |
-| Marketplace packaging with upgrade-safe config                                     | **Shipped** — upgrade with customer configuration packages installed rehearsed (NXSAT-312) |
+| Feature                                                                            | Status                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication — Basic, SSO-cookie detection, share tokens, session-expiry warning | **Shipped**                                                                                                                                                                                  |
+| Authorisation — route guards, admin guard, power-user detection                    | **Shipped**                                                                                                                                                                                  |
+| i18n — `@ngx-translate`, layered catalogues                                        | **Shipped**                                                                                                                                                                                  |
+| Runtime theming from Layer 0 tokens                                                | **Shipped**                                                                                                                                                                                  |
+| Accessibility                                                                      | **Shipped, WCAG 2.1 AA not met as of 2026-11-23.** One 2.5.3 (Level A) defect fails on every screen: the navigation's user-profile control. AA was met on the 15 scanned cases on 2026-08-24 |
+| Notification email on permission grant                                             | **Shipped** — Mailpit locally                                                                                                                                                                |
+| Marketplace packaging with upgrade-safe config                                     | **Shipped** — upgrade with customer configuration packages installed rehearsed (NXSAT-312)                                                                                                   |
 
 ---
 

@@ -355,7 +355,7 @@ export default async function run(page, h) {
       'configuration, so adding it to one and not the others fixes only some builds',
   );
 
-  const served = await page.request.get(`${h.baseUrl}/assets/satori-ui/i18n/en.json`, {
+  const served = await page.request.get(`${h.baseUrl}/assets/satori-ui/i18n/en-US.json`, {
     failOnStatusCode: false,
   });
   let servedLabel = null;
@@ -369,7 +369,7 @@ export default async function run(page, h) {
   h.check(
     'the served satori-ui catalogue supplies a non-empty nav label',
     typeof servedLabel === 'string' && servedLabel.trim().length > 0,
-    `GET /assets/satori-ui/i18n/en.json -> ${served.status()}, sat.platform-nav.expand=${JSON.stringify(servedLabel)}`,
+    `GET /assets/satori-ui/i18n/en-US.json -> ${served.status()}, sat.platform-nav.expand=${JSON.stringify(servedLabel)}`,
   );
   h.note(`served sat.platform-nav.expand = ${JSON.stringify(servedLabel)}`);
 

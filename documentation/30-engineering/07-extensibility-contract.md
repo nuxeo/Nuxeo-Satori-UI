@@ -10,14 +10,12 @@ audience: engineering
 # The Extensibility Contract — four layers
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
-> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
+> Last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only "The six guardrail checks" was verified at that commit, against
 > `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
 > `@nuxeo/satori-platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
 > The `@nuxeo/satori-platform/components` row in §6 was re-verified at
-> `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
-> upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
+> `effd434` (`feature/nxsat-308-satori-components`), and the tarball figure
 > in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.
 > Customer-facing companion: [`docs/extension-reference.md`](../../docs/extension-reference.md),
 > which is drift-gated by `npm run beta:reference`.
@@ -41,7 +39,7 @@ Layers 0 and 1 are expected to absorb most customer requests and need no build o
 the customer's configuration package is zipped by a dependency-free script and installed.
 
 > **This expectation is a design assumption, not a measured fact.** It has not been tested
-> against real customer requests. [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md)
+> against real customer requests. [`docs/beta-plan.md`](../../docs/beta-plan.md)
 > flags it as needing validation against The Church and one other account. **Not verified in
 > repository.**
 
@@ -73,16 +71,19 @@ An advertised language is **two** promises, and only one of them is ours to keep
 
 The application's own catalogue is ours, and every advertised language has a complete one —
 `checkAdvertisedLocalesShip` fails a configuration that advertises a language without one. The
-shared-component strings are the vendor's, and `@hylandsoftware/satori-ui` ships **fifteen**
-catalogues: `de en es fr it pl pt` plus the regional variants `de-DE`, `en-AU`, `en-US`,
-`es-ES`, `fr-FR`, `it-IT`, `pl-PL` and `pt-PT`.
+shared-component strings are the vendor's. `@hylandsoftware/satori-ui` 1.0.0 ships **eight**
+catalogues, all regional — `de-DE`, `en-AU`, `en-US`, `es-ES`, `fr-FR`, `it-IT`, `pl-PL` and
+`pt-PT` — plus `languages.json`, a manifest of those locales. Earlier versions also shipped the
+bare names (`de en es fr it pl pt`); 1.0.0 dropped them.
 
-**The match is exact on the catalogue filename**, which is the part worth knowing. A deployment
-set to `en-US` or `fr-FR` is covered, because those files exist. One set to `pt-BR` is **not**,
-even though `pt` exists — nothing falls back from a regional variant to its base language, so
-`pt-BR` is in the same position as a language the vendor never shipped. **Any locale id outside
-those fifteen renders every `sat.*` string in English** — including the accessible names on the
-navigation rail — inside an otherwise translated application. Tracked upstream as
+**The match is on the catalogue filename, with one mapping on top**, which is the part worth
+knowing. The bare codes `de en es fr it pl pt` reach their regional file through `aliases` in
+`UPSTREAM_FOLDERS` (`en` → `en-US`, `fr` → `fr-FR`, …). A deployment set to `en-US` or `fr-FR` is
+covered, because those files exist. One set to `pt-BR` is **not**: it is neither a shipped file
+nor an alias — nothing falls back from a regional variant to its base language — so `pt-BR` is
+in the same position as a language the vendor never shipped. **Any other locale id renders every
+`sat.*` string in English** — including the accessible names on the navigation rail — inside an
+otherwise translated application. Tracked upstream as
 [DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
 because the strings are the vendor's to author.
 
@@ -289,8 +290,9 @@ request for it comes from people who believe it needs a fork (NXSAT-684).
 A bootstrap fragment declares named presets under `presales`; each carries a whole `bootstrap` and
 `manifest` patch applied **after** every package's fragments, so it wins over all of them:
 application title, document title, logo, favicon, the entire theme token map, `defaultThemeId`,
-languages, and every Layer 1 capability. `config-packages/presales-demo` ships two worked
-prospects:
+languages, and every Layer 1 capability.
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo),
+in nuxeo/Nuxeo-Satori-Config, ships two worked prospects, both fictional:
 
 ```
 https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
@@ -320,8 +322,9 @@ distinction is between the content and the selection, and only one of them is ru
 `bootstrap.json`, raising the version, rebuilding, reinstalling and restarting — two to four
 minutes, because presets are package content and package content is read once at startup. The fix
 is the development override directory: with `nuxeo.agentic.ui.config.dev=true` a new preset is one
-`docker cp` and a reload. See "The fast loop while you are tuning a value" in
-`config-packages/presales-demo/README.md`.
+`docker cp` and a reload. See
+[The fast loop while you are tuning a value](../../docs/extension-reference.md#the-fast-loop-while-you-are-tuning-a-value)
+in the extension reference.
 
 ### `sso.endpoints`
 
@@ -521,15 +524,10 @@ Both answer `false` with no string parameter, and both read the focused document
 document-detail tabs and toolbar actions but not browse columns. Reference and examples:
 `docs/extension-reference.md` §4.
 
-### Our rule context is deliberately not upstream's
+### Our rule context is typed on Nuxeo
 
-`RuleContext` from `@alfresco/adf-extensions` is typed on Alfresco Content Services domain
-objects — `NodeEntry`, `SiteEntry`, `RepositoryInfo` — describing a repository we do not
-talk to. Reusing it would put ACS types in the signature every customer rule is written
-against. The _shape_ is upstream's; the types are ours. Upstream's domain-neutral helpers
-were used directly until NXSAT-308, which replaced the three the engine needed —
-`mergeObjects`, `filterEnabled` and `sortByOrder` — with our own, pinned case by case to
-upstream's output.
+`RuleContext` is typed on Nuxeo documents, not on the domain objects of a repository we do not
+talk to. The engine's helpers — `mergeObjects`, `filterEnabled` and `sortByOrder` — are our own.
 
 ---
 
@@ -543,7 +541,7 @@ One publishable library, six secondary entry points; `npm pack --dry-run` on the
 | `@nuxeo/satori-platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
 | `@nuxeo/satori-platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
 | `@nuxeo/satori-platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
-| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no Satori import                                                                                            |
 | `@nuxeo/satori-platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
 | `@nuxeo/satori-platform/nuxeo-client`      | Services and models                                                                                                                              |
 | `@nuxeo/satori-platform/ui`                | Shared presentational components                                                                                                                 |

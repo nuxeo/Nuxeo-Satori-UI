@@ -319,7 +319,7 @@ describe('TasksPageComponent', () => {
       component.targetDoc.set(mockDocument);
       component.previewBlobType.set('image/png');
 
-      // A PDF previews as a thumbnail, so what the viewer is handed must describe the blob
+      // A non-media document previews as a thumbnail, so what the viewer is handed must describe the blob
       // (image/png), not the document (application/pdf).
       expect(component.viewerMimeType()).toBe('image/png');
     });
@@ -332,12 +332,32 @@ describe('TasksPageComponent', () => {
     });
 
     it('should fetch a thumbnail rendition for a non-media document', () => {
-      component.targetDoc.set(mockDocument);
+      mockDocService.getById.mockReturnValue(
+        of({
+          ...mockDocument,
+          properties: {
+            'file:content': {
+              name: 'notes.docx',
+              'mime-type':
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            },
+          },
+        }),
+      );
       mockHttp.get.mockClear();
 
       component.selectTask(mockTask);
 
       expect(mockHttp.get.mock.calls[0][0]).toContain('/@rendition/thumbnail');
+    });
+
+    it('should fetch the real blob for a PDF so every page is available', () => {
+      mockHttp.get.mockClear();
+
+      component.selectTask(mockTask);
+
+      expect(mockHttp.get.mock.calls[0][0]).toContain('/@blob/file:content');
+      expect(mockHttp.get.mock.calls[0][0]).not.toContain('/@rendition/thumbnail');
     });
 
     it('should fetch the real blob for an image document', () => {

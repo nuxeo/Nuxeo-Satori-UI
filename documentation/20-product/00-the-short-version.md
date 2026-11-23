@@ -81,8 +81,9 @@ nuxeoctl mp-install config-packages/acme-config/dist/acme-config-1.0.0.zip   # o
 ```
 
 What it writes is plain JSON, XML and a build script with no dependencies, so it can live in your
-own repository. `config-packages/presales-demo` is a finished example that builds the same way,
-with `node config-packages/presales-demo/build.mjs`; copying it instead also needs only Node, but
+own repository. [`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo),
+in nuxeo/Nuxeo-Satori-Config, is a finished example that builds the same way, with
+`node config-packages/presales-demo/build.mjs` from a clone of it; copying it instead also needs only Node, but
 means renaming it in `package.xml`, `MANIFEST.MF` and the component XML (and that file's name), and
 removing its presets.
 With this repository fully installed (which does need the token), the `config-package` Nx generator
@@ -122,7 +123,9 @@ https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
 https://<server>/nuxeo/agentic-ui/?preset=             # clear it
 ```
 
-Those two prospects are real and already in the repository, in `config-packages/presales-demo`. A
+Both presets already exist — fictional companies, in
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo)
+in nuxeo/Nuxeo-Satori-Config. A
 preset replaces the product name, the tab title, the logo, the tab icon, the whole colour palette
 and any wording, and a badge in the header says which one is in force. Nothing changes on the
 server and nothing changes for anyone else.
@@ -134,8 +137,9 @@ This is not a way around configuration-as-code. The preset's _content_ is versio
 content like every other fragment; only the _selection_ is runtime, per browser, with no
 server-side state. What does still cost a package rebuild and a restart today is adding a
 **new** prospect — around two to four minutes — and the development override directory removes
-that for a demo server: see "The fast loop while you are tuning a value" in
-`config-packages/presales-demo/README.md`.
+that for a demo server: see
+[The fast loop while you are tuning a value](../../docs/extension-reference.md#the-fast-loop-while-you-are-tuning-a-value)
+in the extension reference.
 
 For example, this manifest fragment hides Trash, renames Collections to "Repository", and
 shows Administration to administrators only:
@@ -177,12 +181,6 @@ shows Administration to administrators only:
   pre-production Marketplace. The developer package your own code builds against,
   `@nuxeo/satori-platform`, is not on any npm registry yet.
 - **Run your own code inside the shipped application.** See the next section.
-- **Edit every permission level on the rail's Browse page.** That page is still the adf-hx proof
-  of concept, and its Permissions tab handles only Nuxeo's Read, ReadWrite and Everything. On a
-  folder that also carries any other permission it refuses to save rather than delete that entry.
-  The Permissions tab on a document's own page, and on `/browse`, offers all of Nuxeo's standard
-  permissions and the others the server reports
-  ([extension reference, section 13](../../docs/extension-reference.md#13-what-beta-does-not-yet-address)).
 
 ## What needs code
 
@@ -235,5 +233,5 @@ the package is not published yet, you build it from this repository. Publishing 
 | Understand the product case and the layers in depth    | [Product Overview](01-product-overview.md)                                                                            |
 | Install and troubleshoot the Marketplace package       | [Deployment & Troubleshooting](../30-engineering/13-deployment-and-troubleshooting.md)                                |
 | Write your own code against the package                | [Platform package README](../../libs/platform/README.md) and [its guide for extenders](../../libs/platform/AGENTS.md) |
-| Know where the programme stands                        | [Programme status](../../docs/adf-hx-beta-plan.md#programme-status) in the Beta plan                                  |
+| Know where the programme stands                        | [Programme status](../../docs/beta-plan.md#programme-status) in the Beta plan                                         |
 | Customise it with an AI coding agent                   | [Prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts)                                           |

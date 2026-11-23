@@ -14,9 +14,7 @@ audience: engineering
 > three `Common problems` rows, the programme-status paragraph and the `Extending the system`
 > table** were re-verified against the code at that commit and corrected — the Node and
 > `localStorage` numbers had both been wrong since NXSAT-669.
-> Before that, last reviewed 2026-10-15 at `c053e63` (`integration/nxsat-308`):
-> only the adf-hx bridge and POC-route passages, for NXSAT-648.
-> Before that, 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
+> Before that, 2026-10-14 at `d36176c`:
 > Only the registry guidance (the token row and install snippet, `.npmrc` and the `E404` row) was re-verified at that commit,
 > for NXSAT-637; the gate guidance (the lockfile trap) on 2026-10-08 at `fb97d44`; the rest of the
 > page was last reviewed on 2026-08-24 at `77265f9`.
@@ -121,8 +119,7 @@ looks at the pruned Linux subtree and passes.
 ### Why `.npmrc` matters and is not enough
 
 [`.npmrc`](../../.npmrc) maps `@hylandsoftware` to GitHub Packages, where
-`@hylandsoftware/satori-ui` and the fonts, icons and tokens it depends on are published. The
-`@alfresco` mapping went in NXSAT-637 with the last `@alfresco` package.
+`@hylandsoftware/satori-ui` and the fonts, icons and tokens it depends on are published.
 
 And note: `npm ci` installs from each lock entry's `resolved` URL and **ignores** the
 registry mapping. If you change a scope's registry you must regenerate the lock, or CI
@@ -270,7 +267,7 @@ npm run beta:state
 
 It resolves every phase's cited evidence manifest and gate report and is red whenever a
 phase claims more than the artifacts support. The narrative version is the **Programme
-status** section of [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md), which is
+status** section of [`docs/beta-plan.md`](../../docs/beta-plan.md), which is
 dated.
 
 This page used to end the section with a prose snapshot — "At `77265f9`: Phases 0–5 complete,
@@ -308,8 +305,7 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 - Never cross-feature imports — shared logic goes in `libs/shared/`. Enforced by real
   `depConstraints` in [`eslint.config.mjs`](../../eslint.config.mjs); **an untagged project
   cannot depend on anything**, so a new library needs `scope:` and `type:` tags
-- adf-hx types must never appear in our public API — nothing imports adf-hx since its bridge was
-  removed with the POC routes (NXSAT-635); do not reintroduce it
+- Vendor component types must never appear in our public API — a feature uses the `nxs-` wrapper
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 
 ---
@@ -340,17 +336,17 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 
 ## 10. Common problems
 
-| Symptom                                                | Cause                                                                                                            | Fix                                                                                                                                                                              |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SecurityError` on `localStorage` in specs             | **Node 25** defines a throwing global `localStorage` that shadows jsdom's. Absent on 20, 22 and 24               | Use the pinned Node 24, or route every run through `npm run beta:gate`, which passes `--no-experimental-webstorage`. Do not edit the spec — the code is correct                  |
-| `npm ci` fails on CI, green locally                    | A bare `npm install` pruned Linux-only optional entries                                                          | Restore a known-good lock, merge new entries only                                                                                                                                |
-| `E404` installing `@hylandsoftware/*`                  | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                                | Set the token; it needs `read:packages` on the Hyland org                                                                                                                        |
-| `NG0201: No provider for …` from a library service     | The service is `providedIn: 'root'` and resolves its dependency from the root injector                           | Provide it in the **root** injector, not on the component. (This row named adf-hx until NXSAT-308 removed it; the cited comment is gone and `app.config.ts:37` is now unrelated) |
-| Components render raw translation keys instead of text | An i18n catalogue is missing from the bundle; `AppTranslateLoader` catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts both runtime catalogues are present, non-empty and not truncated (`no-test-libs-in-bundle.mjs:106-126`); a 0-byte file used to pass           |
-| HTTP 500 from an `AI.*` operation                      | The AI backend is a **separate marketplace package not in this repo**                                            | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                              |
-| Empty screens, intermittent 403 on `/nuxeo/api`        | Session injected but XHRs unauthenticated                                                                        | Both mechanisms are required — see the auth note in [Testing & Evidence](12-testing-and-evidence.md)                                                                             |
-| Evidence run passes suspiciously                       | A capture that asserts nothing                                                                                   | `npm run beta:audit` fails any assertion incapable of failing                                                                                                                    |
-| `beta:state` red after you added a gate                | Every phase cites a re-gate with a smaller gate count                                                            | Re-run the full gate and re-cite. Do not relax the check — it has been right both times                                                                                          |
+| Symptom                                                | Cause                                                                                                            | Fix                                                                                                                                                                    |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SecurityError` on `localStorage` in specs             | **Node 25** defines a throwing global `localStorage` that shadows jsdom's. Absent on 20, 22 and 24               | Use the pinned Node 24, or route every run through `npm run beta:gate`, which passes `--no-experimental-webstorage`. Do not edit the spec — the code is correct        |
+| `npm ci` fails on CI, green locally                    | A bare `npm install` pruned Linux-only optional entries                                                          | Restore a known-good lock, merge new entries only                                                                                                                      |
+| `E404` installing `@hylandsoftware/*`                  | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                                | Set the token; it needs `read:packages` on the Hyland org                                                                                                              |
+| `NG0201: No provider for …` from a library service     | The service is `providedIn: 'root'` and resolves its dependency from the root injector                           | Provide it in the **root** injector, not on the component.                                                                                                             |
+| Components render raw translation keys instead of text | An i18n catalogue is missing from the bundle; `AppTranslateLoader` catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts both runtime catalogues are present, non-empty and not truncated (`no-test-libs-in-bundle.mjs:106-126`); a 0-byte file used to pass |
+| HTTP 500 from an `AI.*` operation                      | The AI backend is a **separate marketplace package not in this repo**                                            | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                    |
+| Empty screens, intermittent 403 on `/nuxeo/api`        | Session injected but XHRs unauthenticated                                                                        | Both mechanisms are required — see the auth note in [Testing & Evidence](12-testing-and-evidence.md)                                                                   |
+| Evidence run passes suspiciously                       | A capture that asserts nothing                                                                                   | `npm run beta:audit` fails any assertion incapable of failing                                                                                                          |
+| `beta:state` red after you added a gate                | Every phase cites a re-gate with a smaller gate count                                                            | Re-run the full gate and re-cite. Do not relax the check — it has been right both times                                                                                |
 
 ---
 

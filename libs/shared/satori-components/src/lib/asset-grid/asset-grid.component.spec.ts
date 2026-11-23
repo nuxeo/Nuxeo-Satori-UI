@@ -138,6 +138,18 @@ describe('NxsAssetGridComponent', () => {
     expect(el().querySelector('.nxs-asset-grid__type')?.textContent?.trim()).toBe('Picture');
   });
 
+  // Name and type are both clipped with an ellipsis, and the pill cannot hold a tooltip of its own
+  // because it is `pointer-events: none` — without that it would punch a hole in the name button's
+  // card-wide hit area. The one tooltip has to carry both, and the pill must not claim one.
+  it('puts the full name and type in the one tooltip, and none on the pill', async () => {
+    host.assets.set([card('a', { name: 'Spring campaign hero.jpg', type: 'Picture' })]);
+    await render();
+    expect(el().querySelector('.nxs-asset-grid__name')?.getAttribute('title')).toBe(
+      'Spring campaign hero.jpg — Picture',
+    );
+    expect(el().querySelector('.nxs-asset-grid__type')?.hasAttribute('title')).toBe(false);
+  });
+
   it('marks the selected cards, taking the selection as a Set', async () => {
     host.assets.set([card('a'), card('b')]);
     host.selectedIds.set(new Set(['b']));

@@ -61,7 +61,7 @@ dialog preview with a fake `MatDialogRef` cannot establish the real modal's focu
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:
 
-1. **It was driven to zero, and is back at zero.** Seven rule classes and 77
+1. **It was driven to zero, and was back at zero on 2026-10-22.** Seven rule classes and 77
    violating nodes were cleared to empty `KNOWN_VIOLATIONS` and make the verdict
    unconditional. That zero went stale — two `color-contrast` nodes on `/#/tasks`
    still failed under phase-6's own tags as of 2026-09-30; see
@@ -71,9 +71,11 @@ Both run axe, so one of them had to give it up. phase-6 keeps it for three reaso
    1.4.3's 4.5:1. Both reported nodes sit on that background — `.task-item.active` differs only
    by an inset box-shadow, not its fill. Fixed under NXSAT-647 by moving to
    `--mat-sys-on-surface-variant` (8.93:1), and phase-6 re-measured at **35/35, `verdict PASS`**
-   on 2026-10-22.
+   on 2026-10-22, with axe-core 4.13.0.
    The remedy was to fix those and re-measure phase-6, not to move the verdict to a scanner
-   with 22 untriaged axe findings.
+   with 22 untriaged axe findings. That zero did not hold either. On 2026-11-23 phase-6 fails
+   one rule on one control, on every screen; see
+   [The 2026-11-23 measurement](#the-2026-11-23-measurement).
 2. **It depends on a public package.** `@axe-core/playwright` is on the public registry.
    a11y-scout is distributed as hand-passed tarballs that no registry can serve. A
    customer-shippable product should not have its conformance claim depend on a file
@@ -178,7 +180,9 @@ violation.
 Seven consecutive rounds in one class is a statement about the approach: the rule needs a real
 Sass parser (`postcss-scss`), not a regex, and that is tracked as **NXSAT-709**. Recorded here so the
 next attempt starts from the ten known cases and their controls rather than from scratch. The
-WCAG verdict is unaffected either way — it belongs to axe, and `phase-6-a11y` is `PASS 35/35`.
+WCAG verdict is unaffected either way. It belongs to axe, and `phase-6-a11y` was `PASS 35/35` on
+2026-10-22 and is `FAIL`, 20 of 35, on 2026-11-23
+([The 2026-11-23 measurement](#the-2026-11-23-measurement)).
 
 ## Baselines and suppression
 
@@ -201,10 +205,8 @@ Three properties make it the right shape, each of them learned the hard way and 
 
 Two further rules apply to every layer:
 
-- **An exclusion is scoped to one surface and cites an owner.** `phase-6-a11y.mjs` is the
-  model: `ADF_HX_UPSTREAM` is applied to the adf-hx POC step alone and cites
-  `docs/adf-hx-upstream-findings.md` §1.2. A global rule-id list silences that rule
-  everywhere, including on surfaces we own — the file says so itself, and it is the reason
+- **An exclusion is scoped to one surface and cites an owner.** A global rule-id list silences
+  that rule everywhere, including on surfaces we own, and it is the reason
   `KNOWN_VIOLATIONS` must stay empty.
 - **A new gate is not trusted until it has been seen to fail on purpose.** The static scan was
   negative-controlled before adoption: a second `click-events-have-key-events` in an
@@ -267,10 +269,7 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   depends on what the test repository happens to hold rather than on anything the journey asserts.
 - **Six routes no runtime layer visits:** `/#/contracts` and the five `/#/settings/*` pages
   (Nuxeo Drive, profile, authorized applications, cloud services, themes). Contracts was dropped
-  from the journey on purpose — see "Fifteen screens" below. `/#/search-adf-hx` was the seventh
-  until the adf-hx routes were retired on 2026-10-14; it and `/#/browse-adf-hx` now redirect to
-  `/#/search` and `/#/browse`, which the surfaces and display-modes suites scan, so both suites
-  dropped their `/#/browse-adf-hx` row rather than moved it.
+  from the journey on purpose — see "Fifteen screens" below.
 - **Populated tasks and expired-queue screens.** The journey scans their empty states on a server
   with neither, and says so in its output; a task form or an expired card has never been scanned.
 - **Horizontal scrolling inside a region at 320px.** Reflow checks the document's `scrollWidth`
@@ -311,6 +310,65 @@ checked against `/me`.
   `#999999` on `#fafafa`). Neither phase-6 visit sees it: one opens a Picture, the other a File
   with a main blob.
 
+## The 2026-11-23 measurement
+
+`phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at e27deeaa0, is **`FAIL`, 20 of 35
+checks**. WCAG 2.1 AA is **not met**. The capture ran exactly as its prerequisites document, and
+the `--no-save` install resolved `@axe-core/playwright` 4.14.0 and `axe-core` 4.14.1. Its scope is
+14 axe scans over 9 routes, counting document detail once: landing, browse in three states, search
+in three, trash, tasks, collections, administration, knowledge discovery, and two document-detail
+states. The August pass's "fifteen cases over eight routes" was that run's count. Quote the counts
+of the run you cite.
+
+| Failed checks | What                                                                                                                                        | Verdict                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 14            | `label-content-name-mismatch` (2.5.3 Label in Name, Level A, serious): one node, `#sat-platform-nav-user-profile`, on every scanned surface | **product defect**, ours to fix                   |
+| 1             | Health: `HTTP 404 /agentic-ui-config/layouts.json`                                                                                          | **environment**, and not an accessibility finding |
+
+No other axe rule reported a violation at any impact.
+
+**The defect.** The control is the navigation's user-profile button, and it is in the shell, so
+every surface fails. On 2026-10-26 NXSAT-673 started projecting the signed-in user's avatar into
+it, and the avatar renders their initials as text. The rail is collapsed in the state the capture
+scans, so the initials are all the control shows. Its accessible name is the full display name,
+which the upstream navigation component copies from a label that is hidden in that state. A
+speech-input user who says what they see therefore does not name the control. The avatar is
+`aria-hidden`, which hides it from a screen reader but not from sight, and 2.5.3 concerns what
+is visible.
+
+**What fixing it would show.** It would clear this capture's axe checks, and nothing more: the
+Health 404 would still fail the run.
+[Storybook observations](#storybook-observations--triaged-2026-10-15) above records failures
+under the same tags in states the capture does not reach, among them the viewer placeholder for
+a File without a main file. [What nothing covers](#what-nothing-covers) lists what no layer
+scans at all. Conformance needs those fixed and measured too.
+
+**Why 2026-10-22 passed.** Three runs on one checkout separate the engine from the product:
+
+| Run                                                            | Engine | Result                                                                                                        |
+| -------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| `phase-6-a11y/2026-11-23T08-09-11`, the record                 | 4.14.1 | 20 of 35, as above                                                                                            |
+| The full capture again, with `@axe-core/playwright@4.13.0`     | 4.13.0 | 34 of 35: every axe check passes, and the same Health 404 fails                                               |
+| One page, each engine, the rule selected by tag and then by id | both   | 4.13.0 does not run the rule under the WCAG tags and passes the control when it is forced on. 4.14.1 fails it |
+
+In 4.13.0 the rule is tagged `experimental`, so the WCAG tags never select it. Its comparison
+also matches characters, and these initials happen to be the first two letters of the capture
+account's display name, so it finds them inside the name. 4.14 drops the `experimental` tag and
+compares whole words. The 2026-10-22 pass was measured with 4.13.0, four days before the initials
+arrived, so it measured neither this rule nor the control as it is now. The two control runs are kept outside
+the evidence of record, under `agentic-ui-evidence/a11y-engine-diagnostic-2026-11-23/`, so they
+are never mistaken for it.
+
+**The engine is not pinned.** `a11y/versions.mjs` pins axe for a11y-scout, and Storybook's lock
+resolves 4.13.0. `phase-6-a11y` installs whatever `--no-save` resolves, and its manifest does not
+record the version. That is how the verdict changed without a commit, and it is gap 8 below.
+
+**What else the run shows.** The September `button-name` failures on browse (2026-09-15 and
+2026-09-16) do not reproduce under either engine. The Health 404 is the configuration service's
+optional layout index, which the local dev server does not serve. The layout service falls back to
+generated layouts by design. The check's ignore list names the sibling `bootstrap.json` and
+`manifest.json`, but not this file.
+
 ## The disagreement — resolved 2026-09-11, against phase-6
 
 The first a11y-scout baseline reported **8 `color-contrast`** and **2 `button-name`** findings
@@ -320,11 +378,10 @@ while `phase-6-a11y.mjs` recorded both rules as driven to zero. Two scripts sett
 **a11y-scout was right. phase-6's zero is stale.** Under phase-6's _own_ four-tag set, at its
 own 1440×900 viewport, measured on 2026-09-11 and again on 2026-09-30:
 
-| Surface            | Rule                     | Impact   | 11 Sep                                | 30 Sep                               |
-| ------------------ | ------------------------ | -------- | ------------------------------------- | ------------------------------------ |
-| `/#/browse`        | `button-name`            | critical | 2 — the document-tree expand toggles  | **0** — fixed by `NXSAT-227`         |
-| `/#/tasks`         | `color-contrast`         | serious  | 2                                     | **2** — still open                   |
-| `/#/browse-adf-hx` | `aria-required-children` | critical | 2 — the documented upstream exclusion | 2 — unchanged, legitimately excluded |
+| Surface     | Rule             | Impact   | 11 Sep                               | 30 Sep                       |
+| ----------- | ---------------- | -------- | ------------------------------------ | ---------------------------- |
+| `/#/browse` | `button-name`    | critical | 2 — the document-tree expand toggles | **0** — fixed by `NXSAT-227` |
+| `/#/tasks`  | `color-contrast` | serious  | 2                                    | **2** — still open           |
 
 On 11 September that was **four blocking nodes** phase-6 claimed did not exist. Its table is
 dated 2026-08-24; the claim was true when written and was never re-measured. `KNOWN_VIOLATIONS`
@@ -705,7 +762,7 @@ reasoning is kept because the _mechanism_ is general: any element whose loading 
 
 `screenUnsettledReason()` in `a11y/surface.mjs` therefore waits for the screen to hold still for
 1.5 seconds with no loader visible. On every poll it reads, across the nav drawer and the feature
-host together, every visible spinner (Material's or the hand-written `hxp-spinner`), progress
+host together, every visible spinner (Material's or a hand-written one), progress
 indicator and text or skeleton loader listed in its `LOADING_SELECTOR`, plus the tree
 node count, the `<img>` count and the element count; the window restarts whenever a loader is
 visible or any count changes. (It first accepted a single repeated count, which proves only that
@@ -814,6 +871,7 @@ should be closed:
 | 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                                                                                                                                                                                                                                                                                                |
 | 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half                                                                                                                                                                                                                                                                                   |
 | 7   | Three untriaged text uses of `--mat-sys-outline`, in states no harness renders                       | **Open** — `tasks-page.component.scss:312` (`.graph-empty`, 0.82rem), `:569` (`.dropdown-id`, 0.72rem) and `kd-citation-dialog.scss:129` (`.__mime`, 11px). Found by token search under `NXSAT-647`, not by a scan; each needs its background measured in the state that renders it before it is called a violation. `:281` was checked and is an 18px icon, so 1.4.11's 3:1 applies and it is correct |
+| 8   | phase-6's axe engine is not pinned, and its manifest does not record the version                     | **Open**, found 2026-11-23. The `--no-save` install moved from 4.13.0 to 4.14.x, which brought `label-content-name-mismatch` under the WCAG tags and changed the verdict without a commit. See [The 2026-11-23 measurement](#the-2026-11-23-measurement)                                                                                                                                               |
 
 Do not describe accessibility as standardised until rows 2 and 5 are closed. Rows 3 and 4
 depend on triage and are expected to take longer.

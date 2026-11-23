@@ -34,6 +34,7 @@ import {
   TagService,
   type AuditEntry,
   type NuxeoDocument,
+  CURRENT_USERNAME,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent, FILTER_DEBOUNCE_MS } from './browse';
@@ -633,6 +634,88 @@ describe('BrowseComponent — rendered document list', () => {
       'You do not have access',
     );
     expect(query('nxs-error-state button')).toBeNull();
+  });
+
+  describe('an external share recipient', () => {
+    const transient = {
+      provide: CURRENT_USERNAME,
+      useValue: () => 'transient/recipient@example.invalid',
+    };
+    const sharedLink = '/browse/default-domain/workspaces/ws-1/shared-doc';
+
+    afterEach(() => window.sessionStorage.removeItem('nxs.sharedDocumentPath'));
+
+    const remembered = (user: string, path: string) =>
+      window.sessionStorage.setItem('nxs.sharedDocumentPath', JSON.stringify({ user, path }));
+
+    it('is offered a way back to the document they were sent, from a folder they cannot read', async () => {
+      remembered('transient/recipient@example.invalid', sharedLink);
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      const back = query('nxs-error-state a');
+      expect(back?.textContent?.trim()).toBe('Back to shared document');
+      expect(back?.getAttribute('href')).toBe(sharedLink);
+    });
+
+    it('resolves an encoded path once, so a folder with a space is reached, not a doubly encoded one', async () => {
+      remembered(
+        'transient/recipient@example.invalid',
+        '/browse/default-domain/workspaces/Shared%20Folder/doc',
+      );
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state a')?.getAttribute('href')).toBe(
+        '/browse/default-domain/workspaces/Shared%20Folder/doc',
+      );
+    });
+
+    it('is not offered a landing that was issued to someone else', async () => {
+      remembered('transient/someone-else@example.invalid', sharedLink);
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(query('nxs-error-state a')).toBeNull();
+    });
+
+    it('gets no way back when the landing was not remembered', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(query('nxs-error-state a')).toBeNull();
+    });
+
+    it('sees its trail as text, with no ancestor it cannot open as a link', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: [doc({ uid: 'c-1', title: 'Report.pdf' })], totalSize: 1 }),
+      );
+      const component = await render([transient]);
+      const crumbs = component.breadcrumbs();
+
+      expect(crumbs.length).toBeGreaterThan(1);
+      expect(crumbs.slice(0, -1).filter((crumb) => crumb.routerLink !== undefined)).toEqual([]);
+    });
+
+    it('still gets the ancestor links for a signed-in user who is not external', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: [doc({ uid: 'c-1', title: 'Report.pdf' })], totalSize: 1 }),
+      );
+      const component = await render();
+
+      expect(
+        component
+          .breadcrumbs()
+          .slice(0, -1)
+          .some((crumb) => crumb.routerLink !== undefined),
+      ).toBe(true);
+    });
   });
 
   describe('a folder that cannot be opened, after one that could', () => {

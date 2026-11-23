@@ -129,14 +129,14 @@ export const KeyboardExpansion: Story = {
   },
 };
 
-/** Inside a domain: that domain's branch, expanded to Claims, which is marked as the current page. */
+/** Inside a domain: a back row for each ancestor, then Claims alone, marked as the current page. */
 export const InsideADomain: Story = {
   args: { currentPath: '/default-domain/workspaces/claims' },
 };
 
 /** From the keyboard: Down to Legal, Enter opens it. */
 export const FromTheKeyboard: Story = {
-  args: { currentPath: '/default-domain/workspaces/claims' },
+  args: { currentPath: '/default-domain/workspaces' },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const current = await canvas.findByRole('treeitem', { current: 'page' });

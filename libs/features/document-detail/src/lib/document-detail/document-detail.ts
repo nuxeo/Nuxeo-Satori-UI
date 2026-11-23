@@ -433,6 +433,23 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     ),
   );
 
+  /** A manifest rule on the packaged View tab selects NEV without replacing its fallback. */
+  readonly preferARender = computed(() => {
+    const rule = this.detailTabs().find((tab) => tab.id === 'app.tabs.view')?.preferARender;
+    // Manifest overrides are untyped JSON. Missing or malformed opt-ins keep the default.
+    if (
+      !rule ||
+      (typeof rule !== 'string' &&
+        (typeof rule !== 'object' || Array.isArray(rule) || typeof rule.type !== 'string'))
+    ) {
+      return false;
+    }
+    return this.extensions.evaluateRule(rule, {
+      ...this.extensionRuleContext.context(),
+      document: this.doc(),
+    });
+  });
+
   /** The tab strip for `nxs-tabs`: labels translated, so a language change relabels it. */
   readonly detailTabEntries = computed<readonly NxsTab[]>(() => {
     this.translationTick();
@@ -624,6 +641,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly documentTasks = signal<NuxeoTask[]>([]);
   readonly documentTasksLoading = signal(false);
   readonly documentWorkflows = signal<NuxeoWorkflow[]>([]);
+  /** Ids of workflows whose banner the user dismissed on this document; the workflow keeps running. */
+  readonly dismissedWorkflowIds = signal<ReadonlySet<string>>(new Set());
+  /** The running workflows whose banner is still on screen. */
+  readonly visibleWorkflows = computed(() => {
+    const dismissed = this.dismissedWorkflowIds();
+    return this.documentWorkflows().filter((wf) => !dismissed.has(wf.id));
+  });
   readonly abandoningWorkflow = signal(false);
   readonly availableWorkflows = signal<NuxeoWorkflowModel[]>([]);
   readonly workflowsLoading = signal(false);
@@ -712,7 +736,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!d) return [];
 
     const path = d.path ?? '';
-    const cacheKey = `${path}\0${d.title}`;
+    // An external share recipient can open none of the ancestors (NXSAT-211): they are text for them.
+    const external = (this.currentUsername() ?? '').startsWith('transient/');
+    const cacheKey = `${path}\0${d.title}\0${external}`;
     if (cacheKey === this.breadcrumbPathCache) {
       return this.breadcrumbItemsCache;
     }
@@ -723,10 +749,14 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     // Router links, not hrefs: whichever component `nxs.primitives.breadcrumbs` resolves to routes
     // them itself — the folded ones too, which Material's trail lists in a menu outside its host.
     // One command per segment, so the router encodes each exactly once.
-    this.breadcrumbItemsCache = parts.map((s, index) => ({
-      label: decodeNuxeoPathSegment(s),
-      routerLink: ['/browse', ...parts.slice(0, index + 1)],
-    }));
+    this.breadcrumbItemsCache = parts.map((s, index) =>
+      external
+        ? { label: decodeNuxeoPathSegment(s) }
+        : {
+            label: decodeNuxeoPathSegment(s),
+            routerLink: ['/browse', ...parts.slice(0, index + 1)],
+          },
+    );
     return this.breadcrumbItemsCache;
   });
 
@@ -1109,6 +1139,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
+    this.dismissedWorkflowIds.set(new Set());
     this.panelSubTab.set('properties');
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
@@ -1364,6 +1395,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  /** Hides this workflow's banner for the document on screen. The workflow itself is untouched. */
+  dismissWorkflowBanner(wf: NuxeoWorkflow): void {
+    this.dismissedWorkflowIds.update((ids) => new Set(ids).add(wf.id));
   }
 
   abandonWorkflow(wf: NuxeoWorkflow): void {

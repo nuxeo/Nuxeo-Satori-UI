@@ -310,9 +310,11 @@ export class TasksPageComponent implements OnInit {
     if (!fc) return;
 
     const mime = (fc['mime-type'] as string) ?? '';
-    // Audio and video need the real blob, not a thumbnail image: the viewer dispatches on the
-    // document's own MIME type, so a thumbnail rendition would be handed to <audio>/<video>.
-    // Everything else that is not an image previews as a thumbnail image of itself.
+    // Image, audio, video and PDF need the real blob, not a thumbnail image: the viewer dispatches
+    // on the document's own MIME type, so a thumbnail rendition would be handed to <img>, <audio>,
+    // <video> or the PDF frame. A PDF thumbnail showed only its first page, where the reference UI
+    // lets the user read the whole document. Everything else that is not media previews as a
+    // thumbnail image of itself.
     //
     // The `application/(g|m)xf` arm mirrors `DocumentViewerComponent.contentType`, which classifies
     // those broadcast containers as 'video'. Matching only `video/` here left them fetching a
@@ -322,6 +324,7 @@ export class TasksPageComponent implements OnInit {
       /^image\//.test(mime) ||
       /^audio\//.test(mime) ||
       /^video\//.test(mime) ||
+      mime === 'application/pdf' ||
       /^application\/(g|m)xf$/.test(mime);
     const url = this.nuxeoApi.apiUrl(
       needsOwnBlob

@@ -1132,7 +1132,9 @@ Narrow correctness does not generalise; check what the values actually are.
 **A real instant is not a calendar day and must not be converted.** In one panel,
 `dc:created`/`dc:modified` are server stamps and belong in the reader's zone, while `dc:expired` is
 a picked day and belongs in UTC. Formatting them alike is a second bug wearing consistency's
-clothes.
+clothes. The layout `date` view had it until 2026-11-23, formatting every value in UTC; it now asks
+`isStoredCalendarDay` (`document-layouts/…/stored-calendar-day.ts`) and formats only a stored day
+there.
 
 Regression test pattern — and this is the part that is easy to get wrong:
 
@@ -1232,11 +1234,42 @@ and read. And pick the safe direction to be wrong in: stricter than the server r
 that would have worked, which the customer sees immediately; more generous ships one that installs,
 starts, and silently does nothing.
 
+**Bounding the input does not bound the walks inside the bound.** QA found the rest of this one.
+Refusing past 1000 fixed everything deeper than 1000 and nothing below it: both remaining walks —
+the recursive tokeniser, and the `JSON.stringify` that packages the result — are still functions of
+depth, so the greatest depth the tool can actually handle stayed a property of the machine. It just
+moved to inside the band the server accepts, where the tool now claims to work. On Windows with
+Node 20 that is about depth 993, and `JSON.stringify` was the one depth-sensitive call left outside
+a `try`, so the build died there with the raw trace the fix was supposed to have removed. After
+bounding the input, **list every walk that is still a function of it** and decide what each one does
+at its own limit. A refusal inside the accepted band must also say _whose_ limit it was: "the server
+accepts this depth but this Node ran out of stack walking it" sends the reader to their toolchain,
+where "nested 993 deep" alone sends them to edit a file that was fine.
+
+**Which recursive walk gives out first flips by platform, so one OS proves nothing about the
+others.** On macOS and Linux the tokeniser goes first in the real script at every stack size tried
+(`--stack-size` from 100 KB up: always the caught refusal, never a `JSON.stringify` trace); on
+Windows with Node 20 the order is reversed, from about depth 993. So on this machine the
+`JSON.stringify` branch is **unreachable**, and a test that only shrinks the stack leaves it
+unexercised while looking thorough. Reach it by injecting the failure at that exact call
+(`--import` a preload that makes `JSON.stringify` throw the `RangeError`), and keep the real
+small-stack test beside it for the branch this platform does reach. One genuine overflow, one
+injected at the site only another platform reaches.
+
+Measure in the script, not in a probe. Each call's overflow depth in isolation — roughly 3800–4700
+for the tokeniser on Node 20 to 24 against 5900–6200 for `JSON.stringify`, which is iterative from
+Node 25 — moves by hundreds between runs of the same probe, enough to reverse the order, because it
+depends on how much stack the caller had already spent. Only the end-to-end run is stable enough to
+conclude from.
+
 Regression test pattern: the boundary on **both** sides (1000 builds, 1001 refused), a depth far
 past any stack asserting no trace and a one-line refusal, both container kinds since the parser
 counts arrays too, a string full of `{` that must still build, and a shallow control — otherwise a
-check that refuses everything passes.
-`tools/satori-generators/src/config-package/generator.spec.ts`, "nesting depth".
+check that refuses everything passes. Then, for the band the server accepts: a small `--stack-size`
+with a normal package as the control that Node still starts, the real overflow there, the injected
+overflow at the platform-only site, and a non-stack `RangeError` asserting it is **not** dressed up
+as one — "Invalid string length" told to build with a newer Node sends the reader after the wrong
+thing. `tools/satori-generators/src/config-package/generator.spec.ts`, "nesting depth".
 
 ---
 
@@ -1291,6 +1324,68 @@ still render a working button), and one property test that resolves every accept
 more than one base and asserts the origin did not move — that last one is what ties the string
 rule to the behaviour it claims, rather than testing a proxy for it
 (`bootstrap-config.spec.ts`, `auth.service.sso.spec.ts`).
+
+---
+
+## 32. One source, two module systems, and a test that only ever sees the forgiving one
+
+```typescript
+// BAD ❌ — works in the compiled CommonJS every customer runs, and in vitest. Throws
+// `ReferenceError: __dirname is not defined` in the one place the documentation sends people:
+// Nx loads this .ts with Node's native type stripping, so the module is ESM.
+generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+
+// GOOD ✅ — one resolver, both module systems, and both branches asserted.
+generateFiles(tree, generatorFilesDir('config-package'), projectRoot, substitutions);
+```
+
+NXSAT-795: all four generators that write templates used `join(__dirname, 'files')`.
+`scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+where `__dirname` exists, and vitest defines it too — so 187 tests, 34 gates and a QA pass of
+NXSAT-729 were all green while `npx nx g ./tools/satori-generators:config-package …`, the command
+in `docs/extension-reference.md`, `docs/beta-demo-runbook.md` and `libs/platform/AGENTS.md`, had
+never once worked on Node ≥ 22.6. QA found it by running the documented command.
+
+**A file loaded two ways needs the harsher way tested, and tests run the forgiving one.** Nx 23's
+`loadTsFile` prefers Node's native type stripping and falls back to swc only when stripping
+_fails_; stripping does not transform module syntax, so a `.ts` with `import` statements is ESM
+and nothing in CJS is defined. Vitest and `tsc --module commonjs` both give you the CJS globals,
+so no unit test and no build can see this. `NX_PREFER_NODE_STRIP_TYPES=false` restores the old
+behaviour — useful to confirm a diagnosis, not a fix, because a documented command must not need
+an environment variable.
+
+**Reach for a static check when no runtime test can see the gap.** `checkGeneratorsEsmSafe` in
+`scripts/review-guardrails.mjs` fails on `__dirname`, `__filename` or `require` anywhere under
+`tools/satori-generators/src` except the one resolver that guards with `typeof`, with specs
+exempt. That is what would have caught this; a test could not, because the test harness is the
+forgiving environment.
+
+**Ask which paths your evidence actually covered.** NXSAT-729's own verification ran the generator
+through `create.mjs` (a subprocess), the Nx generator through vitest (in-process) and the
+published compiled copy — three ways, none of them the Nx command line on the TypeScript source.
+Count the ways a thing can be invoked before reporting that it was exercised.
+
+**A default parameter cannot be overridden with `undefined`, so it cannot be used to reach the
+branch it hides.** The first fix for this had the shape below, and its "no `__dirname`" tests all
+ran the CommonJS branch — the default is applied whether the argument was omitted or passed as
+`undefined`. They passed, because both branches resolve to the same directory here. Measured, not
+argued: with the ESM branch deliberately returning a wrong path, all ten tests stayed green.
+
+```typescript
+// BAD ❌ — `f('x', undefined)` runs the default, so the `here === undefined` branch is unreachable.
+function f(generator: string, here = typeof __dirname === 'undefined' ? undefined : __dirname) {}
+
+// GOOD ✅ — a pure function taking the value, and a thin wrapper that supplies it.
+export function filesDirFrom(here: string | undefined, generator: string) {}
+export function generatorFilesDir(generator: string) {
+  return filesDirFrom(moduleDir(), generator);
+}
+```
+
+`__dirname` cannot be stubbed to reach the branch either: in CommonJS it is a module-scoped
+binding, not a property of `globalThis`. And when both branches return the same value, assert one
+that **cannot** — give the CommonJS branch a directory outside the workspace and check the answer
+came from it. Without that case, a branch that stops reading its input still passes.
 
 ---
 

@@ -195,7 +195,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-193 exported symbol(s).
+196 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -417,6 +417,7 @@ class NxsAdminUsersGroupsPageComponent implements OnInit {
     protected readonly selectedTab: import("@angular/core").WritableSignal<number>;
     protected readonly status: import("@angular/core").WritableSignal<Status$2 | null>;
     ngOnInit(): void;
+    protected onQueryChange(value: string): void;
     protected runSearch(): void;
     protected loadRecent(): void;
     protected onUsersPage(event: PageEvent): void;
@@ -1031,6 +1032,7 @@ interface NxsCreateVersionDialogData {
     }
 }
 type NxsCreateVersionDialogResult = NuxeoDocument | undefined;
+type NxsCsvCell = string | number | null | undefined;
 class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: import("@angular/core").InputSignal<string>;
     readonly min: import("@angular/core").InputSignal<Date | null>;
@@ -1043,6 +1045,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     protected readonly adapterMin: import("@angular/core").Signal<unknown>;
     protected readonly adapterMax: import("@angular/core").Signal<unknown>;
     protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly hasText: import("@angular/core").Signal<boolean>;
     protected readonly problem: import("@angular/core").Signal<"max" | "min" | "parse" | null>;
     protected readonly example: import("@angular/core").Signal<string>;
     protected readonly errorState: {
@@ -1060,6 +1063,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     protected formatted(date: unknown): string;
     protected typing(event: Event): void;
     protected changed(event: MatDatepickerInputEvent<unknown>): void;
+    protected clear(): void;
     protected blurred(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDateInputComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDateInputComponent, "nxs-date-input", never, {
@@ -1592,7 +1596,7 @@ class NxsDocumentTreeComponent {
     protected readonly loadError: import("@angular/core").WritableSignal<NxsErrorStatus>;
     protected readonly focusKey: import("@angular/core").WritableSignal<string | null>;
     protected readonly topNodes: import("@angular/core").Signal<readonly TreeNode[]>;
-    protected readonly showRootBack: import("@angular/core").Signal<boolean>;
+    protected readonly ancestors: import("@angular/core").Signal<readonly TreeNode[]>;
     protected readonly rows: import("@angular/core").Signal<readonly TreeRow[]>;
     protected readonly currentKey: import("@angular/core").Signal<string | null>;
     protected rowFor(key: string): TreeRow | undefined;
@@ -1602,7 +1606,8 @@ class NxsDocumentTreeComponent {
     protected nodeLabel(node: TreeNode): string;
     protected onItemClick(event: MouseEvent, row: TreeRow): void;
     protected onKeydown(event: KeyboardEvent, row: TreeRow): void;
-    protected openRoot(): void;
+    protected openAncestor(node: TreeNode): void;
+    protected onFocusOut(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentTreeComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentTreeComponent, "nxs-document-tree", never, {
     "currentPath": {
@@ -2529,6 +2534,7 @@ class NxsSavedSearchSelectComponent {
     readonly pageProvider: import("@angular/core").InputSignal<string>;
     readonly refresh: import("@angular/core").InputSignal<number>;
     readonly selectedChange: import("@angular/core").OutputEmitterRef<NxsSavedSearchChoice>;
+    readonly cleared: import("@angular/core").OutputEmitterRef<void>;
     protected readonly inputId: string;
     protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly searches: import("@angular/core").WritableSignal<readonly SavedSearchOption[]>;
@@ -2538,6 +2544,7 @@ class NxsSavedSearchSelectComponent {
     protected load(): void;
     protected onInput(value: string): void;
     protected choose(id: string): void;
+    protected clear(): void;
     protected restore(): void;
     protected readonly display: (id: string | null) => string;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsSavedSearchSelectComponent, never>;
@@ -2564,6 +2571,7 @@ class NxsSavedSearchSelectComponent {
     };
     }, {
     "selectedChange": "selectedChange";
+    "cleared": "cleared";
     }, never, never, true, never>;
     }
 }
@@ -2985,6 +2993,7 @@ class NxsTaskDetailComponent {
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     protected readonly panelHeadingLevel: import("@angular/core").Signal<number>;
     protected readonly actions: import("@angular/core").Signal<readonly TaskAction[]>;
+    protected readonly canReassign: import("@angular/core").Signal<boolean>;
     protected readonly choosesParticipants: import("@angular/core").Signal<boolean>;
     protected readonly actors: import("@angular/core").Signal<string[]>;
     protected readonly delegatedActors: import("@angular/core").Signal<string[]>;
@@ -3525,7 +3534,9 @@ class TranslatedDatepickerIntl extends MatDatepickerIntl {
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
 function nxsActionBarView(bar: NxsActionBarSource): NxsActionBarView;
+function nxsCsvText(rows: readonly (readonly NxsCsvCell[])[]): string;
 function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): string;
+function nxsDownloadCsv(filename: string, content: string | Blob, doc?: Document): void;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsFormatTimecode(seconds: number): string;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
@@ -3798,6 +3809,7 @@ class ExtensionSlotRegistry {
     }
 }
 interface ExtensionTabDescriptor extends ExtensionElement {
+    readonly preferARender?: ExtensionRule;
     readonly label: string;
     readonly labelKey?: string;
     readonly icon?: string;
@@ -4814,6 +4826,7 @@ interface NuxeoTask {
     url?: string;
     validate?: boolean;
     }[];
+    allowTaskReassignment?: boolean;
     };
     targetDocTitle?: string;
     }
@@ -5491,6 +5504,7 @@ class DocumentViewerComponent {
     readonly arenderReloadId: import("@angular/core").InputSignal<number>;
     readonly viewerDocUid: import("@angular/core").InputSignal<string>;
     readonly annotationsTab: import("@angular/core").InputSignal<boolean>;
+    readonly preferARender: import("@angular/core").InputSignal<boolean>;
     readonly showMainFileControls: import("@angular/core").InputSignal<boolean>;
     readonly mainFileActionInProgress: import("@angular/core").InputSignal<string | null>;
     readonly downloadClicked: import("@angular/core").OutputEmitterRef<void>;
@@ -5648,6 +5662,11 @@ class DocumentViewerComponent {
     };
     "annotationsTab": {
     "alias": "annotationsTab";
+    "required": false;
+    "isSignal": true;
+    };
+    "preferARender": {
+    "alias": "preferARender";
     "required": false;
     "isSignal": true;
     };

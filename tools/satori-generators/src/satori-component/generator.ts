@@ -1,6 +1,6 @@
 import { formatFiles, generateFiles, names, readProjectConfiguration, type Tree } from '@nx/devkit';
-import { join } from 'node:path';
 
+import { generatorFilesDir } from '../util/generator-files-dir';
 import { assertIdAbsent, insertAboveMarker } from '../util/splice';
 
 export type SatoriComponentSlot = 'sidebar' | 'tabs' | 'documentView' | 'routes';
@@ -222,7 +222,7 @@ export default async function satoriComponentGenerator(tree: Tree, options: Sato
     }
   }
 
-  generateFiles(tree, join(__dirname, 'files'), `${root}/src/lib`, {
+  generateFiles(tree, generatorFilesDir('satori-component'), `${root}/src/lib`, {
     ...name,
     className,
     componentId,

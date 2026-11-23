@@ -33,6 +33,7 @@ const SEARCHES: SavedSearchOption[] = [
     [pageProvider]="pageProvider()"
     [refresh]="refresh()"
     (selectedChange)="chosen.push($event)"
+    (cleared)="clearedCount = clearedCount + 1"
   />`,
 })
 class HostComponent {
@@ -41,6 +42,7 @@ class HostComponent {
   readonly pageProvider = signal('default_search');
   readonly refresh = signal(0);
   readonly chosen: NxsSavedSearchChoice[] = [];
+  clearedCount = 0;
 }
 
 describe('NxsSavedSearchSelectComponent', () => {
@@ -95,6 +97,69 @@ describe('NxsSavedSearchSelectComponent', () => {
     expect(label?.htmlFor).toBe(box().id);
     expect(box().placeholder).toBe('Search Filters');
     expect(getSavedSearches).not.toHaveBeenCalled();
+  });
+
+  it('shows a clear button only while a saved search is open, and tells the host when it is used', async () => {
+    const clearButton = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        '.nxs-saved-search-select__clear',
+      );
+    expect(clearButton()).toBeNull();
+
+    host.selectedId.set('ss-1');
+    host.selectedTitle.set('Contracts this month');
+    await render();
+    expect(clearButton()).not.toBeNull();
+    expect(clearButton()?.getAttribute('aria-label')).toBe('Clear saved search');
+    expect(box().value).toBe('Contracts this month');
+
+    clearButton()?.click();
+    await render();
+    expect(host.clearedCount).toBe(1);
+    expect(box().value).toBe('');
+
+    // The host closes the search; the button goes away with it.
+    host.selectedId.set('');
+    host.selectedTitle.set('');
+    await render();
+    expect(clearButton()).toBeNull();
+  });
+
+  it('returns focus to the box when the focused clear button is activated', async () => {
+    host.selectedId.set('ss-1');
+    host.selectedTitle.set('Contracts this month');
+    await render();
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.nxs-saved-search-select__clear',
+    );
+    button?.focus();
+    expect(document.activeElement).toBe(button);
+
+    button?.click();
+    host.selectedId.set('');
+    host.selectedTitle.set('');
+    await render();
+    expect(document.activeElement).toBe(box());
+  });
+
+  it('does not leave the cleared saved search marked as selected in the list', async () => {
+    await open();
+    const first = document.querySelector<HTMLElement>('mat-option');
+    first?.click();
+    await render();
+    host.selectedId.set('ss-1');
+    host.selectedTitle.set('Contracts this month');
+    await render();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('.nxs-saved-search-select__clear')
+      ?.click();
+    host.selectedId.set('');
+    host.selectedTitle.set('');
+    await render();
+    await open();
+    expect(document.querySelectorAll('mat-option[aria-selected="true"]').length).toBe(0);
+    expect(document.querySelectorAll('mat-option.mdc-list-item--selected').length).toBe(0);
   });
 
   it('lists the page provider’s saved searches when opened, reading them once', async () => {

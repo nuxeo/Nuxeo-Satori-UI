@@ -81,14 +81,14 @@ libs/
 
 ## `nxs-` component library (NXSAT-308)
 
-`libs/shared/satori-components` holds the Nuxeo-owned components that replace the adf-hx ones.
+`libs/shared/satori-components` holds the Nuxeo-owned components.
 It is published as `@nuxeo/satori-platform/components` — `@nuxeo/satori-platform/components`
 after the scope rename sweep. Selector prefix `nxs-`, class prefix `Nxs`.
 
 **Tags: `scope:shared` and `type:ui`**, the same pair as `libs/shared/ui`. `scope:shared` because
 features, the app and `libs/platform` (`type:publishable`, which may depend on `scope:shared`) all
 consume it and it must never depend on a feature; `type:ui` because that is what the app's rule
-admits. No new `depConstraints` entry was needed. Tags cannot say "no ADF, no Satori" — those are
+admits. No new `depConstraints` entry was needed. Tags cannot say "no third-party UI package, no Satori" — those are
 npm packages, not projects — so that is what the guardrails below are for.
 
 **Rules.** Each is a guardrail in `scripts/review-guardrails.mjs`, run by the `guardrails` gate and
@@ -97,12 +97,12 @@ gate, also in CI):
 
 | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Guardrail                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| No `@alfresco/*` and no `@hylandsoftware/*` — imported directly (even when a tsconfig alias maps the name to a workspace file), reached through any workspace import, or loaded by a stylesheet or inline `styles`. A type-only import counts. Stylesheet paths are read from the syntax tree; one the guardrail cannot read statically fails                                                                                                                                                     | `checkSatoriComponentsDependencies`        |
+| No `@hylandsoftware/*` — imported directly (even when a tsconfig alias maps the name to a workspace file), reached through any workspace import, or loaded by a stylesheet or inline `styles`. A type-only import counts. Stylesheet paths are read from the syntax tree; one the guardrail cannot read statically fails                                                                                                                                                                          | `checkSatoriComponentsDependencies`        |
 | Reached only through `@nuxeo/satori-platform/components`: no subpath under it, no relative path into the library, no second alias in any tsconfig (a project's own `paths` included), and the alias and `libs/platform/components/ng-package.json` both name `src/index.ts`                                                                                                                                                                                                                       | `checkSatoriComponentsEntryPoint`          |
 | Federation readiness: no `@NgModule`, every component, directive and pipe says `standalone: true`, and no `providedIn` of any value                                                                                                                                                                                                                                                                                                                                                               | `checkSatoriComponentsFederationReadiness` |
 | Every component the barrel exports has a `*.stories.ts` under `src/` whose meta says `component: <Class>` and exports a story, and `.storybook/main.ts` loads `../src/**/*.stories.ts`. Every story meta that names a component carries the `autodocs` tag, so the component has its API page                                                                                                                                                                                                     | `checkSatoriComponentsHaveStories`         |
 | Every component the barrel exports has an Overview: an `*.mdx` under `src/` attached to its story file with `<Meta of={Stories} name="Overview" />`, with the Key features, Demo showcase, Usage, Examples and Accessibility sections and at least one `<Canvas>`; a story file naming no component has one too; `main.ts` loads `../src/**/*.mdx`. On every page under `src/` and `.storybook/`, each `of={X.Y}` names a story the file exports and no Markdown table is written                 | `checkSatoriComponentsHaveOverviews`       |
-| `libs/shared/satori-components-satori` may import `@hylandsoftware/satori-ui` and nothing else from GitHub Packages, no ADF and no HxCS client, followed transitively                                                                                                                                                                                                                                                                                                                             | `checkSatoriFallbackDependencies`          |
+| `libs/shared/satori-components-satori` may import `@hylandsoftware/satori-ui` and nothing else from GitHub Packages and no HxCS client, followed transitively                                                                                                                                                                                                                                                                                                                                     | `checkSatoriFallbackDependencies`          |
 | It is reached only through `@nuxeo/satori-platform/components-satori`, by the same rules as the base library                                                                                                                                                                                                                                                                                                                                                                                      | `checkSatoriFallbackEntryPoint`            |
 | `apps/nuxeo-ui` lists `provideNxsComponents()` before `provideNxsSatoriComponents()` in its providers                                                                                                                                                                                                                                                                                                                                                                                             | `checkSatoriPrimitivesRegisteredInOrder`   |
 | Nothing outside the two libraries imports the `@hylandsoftware/satori-ui` entry point behind an adopted primitive, which would take the Satori rendering while losing the Material fallback and the extension ID. Both the adopted set and the entry points each one wraps are read from `provideNxsSatoriComponents()`, never listed, so adopting a seventh primitive extends the rule by itself. `ADOPTION_BASELINE` holds the sites that predate it, four since NXSAT-652, and may only shrink | `checkAdoptedPatternsNotBypassed`          |
@@ -174,7 +174,7 @@ npx nx run satori-components:build-storybook:satori # the same under Satori's th
 The default build needs **no GitHub Packages token**: it themes with plain `mat.theme`
 (`.storybook/material-theme.scss`), and `checkSatoriComponentsDependencies` covers `.storybook/*.ts`
 and the default configuration's `styles` as well as `src/`. Whenever the library is affected, CI
-builds it with `@hylandsoftware` and `@alfresco` removed from `node_modules`, so an accidental
+builds it with `@hylandsoftware` removed from `node_modules`, so an accidental
 Satori import fails the build rather than compiling. Only the opt-in `:satori` configuration reaches `@hylandsoftware/satori-ui`, for its theme.
 `typecheck` type-checks the stories too.
 
@@ -199,14 +199,18 @@ tokens and Satori's fonts, and this repository is public, so the workflow artifa
 The Satori package owners approved it (relayed 2026-10-28; record the approver or ticket here).
 Until that approval this file, the workflow and the gate all said the opposite, so do not read a
 narrowed gate as an accident. `satori-components-satori`'s own Storybook is still **not**
-published: the approval was for the themed build, and nothing asked for the other.
+published: the approval was for the themed build, and nothing asked for the other. It is built
+and checked there all the same, by a separate `storybook-satori` job that runs the gate of that
+name: every story is opened in Chromium and fails if Satori's translation catalogues are not
+served. That job does not gate `deploy`, so a failure in an unpublished Storybook cannot freeze
+the site.
 
 `scripts/storybook-publication-gate.mjs` is unchanged and still runs, but on the default build
 alone — in CI after its own build, and in `storybook-pages.yml` before the site is assembled, while
 that build is still a tree of its own. So the root stays provably Satori-free, which is the claim
 still worth making, and a change to the library that would block the deployment fails its pull
 request first; `/satori` is ungated by design, because gating it would mean weakening the gate until
-it passed. The workflow builds `:satori` first and then removes `@hylandsoftware` and `@alfresco`
+it passed. The workflow builds `:satori` first and then removes `@hylandsoftware`
 from `node_modules` before the default build, so a stray Satori import cannot compile into the root
 at all rather than merely being caught afterwards.
 
@@ -301,8 +305,7 @@ after its test-with-coverage step.
 
 **`@nuxeo/satori-platform/nuxeo-client` and `@nuxeo/satori-platform/extensions` are importable**,
 because the dependency rule follows imports and neither barrel now reaches a banned package.
-Both once did: `nuxeo-client`'s `avatar-colors.ts` imported a Satori type, and `extensions` imported
-`@alfresco/adf-extensions`. Controls in `scripts/review-guardrails.selftest.mjs` run the rule over
+`nuxeo-client`'s `avatar-colors.ts` once imported a Satori type. Controls in `scripts/review-guardrails.selftest.mjs` run the rule over
 the real `libs/` tree and put each import back, so a regression in either barrel is red there.
 `nxs-drive-dialog`, `nxs-domain-hint` and `nxs-doc-type-icon` import `nuxeo-client`.
 
@@ -402,15 +405,6 @@ shipped in the package; customers use `extension-component`. By hand, the steps 
 
 ---
 
-## adf-hx browse POC — removed
-
-The parallel browse at `/#/browse-adf-hx`, its search at `/#/search-adf-hx` and the
-`libs/shared/adf-hx-bridge` library that backed them were removed on 2026-10-14 (NXSAT-635).
-Browse is one surface, at `/#/browse`. Both old paths redirect, query string intact — see
-`apps/nuxeo-ui/src/app/retired-routes.ts`.
-
----
-
 ## Routing
 
 All routes use `HashLocationStrategy` (`/#/path`). This ensures Nuxeo/Tomcat serves `index.html` for all deep links without 404s.
@@ -471,3 +465,12 @@ contributed. A customer ships their own package that depends on `nuxeo-agentic-u
 - Blob URLs: always `URL.revokeObjectURL()` in `ngOnDestroy` for every `createObjectURL`
 - Authenticated content: always use `HttpClient` (via services) — never `<img [src]="nuxeoUrl">`
 - Imports: `@nuxeo/satori-platform/nuxeo-client`, `@nuxeo/satori-platform/ui`, `@nuxeo/satori-platform/components`, `@agentic-ui/shared/ai-client`, `@agentic-ui/shared/kd-client`, `@agentic-ui/shared/ke-client`
+
+## View tab viewer selection (NXSAT-698)
+
+`app.tabs.view` accepts a `preferARender` rule through `extensions.slots.tabs`. Document detail
+evaluates it against the focused document and passes the result to `DocumentViewerComponent`.
+The shared viewer chooses NEV only with a non-null URL, otherwise keeping its existing dispatch.
+Notes and custom `documentView` components keep precedence. `app.rules.hasMimeType` matches the
+main blob MIME essence, exactly or by family (`image/*`), without rendition fallback.
+See `docs/extension-reference.md` for the deployment manifest contract.
