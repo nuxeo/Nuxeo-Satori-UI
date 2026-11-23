@@ -3905,7 +3905,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-327 exported symbol(s).
+329 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4915,10 +4915,15 @@ interface PageProviderRequest {
     readonly pageIndex?: number;
     readonly sort?: readonly PageProviderSort[];
     readonly properties?: string;
+    readonly aggregates?: Readonly<Record<string, readonly string[]>>;
+    }
+}
+interface PageProviderResults extends NuxeoDocumentList {
+    readonly aggregations?: Readonly<Record<string, unknown>> | null;
     }
 }
 class PageProviderService {
-    execute(name: string, request: PageProviderRequest): Observable<NuxeoDocumentList>;
+    execute(name: string, request: PageProviderRequest): Observable<PageProviderResults>;
     static ɵfac: i0.ɵɵFactoryDeclaration<PageProviderService, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
@@ -5092,6 +5097,7 @@ class SelectionService {
     readonly selectedPreviews: import("@angular/core").WritableSignal<Map<string, SelectionPreview>>;
     readonly selectedTypes: import("@angular/core").WritableSignal<Map<string, string>>;
     readonly clearOnlyMode: import("@angular/core").WritableSignal<boolean>;
+    readonly offeredBulkActions: import("@angular/core").WritableSignal<readonly string[] | null>;
     readonly selectedCount: () => number;
     readonly selectedItems: () => {
     id: string;
@@ -5374,6 +5380,7 @@ function hasDocumentPermissionsEnricher(doc: NuxeoDocument | null | undefined): 
 function hasInsertablePictureBlob(doc: NuxeoDocument): boolean;
 function inferBlobDocTypeFromFile(file: File): string;
 function insecureAllowedForHost(isDevMode: boolean, hostProtocol?: string): boolean;
+function isAggregateParameter(name: string): boolean;
 function isBlobHoldingDocType(docType: string): boolean;
 function isBrowsableNavNode(doc: NuxeoDocument | null): boolean;
 function isBrowseRouterUrl(routerUrl: string): boolean;
@@ -5871,6 +5878,7 @@ class SelectionTopbarComponent {
     preview: SafeUrl | string | null;
     }[]>;
     readonly clearOnly: import("@angular/core").InputSignal<boolean>;
+    readonly offered: import("@angular/core").InputSignal<readonly string[] | null>;
     readonly cleared: import("@angular/core").OutputEmitterRef<void>;
     readonly selectionPopupOpen: import("@angular/core").WritableSignal<boolean>;
     readonly bulkActions: import("@angular/core").Signal<readonly ExtensionActionDescriptor[]>;
@@ -5893,6 +5901,11 @@ class SelectionTopbarComponent {
     };
     "clearOnly": {
     "alias": "clearOnly";
+    "required": false;
+    "isSignal": true;
+    };
+    "offered": {
+    "alias": "offered";
     "required": false;
     "isSignal": true;
     };

@@ -29,6 +29,21 @@ the fragments named `defaults`. `level` was already one of `error` / `warning` /
 is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
 `removed` to notice this case should match the new codes instead.
 
+### Added (`@nuxeo-satori/platform/nuxeo-client`, `@nuxeo-satori/platform/ui`) — what a queue needs
+
+For the queue page of the business apps (docs/business-apps/app-definition-v2.md, section 4).
+Additive: no existing call changes.
+
+- `PageProviderService.execute` takes `aggregates`, the buckets chosen in each of the page
+  provider's aggregates, and sends each as the search page sends its filters,
+  `<aggregate>=<JSON array>`. It returns `PageProviderResults`, the page with the server's
+  `aggregations`. `isAggregateParameter` says which names it sends: letters, digits and `_`, and
+  none the search reads for itself, such as `pageSize` or `properties`.
+- `SelectionService.offeredBulkActions`: the bulk actions the page holding the selection offers, or
+  `null` for every one. `SelectionTopbarComponent` takes them as `offered`, and then offers only
+  those that the `bulk-actions` slot resolves and that have a handler. Neither is a security
+  control.
+
 ### Fixed (generators) — a configuration package's manifest is one Java can read
 
 A generated package's `build.mjs` packaged a `bundle/META-INF/MANIFEST.MF` that Java's
