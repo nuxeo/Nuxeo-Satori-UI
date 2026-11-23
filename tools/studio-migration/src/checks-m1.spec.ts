@@ -286,6 +286,20 @@ describe('check 7, what the server is asked', () => {
     ]);
   });
 
+  it("fails on a list that sends other parameters than Web UI's card", () => {
+    const changed = edit(input, 'queues/home-1-claims.json', (file) => ({
+      ...file,
+      parameters: ['closed'],
+    }));
+    expect(run(changed, 7)?.findings).toEqual([
+      'queues/home-1-claims.json: it sends the parameters ["closed"], where Web UI sends ["open"]',
+    ]);
+    const search = edit(input, 'queues/claims.json', (file) => ({ ...file, parameters: ['x'] }));
+    expect(run(search, 7)?.findings).toEqual([
+      'queues/claims.json: it sends the parameters ["x"], where Web UI sends []',
+    ]);
+  });
+
   it('fails on a list or an action the package does not have', () => {
     const queue = edit(input, 'queues/extra.json', () => ({
       version: 2,

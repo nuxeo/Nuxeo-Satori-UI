@@ -141,6 +141,22 @@ describe('each deliberate breakage fails the check that guards it', () => {
     });
   }
 
+  it('says so, rather than failing some other way, when there is nothing of its kind to break', () => {
+    const files = syntheticBundleFiles();
+    const bare = prepare({
+      without: Object.keys(files).filter(
+        (path) => path.startsWith(`${UI}/`) || path.startsWith('data/i18n/'),
+      ),
+    });
+    for (const mutation of MUTATIONS) {
+      try {
+        mutation.apply(bare.conversion);
+      } catch (error) {
+        expect([mutation.name, (error as Error).name]).toEqual([mutation.name, 'MutationError']);
+      }
+    }
+  });
+
   it('names what broke', () => {
     const input = prepare();
     const findings = (name: string) => {

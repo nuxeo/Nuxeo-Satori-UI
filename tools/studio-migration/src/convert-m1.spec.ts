@@ -148,6 +148,27 @@ describe('M1 converts document layouts', () => {
     expect(only.app['layouts/Claim/metadata.layout.json']).toEqual({ version: 1, sections: [] });
   });
 
+  it('writes a field bound twice once, and reports the repeat', () => {
+    const path = `${UI}/document/claim/nuxeo-claim-edit-layout.html`;
+    const twice = converted({
+      bundle: {
+        [path]: layout(
+          'nuxeo-claim-edit-layout',
+          `<nuxeo-input role="widget" value="{{document.properties.cl:number}}" label="Claim number"></nuxeo-input>
+           <nuxeo-input role="widget" value="{{document.properties.cl:number}}" label="Number again"></nuxeo-input>`,
+        ),
+      },
+    });
+    expect(twice.app['layouts/Claim/edit.layout.json']).toEqual({
+      version: 1,
+      sections: [{ id: 'fields', fields: [{ field: 'cl:number', label: 'Claim number' }] }],
+    });
+    expect(outcome(twice, `layout-field:${path}#2`)).toMatchObject({
+      outcome: 'reported',
+      note: 'It binds cl:number again, and is kept once',
+    });
+  });
+
   it('reports an element the catalogue does not know rather than guessing its widget', () => {
     const path = `${UI}/document/claim/nuxeo-claim-view-layout.html`;
     const unknown = converted({

@@ -456,7 +456,8 @@ export const MUTATIONS: readonly Mutation[] = [
     description: 'Bind a button to a different operation',
     caughtBy: 7,
     apply: (conversion) => {
-      const file = clone(conversion.app['actions.json']) as Json | undefined;
+      const written = conversion.app['actions.json'];
+      const file = written === undefined ? undefined : (clone(written) as Json);
       const action = (Array.isArray(file?.['actions']) ? (file['actions'] as Json[]) : []).find(
         (candidate) => typeof candidate['operation'] === 'string',
       );
