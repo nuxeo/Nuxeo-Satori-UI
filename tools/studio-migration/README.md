@@ -244,15 +244,27 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
 
 **Slot contributions:**
 
-- **As Web UI's slots register them** (nuxeo-elements' `nuxeo-slots.js`, in
-  [`slot-registry.ts`](src/slot-registry.ts)), for actions, the left menu, the theme and tabs
-  alike: a disabled contribution shows nothing, and is reported as left out; in one slot, a later
-  contribution of an earlier one's name, at the same or a higher `priority`, replaces it when it
-  holds a template, and otherwise changes its `disabled`, `order` and `priority`; one at a lower
-  priority is ignored. The one left out is reported, and the one kept is converted, at its order
-  after every change. A contribution with no template and no earlier one of its name changes one of
-  Web UI's own, and is reported for a person to decide. One that holds a template and shares its
-  name with one of Web UI's own replaces that one in Web UI, which the converter cannot see.
+- **As Web UI's slots register them** (nuxeo-elements' `nuxeo-slots.js`, replayed step by step
+  in [`slot-registry.ts`](src/slot-registry.ts)), for actions, the left menu, the theme and tabs
+  alike:
+  - a contribution registers into each slot its `slot` names, split at commas as written;
+  - in a slot, a contribution of an earlier one's `name`, at the same or a higher `priority`,
+    replaces it in its place when it holds a template, and otherwise changes its `disabled`,
+    `order` and `priority`, and its slots; at a lower priority it is ignored. Every contribution
+    is registered, one with no template too, so one that comes first at a higher priority makes a
+    later one of its name ignored;
+  - after each registration the slot sorts by `order`, 0 when left out, equals keeping their
+    places;
+  - what shows is a contribution with a template, not disabled. The converter writes it at its
+    order, `order: 0` where Web UI's is left out, and in Web UI's order; it reports each other
+    one as left out, and one a change moves to other slots for a person to map. One with no
+    template and no earlier one of its name changes one of Web UI's own, and is reported for a
+    person to decide;
+  - `priority` and `order` are read as Polymer reads a Number, so `2.5` is a priority. An order
+    that is not whole is left out of the file, which takes whole numbers, and kept by the place.
+
+  The custom bundle's contributions are read too, before the bundle's, as Studio's bundle imports
+  it first: a project's hand-written change, such as hiding a button, goes there.
 
 - **Actions.** An operation button on a document's page or over a selection becomes an action, with
   its operation, its literal parameters, its icon (Polymer's `icons` set shares Material's names)
@@ -764,12 +776,22 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **Web UI's own contributions.** The slot registration sees the package's contributions only.
   One that shares its name with a contribution of Web UI's own replaces it in Web UI, and the app
   keeps its own; a list of Web UI's contributions, by slot and name, would let the converter report
-  it. A contribution to several slots at once, `slot="A, B"`, is a slot the catalogue does not
-  know, and is reported.
+  it. A contribution to several slots at once, `slot="A,B"`, takes part in each slot's
+  registration, but is itself a slot the catalogue does not know, and is reported.
+- **The order Web UI loads files in.** The registration reads the custom bundle, then each
+  slot-contributions file, as the bundle lists them. Web UI loads the bundle its web resources
+  register, and the files it imports; where it loads two files of contributions in the other order,
+  two of one name at one priority resolve the other way. Only the server's resources say.
+- **A menu entry's page** is paired with the entry by the contribution's `name`, as M1 does. Web UI
+  pairs the menu icon with the page by the stamped elements' own `name` (`nuxeo-app.js`,
+  `attr-for-selected`); Studio writes the two the same, but a package that does not would open a
+  page Web UI does not. Follow-up.
 - **What the checks share with the converter.** The checks hold what each file shows to the
   package, but they take from the converter's own planning (`forms.ts`, `blocks.ts`,
-  `convert-tabs.ts`, `convert-tasks.ts`, `convert-layouts.ts`): which tabs exist, as `registered`
-  reads Web UI's slots; which tab is which, which types each goes to and the conditions of its
+  `convert-tabs.ts`, `convert-tasks.ts`, `convert-layouts.ts`, `slot-registry.ts`,
+  `convert-slots.ts`, `convert-home.ts`): which actions, menu entries and tabs exist, and at what
+  order, as `slotRegistry` reads Web UI's slots, so a mistake in that reading passes checks 5, 6
+  and 7 alike, and its controls only move the output away from it; which tab is which, which types each goes to and the conditions of its
   rule; which file a task form is; which card is a block's; and, through `planFields`, which field
   a rule belongs to. Whether a field edits is the inventory's reading of its bindings, for both. A
   mistake there would pass both. Only check 1's second count reads the package another way, and
