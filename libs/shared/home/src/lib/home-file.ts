@@ -77,6 +77,11 @@ function cardOf(finding: Finding): number | null {
  * passes in the registry, unless it is declared security-relevant, so a card whose rule this build
  * cannot answer would show to everyone. The walk stops at that depth, so it never recurses further
  * than the registry would.
+ *
+ * The nested rules are those a composite resolves: every parameter of `core.every`, `core.some`
+ * and `core.not`, a rule's id included, and any `{ "type" }` among another rule's parameters, which
+ * a customer's own composite, registered in Layer 2 code, may resolve the same way. A text among a
+ * non-composite's parameters is a value, such as a group, and is not read as a rule.
  */
 export function refusedRule(
   rule: unknown,
@@ -88,8 +93,10 @@ export function refusedRule(
   if (!isRegistered(id)) return `names the rule "${id}", which this build does not register`;
   if (level > MAX_RULE_LEVELS)
     return `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`;
-  if (!COMPOSITES.has(id) || !isRecord(rule) || !Array.isArray(rule['parameters'])) return null;
+  if (!isRecord(rule) || !Array.isArray(rule['parameters'])) return null;
+  const composite = COMPOSITES.has(id);
   for (const nested of rule['parameters']) {
+    if (!composite && !(isRecord(nested) && typeof nested['type'] === 'string')) continue;
     const refused = refusedRule(nested, isRegistered, level + 1);
     if (refused) return refused;
   }

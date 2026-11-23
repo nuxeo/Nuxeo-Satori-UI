@@ -6,13 +6,14 @@
 import { reflectComponentType, type Type } from '@angular/core';
 
 import { routes } from './app.routes';
+import { authGuard } from './auth/auth.guards';
 
 describe('the home route', () => {
   const shell = routes.find((route) => route.path === '' && route.children);
   const home = shell?.children?.find((route) => route.path === 'home');
 
   it("is a page of the shell, behind the shell's sign-in", () => {
-    expect(shell?.canActivate?.length).toBeGreaterThan(0);
+    expect(shell?.canActivate).toContain(authGuard);
     expect(home).toBeDefined();
   });
 

@@ -255,6 +255,47 @@ describe('HomePageComponent', () => {
     http.expectNone((r) => r.url === ppUrl('pp_a'));
   });
 
+  it('says the home could not be read when every card is left out, not that none is for you', () => {
+    create({ groups: [] });
+    home({
+      version: 2,
+      cards: [
+        { id: 'a', label: 'A', kpi: { pageProvider: 'pp_a' }, visibleWhen: 'acme.rules.one' },
+        { id: 'b', label: 'B', kpi: { pageProvider: 'pp_b' }, visibleWhen: 'acme.rules.two' },
+      ],
+    });
+    expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      'The home could not be read.',
+    );
+    expect(page().textContent).not.toContain('Nothing on the home is for you.');
+    expect(warn).toHaveBeenCalledWith(
+      '[agentic-ui-home] home.json refused: every card is left out',
+    );
+  });
+
+  it('names a card by its id when its name is empty, and says when a list of buckets may be cut', () => {
+    create({ groups: [] });
+    home({
+      version: 2,
+      cards: [{ id: 'authors', labelKey: '', kpi: { pageProvider: 'pp', aggregate: 'by_author' } }],
+    });
+    answer('pp', {
+      resultsCount: 30,
+      aggregations: {
+        by_author: {
+          type: 'terms',
+          properties: { size: '2' },
+          buckets: [
+            { key: 'ada', docCount: 20 },
+            { key: 'grace', docCount: 7 },
+          ],
+        },
+      },
+    });
+    expect(page().querySelector('h2')?.textContent?.trim()).toBe('authors');
+    expect(cards()).toEqual(['authors 30 ada 20 grace 7 The largest only']);
+  });
+
   it('draws no home, and says so, for a file it refuses', () => {
     create({ groups: [] });
     home({ version: 2, cards: [{ id: 'a' }] });

@@ -165,6 +165,27 @@ describe('reading home.json', () => {
   });
 });
 
+describe("a customer's own composite", () => {
+  it('leaves out a card whose rule nests an unregistered rule in it, as the core composites do', () => {
+    const registered = [...REGISTERED, 'acme.rules.anyOf'];
+    const card = (nested: unknown) => ({
+      version: 2,
+      cards: [kpi('a', { visibleWhen: { type: 'acme.rules.anyOf', parameters: [nested] } })],
+    });
+    expect(
+      ids(readHome(card({ type: 'app.rules.inGroup', parameters: ['members'] }), registered)),
+    ).toEqual(['a']);
+    // The validator does not read a customer rule's parameters as rules; the build's registry does.
+    const result = readHome(card({ type: 'acme.rules.unknown' }), registered);
+    expect(ids(result)).toEqual([]);
+    expect('home' in result && result.problems).toEqual([
+      'cards[0].visibleWhen names the rule "acme.rules.unknown", which this build does not register; cards[0] left out',
+    ]);
+    // A text among a rule's parameters is a value, such as a group, not a rule's id.
+    expect(ids(readHome(card('claims-adjusters'), registered))).toEqual(['a']);
+  });
+});
+
 describe('a rule nested deeper than the registry answers', () => {
   const every = (levels: number, innermost: string): unknown =>
     levels <= 1 ? innermost : { type: 'core.every', parameters: [every(levels - 1, innermost)] };

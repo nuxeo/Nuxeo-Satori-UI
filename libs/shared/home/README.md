@@ -28,13 +28,17 @@ It is an engine (tier 3 of [architecture.md](../../../docs/business-apps/archite
   - a `structure` finding draws no home, and the console names it;
   - an `unknown` or `parameter` finding leaves out its card, and a key of the file's own is ignored;
   - a card whose rule this build does not register, or nests deeper than the rule registry answers
-    (`MAX_RULE_LEVELS`, 32), is left out: the registry would answer `true` for it.
+    (`MAX_RULE_LEVELS`, 32), is left out: the registry would answer `true` for it. Nested rules are
+    a core composite's parameters and any `{ "type" }` among another rule's;
+  - a home whose every card is left out is a home that could not be read.
 - **Evaluates each card's rule** with `ExtensionRuleRegistry`, in the signed-in person's context:
   their user name and groups, and no record. A home per group is cards whose rule is
   `app.rules.inGroup`.
 - **Counts** with `GET /nuxeo/api/v1/search/pp/<pageProvider>/execute`, a page of one record, as the
   signed-in person. One request for each page provider and parameters that a shown card reads; a
-  hidden card asks for nothing.
+  hidden card asks for nothing. A terms aggregate returns only its `size` largest buckets: a KPI on
+  a bucket missing from a full list is unavailable, not 0, and a full list says it is the largest
+  only.
 - **Leaves queue links out** until the app gives `HOME_QUEUE_LINK`, which it does not yet: phase 1's
   queue page is not built.
 
@@ -61,9 +65,10 @@ npx ngc -p libs/shared/home/tsconfig.lib.json
 - The proposal's `home.json` and the sample are read whole, with no problem.
 - The page is drawn for an adjuster, a supervisor, someone in neither group and someone in both,
   against a stand-in server: which cards show, which requests are made, and the figures.
-- Negative controls: a refused file, a card a finding leaves out, an unregistered rule, a rule
-  nested past the registry's depth (held to `ExtensionRuleRegistry` both ways), a page provider that
-  fails, one with no aggregates, a bucket the server does not return.
+- Negative controls: a refused file, a card a finding leaves out, every card left out, an
+  unregistered rule, in a core composite or a customer's, a rule nested past the registry's depth
+  (held to `ExtensionRuleRegistry` both ways), a page provider that fails, one with no aggregates,
+  a bucket the server does not return, from a full list of a terms aggregate or a short one.
 
 ## Not done yet
 
@@ -72,3 +77,4 @@ npx ngc -p libs/shared/home/tsconfig.lib.json
 - **The home as the app's first page.** `/` still opens the dashboard.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
 - **The menu.** `navigation.json` is proposed and validated, and not drawn.
+- **Sums**, which the plan's KPI tiles ask for: a KPI counts only.

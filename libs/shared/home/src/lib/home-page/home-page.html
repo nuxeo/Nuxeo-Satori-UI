@@ -41,6 +41,9 @@
                           </div>
                         }
                       </dl>
+                      @if (card.truncated) {
+                        <p class="home-card__note">{{ 'home.largest-only' | translate }}</p>
+                      }
                     }
                   }
                 }

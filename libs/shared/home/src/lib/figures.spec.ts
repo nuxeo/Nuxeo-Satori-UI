@@ -63,6 +63,52 @@ describe('what a KPI shows', () => {
         { key: 'tiny', count: 175 },
         { key: 'huge', count: 0 },
       ],
+      truncated: false,
+    });
+  });
+
+  describe('a terms aggregate, which returns only its largest buckets', () => {
+    // Measured on the local server's `default_search`: its terms aggregates write their size as
+    // `"properties": { "size": "10" }`, and `dc_creator_agg` returned ten buckets.
+    const full = (size: string | null, count: number) => ({
+      resultsCount: 50,
+      aggregations: {
+        dc_creator_agg: {
+          type: 'terms',
+          properties: size === null ? {} : { size },
+          buckets: Array.from({ length: count }, (_, index) => ({
+            key: `user${index}`,
+            docCount: count - index,
+          })),
+        },
+      },
+    });
+    const creator = (bucket: string | null) => kpi({ aggregate: 'dc_creator_agg', bucket });
+
+    it('counts a bucket it returns, full or not', () => {
+      expect(figureOf(creator('user0'), full('3', 3))).toEqual({ kind: 'count', value: 3 });
+    });
+
+    it('cannot tell a missing bucket from one it left out, when the list is full', () => {
+      expect(figureOf(creator('someone'), full('3', 3))).toEqual({
+        kind: 'unavailable',
+        reason:
+          'the bucket "someone" is not among the 3 largest the aggregate "dc_creator_agg" returns',
+      });
+      // With no size of its own, the aggregate has the search index's default, 10.
+      expect(figureOf(creator('someone'), full(null, 10)).kind).toBe('unavailable');
+    });
+
+    it('counts 0 for a missing bucket when the list is shorter than its size', () => {
+      expect(figureOf(creator('someone'), full('3', 2))).toEqual({ kind: 'count', value: 0 });
+      expect(figureOf(creator('someone'), full(null, 9))).toEqual({ kind: 'count', value: 0 });
+    });
+
+    it('says when the list of buckets may be cut', () => {
+      const listed = figureOf(creator(null), full('3', 3));
+      expect(listed.kind === 'buckets' && listed.truncated).toBe(true);
+      const short = figureOf(creator(null), full('3', 2));
+      expect(short.kind === 'buckets' && short.truncated).toBe(false);
     });
   });
 
@@ -88,6 +134,7 @@ describe('what a KPI shows', () => {
         { key: 'x', count: 1 },
         { key: '7', count: 2 },
       ],
+      truncated: false,
     });
   });
 

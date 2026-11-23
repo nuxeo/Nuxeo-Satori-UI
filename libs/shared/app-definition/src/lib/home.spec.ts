@@ -213,6 +213,41 @@ describe('home.json', () => {
     const input = home([kpi({}, { visibleWhen: 'acme.rules.isAdjuster' })]);
     expect(show(validateHome(input, { registries }))).toEqual([]);
   });
+
+  it("refuses a property in a customer's own rule too, however deep, which has no signature here", () => {
+    const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.ownerIs'] });
+    const input = home([
+      kpi(
+        {},
+        {
+          visibleWhen: {
+            type: 'acme.rules.ownerIs',
+            parameters: ['x', [{ field: 'dc:creator' }], { of: { field: 'dc:title' } }],
+          },
+        },
+      ),
+    ]);
+    expect(show(validateHome(input, { registries }))).toEqual([
+      'cards[0].visibleWhen.parameters[1][0]: no record is open here, so a rule is given literals, not a property [parameter]',
+      'cards[0].visibleWhen.parameters[2].of: no record is open here, so a rule is given literals, not a property [parameter]',
+    ]);
+    // Where a record is open, the same rule reads it, as a layout's may.
+    const layout = {
+      version: 2,
+      cards: [
+        {
+          id: 'c',
+          fields: [
+            {
+              field: 'dc:title',
+              visibleWhen: { type: 'acme.rules.ownerIs', parameters: [{ field: 'dc:creator' }] },
+            },
+          ],
+        },
+      ],
+    };
+    expect(show(validateLayoutV2(layout, { mode: 'view', registries }))).toEqual([]);
+  });
 });
 
 describe('navigation.json', () => {

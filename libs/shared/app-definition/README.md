@@ -138,7 +138,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 93 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 94 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -188,7 +188,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - a rule id that is not one;
     - a `$schema` that is not a text.
   - **The menu and the home:**
-    - letting a rule there read a record, in either file or in the checker;
+    - letting a rule there read a record, in either file, in the checker, or in a customer's own
+      rule, which has no signature;
     - a bucket with no aggregate;
     - a KPI's parameter from a record;
     - a figure with no name, a page with no name;

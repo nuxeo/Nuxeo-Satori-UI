@@ -469,14 +469,19 @@ A KPI:
   - with an `aggregate` and a `bucket`, how many are in that bucket: its `docCount` in
     `aggregations`, or 0 when the server returns no such bucket, as a terms aggregate does for an
     empty one;
-  - with an `aggregate` alone, how many records it returns, and under it each of the aggregate's
-    buckets with its count, in the server's order.
+  - with an `aggregate` alone, how many records it returns, and under it the buckets the server
+    returns, each with its count, in the server's order.
+- **A terms aggregate returns only its largest buckets,** as many as its `size` (10 when it sets
+  none). When it returns that many, a bucket missing from them may be one it left out, so a KPI on
+  it says its figure is unavailable rather than 0, and a list of buckets says it shows the largest
+  only. Range and histogram aggregates return every bucket they define.
 - **Aggregates come from the search index.** A page provider that queries the repository has
   none, and a KPI that names one says the figure is unavailable.
 - **One request per page provider and parameters**, however many cards read it, with a page of one
   record. A hidden card asks for nothing.
 - **No record is open** on the home: a page provider's parameters are literals, as a queue's are,
-  and a rule is given literals.
+  and a rule is given literals. That holds for a customer's own rule too: its parameters are not
+  checked here, but a `{ "field" }` among them, at any depth, is a `parameter` finding.
 - **A figure is not a security control,** and not an audit either. It counts what the page provider
   returns to the person signed in, and hiding a card hides the figure, not the records.
 
@@ -504,7 +509,11 @@ The app's page `/home` reads the file, checks it with the validator, and draws i
 - **a `structure` finding** draws no home: the page says the home could not be read, and the
   console names the findings;
 - **an `unknown` or a `parameter` finding** leaves out the card it is in, and the console says why;
-  one of the file's own keys is ignored;
+  one of the file's own keys is ignored. A home whose every card is left out is one that could not
+  be read;
+- **a rule this build does not register,** at any depth, leaves out its card, and so does one
+  nested deeper than the rule registry answers, 32 levels: the registry would pass either. The
+  nested rules are a composite's parameters, and any `{ "type" }` among another rule's;
 - **the rules** are the rule registry's, evaluated with the person, their groups and no record. An
   unregistered `app.rules.inGroup` hides its card, as the registry's security-relevant rules do;
 - **a page provider the server does not have,** or a request it refuses, shows the card's title
@@ -547,7 +556,7 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 | A labels file     | The file is not applied: the platform's labels show                   | The key is ignored                                                                    |
 | Module settings   | The app is refused, as for `app.json`                                 | The app is refused, as for `app.json`                                                 |
 | `navigation.json` | The menu is not drawn: the platform's shows                           | The entry it is in is left out. A key of the file's own is ignored                    |
-| `home.json`       | The home is not drawn, and the page says why                          | The card it is in is left out. A key of the file's own is ignored                     |
+| `home.json`       | The home is not drawn: the page says so, and the console why          | The card it is in is left out. A key of the file's own is ignored                     |
 
 - **`app.json` and module settings refuse the app** on any finding, an unknown key included. An
   app the shell cannot read whole would run half configured. A package that needs a later
@@ -576,8 +585,19 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   `/home`. Opening an app on its home is the shell's, with the registry.
 - **A bucket's name.** A KPI's bucket shows its key, as the server returns it. A vocabulary's
   label for it is not looked up.
+- **Sums.** The plan's KPI tiles are "counts and sums from page provider aggregates". A KPI counts
+  only. A sum needs an aggregate that adds a property up. The aggregates measured here are terms
+  and ranges, which count; whether a page provider can sum is not checked.
+- **The other cards of a Studio home.** A Web UI home also holds the person's tasks, recently
+  viewed documents and favourites, and lists a page provider's records in place. The menu opens
+  the first three as platform pages (`app.navbar.tasks`, `app.navbar.recentlyViewed`,
+  `app.navbar.favorites`); the home has no card for them yet, and a list in place is a link to a
+  queue for now. The Studio migration writes such a list as a queue.
 - **The person signed in as a page provider parameter.** A page provider names them on the server
-  for now.
+  for now. The server already reads a parameter written `$currentUser` as the person's name, and
+  `$currentRepository` as the repository's (`QueryExecutor` in `nuxeo-search-rest-api`
+  2025.10.18), so a literal in a queue or a KPI can name them today. Whether version 2 says so is
+  open.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, can name a
   rule that reads a record, such as `app.rules.isType`, or a `{ "field" }` value, and there is no
   one record there for it to read. The menu and the home refuse a `{ "field" }` value already.

@@ -177,6 +177,19 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     }
     const signature = registries.rules[type];
     if (signature) signed(signature, parameters, join(path, 'parameters'), `the rule "${type}"`);
+    // A customer's own rule has no signature here, so its parameters are not read as values. With
+    // no record open, none of them may still name a property, however deep.
+    else if (!record) propertiesIn(parameters, join(path, 'parameters'));
+  };
+
+  /** Every `{ "field" }` in `item`, at any depth: a parameter finding where no record is open. */
+  const propertiesIn = (item: unknown, path: string): void => {
+    if (isFieldReference(item))
+      add(path, 'parameter', 'no record is open here, so a rule is given literals, not a property');
+    else if (Array.isArray(item))
+      item.forEach((inner, index) => propertiesIn(inner, join(path, index)));
+    else if (isRecord(item))
+      for (const [key, inner] of Object.entries(item)) propertiesIn(inner, join(path, key));
   };
 
   /** A literal, a property, or a computation. */

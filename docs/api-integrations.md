@@ -1855,7 +1855,14 @@ list; `nxs-saved-search-actions` for the permission read.
   search index serves has aggregates; one that queries the repository, such as `tree_children`,
   answers `aggregations: null`, and the card says its figure is unavailable. Measured on the local
   server: `default_search` answers six aggregates; an unknown page provider answers HTTP 500.
-- A terms aggregate returns no bucket for a key no record has, so a KPI on that bucket is 0.
+- A terms aggregate returns no bucket for a key no record has, so a KPI on that bucket is 0, unless
+  it returned as many buckets as its `size` (`properties.size`, 10 when unset): then the bucket may
+  be one it left out, and the card says its figure is unavailable.
+- The server reads `queryParams` as a list, one value per parameter, and splits none on commas
+  (`QueryExecutor.getParameters`, `nuxeo-search-rest-api` 2025.10.18). It replaces a value
+  `$currentUser` with the signed-in user's name.
+- `resultsCount` is negative (`-2`) when a page provider does not count its results, as
+  `tree_children` does; the card says its figure is unavailable.
 - The counts are the signed-in person's: a user in `members` only counted 2,167 records of
   `default_search` where an administrator counted 2,249.
 

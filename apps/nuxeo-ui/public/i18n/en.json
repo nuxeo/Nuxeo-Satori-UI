@@ -1536,6 +1536,7 @@
   "home": {
     "empty": "Nothing on the home is for you.",
     "loading": "Loading the home",
+    "largest-only": "The largest only",
     "loading-figure": "Counting",
     "none": "No home is configured for this app.",
     "open-queue": "Open the queue",

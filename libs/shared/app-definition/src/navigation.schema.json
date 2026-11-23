@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:nuxeo-satori:app-definition:navigation:2",
   "title": "An app's menu, navigation.json, app definition version 2",
-  "description": "docs/business-apps/app-definition-v2.md, section 9. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that entry ids are unique, that each queue is one of the package's, that each page is registered, and that a rule is given literals, since no record is open in the menu.",
+  "description": "docs/business-apps/app-definition-v2.md, section 9. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that entry ids are unique, that each queue is one of the package's, that each page is registered, and that a rule, a customer's own included, is given literals, since no record is open in the menu.",
   "type": "object",
   "required": ["version", "entries"],
   "additionalProperties": false,

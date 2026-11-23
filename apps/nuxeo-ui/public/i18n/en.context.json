@@ -2773,6 +2773,7 @@
   "satori-components.trash-list.purge-failed-many": "Error after the permanent delete of some of several documents failed. {{failed}} is how many failed, {{count}} how many were tried.",
   "home.empty": "Shown on the home page when the app's home has cards, but none is meant for the signed-in user's groups. The home is the app's start page of figures and links.",
   "home.loading": "Status text, read by screen readers, while the home page reads the app's home configuration.",
+  "home.largest-only": "Shown under the list of a figure card's groups on the home page when the server returned only the largest groups, so the list may be incomplete.",
   "home.loading-figure": "Shown in a figure card on the home page while the number it shows is being counted on the server. A verb in progress: the count is being worked out.",
   "home.none": "Shown on the home page when the app has no home configured: no home.json file is served. 'Home' is the app's start page of figures and links.",
   "home.open-queue": "Link at the bottom of a figure card on the home page that opens the work queue the figure counts. A queue is a list of records waiting to be worked on.",

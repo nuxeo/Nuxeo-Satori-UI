@@ -40,6 +40,8 @@ interface DrawnCard {
   readonly kind: 'link' | 'loading' | 'unavailable' | 'figure';
   readonly value: string | null;
   readonly buckets: readonly { readonly key: string; readonly count: string }[];
+  /** Whether the server returned only an aggregate's largest buckets. */
+  readonly truncated: boolean;
   /** Why the figure is unavailable, for the console. */
   readonly reason: string | null;
   readonly link: string | readonly unknown[] | null;
@@ -117,10 +119,11 @@ export class HomePageComponent {
         if (link === null) continue;
         drawn.push({
           id: card.id,
-          title: this.text(card.label, card.labelKey) ?? (card.queue as string),
+          title: this.text(card.label, card.labelKey) || (card.queue as string),
           kind: 'link',
           value: null,
           buckets: [],
+          truncated: false,
           reason: null,
           link,
         });
@@ -135,7 +138,8 @@ export class HomePageComponent {
             : { kind: 'unavailable', reason: answer.reason };
       drawn.push({
         id: card.id,
-        title: this.text(card.label, card.labelKey) ?? card.labelKey ?? card.id,
+        // An empty name, which the validator lets through, falls back too.
+        title: this.text(card.label, card.labelKey) || card.labelKey || card.id,
         kind:
           figure === null ? 'loading' : figure.kind === 'unavailable' ? 'unavailable' : 'figure',
         value: figure && figure.kind !== 'unavailable' ? this.format(figure.value) : null,
@@ -146,6 +150,7 @@ export class HomePageComponent {
                 count: this.format(bucket.count),
               }))
             : [],
+        truncated: figure?.kind === 'buckets' && figure.truncated,
         reason: figure?.kind === 'unavailable' ? figure.reason : null,
         link,
       });
@@ -178,6 +183,12 @@ export class HomePageComponent {
           return;
         }
         for (const problem of read.problems) warn(`home.json ${problem}`);
+        // Every card left out is a home that could not be read, not one with nothing for this person.
+        if (read.home.cards.length === 0) {
+          warn('home.json refused: every card is left out');
+          this.state.set({ kind: 'refused' });
+          return;
+        }
         if (this.queueLink === null && read.home.cards.some((card) => card.queue !== null))
           warn('the app has no queue page yet, so the links to queues are not drawn');
         this.state.set({ kind: 'home', home: read.home });

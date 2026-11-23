@@ -5,6 +5,10 @@
  * - `resultsCount`, how many records the page provider returns to the person signed in;
  * - `aggregations`, by aggregate id, each with its `buckets`: `{ key, docCount }`. Only a page
  *   provider served by the search index has them.
+ *
+ * A terms aggregate returns only its largest buckets, as many as its `size` (10 when it sets
+ * none), so a key missing from a full list may be one more bucket the server did not return, not
+ * one no record has.
  */
 import type { HomeKpi } from './home-file';
 
@@ -15,8 +19,31 @@ export interface Bucket {
 
 export type Figure =
   | { readonly kind: 'count'; readonly value: number }
-  | { readonly kind: 'buckets'; readonly value: number; readonly buckets: readonly Bucket[] }
+  | {
+      readonly kind: 'buckets';
+      readonly value: number;
+      readonly buckets: readonly Bucket[];
+      /** Whether the server may have more buckets than these: a terms aggregate returned its size. */
+      readonly truncated: boolean;
+    }
   | { readonly kind: 'unavailable'; readonly reason: string };
+
+/** The terms aggregates' default size, when the page provider's aggregate sets none. */
+export const DEFAULT_TERMS_SIZE = 10;
+
+const TERMS = new Set(['terms', 'significant_terms']);
+
+/**
+ * Whether `aggregate` may hold more buckets than the `returned` the server gave: a terms aggregate
+ * returns only its `size` largest. Range and histogram aggregates return every bucket they define.
+ */
+function mayHaveMore(aggregate: Record<string, unknown>, returned: number): boolean {
+  if (!TERMS.has(aggregate['type'] as string)) return false;
+  const properties = aggregate['properties'];
+  const written = isRecord(properties) ? Number(properties['size']) : NaN;
+  const size = Number.isSafeInteger(written) && written > 0 ? written : DEFAULT_TERMS_SIZE;
+  return returned >= size;
+}
 
 /** The cards that read the same page provider with the same parameters share one request. */
 export function requestKey(kpi: HomeKpi): string {
@@ -63,7 +90,16 @@ export function figureOf(kpi: HomeKpi, results: unknown): Figure {
     if ((typeof key === 'string' || typeof key === 'number') && isCount(count))
       buckets.push({ key: String(key), count });
   }
-  if (kpi.bucket === null) return { kind: 'buckets', value: total, buckets };
-  // A terms aggregate returns no bucket for a key no record has: that is a count of 0.
-  return { kind: 'count', value: buckets.find((bucket) => bucket.key === kpi.bucket)?.count ?? 0 };
+  const returned = (aggregate['buckets'] as unknown[]).length;
+  const truncated = mayHaveMore(aggregate, returned);
+  if (kpi.bucket === null) return { kind: 'buckets', value: total, buckets, truncated };
+  const found = buckets.find((bucket) => bucket.key === kpi.bucket);
+  if (found) return { kind: 'count', value: found.count };
+  // A terms aggregate returns no bucket for a key no record has: that is a count of 0, unless the
+  // list is full, and the bucket may be one the server left out.
+  if (truncated)
+    return unavailable(
+      `the bucket "${kpi.bucket}" is not among the ${returned} largest the aggregate "${kpi.aggregate}" returns`,
+    );
+  return { kind: 'count', value: 0 };
 }
