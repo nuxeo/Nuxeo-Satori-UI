@@ -35,8 +35,10 @@ pipeline that existed when each was signed off — Phases 0–2 were originally 
 The re-gate matters: two of the gates added since found real defects in already-signed-off
 work. It does not make a phase complete: Phases 1 and 2 are back in progress, and Phase 3 is
 superseded. Gates have been added since 2026-11-03, so that re-gate no longer covers the whole
-pipeline. Where the gate reports are on disk, `npm run beta:state` warns for each phase whose
-re-gate ran fewer gates than exist now.
+pipeline. `npm run beta:state` says so only for the complete phases, 0, 4 and 5, and only where
+their evidence and gate reports are on disk and pass. It does not check the re-gate of a phase
+in progress or superseded, so the absence of a warning for Phases 1, 2 and 3 says nothing about
+their gate coverage.
 
 **Deviations are recorded per phase in `.ai/state/phases.json`, not here.** Phase 4 carries
 twelve, including the one that mattered most: the published package could not be published at
