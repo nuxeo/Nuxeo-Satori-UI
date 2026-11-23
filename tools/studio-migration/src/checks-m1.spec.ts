@@ -650,7 +650,7 @@ describe('what the review found', () => {
 
   it("gives two files' unnamed buttons actions of their own, and holds each to its own", () => {
     const button = (operation: string) =>
-      `<nuxeo-slot-content name="" slot="DOCUMENT_ACTIONS"><template><nuxeo-operation-button operation="${operation}" label="${operation}"></nuxeo-operation-button></template></nuxeo-slot-content>`;
+      `<nuxeo-slot-content name="" slot="DOCUMENT_ACTIONS"><template><nuxeo-operation-button operation="${operation}" label="${operation}" input="[[document]]"></nuxeo-operation-button></template></nuxeo-slot-content>`;
     const pkg = readStudioPackage(
       syntheticPackage({
         bundle: {
@@ -764,7 +764,7 @@ describe("what Copilot's review found", () => {
 
   it('holds an action to the button that owns its id, not to an earlier one that becomes none', () => {
     const button = (extra: string, operation: string) =>
-      `<nuxeo-slot-content name="approveClaim" slot="DOCUMENT_ACTIONS"><template>${extra.replace('X', `<nuxeo-operation-button operation="${operation}" label="Approve"></nuxeo-operation-button>`)}</template></nuxeo-slot-content>`;
+      `<nuxeo-slot-content name="approveClaim" slot="DOCUMENT_ACTIONS"><template>${extra.replace('X', `<nuxeo-operation-button operation="${operation}" label="Approve" input="[[document]]"></nuxeo-operation-button>`)}</template></nuxeo-slot-content>`;
     for (const first of [
       button(
         '<nuxeo-filter permission="Write"><template>X</template></nuxeo-filter>',
@@ -856,6 +856,128 @@ describe("what Copilot's second review found", () => {
       note: expect.stringMatching(/a queue needs at least one/),
     });
     for (const number of [2, 7, 10]) expect(run(input, number)?.findings).toEqual([]);
+  });
+});
+
+// Found by Copilot's third review of #643.
+describe("what Copilot's third review found", () => {
+  const results = `${UI}/search/claims/nuxeo-claims-search-results.html`;
+  const bundle = `${UI}/nuxeo-Acme-Claims-bundle.html`;
+  const files = syntheticBundleFiles();
+
+  it('gives a queue path to the first list that writes one, not to a search with no column', () => {
+    // A search folder named as the dashboard card's queue, whose results show no property.
+    const bare = files[results].replace(
+      /<nuxeo-data-table class="results">[\s\S]*<\/nuxeo-data-table>/,
+      '<nuxeo-data-table class="results"><nuxeo-data-table-column name="Thumb"></nuxeo-data-table-column></nuxeo-data-table>',
+    );
+    const input = prepare({
+      bundle: {
+        [`${UI}/search/home-1-claims/nuxeo-home-1-claims-search-form.html`]:
+          files[`${UI}/search/claims/nuxeo-claims-search-form.html`],
+        [`${UI}/search/home-1-claims/nuxeo-home-1-claims-search-results.html`]: bare,
+      },
+    });
+    expect(
+      input.inventory.searches.find(
+        (search) => search.path.includes('home-1-claims/') && search.part === 'results',
+      )?.provider,
+    ).toBe('claims');
+    expect(input.conversion.app['queues/home-1-claims.json']).toMatchObject({
+      label: 'Open claims',
+      parameters: ['open'],
+    });
+    for (const number of [2, 5, 6, 7]) expect(run(input, number)?.findings).toEqual([]);
+    const deleted = edit(input, 'queues/home-1-claims.json', () => undefined);
+    expect(run(deleted, 7)?.findings).toEqual([
+      "queues/home-1-claims.json is missing, though Web UI's card 1 lists claims",
+    ]);
+  });
+
+  it('holds a queue two search folders share to the first, and only to it', () => {
+    const other = files[results].replace(
+      '<nuxeo-data-table-column name="Amount" field="cl:amount"></nuxeo-data-table-column>',
+      '',
+    );
+    const form = `${UI}/search/claims/nuxeo-claims-search-form.html`;
+    const input = prepare({
+      bundle: {
+        [`${UI}/search/Claims/nuxeo-claims-search-form.html`]: files[form],
+        [`${UI}/search/Claims/nuxeo-claims-search-results.html`]: other,
+      },
+    });
+    const second = `search:${UI}/search/Claims/nuxeo-claims-search-results.html#search`;
+    const first = `search:${UI}/search/claims/nuxeo-claims-search-results.html#search`;
+    const outcome = (id: string) =>
+      input.conversion.report.constructs.find((entry) => entry.id === id)?.outcome;
+    // Both slug to queues/claims.json; whichever the inventory reads first owns it.
+    expect([outcome(first), outcome(second)].sort()).toEqual(['converted', 'reported']);
+    for (const number of [2, 5, 6, 7]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it('reports a button that runs on another document than the record, and writes no action', () => {
+    for (const input of ['[[document.parentRef]]', 'a1b2c3', '']) {
+      const converted = prepare({
+        bundle: {
+          [bundle]: files[bundle].replace(
+            'input="[[document]]" params=',
+            `input="${input}" params=`,
+          ),
+        },
+      });
+      expect(converted.conversion.app['actions.json']).toBeUndefined();
+      expect(
+        converted.conversion.report.constructs.find((entry) =>
+          entry.label.includes('approveClaim'),
+        ),
+      ).toMatchObject({
+        outcome: 'reported',
+        note: expect.stringMatching(/runs on the open record/),
+      });
+      for (const number of [5, 7]) expect(run(converted, number)?.findings).toEqual([]);
+      // Written anyway, it is an action no button of the package becomes.
+      const written = edit(converted, 'actions.json', () => ({
+        version: 2,
+        actions: [{ id: 'acme-claims.approveClaim', label: 'Approve', operation: 'Claim.Approve' }],
+      }));
+      expect(run(written, 7)?.findings).toEqual([
+        'actions.json: "acme-claims.approveClaim" runs something no button of the package runs',
+      ]);
+    }
+  });
+
+  it("holds a column's label to the column the queue shows, not to an earlier one under a condition", () => {
+    const input = prepare({
+      bundle: {
+        [results]: files[results]
+          .replace(
+            '<nuxeo-data-table-column name="Reserve" field="cl:reserve">',
+            '<nuxeo-data-table-column name="Restricted reserve" field="cl:reserve"><template><nuxeo-filter group="x"><template>[[item.properties.cl:reserve]]</template></nuxeo-filter></template></nuxeo-data-table-column><nuxeo-data-table-column name="Reserve" field="cl:reserve">',
+          )
+          .replace(
+            '<template><nuxeo-filter group="adjusters"><template>[[item.properties.cl:reserve]]</template></nuxeo-filter></template></nuxeo-data-table-column>',
+            '</nuxeo-data-table-column>',
+          ),
+      },
+    });
+    expect(input.conversion.app['queues/claims.json']).toMatchObject({
+      columns: [{}, {}, { field: 'cl:reserve', label: 'Reserve' }],
+    });
+    for (const number of [2, 5, 6]) expect(run(input, number)?.findings).toEqual([]);
+  });
+
+  it('binds an action to another operation than the one it runs, whatever that is', () => {
+    const input = prepare();
+    const deleting = edit(input, 'actions.json', (file) => {
+      file.actions[0].operation = 'Document.Delete';
+      return file;
+    });
+    const mutation = MUTATIONS.find((m) => m.name === 'bind-other-operation');
+    if (!mutation) throw new Error('bind-other-operation is missing');
+    const broken = mutation.apply(deleting.conversion).conversion;
+    expect(broken.app['actions.json']).toMatchObject({
+      actions: [{ operation: 'Document.Trash' }],
+    });
   });
 });
 

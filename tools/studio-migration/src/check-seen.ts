@@ -13,21 +13,12 @@
  * server: it has not run, and the check says so.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import {
-  LAYOUT_VERSION,
-  homeQueueId,
-  isBound,
-  labelOf,
-  layoutPath,
-  queuePath,
-  searchQueueId,
-  searchQueuePaths,
-} from './app-files';
+import { LAYOUT_VERSION, isBound, labelOf, layoutPath } from './app-files';
 import { layoutFields, listColumns } from './app-walk';
 import { listed } from './check-model';
 import { labelsOf, readCatalogue } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
-import { menuLabel } from './convert-lists';
+import { menuLabel, queueOwners } from './convert-lists';
 import type { CheckOutcome, HarnessInput } from './harness';
 import { fieldWidget } from './widgets';
 
@@ -116,15 +107,20 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     }
   }
 
-  for (const search of inventory.searches) {
-    if (search.part !== 'results') continue;
-    const path = queuePath(searchQueueId(search));
+  // Lists: each queue against the one list that owns its path, as the converter decides it.
+  for (const [path, owner] of queueOwners(inventory)) {
     const queue = conversion.app[path];
     if (queue === undefined) continue;
-    const menu = menuLabel({ inventory }, search);
-    if (menu !== null) compare(`${path}: its name`, web(menu), shown(queue, null, null));
+    // A column under a condition is left out: the heading the queue shows is a column's in none.
+    const sources =
+      owner.kind === 'search'
+        ? owner.search.columnDetails.filter((column) => !column.conditional)
+        : owner.card.columns;
+    const name =
+      owner.kind === 'search' ? menuLabel({ inventory }, owner.search) : owner.card.heading;
+    if (name !== null) compare(`${path}: its name`, web(name), shown(queue, null, null));
     for (const column of listColumns(queue)) {
-      const source = search.columnDetails.find((candidate) => candidate.field === column.field);
+      const source = sources.find((candidate) => candidate.field === column.field);
       if (source)
         compare(
           `${path}: the column ${column.field}`,
@@ -133,23 +129,6 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
         );
     }
   }
-  // A card whose queue a search screen took has no queue of its own: the converter reports it.
-  const taken = searchQueuePaths(inventory.searches);
-  inventory.dashboard?.cards.forEach((card, index) => {
-    const path = queuePath(homeQueueId(card, index));
-    const queue = conversion.app[path];
-    if (queue === undefined || taken.has(path)) return;
-    compare(`${path}: its name`, web(card.heading), shown(queue, null, null));
-    for (const column of listColumns(queue)) {
-      const source = card.columns.find((candidate) => candidate.field === column.field);
-      if (source)
-        compare(
-          `${path}: the column ${column.field}`,
-          web(source.name),
-          shown(column.entry, null, null),
-        );
-    }
-  });
 
   const values =
     'The values half opens the same records in both apps, as the same user, and needs the migration server';

@@ -10,17 +10,10 @@
  * readiness instead.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import {
-  LAYOUT_VERSION,
-  homeQueueId,
-  layoutPath,
-  queuePath,
-  searchQueueId,
-  searchQueuePaths,
-} from './app-files';
+import { LAYOUT_VERSION, layoutPath } from './app-files';
 import { layoutFields, listColumns, parametersOf, sameJson, widgetOf } from './app-walk';
 import { PANEL_ROWS } from './convert-layouts';
-import { isConditionalTable } from './convert-lists';
+import { queueOwners } from './convert-lists';
 import type { CheckOutcome, HarnessInput } from './harness';
 import type { ResultColumn } from './inventory';
 import { VERSION_ONE_WIDGETS, columnWidget, fieldWidget } from './widgets';
@@ -127,12 +120,22 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
   for (const path of layoutFiles)
     findings.push(`${path}: the package has no Web UI layout of that type and mode`);
 
-  // Lists: a search screen's results, and a dashboard card's list.
-  for (const search of inventory.searches) {
-    // A table under a condition is check 5's: the converter leaves the whole list pending.
-    if (search.part !== 'results' || search.provider === null || isConditionalTable(search))
+  // Lists: each queue against the one list that owns its path, a search screen's results or a
+  // dashboard card's list, as the converter decides it. A list under a condition owns none: it is
+  // check 5's. A card's missing queue is check 7's.
+  for (const [path, owner] of queueOwners(inventory)) {
+    if (owner.kind === 'card') {
+      if (app[path] !== undefined)
+        findings.push(
+          ...compareColumns(
+            path,
+            owner.card.columns.filter((column) => column.field !== null),
+            app[path],
+          ),
+        );
       continue;
-    const path = queuePath(searchQueueId(search));
+    }
+    const { search } = owner;
     if (app[path] === undefined) {
       if (!excused(`search:${search.path}#search`))
         findings.push(
@@ -156,19 +159,6 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
     );
     findings.push(...compareColumns(path, columns, app[path], conditional));
   }
-  // A card whose queue a search screen took has no queue of its own: the converter reports it.
-  const taken = searchQueuePaths(inventory.searches);
-  inventory.dashboard?.cards.forEach((card, index) => {
-    const path = queuePath(homeQueueId(card, index));
-    if (app[path] === undefined || taken.has(path)) return;
-    findings.push(
-      ...compareColumns(
-        path,
-        card.columns.filter((column) => column.field !== null),
-        app[path],
-      ),
-    );
-  });
   return { findings };
 }
 

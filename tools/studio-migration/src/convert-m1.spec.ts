@@ -379,7 +379,7 @@ describe('M1 converts slot contributions', () => {
   it('reports a button whose parameters are bound to the page', () => {
     const bound = converted({
       bundle: {
-        [bundle]: `<nuxeo-slot-content name="b" slot="DOCUMENT_ACTIONS"><template><nuxeo-operation-button operation="Claim.Approve" params="[[params]]"></nuxeo-operation-button></template></nuxeo-slot-content>`,
+        [bundle]: `<nuxeo-slot-content name="b" slot="DOCUMENT_ACTIONS"><template><nuxeo-operation-button operation="Claim.Approve" input="[[document]]" params="[[params]]"></nuxeo-operation-button></template></nuxeo-slot-content>`,
       },
     });
     expect(outcome(bound, `slot-contribution:${bundle}#1`)).toMatchObject({

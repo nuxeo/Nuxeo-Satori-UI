@@ -14,17 +14,10 @@
  * with recent writes, needs the migration server: that half has not run, and the check says so.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import {
-  appIdOf,
-  homeQueueId,
-  queuePageSize,
-  queuePath,
-  searchQueueId,
-  searchQueuePaths,
-} from './app-files';
+import { appIdOf, queuePageSize } from './app-files';
 import { sameJson } from './app-walk';
 import { recordedAllowList } from './convert';
-import { cardParameters, isListCard, openingSort } from './convert-lists';
+import { openingSort, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
 
@@ -73,35 +66,32 @@ export function checkRequests({
       );
   };
 
-  for (const search of inventory.searches) {
-    if (search.part !== 'results' || search.provider === null) continue;
-    // Web UI's form sends a predicate's parameter only once someone fills it in.
-    list(queuePath(searchQueueId(search)), search.provider, [], openingSort(search), null);
-  }
-  // A card whose queue a search screen took is reported by the converter, and has no queue.
-  const taken = searchQueuePaths(inventory.searches);
-  inventory.dashboard?.cards.forEach((card, index) => {
-    if (!isListCard(card) || card.provider === null) return;
-    if (taken.has(queuePath(homeQueueId(card, index)))) return;
-    const parameters = cardParameters(card);
-    if ('problem' in parameters) return;
+  // Each queue against the one list that owns its path, as the converter decides it, and no
+  // other: a later list of the same path is reported, and one under a condition owns none.
+  for (const [path, owner] of queueOwners(inventory)) {
+    if (owner.kind === 'search') {
+      // Web UI's form sends a predicate's parameter only once someone fills it in. A search
+      // screen's missing queue is check 2's.
+      list(path, owner.search.provider ?? '', [], openingSort(owner.search), null);
+      continue;
+    }
+    const { card, index } = owner;
     // Web UI's data table asks a card's provider for its own page size, which a queue keeps when
-    // it is one a queue takes. A card whose list the converter writes must have its queue, unless
-    // the report reports the card, with its reason. (A search screen's missing queue is check 2's.)
-    const path = queuePath(homeQueueId(card, index));
+    // it is one a queue takes. The card's queue must be there, unless the report reports the
+    // card, with its reason.
     const entry = entries.get(`dashboard-card:${inventory.dashboard?.path}#${index + 1}`);
     const excused = entry?.outcome === 'reported' && Boolean(entry.note?.trim());
     list(
       path,
-      card.provider,
-      parameters.parameters,
+      card.provider ?? '',
+      owner.parameters,
       [],
       queuePageSize(card),
       excused
         ? undefined
         : `${path} is missing, though Web UI's card ${index + 1} lists ${card.provider}`,
     );
-  });
+  }
   for (const path of Object.keys(app))
     if (path.startsWith('queues/') && !expectedQueues.has(path))
       findings.push(`${path}: it asks for a list that no screen or card of the package asks for`);

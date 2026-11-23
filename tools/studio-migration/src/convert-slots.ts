@@ -25,7 +25,22 @@ import {
 } from './app-files';
 
 /** The operation an action converted from a button runs, and its parameters, or why it cannot. */
-export function buttonAction(contribution: SlotContribution):
+/**
+ * What a button's operation runs on, as the action it becomes must: an action on the record
+ * page's toolbar runs on the open record, one over a selection on the selected records
+ * (app-definition-v2.md, section 5). Web UI writes those `[[document]]` and `[[selectedItems]]`
+ * (or `[[documents]]`); a button on anything else, such as `[[document.parentRef]]` or a literal
+ * id, or on nothing, would run its operation on another document once it became an action.
+ */
+const INPUTS: Readonly<Record<'toolbar' | 'bulk-actions', readonly string[]>> = {
+  toolbar: ['document'],
+  'bulk-actions': ['selectedItems', 'documents'],
+};
+
+export function buttonAction(
+  contribution: SlotContribution,
+  slot: 'toolbar' | 'bulk-actions',
+):
   | {
       operation: string;
       parameters: Record<string, unknown> | null;
@@ -42,6 +57,12 @@ export function buttonAction(contribution: SlotContribution):
   const [button] = buttons;
   const operation = own(button.attributes, 'operation')?.trim();
   if (!operation) return { problem: 'Its operation button runs no operation' };
+  const input = own(button.attributes, 'input')?.trim();
+  const bound = /^(?:\[\[|\{\{)\s*([\w.]+)\s*(?:\]\]|\}\})$/.exec(input ?? '')?.[1];
+  if (bound === undefined || !INPUTS[slot].includes(bound))
+    return {
+      problem: `Its button runs ${operation} on ${input ? input : 'no input'}, where an action ${slot === 'toolbar' ? 'on the toolbar runs on the open record' : 'over a selection runs on the selected records'}: a person maps it`,
+    };
   const raw = own(button.attributes, 'params');
   if (raw === undefined || raw.trim() === '')
     return { operation, parameters: null, attributes: button.attributes };
@@ -100,7 +121,7 @@ export function actionOwners(
     if (!entry || entry.how === 'reported') continue;
     if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') continue;
     if (contribution.operations.includes(null) || contribution.conditions.length > 0) continue;
-    const action = buttonAction(contribution);
+    const action = buttonAction(contribution, entry.slot);
     if ('problem' in action || !allowList.has(action.operation)) continue;
     const id = actionIdOf(appId, contribution.name, overall);
     if (!owners.has(id)) owners.set(id, { contribution, index, ...action, slot: entry.slot });
@@ -135,7 +156,7 @@ export function convertSlots(context: ConvertContext): void {
       continue;
     }
     if (entry.slot === 'toolbar' || entry.slot === 'bulk-actions') {
-      const action = buttonAction(contribution);
+      const action = buttonAction(contribution, entry.slot);
       if ('problem' in action) {
         context.decide(id, { outcome: 'reported', note: action.problem });
         continue;

@@ -122,15 +122,6 @@ export function placed(contributions: readonly SlotContribution[]): {
   });
 }
 
-/** The queues the search screens take, which a dashboard card's queue may not take too. */
-export function searchQueuePaths(searches: readonly SearchLayout[]): Set<string> {
-  return new Set(
-    searches
-      .filter((search) => search.part === 'results' && search.provider !== null)
-      .map((search) => queuePath(searchQueueId(search))),
-  );
-}
-
 /**
  * A Material Symbols name for a Web UI icon: `icons:3d-rotation` is `3d_rotation`. Only Polymer's
  * `icons` set shares Material's names; another set's icon has none.

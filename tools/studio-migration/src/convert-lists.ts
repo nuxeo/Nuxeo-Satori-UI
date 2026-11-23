@@ -13,7 +13,7 @@
  */
 import { own } from './catalogue';
 import type { ConvertContext } from './convert';
-import type { DashboardCard, ResultColumn, SearchLayout } from './inventory';
+import type { DashboardCard, Inventory, ResultColumn, SearchLayout } from './inventory';
 import {
   homeQueueId,
   labelOf,
@@ -70,6 +70,7 @@ export function cardParameters(
 
 export function convertSearches(context: ConvertContext): void {
   const { inventory } = context;
+  const owners = queueOwners(inventory);
   for (const search of inventory.searches) {
     const id = `search:${search.path}#search`;
     if (search.part === 'form') {
@@ -111,10 +112,6 @@ export function convertSearches(context: ConvertContext): void {
     };
     if (search.provider === null) {
       report('It names no page provider, through a @search annotation or its form');
-      continue;
-    }
-    if (Object.hasOwn(context.files, path)) {
-      report(`Another list is already written as ${path}`);
       continue;
     }
     if (isConditionalTable(search)) {
@@ -172,6 +169,11 @@ export function convertSearches(context: ConvertContext): void {
       );
       continue;
     }
+    const owner = owners.get(path);
+    if (owner?.kind !== 'search' || owner.search !== search) {
+      report(`Another list is already written as ${path}`);
+      continue;
+    }
     const sort = openingSort(search);
     // A queue needs a name: the menu's, or else its page provider's.
     const named = labelOf(menuLabel(context, search));
@@ -184,6 +186,45 @@ export function convertSearches(context: ConvertContext): void {
     };
     context.decide(id, { outcome: 'converted', to: path });
   }
+}
+
+/** A list a queue is written for: a search screen's results, or a dashboard card's list. */
+export type QueueOwner =
+  | { readonly kind: 'search'; readonly search: SearchLayout }
+  | {
+      readonly kind: 'card';
+      readonly card: DashboardCard;
+      /** Its place on the dashboard, from 0. */
+      readonly index: number;
+      readonly parameters: readonly string[];
+    };
+
+/**
+ * Whose each queue is: for each path, the first list, search screens before dashboard cards, that
+ * the converter writes a queue for at all. A list under a condition, with no column a queue can
+ * show, with parameters a queue cannot send, or with no page provider owns no path, so a later
+ * list of the same path may take it. The converter writes the owners' queues and reports every
+ * other list of an owned path; checks 2, 5, 6 and 7 hold each queue to its owner, and to no other.
+ */
+export function queueOwners(inventory: Inventory): Map<string, QueueOwner> {
+  const owners = new Map<string, QueueOwner>();
+  for (const search of inventory.searches) {
+    if (search.part !== 'results' || search.provider === null || isConditionalTable(search))
+      continue;
+    if (!search.columnDetails.some((column) => column.field !== null && !column.conditional))
+      continue;
+    const path = queuePath(searchQueueId(search));
+    if (!owners.has(path)) owners.set(path, { kind: 'search', search });
+  }
+  inventory.dashboard?.cards.forEach((card, index) => {
+    if (!isListCard(card) || !card.columns.some((column) => column.field !== null)) return;
+    const parameters = cardParameters(card);
+    if ('problem' in parameters) return;
+    const path = queuePath(homeQueueId(card, index));
+    if (!owners.has(path))
+      owners.set(path, { kind: 'card', card, index, parameters: parameters.parameters });
+  });
+  return owners;
 }
 
 /** True when the results' table sits in a condition: the whole list then shows only to some. */
@@ -246,6 +287,7 @@ export function isListCard(card: DashboardCard): boolean {
 export function convertDashboard(context: ConvertContext): void {
   const dashboard = context.inventory.dashboard;
   if (!dashboard) return;
+  const owners = queueOwners(context.inventory);
   dashboard.cards.forEach((card, index) => {
     const id = `dashboard-card:${dashboard.path}#${index + 1}`;
     if (card.repeatOf !== null) {
@@ -296,18 +338,19 @@ export function convertDashboard(context: ConvertContext): void {
       return;
     }
     const path = queuePath(homeQueueId(card, index));
-    if (Object.hasOwn(context.files, path)) {
-      context.decide(id, {
-        outcome: 'reported',
-        note: `Another list is already written as ${path}`,
-      });
-      return;
-    }
     const columns = card.columns.filter((column) => column.field !== null).map(queueColumn);
     if (columns.length === 0) {
       context.decide(id, {
         outcome: 'reported',
         note: 'Its list shows no column a queue can name, and a queue needs at least one',
+      });
+      return;
+    }
+    const owner = owners.get(path);
+    if (owner?.kind !== 'card' || owner.card !== card) {
+      context.decide(id, {
+        outcome: 'reported',
+        note: `Another list is already written as ${path}`,
       });
       return;
     }

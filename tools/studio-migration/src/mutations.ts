@@ -520,10 +520,12 @@ export const MUTATIONS: readonly Mutation[] = [
       if (!file || !action)
         throw new MutationError('the conversion has no action bound to an operation');
       const before = action['operation'] as string;
-      action['operation'] = 'Document.Delete';
+      // Another operation than the one it runs, or the control would change nothing.
+      const other = before === 'Document.Delete' ? 'Document.Trash' : 'Document.Delete';
+      action['operation'] = other;
       return {
         conversion: withFile(conversion, 'actions.json', file),
-        changed: `bound ${String(action['id'])} to Document.Delete, not ${before}, in app/actions.json`,
+        changed: `bound ${String(action['id'])} to ${other}, not ${before}, in app/actions.json`,
       };
     },
   },

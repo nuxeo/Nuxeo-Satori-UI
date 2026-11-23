@@ -234,7 +234,12 @@ refuse the file as out of place.
   its operation, its literal parameters, its icon (Polymer's `icons` set shares Material's names)
   and its order. It needs the operation on the allow-list; without one, the button is reported. A
   button whose parameters are bound to the page is reported: a written action has no page to read
-  them from.
+  them from. So is a button whose `input` is not what its action runs on, `[[document]]` on the
+  toolbar or `[[selectedItems]]` over a selection: one on `[[document.parentRef]]`, a literal id or
+  nothing would run its operation on another document.
+- **One owner per action and per queue.** Each action id, and each queue path, belongs to the first
+  contribution or list that becomes one at all, in the package's order. A later one is reported,
+  and the checks hold each action and queue to its owner only.
 - **Pending:** the left menu and its pages wait for phase 1's `navigation.json`, and the note names
   the queue they open. Tabs wait for M2.
 - **Conditions.** A contribution that sits in a condition is pending, whatever the allow-list says.

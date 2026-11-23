@@ -25,11 +25,10 @@ import {
   placed,
   queuePath,
   searchQueueId,
-  searchQueuePaths,
 } from './app-files';
 import { layoutFields, listColumns, rulesIn } from './app-walk';
 import { recordedAllowList } from './convert';
-import { isConditionalTable } from './convert-lists';
+import { isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
 
@@ -85,27 +84,30 @@ export function checkConditions({
       );
   }
 
-  const taken = searchQueuePaths(inventory.searches);
+  // Lists. A queue at a path no list owns, where a list under a condition would have gone, shows
+  // that list to everyone; an owned queue is its owner's, whatever else shares the path.
+  const lists = queueOwners(inventory);
   inventory.dashboard?.cards.forEach((card, index) => {
     const path = queuePath(homeQueueId(card, index));
-    if (card.conditional && !taken.has(path) && conversion.app[path] !== undefined)
+    if (card.conditional && !lists.has(path) && conversion.app[path] !== undefined)
       findings.push(
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
       );
   });
-
-  // Lists: a search screen's table, or one of its columns, under a condition.
   for (const search of inventory.searches) {
     if (search.part !== 'results') continue;
     const path = queuePath(searchQueueId(search));
     const queue = conversion.app[path];
     if (queue === undefined) continue;
+    const owner = lists.get(path);
     if (isConditionalTable(search)) {
-      findings.push(
-        `${path}: it lists ${search.provider ?? 'its records'} for everyone, though Web UI shows the table only while a condition passes`,
-      );
+      if (!owner)
+        findings.push(
+          `${path}: it lists ${search.provider ?? 'its records'} for everyone, though Web UI shows the table only while a condition passes`,
+        );
       continue;
     }
+    if (owner?.kind !== 'search' || owner.search !== search) continue;
     const always = new Set(
       search.columnDetails.filter((column) => !column.conditional).map((column) => column.field),
     );
