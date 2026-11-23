@@ -1784,6 +1784,32 @@
     "plain": "Text",
     "xml": "XML"
   },
+  "notifications": {
+    "bell": {
+      "label": "Notifications, {{ count }} unread"
+    },
+    "change": {
+      "modified": "Modified by {{ who }}",
+      "transition": "State changed to {{ state }} by {{ who }}",
+      "transition-unknown": "State changed by {{ who }}"
+    },
+    "panel": {
+      "changes": "Changes to records you follow",
+      "close": "Close notifications",
+      "failed": "The latest check for new items failed. The bell will try again.",
+      "loading": "Checking for new items…",
+      "mark-all-read": "Mark all as read",
+      "new": "New",
+      "no-changes": "No changes by other people in the last 7 days",
+      "no-tasks": "No open tasks",
+      "tasks": "Your open tasks",
+      "this-browser": "What you have read is remembered in this browser only, not on your other devices.",
+      "title": "Notifications"
+    },
+    "task": {
+      "on-record": "On {{ record }}"
+    }
+  },
   "permission": {
     "everything": "Manage everything",
     "read": "Read",

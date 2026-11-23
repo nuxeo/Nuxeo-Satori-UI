@@ -1,4 +1,4 @@
-import { HttpParams } from '@angular/common/http';
+import { HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, Subject, catchError, forkJoin, map, of, switchMap } from 'rxjs';
 
@@ -23,32 +23,42 @@ export class TaskService {
     'X-NXfetch.task': 'targetDocumentIds,actors',
   };
 
-  getUserTasks(userId: string, pageSize = 10): Observable<NuxeoTask[]> {
+  /**
+   * The user's open tasks, with each target's title.
+   *
+   * @param context passed to every request this makes, the task list and any target it reads for
+   *   a title: `backgroundRequestContext()` for a read the application sends on its own
+   */
+  getUserTasks(userId: string, pageSize = 10, context?: HttpContext): Observable<NuxeoTask[]> {
     const params = new HttpParams().set('userId', userId).set('pageSize', pageSize);
 
-    return this.api.get<NuxeoTaskList>('/nuxeo/api/v1/task', params, this.taskFetchHeaders).pipe(
-      map((res) => res.entries),
-      switchMap((tasks) => {
-        if (tasks.length === 0) return of([] as NuxeoTask[]);
+    return this.api
+      .get<NuxeoTaskList>('/nuxeo/api/v1/task', params, this.taskFetchHeaders, context)
+      .pipe(
+        map((res) => res.entries),
+        switchMap((tasks) => {
+          if (tasks.length === 0) return of([] as NuxeoTask[]);
 
-        const enriched$ = tasks.map((task) => {
-          const targetRef = task.targetDocumentIds?.[0];
-          // Enriched response has uid+title, plain response has id
-          if (targetRef?.title) {
-            return of({ ...task, targetDocTitle: targetRef.title });
-          }
-          const docId = targetRef?.uid || targetRef?.id;
-          if (!docId) return of(task);
+          const enriched$ = tasks.map((task) => {
+            const targetRef = task.targetDocumentIds?.[0];
+            // Enriched response has uid+title, plain response has id
+            if (targetRef?.title) {
+              return of({ ...task, targetDocTitle: targetRef.title });
+            }
+            const docId = targetRef?.uid || targetRef?.id;
+            if (!docId) return of(task);
 
-          return this.api.get<NuxeoDocument>(`/nuxeo/api/v1/id/${docId}`).pipe(
-            map((doc) => ({ ...task, targetDocTitle: doc.title })),
-            catchError(() => of(task)),
-          );
-        });
+            return this.api
+              .get<NuxeoDocument>(`/nuxeo/api/v1/id/${docId}`, undefined, undefined, context)
+              .pipe(
+                map((doc) => ({ ...task, targetDocTitle: doc.title })),
+                catchError(() => of(task)),
+              );
+          });
 
-        return forkJoin(enriched$);
-      }),
-    );
+          return forkJoin(enriched$);
+        }),
+      );
   }
 
   /** Get a specific task by ID (with enriched targets & actors). */

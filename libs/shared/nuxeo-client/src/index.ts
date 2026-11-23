@@ -107,6 +107,10 @@ export type { NuxeoOAuth2Provider } from './lib/models/oauth.model';
 // Config
 export { NUXEO_API_ORIGIN, NUXEO_SERVER_URL } from './lib/nuxeo-api.config';
 export { CURRENT_USERNAME } from './lib/current-user.token';
+export {
+  NUXEO_BACKGROUND_REQUEST,
+  backgroundRequestContext,
+} from './lib/background-request.context';
 export { ADMIN_ACCESS_CHECKS, type AdminAccessChecks } from './lib/auth/admin-access.token';
 export {
   administrationAccessGuard,

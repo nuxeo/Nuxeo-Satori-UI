@@ -26,7 +26,7 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
-getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>
+getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>
   // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>
 getSectionTree(): Observable<NuxeoDocumentList>
@@ -276,7 +276,8 @@ bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 
 ```typescript
 notifyTasksChanged(): void
-getUserTasks(userId: string, pageSize?: number): Observable<NuxeoTask[]>
+getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>
+  // context reaches every request it makes, the task list and any target read for a title
 getTask(taskId: string): Observable<NuxeoTask>
 getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>
 ```
@@ -621,6 +622,25 @@ queueLink(id: string): readonly string[]  // ['/queues', id]
 
 ---
 
+## NotificationSources (`libs/shared/notifications/src/lib/notification-sources.ts`)
+
+Where the notification bell's items come from. Every request is a background request. Nothing
+writes.
+
+```typescript
+tasks(user: string): Observable<TaskNotification[]>            // TaskService.getUserTasks, newest first
+followed(user: string, since: Date, page?: number): Observable<FollowedPage>
+  // Repository.Query: notif:notifications/*/subscribers/* = 'user:<id>', dc:modified > since, 20 to a page
+changes(wanted: readonly ChangesWanted[], audit: boolean): Observable<ChangesRead & { refused: boolean }>
+  // audit: one Audit.QueryWithPageProvider (administrators only); else one @audit per record; both paged
+```
+
+`NotificationCenter` (provided by the bell) holds the state and runs the checks with
+`NotificationPoller`; `NotificationReadState` keeps what each user has seen, by item, in
+`localStorage`.
+
+---
+
 ## DocumentLayoutService (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)
 
 Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports
@@ -670,8 +690,15 @@ Consumers reading it would have built against a synchronous, non-nullable contra
 Low-level HTTP wrapper. **Do not inject directly in features or components.**
 
 ```typescript
-get<T>(path: string, options?: HttpOptions): Observable<T>
-post<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
-put<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
-delete<T>(path: string, options?: HttpOptions): Observable<T>
+apiUrl(path: string): string
+get<T>(path: string, params?: HttpParams, headers?: Record<string, string>, context?: HttpContext): Observable<T>
+post<T>(path: string, body: unknown, headers?: Record<string, string>, context?: HttpContext): Observable<T>
+put<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>
+delete<T>(path: string, headers?: Record<string, string>): Observable<T>
+nxqlSearch(query: string, pageSize: number, headers?: Record<string, string>): Observable<NuxeoDocumentList>
 ```
+
+A request the application sends on its own, on a timer, passes `backgroundRequestContext()` as
+`context` (`background-request.context.ts`): the auth interceptor then does not count its response
+as activity for the idle timer, so it cannot keep a session open. It still carries the credentials,
+and a 401 still ends the session. The notification bell's reads are the only ones today.

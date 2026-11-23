@@ -2075,6 +2075,94 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ---
 
+## 35. Notification Bell — Open Tasks, Followed Records and Their Audit
+
+| Field           | Value                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Service**     | `NotificationSources` (`libs/shared/notifications/src/lib/notification-sources.ts`), through `TaskService`, `NuxeoApiBase` and `DocumentDetailService` |
+| **Method**      | `tasks(user)`, `followed(user, since, page)` and `changes(wanted, audit)`, at each check: every 60 seconds by default (`notifications.pollIntervalMs`) |
+| **HTTP Method** | `GET` for the tasks and `@audit`; `POST` for the two Automation operations                                                                             |
+| **Endpoints**   | `/nuxeo/api/v1/task?userId=<user>&pageSize=100` with `X-NXfetch.task: targetDocumentIds,actors` (the read the tasks page makes)                        |
+|                 | `/nuxeo/api/v1/automation/Repository.Query`, with `properties: dublincore`                                                                             |
+|                 | `/nuxeo/api/v1/automation/Audit.QueryWithPageProvider`, for an administrator                                                                           |
+|                 | `/nuxeo/api/v1/id/{uid}/@audit?startEventDate=…&eventId=documentModified&eventId=lifecycle_transition_event`, for anyone else, per record              |
+| **Context**     | `backgroundRequestContext()` on every request: the idle timer does not count them                                                                      |
+
+**Followed records** — the documents whose `notif:notifications` list the reader, the property
+`Document.Subscribe` writes:
+
+```json
+{
+  "params": {
+    "query": "SELECT * FROM Document WHERE notif:notifications/*/subscribers/* = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND dc:modified > TIMESTAMP '<seven days ago, ISO>'",
+    "queryParams": ["user:<user>"],
+    "pageSize": 20,
+    "currentPageIndex": 0,
+    "sortBy": "dc:modified",
+    "sortOrder": "DESC"
+  },
+  "context": {}
+}
+```
+
+**Changes, for an administrator** — one request for every followed record whose `dc:modified` moved:
+
+```json
+{
+  "params": {
+    "query": "SELECT * FROM LogEntry WHERE docUUID IN (?, ?) AND eventId IN (?, ?) AND eventDate >= TIMESTAMP '<earliest lower bound, ISO>'",
+    "queryParams": ["<uid>", "<uid>", "documentModified", "lifecycle_transition_event"],
+    "pageSize": 50,
+    "currentPageIndex": 0,
+    "sortBy": "eventDate",
+    "sortOrder": "DESC"
+  },
+  "context": {}
+}
+```
+
+**Notes** (measured on the local Nuxeo 2025.10, 2026-11-23):
+
+- **There is no notification API.** `/api/v1/notification`, `/api/v1/me/notifications` and
+  `/api/v1/me/subscriptions` answer 404, so the bell reads tasks, subscriptions and the audit.
+- **`Repository.Query`, not the search endpoint.** The search endpoint is served by the search
+  index: for the same subscriber query it reported `resultsCount: 37` and returned no entries,
+  where the repository returned the 10 live records. A record followed a moment ago must be there.
+- **The audit query is for administrators only.** `nuxeo-automation-features`'
+  `bindings-contrib.xml` binds `Audit.QueryWithPageProvider` (and `Audit.Query`) with
+  `<administrator>true</administrator>`; anyone else gets **404**, not 401, so a refusal never ends
+  the session. Every audit page provider on the server (`EVENTS_VIEW`, `DOCUMENT_HISTORY_PROVIDER`,
+  `ADMIN_HISTORY`) is reached only through that operation, or one record at a time through `@audit`.
+  So a reader who is not an administrator gets one `@audit` read per followed record that changed,
+  four at a time. A 404 or 403 from the operation switches the reader to those reads for the session.
+- **Values go as `queryParams`**, which Nuxeo quotes: a quote in a user id or a uid is a value, and
+  `IN (?, ?)` takes one placeholder per value. An instant goes as a `TIMESTAMP '…'` literal, the form
+  `nxql.utils.ts` documents, written from `toISOString()` with its zone and checked
+  (`timestampLiteral`); a quoted ISO string also answered here, but may not on another repository
+  backend. `sortBy`/`sortOrder` order
+  the audit query; an `ORDER BY` in its text is ignored. `NOT IN` answers 500; `!=` works.
+- **Pages.** `currentPageIndex` pages both operations. A check reads the next page of followed
+  records only while the whole of the last one was modified after the newest `dc:modified` the last
+  check saw (a change to many records at once), up to 5 pages; and the next page of the audit,
+  query or `@audit`, while `isNextPageAvailable`, up to 4 pages of 50, so that the reader's own
+  entries, which are read too, cannot crowd other people's out.
+- **The task list is answered oldest first**, and `sortBy=created&sortOrder=desc` changes nothing,
+  so the bell reads 100 and keeps the newest 20.
+- **What moves `dc:modified`**, which is how the bell finds the records that changed: an edit, a
+  comment (Nuxeo audits it as `documentModified` on its record) and a lifecycle transition do; a
+  lock, an unlock, a check-in and a permission change do not. So the bell lists `documentModified`
+  and `lifecycle_transition_event` only. An edit's audit entry is dated 0 to 3 ms after its
+  `dc:modified`, and readable a second or so after the change, so a record whose audit has no entry
+  at or after its `dc:modified` yet is read once more at the next check.
+- The reader's own changes are read, and left out of the list on the client: they say whether the
+  audit has caught up with a change the reader made. `principalName != ?` works in the audit query,
+  but leaving them out there made every change of the reader's own look not caught up, and read it
+  twice more.
+
+**Used by:** `NotificationBellComponent` (`libs/shared/notifications`), in the shell's header.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

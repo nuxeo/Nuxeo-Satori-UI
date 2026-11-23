@@ -334,9 +334,10 @@ that is not `true` or `false` is ignored, and a later fragment's value wins.
 { "version": 1, "featureToggles": { "permissions.externalUsers": false } }
 ```
 
-| Toggle                      | Default | What it controls                                                                                                                                                                                                                                 |
-| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server. |
+| Toggle                      | Default | What it controls                                                                                                                                                                                                                                                                  |
+| --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server.                                  |
+| `notifications.bell`        | `true`  | The notification centre's bell in the shell's header (`libs/shared/notifications`). Turning it off removes the bell and stops its checks. The header has no slot, so this toggle is the bell's only switch; its check interval is the bootstrap's `notifications.pollIntervalMs`. |
 
 ---
 

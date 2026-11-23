@@ -189,6 +189,9 @@
             <mat-icon svgIcon="ai" />
           </button>
         }
+        @if (notificationsEnabled()) {
+          <lib-notification-bell />
+        }
         <button
           type="button"
           mat-icon-button
