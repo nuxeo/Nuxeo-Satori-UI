@@ -1673,26 +1673,33 @@ In an `edit` or `create` form, the schema type picks the control:
 | `complex[]`                        | one group per item, with Add and Remove                                                     |
 | `blob`, or `complex` nested deeper | shown, not editable                                                                         |
 
-**A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
-sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
-the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
-the day that was saved everywhere. This is the same anchoring the view uses for a stored day
-(above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
-value and every surface showing it agrees.
+**A `date` field edits a calendar day, and opens on the day the view shows.** A day picked or typed
+is sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever
+zone the user is in — which is the same anchoring Nuxeo itself applies to a day-only write, so one
+picked day is one stored value. A value is opened by the rule the view formats it by (above): a
+stored day on the day it names in UTC, so the form opens on the day that was saved everywhere, and
+any other instant on the reader's own day. The form and the view therefore name the same day for
+every value, including the one the view misreads: an instant at exactly midnight UTC opens, as it
+is shown, on its UTC day. Until 2026-11-23 the form opened every value on its UTC day, so at +05:30
+`2026-11-23T20:00:00Z` was shown as 24 November and opened in the form as 23 November.
 
-Two consequences worth designing around:
+Three consequences worth designing around:
 
 - A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
-  does not treat it as one beyond its day: it is edited by day, and written back unchanged — time
-  of day included — as long as the day is not altered. Alter the day and the time is replaced by
-  UTC midnight. The form opens such a value on its UTC day while the view shows it on the reader's
-  day, so where those differ the two name different days: at +05:30, `2026-11-23T20:00:00Z` is
-  shown as 24 November and opens in the form as 23 November.
+  does not treat it as one beyond its day: it opens on the reader's day, and is written back
+  unchanged — time of day included — as long as that day is not altered. Alter the day and the
+  time is replaced by UTC midnight, so the value is a stored day from then on.
 - A value written by another client at midnight in a local zone (Nuxeo Web UI does this) is not at
-  midnight UTC, so it is shown as an instant: on the day that was picked to a reader in the
-  writer's zone, and, when that zone is ahead of UTC, on the previous day to a reader in UTC or
-  west of it. The form opens it on its UTC day, which for a zone ahead of UTC is the previous day.
-  Nothing records the zone it was written in, so it cannot be recovered.
+  midnight UTC, so it is shown and opened as an instant: on the day that was picked by a reader in
+  the writer's zone, and, when that zone is ahead of UTC, on the previous day by a reader in UTC or
+  west of it. Nothing records the zone it was written in, so it cannot be recovered.
+- **`dc:expired` is read two ways.** The Edit dialog's Expires field follows the rule above. The
+  Properties panel's packaged Expires row, and the edit dialogs of Browse and of a collection
+  (`browse/…/edit-metadata-dialog`, `shared/ui/…/edit-collection-dialog`), read every
+  `dc:expired` on its UTC day. For a stored day they agree. For a `dc:expired` that is not one they
+  can name different days: 6 March picked in Web UI in Paris, `2024-03-05T23:00:00.000Z`, opens on
+  6 March in the Edit dialog for a reader in Paris while the Expires row shows 5 March. A day
+  picked in this application is always written as a stored day.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
