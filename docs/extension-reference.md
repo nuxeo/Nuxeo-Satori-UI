@@ -317,7 +317,8 @@ the destination prompt when the deployment is Docker and hardcodes
   not stat-ed and not reached, whatever is in it — asserted on the response bytes by
   `AgenticUiConfigDevOverrideTest`, and by the `checkDevConfigOverrideIsNotProductionReachable`
   guardrail on anything this repository ships — and, for the configuration packages in
-  nuxeo/Nuxeo-Satori-Config, by `scripts/check-deployable.mjs` there.
+  nuxeo/Nuxeo-Satori-Config, by that repository's
+  [deployability check](https://github.com/nuxeo/Nuxeo-Satori-Config/blob/main/scripts/check-deployable.mjs).
 - **Never set it in production.** It makes configuration editable by anyone who can write to the
   server's filesystem, which is exactly the privilege separation a regulated customer is relying
   on. It belongs on a development box or a demo box, nowhere else.
@@ -404,6 +405,45 @@ populated) honour four more:
 | `tooltip`     | Hover text. Falls back to `label`.                                            |
 | `enabledRule` | A rule ID. When it denies, the control renders **disabled** rather than gone. |
 | `action`      | Registered handler ID. Defaults to the descriptor `id`.                       |
+
+#### `icon` names removed in Satori 1.0.0
+
+`icon` is a name in Satori's icon sprite: the action bar, the action menu and the selection top
+bar render it as `<mat-icon [svgIcon]="action.icon">`. Satori 1.0.0 (DS-1505) removed the
+deprecated names below. A manifest that still uses one gets **a blank icon and no error** — no
+warning is logged and nothing in §2a reports it. Satori's `migrate-deprecated-satori-icons`
+migrator cannot help here either: it rewrites names written in templates, and a manifest value
+reaches the template only at run time. Rename them in the manifest:
+
+| Removed         | Use instead    |
+| --------------- | -------------- |
+| `AI`            | `ai`           |
+| `UI`            | `ui`           |
+| `Acs`           | `acs`          |
+| `Comprehend`    | `comprehend`   |
+| `DocuSign`      | `docusign`     |
+| `Lambda`        | `lambda`       |
+| `Mariadb`       | `mariadb`      |
+| `MS_Teams`      | `ms_teams`     |
+| `Nuxeo`         | `nuxeo`        |
+| `OnBase`        | `onbase`       |
+| `OpenAI`        | `openai`       |
+| `Outlook`       | `outlook`      |
+| `PostgreSQL`    | `postgresql`   |
+| `Perceptive`    | `perceptive`   |
+| `Rekognition`   | `rekognition`  |
+| `Rest`          | `rest`         |
+| `Salesforce`    | `salesforce`   |
+| `SFTP`          | `sftp`         |
+| `Stack`         | `slack`        |
+| `SQL_database`  | `sql_database` |
+| `Textract`      | `textract`     |
+| `Trello`        | `trello`       |
+| `regenerate_ai` | `autorenew`    |
+| `record_audio`  | `audio`        |
+
+Source: the `migrate-deprecated-satori-icons` README in `@hylandsoftware/satori-migrations@1.0.0`.
+None of these names is used by the descriptors this product registers.
 
 ### Per-ID overrides
 
@@ -1548,8 +1588,10 @@ modes:
   default (`@emptyWithDefault`) when the document is created. A complex field is sent whole once
   any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
   checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
-  the location, the main file of a File, Picture, Audio or Video, and a Note's format. The import
-  wizard's properties step is not this form.
+  the location, the main file of a File, Picture, Audio or Video, and a Note's format. A type that
+  extends File, Picture, Audio or Video, or carries the `file` schema itself, gets the same
+  main-file field, and Import offers it for files; the dialog reads the type's ancestry from
+  Nuxeo's content model (`/config/types`). The import wizard's properties step is not this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
