@@ -32,9 +32,11 @@ import { appIdOf, labelsPath, labelTexts } from './app-files';
 import { mapThemeProperty, scriptEntry, type Catalogue } from './catalogue';
 import { decideCondition } from './conditions';
 import { constructsOf, type Construct, type ConstructKind } from './constructs';
+import { convertBlocks } from './convert-blocks';
 import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
 import { convertSlots } from './convert-slots';
+import { convertTasks } from './convert-tasks';
 import type { FileKind, Inventory } from './inventory';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -131,6 +133,8 @@ export interface ConvertContext {
   /** Where each condition's rule was written, by `<file>#<index>`: what the report says it became. */
   readonly carried: Map<string, string[]>;
   readonly decide: (id: string, decision: Decision) => void;
+  /** What has been decided for a construct so far. */
+  readonly decision: (id: string) => Decision | undefined;
 }
 
 const FILE_OUTCOMES: Readonly<
@@ -159,6 +163,8 @@ const FILE_OUTCOMES: Readonly<
   },
   'custom-bundle': { outcome: 'generated', note: "Studio's custom bundle, holding no code" },
   'document-layout': { outcome: 'generated', note: 'It holds nothing to convert' },
+  'task-layout': { outcome: 'generated', note: 'It holds nothing to convert' },
+  'layout-block': { outcome: 'generated', note: 'It holds nothing to convert' },
   'search-form': { outcome: 'generated', note: 'It holds nothing to convert' },
   'search-results': { outcome: 'generated', note: 'It holds nothing to convert' },
   'slot-contributions': { outcome: 'generated', note: 'It holds nothing to convert' },
@@ -187,12 +193,16 @@ export function convert(
     theme: null,
     carried: new Map(),
     decide: (id, decision) => decided.set(id, decision),
+    decision: (id) => decided.get(id),
   };
 
   convertLayouts(context);
+  convertTasks(context);
   convertSearches(context);
   convertDashboard(context);
   convertSlots(context);
+  // Last: a block is decided by its uses, which the parts above decide.
+  convertBlocks(context);
 
   for (const translations of inventory.translations) {
     const texts = readCatalogue(pkg, translations.path);

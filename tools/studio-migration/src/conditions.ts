@@ -67,6 +67,13 @@ export type ConditionDecision =
     }
   | { readonly kind: 'reported'; readonly note: string };
 
+/**
+ * Why a test of the document means nothing in a task layout: Web UI gives the layout the task's
+ * first target as the task names it, by its id alone (`nuxeo-document-task.js`, `_elementChanged`).
+ */
+const TASK_DOCUMENT =
+  "tests the document, which Web UI gives a task layout as the task's first target, by its id alone (nuxeo-document-task, targetDocumentIds[0]): with no type, facet, state or permission to read there, it does not decide as a rule over the whole record would, so a person decides what was meant";
+
 /** The permission tests that are exactly one registered rule. */
 const PERMISSION_RULES: readonly (readonly [readonly string[], string])[] = [
   [['Write', 'WriteProperties'], 'app.rules.canWrite'],
@@ -152,6 +159,8 @@ function decideOnce(condition: Condition): ConditionDecision {
         kind: 'reported',
         note: `Its \`if\`, ${test}, reads a user its file is not given, so it never passes in Web UI: a mistake to fix, not to copy`,
       };
+    if (parsed.document && condition.documentInScope === false)
+      return { kind: 'reported', note: `Its \`if\`, ${test}, ${TASK_DOCUMENT}` };
     return {
       kind: 'proposed',
       rule: parsed.rule,
@@ -233,6 +242,8 @@ function decideOnce(condition: Condition): ConditionDecision {
       kind: 'reported',
       note: `It tests ${own(attributes, 'document') ? `the document ${own(attributes, 'document')}` : 'a document it is not given'}, where a rule reads the open record`,
     };
+  if (document && condition.documentInScope === false)
+    return { kind: 'reported', note: `It ${TASK_DOCUMENT}` };
   const userBinding = BOUND.exec(own(attributes, 'user') ?? '')?.[1];
   if (user && (userBinding !== 'user' || !condition.userInScope))
     return {
