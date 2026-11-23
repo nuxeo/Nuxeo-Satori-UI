@@ -7,7 +7,8 @@
  *   reported.
  * - **A theme** becomes the app's `branding.theme`, with its tokens in `themes/<name>.json`.
  * - **The left menu's entries** that open a search screen become entries of `navigation.json`
- *   (`convert-home.ts`); **tabs** wait for M2.
+ *   (`convert-home.ts`); **tabs** become tabs of the view files of the types they show on
+ *   (`convert-tabs.ts`).
  *
  * A contribution that sits in a condition carries its rule as the `visibleWhen` of what it
  * becomes, where that can hold one: an action, or a menu entry. Elsewhere it is pending, because
@@ -170,6 +171,8 @@ export function convertSlots(context: ConvertContext): void {
       context.decide(id, { outcome: 'reported', note: entry.note ?? catalogue.reportedBecause });
       continue;
     }
+    // Tabs are decided with the view files they go into (`convert-tabs.ts`).
+    if (entry.slot === 'tabs') continue;
     if (contribution.operations.includes(null)) {
       context.decide(id, { outcome: 'reported', note: 'Its operation button runs no operation' });
       continue;
@@ -274,10 +277,6 @@ export function convertSlots(context: ConvertContext): void {
                 to: `queues/${menu.queue}.json, which the menu entry navigation.json ${menu.id} opens`,
               },
       );
-      continue;
-    }
-    if (entry.slot === 'tabs') {
-      context.decide(id, { outcome: 'pending', note: 'Tabs are converted in M2' });
       continue;
     }
     context.decide(id, {

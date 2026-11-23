@@ -56,6 +56,13 @@ const PATTERNS: Partial<
     condition: conditionTags,
     script: count(SCRIPT),
   },
+  'task-layout': {
+    'task-field': fieldTags,
+    condition: conditionTags,
+    script: count(SCRIPT),
+  },
+  // A block's fields are counted where it is used, below.
+  'layout-block': { condition: conditionTags, script: count(SCRIPT) },
   'search-form': { 'search-field': fieldTags, condition: conditionTags, script: count(SCRIPT) },
   'search-results': {
     'search-field': fieldTags,
@@ -81,15 +88,52 @@ const PATTERNS: Partial<
   },
 };
 
+/** The Web UI files a layout block can be used in: those the parser reads as Polymer markup. */
+const WEB_UI_KINDS: ReadonlySet<FileKind> = new Set<FileKind>([
+  'document-layout',
+  'task-layout',
+  'layout-block',
+  'search-form',
+  'search-results',
+  'slot-contributions',
+  'dashboard',
+  'theme',
+]);
+const DOM_MODULE_ID =
+  /<dom-module\s(?:[^>"']|"[^"]*"|'[^']*')*?\bid\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+const TAG_NAME = /^<([A-Za-z][\w:-]*)/;
+
 /** The same keys as `countsOf` in `constructs.ts`: `<kind> <file>`, for counts above zero. */
 export function secondCount(pkg: StudioPackage, inventory: Inventory): Map<string, number> {
   const counts = new Map<string, number>();
   const set = (kind: ConstructKind, file: string, value: number): void => {
     if (value > 0 && COUNTED_KINDS.includes(kind)) counts.set(`${kind} ${file}`, value);
   };
+  // The layout blocks, by the element each defines, with the fields each holds: read from their
+  // own text. Only the file kinds come from the inventory.
+  const blocks = new Map<string, number>();
+  for (const file of inventory.files) {
+    if (file.location !== 'bundle' || file.kind !== 'layout-block') continue;
+    const text = withoutHtmlComments(pkg.bundleFiles.get(file.path)?.toString('utf8') ?? '');
+    const match = DOM_MODULE_ID.exec(text);
+    const id = (match?.[1] ?? match?.[2] ?? '').trim().toLowerCase();
+    if (id && !blocks.has(id)) blocks.set(id, fieldTags(text));
+  }
   for (const file of inventory.files) {
     if (file.location !== 'bundle') continue;
     const raw = pkg.bundleFiles.get(file.path)?.toString('utf8') ?? '';
+    if (WEB_UI_KINDS.has(file.kind) && blocks.size > 0) {
+      // Each tag named as a block is a use of it, which shows the block's fields once more.
+      const uses = [...withoutHtmlComments(raw).matchAll(START_TAG)]
+        .map(([start]) => TAG_NAME.exec(start)?.[1]?.toLowerCase() ?? '')
+        .filter((name) => blocks.has(name));
+      set('block-use', file.path, uses.length);
+      set(
+        'block-field',
+        file.path,
+        uses.reduce((total, name) => total + (blocks.get(name) ?? 0), 0),
+      );
+    }
     if (file.kind === 'translations') {
       // JSON has no comments: every quoted string followed by a colon is a key.
       set('translation', file.path, count(JSON_KEY)(raw));

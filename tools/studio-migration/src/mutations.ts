@@ -146,7 +146,34 @@ export function ruleHolders(conversion: Conversion): RuleHolder[] {
     });
   };
   for (const path of Object.keys(conversion.app).sort()) {
-    if (path.startsWith('layouts/')) {
+    if (path.startsWith('layouts/') || path.startsWith('tasks/')) {
+      // A tab's rule and a card's: `tabs.1.visibleWhen`, `cards.2.visibleWhen`.
+      const content = conversion.app[path];
+      const holders: string[] = [];
+      const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+      const cardsAt = (cards: unknown, at: string): void =>
+        listOf(cards).forEach((card, index) => {
+          if (isRecord(card) && 'visibleWhen' in card) holders.push(`${at}cards.${index}`);
+        });
+      if (isRecord(content)) {
+        cardsAt(content['cards'], '');
+        listOf(content['tabs']).forEach((tab, index) => {
+          if (!isRecord(tab)) return;
+          if ('visibleWhen' in tab) holders.push(`tabs.${index}`);
+          cardsAt(tab['cards'], `tabs.${index}.`);
+        });
+      }
+      for (const at of holders) {
+        const file = clone(content) as Json;
+        const holder = at
+          .split('.')
+          .reduce<unknown>(
+            (value, key) =>
+              isRecord(value) || Array.isArray(value) ? (value as Json)[key] : undefined,
+            file,
+          );
+        if (isRecord(holder)) found.push({ path, file, holder, at: `${at}.visibleWhen` });
+      }
       for (const shown of layoutFields(conversion.app[path] as Json)) {
         if (!isRecord(shown.entry) || !('visibleWhen' in shown.entry)) continue;
         const file = clone(conversion.app[path]) as Json;
@@ -178,7 +205,7 @@ const findRule = (conversion: Conversion): RuleHolder | null => ruleHolders(conv
 const asObject = (entry: unknown): Json =>
   typeof entry === 'string' ? { field: entry } : (entry as Json);
 
-export const MUTATIONS: readonly Mutation[] = [
+const M1_MUTATIONS: readonly Mutation[] = [
   {
     name: 'drop-translation',
     description: 'Drop one translation from one language',
@@ -675,6 +702,227 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
 ];
+
+/** The task forms, in path order. */
+const taskForms = (conversion: Conversion): string[] =>
+  Object.keys(conversion.app)
+    .filter((path) => path.startsWith('tasks/'))
+    .sort();
+
+/** The first tab of a view file other than its record page's own, `view`, in a copy of its file. */
+function findTab(
+  conversion: Conversion,
+  pick: (tab: Json) => boolean = () => true,
+): { path: string; file: Json; tabs: Json[]; index: number } | null {
+  for (const path of layouts(conversion)) {
+    const file = clone(conversion.app[path]) as Json;
+    const tabs = Array.isArray(file['tabs']) ? (file['tabs'] as Json[]) : [];
+    const index = tabs.findIndex((tab) => isRecord(tab) && tab['id'] !== 'view' && pick(tab));
+    if (index !== -1) return { path, file, tabs, index };
+  }
+  return null;
+}
+
+/** M2's controls: task forms, tabs and layout blocks (studio-migration.md, section 7). */
+const M2_MUTATIONS: readonly Mutation[] = [
+  {
+    name: 'drop-task-field',
+    description: 'Drop a field from a converted task form',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findField(
+        conversion,
+        (entry) => fieldOf(entry) !== null,
+        taskForms(conversion),
+      );
+      if (!found) throw new MutationError('no converted task form has a field to drop');
+      const [dropped] = found.holder.splice(found.index, 1);
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped ${fieldOf(dropped)} from app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'rename-task-variable',
+    description: "Name a variable the task's step and workflow do not have",
+    caughtBy: 3,
+    apply: (conversion) => {
+      const found = findField(
+        conversion,
+        (entry) => fieldOf(entry)?.startsWith('var:') === true,
+        taskForms(conversion),
+      );
+      if (!found) throw new MutationError('no converted task form has a variable to rename');
+      const entry = asObject(found.holder[found.index]);
+      const before = entry['field'] as string;
+      entry['field'] = `${before}Renamed`;
+      found.holder[found.index] = entry;
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `renamed ${before} to ${entry['field']} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'var-in-layout',
+    description: "Put a task's variable into a document's layout, where var: means nothing",
+    caughtBy: 10,
+    apply: (conversion) => {
+      const found = findField(conversion, (entry, path) => {
+        const file = conversion.app[path];
+        return isRecord(file) && file['version'] === 2 && fieldOf(entry) !== null;
+      });
+      if (!found) throw new MutationError('no converted layout of version 2 has a field');
+      const entry = asObject(found.holder[found.index]);
+      const before = entry['field'] as string;
+      entry['field'] = `var:${before.slice(before.indexOf(':') + 1)}`;
+      found.holder[found.index] = entry;
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `made ${before} the task variable ${entry['field']} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-block-card',
+    description: "Drop a layout block's card from a converted layout",
+    caughtBy: 2,
+    apply: (conversion) => {
+      const blocks = new Set(
+        conversion.report.constructs
+          .filter((entry) => entry.kind === 'block-use' && entry.outcome === 'converted')
+          .map((entry) => entry.to ?? ''),
+      );
+      // A card holding a field the report says it converted there, which check 2 then misses.
+      const converted = (path: string): Set<string> =>
+        new Set(
+          conversion.report.constructs
+            .filter(
+              (entry) =>
+                entry.kind === 'block-field' &&
+                entry.outcome === 'converted' &&
+                (entry.to ?? '').split(', ').includes(path),
+            )
+            .flatMap((entry) => (entry.property ? [entry.property] : [])),
+        );
+      for (const path of layouts(conversion)) {
+        const file = clone(conversion.app[path]) as Json;
+        const holders: { at: string; cards: Json[] }[] = [];
+        if (Array.isArray(file['cards']))
+          holders.push({ at: 'cards', cards: file['cards'] as Json[] });
+        if (Array.isArray(file['sections']))
+          holders.push({ at: 'sections', cards: file['sections'] as Json[] });
+        (Array.isArray(file['tabs']) ? (file['tabs'] as Json[]) : []).forEach((tab) => {
+          if (isRecord(tab) && Array.isArray(tab['cards']))
+            holders.push({ at: `tabs.${String(tab['id'])}.cards`, cards: tab['cards'] as Json[] });
+        });
+        for (const { at, cards } of holders) {
+          const index = cards.findIndex(
+            (card) =>
+              isRecord(card) &&
+              blocks.has(`${path} ${at}.${String(card['id'])}`) &&
+              Array.isArray(card['fields']) &&
+              card['fields'].some((field) => converted(path).has(fieldOf(field) ?? '')),
+          );
+          if (index === -1) continue;
+          const [dropped] = cards.splice(index, 1);
+          return {
+            conversion: withFile(conversion, path, file),
+            changed: `dropped the card ${String(dropped['id'])}, a layout block's, from app/${path}`,
+          };
+        }
+      }
+      throw new MutationError("no converted layout has a layout block's card to drop");
+    },
+  },
+  {
+    name: 'drop-tab',
+    description: 'Drop a tab from a converted view layout',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findTab(conversion);
+      if (!found) throw new MutationError('no converted view layout has a tab of the package');
+      const [dropped] = found.tabs.splice(found.index, 1);
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the tab ${String(dropped['id'])} from app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-tab-rule',
+    description: 'Show a tab Web UI shows only under a condition to every user',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findTab(conversion, (tab) => 'visibleWhen' in tab);
+      if (!found) throw new MutationError('no converted tab carries a rule');
+      const tab = found.tabs[found.index];
+      delete tab['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule of the tab ${String(tab['id'])} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
+    name: 'change-tab-label',
+    description: 'Change the label of a converted tab',
+    caughtBy: 6,
+    apply: (conversion) => {
+      // A tab whose label the package's own catalogue settles: a literal one may rest on Web UI's.
+      const found = findTab(conversion, (tab) => typeof tab['labelKey'] === 'string');
+      if (!found) throw new MutationError('no converted tab has a translated label');
+      const tab = found.tabs[found.index];
+      const before = tab['labelKey'];
+      delete tab['labelKey'];
+      tab['label'] = 'Something else';
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `labelled the tab ${String(tab['id'])} "Something else", not ${String(before)}, in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'make-display-editable',
+    description: 'Make a field Web UI only shows editable in a converted task form',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findField(
+        conversion,
+        (entry) => isRecord(entry) && entry['readOnlyWhen'] === 'core.true',
+        taskForms(conversion),
+      );
+      if (!found) throw new MutationError('no converted task form has a read-only field');
+      const entry = found.holder[found.index] as Json;
+      delete entry['readOnlyWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `made ${fieldOf(entry)} editable in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-block-use-entry',
+    description: 'Drop a use of a layout block from the report without a word',
+    caughtBy: 1,
+    apply: (conversion) => {
+      const entries = conversion.report.constructs;
+      const index = entries.findIndex((entry) => entry.kind === 'block-use');
+      if (index === -1) throw new MutationError('the report lists no use of a layout block');
+      return {
+        conversion: withEntries(conversion, [
+          ...entries.slice(0, index),
+          ...entries.slice(index + 1),
+        ]),
+        changed: `dropped ${entries[index].id} from report.json`,
+      };
+    },
+  },
+];
+
+/** Every control, M1's and M2's. */
+export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS];
 
 export function mutation(name: string): Mutation | null {
   return MUTATIONS.find((candidate) => candidate.name === name) ?? null;

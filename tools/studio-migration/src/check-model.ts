@@ -1,7 +1,8 @@
 /**
  * Check 3, model (docs/business-apps/studio-migration.md, section 6): every field, vocabulary,
  * page provider and type the conversion names exists, and every widget it names shows its
- * property's type.
+ * property's type. A task form's variable is held to its step's and its workflow's variables
+ * schemas.
  *
  * Without a server, the package's own model is all there is to hold it against
  * (`model.ts`), and that part is checked in full: a field of one of the package's schemas that the
@@ -80,7 +81,53 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
     if (!model.pageProviders.has(name)) platform.add(`the page provider ${name}`);
   };
 
+  /**
+   * A task form's field: a variable of its step or its workflow, `var:<name>`, held to their
+   * variables schemas, `var_<step>` and `var_<workflow>`, when the package holds them.
+   */
+  const variable = (where: string, value: unknown, workflow: string, step: string): void => {
+    const xpath = fieldOf(value);
+    if (xpath === null || !xpath.startsWith('var:')) {
+      entry(where, value, null);
+      return;
+    }
+    const name = xpath.slice('var:'.length);
+    const wanted = [`var_${step}`, `var_${workflow}`];
+    const schemas = [...model.schemas.values()].filter((schema) => wanted.includes(schema.name));
+    const unread = schemas.find((schema) => !schema.read);
+    if (unread) {
+      findings.push(
+        `${where}: ${xpath} cannot be checked, because the schema ${unread.name}'s file cannot be read`,
+      );
+      return;
+    }
+    const holder = schemas.find((schema) => schema.fields.has(name));
+    if (!holder) {
+      if (schemas.length === wanted.length)
+        findings.push(
+          `${where}: neither var_${step} nor var_${workflow} has a variable ${name}, so ${xpath} does not exist`,
+        );
+      else platform.add(`${xpath} of ${workflow}.${step}`);
+      return;
+    }
+    const widget = widgetOf(value);
+    const fieldType = holder.fields.get(name);
+    const definition = widget === null ? undefined : own(PACKAGED_WIDGETS, widget);
+    if (definition && fieldType !== undefined && !definition.accepts.includes(fieldType))
+      findings.push(
+        `${where}: the ${widget} widget does not show ${xpath}, which is a ${fieldType}`,
+      );
+    const directory = parametersOf(value)['directory'];
+    if (widget === 'vocabulary' && typeof directory === 'string') vocabulary(directory);
+  };
+
   for (const [path, file] of Object.entries(conversion.app)) {
+    const task = /^tasks\/([^/.]+)\.([^/.]+)\.layout\.json$/.exec(path);
+    if (task) {
+      for (const field of layoutFields(file))
+        variable(`${path} ${field.at}`, field.entry, task[1], task[2]);
+      continue;
+    }
     const layout = /^layouts\/([^/]+)\/[^/]+\.layout\.json$/.exec(path);
     if (layout) {
       const type = layout[1];

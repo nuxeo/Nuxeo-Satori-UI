@@ -54,7 +54,7 @@ describe('check 2, fields', () => {
       return file;
     });
     expect(run(extra, 2)?.findings).toEqual([
-      "layouts/Claim/edit.layout.json: it shows cl:amount, which Web UI's layout does not",
+      "layouts/Claim/edit.layout.json: it shows cl:amount, which Web UI's edit layout of Claim does not",
     ]);
     const invented = edit(input, 'layouts/Party/view.layout.json', () => ({
       version: 2,

@@ -468,6 +468,9 @@ becomes. In version 2's terms:
 | `nuxeo-data-table` on a complex property  | `table`                                                          |
 | `nuxeo-document-viewer`                   | Not a field: the record page shows a file record's preview first |
 | A condition in a known pattern            | A rule, proven with truth tables (check 5)                       |
+| A layout block a layout uses              | A card of its fields where it sits, with its condition's rule    |
+| A tab of the document page                | A tab of each type's view file it shows on, holding its block    |
+| A workflow task layout                    | A task form, `tasks/<workflow>.<step>.layout.json`               |
 
 ## 11. Not settled here
 
