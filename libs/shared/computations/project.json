@@ -9,13 +9,8 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus the layout version 2 proposal, whose examples' computations must evaluate. Without it an edit to the proposal would replay a cached pass. SATORI_TEST_TZ is the zone vite.config.mts pins, and the signatures the contract test holds the evaluators to come in through ^production.",
-      "inputs": [
-        "default",
-        "^production",
-        { "env": "SATORI_TEST_TZ" },
-        "{workspaceRoot}/docs/business-apps/layout-v2.md"
-      ],
+      "$inputsComment": "nx.json's test inputs, plus the layout version 2 proposal, whose examples' computations must evaluate. Without it an edit to the proposal would replay a cached pass. Not SATORI_TEST_TZ: vite.config.mts runs the suite in two zones of its own, which are project files. The signatures the contract test holds the evaluators to come in through ^production.",
+      "inputs": ["default", "^production", "{workspaceRoot}/docs/business-apps/layout-v2.md"],
       "options": { "reportsDirectory": "coverage/libs/shared/computations" }
     },
     "lint": {

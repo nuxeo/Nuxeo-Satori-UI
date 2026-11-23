@@ -16,6 +16,7 @@ import {
   difference,
   localDayOf,
   parseDay,
+  written,
   type CalendarDay,
   type Unit,
 } from './dates';
@@ -44,7 +45,9 @@ function define(
     // Worded as the validator words it (app-definition's checker.ts), so the two read alike.
     const expected = least === most ? `${most}` : `${least} to ${most}`;
     const noun = expected === '1' ? 'parameter' : 'parameters';
-    return refuse(`the computation "${type}" takes ${expected} ${noun}, not ${parameters.length}`);
+    return refuse(
+      `the computation ${quote(type)} takes ${expected} ${noun}, not ${parameters.length}`,
+    );
   };
 }
 
@@ -52,9 +55,14 @@ function isResult(value: CalendarDay | ComputationResult | null): value is Compu
   return value !== null && 'ok' in value;
 }
 
-function written({ year, month, day }: CalendarDay): string {
-  const pad = (n: number, width: number): string => String(n).padStart(width, '0');
-  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}`;
+/** Today's day in the reader's zone, or the refusal of a `today` that is not a valid `Date`. */
+function todayOf(type: string, context: ComputationContext): CalendarDay | ComputationResult {
+  const today: unknown = context.today;
+  if (!(today instanceof Date) || Number.isNaN(today.getTime()))
+    return refuse(
+      `the computation ${quote(type)} reads today from its context, which gives ${quote(today)}, not a valid Date`,
+    );
+  return localDayOf(today);
 }
 
 /** A date parameter as a calendar day; `null` when it is missing. */
@@ -68,7 +76,8 @@ function dateParameter(
   if (given.value === null) return null;
   const day = typeof given.value === 'string' ? parseDay(given.value) : undefined;
   return (
-    day ?? refuse(`the computation "${type}" takes an ISO 8601 date, not ${quote(given.value)}`)
+    day ??
+    refuse(`the computation ${quote(type)} takes an ISO 8601 date, not ${quote(given.value)}`)
   );
 }
 
@@ -93,7 +102,7 @@ function listParameter(
   }
   if (value === undefined || value === null) return accept(null);
   if (!Array.isArray(value))
-    return refuse(`the computation "${type}" takes a list, not ${quote(value)}`);
+    return refuse(`the computation ${quote(type)} takes a list, not ${quote(value)}`);
   return value;
 }
 
@@ -101,7 +110,8 @@ function listParameter(
 const age = define('core.age', 1, 1, ([date], context, evaluate) => {
   const born = dateParameter('core.age', date, evaluate);
   if (born === null || isResult(born)) return born ?? accept(null);
-  const today = localDayOf(context.today);
+  const today = todayOf('core.age', context);
+  if (isResult(today)) return today;
   // An age before birth is not an age. A negative number or a 0 would show a wrong value as if it
   // were right, so a date after today is refused, and the renderer leaves the field out.
   if (dayNumber(born) > dayNumber(today))
@@ -165,14 +175,14 @@ const sum = define('core.sum', 1, 2, (parameters, context, evaluate) => {
     if (typeof subfield === 'string') {
       if (!isRecord(item))
         return refuse(
-          `the computation "core.sum" reads "${subfield}" in each item, and item ${index} is ${quote(item)}, not a complex value`,
+          `the computation "core.sum" reads ${quote(subfield)} in each item, and item ${index} is ${quote(item)}, not a complex value`,
         );
       if (!Object.hasOwn(item, subfield))
         return refuse(
-          `the computation "core.sum" reads "${subfield}" in each item, and item ${index} has no "${subfield}"`,
+          `the computation "core.sum" reads ${quote(subfield)} in each item, and item ${index} has no ${quote(subfield)}`,
         );
       value = item[subfield];
-      where = `"${subfield}" in item ${index}`;
+      where = `${quote(subfield)} in item ${index}`;
     }
     if (value === null || value === undefined) continue;
     if (typeof value !== 'number' || !Number.isFinite(value))
@@ -205,7 +215,7 @@ const dateDiff = define('core.dateDiff', 3, 3, ([first, second, unit], context, 
   if (isResult(from)) return from;
   const to =
     second === 'today'
-      ? localDayOf(context.today)
+      ? todayOf('core.dateDiff', context)
       : dateParameter('core.dateDiff', second, evaluate);
   if (isResult(to)) return to;
   if (from === null || to === null) return accept(null);

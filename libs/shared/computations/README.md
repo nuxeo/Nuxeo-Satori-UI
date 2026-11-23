@@ -19,7 +19,8 @@ import { compute, type ComputationContext } from '@agentic-ui/shared/computation
 const context: ComputationContext = {
   value: (field) => record.properties[field],
   display: (field) => displayValueOf(record, field),
-  rule: (rule) => rules.evaluate(rule, record, user),
+  // A rule that evaluates a computation passes `depth` on to compute: see "The computation itself".
+  rule: (rule, depth) => rules.evaluate(rule, record, user, depth),
   today: new Date(),
 };
 const result = compute(field.computed, context);
@@ -28,13 +29,17 @@ const result = compute(field.computed, context);
 
 ## What is in it
 
-- **`compute(computation, context, evaluators?)`** evaluates `{ "type", "parameters" }` as a layout
-  writes it. It never throws: whatever is wrong, the result says why, and the renderer leaves the
-  field out and logs the reason (layout-v2.md, section 8).
+- **`compute(computation, context, evaluators?, depth = 0)`** evaluates `{ "type", "parameters" }`
+  as a layout writes it. It never throws: whatever is wrong, the result says why, and the renderer
+  leaves the field out and logs the reason (layout-v2.md, section 8). `depth` is for a rule that
+  evaluates a computation in turn.
 - **`PACKAGED_COMPUTATION_EVALUATORS`**, the six computations by ID, frozen. A customer's own
   computation is a Layer 2 registration in code, passed to `compute` beside them.
 - **`ComputationContext`** is what a computation reads: `value` and `display` of a property,
-  `rule`, and `today`, injected so that tests are deterministic.
+  `rule`, which is given the depth of the computation asking, and `today`, injected so that tests
+  are deterministic.
+- **`isStoredCalendarDay(value)`**, whether a date is a stored day or an instant (below), so that
+  the record page's `date` widget can format with the same rule.
 - **The caps**, `MAX_DEPTH` (10) and `MAX_TEMPLATE_LENGTH` (1000).
 
 ### A parameter
@@ -44,25 +49,32 @@ const result = compute(field.computed, context);
 - `{ "computed": { … } }`, evaluated one level deeper;
 - for `core.choose`'s first parameter only, a rule, handed to `context.rule` as it is written.
 
-A property is one value. Missing, as `undefined` or Nuxeo's `null`, it is `null`. A `Date`, which a
-form's date picker may hold, is its ISO 8601 text. A list or a complex value is refused where one
-value is wanted; `core.sum` and `core.count` read their lists through `context.value` themselves.
+A property is one value. Missing, as `undefined` or Nuxeo's `null`, it is `null`. A `Date` is a
+picked day, as a form's date picker holds one at local midnight: it is its local day, written
+`2024-03-06`, and its time of day is not kept. A list or a complex value is refused where one value
+is wanted; `core.sum` and `core.count` read their lists through `context.value` themselves.
 
 ## The decisions
 
 Where layout-v2.md is silent, these are the choices, each tested.
 
-- **Dates** (`src/lib/dates.ts`, after `AGENTS/08-bug-patterns.md`, pattern 29):
-  - **A record's date is a calendar day anchored in UTC.** Nuxeo stores a day-only write at
-    midnight UTC, and the layout's `date` widget formats in UTC, so an age agrees with the birth
-    date shown beside it. A date with a time is the instant it names, and its day is that
-    instant's day in UTC.
-  - **`today` is read in the reader's zone:** it is the day the person at the page is living, so an
-    age turns over at their midnight.
-  - **Only ISO 8601 as Nuxeo writes it is a date:** `2024-03-06`, or a date and time with a zone,
-    `Z` or `±HH:mm`. A time with no zone names a different instant in every zone, so it is refused
-    rather than guessed. So is a day that does not exist, such as `2023-02-29`, and a number of
-    milliseconds.
+- **Dates** (`src/lib/dates.ts`, after `AGENTS/08-bug-patterns.md`, pattern 29: a stored day is
+  anchored in UTC, and a real instant belongs in the reader's zone):
+  - **`2024-03-06`** is that day.
+  - **An ISO 8601 instant at exactly midnight UTC**, written with `Z` or `+00:00` and a fraction of
+    zeros or none, is its UTC day. That is what Nuxeo stores for a day-only write.
+  - **Any other ISO 8601 instant**, a `dc:created` for one, is its day in the reader's zone.
+  - **A `Date`** is its local year, month and day, as a picker gives them.
+  - **`today`** is the reader's local day, so an age turns over at their midnight. A `today` that is
+    not a valid `Date` is refused, rather than answered with `NaN`.
+  - `isStoredCalendarDay` is true for the two day forms, and false for everything else, a `Date`
+    included. **The one known misreading:** an instant that falls at exactly midnight UTC, a
+    `dc:created` stamped `00:00:00.000Z`, is taken for a stored day, and west of UTC reads a day
+    later than it is there. Nothing in the value tells the two apart.
+  - **Only ISO 8601 as Nuxeo writes it is a date:** a day, `2024-03-06`, or a date and time with a
+    zone, `Z` or `±HH:mm`. A time with no zone names a different instant in every zone, so it is
+    refused rather than guessed. So is a day that does not exist, such as `2023-02-29`, and a
+    number of milliseconds.
   - **A whole month is counted as a birthday is:** complete on the same day of the month, or, when
     that month has no such day, on the first of the next. A year is twelve such months. So someone
     born on 29 February turns one on 1 March in a common year.
@@ -106,14 +118,36 @@ Where layout-v2.md is silent, these are the choices, each tested.
   - Absent `parameters` are none; `null` is malformed, not absent (section 8).
   - A type is found among the evaluators' own keys only, so `constructor` or `__proto__` is not
     registered.
-  - **Computations nest at most 10 deep**, counting the top one. The 11th is refused without being
-    evaluated, so a thousand-deep file costs ten levels of work.
+  - **Computations nest at most 10 deep.** A field's own computation is level 1, and each
+    `{ "computed" }` parameter is one deeper. The 11th level is refused without being evaluated,
+    and nothing under it is read.
+    - **Through a rule, only if the rule passes the depth on.** `context.rule` is given the level of
+      the computation asking. A rule that evaluates a computation in turn, as `app.rules.fieldIn`
+      will, passes that to `compute(…, depth)` and the count continues; one that calls `compute`
+      without it starts again at 0.
+    - **So the cap bounds the depth of an evaluation, not the size of a file.** The work is the
+      computations within ten levels of the top, and the packaged evaluators evaluate each at most
+      once.
   - **An evaluator that throws, or a context whose `value`, `display` or `rule` throws**, is refused
     with the error's message, naming the computation.
-  - A refusal of a nested computation is passed up as it is, naming the one that refused. A reason
-    quotes at most 60 characters of the value it refuses.
+  - A refusal of a nested computation is passed up as it is, naming the one that refused.
+  - **A reason quotes at most 60 characters of each value it names**: a value, a type, a key, a
+    property or a subfield. An error's message is cut at 60 characters too.
   - **An evaluator checks its own number of parameters**, so a customer's needs no signature here.
     The packaged ones word the refusal exactly as the validator does.
+- **Refusals the validator words its own way.** Six mistakes are refused here in other words than
+  the validator's. In the app the validator runs first: it leaves such a field out, or refuses the
+  file, with its own message, so these refusals never reach the console. They are for a caller that
+  evaluates a computation the validator has not seen.
+
+  | The mistake                               | The validator says                                                                                | This library says                                                                              |
+  | ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+  | A key a computation does not have         | `"<key>" is not a key version 2 has`                                                              | `the computation "<type>" has a key a computation does not have: "<key>"`                      |
+  | Parameters that are not a list            | `parameters must be a list`                                                                       | `the computation "<type>" has parameters that are not a list`                                  |
+  | A parameter that is not a value           | `a value is a text, a number, a boolean, { "field": "<prefix>:<name>" } or { "computed": {...} }` | `a parameter is a text, a number, a boolean, … , not <value>`                                  |
+  | `core.template`'s text that is not a text | `the computation "core.template" takes a text with {<prefix>:<name>} placeholders`                | The same, then `, not <value>`                                                                 |
+  | `core.sum`'s subfield that is not a text  | `the computation "core.sum" takes a text here`                                                    | `the computation "core.sum" takes the name of a subfield as its second parameter, not <value>` |
+  | `core.dateDiff`'s unit that is not one    | `the computation "core.dateDiff" takes "days", "months" or "years" here`                          | `the computation "core.dateDiff" counts in "days", "months" or "years", not <value>`           |
 
 ## What holds it to the rest
 
@@ -127,9 +161,15 @@ Where layout-v2.md is silent, these are the choices, each tested.
 - **Its imports.** The library's sources import only each other and
   `@agentic-ui/shared/app-definition`, and name no `fetch`, `XMLHttpRequest`, `eval`, `Function` or
   timer.
-- **The time zone.** `vite.config.mts` pins Asia/Calcutta, as `libs/shared/ui` does, and a test fails
-  if the pin is lost. In UTC, reading a day in UTC or in the reader's zone gives the same answer,
-  and CI runners are UTC.
+- **The time zones.** Every spec runs twice, in Asia/Calcutta and in America/New_York, one each
+  side of UTC, because each reading of a date can only be seen failing on one side:
+  - a stored day read in the reader's zone is a day out only west of UTC, since midnight UTC is the
+    same day everywhere from UTC to +14:00;
+  - a `Date` at local midnight, or `today` at 01:30, read in UTC is a day out east of it.
+
+  The suite supports these two zones and no other, so it does not take `SATORI_TEST_TZ`: its
+  expectations are literals, written for each. A test fails if a run is in any other zone. CI
+  runners are UTC, where neither reading could fail.
 
 ## Tests
 
@@ -143,27 +183,39 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
   reason has no control. Every refusal is built by `refuse()`, and a second test fails when one is
   built any other way, so that a reason cannot slip past the first. It proves that every reason has a
   control, not that every guard has one. The mutation checks are for guards.
-- **Mutation checks:** taking out any one of these 21 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 37 guards made a test fail. The helper that ran
   them refused a mutation that did not apply exactly once, and one that broke a suite instead of
   failing a test.
   - the depth cap, and the depth cap off by one;
+  - the starting depth, the depth given to a rule, and refusing a depth that is not a whole number
+    from 0;
   - birthday-correct ages, against days divided by 365 and by 365.25;
   - refusing a non-number in a sum, and an item with no such subfield;
-  - today read in the reader's zone, and a record's date in UTC;
+  - today read in the reader's zone, and refusing a `today` that is not a valid `Date`;
+  - a stored day read in UTC, any other instant in the reader's zone, and a `Date` as its local
+    day;
+  - the stored-day test's seconds, its fraction of zeros, and its `Z` or `+00:00`;
   - refusing a future birth date, a time with no zone, and a key a computation does not have;
   - a missing property's placeholder as empty text, and the template's size cap;
   - evaluating only `core.choose`'s chosen value;
   - looking up a type among own keys only;
   - never `-0`;
   - catching what an evaluator or the context throws;
+  - quoting a type, a key and a subfield, and cutting an error's message;
   - an evaluator's number of parameters drifting from its signature, and an ID missing from the
     evaluators;
-  - a new refusal with no control, and a refusal built without `refuse()`.
+  - a new refusal with no control, and a refusal built without `refuse()`;
+  - each run in its own zone, and the config's zones the ones the suite's literals are written for.
 
 ## Not done yet
 
 - **The renderer**, in phase 1: it binds a result as text, and leaves out a field whose computation
   is refused, logging the reason.
+- **The record page's `date` widget** is to format with `isStoredCalendarDay`, so that an instant
+  such as `dc:created` shows the reader's day, as this library reads it. Version 1's renderer,
+  `field-view.ts`, formats every date in UTC.
+- **Rules that evaluate a computation**, `app.rules.fieldIn` first, are to pass on the depth
+  `context.rule` is given.
 - **The validator does not know the caps.** A package with computations nested 11 deep, or a
   template over 1000 characters, passes the pipeline and is refused here. `MAX_DEPTH` and
   `MAX_TEMPLATE_LENGTH` are exported for it.

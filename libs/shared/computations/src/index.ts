@@ -5,6 +5,7 @@
  * built. Plain TypeScript, with no Angular and no HTTP.
  */
 export { compute } from './lib/compute';
+export { isStoredCalendarDay } from './lib/dates';
 export { PACKAGED_COMPUTATION_EVALUATORS } from './lib/evaluators';
 export {
   MAX_DEPTH,
