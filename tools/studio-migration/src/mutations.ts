@@ -405,6 +405,34 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
   {
+    name: 'widen-column-to-everyone',
+    description: 'Show a list column Web UI shows only under a condition to every user',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const entries = conversion.report.constructs;
+      const column = entries.find(
+        (entry) =>
+          entry.kind === 'search-column' &&
+          entry.outcome === 'pending' &&
+          entry.property &&
+          /condition/.test(entry.note ?? ''),
+      );
+      const list = column && entries.find((entry) => entry.id === `search:${column.file}#search`);
+      const path = list?.to?.startsWith('queues/') ? list.to : undefined;
+      if (!column?.property || !path || !conversion.app[path])
+        throw new MutationError('the package has no list column shown under a condition');
+      const queue = clone(conversion.app[path]) as Json;
+      queue['columns'] = [
+        ...(Array.isArray(queue['columns']) ? queue['columns'] : []),
+        column.property,
+      ];
+      return {
+        conversion: withFile(conversion, path, queue),
+        changed: `added the column ${column.property}, which Web UI shows only under a condition, to app/${path} for everyone`,
+      };
+    },
+  },
+  {
     name: 'change-label',
     description: 'Change the label of a converted field',
     caughtBy: 6,

@@ -60,25 +60,72 @@ export function listColumns(file: unknown): ShownField[] {
 }
 
 /**
- * Every place a file names a rule: `visibleWhen` and `readOnlyWhen` anywhere, and a `required`
- * that is not plain `true`. Each with where it is.
+ * Every place a file of an app definition names a rule, by its path in the package, each with
+ * where it is. Only the places a rule can sit are read (layout-v2.md, section 5, and
+ * app-definition-v2.md, sections 4 and 5):
+ *
+ * - **a layout or task form:** a tab's, a card's and a field's `visibleWhen`, a field's
+ *   `readOnlyWhen`, a `required` that is a rule rather than `true` or `false`, and the rule of a
+ *   `core.choose` computation; and the same in a table's columns and a related list's columns;
+ * - **a queue:** its `visibleWhen`, and its columns' as a field's;
+ * - **`actions.json`:** each action's `visibleWhen`.
+ *
+ * A labels file, a module's settings, `app.json` and an operation's parameters hold none: a
+ * translation key or a parameter named `required` is text, not a rule.
  */
-export function rulesIn(file: unknown, at = ''): { readonly at: string; readonly rule: unknown }[] {
+export function rulesIn(
+  path: string,
+  file: unknown,
+): { readonly at: string; readonly rule: unknown }[] {
   const found: { at: string; rule: unknown }[] = [];
-  const visit = (value: unknown, path: string): void => {
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => visit(item, path ? `${path}.${index}` : String(index)));
-      return;
-    }
-    if (!isRecord(value)) return;
-    for (const [key, inner] of Object.entries(value)) {
-      const place = path ? `${path}.${key}` : key;
-      if (key === 'visibleWhen' || key === 'readOnlyWhen' || (key === 'required' && inner !== true))
-        found.push({ at: place, rule: inner });
-      else visit(inner, place);
-    }
+  const rule = (holder: Record<string, unknown>, key: string, at: string): void => {
+    if (key in holder) found.push({ at: `${at}${key}`, rule: holder[key] });
   };
-  visit(file, at);
+  const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const field = (entry: unknown, at: string): void => {
+    if (!isRecord(entry)) return;
+    rule(entry, 'visibleWhen', at);
+    rule(entry, 'readOnlyWhen', at);
+    if ('required' in entry && typeof entry['required'] !== 'boolean')
+      found.push({ at: `${at}required`, rule: entry['required'] });
+    const computed = entry['computed'];
+    if (isRecord(computed) && computed['type'] === 'core.choose') {
+      const [chosen] = list(computed['parameters']);
+      if (chosen !== undefined) found.push({ at: `${at}computed.parameters.0`, rule: chosen });
+    }
+    const parameters = entry['parameters'];
+    if (isRecord(parameters))
+      list(parameters['columns']).forEach((column, index) =>
+        field(column, `${at}parameters.columns.${index}.`),
+      );
+  };
+  const card = (value: unknown, at: string): void => {
+    if (!isRecord(value)) return;
+    rule(value, 'visibleWhen', at);
+    list(value['fields']).forEach((entry, index) => field(entry, `${at}fields.${index}.`));
+    const related = value['related'];
+    if (isRecord(related))
+      list(related['columns']).forEach((entry, index) =>
+        field(entry, `${at}related.columns.${index}.`),
+      );
+  };
+  if (!isRecord(file)) return found;
+  if (/^(layouts|tasks)\//.test(path)) {
+    list(file['cards']).forEach((value, index) => card(value, `cards.${index}.`));
+    list(file['sections']).forEach((value, index) => card(value, `sections.${index}.`));
+    list(file['tabs']).forEach((tab, tabIndex) => {
+      if (!isRecord(tab)) return;
+      rule(tab, 'visibleWhen', `tabs.${tabIndex}.`);
+      list(tab['cards']).forEach((value, index) => card(value, `tabs.${tabIndex}.cards.${index}.`));
+    });
+  } else if (path.startsWith('queues/')) {
+    rule(file, 'visibleWhen', '');
+    list(file['columns']).forEach((entry, index) => field(entry, `columns.${index}.`));
+  } else if (path === 'actions.json') {
+    list(file['actions']).forEach((action, index) => {
+      if (isRecord(action)) rule(action, 'visibleWhen', `actions.${index}.`);
+    });
+  }
   return found;
 }
 

@@ -15,19 +15,17 @@
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import {
-  actionIdOf,
   appIdOf,
   homeQueueId,
-  placed,
   queuePageSize,
-  searchQueuePaths,
   queuePath,
   searchQueueId,
+  searchQueuePaths,
 } from './app-files';
 import { sameJson } from './app-walk';
-import { slotEntry } from './catalogue';
+import { recordedAllowList } from './convert';
 import { cardParameters, isListCard, openingSort } from './convert-lists';
-import { buttonAction } from './convert-slots';
+import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
 
 export function checkRequests({
@@ -47,10 +45,14 @@ export function checkRequests({
     parameters: readonly string[],
     sort: unknown[],
     pageSize: number | null,
+    missing?: string,
   ): void => {
     expectedQueues.add(path);
     const queue = app[path];
-    if (!isRecord(queue)) return;
+    if (!isRecord(queue)) {
+      if (missing !== undefined) findings.push(missing);
+      return;
+    }
     if (queue['pageProvider'] !== provider)
       findings.push(
         `${path}: it asks the page provider ${JSON.stringify(queue['pageProvider'])}, where Web UI asks ${provider}`,
@@ -84,13 +86,20 @@ export function checkRequests({
     const parameters = cardParameters(card);
     if ('problem' in parameters) return;
     // Web UI's data table asks a card's provider for its own page size, which a queue keeps when
-    // it is one a queue takes.
+    // it is one a queue takes. A card whose list the converter writes must have its queue, unless
+    // the report reports the card, with its reason. (A search screen's missing queue is check 2's.)
+    const path = queuePath(homeQueueId(card, index));
+    const entry = entries.get(`dashboard-card:${inventory.dashboard?.path}#${index + 1}`);
+    const excused = entry?.outcome === 'reported' && Boolean(entry.note?.trim());
     list(
-      queuePath(homeQueueId(card, index)),
+      path,
       card.provider,
       parameters.parameters,
       [],
       queuePageSize(card),
+      excused
+        ? undefined
+        : `${path} is missing, though Web UI's card ${index + 1} lists ${card.provider}`,
     );
   });
   for (const path of Object.keys(app))
@@ -99,23 +108,17 @@ export function checkRequests({
 
   const actions = app['actions.json'];
   const written = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
-  const appId = appIdOf(pkg);
-  const expectedActions = new Set<string>();
-  for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
-    const slot = slotEntry(catalogue, contribution.slot)?.slot;
-    if (slot !== 'toolbar' && slot !== 'bulk-actions') continue;
-    const button = buttonAction(contribution);
-    if ('problem' in button) continue;
-    const id = actionIdOf(appId, contribution.name, overall);
-    // The first contribution to an id is the one the converter writes; a later one is reported.
-    if (expectedActions.has(id)) continue;
-    expectedActions.add(id);
+  // Each action is held to the button that owns its id: the first that becomes an action at all,
+  // as the converter decides it, not merely the first to bear the name.
+  const owners = actionOwners(inventory, catalogue, appIdOf(pkg), recordedAllowList(conversion));
+  const expectedActions = new Set(owners.keys());
+  for (const [id, button] of owners) {
+    const { contribution, slot } = button;
     const action = written.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (!isRecord(action)) {
-      if (entries.get(`slot-contribution:${contribution.path}#${index}`)?.outcome === 'converted')
-        findings.push(
-          `actions.json: ${id} is missing, though the report says "${contribution.name}" became it`,
-        );
+      findings.push(
+        `actions.json: ${id} is missing, though Web UI's "${contribution.name}" runs ${button.operation}`,
+      );
       continue;
     }
     if (action['operation'] !== button.operation)

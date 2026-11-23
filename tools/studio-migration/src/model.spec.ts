@@ -120,7 +120,15 @@ describe('the widget each element becomes', () => {
 
   it("reads a list column's widget from what its template holds", () => {
     const column = (elements: string[], dateFormat: string | null = null, formatsDate = false) =>
-      columnWidget({ name: null, field: 'x:y', sortBy: null, elements, dateFormat, formatsDate });
+      columnWidget({
+        name: null,
+        field: 'x:y',
+        sortBy: null,
+        elements,
+        dateFormat,
+        formatsDate,
+        conditional: false,
+      });
     expect(column(['nuxeo-user-tag'])).toBe('user');
     expect(column(['nuxeo-date'], 'relative')).toBe('relative-date');
     expect(column(['nuxeo-date'])).toBe('date');

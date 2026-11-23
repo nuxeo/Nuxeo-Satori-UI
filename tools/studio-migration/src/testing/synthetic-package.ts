@@ -8,7 +8,7 @@
  * twice, a Polymer mixin in the theme, and a translation in a second language.
  *
  * For M1's conversion it also holds what the sample lacks (section 7's synthetic corpus): a field
- * and a button that show only under a condition, a date in a view layout, a user picker in an edit
+ * a button and a list column that show only under a condition, a date in a view layout, a user picker in an edit
  * form, an operation button with parameters, and a dashboard list with a query parameter.
  */
 import { writeZip } from './zip-writer';
@@ -137,6 +137,7 @@ export function syntheticBundleFiles(): Record<string, string> {
       <nuxeo-data-table class="results">
         <nuxeo-data-table-column name="Title" field="dc:title" sort-by="dc:title"></nuxeo-data-table-column>
         <nuxeo-data-table-column name="Amount" field="cl:amount"></nuxeo-data-table-column>
+        <nuxeo-data-table-column name="Reserve" field="cl:reserve"><template><nuxeo-filter group="adjusters"><template>[[item.properties.cl:reserve]]</template></nuxeo-filter></template></nuxeo-data-table-column>
       </nuxeo-data-table>
     </nuxeo-results>
   </template>

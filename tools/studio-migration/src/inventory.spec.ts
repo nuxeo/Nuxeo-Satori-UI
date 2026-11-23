@@ -122,6 +122,12 @@ describe('inventory', () => {
         { document: '[[document]]', group: 'adjusters' },
       ],
       [
+        `${UI}/search/claims/nuxeo-claims-search-results.html`,
+        0,
+        'nuxeo-filter',
+        { group: 'adjusters' },
+      ],
+      [
         `${UI}/nuxeo-Acme-Claims-bundle.html`,
         0,
         'nuxeo-filter',
@@ -153,7 +159,7 @@ describe('inventory', () => {
       synthetic.searches.map((s) => [s.part, s.provider, s.fields.length, s.columns, s.views]),
     ).toEqual([
       ['form', 'claims', 2, 0, []],
-      ['results', 'claims', 0, 2, ['nuxeo-data-table']],
+      ['results', 'claims', 0, 3, ['nuxeo-data-table']],
     ]);
     expect(synthetic.searches[0].fields.map((f) => f.binding)).toEqual(['cl_number', 'cl_status']);
   });
@@ -163,6 +169,7 @@ describe('inventory', () => {
     expect(results.columnDetails.map((c) => [c.name, c.field, c.sortBy])).toEqual([
       ['Title', 'dc:title', 'dc:title'],
       ['Amount', 'cl:amount', null],
+      ['Reserve', 'cl:reserve', null],
     ]);
     expect(results.sortOptions).toEqual([
       { field: 'dc:title', order: 'asc', selected: false },
@@ -270,12 +277,12 @@ describe('inventory', () => {
 
   it('counts the custom elements, leaving out the two wrappers and anything commented out', () => {
     expect(Object.fromEntries(synthetic.elements)).toEqual({
-      'nuxeo-data-table-column': 6,
+      'nuxeo-data-table-column': 7,
       'nuxeo-slot-content': 5,
       'nuxeo-data-table': 3,
       'nuxeo-card': 3,
       'nuxeo-date': 3,
-      'nuxeo-filter': 2,
+      'nuxeo-filter': 3,
       'nuxeo-input': 2,
       'nuxeo-operation-button': 2,
       'nuxeo-page-provider': 2,

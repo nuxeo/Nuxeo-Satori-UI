@@ -215,6 +215,8 @@ gives the same conversion. A conversion directory holds:
 - **Reported:** a queue has no search form. The form and its fields are reported, because the
   queue lists what the page provider returns with the predicates left empty, as Web UI does before
   anyone searches. A grid or justified-grid view is reported too: a queue is a table.
+- **Pending:** a column under a condition, which the queue leaves out, and a list whose table sits
+  in one, which gets no queue: M2 converts the condition, as for a layout's field.
 
 **The dashboard.** A card's list becomes a queue: its page provider, its query parameters, its page
 size when it is one a queue takes (1 to 100; the card's note says when it is not) and its columns. The card itself is pending, naming its queue: its place on the home is phase
@@ -327,34 +329,35 @@ lists what stands in the way.
 the checks that run. Each breaks one thing and names the check that must then fail. The tests
 apply every one to the made-up package, and `mutate` applies one to a copy:
 
-| Mutation               | Check | Breaks                                                          |
-| ---------------------- | ----- | --------------------------------------------------------------- |
-| `drop-translation`     | 4     | Drops one translation from one language                         |
-| `change-translation`   | 4     | Changes the words of one translation                            |
-| `wrong-primary-token`  | 8     | Maps the theme's primary colour to the wrong token              |
-| `invent-token`         | 8     | Sets a token that no property sets                              |
-| `drop-asset`           | 8     | Leaves out one of a theme's files                               |
-| `change-asset`         | 8     | Changes one byte of one of a theme's files                      |
-| `drop-report-entry`    | 1     | Drops a layout from the report without a word                   |
-| `invent-report-entry`  | 1     | Lists a layout the package does not have                        |
-| `unexplained-report`   | 1     | Reports something without saying why                            |
-| `drop-field`           | 2     | Drops a field from a converted layout                           |
-| `date-to-text`         | 2     | Turns a date widget into text, in a layout or a list            |
-| `drop-required`        | 2     | Makes a required field of a form optional                       |
-| `rename-field`         | 3     | Names a field the package's own schema does not have            |
-| `slip-free-javascript` | 5     | Slips a free JavaScript condition into the configuration        |
-| `widen-to-everyone`    | 5     | Shows a field Web UI shows only under a condition to every user |
-| `change-label`         | 6     | Changes the label of a converted field                          |
-| `wrong-page-provider`  | 7     | Points a list at a different page provider                      |
-| `change-parameter`     | 7     | Changes one parameter of a list or an action                    |
-| `bind-other-operation` | 7     | Binds a button to a different operation                         |
-| `unregistered-widget`  | 10    | Names a widget the platform does not have                       |
+| Mutation                   | Check | Breaks                                                                |
+| -------------------------- | ----- | --------------------------------------------------------------------- |
+| `drop-translation`         | 4     | Drops one translation from one language                               |
+| `change-translation`       | 4     | Changes the words of one translation                                  |
+| `wrong-primary-token`      | 8     | Maps the theme's primary colour to the wrong token                    |
+| `invent-token`             | 8     | Sets a token that no property sets                                    |
+| `drop-asset`               | 8     | Leaves out one of a theme's files                                     |
+| `change-asset`             | 8     | Changes one byte of one of a theme's files                            |
+| `drop-report-entry`        | 1     | Drops a layout from the report without a word                         |
+| `invent-report-entry`      | 1     | Lists a layout the package does not have                              |
+| `unexplained-report`       | 1     | Reports something without saying why                                  |
+| `drop-field`               | 2     | Drops a field from a converted layout                                 |
+| `date-to-text`             | 2     | Turns a date widget into text, in a layout or a list                  |
+| `drop-required`            | 2     | Makes a required field of a form optional                             |
+| `rename-field`             | 3     | Names a field the package's own schema does not have                  |
+| `slip-free-javascript`     | 5     | Slips a free JavaScript condition into the configuration              |
+| `widen-to-everyone`        | 5     | Shows a field Web UI shows only under a condition to every user       |
+| `widen-column-to-everyone` | 5     | Shows a list column Web UI shows only under a condition to every user |
+| `change-label`             | 6     | Changes the label of a converted field                                |
+| `wrong-page-provider`      | 7     | Points a list at a different page provider                            |
+| `change-parameter`         | 7     | Changes one parameter of a list or an action                          |
+| `bind-other-operation`     | 7     | Binds a button to a different operation                               |
+| `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
 
 **On the sample**, every control was applied to its conversion with `mutate` and checked: the 18
-that find something to break each fail their check, with a finding of their own. The other two have
-nothing to break there, and say so: `widen-to-everyone`, because the sample has no condition, and
-`bind-other-operation`, because its one button runs no operation. The tests apply both to the
-made-up package, which has them.
+that find something to break each fail their check, with a finding of their own. The other three
+have nothing to break there, and say so: `widen-to-everyone` and `widen-column-to-everyone`,
+because the sample has no condition, and `bind-other-operation`, because its one button runs no
+operation. The tests apply all three to the made-up package, which has them.
 
 Section 7's "invert a rule" waits for M2, which converts the first rules: until then there is no
 rule to invert, and any rule at all fails check 5.

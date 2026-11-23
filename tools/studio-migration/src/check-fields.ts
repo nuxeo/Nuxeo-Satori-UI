@@ -20,6 +20,7 @@ import {
 } from './app-files';
 import { layoutFields, listColumns, parametersOf, sameJson, widgetOf } from './app-walk';
 import { PANEL_ROWS } from './convert-layouts';
+import { isConditionalTable } from './convert-lists';
 import type { CheckOutcome, HarnessInput } from './harness';
 import type { ResultColumn } from './inventory';
 import { VERSION_ONE_WIDGETS, columnWidget, fieldWidget } from './widgets';
@@ -128,7 +129,9 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
 
   // Lists: a search screen's results, and a dashboard card's list.
   for (const search of inventory.searches) {
-    if (search.part !== 'results' || search.provider === null) continue;
+    // A table under a condition is check 5's: the converter leaves the whole list pending.
+    if (search.part !== 'results' || search.provider === null || isConditionalTable(search))
+      continue;
     const path = queuePath(searchQueueId(search));
     if (app[path] === undefined) {
       if (!excused(`search:${search.path}#search`))
@@ -137,11 +140,17 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
         );
       continue;
     }
+    // A column under a condition is check 5's, whether the queue shows it or not.
     const columns = search.columnDetails.filter(
       (column, index) =>
-        column.field !== null && !excused(`search-column:${search.path}#${index + 1}`),
+        column.field !== null &&
+        !column.conditional &&
+        !excused(`search-column:${search.path}#${index + 1}`),
     );
-    findings.push(...compareColumns(path, columns, app[path]));
+    const conditional = new Set(
+      search.columnDetails.filter((column) => column.conditional).map((column) => column.field),
+    );
+    findings.push(...compareColumns(path, columns, app[path], conditional));
   }
   // A card whose queue a search screen took has no queue of its own: the converter reports it.
   const taken = searchQueuePaths(inventory.searches);
@@ -160,9 +169,14 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
 }
 
 /** A list's columns against Web UI's, in order, each with its widget. */
-function compareColumns(path: string, expected: readonly ResultColumn[], file: unknown): string[] {
+function compareColumns(
+  path: string,
+  expected: readonly ResultColumn[],
+  file: unknown,
+  conditional: ReadonlySet<string | null> = new Set(),
+): string[] {
   const findings: string[] = [];
-  const shown = listColumns(file);
+  const shown = listColumns(file).filter((column) => !conditional.has(column.field));
   const want = expected.map((column) => ({ field: column.field, widget: columnWidget(column) }));
   const have = shown.map((column) => ({ field: column.field, widget: widgetOf(column.entry) }));
   for (const column of want)

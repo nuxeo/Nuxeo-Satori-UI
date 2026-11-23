@@ -11,9 +11,9 @@
  * A contribution that sits in a condition waits for M2, which converts the condition: converting
  * it alone would show it to everyone.
  */
-import { own, slotEntry } from './catalogue';
+import { own, slotEntry, type Catalogue } from './catalogue';
 import type { ConvertContext } from './convert';
-import type { SlotContribution } from './inventory';
+import type { Inventory, SlotContribution } from './inventory';
 import {
   actionIdOf,
   iconOf,
@@ -69,9 +69,49 @@ export function buttonAction(contribution: SlotContribution):
   };
 }
 
+/** A slot contribution that becomes an action, with what the action runs. */
+export interface ActionOwner {
+  readonly contribution: SlotContribution;
+  /** Its place in its file, from 1, as its construct's id counts it. */
+  readonly index: number;
+  readonly operation: string;
+  readonly parameters: Record<string, unknown> | null;
+  readonly attributes: Readonly<Record<string, string>>;
+  readonly slot: 'toolbar' | 'bulk-actions';
+}
+
+/**
+ * Which contribution each action id belongs to: the first, in the package's order, that becomes
+ * an action at all. A contribution in a slot the app lacks, under a condition, with a button that
+ * runs nothing, with page-bound parameters, or with an operation off the allow-list becomes none,
+ * so it owns no id, and a later contribution of the same name may take it. The converter writes
+ * the owners' actions and reports every other contribution to an owned id; checks 5 and 7 hold
+ * each action to its owner.
+ */
+export function actionOwners(
+  inventory: Inventory,
+  catalogue: Catalogue,
+  appId: string,
+  allowList: ReadonlySet<string>,
+): Map<string, ActionOwner> {
+  const owners = new Map<string, ActionOwner>();
+  for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
+    const entry = slotEntry(catalogue, contribution.slot);
+    if (!entry || entry.how === 'reported') continue;
+    if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') continue;
+    if (contribution.operations.includes(null) || contribution.conditions.length > 0) continue;
+    const action = buttonAction(contribution);
+    if ('problem' in action || !allowList.has(action.operation)) continue;
+    const id = actionIdOf(appId, contribution.name, overall);
+    if (!owners.has(id)) owners.set(id, { contribution, index, ...action, slot: entry.slot });
+  }
+  return owners;
+}
+
 export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
+  const owners = actionOwners(inventory, catalogue, context.appId, context.allowList);
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const id = `slot-contribution:${contribution.path}#${index}`;
     const entry = slotEntry(catalogue, contribution.slot);
@@ -108,7 +148,7 @@ export function convertSlots(context: ConvertContext): void {
         continue;
       }
       const actionId = actionIdOf(context.appId, contribution.name, overall);
-      if (actions.some((other) => other['id'] === actionId)) {
+      if (owners.get(actionId)?.contribution !== contribution) {
         context.decide(id, {
           outcome: 'reported',
           note: `Another contribution already became ${actionId}`,

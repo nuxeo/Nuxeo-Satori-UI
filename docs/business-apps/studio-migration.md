@@ -266,16 +266,18 @@ all of them on every change:
 
 - **For check 2:** drop a field, turn a date widget into text, make a required field optional.
 - **For check 3:** name a field the package's own schema lacks.
-- **For check 5:** slip a free JavaScript condition in, or show a field Web UI shows only under a
-  condition to everyone. "Invert a rule" waits for M2, which converts the first rules.
+- **For check 5:** slip a free JavaScript condition in, or show a field or a list column Web UI
+  shows only under a condition to everyone. "Invert a rule" waits for M2, which converts the
+  first rules.
 - **For check 6:** change a field's label.
 - **For check 7:** point a list at another page provider, change one parameter, or bind a button
   to another operation.
 - **For check 10:** name a widget the platform does not have.
 
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
-something to break fails its check too. The two that do not, `widen-to-everyone` and
-`bind-other-operation`, find no condition and no operation button to break there, and say so.
+something to break fails its check too. The three that do not, `widen-to-everyone`,
+`widen-column-to-everyone` and `bind-other-operation`, find no condition and no operation button
+to break there, and say so.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -358,7 +360,7 @@ These sit inside the [development plan](development-plan.md):
     actions, the theme and the translations, written as an app definition the package pipeline's
     validator accepts;
   - checks 2, 3, 5, 6, 7 and 10. Checks 3, 5, 6 and 7 run in part until the migration server
-    exists. With M0's, there are twenty negative controls.
+    exists. With M0's, there are twenty-one negative controls.
 - **On the sample:**
   - checks 1, 2, 4, 5 and 10 pass;
   - checks 3, 6 and 7 run in part;

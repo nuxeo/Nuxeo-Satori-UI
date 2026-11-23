@@ -89,6 +89,8 @@ export interface ResultColumn {
   readonly dateFormat: string | null;
   /** True when its template writes the value through `formatDate`. */
   readonly formatsDate: boolean;
+  /** True when it sits in a condition, or its template holds one: it then shows only to some. */
+  readonly conditional: boolean;
 }
 
 /** A sort a results layout offers, from the options Studio's script writes. */
@@ -125,6 +127,8 @@ export interface SearchLayout {
    * `nuxeo-data-grid`, `nuxeo-justified-grid`.
    */
   readonly views: readonly string[];
+  /** For each of `views`, whether it sits in a condition, or holds one. */
+  readonly conditionalViews: readonly boolean[];
   /** For results: the sorts its script offers. */
   readonly sortOptions: readonly SortOption[];
 }
@@ -380,10 +384,13 @@ export function inventory(pkg: StudioPackage): Inventory {
         part,
         fields: fieldsOf(document, within),
         columns: columns.length,
-        columnDetails: columns.map(columnOf),
+        columnDetails: columns.map((column) => columnOf(column, within)),
         views: all
           .filter((element) => RESULT_VIEWS.includes(element.localName))
           .map((element) => element.localName),
+        conditionalViews: all
+          .filter((element) => RESULT_VIEWS.includes(element.localName))
+          .map((view) => within.has(view)),
         sortOptions:
           part === 'results'
             ? all
@@ -469,7 +476,7 @@ export function inventory(pkg: StudioPackage): Inventory {
           params: provider?.getAttribute('params') ?? null,
           columns: elementsOf(card)
             .filter((element) => element.localName === 'nuxeo-data-table-column')
-            .map(columnOf),
+            .map((column) => columnOf(column, within)),
           operation:
             inner.find((element) => element.localName === 'nuxeo-operation')?.getAttribute('op') ??
             null,
@@ -617,7 +624,7 @@ function conditionsOf(path: string, document: Document, within: Map<Element, num
  * A column of a list: its heading, the property it shows, and how. The property is its `field`,
  * or else the one its template binds: `item.properties.dc:modified`, or `item.title` for the title.
  */
-function columnOf(column: Element): ResultColumn {
+function columnOf(column: Element, within: ReadonlyMap<Element, number>): ResultColumn {
   const inside = elementsOf(column);
   const texts = [column, ...inside].flatMap((element) => [
     ...Array.from(element.attributes, (attribute) => attribute.value),
@@ -637,6 +644,7 @@ function columnOf(column: Element): ResultColumn {
     dateFormat:
       inside.find((element) => element.localName === 'nuxeo-date')?.getAttribute('format') ?? null,
     formatsDate: /\bformatDate\s*\(/.test(all),
+    conditional: [column, ...inside].some((element) => within.has(element)),
   };
 }
 

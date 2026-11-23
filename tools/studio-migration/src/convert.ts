@@ -362,6 +362,15 @@ export function readCatalogue(pkg: StudioPackage, path: string): Readonly<Record
   }
 }
 
+/**
+ * The allow-list the conversion was made with, as its report records it. It says which buttons
+ * the converter made actions of, so the checks can tell whose each action is; whether those
+ * operations are allowed is check 10's, against the deployment's own list.
+ */
+export function recordedAllowList(conversion: Pick<Conversion, 'report'>): ReadonlySet<string> {
+  return new Set(conversion.report.allowList ?? []);
+}
+
 /** Each language's translations as the conversion holds them, in its labels files. */
 export function labelsOf(
   conversion: Pick<Conversion, 'app'>,

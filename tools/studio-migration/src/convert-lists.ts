@@ -6,6 +6,8 @@
  *   predicates left empty, as Web UI's results do before anyone searches. The form and its fields
  *   are reported: letting a person fill them in needs a form the queue does not have yet.
  * - **A queue is a table.** A grid of thumbnails or a justified grid is reported.
+ * - **What shows under a condition** waits for M2, as a layout's field does: a column in a
+ *   condition is left out, and a table in one leaves the whole list pending.
  * - **A dashboard card's place on the home** is phase 1's `home.json`, which is not in the app
  *   definition yet. Its list is written as a queue now, and the card is pending, naming it.
  */
@@ -91,18 +93,19 @@ export function convertSearches(context: ConvertContext): void {
     );
     const queueId = searchQueueId(search);
     const path = queuePath(queueId);
-    const report = (note: string): void => {
-      context.decide(id, { outcome: 'reported', note });
+    const report = (note: string, outcome: 'reported' | 'pending' = 'reported'): void => {
+      const which = outcome === 'reported' ? 'reported' : 'pending';
+      context.decide(id, { outcome, note });
       search.columnDetails.forEach((_, index) =>
         context.decide(`search-column:${search.path}#${index + 1}`, {
-          outcome: 'reported',
-          note: 'Its results are reported',
+          outcome,
+          note: `Its results are ${which}`,
         }),
       );
       search.views.forEach((_, index) =>
         context.decide(`search-view:${search.path}#${index + 1}`, {
-          outcome: 'reported',
-          note: 'Its results are reported',
+          outcome,
+          note: `Its results are ${which}`,
         }),
       );
     };
@@ -114,9 +117,23 @@ export function convertSearches(context: ConvertContext): void {
       report(`Another list is already written as ${path}`);
       continue;
     }
+    if (isConditionalTable(search)) {
+      report(
+        `Its table shows only while a condition passes. M2 converts the condition, with truth tables, so the list is not shown to everyone meanwhile`,
+        'pending',
+      );
+      continue;
+    }
     const columns: unknown[] = [];
     search.columnDetails.forEach((column, index) => {
       const columnId = `search-column:${search.path}#${index + 1}`;
+      if (column.conditional) {
+        context.decide(columnId, {
+          outcome: 'pending',
+          note: 'It shows only while a condition passes. M2 converts the condition, with truth tables, so the column is not shown to everyone meanwhile',
+        });
+        return;
+      }
       if (column.field === null) {
         context.decide(columnId, {
           outcome: 'reported',
@@ -150,6 +167,13 @@ export function convertSearches(context: ConvertContext): void {
     };
     context.decide(id, { outcome: 'converted', to: path });
   }
+}
+
+/** True when the results' table sits in a condition: the whole list then shows only to some. */
+export function isConditionalTable(search: SearchLayout): boolean {
+  return search.views.some(
+    (view, index) => view === 'nuxeo-data-table' && search.conditionalViews[index] === true,
+  );
 }
 
 /**

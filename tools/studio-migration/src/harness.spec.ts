@@ -68,7 +68,7 @@ describe('the harness on a sound conversion', () => {
       "1 name rests on the platform's own model, which only the migration server can confirm: dc:title",
     );
     expect(reason(5)).toBe(
-      '2 conditions wait for M2, whose truth tables run in Web UI on the migration server',
+      '3 conditions wait for M2, whose truth tables run in Web UI on the migration server',
     );
     expect(reason(6)).toMatch(/^The values half opens the same records in both apps/);
     expect(reason(7)).toMatch(/needs the migration server$/);

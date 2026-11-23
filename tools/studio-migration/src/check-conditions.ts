@@ -24,15 +24,24 @@ import {
   layoutPath,
   placed,
   queuePath,
+  searchQueueId,
   searchQueuePaths,
 } from './app-files';
-import { layoutFields, rulesIn } from './app-walk';
+import { layoutFields, listColumns, rulesIn } from './app-walk';
+import { recordedAllowList } from './convert';
+import { isConditionalTable } from './convert-lists';
+import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
 
-export function checkConditions({ pkg, inventory, conversion }: HarnessInput): CheckOutcome {
+export function checkConditions({
+  pkg,
+  inventory,
+  catalogue,
+  conversion,
+}: HarnessInput): CheckOutcome {
   const findings: string[] = [];
   for (const [path, file] of Object.entries(conversion.app)) {
-    for (const { at } of rulesIn(file))
+    for (const { at } of rulesIn(path, file))
       findings.push(
         `${path}: ${at} holds a rule that no condition of the package gives: M1 converts no condition`,
       );
@@ -63,13 +72,12 @@ export function checkConditions({ pkg, inventory, conversion }: HarnessInput): C
   const actions = conversion.app['actions.json'];
   const list = isRecord(actions) && Array.isArray(actions['actions']) ? actions['actions'] : [];
   const appId = appIdOf(pkg);
-  const claimed = new Set<string>();
+  // An action whose id a contribution in no condition owns is that one's, not the conditional
+  // contribution's that happens to share its name.
+  const owners = actionOwners(inventory, catalogue, appId, recordedAllowList(conversion));
   for (const { contribution, overall } of placed(inventory.slotContributions)) {
     const id = actionIdOf(appId, contribution.name, overall);
-    // The first contribution to an id is the one the converter writes; a later one is reported.
-    if (claimed.has(id)) continue;
-    claimed.add(id);
-    if (contribution.conditions.length === 0) continue;
+    if (contribution.conditions.length === 0 || owners.has(id)) continue;
     const action = list.find((candidate) => isRecord(candidate) && candidate['id'] === id);
     if (action && !('visibleWhen' in (action as Record<string, unknown>)))
       findings.push(
@@ -85,6 +93,30 @@ export function checkConditions({ pkg, inventory, conversion }: HarnessInput): C
         `${path}: it lists card ${index + 1}'s records for everyone, though Web UI shows the card only while a condition passes`,
       );
   });
+
+  // Lists: a search screen's table, or one of its columns, under a condition.
+  for (const search of inventory.searches) {
+    if (search.part !== 'results') continue;
+    const path = queuePath(searchQueueId(search));
+    const queue = conversion.app[path];
+    if (queue === undefined) continue;
+    if (isConditionalTable(search)) {
+      findings.push(
+        `${path}: it lists ${search.provider ?? 'its records'} for everyone, though Web UI shows the table only while a condition passes`,
+      );
+      continue;
+    }
+    const always = new Set(
+      search.columnDetails.filter((column) => !column.conditional).map((column) => column.field),
+    );
+    for (const column of search.columnDetails) {
+      if (!column.conditional || column.field === null || always.has(column.field)) continue;
+      if (listColumns(queue).some((shown) => shown.field === column.field))
+        findings.push(
+          `${path}: it shows the column ${column.field} to everyone, though Web UI shows it only while a condition passes`,
+        );
+    }
+  }
 
   const conditions = inventory.conditions.length;
   return {
