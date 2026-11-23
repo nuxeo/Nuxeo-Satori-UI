@@ -77,6 +77,12 @@ export interface Registries {
   readonly actions: ReadonlySet<string>;
   /** The domain modules an app may turn on (architecture.md, section 6). */
   readonly modules: ReadonlySet<string>;
+  /**
+   * The pages a menu entry may open, by the ID of the platform's menu entry for each
+   * (extension-reference.md, section 3), and a customer's own, registered in a manifest or in
+   * Layer 2 code. `home`, the app's own home, is not one of them: every app has it.
+   */
+  readonly pages: ReadonlySet<string>;
 }
 
 const text: ParameterCheck = (value) =>
@@ -261,6 +267,27 @@ export const PACKAGED_BULK_ACTIONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The platform's pages, by the ID of its menu entry for each (extension-reference.md, section 3).
+ * `app.navbar.settings` opens a drawer, not a page, so it is not one.
+ */
+export const PACKAGED_PAGES: ReadonlySet<string> = new Set([
+  'app.navbar.knowledgeDiscovery',
+  'app.navbar.dashboard',
+  'app.navbar.browse',
+  'app.navbar.recentlyViewed',
+  'app.navbar.search',
+  'app.navbar.expiredQueue',
+  'app.navbar.assets',
+  'app.navbar.tasks',
+  'app.navbar.favorites',
+  'app.navbar.collections',
+  'app.navbar.personalSpace',
+  'app.navbar.clipboard',
+  'app.navbar.trash',
+  'app.navbar.administration',
+]);
+
+/**
  * The domain modules the platform has. None yet: each joins when it is built, with the schema of
  * its settings, so until then an app that turns one on is refused.
  */
@@ -275,13 +302,15 @@ export const PACKAGED_REGISTRIES: Registries = {
   bulkActions: PACKAGED_BULK_ACTIONS,
   actions: new Set(),
   modules: PACKAGED_MODULES,
+  pages: PACKAGED_PAGES,
 };
 
 /**
  * The packaged registries with more IDs added: the rules and actions a customer registered in
  * Layer 2 code, whose parameters this library cannot know, so it accepts any; a package's own
- * actions, from its `actions.json`; and modules. A rule the platform already registers keeps its
- * own signature, so that adding it again cannot loosen the checks of its parameters.
+ * actions, from its `actions.json`; modules; and pages a menu may open. A rule the platform already
+ * registers keeps its own signature, so that adding it again cannot loosen the checks of its
+ * parameters.
  */
 export function withRegistered(
   base: Registries,
@@ -291,6 +320,7 @@ export function withRegistered(
     readonly bulkActions?: readonly string[];
     readonly actions?: readonly string[];
     readonly modules?: readonly string[];
+    readonly pages?: readonly string[];
   },
 ): Registries {
   return {
@@ -300,6 +330,7 @@ export function withRegistered(
     bulkActions: new Set([...base.bulkActions, ...(extra.bulkActions ?? [])]),
     actions: new Set([...base.actions, ...(extra.actions ?? [])]),
     modules: new Set([...base.modules, ...(extra.modules ?? [])]),
+    pages: new Set([...base.pages, ...(extra.pages ?? [])]),
   };
 }
 

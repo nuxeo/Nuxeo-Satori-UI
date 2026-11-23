@@ -21,10 +21,14 @@ describe("the proposal's examples", () => {
     ]),
   );
   const allowList = examples.get('allow-list.json') as { operations: string[] };
+  const queues = new Set(
+    [...examples.keys()].flatMap((path) => /^queues\/(.+)\.json$/.exec(path)?.[1] ?? []),
+  );
   const context: PackageContext = {
     app: examples.get('app.json'),
     actions: examples.get('actions.json'),
     assets: new Set(),
+    queues,
   };
   const options = {
     registries: withRegistered(PACKAGED_REGISTRIES, { modules: ['cases'] }),
@@ -34,13 +38,37 @@ describe("the proposal's examples", () => {
 
   it('show one file of each kind', () => {
     const kinds = files.map((path) => placeFile(path)?.file.kind);
-    expect(kinds.sort()).toEqual(['actions', 'app', 'labels', 'module', 'queue', 'task']);
+    expect(kinds.sort()).toEqual([
+      'actions',
+      'app',
+      'home',
+      'labels',
+      'module',
+      'navigation',
+      'queue',
+      'task',
+    ]);
   });
 
   it.each(files)('%s has no finding', (path) => {
     const placed = placeFile(path);
     if (!placed) throw new Error(`${path} is not a place in a package`);
     expect(show(validateFile(placed.file, examples.get(path), context, options))).toEqual([]);
+  });
+
+  it("name only the package's queues in the menu and the home", () => {
+    expect(queues).toEqual(new Set(['unassigned-claims']));
+    for (const path of ['navigation.json', 'home.json']) {
+      const placed = placeFile(path);
+      if (!placed) throw new Error(`${path} is not a place in a package`);
+      const findings = validateFile(placed.file, examples.get(path), {
+        ...context,
+        queues: new Set(),
+      });
+      expect(show(findings).length).toBeGreaterThan(0);
+      for (const finding of show(findings))
+        expect(finding).toMatch(/the queue "unassigned-claims" is not in the package/);
+    }
   });
 
   it('need the allow-list: without it, every operation in actions.json is refused', () => {
@@ -69,6 +97,9 @@ describe('where a file sits', () => {
       ['p/queues/app.json', { kind: 'queue', id: 'app' }, 'p'],
       ['p\\labels\\pt-BR.json', { kind: 'labels', locale: 'pt-BR' }, 'p'],
       ['p/modules/cases.json', { kind: 'module', module: 'cases' }, 'p'],
+      ['p/home.json', { kind: 'home' }, 'p'],
+      ['p/navigation.json', { kind: 'navigation' }, 'p'],
+      ['p/queues/home.json', { kind: 'queue', id: 'home' }, 'p'],
     ];
     for (const [path, file, root] of cases) expect(placeFile(path)).toEqual({ file, root });
   });
@@ -168,6 +199,31 @@ describe('the checks across files', () => {
     const assets = new Set(['assets/logo.svg', 'assets/logo mark.svg']);
     for (const src of ['assets/./logo.svg', 'assets/logo.svg?v=2', 'assets/logo%20mark.svg'])
       expect(show(validateFile({ kind: 'app' }, app(src), { assets }))).toEqual([]);
+  });
+
+  it('refuse a queue the home or the menu names that the package does not have', () => {
+    const home = {
+      version: 2,
+      cards: [
+        { id: 'open', label: 'Open', kpi: { pageProvider: 'payers_open' }, queue: 'open' },
+        { id: 'closed', queue: 'closed' },
+      ],
+    };
+    const navigation = { version: 2, entries: [{ id: 'open', queue: 'open' }] };
+    const withOpen: PackageContext = { assets: new Set(), queues: new Set(['open']) };
+    expect(show(validateFile({ kind: 'home' }, home, withOpen))).toEqual([
+      'cards[1].queue: the queue "closed" is not in the package: no queues/closed.json [unknown]',
+    ]);
+    expect(show(validateFile({ kind: 'navigation' }, navigation, withOpen))).toEqual([]);
+    expect(
+      show(
+        validateFile({ kind: 'navigation' }, navigation, { assets: new Set(), queues: new Set() }),
+      ),
+    ).toEqual([
+      'entries[0].queue: the queue "open" is not in the package: no queues/open.json [unknown]',
+    ]);
+    // Read on its own, as the app reads home.json, the queues are not known, and not checked.
+    expect(show(validateFile({ kind: 'home' }, home, empty))).toEqual([]);
   });
 
   it('refuse a file whose name does not say what it needs to', () => {

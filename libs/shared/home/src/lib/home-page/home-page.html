@@ -1,0 +1,62 @@
+<div class="home-page">
+  <h1 class="home-page__title">{{ title() ?? ('home.title' | translate) }}</h1>
+  @switch (state().kind) {
+    @case ('loading') {
+      <p class="home-page__message" role="status">{{ 'home.loading' | translate }}</p>
+    }
+    @case ('none') {
+      <p class="home-page__message">{{ 'home.none' | translate }}</p>
+    }
+    @case ('refused') {
+      <p class="home-page__message" role="alert">{{ 'home.refused' | translate }}</p>
+    }
+    @case ('home') {
+      @if (cards().length === 0) {
+        <p class="home-page__message">{{ 'home.empty' | translate }}</p>
+      } @else {
+        <ul class="home-page__cards">
+          @for (card of cards(); track card.id) {
+            <li class="home-card" [attr.data-card-id]="card.id">
+              @if (card.kind === 'link') {
+                <a class="home-card__queue" [routerLink]="card.link">{{ card.title }}</a>
+              } @else {
+                <h2 class="home-card__title" [id]="'home-card-' + card.id">{{ card.title }}</h2>
+                @switch (card.kind) {
+                  @case ('loading') {
+                    <p class="home-card__note" role="status">
+                      {{ 'home.loading-figure' | translate }}
+                    </p>
+                  }
+                  @case ('unavailable') {
+                    <p class="home-card__note">{{ 'home.unavailable' | translate }}</p>
+                  }
+                  @default {
+                    <p class="home-card__figure">{{ card.value }}</p>
+                    @if (card.buckets.length > 0) {
+                      <dl class="home-card__buckets">
+                        @for (bucket of card.buckets; track bucket.key) {
+                          <div class="home-card__bucket">
+                            <dt>{{ bucket.key }}</dt>
+                            <dd>{{ bucket.count }}</dd>
+                          </div>
+                        }
+                      </dl>
+                      @if (card.truncated) {
+                        <p class="home-card__note">{{ 'home.largest-only' | translate }}</p>
+                      }
+                    }
+                  }
+                }
+                @if (card.link !== null) {
+                  <a class="home-card__link" [routerLink]="card.link">{{
+                    'home.open-queue' | translate
+                  }}</a>
+                }
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+</div>

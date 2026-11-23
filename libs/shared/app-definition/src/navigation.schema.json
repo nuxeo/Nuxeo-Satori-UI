@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nuxeo-satori:app-definition:navigation:2",
+  "title": "An app's menu, navigation.json, app definition version 2",
+  "description": "docs/business-apps/app-definition-v2.md, section 9. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that entry ids are unique, that each queue is one of the package's, that each page is registered, and that a rule, a customer's own included, is given literals, since no record is open in the menu.",
+  "type": "object",
+  "required": ["version", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this JSON Schema, for editors. Ignored otherwise."
+    },
+    "version": {
+      "const": 2
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["id"],
+      "oneOf": [
+        {
+          "required": ["queue"],
+          "not": {
+            "required": ["page"]
+          }
+        },
+        {
+          "required": ["page"],
+          "not": {
+            "required": ["queue"]
+          },
+          "anyOf": [
+            {
+              "required": ["label"]
+            },
+            {
+              "required": ["labelKey"]
+            }
+          ]
+        }
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelKey": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$"
+        },
+        "order": {
+          "type": "integer"
+        },
+        "queue": {
+          "$ref": "#/$defs/id",
+          "description": "A queue of the package, by its id: its file's name in queues/."
+        },
+        "page": {
+          "type": "string",
+          "minLength": 1,
+          "description": "\"home\", or the ID of one of the platform's menu entries (extension-reference.md, section 3), whose page it opens."
+        },
+        "visibleWhen": {
+          "$ref": "#/$defs/rule"
+        }
+      }
+    },
+    "rule": {
+      "description": "A registered rule (extension-reference.md, section 4), or a customer's own, registered in code.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "parameters": {
+              "type": "array"
+            }
+          }
+        }
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    }
+  }
+}

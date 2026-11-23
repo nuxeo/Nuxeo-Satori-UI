@@ -1830,6 +1830,48 @@ list; `nxs-saved-search-actions` for the permission read.
 
 ---
 
+## 32. Home — `home.json` and the KPIs' Page Providers
+
+| Field           | Value                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `HomeService` (`libs/shared/home/src/lib/home.service.ts`)                                                                                                                 |
+| **Method**      | `load()`, once per visit of `/home`; `results(kpi)`, once per page provider and parameters that a card the person sees reads                                               |
+| **HTTP Method** | `GET`                                                                                                                                                                      |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/home.json` (`/agentic-ui-config/home.json` under `nx serve`) — without interceptors, no `Authorization` header                                   |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                   |
+| **Server side** | None for `home.json`: the configuration servlet does not answer there (404), and only `npm run config:dev -- --home <file>` serves it. Nuxeo's page providers for the KPIs |
+
+**Query parameters of the page provider read:**
+
+| Parameter          | Value                                                               |
+| ------------------ | ------------------------------------------------------------------- |
+| `pageSize`         | `1`: a KPI reads `resultsCount` and `aggregations`, not the records |
+| `currentPageIndex` | `0`                                                                 |
+| `queryParams`      | The KPI's `parameters`, one each, in order; none when it has none   |
+
+**Request headers:** `properties: dublincore`.
+
+**Notes:**
+
+- `aggregations.<id>.buckets` holds `{ key, docCount }` for each bucket. Only a page provider the
+  search index serves has aggregates; one that queries the repository, such as `tree_children`,
+  answers `aggregations: null`, and the card says its figure is unavailable. Measured on the local
+  server: `default_search` answers six aggregates; an unknown page provider answers HTTP 500.
+- A terms aggregate returns no bucket for a key no record has, so a KPI on that bucket is 0, unless
+  it returned as many buckets as its `size` (`properties.size`, 10 when unset): then the bucket may
+  be one it left out, and the card says its figure is unavailable.
+- The server reads `queryParams` as a list, one value per parameter, and splits none on commas
+  (`QueryExecutor.getParameters`, `nuxeo-search-rest-api` 2025.10.18). It replaces a value
+  `$currentUser` with the signed-in user's name.
+- `resultsCount` is negative (`-2`) when a page provider does not count its results, as
+  `tree_children` does; the card says its figure is unavailable.
+- The counts are the signed-in person's: a user in `members` only counted 2,167 records of
+  `default_search` where an administrator counted 2,249.
+
+**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

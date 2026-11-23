@@ -10,6 +10,14 @@
 export { ACTIONS_V2_KEYS, PLACEMENTS, validateActions, type ActionsOptions } from './lib/actions';
 export { APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
 export { type Finding } from './lib/checker';
+export {
+  HOME_PAGE,
+  HOME_V2_KEYS,
+  NAVIGATION_V2_KEYS,
+  validateHome,
+  validateNavigation,
+  type HomeOptions,
+} from './lib/home';
 export { LABELS_V2_KEYS, validateLabels, validateModuleSettings } from './lib/labels';
 export {
   LAYOUT_MODES,
@@ -38,6 +46,7 @@ export {
   PACKAGED_CHECKS,
   PACKAGED_COMPUTATIONS,
   PACKAGED_MODULES,
+  PACKAGED_PAGES,
   PACKAGED_REGISTRIES,
   PACKAGED_ROW_ACTIONS,
   PACKAGED_WIDGETS,
