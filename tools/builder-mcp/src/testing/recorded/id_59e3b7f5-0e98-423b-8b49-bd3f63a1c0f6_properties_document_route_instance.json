@@ -1,7 +1,7 @@
 {
   "request": {
     "path": "/id/59e3b7f5-0e98-423b-8b49-bd3f63a1c0f6",
-    "properties": "*"
+    "properties": "document_route_instance"
   },
   "status": 200,
   "body": {
@@ -19,12 +19,6 @@
       "facet-var_ParallelDocumentReview"
     ],
     "properties": {
-      "var_ParallelDocumentReview:end_date": null,
-      "var_ParallelDocumentReview:initiatorComment": null,
-      "var_ParallelDocumentReview:participants": [],
-      "var_ParallelDocumentReview:review_result": null,
-      "var_ParallelDocumentReview:review_result_file": null,
-      "var_ParallelDocumentReview:validationOrReview": null,
       "docri:variablesFacet": "facet-var_ParallelDocumentReview",
       "docri:availabilityFilter": "filter@wf@ParallelDocumentReview",
       "docri:initiator": null,
@@ -34,5 +28,5 @@
       "docri:parentRouteNodeId": null
     }
   },
-  "trimmed": "properties: 13 of 34 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 7 of 7 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

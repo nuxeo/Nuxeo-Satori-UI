@@ -5,9 +5,11 @@
  *
  * - `/workflowModel/<name>`: the model's id, title and its variables' default values;
  * - `/workflowModel/<name>/graph`: its steps, which start and end, and the transitions between them;
- * - `/id/<model id>`: the model document, whose `docri:variablesFacet` names the facet that holds
- *   the workflow's variables, and whose path holds the steps;
- * - `<model path>/<step id>`: each step's document. Its `rnode:variablesFacet` names the facet that
+ * - `/id/<model id>`, its `document_route_instance` schema only: the model document, whose
+ *   `docri:variablesFacet` names the facet that holds the workflow's variables, and whose path
+ *   holds the steps;
+ * - `<model path>/<step id>`, its `route_node` schema only: each step's document. Its
+ *   `rnode:variablesFacet` names the facet that
  *   holds the step's variables, and the rest says what the task is: buttons, directive, layout,
  *   transitions with their conditions and chains. It is read by path because `@children` leaves
  *   steps out, as it leaves out every document hidden in navigation;
@@ -28,6 +30,13 @@ import {
   texts,
   type JsonRecord,
 } from './shapes.ts';
+
+/**
+ * The one schema read of each document: the workflow's own. A model or a step is read with no
+ * other, so no Dublin Core or other properties, such as who made it, are asked for.
+ */
+const MODEL_SCHEMA = 'document_route_instance';
+const STEP_SCHEMA = 'route_node';
 
 export interface Variable {
   readonly name: string;
@@ -66,7 +75,7 @@ export async function describeWorkflow(nuxeo: NuxeoReads, name: string) {
   if (!id) throw new NuxeoError(`/workflowModel/${name} has no id`, null);
   const [graph, document, facets] = await Promise.all([
     nuxeo.get(`/workflowModel/${segment(name)}/graph`),
-    nuxeo.get(`/id/${segment(id)}`, { properties: '*' }),
+    nuxeo.get(`/id/${segment(id)}`, { properties: MODEL_SCHEMA }),
     nuxeo.get('/config/facets'),
   ]);
   const facetFields = new Map<string, Field[]>();
@@ -146,7 +155,7 @@ export async function describeWorkflow(nuxeo: NuxeoReads, name: string) {
           if (!path) throw new NuxeoError('the model document has no path', null);
           const stepPath = [...path.split('/').filter(Boolean), nodeId].map(segment).join('/');
           const stepDocument = record(
-            await nuxeo.get(`/path/${stepPath}`, { properties: '*' }),
+            await nuxeo.get(`/path/${stepPath}`, { properties: STEP_SCHEMA }),
             `the step ${nodeId}`,
           );
           properties = isRecord(stepDocument['properties']) ? stepDocument['properties'] : {};

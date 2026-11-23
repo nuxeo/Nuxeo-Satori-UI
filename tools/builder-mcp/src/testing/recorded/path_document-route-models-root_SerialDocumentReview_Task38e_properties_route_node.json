@@ -1,7 +1,7 @@
 {
   "request": {
     "path": "/path/document-route-models-root/SerialDocumentReview/Task38e",
-    "properties": "*"
+    "properties": "route_node"
   },
   "status": 200,
   "body": {
@@ -97,9 +97,8 @@
       "rnode:nodeId": "Task38e",
       "rnode:merge": null,
       "rnode:start": false,
-      "rnode:taskAssigneesPermission": null,
-      "var_Task38e:comment": null
+      "rnode:taskAssigneesPermission": null
     }
   },
-  "trimmed": "properties: 38 of 56 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

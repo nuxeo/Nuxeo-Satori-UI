@@ -74,6 +74,6 @@ function readOrigin(value: string | undefined): string | { readonly problem: str
  * Loopback only. Not `*.localhost`: whether such a name stays on this machine is the resolver's
  * choice, and not every resolver makes it.
  */
-function isThisMachine(hostname: string): boolean {
+export function isThisMachine(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(hostname);
 }

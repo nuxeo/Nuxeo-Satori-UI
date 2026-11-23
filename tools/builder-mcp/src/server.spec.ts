@@ -9,7 +9,7 @@ import type { PackageRequest } from './validate-package.ts';
 
 describe('createServer', () => {
   it('answers each Nuxeo tool as JSON, naming the server it read', async () => {
-    const client = await connect(createServer({ nuxeo: new RecordedReads() }));
+    const client = await connect(createServer({ nuxeo: () => new RecordedReads() }));
     try {
       const calls: [string, Record<string, unknown>][] = [
         ['get_content_model', {}],
@@ -35,7 +35,7 @@ describe('createServer', () => {
   });
 
   it('answers a refusal as a tool error the agent can read', async () => {
-    const client = await connect(createServer({ nuxeo: new RecordedReads() }));
+    const client = await connect(createServer({ nuxeo: () => new RecordedReads() }));
     try {
       const missing = await client.call('describe_workflow', { name: 'NoSuchWorkflow' });
       expect(missing.isError).toBe(true);
@@ -46,7 +46,7 @@ describe('createServer', () => {
   });
 
   it("checks a tool's arguments before running it", async () => {
-    const client = await connect(createServer({ nuxeo: new RecordedReads() }));
+    const client = await connect(createServer({ nuxeo: () => new RecordedReads() }));
     try {
       // Refused by the argument check, not by a read that happened to fail: the text says which.
       const wrong = await client.call('get_vocabulary', { name: 'continent', pageSize: 5000 });

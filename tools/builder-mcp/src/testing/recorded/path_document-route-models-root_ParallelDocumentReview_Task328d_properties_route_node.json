@@ -1,7 +1,7 @@
 {
   "request": {
     "path": "/path/document-route-models-root/ParallelDocumentReview/Task328d",
-    "properties": "*"
+    "properties": "route_node"
   },
   "status": 200,
   "body": {
@@ -15,8 +15,6 @@
       "HiddenInNavigation"
     ],
     "properties": {
-      "var_Task328d:assignees": [],
-      "var_Task328d:comment": null,
       "rnode:taskDocType": "TaskDoc",
       "rnode:subRouteModelExpr": null,
       "rnode:taskButtons": [
@@ -96,5 +94,5 @@
       "rnode:taskAssigneesPermission": "Read"
     }
   },
-  "trimmed": "properties: 39 of 57 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

@@ -1,42 +1,31 @@
 {
   "request": {
-    "path": "/path/document-route-models-root/ParallelDocumentReview/Task21a0",
-    "properties": "*"
+    "path": "/path/document-route-models-root/ParallelDocumentReview/Task22b4",
+    "properties": "route_node"
   },
   "status": 200,
   "body": {
     "entity-type": "document",
     "type": "RouteNode",
-    "path": "/document-route-models-root/ParallelDocumentReview/Task21a0",
+    "path": "/document-route-models-root/ParallelDocumentReview/Task22b4",
     "facets": [
       "SystemDocument",
       "NotFulltextIndexable",
       "HiddenInNavigation",
-      "facet-var_Task21a0"
+      "facet-var_Task22b4"
     ],
     "properties": {
       "rnode:taskDocType": null,
       "rnode:subRouteModelExpr": null,
       "rnode:taskButtons": [],
-      "rnode:transitions": [
-        {
-          "result": null,
-          "path": [],
-          "condition": "true",
-          "chain": "",
-          "targetId": "Task2556",
-          "name": "automatic_transitionTask21a0",
-          "description": null,
-          "label": "automatic_transition"
-        }
-      ],
+      "rnode:transitions": [],
       "rnode:taskLayout": null,
       "rnode:startDate": null,
-      "rnode:taskY": "20",
-      "rnode:variablesFacet": "facet-var_Task21a0",
+      "rnode:taskY": "480",
+      "rnode:variablesFacet": "facet-var_Task22b4",
       "rnode:subRouteVariables": [],
       "rnode:subRouteInstanceId": null,
-      "rnode:taskX": "360",
+      "rnode:taskX": "580",
       "rnode:inputChain": "",
       "rnode:canceled": null,
       "rnode:endDate": null,
@@ -47,7 +36,7 @@
       "rnode:hasMultipleTasks": null,
       "rnode:taskNotificationTemplate": null,
       "rnode:allowTaskReassignment": true,
-      "rnode:stop": false,
+      "rnode:stop": true,
       "rnode:taskAssignees": [],
       "rnode:taskDueDateExpr": null,
       "rnode:hasTask": false,
@@ -59,11 +48,11 @@
       "rnode:taskAssigneesExpr": null,
       "rnode:count": null,
       "rnode:tasksInfo": [],
-      "rnode:nodeId": "Task21a0",
+      "rnode:nodeId": "Task22b4",
       "rnode:merge": null,
-      "rnode:start": true,
+      "rnode:start": false,
       "rnode:taskAssigneesPermission": null
     }
   },
-  "trimmed": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

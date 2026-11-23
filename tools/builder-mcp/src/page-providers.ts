@@ -17,8 +17,18 @@
 import { NuxeoError, segment, type NuxeoReads } from './nuxeo.ts';
 import { isRecord, list, notFound, record, text, texts, type JsonRecord } from './shapes.ts';
 
-/** The class Nuxeo uses for a page provider answered from the search index. */
-const INDEXED = 'org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider';
+/**
+ * Whether the search index answers a page provider. The management API names a search client for
+ * those it sends to the index; the class is read too, for a server whose answer names none.
+ */
+function isIndexed(entry: JsonRecord): boolean {
+  const kind = text(entry['class']) ?? '';
+  return (
+    text(entry['searchClient']) !== null ||
+    text(entry['defaultSearchClient']) !== null ||
+    /SearchServicePageProvider|ElasticSearch|OpenSearch/.test(kind)
+  );
+}
 
 export async function listPageProviders(nuxeo: NuxeoReads, query: string | undefined) {
   let answer: unknown;
@@ -42,11 +52,10 @@ export async function listPageProviders(nuxeo: NuxeoReads, query: string | undef
   const all = list(answer, '/management/page-providers')
     .filter(isRecord)
     .map((entry) => {
-      const kind = text(entry['class']);
       return {
         name: text(entry['name']) ?? '',
-        class: kind,
-        indexed: kind === INDEXED,
+        class: text(entry['class']),
+        indexed: isIndexed(entry),
         maxPageSize: typeof entry['maxPageSize'] === 'number' ? entry['maxPageSize'] : null,
       };
     })
@@ -86,12 +95,16 @@ export async function describePageProvider(nuxeo: NuxeoReads, name: string) {
 
 /** A page provider's definition, as a builder needs it: what fills it, what it sorts and counts. */
 export function describeDefinition(definition: JsonRecord) {
-  const pattern = text(definition['pattern']);
+  // Nuxeo builds the query from the where clause whenever there is one, and from the pattern
+  // only when there is not, so only the one it uses is described.
   const where = isRecord(definition['whereClause']) ? definition['whereClause'] : null;
+  const pattern = where ? null : text(definition['pattern']);
   const fixedPart = where ? text(where['fixedPart']) : null;
   const predicates =
     where && Array.isArray(where['predicates']) ? where['predicates'].filter(isRecord) : [];
-  const positional = countParameters(pattern ?? '') + countParameters(fixedPart ?? '');
+  const query = pattern ?? fixedPart ?? '';
+  const positional = countParameters(query);
+  const named = namedParameters(query);
   return {
     name: text(definition['name']),
     enabled: definition['enabled'] !== false,
@@ -106,6 +119,7 @@ export function describeDefinition(definition: JsonRecord) {
           },
     parameters: {
       positional,
+      ...(named.length ? { named } : {}),
       ...(predicates.length
         ? {
             searchDocumentType: text(definition['searchDocumentType']),
@@ -177,15 +191,34 @@ function keysOf(value: unknown): string[] {
 
 /** The `?` of an NXQL fragment outside quoted strings, which Nuxeo replaces in order. */
 export function countParameters(nxql: string): number {
-  let count = 0;
+  return unquoted(nxql).split('?').length - 1;
+}
+
+/**
+ * The `:name` parameters of an NXQL fragment outside quoted strings, which Nuxeo fills by name. A
+ * property's own colon, as in `dc:title`, follows a letter, so it is not one.
+ */
+export function namedParameters(nxql: string): string[] {
+  const names = [...unquoted(nxql).matchAll(/(?<![\w:]):([A-Za-z_][\w]*)/g)].map(
+    (match) => match[1],
+  );
+  return [...new Set(names)];
+}
+
+/** The fragment with every quoted string blanked, escapes included, so neither sees inside one. */
+function unquoted(nxql: string): string {
+  let out = '';
   let quote: string | null = null;
   for (let index = 0; index < nxql.length; index++) {
     const character = nxql[index];
     if (quote !== null) {
       if (character === '\\') index++;
       else if (character === quote) quote = null;
-    } else if (character === "'" || character === '"') quote = character;
-    else if (character === '?') count++;
+      out += ' ';
+    } else if (character === "'" || character === '"') {
+      quote = character;
+      out += ' ';
+    } else out += character;
   }
-  return count;
+  return out;
 }

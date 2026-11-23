@@ -42,7 +42,10 @@ describe('the server over stdio', () => {
         [...NUXEO_TOOLS, 'validate_package'].sort(),
       );
       for (const tool of tools) {
-        expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(true);
+        // Every Nuxeo tool only reads; validate_package builds a zip, if only in a temporary folder.
+        expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(
+          tool.name !== 'validate_package',
+        );
         expect(tool.annotations?.['destructiveHint'], tool.name).toBe(false);
       }
       const refused = await client.call('get_content_model');
@@ -65,6 +68,51 @@ describe('the server over stdio', () => {
     } finally {
       await client.close();
     }
+  });
+
+  describe('against a server whose account stops being accepted', () => {
+    let meAnswers = 0;
+    const nuxeo = createServer((request: IncomingMessage, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      if (request.url === '/nuxeo/api/v1/me') {
+        // Accepted once; then, as after a password change on a server with anonymous access,
+        // answered as the guest.
+        meAnswers++;
+        response.end(
+          JSON.stringify(
+            meAnswers === 1
+              ? { id: 'builder', isAnonymous: false }
+              : { id: 'Anonymous', isAnonymous: true },
+          ),
+        );
+      } else response.end(JSON.stringify({ 'entity-type': 'workflows', entries: [] }));
+    });
+    let origin = '';
+    beforeAll(async () => {
+      await new Promise<void>((done) => nuxeo.listen(0, '127.0.0.1', done));
+      origin = `http://127.0.0.1:${(nuxeo.address() as AddressInfo).port}`;
+    });
+    afterAll(() => new Promise<void>((done) => nuxeo.close(() => done())));
+
+    it('checks who it runs as on every call, not only the first', async () => {
+      const client = await spawnServer(
+        ENTRY,
+        environment({
+          NUXEO_URL: origin,
+          NUXEO_USER: 'builder',
+          NUXEO_PASS: 'not-a-real-password',
+        }),
+      );
+      try {
+        expect((await client.call('list_workflows')).isError).toBe(false);
+        const second = await client.call('list_workflows');
+        expect(second.isError).toBe(true);
+        expect(second.text).toContain('the anonymous guest, not as builder');
+      } finally {
+        await client.close();
+      }
+      expect(meAnswers).toBe(2);
+    });
   });
 
   describe('against a server that answers as its guest', () => {

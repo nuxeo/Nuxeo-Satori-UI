@@ -1,7 +1,7 @@
 {
   "request": {
     "path": "/path/document-route-models-root/SerialDocumentReview/Task6d8",
-    "properties": "*"
+    "properties": "route_node"
   },
   "status": 200,
   "body": {
@@ -10,7 +10,6 @@
     "path": "/document-route-models-root/SerialDocumentReview/Task6d8",
     "facets": ["facet-var_Task6d8", "SystemDocument", "NotFulltextIndexable", "HiddenInNavigation"],
     "properties": {
-      "var_Task6d8:comment": null,
       "rnode:taskDocType": "TaskDoc",
       "rnode:subRouteModelExpr": null,
       "rnode:taskButtons": [
@@ -196,5 +195,5 @@
       "rnode:taskAssigneesPermission": "ReadWrite"
     }
   },
-  "trimmed": "properties: 38 of 56 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

@@ -9,7 +9,13 @@ import { describe, expect, it } from 'vitest';
 import { describeSchema, describeType, readContentModel, summarise } from './model.ts';
 import { NuxeoError } from './nuxeo.ts';
 import { describeOperation, listOperations, readOperations } from './operations.ts';
-import { countParameters, describePageProvider, listPageProviders } from './page-providers.ts';
+import {
+  countParameters,
+  describeDefinition,
+  describePageProvider,
+  listPageProviders,
+  namedParameters,
+} from './page-providers.ts';
 import { RECORDED, RecordedReads, holdingSecrets } from './testing/recordings.ts';
 import { listVocabularies, readVocabulary } from './vocabularies.ts';
 import { describeWorkflow, listWorkflows } from './workflows.ts';
@@ -118,6 +124,51 @@ describe('page providers', () => {
   });
 });
 
+describe('page provider definitions, as Nuxeo reads them', () => {
+  // Made up, to hold what the recorded server has no example of.
+  it('describes the where clause when there is one, as Nuxeo builds the query from it', () => {
+    const both = describeDefinition({
+      name: 'both',
+      pattern: 'SELECT * FROM Document WHERE a = ?',
+      whereClause: { fixedPart: 'b = ? AND c = ?', predicates: [] },
+    });
+    expect(both.query).toEqual({ fixedPart: 'b = ? AND c = ?' });
+    expect(both.parameters.positional).toBe(2);
+  });
+
+  it('lists named parameters, and not the colon of a property', () => {
+    expect(
+      namedParameters("ecm:parentId = :parent AND dc:title = ':quoted' AND x = :parent"),
+    ).toEqual(['parent']);
+    const named = describeDefinition({
+      name: 'named',
+      pattern: 'SELECT * FROM Document WHERE dc:creator = :who',
+    });
+    expect(named.parameters).toMatchObject({ positional: 0, named: ['who'] });
+  });
+
+  it('marks a page provider indexed when it names a search client, or by its class', async () => {
+    const reads = {
+      origin: 'http://localhost:8080',
+      get: async () => [
+        {
+          name: 'a',
+          class: 'org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider',
+          defaultSearchClient: 'opensearch',
+        },
+        { name: 'b', class: 'org.nuxeo.elasticsearch.provider.ElasticSearchNxqlPageProvider' },
+        { name: 'c', class: 'org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider' },
+      ],
+    };
+    const listed = await listPageProviders(reads, undefined);
+    expect(listed.pageProviders.map((entry) => [entry.name, entry.indexed])).toEqual([
+      ['a', true],
+      ['b', true],
+      ['c', false],
+    ]);
+  });
+});
+
 describe('workflows', () => {
   it('lists the models with their variables', async () => {
     const { workflows } = await listWorkflows(nuxeo());
@@ -160,14 +211,12 @@ describe('workflows', () => {
 });
 
 describe('vocabularies', () => {
-  it('lists vocabularies only, unless asked for every directory', async () => {
-    const only = await listVocabularies(nuxeo(), false);
-    expect(only.vocabularies.every((directory) => directory.vocabulary)).toBe(true);
-    expect(only.vocabularies.map((directory) => directory.name)).toEqual(
+  it('lists the vocabularies', async () => {
+    const listed = await listVocabularies(nuxeo());
+    expect(listed.vocabularies.every((directory) => directory.vocabulary)).toBe(true);
+    expect(listed.vocabularies.map((directory) => directory.name)).toEqual(
       expect.arrayContaining(['continent', 'country']),
     );
-    const all = await listVocabularies(nuxeo(), true);
-    expect(all.vocabularies.length).toBe(only.vocabularies.length + only.otherDirectories!);
   });
 
   it("reads a vocabulary's entries a page at a time", async () => {
@@ -202,7 +251,7 @@ describe('vocabularies', () => {
         };
       },
     };
-    const listed = await listVocabularies(nuxeo, false);
+    const listed = await listVocabularies(nuxeo);
     expect(listed.vocabularies.map((directory) => directory.name)).toEqual(['continent']);
     expect(listed.otherDirectories).toBe(1);
     await expect(readVocabulary(nuxeo, 'people', { pageSize: 5, pageIndex: 0 })).rejects.toThrow(
@@ -258,6 +307,16 @@ describe('the recordings themselves', () => {
     }
   });
 
+  it('answer only the reads they hold: any other fails, naming the read', async () => {
+    const reads = new RecordedReads();
+    await expect(reads.get('/config/types', { properties: 'dublincore' })).rejects.toThrow(
+      'Not recorded: /config/types [properties: dublincore]',
+    );
+    await expect(reads.get('/directory', { query: { pageSize: 1 } })).rejects.toThrow(
+      'Not recorded: /directory?pageSize=1',
+    );
+  });
+
   it('are refused when one would hold the account they were made with', () => {
     const made = new Map([
       ['a.json', '{"id": "builder"}'],
@@ -265,5 +324,8 @@ describe('the recordings themselves', () => {
     ]);
     expect(holdingSecrets(made, ['builder', 'not-a-real-password'])).toEqual(['a.json']);
     expect(holdingSecrets(made, ['', 'nobody'])).toEqual([]);
+    // A password with a quote is stored escaped; it is found all the same.
+    const escaped = new Map([['c.json', JSON.stringify({ id: 'pa"ss\\word' })]]);
+    expect(holdingSecrets(escaped, ['pa"ss\\word'])).toEqual(['c.json']);
   });
 });

@@ -18,9 +18,10 @@ import { NuxeoReader } from './nuxeo.ts';
 import { createServer } from './server.ts';
 
 const read = readTarget(process.env);
-const nuxeo = 'target' in read ? new NuxeoReader(read.target) : read;
-if ('problem' in nuxeo)
-  process.stderr.write(`nuxeo-builder: the Nuxeo tools will refuse: ${nuxeo.problem}\n`);
+if ('problem' in read)
+  process.stderr.write(`nuxeo-builder: the Nuxeo tools will refuse: ${read.problem}\n`);
+// A reader per tool call: each call asks Nuxeo who it runs as before it reads anything.
+const nuxeo = 'target' in read ? () => new NuxeoReader(read.target) : read;
 
 serveStdio(() => createServer({ nuxeo }), {
   onerror: (error) => process.stderr.write(`nuxeo-builder: ${error.message}\n`),

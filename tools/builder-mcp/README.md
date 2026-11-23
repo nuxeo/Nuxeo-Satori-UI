@@ -30,7 +30,7 @@ The plan gives the server four jobs. Two are here:
 | `describe_page_provider` | One page provider: its pattern or fixed part, how many parameters it takes in order, its predicates, sorts, page sizes, aggregates and quick filters | `/search/pp/<name>`                                                                |
 | `list_workflows`         | The workflow models and their variables' names                                                                                                       | `/workflowModel`                                                                   |
 | `describe_workflow`      | One model's variables, and each step's task, buttons, variables and transitions; a task step's task form file and `var:` fields                      | `/workflowModel/<name>`, its graph, the model and step documents, `/config/facets` |
-| `list_vocabularies`      | The vocabularies; with `all`, every directory by name                                                                                                | `/directory`                                                                       |
+| `list_vocabularies`      | The vocabularies; other directories are counted, not named                                                                                           | `/directory`                                                                       |
 | `get_vocabulary`         | One vocabulary's entries, a page at a time                                                                                                           | `/directory`, `/directory/<name>`                                                  |
 | `list_operations`        | Operations and chains, filtered by category or text, with every category's count                                                                     | `/automation`                                                                      |
 | `describe_operation`     | One operation or chain, by id or alias: signature and parameters                                                                                     | `/automation`                                                                      |
@@ -47,14 +47,21 @@ Some things about them are worth knowing before relying on them:
 - **The page provider list needs an administrator.** It comes from Nuxeo's management API.
   `describe_page_provider` reads one definition by name without it.
 - **A page provider's parameters are its `?`.** A queue's or a related-records card's
-  `parameters` fill them in order, in the pattern or in a where clause's fixed part; a `?` inside
-  quotes is not one. A where clause's predicates are filled from a search document instead, and
-  are listed with the property each one filters.
+  `parameters` fill them in order. Nuxeo builds the query from the where clause's fixed part when
+  the page provider has a where clause, and from its pattern otherwise, so only that one is
+  described and counted; a `?` inside quotes is not one. `:name` parameters are listed by name. A
+  where clause's predicates are filled from a search document instead, and are listed with the
+  property each one filters.
 - **An indexed page provider lags.** One the search index answers does not show a write at once
-  (AGENTS/11-beta-program.md, section 3), so `list_page_providers` marks them.
+  (AGENTS/11-beta-program.md, section 3), so `list_page_providers` marks them: those the
+  management API names a search client for, or whose class is a search-service one.
 - **A workflow step is read by its path.** `@children` leaves steps out, as it leaves out every
-  document hidden in navigation, so each step's document is read at `<model path>/<step id>`. A
-  step that cannot be read is reported with the reason, and its variables are left unknown.
+  document hidden in navigation, so each step's document is read at `<model path>/<step id>`, with
+  its `route_node` schema only. A step that cannot be read is reported with the reason, and its
+  variables are left unknown.
+- **Vocabularies are the directories `/directory` lists with a vocabulary schema.** Which
+  directories it lists is Nuxeo's choice; the local one lists its vocabularies only. Any other is
+  counted, not named, and its entries are refused.
 - **A task form's file and fields** follow
   [app-definition-v2.md](../../docs/business-apps/app-definition-v2.md), section 6:
   `tasks/<workflow>.<step>.layout.json`, and `var:<name>` for each variable of the step and of
@@ -63,9 +70,18 @@ Some things about them are worth knowing before relying on them:
   allow-list's to say (decision 3). `validate_package` refuses every operation unless it is given
   one.
 - **`validate_package` is the pipeline itself.** It runs `scripts/app-package.mjs` as a command,
-  as `npm run app-package` and CI do, so it cannot drift from what CI refuses. The zip goes to a
-  temporary folder, which is removed: nothing in the package is written, and nothing is published.
-  `--platform` is `libs/platform`'s version unless another is given, as the workflow passes it.
+  as `npm run app-package` and CI do. Given the folder alone it passes what the workflow passes,
+  `--platform` with `libs/platform`'s version, and answers `asCi: true`. An allow-list, a
+  registered file or another platform version are the deployment's, change what is checked, and
+  are listed under `departsFromCi`.
+- **It reads inside the repository only.** The folder and the files are resolved through any link,
+  and each must be in the repository: the pipeline's messages can quote what it read, and they go
+  to the agent. A package kept elsewhere has to be copied in first.
+- **It writes nothing in the package.** The zip goes to a temporary folder, which is removed, and
+  nothing is published. The pipeline gets only `PATH`, the temporary folder and the locale from the
+  environment, so no credential reaches it. Past three minutes it is stopped, with every process
+  it started (on Windows, its own process only). Because it builds a zip, it is the one tool not
+  marked read-only, so a client may ask before running it.
 
 ## What it sends, and where
 
@@ -77,11 +93,12 @@ only place it sends anything is the Nuxeo server it is configured with:
   redirect is never followed, and a URL that would leave the configured server is refused before
   it is sent.
 - **Nothing else goes out.** No telemetry, no other host. `validate_package` runs Node and
-  `unzip` on this machine, and needs no network.
+  `unzip` on this machine, needs no network, and reads only inside the repository.
 - **Definitions, not records.** The tools read the model, searches, workflow models, vocabularies
-  and operations. None reads a document's content, a user, a group, an audit entry or a file.
-  A workflow model's own documents are read for their steps, and a directory's entries only when
-  it is a vocabulary.
+  and operations. None reads a document's content, a group, an audit entry or a file. A workflow
+  model's own documents are read for their steps, with the workflow's schemas only, and a
+  directory's entries only when it is a vocabulary. The one user read is the configured account's own `/me`, to check who the requests
+  run as; no tool answers it.
 - **What the tools answer goes to the agent.** The MCP client passes it to the model the agent
   runs on. Point the server at a development server whose content model you may share with it.
 
@@ -98,12 +115,14 @@ From the environment only, read once when the server starts:
 - **No default account.** `scripts/beta-harness/nuxeo-credentials.mjs` says why. Without the pair
   the server still starts, `validate_package` still answers, and each Nuxeo tool says what is
   missing.
-- **Checked before the first read.** The server asks Nuxeo who it runs as (`/me`) and reads
-  nothing unless the answer is `NUXEO_USER`. A server with anonymous authentication, such as the
+- **Checked on every call.** Each tool call first asks Nuxeo who it runs as (`/me`), and reads
+  nothing unless the answer is `NUXEO_USER`, so an account that stopped being accepted since the
+  last call is found. A server with anonymous authentication, such as the
   local Docker one, answers a request whose credentials it did not accept `200` as `Anonymous`,
   and a model read as the guest looks complete and is not. The harness's identity guard,
   `scripts/beta-harness/identity-guard.mjs`, judges the answer.
-- **The password goes in the `Authorization` header, and nowhere else.** No message includes it.
+- **The password goes in the `Authorization` header, and nowhere else.** No message includes it,
+  and the processes `validate_package` starts do not get it.
 
 ## Registering it with Claude Code
 
@@ -130,17 +149,22 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
 ```
 
 - **The unit tests run against recorded answers** of the local Docker Nuxeo, in
-  [`src/testing/recorded/`](src/testing/recorded/). `manifest.json` says when they were recorded and
-  what was trimmed from the large answers. A read the recordings do not hold fails its test, naming
-  the read.
+  [`src/testing/recorded/`](src/testing/recorded/). `manifest.json` says when and from where they
+  were recorded, and what was trimmed from the large answers. A read the recordings do not hold
+  fails its test, naming the read.
 - **`src/main.spec.ts`** starts the real entry point over stdio, as Claude Code does: with no
-  credentials, with a server that answers as its guest, and validating the demo package.
+  credentials, with a server that answers as its guest, with one that stops accepting the account
+  after the first call, and validating the demo package.
 - **The recorded run.** With a Nuxeo running, this runs every Nuxeo tool's reads against it and
-  prints what each answered. Without `--check` it also rewrites the recordings:
+  prints what each answered. Without `--check` it also rewrites the recordings, and only from a
+  server on this machine: they are committed to a public repository, and a development server
+  elsewhere may hold a customer's model. It writes none that would hold `NUXEO_USER` or
+  `NUXEO_PASS`, and keeps no document property but the workflow's own. Read the diff before
+  committing them all the same:
 
   ```bash
   node tools/builder-mcp/src/testing/record.ts --check
   ```
 
-**Exit codes of the recorder:** 0, every scenario answered as expected; 1, one did not; 2, no
-credentials.
+**Exit codes of the recorder:** 0, every scenario answered as expected; 1, one did not, or
+nothing was written; 2, no credentials.

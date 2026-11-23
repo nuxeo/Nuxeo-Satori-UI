@@ -125,7 +125,11 @@ export function holdingSecrets(
   files: ReadonlyMap<string, string>,
   secrets: readonly string[],
 ): string[] {
-  const wanted = secrets.filter((secret) => secret !== '');
+  // As written, and as JSON escapes it: a password holding a quote or a backslash is stored
+  // escaped, and would pass a comparison with the raw string.
+  const wanted = secrets
+    .filter((secret) => secret !== '')
+    .flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]);
   return [...files]
     .filter(([, content]) => wanted.some((secret) => content.includes(secret)))
     .map(([name]) => name);

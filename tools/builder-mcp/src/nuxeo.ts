@@ -7,11 +7,13 @@
  * - **One server.** Every URL is built from the configured origin and checked against it, and a
  *   redirect is never followed: whoever answers at its destination is not the configured server,
  *   and would be sent nothing more.
- * - **As the configured user.** Before its first read, Nuxeo is asked who the requests run as
- *   (`/me`), and the answer is judged by the harness's identity guard: a server with anonymous
+ * - **As the configured user.** Before a reader's first read, Nuxeo is asked who the requests run
+ *   as (`/me`), and the answer is judged by the harness's identity guard: a server with anonymous
  *   authentication answers a request whose credentials it did not accept `200` as `Anonymous`,
- *   and a model read as the guest is a smaller model that looks complete. Node's `fetch` keeps no
- *   cookies, so every later request carries the same header the check was made with.
+ *   and a model read as the guest is a smaller model that looks complete. The server makes a
+ *   reader for each tool call, so each call is checked: a password changed or an account locked
+ *   since the last one is found. Node's `fetch` keeps no cookies, so the reads of a call carry
+ *   the same header its check was made with.
  * - **Bounded.** A read that takes more than {@link READ_TIMEOUT_MS} or answers more than
  *   {@link MAX_RESPONSE_BYTES} is abandoned with the reason.
  *

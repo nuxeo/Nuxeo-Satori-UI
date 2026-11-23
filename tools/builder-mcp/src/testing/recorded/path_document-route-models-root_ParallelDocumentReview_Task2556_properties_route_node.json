@@ -1,35 +1,33 @@
 {
   "request": {
-    "path": "/path/document-route-models-root/ParallelDocumentReview/Task2169",
-    "properties": "*"
+    "path": "/path/document-route-models-root/ParallelDocumentReview/Task2556",
+    "properties": "route_node"
   },
   "status": 200,
   "body": {
     "entity-type": "document",
     "type": "RouteNode",
-    "path": "/document-route-models-root/ParallelDocumentReview/Task2169",
+    "path": "/document-route-models-root/ParallelDocumentReview/Task2556",
     "facets": [
       "SystemDocument",
       "NotFulltextIndexable",
       "HiddenInNavigation",
-      "facet-var_Task2169"
+      "facet-var_Task2556"
     ],
     "properties": {
-      "var_Task2169:assignees": [],
-      "var_Task2169:comment": null,
       "rnode:taskDocType": "TaskDoc",
       "rnode:subRouteModelExpr": null,
       "rnode:taskButtons": [
         {
           "filter": "",
-          "name": "reject",
-          "label": "wf.parallelDocumentReview.reject",
-          "validate": true
+          "name": "cancel",
+          "label": "wf.parallelDocumentReview.cancel",
+          "validate": false
         },
         {
           "filter": "",
-          "name": "validate",
-          "label": "wf.parallelDocumentReview.approve",
+          "name": "start_review",
+          "label": "wf.parallelDocumentReview.startReview",
           "validate": true
         }
       ],
@@ -37,31 +35,31 @@
         {
           "result": null,
           "path": [],
-          "condition": "NodeVariables[\"button\"] ==\"validate\"",
-          "chain": "validateDocument",
-          "targetId": "Task22b4",
-          "name": "prl_validateTask2169",
+          "condition": "NodeVariables[\"button\"] ==\"cancel\"",
+          "chain": "NRD-AC-PR-UnlockDocument",
+          "targetId": "Task2225",
+          "name": "prl_cancelationTask2556",
           "description": null,
-          "label": "prl_validate"
+          "label": "prl_cancelation"
         },
         {
           "result": null,
           "path": [],
-          "condition": "NodeVariables[\"button\"] ==\"reject\"",
+          "condition": "NodeVariables[\"button\"] ==\"start_review\"",
           "chain": "",
-          "targetId": "Task232e",
-          "name": "prl_rejectTask2169",
+          "targetId": "Task328d",
+          "name": "prl_review_startTask2556",
           "description": null,
-          "label": "prl_reject"
+          "label": "prl_review_start"
         }
       ],
-      "rnode:taskLayout": "Task2169@taskLayout",
+      "rnode:taskLayout": "Task2556@taskLayout",
       "rnode:startDate": null,
-      "rnode:taskY": "320",
-      "rnode:variablesFacet": "facet-var_Task2169",
+      "rnode:taskY": "120",
+      "rnode:variablesFacet": "facet-var_Task2556",
       "rnode:subRouteVariables": [],
       "rnode:subRouteInstanceId": null,
-      "rnode:taskX": "360",
+      "rnode:taskX": "340",
       "rnode:inputChain": "",
       "rnode:canceled": null,
       "rnode:endDate": null,
@@ -70,25 +68,25 @@
       "rnode:executeOnlyFirstTransition": false,
       "rnode:taskDueDate": null,
       "rnode:hasMultipleTasks": false,
-      "rnode:taskNotificationTemplate": "workflowTaskAssigned",
-      "rnode:allowTaskReassignment": true,
+      "rnode:taskNotificationTemplate": null,
+      "rnode:allowTaskReassignment": false,
       "rnode:stop": false,
       "rnode:taskAssignees": [],
-      "rnode:taskDueDateExpr": "CurrentDate.days(5)",
+      "rnode:taskDueDateExpr": "CurrentDate.days(1)",
       "rnode:hasTask": true,
       "rnode:button": null,
       "rnode:escalationRules": [],
-      "rnode:outputChain": "NRD-AC-PR-ValidateNode-Output",
-      "rnode:taskDirective": "wf.parallelDocumentReview.consolidate.directive",
+      "rnode:outputChain": "NRD-AC-PR-ChooseParticipants-Output",
+      "rnode:taskDirective": "wf.parallelDocumentReview.chooseParticipants.directive",
       "rnode:taskDescription": null,
       "rnode:taskAssigneesExpr": "workflowInitiator",
       "rnode:count": null,
       "rnode:tasksInfo": [],
-      "rnode:nodeId": "Task2169",
+      "rnode:nodeId": "Task2556",
       "rnode:merge": null,
       "rnode:start": false,
       "rnode:taskAssigneesPermission": "ReadWrite"
     }
   },
-  "trimmed": "properties: 39 of 57 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

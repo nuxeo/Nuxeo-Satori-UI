@@ -43,17 +43,17 @@ export async function readDirectories(nuxeo: NuxeoReads): Promise<Directory[]> {
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-export async function listVocabularies(nuxeo: NuxeoReads, all: boolean) {
+/**
+ * The vocabularies among the directories `/directory` lists. Which directories that is, is
+ * Nuxeo's choice: the local one lists its vocabularies only. Any other it lists is counted, not
+ * named.
+ */
+export async function listVocabularies(nuxeo: NuxeoReads) {
   const directories = await readDirectories(nuxeo);
-  const shown = all ? directories : directories.filter((directory) => directory.vocabulary);
+  const vocabularies = directories.filter((directory) => directory.vocabulary);
   return {
-    vocabularies: shown,
-    ...(all
-      ? {}
-      : {
-          otherDirectories: directories.length - shown.length,
-          note: 'Directories that are not vocabularies are left out; pass all: true to list their names.',
-        }),
+    vocabularies,
+    otherDirectories: directories.length - vocabularies.length,
   };
 }
 

@@ -1,7 +1,7 @@
 {
   "request": {
     "path": "/id/0907ccd2-f60f-4471-b084-b3e3e5b6e626",
-    "properties": "*"
+    "properties": "document_route_instance"
   },
   "status": 200,
   "body": {
@@ -19,10 +19,6 @@
       "DocumentRoute"
     ],
     "properties": {
-      "var_SerialDocumentReview:participants": [],
-      "var_SerialDocumentReview:validationOrReview": "validation",
-      "var_SerialDocumentReview:initiatorComment": null,
-      "var_SerialDocumentReview:index": 0,
       "docri:variablesFacet": "facet-var_SerialDocumentReview",
       "docri:availabilityFilter": "filter@SerialDocumentReview",
       "docri:initiator": null,
@@ -32,5 +28,5 @@
       "docri:parentRouteNodeId": null
     }
   },
-  "trimmed": "properties: 11 of 32 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 7 of 7 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

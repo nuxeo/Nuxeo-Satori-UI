@@ -1,7 +1,7 @@
 {
   "request": {
     "path": "/path/document-route-models-root/SerialDocumentReview/Task542",
-    "properties": "*"
+    "properties": "route_node"
   },
   "status": 200,
   "body": {
@@ -125,5 +125,5 @@
       "rnode:taskAssigneesPermission": null
     }
   },
-  "trimmed": "properties: 37 of 55 kept (rnode, docri and var_ ones); the document's other keys left out"
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
 }

@@ -25,8 +25,11 @@ export const SERVER_NAME = 'nuxeo-builder';
 export const SERVER_VERSION = '0.1.0';
 
 export interface ServerDependencies {
-  /** The Nuxeo reader, or why there is none: then every Nuxeo tool answers with that reason. */
-  readonly nuxeo: NuxeoReads | { readonly problem: string };
+  /**
+   * A new Nuxeo reader for each tool call, so that each call asks Nuxeo who it runs as before its
+   * first read; or why there is none, which every Nuxeo tool then answers with.
+   */
+  readonly nuxeo: (() => NuxeoReads) | { readonly problem: string };
   readonly validate?: (request: PackageRequest) => Promise<PackageCheck>;
 }
 
@@ -38,7 +41,10 @@ const INSTRUCTIONS =
   ' card; describe_workflow before a task form; and validate_package after every change to a' +
   ' package. A package that does not pass validate_package is not finished.';
 
-/** Every Nuxeo tool reads definitions, never documents, and changes nothing. */
+/**
+ * Every Nuxeo tool reads definitions and changes nothing. The only documents read are a workflow
+ * model's own, for its steps, each with its workflow schema only.
+ */
 const READS = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -58,8 +64,9 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     <Args>(read: (reader: NuxeoReads, args: Args) => Promise<unknown>) =>
     (args: Args): Promise<CallToolResult> =>
       answer(async () => {
-        if ('problem' in nuxeo) throw new Error(nuxeo.problem);
-        return { server: nuxeo.origin, ...asObject(await read(nuxeo, args)) };
+        if (typeof nuxeo !== 'function') throw new Error(nuxeo.problem);
+        const reader = nuxeo();
+        return { server: reader.origin, ...asObject(await read(reader, args)) };
       });
 
   server.registerTool(
@@ -112,7 +119,9 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       title: 'Page providers',
       description:
         "The names of the server's page providers, from Nuxeo's management API, which needs an" +
-        ' administrator. A queue or a related-records card names one of these.',
+        ' administrator, each marked indexed when the search index answers it: an index lags, so' +
+        ' a list that must show a write just made should not use one. A queue or a' +
+        ' related-records card names one of these.',
       inputSchema: z.object({
         query: z.string().optional().describe('Only names containing this, in any case'),
       }),
@@ -126,9 +135,10 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     {
       title: 'Page provider',
       description:
-        "One page provider's definition, from /search/pp/<name>: its query pattern, how many" +
-        ' parameters it takes in order, its sorts, page sizes and aggregates (the facets a queue' +
-        ' can offer).',
+        "One page provider's definition, from /search/pp/<name>: its pattern or where clause, how" +
+        " many parameters (?) a queue's or a card's parameters fill in order, the predicates a" +
+        ' search document fills, its sorts, page sizes, quick filters and aggregates (the facets' +
+        ' a queue can offer).',
       inputSchema: z.object({ name: z.string().min(1).describe('The page provider name') }),
       annotations: READS,
     },
@@ -167,14 +177,11 @@ export function createServer(dependencies: ServerDependencies): McpServer {
     {
       title: 'Vocabularies',
       description:
-        "The server's vocabularies: directories with a vocabulary schema, which a vocabulary widget" +
-        ' lists values from. all: true lists every directory by name.',
-      inputSchema: z.object({
-        all: z.boolean().optional().describe('List every directory, not only vocabularies'),
-      }),
+        "The server's vocabularies: the directories with a vocabulary schema, which a vocabulary" +
+        ' widget lists values from. Other directories are counted, not named.',
       annotations: READS,
     },
-    reading((reader, { all }: { all?: boolean }) => listVocabularies(reader, all === true)),
+    reading((reader) => listVocabularies(reader)),
   );
 
   server.registerTool(
@@ -249,11 +256,13 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       title: 'Validate a package',
       description:
         "Runs the package pipeline's checks, steps 1 to 6 of docs/business-apps/package-pipeline.md," +
-        ' on a package folder, exactly as CI does (scripts/app-package.mjs): the builder, the app' +
-        " definition's validation, the version, the build, the zip and its checksum. Returns whether" +
-        ' it passed, each finding with its file and place, and the step that refused it. The zip is' +
-        ' built in a temporary folder and removed; nothing is published. Paths are relative to the' +
-        ' repository.',
+        " on a package folder (scripts/app-package.mjs): the builder, the app definition's" +
+        ' validation, the version, the build, the zip and its checksum. Given the folder alone, it' +
+        ' passes what CI passes, and asCi is true; an allow-list, a registered file or another' +
+        ' platform version change what is checked, and are listed under departsFromCi. Returns' +
+        ' whether it passed, each finding with its file and place, and the step that refused it.' +
+        ' The zip is built in a temporary folder and removed; nothing is published. Paths are' +
+        ' relative to the repository, and must be inside it.',
       inputSchema: z.object({
         directory: z.string().min(1).describe('Such as business-apps/packages/payers-claims-demo'),
         allowList: z
@@ -270,11 +279,14 @@ export function createServer(dependencies: ServerDependencies): McpServer {
           ),
         platform: z
           .string()
+          .min(1)
           .optional()
           .describe("The platform version to hold app.json's range to. Default: libs/platform's"),
       }),
+      // Not read-only: it builds a zip, if only in a temporary folder it removes, and runs the
+      // pipeline's processes. A client may ask before running it, and should be free to.
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
         openWorldHint: false,

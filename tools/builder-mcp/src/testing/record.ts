@@ -13,7 +13,7 @@
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readTarget } from '../config.ts';
+import { isThisMachine, readTarget } from '../config.ts';
 import { describeSchema, describeType, readContentModel, summarise } from '../model.ts';
 import { NuxeoReader, type NuxeoReads } from '../nuxeo.ts';
 import { describeOperation, listOperations, readOperations } from '../operations.ts';
@@ -91,8 +91,7 @@ const SCENARIOS: Scenario[] = [
     run: (nuxeo) => describeWorkflow(nuxeo, 'NoSuchWorkflow'),
     refusedWith: 'has no workflow model',
   },
-  { tool: 'list_vocabularies', run: (nuxeo) => listVocabularies(nuxeo, false) },
-  { tool: 'list_vocabularies all', run: (nuxeo) => listVocabularies(nuxeo, true) },
+  { tool: 'list_vocabularies', run: (nuxeo) => listVocabularies(nuxeo) },
   {
     tool: 'get_vocabulary continent',
     run: (nuxeo) => readVocabulary(nuxeo, 'continent', { pageSize: 100, pageIndex: 0 }),
@@ -117,6 +116,15 @@ const read = readTarget(process.env);
 if ('problem' in read) {
   process.stderr.write(`${read.problem}\n`);
   process.exit(2);
+}
+// The recordings are committed to a public repository, so they are made against this machine's
+// own server only: a development server elsewhere may hold a customer's model. Refused before any
+// request is made. `--check` runs against any server, and writes nothing.
+if (!check && !isThisMachine(new URL(read.target.origin).hostname)) {
+  process.stdout.write(
+    `Nothing recorded: ${read.target.origin} is not this machine. Use --check against it.\n`,
+  );
+  process.exit(1);
 }
 const recorder = new RecordingReads(new NuxeoReader(read.target));
 /** What is printed, with the account's name and password, should either appear, replaced. */
@@ -146,10 +154,14 @@ process.stdout.write(
   `${SCENARIOS.length - failed} of ${SCENARIOS.length} scenarios answered as expected.\n`,
 );
 if (!check && failed === 0)
-  write(recorder.recordings, [read.target.username, read.target.password]);
+  write(recorder.recordings, [read.target.username, read.target.password], read.target.origin);
 process.exit(failed === 0 ? 0 : 1);
 
-function write(recordings: ReadonlyMap<string, Recording>, secrets: readonly string[]): void {
+function write(
+  recordings: ReadonlyMap<string, Recording>,
+  secrets: readonly string[],
+  origin: string,
+): void {
   const trims: Record<string, string> = {};
   const used = usedNames(recordings);
   const files = new Map<string, string>();
@@ -176,8 +188,7 @@ function write(recordings: ReadonlyMap<string, Recording>, secrets: readonly str
       {
         recordedAt: new Date().toISOString().slice(0, 10),
         by: 'tools/builder-mcp/src/testing/record.ts',
-        server:
-          'the local Docker Nuxeo of AGENTS/11-beta-program.md, recorded as http://localhost:8080',
+        server: origin,
         reads: recordings.size,
         trims,
       },
