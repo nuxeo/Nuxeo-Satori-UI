@@ -424,7 +424,8 @@ export class CreateImportDialogComponent implements OnInit {
 
   /**
    * Dublin Core metadata fields for blob-holding import types: File, Picture, Audio, Video and
-   * any type that extends one of them or carries the `file` schema, itself or through a facet.
+   * any type that extends one of them, or carries the `file` schema, itself or through a facet,
+   * and is not folderish.
    */
   readonly showImportBlobMetadataFields = computed(() => {
     const type = this.importDocType();
