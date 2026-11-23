@@ -42,6 +42,12 @@ export function checkPackage({
     app: app['app.json'],
     actions: app['actions.json'],
     assets: new Set(Object.keys(conversion.appAssets).filter((path) => path.startsWith('assets/'))),
+    // The queues the home and the menu may name: the package's own, by their files' names.
+    queues: new Set(
+      Object.keys(app)
+        .map((path) => /^queues\/([^/]+)\.json$/.exec(path)?.[1])
+        .filter((id): id is string => id !== undefined),
+    ),
   };
   for (const path of Object.keys(conversion.appAssets))
     if (!path.startsWith('assets/'))

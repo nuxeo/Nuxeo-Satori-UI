@@ -433,6 +433,47 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
   {
+    name: 'wrong-home-queue',
+    description: 'Point a card of the home at another queue',
+    caughtBy: 7,
+    apply: (conversion) => {
+      const home = conversion.app['home.json'];
+      const cards = isRecord(home) && Array.isArray(home['cards']) ? home['cards'] : [];
+      const queues = Object.keys(conversion.app)
+        .filter((path) => path.startsWith('queues/'))
+        .map((path) => path.slice('queues/'.length, -'.json'.length));
+      const card = cards.find((item) => isRecord(item) && typeof item['queue'] === 'string') as
+        Json | undefined;
+      const other = queues.find((id) => id !== card?.['queue']);
+      if (!card || other === undefined)
+        throw new MutationError(
+          'the conversion has no home card, or no other queue to point it at',
+        );
+      const file = clone(home) as Json;
+      const target = (file['cards'] as Json[]).find((item) => item['id'] === card['id']) as Json;
+      target['queue'] = other;
+      return {
+        conversion: withFile(conversion, 'home.json', file),
+        changed: `pointed ${String(card['id'])} in app/home.json at ${other}, not ${String(card['queue'])}`,
+      };
+    },
+  },
+  {
+    name: 'drop-menu-entry',
+    description: 'Drop an entry of the menu',
+    caughtBy: 7,
+    apply: (conversion) => {
+      const menu = conversion.app['navigation.json'];
+      const entries = isRecord(menu) && Array.isArray(menu['entries']) ? menu['entries'] : [];
+      if (entries.length === 0) throw new MutationError('the conversion has no menu entry to drop');
+      const [dropped, ...rest] = entries as Json[];
+      return {
+        conversion: withFile(conversion, 'navigation.json', { ...(menu as Json), entries: rest }),
+        changed: `dropped ${String(dropped['id'])} from app/navigation.json`,
+      };
+    },
+  },
+  {
     name: 'change-label',
     description: 'Change the label of a converted field',
     caughtBy: 6,

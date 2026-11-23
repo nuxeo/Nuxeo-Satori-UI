@@ -6,23 +6,17 @@
  *   deployment's allow-list (decision 3). A button with no operation, or one off the list, is
  *   reported.
  * - **A theme** becomes the app's `branding.theme`, with its tokens in `themes/<name>.json`.
- * - **The left menu and its pages** wait for phase 1's `navigation.json`, and **tabs** for M2.
+ * - **The left menu's entries** that open a search screen become entries of `navigation.json`
+ *   (`convert-home.ts`); **tabs** wait for M2.
  *
  * A contribution that sits in a condition waits for M2, which converts the condition: converting
  * it alone would show it to everyone.
  */
 import { own, slotEntry, type Catalogue } from './catalogue';
+import { menuDecisions } from './convert-home';
 import type { ConvertContext } from './convert';
 import type { Inventory, SlotContribution } from './inventory';
-import {
-  actionIdOf,
-  iconOf,
-  isBound,
-  labelOf,
-  placed,
-  queuePath,
-  searchQueueId,
-} from './app-files';
+import { actionIdOf, iconOf, isBound, labelOf, placed } from './app-files';
 
 /** The operation an action converted from a button runs, and its parameters, or why it cannot. */
 /**
@@ -133,6 +127,8 @@ export function convertSlots(context: ConvertContext): void {
   const { inventory, catalogue } = context;
   const actions: Record<string, unknown>[] = [];
   const owners = actionOwners(inventory, catalogue, context.appId, context.allowList);
+  const menus = menuDecisions(inventory, catalogue);
+  const entries = menus.entries;
   for (const { contribution, index, overall } of placed(inventory.slotContributions)) {
     const id = `slot-contribution:${contribution.path}#${index}`;
     const entry = slotEntry(catalogue, contribution.slot);
@@ -216,10 +212,23 @@ export function convertSlots(context: ConvertContext): void {
       continue;
     }
     if (entry.slot === 'navbar' || entry.slot === 'sidebar') {
-      context.decide(id, {
-        outcome: 'pending',
-        note: `Phase 1's navigation.json makes it a menu entry${opens(context, contribution)}; that file is not in the app definition yet`,
-      });
+      const menu = entries.find(
+        (candidate) => candidate.item === contribution || candidate.page === contribution,
+      );
+      context.decide(
+        id,
+        menu === undefined
+          ? (menus.skipped.get(contribution) ?? {
+              outcome: 'pending',
+              note: 'No entry of the left menu opens it, so it is no entry of navigation.json: the mapping agent proposes where it goes (section 5)',
+            })
+          : menu.item === contribution
+            ? { outcome: 'converted', to: `navigation.json ${menu.id}` }
+            : {
+                outcome: 'converted',
+                to: `queues/${menu.queue}.json, which the menu entry navigation.json ${menu.id} opens`,
+              },
+      );
       continue;
     }
     if (entry.slot === 'tabs') {
@@ -235,23 +244,6 @@ export function convertSlots(context: ConvertContext): void {
     });
   }
   if (actions.length > 0) context.files['actions.json'] = { version: 2, actions };
-}
-
-/** Which queue a menu entry or its page opens, when it is a search screen M1 wrote. */
-function opens(context: ConvertContext, contribution: SlotContribution): string {
-  const page =
-    contribution.slot === 'DRAWER_PAGES'
-      ? contribution
-      : context.inventory.slotContributions.find(
-          (other) => other.slot === 'DRAWER_PAGES' && other.name === contribution.name,
-        );
-  const form = page?.parts.find((part) => part.element === 'nuxeo-search-form');
-  if (!form) return '';
-  const search = context.inventory.searches.find(
-    (candidate) =>
-      candidate.part === 'results' &&
-      (candidate.provider === own(form.attributes, 'provider') ||
-        searchQueueId(candidate) === own(form.attributes, 'search-name')),
-  );
-  return search ? ` that opens ${queuePath(searchQueueId(search))}` : '';
+  if (entries.length > 0)
+    context.files['navigation.json'] = { version: 2, entries: entries.map((e) => e.entry) };
 }

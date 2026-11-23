@@ -10,7 +10,8 @@
  *   the configuration among them;
  * - **nothing is widened to everyone.** A field, button or dashboard card Web UI shows only while
  *   a condition passes must not be converted without it: a field written without a
- *   `visibleWhen`, an action without one, or a queue written for the card at all.
+ *   `visibleWhen`, an action without one, a queue written for the card at all, or a card of
+ *   `home.json` or an entry of `navigation.json` for what shows only under a condition.
  *
  * The truth tables wait for M2 and the migration server. With conditions in the package, that part
  * has not run, and the check says so; with none, there is nothing for a table to decide.
@@ -28,6 +29,7 @@ import {
 } from './app-files';
 import { layoutFields, listColumns, rulesIn } from './app-walk';
 import { recordedAllowList } from './convert';
+import { homeCards, menuEntries, menuEntryId } from './convert-home';
 import { isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -118,6 +120,38 @@ export function checkConditions({
           `${path}: it shows the column ${column.field} to everyone, though Web UI shows it only while a condition passes`,
         );
     }
+  }
+
+  // The home and the menu: a card or an entry for a dashboard card or a menu entry under a
+  // condition, which owns no queue and so is no card or entry of its own, shows to everyone.
+  const homeIds = new Set(homeCards(inventory).map((card) => card.id));
+  const homeFile = conversion.app['home.json'];
+  const homeList = isRecord(homeFile) && Array.isArray(homeFile['cards']) ? homeFile['cards'] : [];
+  inventory.dashboard?.cards.forEach((card, index) => {
+    const id = `card-${index + 1}`;
+    const written = homeList.find((item) => isRecord(item) && item['id'] === id);
+    if (card.conditional && !homeIds.has(id) && isRecord(written) && !('visibleWhen' in written))
+      findings.push(
+        `home.json: ${id} shows card ${index + 1} to everyone, though Web UI shows it only while a condition passes`,
+      );
+  });
+  const menuIds = new Set(menuEntries(inventory, catalogue).map((entry) => entry.id));
+  const menuFile = conversion.app['navigation.json'];
+  const menuList =
+    isRecord(menuFile) && Array.isArray(menuFile['entries']) ? menuFile['entries'] : [];
+  for (const item of inventory.slotContributions) {
+    if (item.slot !== 'DRAWER_ITEMS') continue;
+    // The entry under a condition, or the page it opens.
+    const page = inventory.slotContributions.find(
+      (other) => other.slot === 'DRAWER_PAGES' && other.name === item.name,
+    );
+    if (item.conditions.length === 0 && (page?.conditions.length ?? 0) === 0) continue;
+    const id = menuEntryId(item);
+    const written = menuList.find((entry) => isRecord(entry) && entry['id'] === id);
+    if (!menuIds.has(id) && isRecord(written) && !('visibleWhen' in written))
+      findings.push(
+        `navigation.json: ${id} shows to everyone, though Web UI shows the menu entry "${item.name}" only while a condition passes`,
+      );
   }
 
   const conditions = inventory.conditions.length;

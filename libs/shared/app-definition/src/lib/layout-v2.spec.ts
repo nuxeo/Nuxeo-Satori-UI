@@ -66,6 +66,45 @@ describe('the proposal and the validator agree', () => {
   });
 });
 
+describe('the proposed examples are refused until they are built', () => {
+  // A block fenced "```json proposed <widget>.<parameter>" is a proposal not yet built, such as
+  // layout-v2.md's section 12: the validator refuses it today, and for that widget's parameter
+  // alone. The day it is accepted, the proposal is built: make the block a plain ```json example,
+  // which the test above then holds to no finding, and settle its section. When no proposed block
+  // is left, delete this describe, whose first test would fail.
+  const proposed = [
+    ...proposal.matchAll(/```json proposed ([a-z-]+)\.([A-Za-z]+)\n([\s\S]*?)```/g),
+  ].map(([, widget, parameter, body]) => ({ widget, parameter, example: JSON.parse(body) }));
+
+  it('finds them', () => {
+    expect(proposed.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('leaves no json block out: each is an example or a labelled proposal', () => {
+    // A block fenced "```json proposed" with no label, or a mistyped one, matches neither pattern,
+    // and no test would read it.
+    const fences = [...proposal.matchAll(/```json[^\n]*\n/g)].length;
+    const examples = [...proposal.matchAll(/```json\n/g)].length;
+    expect(fences).toBe(examples + proposed.length);
+  });
+
+  proposed.forEach(({ widget, parameter, example }, index) => {
+    it(`proposed example ${index + 1} is refused, for ${widget}'s "${parameter}" alone`, () => {
+      // Wrapped as the examples above are: a file, a card, or a field.
+      const file =
+        'version' in example
+          ? example
+          : 'related' in example || 'fields' in example
+            ? { version: 2, columns: 2, cards: [example] }
+            : withFields(example);
+      const found = messages(file);
+      expect(found.length).toBeGreaterThan(0);
+      const refusal = `.parameters.${parameter}: the widget "${widget}" has no parameter "${parameter}" [parameter]`;
+      for (const message of found) expect(message.endsWith(refusal)).toBe(true);
+    });
+  });
+});
+
 describe('a sound file', () => {
   it('has no finding, in every mode it suits', () => {
     expect(messages(sound())).toEqual([]);
