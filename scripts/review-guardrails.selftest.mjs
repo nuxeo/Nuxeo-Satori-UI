@@ -9191,6 +9191,17 @@ expectRed(
 );
 
 expectRed(
+  "a kit's seed script under business-apps/, defaulting the password",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'business-apps/packages/kit/demo/seed.mjs',
+    "const password = process.env['NUXEO_PASS'] || 'Administrator';\n",
+  ),
+  null,
+  /business-apps\/packages\/kit\/demo\/seed\.mjs:1 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
   'a fallback Prettier wrapped onto the next line, in a TypeScript file under a11y/',
   'checkNoNuxeoCredentialDefaults',
   withCredentialFile(

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until the presales Payers model arrives: a fictional member schema, with the
+     properties layout-v2.md's Member page (section 9) names. Replace it with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/member"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/member">
+
+  <!-- The member ID, such as MEMBER-100048. -->
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="firstName" type="xs:string" />
+  <xs:element name="lastName" type="xs:string" />
+  <xs:element name="birthDate" type="xs:date" />
+
+  <!-- The subfields section 9's address widget names: street, city, zip and country. -->
+  <xs:complexType name="memberAddress">
+    <xs:sequence>
+      <xs:element name="street" type="xs:string" />
+      <xs:element name="city" type="xs:string" />
+      <xs:element name="zip" type="xs:string" />
+      <xs:element name="country" type="xs:string" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="address" type="nxs:memberAddress" />
+
+  <xs:element name="phone" type="xs:string" />
+  <xs:element name="email" type="xs:string" />
+  <xs:element name="plan" type="xs:string" />
+
+  <!-- The values section 9's status badge gives a tone. -->
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="active" />
+        <xs:enumeration value="lapsed" />
+        <xs:enumeration value="terminated" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+
+  <!-- Stored in the clear, as any property is. Hiding it on the page is a convenience, not a
+       control: masking it in the API too is decision I (layout-v2.md, section 9). -->
+  <xs:element name="ssn" type="xs:string" />
+</xs:schema>

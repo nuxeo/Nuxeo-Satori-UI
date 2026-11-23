@@ -740,8 +740,11 @@ function checkHardcodedSecrets() {
   }
 }
 
-/** Where the Node-side harness and tooling live — the code that reads Nuxeo credentials. */
-const NUXEO_CREDENTIAL_ROOTS = ['scripts', 'tools', 'a11y'];
+/**
+ * Where the Node-side harness and tooling live — the code that reads Nuxeo credentials — and the
+ * business-apps kits, whose demo seed scripts write to a server.
+ */
+const NUXEO_CREDENTIAL_ROOTS = ['scripts', 'tools', 'a11y', 'business-apps'];
 
 /**
  * A Nuxeo login read from the environment: `NUXEO_USER`, `NUXEO_PASS`, the per-account variants
@@ -1466,10 +1469,10 @@ function scanScriptCredentialDefaults(files, report) {
  * ## What it reads, and why the whole tree rather than the diff
  *
  * Every tracked or untracked-but-not-ignored `.js`/`.mjs`/`.cjs`/`.ts`/`.mts`/`.cts`/`.tsx`/`.jsx`
- * and `.sh` file under `scripts/`, `tools/` and `a11y/`, and the `__tmpl__` generator templates
- * of those kinds under `tools/`, which become customer project code. The tree, because the defect
- * this exists for was already on `main` — a diff-scoped check would have been green over every
- * one of them. There are none left, so any hit is new.
+ * and `.sh` file under `scripts/`, `tools/`, `a11y/` and `business-apps/`, and the `__tmpl__`
+ * generator templates of those kinds under `tools/`, which become customer project code. The tree,
+ * because the defect this exists for was already on `main` — a diff-scoped check would have been
+ * green over every one of them. There are none left, so any hit is new.
  *
  * The variables are `NUXEO_USER`, `NUXEO_PASS`, their per-account variants
  * (`NUXEO_ISOLATED_PASS`), the `…USERNAME` / `…PASSWORD` spellings, and `NUXEO_AUTH`, a whole
@@ -1537,7 +1540,7 @@ function scanScriptCredentialDefaults(files, report) {
  * - A literal login that never touches the environment — `NXSAT-164.mjs` passed
  *   `'Administrator', 'Administrator'` straight to its `loginAs`, and that was found by reading,
  *   not by this check.
- * - Anything outside the three roots — `apps/nuxeo-ui-e2e` and `libs/integration-tests` enforce
+ * - Anything outside the four roots — `apps/nuxeo-ui-e2e` and `libs/integration-tests` enforce
  *   their own no-default rule in code. Product code that falls back to `'Administrator'` as a
  *   display **user id** (`currentUsername() ?? 'Administrator'`) reads no credential and is a
  *   different question.
