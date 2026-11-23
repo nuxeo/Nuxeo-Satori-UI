@@ -5470,6 +5470,50 @@ function checkStorybookSatoriCatalogues() {
     findStaticDirs(mainSource);
 
     /**
+     * Writes that can set `staticDirs` without naming it: an assignment through a computed key that
+     * is not a string literal (`config[key] = []`, where `key` may be `'staticDirs'`), and the
+     * reflective writers. None is counted as a definition above, so any one of them could empty the
+     * exported value while this gate judged the literal (review on #602). Refused, not traced.
+     */
+    const REFLECTIVE_WRITERS = new Set([
+      'Object.assign',
+      'Object.defineProperty',
+      'Object.defineProperties',
+      'Reflect.set',
+      'Reflect.defineProperty',
+    ]);
+    let hiddenWrite = null;
+    const findHiddenWrites = (node) => {
+      if (hiddenWrite) return;
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+        ts.isElementAccessExpression(node.left) &&
+        !ts.isStringLiteralLike(node.left.argumentExpression)
+      ) {
+        hiddenWrite = node;
+      } else if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        REFLECTIVE_WRITERS.has(node.expression.getText())
+      ) {
+        hiddenWrite = node;
+      }
+      ts.forEachChild(node, findHiddenWrites);
+    };
+    findHiddenWrites(mainSource);
+    if (hiddenWrite) {
+      fail(
+        `${main} writes a property this gate cannot name ` +
+          `(\`${hiddenWrite.getText().slice(0, 60)}\`), which may set \`staticDirs\`, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Set ' +
+          '`staticDirs` once, as a literal property of the exported configuration.',
+      );
+      legible = false;
+    }
+
+    /**
      * The object literal `main` exports as its configuration: `export default <object>`, or a
      * `const` it names, through `as` / `satisfies` / parentheses and a single-argument call such
      * as `defineMain({ … })`; `module.exports = …` likewise. `null` when it cannot be resolved.

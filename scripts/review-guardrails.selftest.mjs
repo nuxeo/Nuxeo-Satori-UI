@@ -13298,6 +13298,49 @@ export default customize({ staticDirs: [${SB_SATORI_DIR}] });
   /exports the result of `customize\(\{ staticDirs: \[[^`]*`, which may transform it/,
 );
 
+// Review on #602, tenth round: a write that sets `staticDirs` without naming it was invisible.
+expectRed(
+  'a computed-key write that may set staticDirs',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const key = 'staticDirs';
+const config = { staticDirs: [${SB_SATORI_DIR}] };
+config[key] = [];
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /writes a property this gate cannot name \(`config\[key\] = \[\]`\)/,
+);
+
+expectRed(
+  'Object.assign onto the exported configuration',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}] };
+Object.assign(config, { staticDirs: [] });
+export default config;
+`,
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /writes a property this gate cannot name \(`Object\.assign\(config/,
+);
+
+// A computed write with a literal key naming something else cannot reach `staticDirs`.
+falsePositiveControls += 1;
+expectGreen('a literal-key write to another property', 'checkStorybookSatoriCatalogues', {
+  ...SB_VENDOR_1_0_0,
+  [`${SB}/.storybook/main.ts`]: `const config = { staticDirs: [${SB_SATORI_DIR}] };
+config['framework'] = { name: '@storybook/angular', options: {} };
+export default config;
+`,
+  [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+});
+
 // A spread before `staticDirs` cannot replace it — the explicit value wins — so it must stay green.
 falsePositiveControls += 1;
 expectGreen('a spread before staticDirs', 'checkStorybookSatoriCatalogues', {
