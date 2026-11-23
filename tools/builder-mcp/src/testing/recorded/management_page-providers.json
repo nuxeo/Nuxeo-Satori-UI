@@ -1,0 +1,38 @@
+{
+  "request": {
+    "path": "/management/page-providers"
+  },
+  "status": 200,
+  "body": [
+    {
+      "name": "default_search",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "advanced_document_content",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "document_content",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "default_document_suggestion",
+      "class": "org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider",
+      "maxPageSize": 1000,
+      "defaultSearchClient": "opensearch"
+    },
+    {
+      "name": "tree_children",
+      "class": "org.nuxeo.ecm.platform.query.nxql.CoreQueryDocumentPageProvider",
+      "maxPageSize": 1000
+    }
+  ],
+  "trimmed": "5 of 101 kept: default_search, advanced_document_content, tree_children, default_document_suggestion, document_content"
+}

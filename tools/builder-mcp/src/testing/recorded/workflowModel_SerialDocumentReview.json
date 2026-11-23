@@ -1,0 +1,23 @@
+{
+  "request": {
+    "path": "/workflowModel/SerialDocumentReview"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "workflow",
+    "id": "0907ccd2-f60f-4471-b084-b3e3e5b6e626",
+    "name": "SerialDocumentReview",
+    "title": "wf.serialDocumentReview.SerialDocumentReview",
+    "state": "validated",
+    "workflowModelName": "SerialDocumentReview",
+    "initiator": null,
+    "attachedDocumentIds": [],
+    "variables": {
+      "participants": [],
+      "validationOrReview": "validation",
+      "initiatorComment": null,
+      "index": 0
+    },
+    "graphResource": "http://localhost:8080/nuxeo/api/v1/workflowModel/SerialDocumentReview/graph"
+  }
+}

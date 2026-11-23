@@ -1,0 +1,92 @@
+{
+  "request": {
+    "path": "/path/document-route-models-root/ParallelDocumentReview/Task2169",
+    "properties": "route_node"
+  },
+  "status": 200,
+  "body": {
+    "entity-type": "document",
+    "type": "RouteNode",
+    "path": "/document-route-models-root/ParallelDocumentReview/Task2169",
+    "facets": [
+      "SystemDocument",
+      "NotFulltextIndexable",
+      "HiddenInNavigation",
+      "facet-var_Task2169"
+    ],
+    "properties": {
+      "rnode:taskDocType": "TaskDoc",
+      "rnode:subRouteModelExpr": null,
+      "rnode:taskButtons": [
+        {
+          "filter": "",
+          "name": "reject",
+          "label": "wf.parallelDocumentReview.reject",
+          "validate": true
+        },
+        {
+          "filter": "",
+          "name": "validate",
+          "label": "wf.parallelDocumentReview.approve",
+          "validate": true
+        }
+      ],
+      "rnode:transitions": [
+        {
+          "result": null,
+          "path": [],
+          "condition": "NodeVariables[\"button\"] ==\"validate\"",
+          "chain": "validateDocument",
+          "targetId": "Task22b4",
+          "name": "prl_validateTask2169",
+          "description": null,
+          "label": "prl_validate"
+        },
+        {
+          "result": null,
+          "path": [],
+          "condition": "NodeVariables[\"button\"] ==\"reject\"",
+          "chain": "",
+          "targetId": "Task232e",
+          "name": "prl_rejectTask2169",
+          "description": null,
+          "label": "prl_reject"
+        }
+      ],
+      "rnode:taskLayout": "Task2169@taskLayout",
+      "rnode:startDate": null,
+      "rnode:taskY": "320",
+      "rnode:variablesFacet": "facet-var_Task2169",
+      "rnode:subRouteVariables": [],
+      "rnode:subRouteInstanceId": null,
+      "rnode:taskX": "360",
+      "rnode:inputChain": "",
+      "rnode:canceled": null,
+      "rnode:endDate": null,
+      "rnode:lastActor": null,
+      "rnode:fork": null,
+      "rnode:executeOnlyFirstTransition": false,
+      "rnode:taskDueDate": null,
+      "rnode:hasMultipleTasks": false,
+      "rnode:taskNotificationTemplate": "workflowTaskAssigned",
+      "rnode:allowTaskReassignment": true,
+      "rnode:stop": false,
+      "rnode:taskAssignees": [],
+      "rnode:taskDueDateExpr": "CurrentDate.days(5)",
+      "rnode:hasTask": true,
+      "rnode:button": null,
+      "rnode:escalationRules": [],
+      "rnode:outputChain": "NRD-AC-PR-ValidateNode-Output",
+      "rnode:taskDirective": "wf.parallelDocumentReview.consolidate.directive",
+      "rnode:taskDescription": null,
+      "rnode:taskAssigneesExpr": "workflowInitiator",
+      "rnode:count": null,
+      "rnode:tasksInfo": [],
+      "rnode:nodeId": "Task2169",
+      "rnode:merge": null,
+      "rnode:start": false,
+      "rnode:taskAssigneesPermission": "ReadWrite"
+    }
+  },
+  "trimmed": "properties: 37 of 37 kept (rnode, docri and var_ ones); the document's other keys left out"
+}
