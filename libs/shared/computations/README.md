@@ -31,8 +31,9 @@ const result = compute(field.computed, context);
 
 - **`compute(computation, context, evaluators?, depth = 0)`** evaluates `{ "type", "parameters" }`
   as a layout writes it. It never throws: whatever is wrong, the result says why, and the renderer
-  leaves the field out and logs the reason (layout-v2.md, section 8). `depth` is for a rule that
-  evaluates a computation in turn.
+  leaves the field out and logs the reason (layout-v2.md, section 8). That holds for whatever it is
+  given, a computation with a getter that throws included. `depth` is for a rule that evaluates a
+  computation in turn.
 - **`PACKAGED_COMPUTATION_EVALUATORS`**, the six computations by ID, frozen. A customer's own
   computation is a Layer 2 registration in code, passed to `compute` beside them.
 - **`ComputationContext`** is what a computation reads: `value` and `display` of a property,
@@ -129,10 +130,20 @@ Where layout-v2.md is silent, these are the choices, each tested.
       computations within ten levels of the top, and the packaged evaluators evaluate each at most
       once.
   - **An evaluator that throws, or a context whose `value`, `display` or `rule` throws**, is refused
-    with the error's message, naming the computation.
+    with the error's message, naming the computation. So is a computation that throws when it is
+    read, as a getter or a proxy can, which no layout parsed from JSON does.
+  - **What was thrown is read without trusting it.** An Error with no message, or with one that is
+    not a text, is "an error with no message". A value that throws when it is read, such as an
+    Error whose `message` getter throws or a revoked proxy, is "a thrown value that cannot be read".
   - A refusal of a nested computation is passed up as it is, naming the one that refused.
   - **A reason quotes at most 60 characters of each value it names**: a value, a type, a key, a
     property or a subfield. An error's message is cut at 60 characters too.
+    - **It writes no more of a value than it quotes.** The quote is the value's JSON, as
+      `JSON.stringify` writes it, but no item of a list and no value in an object is read past the
+      cut, and a text or a key is cut before it is escaped. Quoting a list of 100,000 items reads 31
+      of them. An object it opens still has its keys listed, as `JSON.stringify` lists them.
+    - A value JSON cannot write is named by its kind: "a function", "a bigint", or "an object" for
+      a cycle or a list holding a bigint.
   - **An evaluator checks its own number of parameters**, so a customer's needs no signature here.
     The packaged ones word the refusal exactly as the validator does.
 - **Refusals the validator words its own way.** Six mistakes are refused here in other words than
@@ -180,10 +191,15 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
 
 - **Negative controls:** every reason a computation can be refused with has one: an input wrong in
   one way, and the exact reason. `reasons.spec.ts` reads the library's source and fails when a
-  reason has no control. Every refusal is built by `refuse()`, and a second test fails when one is
-  built any other way, so that a reason cannot slip past the first. It proves that every reason has a
-  control, not that every guard has one. The mutation checks are for guards.
-- **Mutation checks:** taking out any one of these 37 guards made a test fail. The helper that ran
+  reason has no control. A control is one matcher's expected value, `expect(…).toEqual(…)` or
+  `expect(….reason).toContain(…)`, holding all of the reason's text. The same text in a comment, a
+  test's title, a fixture, the value under test, or a matcher under `.not` or `expect.not`, asserts
+  nothing and does not count, and a second test holds that. A reason written with no literal text
+  to look for, as a variable, a `+` or a `?:`, is reported as having no control, and a third test
+  holds that. Every refusal is built by `refuse()`, and a fourth test fails when one is built any
+  other way, so that a reason cannot slip past the first. It proves that
+  every reason has a control, not that every guard has one. The mutation checks are for guards.
+- **Mutation checks:** taking out any one of these 55 guards made a test fail. The helper that ran
   them refused a mutation that did not apply exactly once, and one that broke a suite instead of
   failing a test.
   - the depth cap, and the depth cap off by one;
@@ -200,11 +216,19 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
   - evaluating only `core.choose`'s chosen value;
   - looking up a type among own keys only;
   - never `-0`;
-  - catching what an evaluator or the context throws;
+  - catching what an evaluator or the context throws, and a computation that throws when read;
+  - reading what was thrown without trusting it: catching what reading it throws, an Error whose
+    message is no text, and one whose message is empty;
   - quoting a type, a key and a subfield, and cutting an error's message;
+  - quoting without throwing, and naming a kind with the right article;
+  - stopping a list and an object at the cut, and cutting a text and a key before escaping them;
+  - telling a boxed value by its `valueOf` rather than `instanceof`, and unboxing a bigint;
   - an evaluator's number of parameters drifting from its signature, and an ID missing from the
     evaluators;
   - a new refusal with no control, and a refusal built without `refuse()`;
+  - counting as a control only a matcher's argument, not the value under test, not a matcher under
+    `.not`, nor an `expect.not` inside one, only one expectation holding all of a reason, and
+    reporting a reason with no text to look for;
   - each run in its own zone, and the config's zones the ones the suite's literals are written for.
 
 ## Not done yet
