@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "payers.queue.unassigned",
+  "pageProvider": "payers_unassigned_claims",
+  "columns": [
+    "claim:number",
+    { "field": "claim:member", "widget": "document-link" },
+    { "field": "claim:billedAmount", "widget": "currency", "parameters": { "currency": "USD" } },
+    { "field": "claim:received", "widget": "relative-date" }
+  ],
+  "sort": [{ "field": "claim:received", "order": "asc" }],
+  "pageSize": 50,
+  "rowActions": ["payers.claim.approve", "app.rowActions.download"],
+  "bulkActions": ["app.bulkActions.downloadZip"]
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/actions.schema.json",
+  "version": 2,
+  "actions": [
+    {
+      "id": "payers.claim.approve",
+      "labelKey": "payers.action.approve",
+      "icon": "check",
+      "order": 10,
+      "on": ["record", "row"],
+      "visibleWhen": { "type": "app.rules.isType", "parameters": ["Claim"] },
+      "transition": "approve",
+      "confirm": { "labelKey": "payers.action.approve.confirm" },
+      "success": { "labelKey": "payers.action.approve.done" }
+    }
+  ]
+}

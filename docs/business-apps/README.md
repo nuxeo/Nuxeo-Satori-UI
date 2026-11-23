@@ -55,6 +55,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
    and forms are configured in, and what the Studio migration writes.
 9. [app-definition-v2.md](app-definition-v2.md): the other files of an app definition, proposed:
    `app.json`, queues, actions, task forms, labels and module settings.
+10. [package-pipeline.md](package-pipeline.md): the package pipeline's first stage, which checks,
+    signs and publishes an app definition package.
 
 ## Facts that hold
 

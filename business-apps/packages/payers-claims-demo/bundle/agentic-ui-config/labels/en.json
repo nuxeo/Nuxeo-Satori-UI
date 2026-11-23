@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/labels.schema.json",
+  "version": 2,
+  "labels": {
+    "payers.app.claims": "Claims",
+    "payers.queue.unassigned": "Unassigned claims",
+    "payers.card.claim": "Claim",
+    "payers.action.approve": "Approve",
+    "payers.action.approve.confirm": "Approve this claim?",
+    "payers.action.approve.done": "The claim is approved."
+  }
+}

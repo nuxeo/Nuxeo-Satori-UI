@@ -1,0 +1,11 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/app.schema.json",
+  "version": 2,
+  "id": "payers-claims",
+  "label": "Claims",
+  "labelKey": "payers.app.claims",
+  "packageVersion": "0.1.0",
+  "platform": ">=0.2.0 <1.0.0",
+  "groups": ["members"],
+  "branding": { "applicationTitle": "Payers Claims" }
+}

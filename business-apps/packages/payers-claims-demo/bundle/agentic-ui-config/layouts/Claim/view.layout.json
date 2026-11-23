@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "claim",
+      "labelKey": "payers.card.claim",
+      "fields": [
+        "claim:number",
+        { "field": "claim:member", "widget": "document-link" },
+        {
+          "field": "claim:billedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        { "field": "claim:received", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "documents",
+      "label": "Documents",
+      "related": {
+        "pageProvider": "payers_claim_documents",
+        "parameters": [{ "field": "claim:number" }],
+        "columns": ["dc:title", { "field": "dc:modified", "widget": "relative-date" }],
+        "rowActions": ["app.rowActions.download"]
+      }
+    }
+  ]
+}

@@ -18,9 +18,11 @@ builds it. Two proposals define the files:
 npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--registered <file>] [--platform <version>]
 ```
 
-It is the check behind phase 0's demo step 1, which the package pipeline is to run: a layout
-naming a widget the platform does not have is refused, and the message names the file, the place
-and the widget.
+It is the check behind phase 0's demo step 1, which the package pipeline runs
+([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)): a layout naming a widget
+the platform does not have is refused, and the message names the file, the place and the widget.
+It needs Node 24 and nothing else: `src/bin.mjs` runs the library's TypeScript as it is, with no
+install and no transpiler.
 
 - **Files it checks:**
   - **A directory:** every file of an app definition under it, each known by its place
@@ -213,7 +215,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 
 ## Not done yet
 
-- **The package pipeline:** signing and publishing to pre-production, around this check.
+- **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
+  completes it.
 - **The app's use of it:** phase 1 renders layouts and queues, and phase 2 actions and task forms.
 - **Checking widgets against property types**, which needs the content model: phase 1's model
   reader.
