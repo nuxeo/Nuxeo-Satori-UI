@@ -68,24 +68,24 @@ Windows 11; Explorer and `cmd` then cannot open or delete it. The refusal is unc
 
 ### Changed — BREAKING (registered IDs) — one Browse entry again
 
-The adf-hx proof of concept is removed, with its two routes and its navigation entry.
+The earlier parallel-browse proof of concept is removed, with its two routes and its navigation entry.
 
-- **`app.navbar.browseAdfHx` is retired.** An `overrides` key naming it now addresses nothing. A
+- **The proof-of-concept navbar entry's registered ID is retired.** An `overrides` key naming it now addresses nothing. A
   `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
   own — with no path or label unless it gives them, which renders a blank item: delete it. Its
-  label key, `nav.item.browse-adf-hx`, is on no entry any more: move a `labels` entry for it to
+  label key is on no entry any more: move a `labels` entry for it to
   `nav.item.browse`.
-- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
+- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the proof-of-concept entry read
   "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
   it is now redundant, not harmful.
-- **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
+- **Old links redirect.** The two retired proof-of-concept routes go to `/browse` and `/search`
   with their query string intact, and a `?path=` folder opens in `/browse`.
 
-### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the adf-hx browse URL helpers
+### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the proof-of-concept browse URL helpers
 
-They built, recognised and parsed `/browse-adf-hx` URLs, and chose between that route and
+They built, recognised and parsed the proof-of-concept browse URLs, and chose between that route and
 `/browse` for document detail's way back. With the route retired, all seven go:
-`toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
+three proof-of-concept URL functions (build, recognise, parse),
 `toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
 `BROWSE_RETURN_MODE_PARAM`. Use `toBrowseRouterUrl`, `isBrowseRouterUrl` and
 `parseBrowseNuxeoPathFromRouterUrl`. Document detail no longer reads `?browseReturn=`; an old link
@@ -141,9 +141,8 @@ carrying it opens normally, with breadcrumbs into `/browse`.
 
 ### Removed (`@nuxeo-satori/platform`) — a peer dependency
 
-- **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine used three of
-  its functions — `filterEnabled`, `sortByOrder` and `mergeObjects` — and now has its own, pinned
-  case by case to the output 9.0.0 produced (`extension-element.spec.ts` and
+- **The third-party extensions package is no longer a peer dependency.** The extension engine
+  now has its own `filterEnabled`, `sortByOrder` and `mergeObjects` (`extension-element.spec.ts` and
   `extension-merge.spec.ts` in `libs/shared/extensions`). No export changes. A consumer no longer
   has to install the package, and can remove it unless its own code imports it.
 
@@ -256,5 +255,5 @@ private readonly locale = inject(LOCALE_ID);
   already in use by `share-saved-search-dialog` — so this is the fourth copy of that shape
   selection rather than the first consumer of a dormant path. That dialog keeps its own copy
   deliberately: it re-parses its own label, so its dates must stay unformatted.
-- The Clipboard navigation item's accessible name and the `hxp-document-cards` selection
+- The Clipboard navigation item's accessible name and the document cards selection
   checkbox label are translated rather than concatenated (INFO-144).

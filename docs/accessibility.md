@@ -201,10 +201,8 @@ Three properties make it the right shape, each of them learned the hard way and 
 
 Two further rules apply to every layer:
 
-- **An exclusion is scoped to one surface and cites an owner.** `phase-6-a11y.mjs` is the
-  model: `ADF_HX_UPSTREAM` is applied to the adf-hx POC step alone and cites
-  `docs/adf-hx-upstream-findings.md` §1.2. A global rule-id list silences that rule
-  everywhere, including on surfaces we own — the file says so itself, and it is the reason
+- **An exclusion is scoped to one surface and cites an owner.** A global rule-id list silences
+  that rule everywhere, including on surfaces we own, and it is the reason
   `KNOWN_VIOLATIONS` must stay empty.
 - **A new gate is not trusted until it has been seen to fail on purpose.** The static scan was
   negative-controlled before adoption: a second `click-events-have-key-events` in an
@@ -267,10 +265,7 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   depends on what the test repository happens to hold rather than on anything the journey asserts.
 - **Six routes no runtime layer visits:** `/#/contracts` and the five `/#/settings/*` pages
   (Nuxeo Drive, profile, authorized applications, cloud services, themes). Contracts was dropped
-  from the journey on purpose — see "Fifteen screens" below. `/#/search-adf-hx` was the seventh
-  until the adf-hx routes were retired on 2026-10-14; it and `/#/browse-adf-hx` now redirect to
-  `/#/search` and `/#/browse`, which the surfaces and display-modes suites scan, so both suites
-  dropped their `/#/browse-adf-hx` row rather than moved it.
+  from the journey on purpose — see "Fifteen screens" below.
 - **Populated tasks and expired-queue screens.** The journey scans their empty states on a server
   with neither, and says so in its output; a task form or an expired card has never been scanned.
 - **Horizontal scrolling inside a region at 320px.** Reflow checks the document's `scrollWidth`
@@ -320,11 +315,10 @@ while `phase-6-a11y.mjs` recorded both rules as driven to zero. Two scripts sett
 **a11y-scout was right. phase-6's zero is stale.** Under phase-6's _own_ four-tag set, at its
 own 1440×900 viewport, measured on 2026-09-11 and again on 2026-09-30:
 
-| Surface            | Rule                     | Impact   | 11 Sep                                | 30 Sep                               |
-| ------------------ | ------------------------ | -------- | ------------------------------------- | ------------------------------------ |
-| `/#/browse`        | `button-name`            | critical | 2 — the document-tree expand toggles  | **0** — fixed by `NXSAT-227`         |
-| `/#/tasks`         | `color-contrast`         | serious  | 2                                     | **2** — still open                   |
-| `/#/browse-adf-hx` | `aria-required-children` | critical | 2 — the documented upstream exclusion | 2 — unchanged, legitimately excluded |
+| Surface     | Rule             | Impact   | 11 Sep                               | 30 Sep                       |
+| ----------- | ---------------- | -------- | ------------------------------------ | ---------------------------- |
+| `/#/browse` | `button-name`    | critical | 2 — the document-tree expand toggles | **0** — fixed by `NXSAT-227` |
+| `/#/tasks`  | `color-contrast` | serious  | 2                                    | **2** — still open           |
 
 On 11 September that was **four blocking nodes** phase-6 claimed did not exist. Its table is
 dated 2026-08-24; the claim was true when written and was never re-measured. `KNOWN_VIOLATIONS`
@@ -705,7 +699,7 @@ reasoning is kept because the _mechanism_ is general: any element whose loading 
 
 `screenUnsettledReason()` in `a11y/surface.mjs` therefore waits for the screen to hold still for
 1.5 seconds with no loader visible. On every poll it reads, across the nav drawer and the feature
-host together, every visible spinner (Material's or the hand-written `hxp-spinner`), progress
+host together, every visible spinner (Material's or a hand-written one), progress
 indicator and text or skeleton loader listed in its `LOADING_SELECTOR`, plus the tree
 node count, the `<img>` count and the element count; the window restarts whenever a loader is
 visible or any count changes. (It first accepted a single repeated count, which proves only that

@@ -5,7 +5,7 @@
 Everything a manifest can address, by ID. An extension point nobody can discover is not an
 extension point, so this file is the contract: if an ID is not listed here, do not depend on it.
 
-Related: [`docs/adf-hx-beta-plan.md`](adf-hx-beta-plan.md) ·
+Related: [`docs/beta-plan.md`](beta-plan.md) ·
 [`AGENTS/11-beta-program.md`](../AGENTS/11-beta-program.md)
 
 ---
@@ -650,15 +650,7 @@ paths. A manifest that wants one of them shown to recipients too clears its rule
 { "overrides": { "app.navbar.favorites": { "rule": null } } }
 ```
 
-`app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
-app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
-backticks because it is no longer an ID you can address. An `overrides` key naming it changes
-nothing. A `navbar` slot entry naming it no longer patches anything, so it is added as an entry of
-its own, blank unless it gives a path and a label: delete it. A `labels` entry for its key,
-nav.item.browse-adf-hx, no longer reaches any entry: set `nav.item.browse` instead. Old `/#/browse-adf-hx` and `/#/search-adf-hx` links redirect to
-`/browse` and `/search` with their query string intact, and a `?path=` folder opens in `/browse`.
-Until then `app.navbar.browse` shipped `disabled: true`; a manifest restating it with
-`"disabled": false` is now redundant but harmless.
+`app.navbar.browse` is the one browse entry, at `/browse`.
 
 **Hiding an entry hides the navigation, not the route.** `{"visible": false}` and a
 denying `rule` both remove the entry from the sidebar; neither removes the route,
@@ -910,8 +902,8 @@ inject(ExtensionActionRegistry).register({
 });
 ```
 
-Handlers are objects with an `execute(context)` method — the shape adf-hx uses
-for its own `*-action.service` classes. Re-registering one of our IDs replaces
+Handlers are objects with an `execute(context)` method — the usual
+service shape. Re-registering one of our IDs replaces
 the behaviour without forking, and it stays replaced: the packaged surfaces
 register their own handlers in a lower-precedence tier, so yours answers whether
 it was registered before or after the page that ships the ID, and navigating away
@@ -1970,9 +1962,8 @@ not protect anything the API would otherwise return.
 
 ## 12. `$references` — layering your JSON over ours
 
-Semantics are ACA's. The merge is our own copy of `mergeObjects` from `@alfresco/adf-extensions`
-9.0.0, pinned case by case to its output, so behaviour matches the upstream documentation, apart
-from the `null` and `__proto__` items below, where ACA's merge threw or rewrote a prototype.
+The merge is our own copy of `mergeObjects`, pinned case by case to its output, apart
+from the `null` and `__proto__` items below, where the original threw or rewrote a prototype.
 
 - Layers apply in the order `$references` lists them. **Later wins.**
 - `$`-prefixed keys are **metadata and do not merge** — `$references` from a referenced layer never

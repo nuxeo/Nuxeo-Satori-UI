@@ -61,11 +61,8 @@ or vendored and carry no engineering intent — with two exceptions worth knowin
 
 - **`package-lock.json` is load-bearing** despite being generated. See the `npm ci` warning
   in [Getting Started](01-getting-started.md#use-npm-ci-never-a-bare-npm-install).
-- **`ng-mocks` is not a dependency.** A hand-written `file:` stub stood in for it while adf-hx
-  imported that **test library from its shipped runtime bundle**, which put `ng-mocks`'
-  implementation and two `eval()` calls into a customer-facing chunk. adf-hx left the tree in
-  NXSAT-637 and the stub, with its supply-chain allowlist entry, went in NXSAT-672.
-  `npm run beta:bundle` still fails if `ng-mocks` or an `eval()` from it reaches `dist/`.
+- **`ng-mocks` is not a dependency.**
+  `npm run beta:bundle` fails if `ng-mocks` or an `eval()` from it reaches `dist/`.
 
 ---
 
@@ -92,7 +89,6 @@ Anything that is inherently _the shell_ and would be wrong to make reusable:
 | `src/app/dashboard/`, `settings/`, `login/`, `personal-space/`, `features/contracts/` | Shell-level pages                                                                                                                                                                                           |
 | `src/app/document-detail/`, `document-viewer/`                                        | Accessibility regression specs (focus rings, contrast) over library components; `document-detail/` also holds a toolbar focus stylesheet that `styles.scss` uses                                            |
 | `src/app/assets/`, `pipes/`                                                           | The assets drawer, re-exported from `feature-assets`; `AiMarkdownPipe`                                                                                                                                      |
-| `src/app/retired-routes.ts`                                                           | Redirects for the retired POC routes, `/browse-adf-hx` → `/browse` and `/search-adf-hx` → `/search`, so old bookmarks still land (NXSAT-635)                                                                |
 
 ### `apps/nuxeo-satori-template` — why it exists and why it is bare
 
@@ -141,8 +137,6 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 
 ### Shared libraries — 13, 94,085 lines
 
-The adf-hx bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes (NXSAT-635).
-
 | Library                    |  Lines | Specs | Responsibility                                                                                                                                                                             |
 | -------------------------- | -----: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `satori-components`        | 38,898 |    59 | The `nxs-` components, Material-backed with no Satori import. **Published** as `@nuxeo/satori-platform/components` (NXSAT-308)                                                             |
@@ -156,7 +150,7 @@ The adf-hx bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes 
 | `ke-client`                |  1,231 |     2 | Knowledge Enrichment client                                                                                                                                                                |
 | `ai-client`                |  1,188 |     4 | The 12 `AI.*` operations. Thin HTTP client                                                                                                                                                 |
 | `satori-components-satori` |    722 |     1 | Four `nxs-` primitive IDs — avatar, breadcrumbs, tag, rich tooltip — on Satori, and the platform package's only Satori import. **Published** as `@nuxeo/satori-platform/components-satori` |
-| `testing`                  |    330 |     1 | Typed Nuxeo model fixtures, `nuxeoDocument` and `nuxeoAce`. Extracted from the bridge's port specs; nothing imports it since those went                                                    |
+| `testing`                  |    330 |     1 | Typed Nuxeo model fixtures, `nuxeoDocument` and `nuxeoAce`. Nothing imports it at present                                                                                                  |
 | `util`                     |      4 |     0 | One Nx-scaffold function, `sharedUtil()`. Nothing imports it                                                                                                                               |
 
 ### The other four
@@ -202,7 +196,7 @@ can import.
 | `type:integration-test`                    | `integration-tests`                                                                                                    | `scope:shared`, `scope:core`, `type:testing`. No rule admits its tag, so **nothing may import it** |
 | `scope:customer`, `type:config`            | None here since the packages moved to nuxeo/Nuxeo-Satori-Config; the generator tags each package it scaffolds this way | Nothing — no rule names either tag                                                                 |
 | `scope:e2e`, `type:e2e`                    | `nuxeo-ui-e2e`                                                                                                         | Nothing — no rule names either tag                                                                 |
-| none                                       | `@nuxeo-satori/generators`, `ng-mocks` (`tools/`); `agentic-ui-a11y`, which Nx infers from `a11y/package.json`         | Nothing                                                                                            |
+| none                                       | `@nuxeo-satori/generators` (`tools/`); `agentic-ui-a11y`, which Nx infers from `a11y/package.json`                     | Nothing                                                                                            |
 
 Nx also tags a project whose `package.json` is private `npm:private` — `platform` and the two
 `tools/` projects — and no rule names it. The `type:extension` rule cannot hold a customer library

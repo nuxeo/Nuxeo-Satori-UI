@@ -17,7 +17,7 @@ collections it is in. It is the counterpart of Web UI's `nuxeo-document-info` an
 - **Reads the document.** Give it a `NuxeoDocument`; every row comes from its properties, facets and
   context parameters. Rows with nothing to show are left out.
 - **Labels, never `[object Object]`.** A directory entry, a user or a blob that arrives as an object
-  shows its label or name. ADF's properties sidebar printed `[object Object]`; this panel cannot.
+  shows its label or name; this panel never prints `[object Object]`.
 - **Vocabulary labels.** Pass `vocabularyLabel` to show "Europe / France" instead of
   `europe/France` for nature, coverage and subjects.
 - **Tags as Web UI shows them.** The tags row appears only on a document with the `NXTag` facet.
