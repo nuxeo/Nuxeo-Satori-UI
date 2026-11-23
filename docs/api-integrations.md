@@ -1642,15 +1642,15 @@ levels deep; a deeper path labels as the stored id.
 
 ## 30. Permissions Panel — ACL Read and Per-Entry Writes (NXSAT-308)
 
-| Field           | Value                                                                                                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service**     | `NxsPermissionsService` (`libs/shared/satori-components/src/lib/permissions-panel/permissions-panel.service.ts`), over `DocumentDetailService`                       |
-| **Read**        | `GET /nuxeo/api/v1/id/:uid` with `enrichers.document=acls,permissions,userVisiblePermissions` and `fetch-acls: username,creator,extended` (`getDocumentPermissions`) |
-| **Add**         | `POST /nuxeo/api/v1/automation/Document.AddPermission` — `username`, `permission`, `begin`, `end`, `notify: false` (`addPermission`)                                 |
-| **Edit**        | `POST /nuxeo/api/v1/automation/Document.ReplacePermission` — `id`, `username`, `permission`, `begin`, `end`, `notify: false` (`replacePermission`)                   |
-| **Remove**      | `POST /nuxeo/api/v1/id/:uid/@op/Document.RemovePermission` — `id`, `acl` (`removePermissionById`)                                                                    |
-| **Inheritance** | `Document.BlockPermissionInheritance` / `Document.UnblockPermissionInheritance` on `/id/:uid/@op/…`                                                                  |
-| **Users**       | `POST /nuxeo/api/v1/automation/UserGroup.Suggestion` (`searchUsersGroups`)                                                                                           |
+| Field           | Value                                                                                                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `NxsPermissionsService` (`libs/shared/satori-components/src/lib/permissions-panel/permissions-panel.service.ts`), over `DocumentDetailService`                                          |
+| **Read**        | `GET /nuxeo/api/v1/id/:uid` with `enrichers.document=acls,permissions,userVisiblePermissions,allowedTransitions` and `fetch-acls: username,creator,extended` (`getDocumentPermissions`) |
+| **Add**         | `POST /nuxeo/api/v1/automation/Document.AddPermission` — `username`, `permission`, `begin`, `end`, `notify: false` (`addPermission`)                                                    |
+| **Edit**        | `POST /nuxeo/api/v1/automation/Document.ReplacePermission` — `id`, `username`, `permission`, `begin`, `end`, `notify: false` (`replacePermission`)                                      |
+| **Remove**      | `POST /nuxeo/api/v1/id/:uid/@op/Document.RemovePermission` — `id`, `acl` (`removePermissionById`)                                                                                       |
+| **Inheritance** | `Document.BlockPermissionInheritance` / `Document.UnblockPermissionInheritance` on `/id/:uid/@op/…`                                                                                     |
+| **Users**       | `POST /nuxeo/api/v1/automation/UserGroup.Suggestion` (`searchUsersGroups`)                                                                                                              |
 
 **The permission list comes from two enrichers, because neither is enough alone.**
 `userVisiblePermissions` is the server's list for the document type, from the `permissionsVisibility`

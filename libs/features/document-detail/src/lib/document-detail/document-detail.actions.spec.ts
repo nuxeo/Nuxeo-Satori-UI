@@ -589,6 +589,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.runToolbarAction(offered('app.toolbar.followTransition'));
 
       // What the route handler does before it loads another document.
+      component['releaseTransitionRequest']();
       component.actionInProgress.set(null);
       component['docUid'] = 'doc-2';
       component.actionInProgress.set('lock');
@@ -614,6 +615,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.openFollowTransition();
 
       // Navigation to another document, which allows a transition too, and one started there.
+      component['releaseTransitionRequest']();
       component.actionInProgress.set(null);
       component['docUid'] = 'doc-2';
       component.openFollowTransition();
@@ -624,6 +626,106 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.actionInProgress()).toBe('transition');
       expect(toast.show).not.toHaveBeenCalled();
+    });
+
+    /** What the route handler does on each navigation, here away from doc-1 and back to it. */
+    function awayAndBack(): void {
+      component['releaseTransitionRequest']();
+      component.actionInProgress.set(null);
+      component['docUid'] = 'doc-2';
+      component['releaseTransitionRequest']();
+      component.actionInProgress.set(null);
+      component['docUid'] = 'doc-1';
+    }
+
+    async function buildWithApprove(): Promise<void> {
+      await build(
+        doc({ contextParameters: { permissions: ['Read'], allowedTransitions: [APPROVE] } }),
+      );
+    }
+
+    it('drops a confirmation from a dialog opened on an earlier visit to the same document', async () => {
+      await buildWithApprove();
+      const closed = new Subject<unknown>();
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => closed }));
+      component.openFollowTransition();
+
+      awayAndBack();
+      closed.next(APPROVE);
+
+      expect(mockDetailService.followTransition).not.toHaveBeenCalled();
+    });
+
+    it("lets an earlier visit's late success neither speak nor reload the page", async () => {
+      await buildWithApprove();
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(APPROVE) }));
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.followTransition.mockReturnValueOnce(first);
+      component.openFollowTransition();
+
+      awayAndBack();
+      mockDetailService.getFullDocument.mockClear();
+      first.next(doc({ state: 'approved' }));
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
+    });
+
+    it("lets an earlier visit's late failure neither speak nor reload the page", async () => {
+      await buildWithApprove();
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(APPROVE) }));
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.followTransition.mockReturnValueOnce(first);
+      component.openFollowTransition();
+
+      awayAndBack();
+      mockDetailService.getFullDocument.mockClear();
+      first.error(new HttpErrorResponse({ status: 403 }));
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
+    });
+
+    it("drops an earlier visit's late response when the route itself goes away and back", async () => {
+      // The route, not a private call: the handler is what has to release the request.
+      const params = new BehaviorSubject(convertToParamMap({ uid: 'doc-1' }));
+      TestBed.overrideProvider(ActivatedRoute, {
+        useValue: {
+          paramMap: params,
+          queryParamMap: of(convertToParamMap({})),
+          snapshot: { queryParamMap: convertToParamMap({}) },
+        },
+      });
+      await buildWithApprove();
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(APPROVE) }));
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.followTransition.mockReturnValueOnce(first);
+      component.openFollowTransition();
+
+      params.next(convertToParamMap({ uid: 'doc-2' }));
+      params.next(convertToParamMap({ uid: 'doc-1' }));
+      await fixture.whenStable();
+      mockDetailService.getFullDocument.mockClear();
+      first.next(doc({ state: 'approved' }));
+
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
+    });
+
+    it('offers what a permissions refresh says the user may follow now', async () => {
+      await buildWithApprove();
+      expect(component.toolbarActions().map((a) => a.id)).toContain('app.toolbar.followTransition');
+
+      // Lifecycle rights revoked in the Permissions tab: the refresh carries the new, empty list.
+      mockDetailService.getDocumentPermissions.mockReturnValue(
+        of(doc({ contextParameters: { permissions: ['Read'], allowedTransitions: [] } })),
+      );
+      component['reloadDocumentPermissions']();
+      await fixture.whenStable();
+
+      expect(component.toolbarActions().map((a) => a.id)).not.toContain(
+        'app.toolbar.followTransition',
+      );
     });
   });
 

@@ -39,7 +39,8 @@ export class DocumentDetailService {
     return this.api
       .get<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}`, undefined, {
         properties: '*',
-        'enrichers.document': 'acls,permissions,userVisiblePermissions',
+        // `allowedTransitions` too: a permission change changes the transitions the user may follow.
+        'enrichers.document': `acls,permissions,userVisiblePermissions,${ALLOWED_TRANSITIONS_ENRICHER}`,
         'fetch-acls': 'username,creator,extended',
         depth: 'children',
         time: String(Date.now()),

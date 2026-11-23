@@ -700,8 +700,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** Token of the lock request that owns `actionInProgress`; navigation invalidates it. */
   private lockRequest = 0;
   /**
-   * Token of the newest lifecycle transition request, so that an older response cannot clear a
-   * newer one's busy flag. Navigation is caught by comparing the document id instead.
+   * Token of the newest lifecycle transition request, and of the visit: a new request and every
+   * navigation advance it. A dialog or a response holding an older one is dropped, so neither a new
+   * request nor a later visit to the same document hears from it.
    */
   private transitionRequest = 0;
   readonly isFavorite = signal(false);
@@ -1112,6 +1113,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.freshNoteDocument = this.readFreshNoteNavigationState();
       this.resetState();
       this.releaseLockRequest();
+      this.releaseTransitionRequest();
       this.docUid = uid;
       this.loadVocabularies();
       this.loadDocument(uid);
@@ -2887,6 +2889,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const transitions = allowedTransitions(doc);
     if (!doc || transitions.length === 0 || this.actionInProgress()) return;
     const uid = this.docUid;
+    // A confirmation counts only on the visit, and with the transitions, it was offered on.
+    const offeredOn = this.transitionRequest;
     this.dialog
       .open<FollowTransitionDialogComponent, FollowTransitionDialogData, NuxeoAllowedTransition>(
         FollowTransitionDialogComponent,
@@ -2895,10 +2899,24 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((transition) => {
-        if (transition && uid === this.docUid && !this.actionInProgress()) {
+        if (
+          transition &&
+          offeredOn === this.transitionRequest &&
+          uid === this.docUid &&
+          !this.actionInProgress()
+        ) {
           this.followTransition(uid, transition);
         }
       });
+  }
+
+  /**
+   * On navigation, the previous visit's transition dialog and request stop counting: a confirmation
+   * from it is dropped, and its late response neither speaks nor reloads, even after the user has
+   * come back to the same document. Navigation clears the busy flag itself (`resetState`).
+   */
+  private releaseTransitionRequest(): void {
+    this.transitionRequest += 1;
   }
 
   /**
