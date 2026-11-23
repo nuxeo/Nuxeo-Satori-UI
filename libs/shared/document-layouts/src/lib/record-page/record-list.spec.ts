@@ -22,7 +22,8 @@ import { Subject, of, throwError, type Observable } from 'rxjs';
 import { DocumentLayoutService } from '../document-layout.service';
 import type { LayoutFieldType } from '../layout.model';
 import type { RecordListEntry, RecordPropertyField } from './record-layout';
-import { RECORD_LIST_TODAY, RecordListComponent } from './record-list';
+import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
+import { RecordListComponent } from './record-list';
 
 const column = (
   xpath: string,
@@ -150,7 +151,9 @@ describe('RecordListComponent', () => {
             principalLabel: () => of(null),
           },
         },
-        { provide: RECORD_LIST_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
+        { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
+        // Neither UTC, where CI runs, nor +05:30: a cell shown in the wrong zone shows another day.
+        { provide: RECORD_PAGE_TIME_ZONE, useValue: '-0800' },
       ],
     });
     const run = (context: ExtensionRuleContext) => flagged.push(context);
@@ -248,6 +251,34 @@ describe('RecordListComponent', () => {
         w.includes('the widget "currency" does not show claim:billedAmount, a string value'),
       ),
     ).toBe(true);
+  });
+
+  it("shows a stored day as written and an instant on the reader's day, as the record page does", async () => {
+    rowProperties = () =>
+      of(
+        new Map<string, LayoutFieldType>([
+          ['claim:number', { type: 'string' }],
+          ['claim:billedAmount', { type: 'date' }],
+          ['claim:status', { type: 'date' }],
+        ]),
+      );
+    const dates: RecordListEntry = {
+      ...CLAIMS,
+      columns: [
+        column('claim:number'),
+        column('claim:billedAmount', 'date', { format: 'short' }),
+        column('claim:status', 'date', { format: 'short' }),
+      ],
+    };
+    await render(['m1'], dates);
+    // A day-only write is midnight UTC, the 23rd everywhere. 03:00 UTC on the 24th is the 24th in
+    // UTC and at +05:30, and 19:00 on the 23rd at -08:00, the reader's zone here.
+    const row = claim(1, {
+      'claim:billedAmount': '2026-11-23T00:00:00.000Z',
+      'claim:status': '2026-11-24T03:00:00.000Z',
+    });
+    await answer([row]);
+    expect(cells(row)).toEqual(['CLM-1', '11/23/26', '11/23/26']);
   });
 
   it("leaves a cell empty where the row's type has no such property", async () => {

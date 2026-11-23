@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  InjectionToken,
   LOCALE_ID,
   computed,
   inject,
@@ -44,6 +43,7 @@ import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType } from '../layout.model';
 import { type RecordValueContext, showValue, viewText } from './record-field-view';
+import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import type { RecordListEntry, RecordPropertyField } from './record-layout';
 import {
   LookupCollector,
@@ -53,12 +53,6 @@ import {
   sameLookups,
 } from './record-lookups';
 import { WIDGETS_SHOWN_AS_VERSION_1, widgetAccepts, widgetPropertyType } from './widget-support';
-
-/** Today, for relative dates in a list's cells. A token, so that tests choose the day. */
-export const RECORD_LIST_TODAY = new InjectionToken<() => Date>('RECORD_LIST_TODAY', {
-  providedIn: 'root',
-  factory: () => () => new Date(),
-});
 
 /** One page of a list, with what each row's properties are: `null` where its type was not read. */
 interface LoadedPage {
@@ -128,7 +122,8 @@ export class RecordListComponent {
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
-  private readonly today = inject(RECORD_LIST_TODAY);
+  private readonly today = inject(RECORD_PAGE_TODAY);
+  private readonly timeZone = inject(RECORD_PAGE_TIME_ZONE);
 
   /** What the console has been told, so that a list redrawn for a label does not repeat it. */
   private readonly told = new Set<string>();
@@ -347,14 +342,15 @@ export class RecordListComponent {
       locale: this.locale,
       today: this.today(),
       ...labelLookups(labels),
-      // A widget parameter that names a property reads the row's own: `currency`'s code.
+      // Set for each cell to the row's own: `currency`'s code may name a property.
       property: () => undefined,
       label: (label) => layoutLabelText(this.translate, label),
       flagText: (flag) =>
         this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no'),
-      // A table cell's columns: shown to everyone the list shows, since the list has no record
-      // of its own to evaluate a rule against.
-      rule: () => true,
+      // Only a table's columns have rules, and a table is never drawn in a cell: the reader leaves
+      // such a column out. Were one to reach here, its rule-gated columns would stay hidden.
+      rule: () => false,
+      timeZone: this.timeZone,
     };
   }
 

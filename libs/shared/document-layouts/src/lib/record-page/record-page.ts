@@ -2,7 +2,6 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  InjectionToken,
   LOCALE_ID,
   computed,
   inject,
@@ -41,6 +40,7 @@ import {
   viewText,
 } from './record-field-view';
 import { listParameters } from './list-parameters';
+import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import {
   type Labels,
   LookupCollector,
@@ -61,22 +61,7 @@ import {
 } from './resolve-record-layout';
 import { own, tableColumns } from './widget-support';
 
-/** Today, for computations and relative dates. A token, so that tests choose the day. */
-export const RECORD_PAGE_TODAY = new InjectionToken<() => Date>('RECORD_PAGE_TODAY', {
-  providedIn: 'root',
-  factory: () => () => new Date(),
-});
-
-/**
- * The zone an instant is shown in: `undefined`, the reader's own. A token, so that a test chooses
- * an offset such as `+0530`. In whatever zone the suite happens to run, UTC on CI, an instant read
- * in the wrong zone can still show the right day, and the test would prove nothing
- * (AGENTS/08-bug-patterns.md, pattern 29).
- */
-export const RECORD_PAGE_TIME_ZONE = new InjectionToken<string | undefined>(
-  'RECORD_PAGE_TIME_ZONE',
-  { providedIn: 'root', factory: () => undefined },
-);
+export { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 
 /** The design system's status for each of version 2's tones. */
 const TAG_STATUS: Readonly<Record<Tone, NxsTagStatus>> = {
