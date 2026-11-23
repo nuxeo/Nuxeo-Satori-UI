@@ -372,7 +372,11 @@ async function runStory(context, story) {
   }
 }
 
-/** How many string values a catalogue body holds, at any depth; 0 for one that is not JSON. */
+/**
+ * How many usable strings a catalogue body holds, at any depth; 0 for one that is not JSON. Blank
+ * strings do not count: a catalogue of `""` values renders empty labels, which no raw-key check can
+ * see, and would otherwise pass as served (review on #602).
+ */
 function countStrings(body) {
   let value;
   try {
@@ -382,7 +386,7 @@ function countStrings(body) {
   }
   const walk = (node) =>
     typeof node === 'string'
-      ? 1
+      ? Number(node.trim().length > 0)
       : node && typeof node === 'object'
         ? Object.values(node).reduce((sum, child) => sum + walk(child), 0)
         : 0;
@@ -440,7 +444,7 @@ function satoriCatalogueFailures(catalogues) {
       parts.length > 1 ? path.replace(new RegExp(`${file}$`), `${parts[0]}.json`) : null;
     if (fallback && loaded.has(fallback)) continue;
     failures.push(
-      `Satori's catalogue ${path} ${ok(status) ? `answered ${status} with no translation strings` : status ? `answered ${status}` : `failed in transport (${error})`}` +
+      `Satori's catalogue ${path} ${ok(status) ? `answered ${status} with no non-blank translation strings` : status ? `answered ${status}` : `failed in transport (${error})`}` +
         (fallback ? ` and its fallback ${fallback} did not load` : '') +
         ', so its sat.* strings are missing',
     );
