@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppQueue",
+  "title": "Satori business app queue",
+  "description": "Writes a queue, queues/<id>.json: a page provider's records, with columns, a sort and a page size, and its name in labels/en.json.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "id": {
+      "type": "string",
+      "description": "The queue's id, which is its file name and what the menu and the home name: 1 to 64 letters, digits, '.', '_' or '-'.",
+      "x-prompt": "Queue id (e.g. open-contracts)?",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "pageProvider": {
+      "type": "string",
+      "description": "The page provider on the server whose records the queue lists. A queue has no open record, so it should need no parameter, or take literals written by hand.",
+      "x-prompt": "Page provider (e.g. acme_open_contracts)?"
+    },
+    "columns": {
+      "type": "string",
+      "description": "The columns, <prefix>:<name> each, separated by commas. Defaults to dc:title,dc:modified."
+    },
+    "label": {
+      "type": "string",
+      "description": "The queue's name in English. Defaults to its id, humanized."
+    },
+    "sort": {
+      "type": "string",
+      "description": "The sort, <prefix>:<name> for ascending or <prefix>:<name>:desc."
+    },
+    "pageSize": {
+      "type": "number",
+      "description": "Records per page, 1 to 100."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Write the queue again if it exists. Its label keeps the text labels/en.json has.",
+      "default": false
+    }
+  },
+  "required": ["package", "id", "pageProvider"]
+}

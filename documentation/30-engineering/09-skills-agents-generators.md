@@ -169,12 +169,14 @@ the definitions disagree.
 
 ---
 
-## 5. Generators — 6 implemented, 5 of them ship to customers
+## 5. Generators — 10 implemented, 5 of them ship to customers
 
 [`tools/satori-generators`](../../tools/satori-generators), Nx generators compiled into the
-published package — all but `satori-component`, which `generators.json` marks
-`x-satori-internal` and `scripts/build-platform-generators.mjs` leaves out, because `nxs-` is our
-prefix.
+published package — all but those `generators.json` marks `x-satori-internal`, which
+`scripts/build-platform-generators.mjs` leaves out: `satori-component`, because `nxs-` is our
+prefix, and the four business-app generators (`app-*`, added 2026-11-23 for phase 3 of
+[the business apps plan](../../docs/business-apps/development-plan.md)), because the packages they
+write are checked by this repository's pipeline and name its JSON Schemas.
 
 | Generator             | Produces                                                                                                                                                                                                                                                                                       |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -184,6 +186,10 @@ prefix.
 | `extension-component` | A component + registration                                                                                                                                                                                                                                                                     |
 | `config-package`      | A Nuxeo Marketplace package carrying Layer 0 and Layer 1 fragments, with a build target that checks them and writes the installable zip                                                                                                                                                        |
 | `satori-component`    | **Internal.** An `nxs-` component in `libs/shared/satori-components`, registered by ID for a slot: spec rendering it as that slot's host does, story tagged `autodocs`, Overview page, barrel export, `provideNxsComponents()` entry, extension-reference row, with-and-without-Satori section |
+| `app-package`         | **Internal.** A business app: an app definition package, version 2, with `app.json`, `labels/en.json`, the component that contributes its layouts, version 1's package files and the reviewed `build.mjs`; with `--type`, its first record page                                                |
+| `app-layout`          | **Internal.** A version 2 `view` layout for a document type, one card per schema, from a content model file or read live, contributed by the package's component                                                                                                                               |
+| `app-queue`           | **Internal.** A queue: a page provider's records, with columns, a sort and a page size                                                                                                                                                                                                         |
+| `app-action`          | **Internal.** An action: a lifecycle transition or an allowed operation, on the record page or a queue                                                                                                                                                                                         |
 
 ### The splice bug, and why the post-condition assertion exists
 

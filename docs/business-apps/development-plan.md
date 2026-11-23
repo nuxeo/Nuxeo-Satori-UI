@@ -266,8 +266,15 @@ faxes wait for capture, in phase 7.
   pre-production. The reads and the validation are in
   [`tools/builder-mcp`](../../tools/builder-mcp/README.md); previewing and publishing are not
   built yet.
-- **The app builder skill**, written under `.cursor/skills/` and mirrored.
-- **The generators**, updated for app definition version 2.
+- **The app builder skill**, written under `.cursor/skills/` and mirrored. It is
+  [`.cursor/skills/app-builder/SKILL.md`](../../.cursor/skills/app-builder/SKILL.md), and says
+  which of its steps are not built: previewing covers record pages and the home only, by hand,
+  and publishing is a person's tag.
+- **The generators**, updated for app definition version 2: `app-package`, `app-layout`,
+  `app-queue` and `app-action`, in [`tools/satori-generators`](../../tools/satori-generators). A
+  record page is laid out from the type's schemas in a content model, from a file or read live.
+  A package they write, once it has a record page, passes the package pipeline. They are
+  internal: they write packages this repository's pipeline checks.
 - **The pipeline**, completed: versions, signatures, and promotion after a person approves.
 
 **Demo:**

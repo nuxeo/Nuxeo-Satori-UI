@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppAction",
+  "title": "Satori business app action",
+  "description": "Adds an action to actions.json: a lifecycle transition or an allowed Automation operation, on the record page, a queue's rows or its selection, with its texts in labels/en.json. Not a security control: Nuxeo still gates every operation and transition.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "id": {
+      "type": "string",
+      "description": "The action's id, the package's own: 1 to 64 letters, digits, '.', '_' or '-', not starting with 'app.' or 'core.'. Best begun with the app's id.",
+      "x-prompt": "Action id (e.g. acme-contracts.approve)?",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "label": {
+      "type": "string",
+      "description": "The button's text in English. Defaults to the id's last part, humanized."
+    },
+    "transition": {
+      "type": "string",
+      "description": "The lifecycle transition it follows. Give this or operation."
+    },
+    "operation": {
+      "type": "string",
+      "description": "The Automation operation or chain it runs, which must be on the deployment's allow-list. Give this or transition."
+    },
+    "parameters": {
+      "type": "string",
+      "description": "The operation's parameters, as a JSON object: each name to a literal, or to { \"field\": \"<prefix>:<name>\" } on a record or a row."
+    },
+    "on": {
+      "type": "string",
+      "description": "Where it shows, separated by commas: record (the record page's toolbar), row (a queue's row menu), bulk (a queue's selection). Defaults to record."
+    },
+    "type": {
+      "type": "string",
+      "description": "Show it only on records of this document type (app.rules.isType). Not with bulk, where there is no one record to read."
+    },
+    "icon": {
+      "type": "string",
+      "description": "A Material Symbols name, such as check."
+    },
+    "confirm": {
+      "type": "string",
+      "description": "A question, in English, asked before it runs."
+    },
+    "success": {
+      "type": "string",
+      "description": "A message, in English, shown after it ran."
+    },
+    "queue": {
+      "type": "string",
+      "description": "A queue of the package to offer it on: added to its rowActions when it shows on rows, and its bulkActions in bulk."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Replace the action if actions.json has its id already. Its labels keep the text labels/en.json has.",
+      "default": false
+    }
+  },
+  "required": ["package", "id"]
+}

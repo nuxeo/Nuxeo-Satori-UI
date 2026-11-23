@@ -1,0 +1,213 @@
+---
+name: app-builder
+description: Build or change a Nuxeo Satori business app, an app definition package of version 2, with a presales engineer, against a development server. Read the server's model, page providers, workflows, vocabularies and operations through the Builder MCP server, write the files with the app generators, check them with the package pipeline, then preview what can be previewed and hand publishing to a person. Use when asked for an app, a record page, a queue or an action for a demo or an account, or to change a package under business-apps/packages/.
+---
+
+# Build a business app with the agent
+
+Phase 3 of `docs/business-apps/development-plan.md`, the Builder kit: a presales engineer asks
+for an app in plain words, and the agent writes the package, checks it, and shows it. The agent
+writes configuration only. It never writes the data model or code: the types, schemas, page
+providers and lifecycles come from Studio or a model package, and are already on the server.
+
+What a package may hold: `docs/business-apps/package-pipeline.md`, section 1, and
+`docs/business-apps/app-definition-v2.md`, section 1. What a record page may say:
+`docs/business-apps/layout-v2.md`. The Payers kit, `business-apps/packages/payers-claims-demo`,
+is the worked example.
+
+## What exists today, and what does not
+
+| Step                         | How                                                                   | State                                                       |
+| ---------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                           | Built: 11 read-only tools                                   |
+| 2. Write the files           | The generators `app-package`, `app-layout`, `app-queue`, `app-action` | Built, in `tools/satori-generators`                         |
+| 3. Check them                | `validate_package`, or `npm run app-package`                          | Built: the pipeline's steps 1 to 6                          |
+| 4. Preview in dev mode       | `npm run config:dev` and `npx nx serve nuxeo-ui`, by hand             | Record pages and the home only. No MCP tool                 |
+| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes               | **Not built in the MCP server.** The tag path has never run |
+
+Say this to the person at the start, and again when you reach steps 4 and 5. Do not describe a
+step as done that this table says is not built.
+
+## 0. Before you start
+
+- **Node 24** (`.nvmrc`) and `npm ci` in the checkout. The MCP server needs `node_modules`.
+- **A development server whose model you may share with the model the agent runs on.** Hyland's AI
+  use requirements apply to everything the tools answer: it goes to the agent. Never point the
+  tools at production, or at a server holding a customer's data you may not share.
+- **Credentials from the environment only:** `NUXEO_USER` and `NUXEO_PASS`, which have no default.
+  Never write them into a file, a command's arguments, a URL or a message.
+- **Fictional data, and no account names.** The repository is public.
+- **Register the MCP server once,** from the repository's root, in a shell that has the credentials
+  exported (the single quotes keep the password out of the configuration):
+
+  ```bash
+  claude mcp add-json nuxeo-builder --scope local '{"type":"stdio","command":"node","args":["tools/builder-mcp/src/main.ts"],"env":{"NUXEO_URL":"${NUXEO_URL:-http://localhost:8080}","NUXEO_USER":"${NUXEO_USER}","NUXEO_PASS":"${NUXEO_PASS}"}}'
+  ```
+
+## 1. Read the server
+
+Find out what is there before writing anything. Every name a package writes must exist on the
+server or be registered in the platform; a guess is refused by the pipeline, or worse, passes and
+shows nothing.
+
+| To know                                           | Ask the MCP server                      |
+| ------------------------------------------------- | --------------------------------------- |
+| which document types exist, and their schemas     | `get_content_model`                     |
+| a type's fields, with their types, by schema      | `describe_document_type`                |
+| a schema's fields, and who uses it                | `describe_schema`                       |
+| which page providers exist, and which are indexed | `list_page_providers`                   |
+| a page provider's parameters, sorts, aggregates   | `describe_page_provider`                |
+| the vocabularies, and one's entries               | `list_vocabularies`, `get_vocabulary`   |
+| the workflows, a step's buttons and variables     | `list_workflows`, `describe_workflow`   |
+| an operation's parameters                         | `list_operations`, `describe_operation` |
+
+- **The type the person names must exist.** If it does not, stop: creating it is Studio's, not
+  yours. Say which types are there.
+- **A page provider's `?` parameters are filled in order.** A queue has no open record, so a page
+  provider that needs a parameter takes a literal; one for "my work" names the person on the
+  server.
+- **An indexed page provider lags a write** (`list_page_providers` marks them): a record created a
+  second ago may not be listed yet.
+- **An operation the server has is not one a package may name.** The deployment's allow-list says
+  which, and the pipeline refuses every operation it is not given one for.
+
+The generators and the pipeline also take the model as a file. Export one outside the repository,
+or read it live with `--modelServer`:
+
+```bash
+npm run app-package:model -- --server http://localhost:8080/nuxeo --out /tmp/content-model.json
+```
+
+## 2. Write the files, with the generators
+
+Run them from the repository's root. Never write `build.mjs`, `package.xml`, the manifest or the
+component by hand: the generators write what the pipeline requires, byte for byte where it
+requires that.
+
+```bash
+# The package, with its first record page from the model
+npx nx g ./tools/satori-generators:app-package acme-contracts --owner=acme --title="Acme Contracts" \
+  --groups=contract-managers --type=Contract --model=/tmp/content-model.json
+
+# Another record page; --modelServer=http://localhost:8080/nuxeo reads the model live instead
+npx nx g ./tools/satori-generators:app-layout --package=business-apps/packages/acme-contracts \
+  --type=Counterparty --model=/tmp/content-model.json
+
+# A queue, on a page provider describe_page_provider showed
+npx nx g ./tools/satori-generators:app-queue --package=business-apps/packages/acme-contracts \
+  --id=open-contracts --pageProvider=acme_open_contracts --columns=contract:number,dc:title,contract:end \
+  --sort=contract:end
+
+# A lifecycle button, on the record page and the queue's rows
+npx nx g ./tools/satori-generators:app-action --package=business-apps/packages/acme-contracts \
+  --id=acme-contracts.approve --transition=approve --on=record,row --type=Contract \
+  --confirm="Approve this contract?" --queue=open-contracts
+```
+
+What each writes, and what it leaves to you:
+
+- **`app-package`:** `app.json`, `labels/en.json`, the component, `package/`, the manifest and the
+  reviewed `build.mjs`, under `business-apps/packages/<name>/`, which CI checks on every pull
+  request. A package with no record page is refused by the pipeline's step 5, so give it `--type`.
+- **`app-layout`:** one card per schema of the type, leaving out Nuxeo's own (`common`,
+  `dublincore`, `uid`, `file`, `files`, `facetedTag`, `relatedtext`) unless `--schemas` names
+  them. A widget only where the model says more than the type: `vocabulary` for a property bound to
+  a directory, `document-link` for a document's id, `table` for a list of complex values,
+  `address` for a complex value with a street and a city. Files are left out, and it says so. It
+  has the component contribute the layout, from the one path the pipeline accepts.
+- **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
+  against the model yet.
+- **`app-action`:** a transition or an operation (`--operation`, with `--parameters` as JSON), on
+  `record`, `row` or `bulk`, and `--queue` to offer it there. An id starting `app.` or `core.` is
+  the platform's, and refused.
+
+Then edit what the generators wrote, as the person asks, following `layout-v2.md`:
+
+- **Fields come in the order the server lists them,** not the schema's. Reorder them.
+- **Pick the widgets a person would:** `currency` with its code, `status-badge` with its tones,
+  `phone`, `email`, `relative-date`. A widget must show its property's type; the pipeline refuses
+  one that does not, given the model.
+- **Rules, computations and related records** are registered ids only (decision 4): no expression
+  and no code. A field rule "in plain words" becomes `visibleWhen`, `required` or `readOnlyWhen`
+  with a rule from `PACKAGED_REGISTRIES` in `libs/shared/app-definition`. If none says it, tell the
+  person; do not invent one.
+- **Sensitive fields.** Ask before showing an identifier such as a social security number. Hiding a
+  field with a rule is a convenience, not a control: the server still returns it to anyone who may
+  read the record.
+- **The menu and the home** (`navigation.json`, `home.json`) have no generator: write them by hand,
+  from `app-definition-v2.md`, sections 9 and 10.
+
+## 3. Check them, after every write
+
+```bash
+npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --model /tmp/content-model.json
+```
+
+The MCP server's `validate_package` runs the same pipeline on the folder, as CI does, but takes no
+content model: use it for the CI view, and the command above for the model. Both must pass before
+you say anything works.
+
+- **Give it the model.** Without one, a field the type does not have and a widget that does not fit
+  its property both pass. With `--model` or `--model-server`, they are refused.
+- **Give it the allow-list** when the package has an operation: `--allow-list <file>`, a file of
+  `{ "operations": [...] }`; `validate_package` takes one as `allowList`, inside the repository.
+  CI passes none yet, so a package with an operation fails CI until
+  decision 3 settles where the allow-list lives. Say so.
+- **Read the findings, then fix the file.** Each names the file, the place and the reason, such as
+  `cards[0].fields[1].widget: the widget "calendar" is not registered [unknown]`. Never weaken a
+  check, rename an id to something unregistered, or run the pipeline without the model to get a
+  pass.
+- **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
+  a queue's or a related list's columns, the properties a rule or a computation names, and a
+  vocabulary widget's directory against its property's. Check those by reading the server.
+
+## 4. Preview in dev mode, as far as it goes
+
+There is no preview tool in the MCP server. What the development server can show, by hand:
+
+```bash
+npm run config:dev -- --layout Contract/view=business-apps/packages/acme-contracts/bundle/agentic-ui-config/layouts/Contract/view.layout.json
+npx nx serve nuxeo-ui
+```
+
+`config:dev` takes one `--layout <Type>/<mode>=<file>` per record page, and `--home <file>`. Run it
+before `nx serve`, which reads the folder when it starts. Then open a record of the type at
+`http://localhost:4200`.
+
+- **Shown:** the record pages, and the home.
+- **Not shown yet:** queues (no queue page), the package's actions (`actions.json` is carried, not
+  read), labels by key (a card's `labelKey` heading shows only once the app registry serves the
+  package's labels), `app.json` and the menu.
+- **The records must exist on the server,** with the types the package names. Seeding them is the
+  kit's (the Payers kit has `demo/seed.mjs`), with fictional data.
+- **Installing the package into a Nuxeo** is the person's decision: ask before installing anything
+  into a server or a container. The Payers kit's README, "Installing it on a local Nuxeo", shows how
+  on the local Docker one.
+
+## 5. Publish to pre-production: a person's step
+
+The MCP server has no publish tool, and promotion after a person approves is not built
+(`package-pipeline.md`, sections 5 and 7). Today:
+
+1. The person raises the version in `package/package.xml`, `app.json`'s `packageVersion` and the
+   manifest's `Bundle-Version`, together, and the pull request merges.
+2. The person tags the merged commit `app-package/<name>/<version>` and pushes the tag.
+3. The workflow `app-packages.yml` checks and builds it again, attests it and publishes it to
+   Marketplace preprod. This path has not run yet.
+
+**Never push an `app-package/*` tag yourself**, and never present the package as published: say
+what is left for the person.
+
+## Done means
+
+- the pipeline passes with the server's model, and with the allow-list when there is an operation;
+- every id the package names is registered, or is the package's own;
+- the person has seen the record pages in the preview, or has been told why not;
+- the reply lists what is not shown yet and what is left for a person: installing, publishing.
+
+## What this skill does not do
+
+- Write document types, schemas, page providers or lifecycles: Studio's.
+- Write Angular or any other code: a package is configuration only.
+- Change the generators, the validator or the pipeline to make a package pass. A refusal is the
+  answer; fix the package.

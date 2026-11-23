@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppLayout",
+  "title": "Satori business app record page",
+  "description": "Writes a version 2 view layout for a document type, one card per schema, from the server's content model, and has the package's component contribute it.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "type": {
+      "type": "string",
+      "description": "The document type the record page is for, as the content model names it.",
+      "x-prompt": "Which document type (e.g. Contract)?",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$"
+    },
+    "model": {
+      "type": "string",
+      "description": "The content model, a file `npm run app-package:model` exported: { doctypes, facets, schemas }. Give this or modelServer."
+    },
+    "modelServer": {
+      "type": "string",
+      "description": "Read the content model live instead, from this Nuxeo, such as http://localhost:8080/nuxeo, with NUXEO_USER and NUXEO_PASS from the environment. HTTPS, or HTTP to this machine only."
+    },
+    "schemas": {
+      "type": "string",
+      "description": "The schemas to show, one card each, in order, separated by commas. Defaults to the type's schemas but Nuxeo's own (common, dublincore, uid, file, files, facetedTag, relatedtext)."
+    },
+    "columns": {
+      "type": "number",
+      "description": "How many columns the cards fill, 1 to 3. Defaults to 2, or 1 for a single card."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Write the layout again if the type already has one. Its labels keep the text labels/en.json has.",
+      "default": false
+    }
+  },
+  "required": ["package", "type"]
+}
