@@ -322,7 +322,8 @@ optional configuration file the local server does not serve, which is an environ
 **Fixed the same day, and AA is still not met.** The shell now names the control with
 `aria-labelledby`: the initials, then the display name. `phase-6-a11y/2026-11-23T18-44-35`,
 with axe-core 4.14.1, passes all 14 axe checks. It is 34 of 35 because Health still fails, on
-404s from the local environment and its test data. Clearing the capture is not conformance:
+404s that are not accessibility findings, most of them from the local environment and its test
+data. Clearing the capture is not conformance:
 failures are recorded in states the capture does not reach, and the capture scans only the
 collapsed rail. `platform-nav-user-profile-label-in-name.spec.ts` holds the control's name to
 the text it paints on both rails, and fails on the old markup. The case it replaces passed on the

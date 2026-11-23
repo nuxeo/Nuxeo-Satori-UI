@@ -52,8 +52,7 @@ not an accessibility finding. The September `button-name` failures do not reprod
 
 **The defect was fixed the same day, and the risk stays open.** The control's accessible name now
 starts with the initials it shows. The re-run, `phase-6-a11y/2026-11-23T18-44-35`, passes all 14
-axe checks. Its one failure is the Health check, on 404s from the local environment and its test
-data. That clears the capture, not the risk: `docs/accessibility.md` records failures in states
+axe checks. Its one failure is the Health check, on 404s that are not accessibility findings. That clears the capture, not the risk: `docs/accessibility.md` records failures in states
 the capture does not reach.
 
 **Where it comes from:** the control's content is ours. The shell projects the avatar into the
