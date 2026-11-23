@@ -109,9 +109,31 @@ const problems = [];
 const problem = (file, message) =>
   problems.push(`${relative(HERE, file).split(sep).join('/') || '.'}: ${message}`);
 
+/**
+ * Names the file system answers with an error rather than as missing, though they name no file:
+ * one under a file, such as `config.xml/x.xml` (ENOTDIR); one with a part longer than a file name
+ * can be (ENAMETOOLONG); and one holding a NUL byte, which Node refuses before asking.
+ */
+const NAMES_NOTHING = new Set(['ENOTDIR', 'ENAMETOOLONG', 'ERR_INVALID_ARG_VALUE']);
+
+/**
+ * What is at `path`, without following a link that `path` itself names, or `undefined` when
+ * nothing is: a name that is missing, or one of `NAMES_NOTHING`. Each names no file, and is
+ * refused as one, not thrown. A link in a folder along the way is still followed; the package
+ * pipeline refuses any link in a package before this builder runs.
+ */
+function entryOf(path) {
+  try {
+    return lstatSync(path, { throwIfNoEntry: false });
+  } catch (error) {
+    if (NAMES_NOTHING.has(error.code)) return undefined;
+    throw error;
+  }
+}
+
 /** Whether `path` is a symbolic link, reported if so: one is refused, not followed. */
 function isLink(path) {
-  if (!lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) return false;
+  if (!entryOf(path)?.isSymbolicLink()) return false;
   problem(
     path,
     'is a symbolic link; put the file itself here, so the package holds only what was reviewed',
@@ -381,7 +403,7 @@ function notWellFormed(xml) {
   }
 }
 
-const isFile = (path) => lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
+const isFile = (path) => entryOf(path)?.isFile() === true;
 /** What goes into the bundle. The one predicate for packaging and for checking a `src`. */
 const isPackaged = (path) => isFile(path) && !path.endsWith('.md');
 

@@ -85,10 +85,12 @@ Some things about them are worth knowing before relying on them:
   - nothing hidden, such as `.git`, `.env` or `.claude`, is read;
   - the allow-list and the registered file are JSON files.
 
-  A package kept elsewhere has to be copied in first, without links. What the pipeline then reads
-  is the pipeline's: a component path in the bundle's manifest that climbs out with `..` is not
-  refused by it yet, so a manifest can still have step 2 read a component outside the package,
-  and quote that component's layout attributes back.
+  A package kept elsewhere has to be copied in first, without links. Inside the package, the
+  pipeline then refuses, before reading it, a symbolic link anywhere in the package, and a
+  component path in the bundle's manifest that leaves `bundle/` or names a folder or a hard link
+  ([package-pipeline.md](../../docs/business-apps/package-pipeline.md), section 2). It does not
+  refuse a hidden file, or a hard link other than a component, as this tool does for the paths it
+  is given.
 
 - **It writes nothing in the package.** The zip goes to a temporary folder, which is removed, and
   nothing is published. The pipeline gets only `PATH`, the temporary folder and the locale from the
