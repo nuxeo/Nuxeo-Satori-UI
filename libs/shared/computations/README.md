@@ -142,6 +142,10 @@ Where layout-v2.md is silent, these are the choices, each tested.
       `JSON.stringify` writes it, but no item of a list and no value in an object is read past the
       cut, and a text or a key is cut before it is escaped. Quoting a list of 100,000 items reads 31
       of them. An object it opens still has its keys listed, as `JSON.stringify` lists them.
+    - **It reads at most 122 items and values**, twice the 61 characters it writes. Each one it
+      writes adds a character, but JSON leaves out a property that is `undefined`, a function or a
+      symbol, and writes nothing for it. A value with too many of those to reach the cut within 122
+      reads is named by its kind, "an object", rather than read in full.
     - A value JSON cannot write is named by its kind: "a function", "a bigint", or "an object" for
       a cycle or a list holding a bigint.
   - **An evaluator checks its own number of parameters**, so a customer's needs no signature here.
@@ -196,10 +200,12 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
   test's title, a fixture, the value under test, or a matcher under `.not` or `expect.not`, asserts
   nothing and does not count, and a second test holds that. A reason written with no literal text
   to look for, as a variable, a `+` or a `?:`, is reported as having no control, and a third test
-  holds that. Every refusal is built by `refuse()`, and a fourth test fails when one is built any
-  other way, so that a reason cannot slip past the first. It proves that
-  every reason has a control, not that every guard has one. The mutation checks are for guards.
-- **Mutation checks:** taking out any one of these 55 guards made a test fail. The helper that ran
+  holds that. A result is built by `accept()` or `refuse()` alone: an object with an `ok` key,
+  however the key is written (`ok`, `'ok'`, `['ok']` or the shorthand `{ ok }`), is found nowhere
+  else, and a fourth and a fifth test hold that, so that a reason cannot slip past the first. It
+  proves that every reason has a control, not that every guard has one. The mutation checks are for
+  guards.
+- **Mutation checks:** taking out any one of these 59 guards made a test fail. The helper that ran
   them refused a mutation that did not apply exactly once, and one that broke a suite instead of
   failing a test.
   - the depth cap, and the depth cap off by one;
@@ -221,11 +227,13 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
     message is no text, and one whose message is empty;
   - quoting a type, a key and a subfield, and cutting an error's message;
   - quoting without throwing, and naming a kind with the right article;
-  - stopping a list and an object at the cut, and cutting a text and a key before escaping them;
+  - stopping a list and an object at the cut, cutting a text and a key before escaping them, and
+    the reads' own budget;
   - telling a boxed value by its `valueOf` rather than `instanceof`, and unboxing a bigint;
   - an evaluator's number of parameters drifting from its signature, and an ID missing from the
     evaluators;
-  - a new refusal with no control, and a refusal built without `refuse()`;
+  - a new refusal with no control, and a refusal built without `refuse()`, its `ok` key written
+    quoted, computed or as a shorthand;
   - counting as a control only a matcher's argument, not the value under test, not a matcher under
     `.not`, nor an `expect.not` inside one, only one expectation holding all of a reason, and
     reporting a reason with no text to look for;
