@@ -3668,6 +3668,7 @@ interface ExtensionActionDescriptor extends ExtensionElement {
 }
 interface ExtensionActionHandler {
     execute(context: ExtensionRuleContext): void;
+    readonly wholeQuery?: boolean;
     }
 }
 interface ExtensionActionRegistration {
@@ -3678,6 +3679,7 @@ class ExtensionActionRegistry {
     register(handlers: Readonly<Record<string, ExtensionActionHandler>>): ExtensionActionRegistration;
     registerPackaged(handlers: Readonly<Record<string, ExtensionActionHandler>>): ExtensionActionRegistration;
     has(id: string): boolean;
+    runsOverWholeQuery(id: string): boolean;
     registeredActionIds(): readonly string[];
     execute(descriptor: ExtensionActionDescriptor, context: ExtensionRuleContext): boolean;
     static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionActionRegistry, never>;
@@ -3941,7 +3943,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-336 exported symbol(s).
+337 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4175,6 +4177,10 @@ interface BulkCommandStatus {
     readonly errorMessage: string | null;
     readonly ended: boolean;
     readonly result: Readonly<Record<string, unknown>> | null;
+    }
+}
+class BulkCommandStatusError extends Error {
+    constructor();
     }
 }
 const CLIPBOARD_STORAGE_KEY = "nuxeo_clipboard";

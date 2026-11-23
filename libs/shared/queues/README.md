@@ -62,7 +62,9 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
   `DocumentChangesService`. `whole-query-run.ts` follows the command. Not while a bucket is chosen,
   which the server would leave out; not without a count; and the command is limited on the server
   to one record more than the person agreed to, and stopped and reported when it reaches it
-  (app-definition-v2.md, section 4).
+  (app-definition-v2.md, section 4). An action is offered over the whole query only while its
+  handler declares the mapping (`ExtensionActionRegistry.runsOverWholeQuery`), so a customer's
+  replacement for Delete's handler takes Delete off the whole query.
 
 Nothing here is a security control. The page provider returns only what the person may read,
 hiding a queue hides the page and not the address, and offering fewer actions decides nothing

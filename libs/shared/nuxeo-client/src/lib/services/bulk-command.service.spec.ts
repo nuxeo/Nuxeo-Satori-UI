@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 
 import { NUXEO_API_ORIGIN } from '../nuxeo-api.config';
-import { BulkCommandService, readBulkCommandStatus } from './bulk-command.service';
+import {
+  BulkCommandService,
+  BulkCommandStatusError,
+  readBulkCommandStatus,
+} from './bulk-command.service';
 
 const ID = 'eb3886b6-d528-44be-a3a1-306e12c2cce2';
 
@@ -215,9 +219,7 @@ describe('readBulkCommandStatus', () => {
       status({ commandId: '../x' }),
       status({ 'entity-type': 'document' }),
     ]) {
-      expect(() => readBulkCommandStatus(body)).toThrow(
-        'the server did not answer with the status of a bulk command',
-      );
+      expect(() => readBulkCommandStatus(body)).toThrow(BulkCommandStatusError);
     }
   });
 });

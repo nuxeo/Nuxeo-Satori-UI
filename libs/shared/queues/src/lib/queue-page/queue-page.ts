@@ -45,7 +45,7 @@ import {
   type NuxeoDocument,
   type PageProviderResults,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { Subject, type Subscription, filter, map, merge, startWith, switchMap } from 'rxjs';
+import { Subject, type Subscription, filter, map, merge, startWith, switchMap, timer } from 'rxjs';
 
 import { facetBuckets } from '../facets';
 import { readQueue, type QueueFile } from '../queue-file';
@@ -346,9 +346,10 @@ export class QueuePageComponent {
    * The queue's bulk actions that can run over every result of its query: those the `bulk-actions`
    * slot resolves for a selection of every result, whose id the platform maps to an action of the
    * Bulk Action Framework (`wholeQueryBulkAction`). The queue file names an action by id only; what
-   * runs on the server is the platform's. One whose descriptor hands its work to another action's
-   * handler is not offered over the whole query, since what it maps to would not be what it does
-   * on a selection.
+   * runs on the server is the platform's. One is not offered over the whole query when what it
+   * maps to would not be what it does on a selection: its descriptor hands its work to another
+   * action's handler, or the handler that answers for it does not declare the mapping its own
+   * (`ExtensionActionHandler.wholeQuery`), as a customer's replacing the platform's does not.
    */
   protected readonly wholeQueryActions = computed<readonly WholeQueryAction[]>(() => {
     this.translations();
@@ -377,6 +378,12 @@ export class QueuePageComponent {
         );
         continue;
       }
+      if (!this.actions.runsOverWholeQuery(id)) {
+        this.tell(
+          `bulkActions "${id}" is not offered over the whole query: the handler that runs it on a selection does not declare that it does what "${mapped.action}" does on the server`,
+        );
+        continue;
+      }
       offered.push({
         id,
         label: descriptorLabel(action, (key) => this.translate.instant(key)),
@@ -402,9 +409,18 @@ export class QueuePageComponent {
   private following: Subscription | null = null;
   private stops = new Subject<void>();
 
+  /**
+   * Whether every result is selected and can still be acted on: while an action can run over the
+   * whole query. When none can any more, such as when the list no longer gives a count, the rows can
+   * be selected again rather than every result staying selected with nothing to do with it.
+   */
+  private readonly selectingAll = computed(
+    () => this.allResults() && this.wholeQueryActions().length > 0,
+  );
+
   /** Whether the rows of the page can be selected: not while every result is, or an action runs. */
   protected readonly rowsSelectable = computed(
-    () => this.bulkActions().length > 0 && !this.allResults() && this.running() === false,
+    () => this.bulkActions().length > 0 && !this.selectingAll() && this.running() === false,
   );
 
   private readonly running = computed(() => {
@@ -425,7 +441,7 @@ export class QueuePageComponent {
     const actions = this.wholeQueryActions();
     if (actions.length === 0) return null;
     const count = this.format(this.total());
-    if (this.allResults()) {
+    if (this.selectingAll()) {
       return {
         message: this.translate.instant('queues.whole-query.all-selected', { count }),
         tone: 'warning',
@@ -552,7 +568,7 @@ export class QueuePageComponent {
       )
       .subscribe(() => {
         // The queue or its filters may have changed while the dialog was open.
-        if (this.queue() !== queue || this.filtered() || !this.allResults()) return;
+        if (this.queue() !== queue || this.filtered() || !this.selectingAll()) return;
         this.start(queue, action, confirmed);
       });
   }
@@ -582,19 +598,28 @@ export class QueuePageComponent {
           (run) =>
             run && {
               ...run,
-              status: event.kind === 'refused' ? run.status : event.status,
+              status: 'status' in event ? event.status : run.status,
               outcome: event,
             },
         );
         this.report(event);
         this.allResults.set(false);
         // Nothing ran when the server refused it; otherwise records may have changed.
-        if (event.kind !== 'refused' && action.mapped.refresh) {
-          // The count is the one before the action: none until the list has been read again.
-          this.total.set(-1);
-          this.documentChanges.notify();
-        }
+        if (event.kind !== 'refused' && action.mapped.refresh) this.refresh();
       });
+  }
+
+  /**
+   * Reads the list again, now and once more a little later: a list the search index serves may
+   * still hold the records the action changed when the command completes. Until it answers, there
+   * is no count, so no stale one is named.
+   */
+  private refresh(): void {
+    this.total.set(-1);
+    this.documentChanges.notify();
+    timer(this.timing.reindexMs)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.documentChanges.notify());
   }
 
   private stop(): void {
@@ -605,6 +630,10 @@ export class QueuePageComponent {
   private report(outcome: WholeQueryOutcome): void {
     if (outcome.kind === 'refused') {
       warn(`queues/${this.id()}.json: the bulk command was not taken: ${outcome.detail}`);
+    } else if (outcome.kind === 'unconfirmed') {
+      warn(
+        `queues/${this.id()}.json: the bulk command's answer could not be read: ${outcome.detail}`,
+      );
     } else if (outcome.kind === 'lost') {
       warn(
         `queues/${this.id()}.json: bulk command ${outcome.status.commandId} no longer followed: ${outcome.detail}`,
@@ -668,6 +697,8 @@ export class QueuePageComponent {
     if (outcome.kind === 'refused') {
       return notice(`queues.whole-query.refused.${outcome.reason}`, 'error', {});
     }
+    if (outcome.kind === 'unconfirmed')
+      return notice('queues.whole-query.unconfirmed', 'error', {});
     const { status } = outcome;
     const values = {
       processed: this.format(status.processed),
@@ -682,12 +713,15 @@ export class QueuePageComponent {
           : notice('queues.whole-query.done', 'info', values);
       case 'lost':
         return notice('queues.whole-query.lost', 'error', values);
-      case 'too-many':
+      case 'too-many': {
+        // Above one more than agreed: the server did not keep to the limit the page sent.
+        const limited = status.total <= run.confirmed + 1 ? '' : '-unlimited';
         return notice(
-          outcome.ended ? 'queues.whole-query.too-many' : 'queues.whole-query.too-many-unsettled',
+          `queues.whole-query.too-many${limited}${outcome.ended ? '' : '-unsettled'}`,
           'error',
           values,
         );
+      }
       case 'aborted':
         return notice('queues.whole-query.aborted', 'warning', values);
       case 'stopped':

@@ -24,6 +24,8 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 import {
   BulkCommandService,
+  BulkCommandStatusError,
+  DocumentChangesService,
   PageProviderService,
   SelectionService,
   type BulkCommandStatus,
@@ -153,13 +155,26 @@ describe('QueuePageComponent, over the whole query', () => {
         },
         {
           provide: QUEUE_WHOLE_QUERY_TIMING,
-          useValue: { pollMs: 0, countPollMs: 0, countReads: 25, failures: 2, settle: 2 },
+          useValue: {
+            pollMs: 0,
+            countPollMs: 0,
+            countReads: 25,
+            failures: 2,
+            settle: 2,
+            reindexMs: 30,
+          },
         },
       ],
     });
+    // As the app registers them: Delete's handler declares what it maps to over a whole query.
     TestBed.inject(ExtensionActionRegistry).register(
       Object.fromEntries(
-        PACKAGED_BULK_ACTIONS.map((action) => [action.id, { execute: () => undefined }]),
+        PACKAGED_BULK_ACTIONS.map((action) => [
+          action.id,
+          action.id === 'app.bulkActions.delete'
+            ? { execute: () => undefined, wholeQuery: true }
+            : { execute: () => undefined },
+        ]),
       ),
     );
     TestBed.inject(ExtensionRuleContextService).username.set('ada');
@@ -328,6 +343,10 @@ describe('QueuePageComponent, over the whole query', () => {
     );
     // The list is read again: the records have changed. Until it answers, there is no count.
     expect(execute.mock.calls.length).toBe(asked + 1);
+    // And once more a little later, for a list the search index serves.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await settle();
+    expect(execute.mock.calls.length).toBe(asked + 2);
     await press('.queue-whole-query__dismiss');
     await selectRow();
     expect(notice()).toBe('');
@@ -346,8 +365,69 @@ describe('QueuePageComponent, over the whole query', () => {
     await respond(at('RUNNING', 100, 2314));
     expect(calls).toContain('abort');
     expect(notice()).toBe(
-      'Delete selected stopped: the query now holds more records than the 120 you agreed to. The server processed 2,100, and goes no further than one more than you agreed to.',
+      'Delete selected stopped: the query holds 2,314 records, more than the 120 you agreed to, and the server did not keep to the limit the page sent. It processed 2,100.',
     );
+  });
+
+  it('says the server kept to the limit when it stops at one more than agreed', async () => {
+    create();
+    await open();
+    await answer(120);
+    await selectRow();
+    await press('.queue-whole-query__select-all');
+    await press('.queue-whole-query__run');
+    aborted = at('ABORTED', 121, 121, { ended: true });
+    await respond(at('RUNNING', 0, 121));
+    expect(calls).toContain('abort');
+    expect(notice()).toBe(
+      'Delete selected stopped: the query now holds more records than the 120 you agreed to. The server processed 121, and goes no further than one more than you agreed to.',
+    );
+  });
+
+  it('says plainly when the answer cannot be read, and reads the list again since it may run', async () => {
+    create();
+    submit = () => throwError(() => new BulkCommandStatusError());
+    await open();
+    await answer(120);
+    await selectRow();
+    await press('.queue-whole-query__select-all');
+    const asked = execute.mock.calls.length;
+    await press('.queue-whole-query__run');
+    expect(notice()).toBe(
+      "Delete selected: the server's answer could not be read, so the page cannot tell whether it is running. It may be running on the server.",
+    );
+    expect(execute.mock.calls.length).toBeGreaterThan(asked);
+  });
+
+  it('does not offer Delete over the whole query once a customer replaces its handler', async () => {
+    create();
+    TestBed.inject(ExtensionActionRegistry).register({
+      'app.bulkActions.delete': { execute: () => undefined },
+    });
+    await open();
+    await answer(120);
+    await selectRow();
+    expect(notice()).toBe('');
+    expect(warnings).toContainEqual(
+      expect.stringContaining(
+        'bulkActions "app.bulkActions.delete" is not offered over the whole query: the handler that runs it on a selection does not declare',
+      ),
+    );
+  });
+
+  it('lets rows be selected again when every result was selected and the count is gone', async () => {
+    create();
+    await open();
+    await answer(120);
+    await selectRow();
+    await press('.queue-whole-query__select-all');
+    expect(list().selectable()).toBe(false);
+    // The list is read again, and the server gives no count this time.
+    TestBed.inject(DocumentChangesService).notify();
+    await settle();
+    await answer(120, { totalSize: -1, resultsCount: -2 });
+    expect(list().selectable()).toBe(true);
+    expect(notice()).toBe('');
   });
 
   it('stops when the person asks, and says so', async () => {

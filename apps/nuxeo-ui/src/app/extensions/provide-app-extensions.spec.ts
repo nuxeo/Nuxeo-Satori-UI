@@ -21,7 +21,9 @@ import {
   type ExtensionRouteDescriptor,
   type ExtensionTabDescriptor,
   ExtensionRuleContextService,
+  PACKAGED_BULK_ACTIONS,
   provideSatoriExtensions,
+  wholeQueryBulkAction,
 } from '@nuxeo/satori-platform/extensions';
 
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
@@ -133,6 +135,18 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
       // Before any list exists: browse used to register these itself, so a record page had none.
       expect(actions.has(id)).withContext(id).toBe(true);
     }
+  });
+
+  it('declares on the packaged bulk handlers exactly the ones the whole-query table maps', async () => {
+    await loadManifest({});
+    const actions = TestBed.inject(ExtensionActionRegistry);
+    for (const { id } of PACKAGED_BULK_ACTIONS) {
+      // A queue offers an action over a whole query only while its handler declares the mapping.
+      expect(actions.runsOverWholeQuery(id))
+        .withContext(id)
+        .toBe(wholeQueryBulkAction(id) !== null);
+    }
+    expect(actions.runsOverWholeQuery('app.bulkActions.delete')).toBe(true);
   });
 
   it('registers the packaged permissions panel under the ID the library exports', async () => {

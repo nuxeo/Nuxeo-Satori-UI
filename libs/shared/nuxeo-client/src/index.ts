@@ -173,6 +173,7 @@ export {
 } from './lib/services/page-provider.service';
 export {
   BulkCommandService,
+  BulkCommandStatusError,
   readBulkCommandStatus,
   type BulkCommandQuery,
   type BulkCommandState,

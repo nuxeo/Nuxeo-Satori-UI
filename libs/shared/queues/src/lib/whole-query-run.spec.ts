@@ -1,5 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import type { BulkCommandService, BulkCommandStatus } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  BulkCommandStatusError,
+  type BulkCommandService,
+  type BulkCommandStatus,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { NEVER, Subject, lastValueFrom, of, throwError, toArray, type Observable } from 'rxjs';
 import { describe, expect, it } from 'vitest';
 
@@ -17,6 +21,7 @@ const FAST: WholeQueryTiming = {
   countReads: 25,
   failures: 2,
   settle: 3,
+  reindexMs: 0,
 };
 
 const at = (
@@ -306,6 +311,90 @@ describe('runWholeQuery', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(calls.filter((call) => call.startsWith('status'))).toHaveLength(2);
     subscription.unsubscribe();
+  });
+
+  it('follows a long command to its end: 6,000 reads do not stop it reporting', async () => {
+    // Nested, each read inside the last, the run stopped reporting after a few thousand reads:
+    // measured, this test timed out on that version. Each read is a step of its own now.
+    const reads: BulkCommandStatus[] = [];
+    for (let n = 1; n <= 6000; n++) reads.push(at('RUNNING', n, 9000));
+    reads.push(at('COMPLETED', 9000, 9000));
+    const { bulk } = server({ reads });
+    const events = await run(bulk, NEVER, { ...REQUEST, confirmed: 9000 });
+    expect(events).toHaveLength(6003);
+    expect(events.at(-2)).toEqual({
+      kind: 'progress',
+      status: expect.objectContaining({ state: 'COMPLETED', processed: 9000 }),
+    });
+    expect(events.at(-1)?.kind).toBe('done');
+  }, 30_000);
+
+  it('reports done, not stopped, when the stop is answered by a command that had completed', async () => {
+    const stop = new Subject<void>();
+    const { bulk } = server({
+      reads: [at('RUNNING', 2, 3), at('RUNNING', 2, 3)],
+      abort: of(at('COMPLETED', 3, 3)),
+    });
+    const events: WholeQueryEvent[] = [];
+    await new Promise<void>((done) =>
+      runWholeQuery(bulk, REQUEST, stop, FAST).subscribe({
+        next: (event) => {
+          events.push(event);
+          if (event.kind === 'progress' && event.status.state === 'RUNNING') stop.next();
+        },
+        complete: done,
+      }),
+    );
+    expect(events.at(-1)).toEqual({
+      kind: 'done',
+      status: expect.objectContaining({ processed: 3 }),
+    });
+  });
+
+  it('keeps too-many when the stop for it is answered by a command that had completed', async () => {
+    const { bulk } = server({ reads: [at('RUNNING', 1, 4)], abort: of(at('COMPLETED', 4, 4)) });
+    const last = (await run(bulk)).at(-1);
+    expect(last).toEqual({
+      kind: 'too-many',
+      ended: true,
+      status: expect.objectContaining({ processed: 4 }),
+    });
+  });
+
+  it('settles a command someone else stopped while the stop was refused', async () => {
+    const stop = new Subject<void>();
+    const { bulk } = server({
+      // The stop is asked at the first read; the refused abort is followed by a read of its own.
+      reads: [at('RUNNING', 1, 3), at('ABORTED', 2, 3, { ended: true })],
+      abort: throwError(() => new HttpErrorResponse({ status: 400 })),
+    });
+    const events: WholeQueryEvent[] = [];
+    await new Promise<void>((done) =>
+      runWholeQuery(bulk, REQUEST, stop, FAST).subscribe({
+        next: (event) => {
+          events.push(event);
+          if (event.kind === 'progress' && event.status.state === 'RUNNING') stop.next();
+        },
+        complete: done,
+      }),
+    );
+    expect(events.at(-1)).toEqual({
+      kind: 'stopped',
+      ended: true,
+      status: expect.objectContaining({ processed: 2 }),
+    });
+  });
+
+  it('cannot confirm a command whose answer is not a status: it may be running', async () => {
+    for (const error of [
+      new BulkCommandStatusError(),
+      new HttpErrorResponse({ status: 202, statusText: 'Accepted', error: 'not JSON' }),
+    ]) {
+      const { bulk, calls } = server({ submit: throwError(() => error) });
+      const events = await run(bulk);
+      expect(events).toEqual([{ kind: 'unconfirmed', detail: expect.any(String) }]);
+      expect(calls).toHaveLength(1);
+    }
   });
 
   it('keeps following through one failed read', async () => {

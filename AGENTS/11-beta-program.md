@@ -293,11 +293,11 @@ Treat them as settled; if you contradict one, prove it first.
   behind it. Measured 2026-11-23; a restart four minutes later brought it back. A framework action's
   parameters are therefore fixed in code
   (`PACKAGED_WHOLE_QUERY_BULK_ACTIONS`), never taken from a file.
-- **`trash` is not opened over HTTP on a stock Nuxeo 2025.10.** `BulkActionObject` answers HTTP 403
-  to anyone but an administrator for an action without `httpEnabled="true"`; `setProperties`,
-  `csvExport`, `automation` and `automationUi` have it. A command's status and `abort` are the
-  submitter's and administrators' only. Read from the bundle's bytecode; the 403 itself was not
-  measured as a person who is not an administrator.
+- **`trash` is not opened over HTTP on a stock Nuxeo 2025.10.** Its contribution in
+  `nuxeo-core-bulk` has no `httpEnabled="true"`; `setProperties`, `csvExport`, `automation` and
+  `automationUi` have it. Read from the bundles' contributions on 2025.10.18. What the REST layer
+  does with that for a person who is not an administrator is in `docs/api-integrations.md`,
+  section 34, and is not measured.
 
 ---
 

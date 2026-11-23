@@ -597,7 +597,7 @@ runOverPageProvider(name: string, query: BulkCommandQuery, action: string,
   actionParameters: Readonly<Record<string, unknown>>): Observable<BulkCommandStatus> // POST …/search/pp/<name>/bulk/<action>
 status(commandId: string): Observable<BulkCommandStatus>  // GET …/bulk/<commandId>
 abort(commandId: string): Observable<BulkCommandStatus>   // PUT …/bulk/<commandId>/abort
-readBulkCommandStatus(body: unknown): BulkCommandStatus   // errors on anything but a bulkStatus
+readBulkCommandStatus(body: unknown): BulkCommandStatus   // BulkCommandStatusError on anything but a bulkStatus
 ```
 
 `BulkCommandQuery` carries the page provider's `parameters` only. There is no way to send a bucket:

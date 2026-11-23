@@ -229,8 +229,10 @@ provider, for the development server.
   - **It always confirms,** naming the number of records. The action then runs on the server through
     Nuxeo's Bulk Action Framework, over the page provider with the queue's parameters. The page shows
     its progress as it reads the command's status, offers to stop it, and says how it ended: done,
-    done with some records failed, stopped, refused by the server, or no longer followed, in which
-    case it may still be running. An action that changes records reads the list again when it ends.
+    done with some records failed, stopped, refused by the server, an answer the page could not
+    read, or no longer followed, in the last two cases saying it may still be running. An action that
+    changes records reads the list again when it ends, and once more a few seconds later, since a
+    list the search index serves may still hold the records changed.
   - **Not while a bucket is chosen.** The server builds the command from the page provider's query
     and leaves out the buckets chosen, so it would reach records the list does not show. The page
     says to clear the filters instead.
@@ -240,7 +242,8 @@ provider, for the development server.
     agreed to (`queryLimit`), so a query that has come to hold more records, or a parameter the server
     leaves out, reaches that many at most. When the server reports the one more, the page stops the
     command and says so. A fast action such as `trash` has usually processed them all by then: the
-    limit is what bounds it.
+    limit is what bounds it. A count above the limit says the server did not keep to it, and the
+    page says that too.
   - **Stopping** stops the command on the server. The batches already started still finish and count,
     so the page waits a while for them before it gives the number processed, and says when it could
     not.

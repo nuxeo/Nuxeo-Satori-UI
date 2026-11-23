@@ -1945,7 +1945,10 @@
       "stopped-unsettled": "{{action}} stopped. At least {{processed}} of {{total}} records were processed, and batches the server had already started may still finish.",
       "stopping": "Stopping",
       "too-many": "{{action}} stopped: the query now holds more records than the {{count}} you agreed to. The server processed {{processed}}, and goes no further than one more than you agreed to.",
-      "too-many-unsettled": "{{action}} stopped: the query now holds more records than the {{count}} you agreed to. The server had processed at least {{processed}}, and goes no further than one more than you agreed to."
+      "too-many-unsettled": "{{action}} stopped: the query now holds more records than the {{count}} you agreed to. The server had processed at least {{processed}}, and goes no further than one more than you agreed to.",
+      "too-many-unlimited": "{{action}} stopped: the query holds {{total}} records, more than the {{count}} you agreed to, and the server did not keep to the limit the page sent. It processed {{processed}}.",
+      "too-many-unlimited-unsettled": "{{action}} stopped: the query holds {{total}} records, more than the {{count}} you agreed to, and the server did not keep to the limit the page sent. It had processed at least {{processed}}, and batches already started may still finish.",
+      "unconfirmed": "{{action}}: the server's answer could not be read, so the page cannot tell whether it is running. It may be running on the server."
     }
   },
   "rendition": {

@@ -997,8 +997,14 @@ Nuxeo has no framework action for any of them that it opens over HTTP.
 
 - **A file cannot name what runs.** A queue file lists bulk actions by id, and a manifest may hide,
   relabel or reorder their descriptors, but neither can map an id to another framework action or send
-  it other parameters. A descriptor that hands its work to another action's handler (`action`) is not
-  offered over the whole query, since what the table maps would not be what it does on a selection.
+  it other parameters.
+- **What it does on a selection, over the whole query.** An action is offered over a whole query
+  only while what the table maps is what it does on a selection. A descriptor that hands its work to
+  another action's handler (`action`) is not offered. Neither is one whose handler does not declare
+  the mapping its own: the app's handler for `app.bulkActions.delete` carries `wholeQuery: true`, and
+  a customer's handler registered in its place does not, so Delete is then not offered over the
+  whole query rather than trashing what the customer's handler would, say, archive.
+  `ExtensionActionRegistry.runsOverWholeQuery(id)` answers it.
 - **The server decides.** A stock Nuxeo 2025.10 does not open `trash` over HTTP: it answers HTTP 403
   to everyone but an administrator, and the page says that the server does not let the person run it
   over a whole query. A deployment opens it with `httpEnabled="true"` on the `trash` action. Either

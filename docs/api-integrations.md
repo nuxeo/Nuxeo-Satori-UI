@@ -2059,6 +2059,13 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 - **Stopping.** `PUT …/abort` answers `ABORTED` at once with the count so far; the batches already
   started still finish and still count, and `completed` is written when they have. Measured:
   `ABORTED` at 1,000 processed, final at 2,100 of 2,314.
+- **An answer that is not a status.** A 202 whose body is not a `bulkStatus` leaves the page unable
+  to tell whether the command runs: it says so, and reads the list again, rather than reporting a
+  refusal.
+- **The list after a command.** A page provider the search index serves may still hold the records
+  a command changed when it completes, so the page reads the list again at the end and once more
+  three seconds later. Measured over 42 records on `document_content`, the list read at the end
+  was already empty; the larger runs were not checked for it.
 - **Counts.** A page provider counts its results, so `resultsCount` is a real total for
   `payers_unassigned_claims`, `member_claims` and `default_search`. One that answers `-2` cannot
   have every result selected.

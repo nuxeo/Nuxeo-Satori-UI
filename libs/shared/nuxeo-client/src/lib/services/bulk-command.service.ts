@@ -62,7 +62,15 @@ const STATES: ReadonlySet<string> = new Set([
 const count = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 
-/** The status the server wrote, or an error when it is not one. */
+/** The server answered, but not with a bulk command's status. */
+export class BulkCommandStatusError extends Error {
+  constructor() {
+    super('the server did not answer with the status of a bulk command');
+    this.name = 'BulkCommandStatusError';
+  }
+}
+
+/** The status the server wrote, or a {@link BulkCommandStatusError} when it is not one. */
 export function readBulkCommandStatus(body: unknown): BulkCommandStatus {
   const record = (body ?? {}) as Record<string, unknown>;
   const commandId = record['commandId'];
@@ -71,7 +79,7 @@ export function readBulkCommandStatus(body: unknown): BulkCommandStatus {
     typeof commandId !== 'string' ||
     !COMMAND_ID.test(commandId)
   ) {
-    throw new Error('the server did not answer with the status of a bulk command');
+    throw new BulkCommandStatusError();
   }
   const state = typeof record['state'] === 'string' ? record['state'] : '';
   const known = (STATES.has(state) ? state : 'UNKNOWN') as BulkCommandState;
