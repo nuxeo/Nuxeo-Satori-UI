@@ -774,7 +774,7 @@
           mat-stroked-button
           type="button"
           class="btn-add-properties"
-          [disabled]="busy() || importRestricted() || importTypesUnsettled()"
+          [disabled]="busy() || importRestricted() || importTypesUnsettled() || noImportBlobTypes()"
           (click)="startImportProperties()"
         >
           {{ 'browse.create-import-dialog.add-properties' | translate }}

@@ -878,6 +878,38 @@ describe('CreateImportDialogComponent CSV', () => {
     expect(component.importRestricted()).toBe(false);
   });
 
+  it('keeps Add properties disabled where the folder allows no type with a main file', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await createDialog({ parentPath: '/default-domain/workspaces/demo' });
+    component.setActiveTab('import');
+    component.creatableTypes.set([
+      { type: 'Workspace', label: 'Workspace' },
+      { type: 'Folder', label: 'Folder' },
+    ]);
+    component.uploads.stage([jpegFile('plan.jpg')]);
+    fixture.detectChanges();
+    const addProperties = (): HTMLButtonElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('.btn-add-properties');
+
+    expect(component.importTypesUnsettled()).toBe(false);
+    expect(component.noImportBlobTypes()).toBe(true);
+    expect(addProperties()?.disabled).toBe(true);
+    component.startImportProperties();
+    expect(component.importEntries()).toEqual([]);
+    expect(component.view()).toBe('main');
+
+    // The same folder with one type that keeps a main file opens the step as before.
+    component.creatableTypes.set([
+      { type: 'Workspace', label: 'Workspace' },
+      { type: 'RentalContract', label: 'Rental Contract' },
+    ]);
+    fixture.detectChanges();
+    expect(addProperties()?.disabled).toBe(false);
+    component.startImportProperties();
+    expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    expect(component.view()).toBe('importProperties');
+  });
+
   it('shows staged import cards and action buttons only after files are selected', async () => {
     await createDialog({ parentPath: '/default-domain/workspaces/demo' });
     component.setActiveTab('import');
@@ -3168,6 +3200,9 @@ describe('CreateImportDialogComponent with the real create form and Expires fiel
 
   it('keeps every partial entry on the import form', async () => {
     const fixture = await render();
+    // A folder that takes File. Without this the folder context is whatever an earlier test left
+    // the mock returning, and one that allows no type with a main file opens no properties step.
+    fixture.componentInstance.creatableTypes.set([{ type: 'File', label: 'File' }]);
     fixture.componentInstance.uploads.stage([jpegFile('photo.png')]);
     fixture.componentInstance.startImportProperties();
     fixture.detectChanges();

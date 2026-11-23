@@ -423,6 +423,14 @@ export class CreateImportDialogComponent implements OnInit {
   readonly importBlobTypeNames = computed(() => this.importBlobTypeOptions().map((dt) => dt.type));
 
   /**
+   * Import's properties step has no type to start the files as: this folder allows none that
+   * keeps a main file — one that takes only Workspace and Folder, say. Each file would otherwise
+   * start as `File`, `resolveImportBlobDocType`'s fallback, which the folder does not allow, so
+   * Add properties stays disabled and `startImportProperties` does nothing.
+   */
+  readonly noImportBlobTypes = computed(() => this.importBlobTypeNames().length === 0);
+
+  /**
    * Dublin Core metadata fields for blob-holding import types: File, Picture, Audio, Video and
    * any type that extends one of them, or carries the `file` schema, itself or through a facet,
    * and is not folderish.
@@ -1071,7 +1079,7 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   startImportProperties(): void {
-    if (this.importRestricted() || this.importTypesUnsettled()) return;
+    if (this.importRestricted() || this.importTypesUnsettled() || this.noImportBlobTypes()) return;
     const files = this.uploads.pending();
     if (files.length === 0) return;
 
