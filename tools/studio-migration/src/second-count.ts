@@ -76,6 +76,12 @@ const PATTERNS: Partial<
     condition: conditionTags,
     script: count(SCRIPT),
   },
+  // The custom bundle may hold contributions as the bundle does, beside its code.
+  'custom-bundle': {
+    'slot-contribution': count(tag('nuxeo-slot-content')),
+    condition: conditionTags,
+    script: count(SCRIPT),
+  },
   dashboard: {
     'dashboard-card': count(tag('nuxeo-card')),
     condition: conditionTags,
@@ -90,6 +96,7 @@ const PATTERNS: Partial<
 
 /** The Web UI files a layout block can be used in: those the parser reads as Polymer markup. */
 const WEB_UI_KINDS: ReadonlySet<FileKind> = new Set<FileKind>([
+  'custom-bundle',
   'document-layout',
   'task-layout',
   'layout-block',

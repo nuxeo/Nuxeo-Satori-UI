@@ -244,6 +244,37 @@ The card becomes a card of `home.json`, with the card's heading, naming the queu
 
 **Slot contributions:**
 
+- **As Web UI's slots register them** (nuxeo-elements' `nuxeo-slots.js`, replayed step by step
+  in [`slot-registry.ts`](src/slot-registry.ts)), for actions, the left menu, the theme and tabs
+  alike:
+  - a contribution registers into each slot its `slot` names, split at commas as written;
+  - in a slot, a contribution of an earlier one's `name`, at the same or a higher `priority`,
+    replaces it in its place when it holds a template, and otherwise changes its `disabled`,
+    `order` and `priority`, and its slots; at a lower priority it is ignored. Every contribution
+    is registered, one with no template too, so one that comes first at a higher priority makes a
+    later one of its name ignored;
+  - after each registration the slot sorts by `order`, 0 when left out, equals keeping their
+    places;
+  - what shows is a contribution with a template, not disabled. The converter writes it at its
+    order, `order: 0` where Web UI's is left out, and in Web UI's order; it reports each other
+    one as left out, and one a change moves to other slots for a person to map. One with no
+    template and no earlier one of its name changes one of Web UI's own, and is reported for a
+    person to decide;
+  - `priority` and `order` are read as Polymer reads a Number, `2.5`, `NaN` and `Infinity`
+    included, and compared as Web UI compares them. An order that is not whole is left out of the
+    file, which takes whole numbers, and the action or entry is reported: the app shows one with no
+    order after every ordered one;
+  - a contribution to several slots, `slot="A,B"`, takes part in each one's registration, so it can
+    hide or replace a button of A, but becomes nothing itself: it is a slot the catalogue does not
+    know, and is reported.
+
+  A button's and a menu icon's label are translated by Web UI as a key
+  (`nuxeo-operation-button`, `nuxeo-menu-icon`: `i18n(label)`), as a tab's is: a key the package
+  translates becomes `labelKey`, and any other is written as it is, which is what Web UI shows.
+
+  The custom bundle's contributions are read too, before the bundle's, as Studio's bundle imports
+  it first: a project's hand-written change, such as hiding a button, goes there.
+
 - **Actions.** An operation button on a document's page or over a selection becomes an action, with
   its operation, its literal parameters, its icon (Polymer's `icons` set shares Material's names)
   and its order. It needs the operation on the allow-list; without one, the button is reported. A
@@ -499,13 +530,17 @@ check that did not run does.
     - The tables prove the mapping against the two sources as written. Evaluating each original
       in Web UI itself, on the migration server, has not run. A package with no condition passes,
       because there is nothing for a table to decide.
-  - **6, what people see.** Each field, column, list and tab is named as Web UI names it, the
-    app's label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
+  - **6, what people see.** Each action and menu entry is at the order Web UI's slot gives it,
+    a later contribution of its name included, and two of one order are listed in the places Web
+    UI shows them in. Each action is named as its button is, a menu entry as its icon is, and a tab
+    as its page item is, each translated as Web UI translates it. Each field, column, list and tab is named as Web
+    UI names it, the app's label worked out as the app does: the `label`, the `labelKey`, `layout.field.<xpath>`, the name
     made readable. A label that rests on a catalogue the package does not hold is listed. The values
     need both apps on the same records.
   - **7, what the server is asked.** Each list asks the same page provider with the same parameters,
     opening sort and page size. Each action runs the same operation with the same parameters, on
-    the record or a selection, as Web UI does. Nothing asks for anything the package does not. The
+    the record or a selection, as Web UI does: the contribution Web UI's slot keeps, never a
+    disabled, replaced or outranked one. Nothing asks for anything the package does not. The
     recorded requests and their result counts need the server.
 - **Not run:** 9, plugins, which M3 brings.
 
@@ -517,50 +552,60 @@ lists what stands in the way.
 the checks that run. Each breaks one thing and names the check that must then fail. The tests
 apply every one to the made-up package, and `mutate` applies one to a copy:
 
-| Mutation                   | Check | Breaks                                                                |
-| -------------------------- | ----- | --------------------------------------------------------------------- |
-| `drop-translation`         | 4     | Drops one translation from one language                               |
-| `change-translation`       | 4     | Changes the words of one translation                                  |
-| `wrong-primary-token`      | 8     | Maps the theme's primary colour to the wrong token                    |
-| `invent-token`             | 8     | Sets a token that no property sets                                    |
-| `drop-asset`               | 8     | Leaves out one of a theme's files                                     |
-| `change-asset`             | 8     | Changes one byte of one of a theme's files                            |
-| `drop-report-entry`        | 1     | Drops a layout from the report without a word                         |
-| `invent-report-entry`      | 1     | Lists a layout the package does not have                              |
-| `unexplained-report`       | 1     | Reports something without saying why                                  |
-| `drop-field`               | 2     | Drops a field from a converted layout                                 |
-| `date-to-text`             | 2     | Turns a date widget into text, in a layout or a list                  |
-| `drop-required`            | 2     | Makes a required field of a form optional                             |
-| `rename-field`             | 3     | Names a field the package's own schema does not have                  |
-| `slip-free-javascript`     | 5     | Slips a free JavaScript condition into the configuration              |
-| `widen-to-everyone`        | 5     | Shows a field Web UI shows only under a condition to every user       |
-| `widen-column-to-everyone` | 5     | Shows a list column Web UI shows only under a condition to every user |
-| `invert-rule`              | 5     | Inverts the rule a converted condition became                         |
-| `drop-rule`                | 5     | Drops the rule of something Web UI shows only under a condition       |
-| `change-label`             | 6     | Changes the label of a converted field                                |
-| `wrong-page-provider`      | 7     | Points a list at a different page provider                            |
-| `change-parameter`         | 7     | Changes one parameter of a list or an action                          |
-| `bind-other-operation`     | 7     | Binds a button to a different operation                               |
-| `wrong-home-queue`         | 7     | Points a card of the home at another queue                            |
-| `drop-menu-entry`          | 7     | Drops an entry of the menu                                            |
-| `unregistered-widget`      | 10    | Names a widget the platform does not have                             |
-| `drop-task-field`          | 2     | Drops a field from a converted task form                              |
-| `rename-task-variable`     | 3     | Names a variable the task's step and workflow do not have             |
-| `var-in-layout`            | 10    | Puts a task's variable into a document's layout                       |
-| `drop-block-card`          | 2     | Drops a layout block's card from a converted layout                   |
-| `drop-tab`                 | 2     | Drops a tab from a converted view layout                              |
-| `drop-tab-rule`            | 5     | Shows a tab Web UI shows only under a condition to every user         |
-| `change-tab-label`         | 6     | Changes the label of a converted tab                                  |
-| `make-display-editable`    | 2     | Makes a field Web UI only shows editable in a task form               |
-| `drop-block-use-entry`     | 1     | Drops a use of a layout block from the report without a word          |
+| Mutation                     | Check | Breaks                                                                |
+| ---------------------------- | ----- | --------------------------------------------------------------------- |
+| `drop-translation`           | 4     | Drops one translation from one language                               |
+| `change-translation`         | 4     | Changes the words of one translation                                  |
+| `wrong-primary-token`        | 8     | Maps the theme's primary colour to the wrong token                    |
+| `invent-token`               | 8     | Sets a token that no property sets                                    |
+| `drop-asset`                 | 8     | Leaves out one of a theme's files                                     |
+| `change-asset`               | 8     | Changes one byte of one of a theme's files                            |
+| `drop-report-entry`          | 1     | Drops a layout from the report without a word                         |
+| `invent-report-entry`        | 1     | Lists a layout the package does not have                              |
+| `unexplained-report`         | 1     | Reports something without saying why                                  |
+| `drop-field`                 | 2     | Drops a field from a converted layout                                 |
+| `date-to-text`               | 2     | Turns a date widget into text, in a layout or a list                  |
+| `drop-required`              | 2     | Makes a required field of a form optional                             |
+| `rename-field`               | 3     | Names a field the package's own schema does not have                  |
+| `slip-free-javascript`       | 5     | Slips a free JavaScript condition into the configuration              |
+| `widen-to-everyone`          | 5     | Shows a field Web UI shows only under a condition to every user       |
+| `widen-column-to-everyone`   | 5     | Shows a list column Web UI shows only under a condition to every user |
+| `invert-rule`                | 5     | Inverts the rule a converted condition became                         |
+| `drop-rule`                  | 5     | Drops the rule of something Web UI shows only under a condition       |
+| `change-label`               | 6     | Changes the label of a converted field                                |
+| `wrong-page-provider`        | 7     | Points a list at a different page provider                            |
+| `change-parameter`           | 7     | Changes one parameter of a list or an action                          |
+| `bind-other-operation`       | 7     | Binds a button to a different operation                               |
+| `wrong-home-queue`           | 7     | Points a card of the home at another queue                            |
+| `drop-menu-entry`            | 7     | Drops an entry of the menu                                            |
+| `unregistered-widget`        | 10    | Names a widget the platform does not have                             |
+| `drop-task-field`            | 2     | Drops a field from a converted task form                              |
+| `rename-task-variable`       | 3     | Names a variable the task's step and workflow do not have             |
+| `var-in-layout`              | 10    | Puts a task's variable into a document's layout                       |
+| `drop-block-card`            | 2     | Drops a layout block's card from a converted layout                   |
+| `drop-tab`                   | 2     | Drops a tab from a converted view layout                              |
+| `drop-tab-rule`              | 5     | Shows a tab Web UI shows only under a condition to every user         |
+| `change-tab-label`           | 6     | Changes the label of a converted tab                                  |
+| `make-display-editable`      | 2     | Makes a field Web UI only shows editable in a task form               |
+| `drop-block-use-entry`       | 1     | Drops a use of a layout block from the report without a word          |
+| `revive-disabled-action`     | 7     | Makes an action of a disabled button                                  |
+| `keep-replaced-action`       | 7     | Keeps a button a later one of the same name replaces                  |
+| `keep-outranked-action`      | 7     | Keeps a button a higher priority one of the same name outranks        |
+| `revive-disabled-menu-entry` | 7     | Makes a menu entry of a disabled one                                  |
+| `change-action-order`        | 6     | Moves an action from the order Web UI's slot gives it                 |
 
-**On the sample**, every one of the 34 controls was applied to its conversion with `mutate` and
+The four that write what Web UI leaves out read the package too: `mutate` takes it with
+`--package <package.zip>`, and refuses without it.
+
+**On the sample**, every one of the 39 controls was applied to its conversion with `mutate` and
 checked. The 21 that find something to break each fail their check, with a finding of their own,
-`wrong-home-queue`, `drop-menu-entry` and M2's `var-in-layout` among them. The other 13 have
+`wrong-home-queue`, `drop-menu-entry` and M2's `var-in-layout` among them. The other 18 have
 nothing to break there, and say so: `widen-to-everyone`, `widen-column-to-everyone`, `invert-rule`
 and `drop-rule`, because the sample has no condition; `bind-other-operation`, because its one
-button runs no operation; and eight of M2's nine, because it has no task layout, tab or layout
-block. The tests apply every control to the made-up package with M2's corpus, which has them all,
+button runs no operation; eight of M2's nine, because it has no task layout, tab or layout block;
+and the five of the slot registration, because it has no disabled, replaced or outranked
+contribution and no action. The slot controls were applied with `mutate` to the made-up package's
+conversion, and each failed its check. The tests apply every control to the made-up package with M2's corpus, which has them all,
 and each of M2's nine was also applied with `mutate` to that package's conversion and seen failing
 its check.
 
@@ -682,6 +727,39 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     a required record field through the conversion unreported. Each now has its test, and the
     second sort is gone.
 
+  - **For the slot registration, 42 guards**, broken the same way, each seen turning the suite
+    red: in the registry, a disabled contribution, one with no template and one a change moves
+    showing nothing, a lower priority ignored, a later one of the name replacing in the earlier
+    one's place, a change moving the earlier one or taking it to another slot, the slot sorting
+    after each registration, a contribution with no template registering, each slot a contribution
+    names, no name never merging, an order left out being 0, a change of Web UI's own reported, and
+    slots kept apart; in the inventory, Polymer's numbers and the custom bundle read; for actions,
+    only what the slot keeps owning one, what it leaves out reported, the slot's order, Web UI's
+    order and its default order written; for the menu, a left-out entry being none, the page the
+    slot keeps, the slot's order and Web UI's order; check 5's left-out entry and the page it
+    keeps; and check 6's order of an action and of a menu entry, and an action's label. After the
+    second review, eleven more: a tab only of a contribution to the tab slot, a priority compared
+    as Web UI compares it, moved and disabled read as disabled, Polymer's `NaN`, the slot sorting
+    after each registration rather than once, an order that is no whole number reported for an
+    action and a menu entry, a button's and a menu icon's translated label, check 6's translated
+    label, and check 6's equals in Web UI's places. Three rounds found five no test reached, each
+    now tested.
+
+  - **An independent review of the slot registration** found eleven things. Fixed, each with a
+    test: a contribution with no template that comes first was not registered, so its priority did
+    not outrank a later one; the custom bundle's contributions were not read; a contribution naming
+    several slots took no part in their registration; a replacement took the place of the kept one
+    rather than the earlier one's; a fractional priority or order was not read; Web UI's default
+    order was written for a change and not for the rest; check 5's two new lines had no test; and
+    an action's label was not checked. The rest are limits, under **Not done yet**: Web UI's own
+    contributions, the order Web UI loads files in, a menu entry's page paired by the
+    contribution's name, and what the checks share with the converter. A second round confirmed
+    them and found six more, fixed the same way: a tab item contributed to two slots was written as
+    a tab and reported; no test held the sort after each registration; a fractional order was left
+    out of the file without a word; Web UI translates a button's and a menu icon's label, which
+    the converter and check 6 read as text; a `NaN` or `Infinity` priority was read as 0; and
+    check 6 did not look at equals' places.
+
   - **An independent review of M2** found twelve things. Fixed, each with a test: a guarded
     block's field moved under another block's rule passed check 5; a block given no document hid
     a dropped rule; a disabled tab, or one a later contribution replaced, still became a tab; Web
@@ -730,14 +808,28 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **A tab's listing.** A tab whose page is a page provider and a table, rather than a layout block,
   is reported: section 3's "a list over the page provider" would be a card of related records
   (layout-v2.md, section 7), and is not written yet.
-- **Web UI's slot registration for actions and the menu.** Tabs are read as `nuxeo-slots.js`
-  registers contributions: `disabled`, `priority` and a later contribution of the same name. M1's
-  actions and menu entries are not yet, so a disabled button still becomes an action, and a
-  replaced one is not reported.
+- **Web UI's own contributions.** The slot registration sees the package's contributions only.
+  One that shares its name with a contribution of Web UI's own replaces it in Web UI, and the app
+  keeps its own; a list of Web UI's contributions, by slot and name, would let the converter report
+  it. A contribution to several slots at once, `slot="A,B"`, takes part in each slot's
+  registration, but is itself a slot the catalogue does not know, and is reported.
+- **The order Web UI loads files in.** The registration reads the custom bundle, then each
+  slot-contributions file, as the bundle lists them. Web UI loads the bundle the package's own
+  web resources register (`OSGI-INF/extensions.xml`), and the files its `<link rel="import">`
+  names, in that order; both could be read from the package, and are not yet. So a
+  `nuxeo-*-bundle.html` that is neither registered nor imported is read as if Web UI loaded it, as
+  the made-up corpus's slots and tabs bundles are, and where Web UI loads two files in the other
+  order, two of one name at one priority resolve the other way.
+- **A menu entry's page** is paired with the entry by the contribution's `name`, as M1 does. Web UI
+  pairs the menu icon with the page by the stamped elements' own `name` (`nuxeo-app.js`,
+  `attr-for-selected`); Studio writes the two the same, but a package that does not would open a
+  page Web UI does not. Follow-up.
 - **What the checks share with the converter.** The checks hold what each file shows to the
   package, but they take from the converter's own planning (`forms.ts`, `blocks.ts`,
-  `convert-tabs.ts`, `convert-tasks.ts`, `convert-layouts.ts`): which tabs exist, as `registered`
-  reads Web UI's slots; which tab is which, which types each goes to and the conditions of its
+  `convert-tabs.ts`, `convert-tasks.ts`, `convert-layouts.ts`, `slot-registry.ts`,
+  `convert-slots.ts`, `convert-home.ts`): which actions, menu entries and tabs exist, and at what
+  order, as `slotRegistry` reads Web UI's slots, so a mistake in that reading passes checks 5, 6
+  and 7 alike, and its controls only move the output away from it; which tab is which, which types each goes to and the conditions of its
   rule; which file a task form is; which card is a block's; and, through `planFields`, which field
   a rule belongs to. Whether a field edits is the inventory's reading of its bindings, for both. A
   mistake there would pass both. Only check 1's second count reads the package another way, and

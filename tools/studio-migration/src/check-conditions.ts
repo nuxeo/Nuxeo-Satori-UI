@@ -29,6 +29,7 @@ import { recordedAllowList } from './convert';
 import { homeCards, menuEntries, menuEntryId } from './convert-home';
 import { planFields } from './convert-layouts';
 import { formPlaces, shownIn, tabOf } from './forms';
+import { slotRegistry } from './slot-registry';
 import { ALWAYS, fieldWidget } from './widgets';
 import { cardGuard, isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
@@ -243,14 +244,18 @@ export function checkConditions({
         `home.json: ${id} shows card ${index + 1} to everyone, though Web UI shows it only while a condition passes`,
       );
   });
+  const registry = slotRegistry(inventory);
   const menuFile = conversion.app['navigation.json'];
   const menuList =
     isRecord(menuFile) && Array.isArray(menuFile['entries']) ? menuFile['entries'] : [];
   for (const item of inventory.slotContributions) {
     if (item.slot !== 'DRAWER_ITEMS') continue;
-    // The entry under a condition, or the page it opens.
+    // An entry Web UI's slot does not show is none: an entry written for it is check 7's.
+    if (!registry.kept.has(item)) continue;
+    // The entry under a condition, or the page it opens, as Web UI's slot keeps it.
     const page = inventory.slotContributions.find(
-      (other) => other.slot === 'DRAWER_PAGES' && other.name === item.name,
+      (other) =>
+        other.slot === 'DRAWER_PAGES' && other.name === item.name && registry.kept.has(other),
     );
     if (item.conditions.length === 0 && (page?.conditions.length ?? 0) === 0) continue;
     const id = menuEntryId(item);
