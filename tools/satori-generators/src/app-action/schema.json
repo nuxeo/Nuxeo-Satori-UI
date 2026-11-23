@@ -30,7 +30,7 @@
     },
     "parameters": {
       "type": "string",
-      "description": "The operation's parameters, as a JSON object: each name to a literal, or to { \"field\": \"<prefix>:<name>\" } on a record or a row."
+      "description": "The operation's parameters, as a JSON object: each name (a letter, then letters, digits or '_') to a literal, or, on a record or a row but never in bulk, to { \"field\": \"<prefix>:<name>\" }."
     },
     "on": {
       "type": "string",
@@ -58,7 +58,7 @@
     },
     "force": {
       "type": "boolean",
-      "description": "Replace the action if actions.json has its id already. Its labels keep the text labels/en.json has.",
+      "description": "Replace the action if actions.json has its id already. A queue that offered it on rows or in bulk, where it no longer shows, stops offering it. Its labels keep the text labels/en.json has.",
       "default": false
     }
   },

@@ -172,8 +172,16 @@ export function addLabels(
   return kept;
 }
 
-const CONFIGURATION =
-  /<extension\s+target\s*=\s*"org\.nuxeo\.agentic\.ui\.config"\s+point\s*=\s*"configuration"\s*>/;
+/**
+ * `xml` with each comment and CDATA section blanked, character for character: a search of it finds
+ * only markup, as the server's reader and the pipeline's do, and an index into it is an index into
+ * `xml`. An unterminated one is left as it is, for `build.mjs` to refuse.
+ */
+function markupOnly(xml: string): string {
+  return xml.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, (part) =>
+    part.replace(/[^\n]/g, ' '),
+  );
+}
 
 /**
  * Adds `<layout type mode src>` to the package's component, inside its
@@ -183,46 +191,64 @@ const CONFIGURATION =
  * server serves only what the component contributes, so a layout file the component does not
  * name is never seen.
  *
- * An entry for the type and mode already there is left alone when it names that file, and refused
- * when it names another: two contributions of one layout would leave the later to win.
+ * The component is read as the pipeline reads it: what a comment or a CDATA section holds is not
+ * an entry. An entry for the type and mode already there is left alone when it names that file,
+ * and refused when it names another, since two contributions of one layout leave the later to win,
+ * or when it is disabled, since the server would then serve nothing.
  */
 export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode: string): void {
   const xml = tree.read(pkg.component, 'utf-8');
   if (xml === null) throw new Error(`Cannot read ${pkg.component}.`);
+  const markup = markupOnly(xml);
   const src = `agentic-ui-config/layouts/${type}/${mode}.layout.json`;
-  const existing = [...xml.matchAll(/<layout\b[^>]*>/g)].find(
-    ([tag]) => attribute(tag, 'type') === type && attribute(tag, 'mode') === mode,
-  );
-  if (existing) {
-    if (attribute(existing[0], 'src') === src) return;
-    throw new Error(
-      `${pkg.component} already contributes the ${type}/${mode} layout, from ` +
-        `${attribute(existing[0], 'src') ?? 'inline'}. Remove that entry first.`,
-    );
+  const existing = [...markup.matchAll(/<layout\b[^>]*>/g)]
+    .map(([tag]) => tag)
+    .filter((tag) => attribute(tag, 'type') === type && attribute(tag, 'mode') === mode);
+  for (const tag of existing) {
+    const enabled = attribute(tag, 'enabled');
+    if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
+      throw new Error(
+        `${pkg.component} has the ${type}/${mode} layout disabled (enabled="${enabled}"), so the server serves none. Remove that entry, or enable it.`,
+      );
+    }
+    if (attribute(tag, 'src') !== src) {
+      throw new Error(
+        `${pkg.component} already contributes the ${type}/${mode} layout, from ` +
+          `${attribute(tag, 'src') ?? 'inline'}. Remove that entry first.`,
+      );
+    }
   }
+  if (existing.length > 0) return;
   const entry = `<layout type="${type}" mode="${mode}" src="${src}" />`;
-  const opening = CONFIGURATION.exec(xml);
+  const opening = [...markup.matchAll(/<extension\b[^>]*>/g)].find(
+    ([tag]) =>
+      !tag.endsWith('/>') &&
+      attribute(tag, 'target') === 'org.nuxeo.agentic.ui.config' &&
+      attribute(tag, 'point') === 'configuration',
+  );
   if (opening) {
-    const close = xml.indexOf('</extension>', opening.index);
+    const close = markup.indexOf('</extension>', opening.index);
     if (close < 0)
       throw new Error(`${pkg.component}: its configuration extension is never closed.`);
-    const lineStart = xml.lastIndexOf('\n', close) + 1;
-    const before = xml.slice(lineStart, close).trim() === '' ? lineStart : close;
+    const lineStart = markup.lastIndexOf('\n', close) + 1;
+    const before = markup.slice(lineStart, close).trim() === '' ? lineStart : close;
     tree.write(pkg.component, `${xml.slice(0, before)}    ${entry}\n${xml.slice(before)}`);
     return;
   }
-  const end = xml.lastIndexOf('</component>');
+  const end = markup.lastIndexOf('</component>');
   if (end < 0) throw new Error(`${pkg.component} has no </component>.`);
   const extension =
     '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
     `    ${entry}\n` +
     '  </extension>\n';
-  const lineStart = xml.lastIndexOf('\n', end) + 1;
+  const lineStart = markup.lastIndexOf('\n', end) + 1;
   tree.write(pkg.component, `${xml.slice(0, lineStart)}\n${extension}${xml.slice(lineStart)}`);
 }
 
+/** An attribute's value, quoted either way, as XML allows. */
 function attribute(tag: string, name: string): string | undefined {
-  return new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`).exec(tag)?.[1];
+  const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(tag);
+  return match ? (match[1] ?? match[2]) : undefined;
 }
 
 /** A comma-separated option as a list, or a list as given; empty items dropped. */

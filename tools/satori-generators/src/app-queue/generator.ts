@@ -4,7 +4,9 @@ import {
   addLabels,
   humanize,
   ID,
+  isRecord,
   listOption,
+  parseJson,
   readAppPackage,
   schemaFor,
   writeJson,
@@ -21,6 +23,9 @@ export interface AppQueueSchema {
   pageSize?: number;
   force?: boolean;
 }
+
+/** A task form's variables: no queue's record has them. */
+const VARIABLE = 'var:';
 
 /** A page provider's name, as a queue writes it. */
 const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
@@ -51,14 +56,16 @@ export default async function appQueueGenerator(tree: Tree, options: AppQueueSch
   }
   const columns = listOption(options.columns);
   if (columns.length === 0) columns.push('dc:title', 'dc:modified');
-  const badColumn = columns.find((column) => !XPATH.test(column));
+  const badColumn = columns.find((column) => !XPATH.test(column) || column.startsWith(VARIABLE));
   if (badColumn !== undefined) {
-    throw new Error(`--columns: "${badColumn}" is not a property, written <prefix>:<name>.`);
+    throw new Error(
+      `--columns: "${badColumn}" is not a record's property, written <prefix>:<name>${badColumn.startsWith(VARIABLE) ? "; var: names a task form's variable" : ''}.`,
+    );
   }
   let sort: { field: string; order: 'asc' | 'desc' } | undefined;
   if (options.sort !== undefined) {
     const match = /^([^:\s]+:[^:\s]+)(?::(asc|desc))?$/.exec(options.sort.trim());
-    if (!match || !XPATH.test(match[1])) {
+    if (!match || !XPATH.test(match[1]) || match[1].startsWith(VARIABLE)) {
       throw new Error(`--sort "${options.sort}" must be <prefix>:<name>, or <prefix>:<name>:desc.`);
     }
     sort = { field: match[1], order: (match[2] as 'asc' | 'desc' | undefined) ?? 'asc' };
@@ -68,13 +75,20 @@ export default async function appQueueGenerator(tree: Tree, options: AppQueueSch
     throw new Error(`--pageSize ${pageSize} must be a whole number from 1 to 100.`);
   }
   const file = `${pkg.config}/queues/${options.id}.json`;
-  if (tree.exists(file) && !options.force) {
+  const existing = tree.read(file, 'utf-8');
+  if (existing !== null && !options.force) {
     throw new Error(`${file} already exists. Pass --force to write it again.`);
   }
+  // Written again, the queue keeps what this generator does not write: its parameters, facets,
+  // row and bulk actions and visibleWhen, which were written by hand or by app-action, and its
+  // sort and page size when they are not given again.
+  const previous = existing === null ? {} : parseJson(existing, file);
+  if (!isRecord(previous)) throw new Error(`${file} is not a queue to write again.`);
 
   const labelKey = `${pkg.appId}.queue.${options.id}`;
   writeJson(tree, file, {
     $schema: schemaFor(file, 'queue.schema.json'),
+    ...previous,
     version: 2,
     labelKey,
     pageProvider: options.pageProvider,
@@ -82,7 +96,9 @@ export default async function appQueueGenerator(tree: Tree, options: AppQueueSch
     ...(sort ? { sort: [sort] } : {}),
     ...(pageSize !== undefined ? { pageSize } : {}),
   });
-  const kept = addLabels(tree, pkg, { [labelKey]: options.label?.trim() || humanize(options.id) });
+  const keptLabels = addLabels(tree, pkg, {
+    [labelKey]: options.label?.trim() || humanize(options.id),
+  });
 
   await formatFiles(tree);
 
@@ -92,7 +108,7 @@ Wrote ${file}
 
   Page provider:  ${options.pageProvider}
   Columns:        ${columns.join(', ')}
-${kept.length > 0 ? `  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}
+${keptLabels.length > 0 ? `  Kept the text labels/en.json already had for ${keptLabels.join(', ')}\n` : ''}
 Check that ${options.pageProvider} exists, and how many parameters it takes, with the Builder MCP
 server's describe_page_provider. Then:
 

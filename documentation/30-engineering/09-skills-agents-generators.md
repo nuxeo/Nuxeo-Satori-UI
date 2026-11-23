@@ -115,6 +115,7 @@ which to read.
 | `capture-phase-evidence/SKILL.md` | Producing evidence that proves something                                                             |
 | `audit-evidence/SKILL.md`         | Auditing evidence adversarially                                                                      |
 | `add-extension-point/SKILL.md`    | Making something manifest-addressable                                                                |
+| `app-builder/SKILL.md`            | Building a business app with the agent: the Builder MCP server, the `app-*` generators, the pipeline |
 | `fix-bug/SKILL.md`                | Bug workflow                                                                                         |
 | `kd-local-setup/SKILL.md`         | Knowledge Discovery local setup                                                                      |
 | `add-nuxeo-api.md`                | Adding a Nuxeo API call                                                                              |
@@ -267,7 +268,7 @@ the architecture.
 
 |                                                                 |                                                                                          Count |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------: |
-| Real, discrete, verifiable components                           |                                   **7 workflows + 2 review agents + 6 generators + 13 skills** |
+| Real, discrete, verifiable components                           |                                  **7 workflows + 2 review agents + 10 generators + 13 skills** |
 | Catalog entries that are context/procedure rather than an agent |                                                                                              8 |
 | Catalog entries not implemented at all                          | **8** (Broken Link, Performance, Refactoring Opportunity, and all six of Tier 4, less overlap) |
 

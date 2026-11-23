@@ -40,11 +40,10 @@ export interface AppLayoutSchema {
 const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 
 /**
- * Nuxeo's own schemas, which nearly every document type carries and which a business record page
- * does not show as cards of their own: the title and the dates are the page's header, and a
- * record's file, attachments, tags and versions have their own places. Left out unless named with
- * `--schemas`. These are the schemas of the stock `File`, `Note` and `Folder` beyond their own
- * (`note`): what a Studio type inherits from `Document` and the usual facets.
+ * Nuxeo's own schemas, which nearly every document type carries: the title and dates, the icon and
+ * size, the version, the main file and attachments, the tags and the full text. They are the
+ * platform's, not the business record's, so they are left out unless `--schemas` names them.
+ * Between them, the stock `File`, `Note` and `Folder` carry these, and `Note` its own `note` besides.
  */
 export const NUXEO_SCHEMAS: readonly string[] = [
   'common',

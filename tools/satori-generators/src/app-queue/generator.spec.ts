@@ -68,6 +68,12 @@ describe('app-queue generator', () => {
       ['a column that is not <prefix>:<name>', { columns: 'title' }, '--columns: "title"'],
       ['a sort in another order', { sort: 'dc:title:up' }, '--sort "dc:title:up"'],
       ['a page size over 100', { pageSize: 500 }, '--pageSize 500'],
+      [
+        'a task variable as a column',
+        { columns: 'dc:title,var:decision' },
+        'var: names a task form',
+      ],
+      ['a task variable as the sort', { sort: 'var:decision' }, '--sort "var:decision"'],
     ];
     for (const [what, options, message] of refusals) {
       it(what, async () => {
@@ -81,6 +87,34 @@ describe('app-queue generator', () => {
       await expect(generate()).rejects.toThrow('already exists. Pass --force');
       await generate({ force: true, columns: 'dc:title' });
       expect(read(tree, `${CONFIG}/queues/open-contracts.json`)['columns']).toEqual(['dc:title']);
+    });
+  });
+
+  it('written again, keeps what it does not write: parameters, actions, facets, the rule', async () => {
+    await generate({ sort: 'dc:modified:desc', pageSize: 20 });
+    const file = `${CONFIG}/queues/open-contracts.json`;
+    const queue = read(tree, file);
+    const byHand = {
+      parameters: ['open'],
+      rowActions: ['acme-contracts.approve'],
+      bulkActions: ['app.bulkActions.downloadZip'],
+      facets: [{ aggregate: 'contract_category_agg', label: 'Category' }],
+      visibleWhen: { type: 'app.rules.inGroup', parameters: ['legal'] },
+    };
+    tree.write(file, JSON.stringify({ ...queue, ...byHand }));
+    await generate({
+      force: true,
+      columns: 'dc:title,contract:end',
+      pageProvider: 'acme_contracts',
+    });
+    expect(read(tree, file)).toEqual({
+      ...queue,
+      ...byHand,
+      pageProvider: 'acme_contracts',
+      columns: ['dc:title', 'contract:end'],
+      // Not given again, so kept.
+      sort: [{ field: 'dc:modified', order: 'desc' }],
+      pageSize: 20,
     });
   });
 });

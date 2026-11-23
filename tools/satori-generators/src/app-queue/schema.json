@@ -39,7 +39,7 @@
     },
     "force": {
       "type": "boolean",
-      "description": "Write the queue again if it exists. Its label keeps the text labels/en.json has.",
+      "description": "Write the queue again if it exists, replacing its page provider and columns, and its sort and page size when given. What else it has is kept: parameters, facets, row and bulk actions, visibleWhen. Its label keeps the text labels/en.json has.",
       "default": false
     }
   },

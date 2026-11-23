@@ -37,7 +37,7 @@
     "app-package": {
       "factory": "./src/app-package/generator",
       "schema": "./src/app-package/schema.json",
-      "description": "Scaffold a business app: an app definition package, version 2, with app.json, labels/en.json, the component that contributes its layouts, and version 1's package files. With --type and the content model it writes the first record page too, and passes the package pipeline as written; without one, the pipeline refuses it until a layout is added, as it refuses every package that contributes nothing. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "description": "Scaffold a business app: an app definition package, version 2, with app.json, labels/en.json, the component that contributes its layouts, and version 1's package files. With --type and the content model it writes the first record page too; without one, the pipeline refuses the package until a layout is added, as it refuses every package that contributes nothing. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
       "x-satori-internal": true
     },
     "app-layout": {

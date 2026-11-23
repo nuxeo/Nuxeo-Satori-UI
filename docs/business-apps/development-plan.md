@@ -273,8 +273,9 @@ faxes wait for capture, in phase 7.
 - **The generators**, updated for app definition version 2: `app-package`, `app-layout`,
   `app-queue` and `app-action`, in [`tools/satori-generators`](../../tools/satori-generators). A
   record page is laid out from the type's schemas in a content model, from a file or read live.
-  A package they write, once it has a record page, passes the package pipeline. They are
-  internal: they write packages this repository's pipeline checks.
+  Their specs hold a scaffold to the package pipeline: it passes, given the model and an
+  allow-list for its operation, and broken copies are refused. They are internal: they write
+  packages this repository's pipeline checks.
 - **The pipeline**, completed: versions, signatures, and promotion after a person approves.
 
 **Demo:**

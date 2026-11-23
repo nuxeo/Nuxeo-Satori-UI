@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/schema",
   "$id": "SatoriAppPackage",
   "title": "Satori business app package",
-  "description": "Scaffolds an app definition package, version 2: app.json, labels/en.json, the OSGi component that contributes its layouts, and version 1's package files with the generator's build.mjs. With type and a content model it writes the first record page, and passes the package pipeline as written: the pipeline refuses a package that contributes nothing. app-layout, app-queue and app-action add to it.",
+  "description": "Scaffolds an app definition package, version 2: app.json, labels/en.json, the OSGi component that contributes its layouts, and version 1's package files with the generator's build.mjs. With type and a content model it writes the first record page: the pipeline refuses a package that contributes nothing. app-layout, app-queue and app-action add to it.",
   "type": "object",
   "properties": {
     "name": {

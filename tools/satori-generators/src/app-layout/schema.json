@@ -34,7 +34,7 @@
     },
     "force": {
       "type": "boolean",
-      "description": "Write the layout again if the type already has one. Its labels keep the text labels/en.json has.",
+      "description": "Write the layout again from the model if the type already has one: edits made to it by hand are lost. Its labels keep the text labels/en.json has.",
       "default": false
     }
   },

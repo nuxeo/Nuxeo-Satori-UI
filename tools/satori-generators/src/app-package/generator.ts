@@ -38,15 +38,83 @@ function isGroupName(group: string): boolean {
   );
 }
 
+/** A semantic version, as the validator's `semver.ts` reads one. */
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+type Triple = readonly [number, number, number];
+
+function compare(a: Triple, b: Triple): number {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
+  return 0;
+}
+
+/**
+ * What is wrong with `range` as `app.json`'s `platform` (app-definition-v2.md, section 3), or
+ * `null`. Read as the validator reads it: comparators separated by spaces, each `>=`, `<=`, `>`,
+ * `<`, `=`, `^` or `~` and a version. When `version`, this platform's, is a release, the range must
+ * hold it, as the pipeline will check; a range or version with a prerelease is left to the
+ * pipeline, whose prerelease rules this does not repeat.
+ */
+export function platformProblem(range: string, version: string | null): string | null {
+  const bounds: { operator: string; version: Triple; prerelease: boolean }[] = [];
+  for (const part of range.trim().split(/\s+/)) {
+    const match = /^(>=|<=|>|<|=|\^|~)?(.+)$/.exec(part);
+    const parsed = match ? SEMVER.exec(match[2]) : null;
+    if (!match || !parsed) {
+      return `"${range}" is not a range of platform versions, such as ">=0.2.0 <1.0.0", "^1.2.0" or "~1.2.0"`;
+    }
+    const at: Triple = [Number(parsed[1]), Number(parsed[2]), Number(parsed[3])];
+    const prerelease = parsed[4] !== undefined;
+    const operator = match[1] ?? '=';
+    if (operator === '^' || operator === '~') {
+      const upper: Triple =
+        operator === '~' || (at[0] === 0 && at[1] > 0)
+          ? [at[0], at[1] + 1, 0]
+          : at[0] > 0
+            ? [at[0] + 1, 0, 0]
+            : [0, 0, at[2] + 1];
+      bounds.push(
+        { operator: '>=', version: at, prerelease },
+        { operator: '<', version: upper, prerelease },
+      );
+    } else bounds.push({ operator, version: at, prerelease });
+  }
+  const own = version === null ? null : SEMVER.exec(version);
+  if (!own || own[4] !== undefined || bounds.some((bound) => bound.prerelease)) return null;
+  const platform: Triple = [Number(own[1]), Number(own[2]), Number(own[3])];
+  const holds = bounds.every(({ operator, version: bound }) => {
+    const order = compare(platform, bound);
+    return operator === '>='
+      ? order >= 0
+      : operator === '<='
+        ? order <= 0
+        : operator === '>'
+          ? order > 0
+          : operator === '<'
+            ? order < 0
+            : order === 0;
+  });
+  return holds
+    ? null
+    : `"${range}" leaves out this platform, ${version}, which the pipeline checks it against`;
+}
+
+/** `libs/platform`'s version, or `null` when the workspace has none. */
+function platformVersion(tree: Tree): string | null {
+  const text = tree.read('libs/platform/package.json', 'utf-8');
+  if (text === null) return null;
+  const version = (parseJson(text, 'libs/platform/package.json') as { version?: unknown }).version;
+  return typeof version === 'string' ? version : null;
+}
+
 /**
  * The platform range a new app runs on: from this platform's version, up to its next major, as the
  * Payers kit writes `>=0.2.0 <1.0.0`. `null` when the workspace has no `libs/platform`.
  */
 function defaultPlatform(tree: Tree): string | null {
-  const text = tree.read('libs/platform/package.json', 'utf-8');
-  if (text === null) return null;
-  const version = (parseJson(text, 'libs/platform/package.json') as { version?: unknown }).version;
-  const match = typeof version === 'string' ? /^(\d+)\.(\d+)\.\d+/.exec(version) : null;
+  const version = platformVersion(tree);
+  const match = version === null ? null : /^(\d+)\.(\d+)\.\d+/.exec(version);
   if (!match) return null;
   return `>=${match[1]}.${match[2]}.0 <${Number(match[1]) + 1}.0.0`;
 }
@@ -125,7 +193,10 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
       'This workspace has no libs/platform/package.json to take the platform range from: pass --platform, such as ">=0.2.0 <1.0.0".',
     );
   }
-  const groups = listOption(options.groups);
+  const wrongRange = platformProblem(platform, platformVersion(tree));
+  if (wrongRange !== null) throw new Error(`--platform: ${wrongRange}.`);
+  // Once each: the validator refuses a group listed twice.
+  const groups = [...new Set(listOption(options.groups))];
   if (groups.length === 0) groups.push('members');
   const badGroup = groups.find((group) => !isGroupName(group));
   if (badGroup !== undefined) throw new Error(`--groups: "${badGroup}" is not a group name.`);

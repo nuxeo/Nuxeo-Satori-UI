@@ -125,7 +125,7 @@ describe.skipIf(process.platform === 'win32')(
       expect(existsSync(join(directory, 'out', 'acme-contracts-0.1.0.zip.sha256'))).toBe(true);
     });
 
-    it('passes the pipeline as CI runs it, with no content model, once its operation is allowed', () => {
+    it('passes the pipeline with no content model, as CI gives none, once its operation is allowed', () => {
       const directory = copy();
       const run = pipeline(directory, ['--platform', PLATFORM, '--allow-list', allowList]);
       expect(run.status).toBe(0);
@@ -210,13 +210,16 @@ describe.skipIf(process.platform === 'win32')(
       });
 
       it('an action that is both a transition and an operation, at step 2', () => {
-        refused(
+        const output = refused(
           (directory) =>
             edit(config(directory, 'actions.json'), (file) => {
               (file['actions'] as Record<string, unknown>[])[0]['operation'] =
                 'Acme.AssignToCurrentUser';
             }),
           2,
+        );
+        expect(output).toContain(
+          'actions[0]: an action has "transition" or "operation", one of the two',
         );
       });
 
@@ -312,7 +315,7 @@ describe.skipIf(process.platform === 'win32')(
       ['the Payers kit’s exported model', PAYERS_MODEL],
       ['the fictional contracts model', CONTRACTS_MODEL],
     ] as const) {
-      it(`lays out every type of ${name}, every schema shown, and the validator finds nothing`, async () => {
+      it(`lays out every type of ${name} that has a schema, every schema shown, and the validator finds nothing`, async () => {
         const model = readModel(JSON.parse(readFileSync(file, 'utf8')), file);
         const tree = createTreeWithEmptyWorkspace();
         await appPackageGenerator(tree, {

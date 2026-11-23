@@ -127,6 +127,24 @@ describe('app-package generator', () => {
     );
   });
 
+  it('lists each group once, as the validator requires', async () => {
+    await generate({ groups: 'legal,legal, legal,members' });
+    expect((json(tree, `${CONFIG}/app.json`) as { groups: string[] }).groups).toEqual([
+      'legal',
+      'members',
+    ]);
+  });
+
+  it("refuses a platform range that leaves out libs/platform's version, as the pipeline would", async () => {
+    tree.write('libs/platform/package.json', JSON.stringify({ version: '0.2.0' }));
+    await expect(generate({ platform: '>=0.3.0 <1.0.0' })).rejects.toThrow(
+      'leaves out this platform, 0.2.0',
+    );
+    await expect(generate({ platform: '^0.3.0' })).rejects.toThrow('leaves out this platform');
+    await generate({ platform: '~0.2.0' });
+    expect((json(tree, `${CONFIG}/app.json`) as { platform: string }).platform).toBe('~0.2.0');
+  });
+
   it('writes the app id the registry knows, when it is not the package name', async () => {
     await generate({ appId: 'contracts' });
     expect(json(tree, `${CONFIG}/app.json`)).toMatchObject({
@@ -147,6 +165,7 @@ describe('app-package generator', () => {
       ['a group with a control character', { groups: 'legal\u0007' }, '--groups'],
       ['a directory that climbs', { directory: '../elsewhere' }, '--directory "../elsewhere"'],
       ['a model with no type', { model: CONTRACTS_MODEL }, 'give its --type too'],
+      ['a platform that is not a range', { platform: 'latest' }, '"latest" is not a range'],
     ];
     for (const [what, options, message] of refusals) {
       it(what, async () => {
@@ -157,7 +176,7 @@ describe('app-package generator', () => {
       });
     }
 
-    it('a type the model does not have, which Nx then writes none of', async () => {
+    it('a type the model does not have', async () => {
       // Found once the package's files are in the tree, by app-layout; a generator that throws has
       // nothing of its tree written to disk.
       await expect(generate({ type: 'Invoice', model: CONTRACTS_MODEL })).rejects.toThrow(

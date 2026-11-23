@@ -34,6 +34,8 @@ const NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
 /** A Material Symbols name, such as `check` or `outgoing_mail`. */
 const ICON = /^[a-z0-9_]{1,64}$/;
 const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
+/** An operation parameter's name, as `actions.json` writes one. */
+const PARAMETER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
 /**
  * Add an action to the package's `actions.json` (docs/business-apps/app-definition-v2.md,
@@ -77,6 +79,12 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
     if (!isRecord(parsed)) {
       throw new Error("--parameters is a JSON object, each parameter's name to its value.");
     }
+    const badName = Object.keys(parsed).find((name) => !PARAMETER.test(name));
+    if (badName !== undefined) {
+      throw new Error(
+        `--parameters: "${badName}" is not a parameter name: a letter, then letters, digits or "_".`,
+      );
+    }
     parameters = parsed;
   }
   const on = listOption(options.on);
@@ -85,6 +93,16 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
     throw new Error(`--on "${badPlacement}" is not one of ${PLACEMENTS.join(', ')}.`);
   }
   const placements = on.length > 0 ? [...new Set(on)] : ['record'];
+  // A bulk action runs on many records at once, so no one record's field can give it a value.
+  if (
+    placements.includes('bulk') &&
+    parameters &&
+    Object.values(parameters).some((value) => isRecord(value) && 'field' in value)
+  ) {
+    throw new Error(
+      '--parameters: a bulk action runs on many records at once, so its parameters are literals, not { "field" }.',
+    );
+  }
   if (options.type !== undefined) {
     if (!TYPE.test(options.type))
       throw new Error(`--type "${options.type}" is not a document type's name.`);
@@ -136,6 +154,15 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
 
   const name = id.startsWith(`${pkg.appId}.`) ? id.slice(pkg.appId.length + 1) : id;
   const labelKey = `${pkg.appId}.action.${name}`;
+  // `approve` and `<app>.approve` would share it, and the second button would show the first's text.
+  const sharing = actions.find(
+    (action) => isRecord(action) && action['id'] !== id && action['labelKey'] === labelKey,
+  );
+  if (isRecord(sharing)) {
+    throw new Error(
+      `The action ${String(sharing['id'])} has the label key ${labelKey} already, which ${id} would share. Give ${id} another id.`,
+    );
+  }
   const labels: Record<string, string> = {
     [labelKey]: options.label?.trim() || humanize(name.split('.').pop() as string),
   };
@@ -161,17 +188,41 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
   else actions.push(action);
   writeJson(tree, file, current);
 
+  const lists = [
+    ['row', 'rowActions'],
+    ['bulk', 'bulkActions'],
+  ] as const;
   if (queue && queueFile) {
-    for (const [placement, key] of [
-      ['row', 'rowActions'],
-      ['bulk', 'bulkActions'],
-    ] as const) {
+    for (const [placement, key] of lists) {
       if (!placements.includes(placement)) continue;
       const list = Array.isArray(queue[key]) ? (queue[key] as unknown[]) : [];
       if (!list.includes(id)) list.push(id);
       queue[key] = list;
     }
     writeJson(tree, queueFile, queue);
+  }
+  // Written again with fewer places, the action leaves the queues that offered it there: a queue
+  // naming a row action that no longer shows on rows is refused by the pipeline.
+  const pruned: string[] = [];
+  if (at >= 0) {
+    for (const entry of tree.children(`${pkg.config}/queues`).filter((f) => f.endsWith('.json'))) {
+      const path = `${pkg.config}/queues/${entry}`;
+      const other = parseJson(tree.read(path, 'utf-8') ?? '', path);
+      if (!isRecord(other)) continue;
+      let changed = false;
+      for (const [placement, key] of lists) {
+        if (placements.includes(placement) || !Array.isArray(other[key])) continue;
+        const kept = (other[key] as unknown[]).filter((item) => item !== id);
+        if (kept.length === (other[key] as unknown[]).length) continue;
+        changed = true;
+        if (kept.length > 0) other[key] = kept;
+        else delete other[key];
+      }
+      if (changed) {
+        writeJson(tree, path, other);
+        pruned.push(path);
+      }
+    }
   }
   const kept = addLabels(tree, pkg, labels);
 
@@ -183,7 +234,7 @@ Added ${id} to ${file}
 
   ${options.transition !== undefined ? `Transition: ${options.transition}` : `Operation:  ${options.operation}`}
   Shows on:   ${placements.join(', ')}${queueFile ? `, offered by ${queueFile}` : ''}
-${kept.length > 0 ? `  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}${
+${pruned.length > 0 ? `  No longer offered by ${pruned.join(', ')}\n` : ''}${kept.length > 0 ? `  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}${
       options.operation !== undefined
         ? `
 ${options.operation} must be on the deployment's allow-list: the pipeline refuses every operation

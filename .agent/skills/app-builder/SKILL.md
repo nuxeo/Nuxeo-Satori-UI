@@ -22,7 +22,7 @@ is the worked example.
 | 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                           | Built: 11 read-only tools                                   |
 | 2. Write the files           | The generators `app-package`, `app-layout`, `app-queue`, `app-action` | Built, in `tools/satori-generators`                         |
 | 3. Check them                | `validate_package`, or `npm run app-package`                          | Built: the pipeline's steps 1 to 6                          |
-| 4. Preview in dev mode       | `npm run config:dev` and `npx nx serve nuxeo-ui`, by hand             | Record pages and the home only. No MCP tool                 |
+| 4. Preview in dev mode       | `npm run config:dev` and `npx nx serve nuxeo-ui`, by hand             | Record pages and the home only, with limits. No MCP tool    |
 | 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes               | **Not built in the MCP server.** The tag path has never run |
 
 Say this to the person at the start, and again when you reach steps 4 and 5. Do not describe a
@@ -174,10 +174,18 @@ npx nx serve nuxeo-ui
 before `nx serve`, which reads the folder when it starts. Then open a record of the type at
 `http://localhost:4200`.
 
-- **Shown:** the record pages, and the home.
-- **Not shown yet:** queues (no queue page), the package's actions (`actions.json` is carried, not
-  read), labels by key (a card's `labelKey` heading shows only once the app registry serves the
-  package's labels), `app.json` and the menu.
+- **Drawn:** a record page from each `view` layout, its related lists included, and the home.
+  What the record page leaves out is in `layout-v2.md`, section 11, and said in the browser's
+  console. The ones a scaffold meets:
+  - **No card headings.** The generators name each card with a `labelKey`, and a key shows only
+    once the app registry serves the package's labels. For a demo that needs headings today, add
+    a literal `label`, which wins.
+  - **`document-link` shows the stored id,** and `image` and `file-list` a file's name, until each
+    has its lookup.
+  - **A record with a file or a note** (a `File`, a `Note`, or any type given the `file` or `note`
+    schema) keeps its own view and preview, not the record page.
+- **Not drawn at all yet:** queues (there is no queue page), the package's actions (`actions.json`
+  is carried, not read), `app.json` and the menu.
 - **The records must exist on the server,** with the types the package names. Seeding them is the
   kit's (the Payers kit has `demo/seed.mjs`), with fictional data.
 - **Installing the package into a Nuxeo** is the person's decision: ask before installing anything

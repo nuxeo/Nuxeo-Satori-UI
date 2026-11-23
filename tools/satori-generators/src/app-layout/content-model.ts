@@ -9,8 +9,8 @@ import { isRecord } from '../app-package/package-files';
  * (docs/business-apps/package-pipeline.md, section 4), which `npm run app-package:model` exports.
  * `readContentModel` in `libs/shared/app-definition` reads the same file for the validator; this is
  * a second, smaller reader because these sources cannot import from outside `src/` (see
- * `app-package.ts`). It is lenient where that one is strict: a model the validator refuses is
- * refused when the pipeline runs, and the layout spec holds what this reads to what that accepts.
+ * `app-package/package-files.ts`). It is lenient where that one is strict: a model the validator refuses is
+ * refused when the pipeline runs, and `app-package/pipeline.spec.ts` holds what this reads to what that accepts.
  */
 
 /** One property, or one subfield of a complex one. */

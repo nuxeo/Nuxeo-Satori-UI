@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import appPackageGenerator from '../app-package/generator';
 import { CONTRACTS_MODEL } from '../app-package/testing/scaffold';
-import appLayoutGenerator, { NUXEO_SCHEMAS, type AppLayoutSchema } from './generator';
+import appLayoutGenerator, { type AppLayoutSchema } from './generator';
 
 const ROOT = 'business-apps/packages/acme-contracts';
 const CONFIG = `${ROOT}/bundle/agentic-ui-config`;
@@ -51,7 +51,6 @@ describe('app-layout generator', () => {
     expect(cards.map((card) => card.id)).toEqual(['contract', 'review']);
     expect(cards[1].fields).toEqual(['rev:reviewer', 'rev:reviewed']);
     expect(JSON.stringify(cards)).not.toMatch(/"(dc|common|uid):/);
-    expect(NUXEO_SCHEMAS).toContain('dublincore');
   });
 
   it('writes a widget only where the model says more than the type', async () => {
@@ -106,6 +105,48 @@ describe('app-layout generator', () => {
     expect(twice).toContain(
       '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
         '    <layout type="Counterparty" mode="view" src="agentic-ui-config/layouts/Counterparty/view.layout.json" />\n' +
+        '  </extension>',
+    );
+  });
+
+  it('reads the component as the pipeline does: a comment holds no entry and no extension', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    tree.write(
+      COMPONENT,
+      xml.replace(
+        '</component>',
+        '  <!-- <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+          '    <layout type="Contract" mode="view" src="agentic-ui-config/old.json" />\n' +
+          '  </extension> -->\n</component>',
+      ),
+    );
+    await generate();
+    const written = tree.read(COMPONENT, 'utf-8') ?? '';
+    // The new extension is after the comment, outside it, and the commented entry refused nothing.
+    const comment = written.lastIndexOf('-->');
+    expect(
+      written.indexOf(
+        '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
+      ),
+    ).toBeGreaterThan(comment);
+    expect(written.slice(comment).match(/<extension /g)).toHaveLength(1);
+  });
+
+  it('finds an extension whose attributes are quoted with apostrophes, and adds to it', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    tree.write(
+      COMPONENT,
+      xml.replace(
+        '</component>',
+        "  <extension point='configuration' target='org.nuxeo.agentic.ui.config'>\n  </extension>\n</component>",
+      ),
+    );
+    await generate();
+    const written = tree.read(COMPONENT, 'utf-8') ?? '';
+    expect(written.match(/<extension /g)).toHaveLength(1);
+    expect(written).toContain(
+      "<extension point='configuration' target='org.nuxeo.agentic.ui.config'>\n" +
+        '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
         '  </extension>',
     );
   });
@@ -182,6 +223,20 @@ describe('app-layout generator', () => {
       await generate();
       await expect(generate()).rejects.toThrow('already exists. Pass --force');
       await generate({ force: true });
+    });
+
+    it('a component that has the layout disabled, so the server serves none', async () => {
+      const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+      tree.write(
+        COMPONENT,
+        xml.replace(
+          '</component>',
+          "  <extension target='org.nuxeo.agentic.ui.config' point='configuration'>\n" +
+            "    <layout type='Contract' mode='view' enabled='false' src='agentic-ui-config/layouts/Contract/view.layout.json' />\n" +
+            '  </extension>\n</component>',
+        ),
+      );
+      await expect(generate()).rejects.toThrow('has the Contract/view layout disabled');
     });
 
     it('a component that contributes the layout from another file', async () => {

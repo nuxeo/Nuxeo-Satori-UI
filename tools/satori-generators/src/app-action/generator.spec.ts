@@ -107,6 +107,20 @@ describe('app-action generator', () => {
     });
   });
 
+  it('written again with fewer places, leaves the queues that offered it there', async () => {
+    await generate({ on: 'record,row,bulk', queue: 'open-contracts' });
+    expect(read(tree, `${CONFIG}/queues/open-contracts.json`)).toMatchObject({
+      rowActions: ['acme-contracts.approve'],
+      bulkActions: ['acme-contracts.approve'],
+    });
+    await generate({ on: 'record,bulk', force: true });
+    const queue = read(tree, `${CONFIG}/queues/open-contracts.json`);
+    expect(queue['rowActions']).toBeUndefined();
+    expect(queue['bulkActions']).toEqual(['acme-contracts.approve']);
+    await generate({ on: 'record', force: true });
+    expect(read(tree, `${CONFIG}/queues/open-contracts.json`)['bulkActions']).toBeUndefined();
+  });
+
   describe('refuses', () => {
     const refusals: [string, Partial<AppActionSchema>, string][] = [
       ['an id of the platform’s', { id: 'app.approve' }, "which is the platform's"],
@@ -133,6 +147,21 @@ describe('app-action generator', () => {
       ],
       ['a queue the package does not have', { on: 'row', queue: 'closed' }, 'no queue "closed"'],
       ['an icon that is not a Material Symbols name', { icon: 'Check Mark' }, '--icon'],
+      [
+        'a field as a bulk action’s parameter, which runs on many records',
+        {
+          transition: undefined,
+          operation: 'Acme.Assign',
+          on: 'bulk',
+          parameters: '{ "who": { "field": "dc:creator" } }',
+        },
+        'its parameters are literals',
+      ],
+      [
+        'a parameter name the validator refuses',
+        { transition: undefined, operation: 'Acme.Assign', parameters: '{ "a-b": 1 }' },
+        '"a-b" is not a parameter name',
+      ],
     ];
     for (const [what, options, message] of refusals) {
       it(what, async () => {
@@ -140,6 +169,13 @@ describe('app-action generator', () => {
         expect(tree.exists(`${CONFIG}/actions.json`)).toBe(false);
       });
     }
+
+    it('a second action whose label key would be the first one’s', async () => {
+      await generate({ id: 'approve', label: 'Approve' });
+      await expect(generate({ transition: 'reject', label: 'Reject' })).rejects.toThrow(
+        'The action approve has the label key acme-contracts.action.approve already',
+      );
+    });
 
     it('an action the file has already, unless forced', async () => {
       await generate();
