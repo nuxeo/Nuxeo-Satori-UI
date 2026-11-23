@@ -794,6 +794,18 @@ const M2_MUTATIONS: readonly Mutation[] = [
           .filter((entry) => entry.kind === 'block-use' && entry.outcome === 'converted')
           .map((entry) => entry.to ?? ''),
       );
+      // A card holding a field the report says it converted there, which check 2 then misses.
+      const converted = (path: string): Set<string> =>
+        new Set(
+          conversion.report.constructs
+            .filter(
+              (entry) =>
+                entry.kind === 'block-field' &&
+                entry.outcome === 'converted' &&
+                (entry.to ?? '').split(', ').includes(path),
+            )
+            .flatMap((entry) => (entry.property ? [entry.property] : [])),
+        );
       for (const path of layouts(conversion)) {
         const file = clone(conversion.app[path]) as Json;
         const holders: { at: string; cards: Json[] }[] = [];
@@ -807,7 +819,11 @@ const M2_MUTATIONS: readonly Mutation[] = [
         });
         for (const { at, cards } of holders) {
           const index = cards.findIndex(
-            (card) => isRecord(card) && blocks.has(`${path} ${at}.${String(card['id'])}`),
+            (card) =>
+              isRecord(card) &&
+              blocks.has(`${path} ${at}.${String(card['id'])}`) &&
+              Array.isArray(card['fields']) &&
+              card['fields'].some((field) => converted(path).has(fieldOf(field) ?? '')),
           );
           if (index === -1) continue;
           const [dropped] = cards.splice(index, 1);

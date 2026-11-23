@@ -29,7 +29,7 @@ import { recordedAllowList } from './convert';
 import { homeCards, menuEntries, menuEntryId } from './convert-home';
 import { planFields } from './convert-layouts';
 import { formPlaces, shownIn, tabOf } from './forms';
-import { ALWAYS } from './widgets';
+import { ALWAYS, fieldWidget } from './widgets';
 import { cardGuard, isConditionalTable, queueOwners } from './convert-lists';
 import { actionOwners } from './convert-slots';
 import type { CheckOutcome, HarnessInput } from './harness';
@@ -87,9 +87,18 @@ export function checkConditions({
     const { cards, fields } = layoutCards(inventory, place.source);
     const useConditional = (card: number): boolean =>
       !place.options.inTab && (cards[card].use?.conditions.length ?? 0) > 0;
+    // A property shown to everyone by a field Web UI does show: in no condition, its own or its
+    // block's, of an element the catalogue knows, and not in a block given no document, which
+    // shows nothing. A field the converter cannot write shows nothing in the app either.
     const always = new Set(
       fields
-        .filter((field) => field.field.conditions.length === 0 && !useConditional(field.card))
+        .filter(
+          (field) =>
+            field.field.conditions.length === 0 &&
+            !useConditional(field.card) &&
+            (cards[field.card].use?.document ?? true) &&
+            fieldWidget(catalogue, field.field.element, field.field.attributes) !== null,
+        )
         .map((field) => field.field.binding),
     );
     for (const placed of fields) {
@@ -109,9 +118,14 @@ export function checkConditions({
           findings.push(
             `${place.path}: it shows ${field.binding}${placed.conditionsIn === place.source.path ? '' : ` of the layout block ${cards[placed.card].use?.element}`} to everyone, though Web UI shows it only while condition ${(field.condition ?? 0) + 1} passes`,
           );
-        else if (byBlock && !ruled && !(isRecord(card) && 'visibleWhen' in card))
+        else if (
+          byBlock &&
+          !(isRecord(card) && card['id'] === cards[placed.card].id && 'visibleWhen' in card)
+        )
+          // Its block's own card, whose rule the tables hold to the block's condition: under
+          // another card's rule, or none, it shows to others than Web UI shows it to.
           findings.push(
-            `${place.path}: it shows ${field.binding} of the layout block ${cards[placed.card].use?.element} to everyone, though Web UI shows the block only while a condition passes`,
+            `${place.path}: it shows ${field.binding} of the layout block ${cards[placed.card].use?.element} outside the card ${cards[placed.card].id} and its rule, though Web UI shows the block only while a condition passes`,
           );
       }
     }

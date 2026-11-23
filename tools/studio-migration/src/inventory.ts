@@ -79,6 +79,12 @@ export interface LayoutField {
    * holds, and whether everyone sees it is a person's call.
    */
   readonly placesUnclear: { readonly reason: 'outside' | 'other'; readonly at: number } | null;
+  /**
+   * True when it binds its property or variable two ways, in a `{{…}}` binding, as an input
+   * does: Web UI then writes what is entered back. One bound in `[[…]]` or text alone only
+   * shows it, as a label beside a value or `nuxeo-date` does.
+   */
+  readonly edits: boolean;
 }
 
 /**
@@ -103,11 +109,12 @@ export interface Condition {
    */
   readonly userInScope: boolean;
   /**
-   * False in a task layout, where Web UI gives `document` as the task's first target, which the
-   * task names by its id alone (`nuxeo-document-task.js`, `targetDocumentIds[0]`): a test of that
-   * document never passes there. True, or left out, elsewhere.
+   * False in a task layout, where Web UI's document is the task's first target as its task page
+   * fetches the task (`nuxeo-app.js`, `fetch-task: targetDocumentIds`): the whole document, with
+   * its type, state, facets and properties, but none of its permissions, which no enricher asks
+   * for. A permission test there never passes. True, or left out, elsewhere.
    */
-  readonly documentInScope?: boolean;
+  readonly permissionsInScope?: boolean;
 }
 
 /** A column of a list of results, or of a dashboard card's list. */
@@ -243,6 +250,12 @@ export interface SlotContribution {
   readonly conditions: readonly number[];
   /** The layout blocks it holds, by their place among its file's block uses. */
   readonly uses: readonly number[];
+  /** Set by `disabled`: Web UI's slot then shows nothing of it (`nuxeo-slots.js`, `_render`). */
+  readonly disabled: boolean;
+  /** Its `priority`, 0 when left out: a later contribution of the same name wins at the same or a higher one. */
+  readonly priority: number;
+  /** False when it holds no template: it then only changes another of its name, as `disabled` does. */
+  readonly hasTemplate: boolean;
 }
 
 export interface DashboardCard {
@@ -458,7 +471,7 @@ export function inventory(pkg: StudioPackage): Inventory {
       ...conditionsOf(path, document, within, conditionAt).map((condition) => ({
         ...condition,
         userInScope: path.endsWith('-bundle.html') || writesUser(document),
-        ...(options.task ? { documentInScope: false } : {}),
+        ...(options.task ? { permissionsInScope: false } : {}),
       })),
     );
     let index = 0;
@@ -623,6 +636,9 @@ export function inventory(pkg: StudioPackage): Inventory {
           uses: [element, ...inner]
             .map((part) => useAt.get(part)?.index)
             .filter((index): index is number => index !== undefined),
+          disabled: element.hasAttribute('disabled'),
+          priority: numberOf(element.getAttribute('priority')) ?? 0,
+          hasTemplate: Array.from(element.children).some((child) => child.localName === 'template'),
         };
       }),
   );
@@ -807,8 +823,32 @@ function fieldsOf(
         condition: conditions[0] ?? null,
         conditions,
         placesUnclear: unclear,
+        edits: binding !== null && editsBinding(element, binding),
       };
     });
+}
+
+/** True when an element, or what it holds, binds `binding` in a two-way `{{…}}` binding. */
+function editsBinding(field: Element, binding: string): boolean {
+  const pattern = bindingPattern(binding);
+  return [field, ...elementsOf(field)].some((element) =>
+    Array.from(element.attributes).some((attribute) =>
+      [...attribute.value.matchAll(/\{\{([^}]*)\}\}/g)].some(([, inner]) => pattern.test(inner)),
+    ),
+  );
+}
+
+/** What names a binding in Web UI's markup: `task.variables.<name>`, or a property or parameter. */
+function bindingPattern(binding: string): RegExp {
+  const variable = binding.startsWith(VARIABLE) ? binding.slice(VARIABLE.length) : null;
+  const escaped = (variable ?? binding).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return variable !== null
+    ? new RegExp(`\\btask\\.variables\\.${escaped}(?![\\w-])`)
+    : new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
+}
+
+function numberOf(text: string | null): number | null {
+  return text !== null && /^-?\d+$/.test(text.trim()) ? Number(text) : null;
 }
 
 /**
@@ -866,12 +906,7 @@ function heldConditions(element: Element, places: Places): number[] {
  * template's condition, or in what the template sits in.
  */
 function placesShowing(field: Element, binding: string, places: Places): (number | null)[] {
-  const variable = binding.startsWith(VARIABLE) ? binding.slice(VARIABLE.length) : null;
-  const escaped = (variable ?? binding).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern =
-    variable !== null
-      ? new RegExp(`\\btask\\.variables\\.${escaped}(?![\\w-])`)
-      : new RegExp(`(?:document\\.properties|\\bparams)\\.${escaped}(?![\\w:-])`);
+  const pattern = bindingPattern(binding);
   const found: (number | null)[] = [];
   const around = (element: Element): number | null => places.within.get(element) ?? null;
   const binds = (element: Element): boolean =>

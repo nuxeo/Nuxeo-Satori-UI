@@ -67,13 +67,6 @@ export type ConditionDecision =
     }
   | { readonly kind: 'reported'; readonly note: string };
 
-/**
- * Why a test of the document means nothing in a task layout: Web UI gives the layout the task's
- * first target as the task names it, by its id alone (`nuxeo-document-task.js`, `_elementChanged`).
- */
-const TASK_DOCUMENT =
-  "tests the document, which Web UI gives a task layout as the task's first target, by its id alone (nuxeo-document-task, targetDocumentIds[0]): with no type, facet, state or permission to read there, it does not decide as a rule over the whole record would, so a person decides what was meant";
-
 /** The permission tests that are exactly one registered rule. */
 const PERMISSION_RULES: readonly (readonly [readonly string[], string])[] = [
   [['Write', 'WriteProperties'], 'app.rules.canWrite'],
@@ -81,6 +74,20 @@ const PERMISSION_RULES: readonly (readonly [readonly string[], string])[] = [
   [['AddChildren'], 'app.rules.canAddChildren'],
   [['WriteSecurity', 'Everything'], 'app.rules.canManagePermissions'],
 ];
+
+/** The registered rules that read the record's permissions. */
+const PERMISSION_RULE_IDS = new Set(PERMISSION_RULES.map(([, rule]) => rule));
+
+/** True when a rule, or one it joins, reads the record's permissions. */
+function readsPermissions(rule: unknown): boolean {
+  if (typeof rule === 'string') return PERMISSION_RULE_IDS.has(rule);
+  if (typeof rule !== 'object' || rule === null) return false;
+  const { type, parameters } = rule as { type?: unknown; parameters?: unknown };
+  return (
+    (typeof type === 'string' && PERMISSION_RULE_IDS.has(type)) ||
+    (Array.isArray(parameters) && parameters.some(readsPermissions))
+  );
+}
 
 const BOUND = /^\s*(?:\[\[|\{\{)\s*([\w.]+)\s*(?:\]\]|\}\})\s*$/;
 
@@ -112,6 +119,13 @@ const POLYMER_PATH = /^(?:\[\[|\{\{)\s*!?\s*[\w.:$*-]+\s*(?:\]\]|\}\})$/;
 export function decideCondition(condition: Condition): ConditionDecision {
   const decision = decideOnce(condition);
   if (decision.kind === 'reported') return decision;
+  // A task layout's document is the task's target as Web UI's task page fetches it, without its
+  // permissions (nuxeo-app.js, `fetch-task: targetDocumentIds`, no permissions enricher).
+  if (condition.permissionsInScope === false && readsPermissions(decision.rule))
+    return {
+      kind: 'reported',
+      note: "It tests a permission of the document, which Web UI's task page fetches as the task's target without its permissions (nuxeo-app.js, fetch-task: targetDocumentIds), so the test never passes there: a mistake to fix, not to copy",
+    };
   const rows = tableSize([condition], decision.rule);
   return rows > MAX_ROWS
     ? {
@@ -159,8 +173,6 @@ function decideOnce(condition: Condition): ConditionDecision {
         kind: 'reported',
         note: `Its \`if\`, ${test}, reads a user its file is not given, so it never passes in Web UI: a mistake to fix, not to copy`,
       };
-    if (parsed.document && condition.documentInScope === false)
-      return { kind: 'reported', note: `Its \`if\`, ${test}, ${TASK_DOCUMENT}` };
     return {
       kind: 'proposed',
       rule: parsed.rule,
@@ -242,8 +254,6 @@ function decideOnce(condition: Condition): ConditionDecision {
       kind: 'reported',
       note: `It tests ${own(attributes, 'document') ? `the document ${own(attributes, 'document')}` : 'a document it is not given'}, where a rule reads the open record`,
     };
-  if (document && condition.documentInScope === false)
-    return { kind: 'reported', note: `It ${TASK_DOCUMENT}` };
   const userBinding = BOUND.exec(own(attributes, 'user') ?? '')?.[1];
   if (user && (userBinding !== 'user' || !condition.userInScope))
     return {

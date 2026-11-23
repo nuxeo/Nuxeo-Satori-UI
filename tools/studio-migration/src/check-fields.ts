@@ -18,7 +18,7 @@ import { queueOwners } from './convert-lists';
 import { formPlaces, shownIn } from './forms';
 import type { CheckOutcome, HarnessInput } from './harness';
 import type { ResultColumn } from './inventory';
-import { ALWAYS, VERSION_ONE_WIDGETS, columnWidget, displaysOnly, fieldWidget } from './widgets';
+import { ALWAYS, VERSION_ONE_WIDGETS, columnWidget, fieldWidget } from './widgets';
 
 /** A property, `<prefix>:<name>`, or a variable of a task, `var:<name>`. */
 const FIELD = /^[A-Za-z_][\w-]*:[A-Za-z_][\w-]*$/;
@@ -65,11 +65,9 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
       const binding = field.binding;
       if (field.element === 'nuxeo-document-viewer') continue;
       if (binding === null || !FIELD.test(binding) || seen.has(binding)) continue;
-      // In a task layout, the document is the target's id alone: only the task's variables show.
-      if (options.task && !binding.startsWith('var:')) continue;
-      // A block not given the document, or in a task layout, shows nothing of its own.
+      // A block not given the document shows nothing of its own.
       const use = cards[placedField.card].use;
-      if (use !== null && (!use.document || options.task)) continue;
+      if (use !== null && !use.document) continue;
       // Shown once a field shows it: a field under a condition, or of an element the catalogue
       // does not know, leaves the next one binding the same property to show it.
       if (conditional(placedField)) continue;
@@ -112,11 +110,17 @@ export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessIn
             `${path}${where}: ${binding}'s ${want} widget has the parameters ${JSON.stringify(parametersOf(match.entry))}, not ${JSON.stringify(choice.parameters ?? {})}`,
           );
       }
-      // In a form of version 2, a field Web UI only shows is read-only, and one it edits is not.
+      // In a form, a field Web UI only shows, bound one way, is read-only, and one it edits is
+      // not. A task form shows the record's own properties read-only whatever its file says.
       const readOnly = isRecord(match.entry) && match.entry['readOnlyWhen'] === ALWAYS;
-      if (options.form && version === 2 && readOnly !== displaysOnly(field.element))
+      const record = options.task === true && !binding.startsWith('var:');
+      if (options.form && version === 2 && !record && readOnly === field.edits)
         findings.push(
           `${path}${where}: ${binding} is ${readOnly ? 'read-only' : 'editable'}, but Web UI's ${field.element} ${readOnly ? 'edits' : 'only shows'} it`,
+        );
+      if (options.form && version === 1 && !field.edits && !excused(id))
+        findings.push(
+          `${path}: ${binding} is editable, though Web UI's ${field.element} only shows it, and the report does not say so`,
         );
       const required = isRecord(match.entry) && match.entry['required'] === true;
       if (options.form && required !== field.required)

@@ -74,9 +74,13 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
     const found = all.find((candidate) => candidate.contribution === contribution);
     return `slot-contribution:${contribution.path}#${found?.index ?? 0}`;
   };
-  const pages = all
-    .map((entry) => entry.contribution)
-    .filter((contribution) => contribution.slot === PAGES);
+  const items = registered(
+    all.map((entry) => entry.contribution).filter((contribution) => contribution.slot === ITEMS),
+  );
+  const pagesKept = registered(
+    all.map((entry) => entry.contribution).filter((contribution) => contribution.slot === PAGES),
+  );
+  const pages = pagesKept.kept.map((entry) => entry.contribution);
   const paired = new Set<SlotContribution>();
   const translated = new Set(inventory.translations.flatMap((t) => t.keys));
   const skip = (contribution: SlotContribution, decision: Decision): void => {
@@ -100,8 +104,10 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
     if (page) skip(page, decision);
   };
 
-  for (const { contribution: item } of all) {
-    if (item.slot !== ITEMS) continue;
+  // What Web UI's slots do not show, or show through another contribution, is no tab of its own.
+  for (const [contribution, decision] of [...items.dropped, ...pagesKept.dropped])
+    skip(contribution, decision);
+  for (const { contribution: item, order } of items.kept) {
     const pageItem = item.parts.find((part) => part.element === 'nuxeo-page-item');
     if (!pageItem) {
       skip(item, {
@@ -132,9 +138,12 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
       continue;
     }
     if (matching.length === 0) {
+      const hidden = pagesKept.dropped.find(([page]) => pageNameOf(page) === name);
       skip(item, {
         outcome: 'reported',
-        note: `No page the package contributes to ${PAGES} is named ${name}, so the tab opens nothing of the package's`,
+        note: hidden
+          ? `Its page, named ${name}, is not shown in Web UI: ${hidden[1].note ?? ''}`
+          : `No page the package contributes to ${PAGES} is named ${name}, so the tab opens nothing of the package's`,
       });
       continue;
     }
@@ -216,7 +225,7 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
         label !== undefined && translated.has(label.trim())
           ? { labelKey: label.trim() }
           : labelOf(label ?? null),
-      order: item.order ?? Number.MAX_SAFE_INTEGER,
+      order,
       use,
       guard,
       types,
@@ -234,6 +243,95 @@ export function tabDecisions(context: Pick<ConvertContext, 'inventory'>): {
     });
   }
   return { tabs, skipped };
+}
+
+/**
+ * The contributions to one slot that Web UI's slots show, as `nuxeo-slots.js` registers them, in
+ * the package's order: a later contribution of the same name, at the same or a higher priority,
+ * replaces an earlier one when it holds a template, and otherwise only changes its `disabled`,
+ * `order` and `priority`; one at a lower priority is ignored. A disabled one shows nothing. Each
+ * kept one has its order, 0 when left out, as the slot's is. What is not kept says why.
+ */
+function registered(contributions: readonly SlotContribution[]): {
+  readonly kept: { readonly contribution: SlotContribution; readonly order: number }[];
+  readonly dropped: [SlotContribution, Decision][];
+} {
+  interface Node {
+    contribution: SlotContribution;
+    disabled: boolean;
+    order: number;
+    priority: number;
+  }
+  const nodes: Node[] = [];
+  const dropped: [SlotContribution, Decision][] = [];
+  for (const contribution of contributions) {
+    const node: Node = {
+      contribution,
+      disabled: contribution.disabled,
+      order: contribution.order ?? 0,
+      priority: contribution.priority,
+    };
+    const at = contribution.name
+      ? nodes.findIndex((other) => other.contribution.name === contribution.name)
+      : -1;
+    if (at === -1) {
+      if (!contribution.hasTemplate)
+        dropped.push([
+          contribution,
+          {
+            outcome: 'reported',
+            note: `It holds no template, so it only changes a contribution of Web UI's own named ${contribution.name || 'as it is'}, if there is one${contribution.disabled ? ', which it hides' : ''}: a person decides what the app does about it`,
+          },
+        ]);
+      else nodes.push(node);
+      continue;
+    }
+    const earlier = nodes[at];
+    if (node.priority < earlier.priority) {
+      dropped.push([
+        contribution,
+        {
+          outcome: 'reported',
+          note: `An earlier contribution of the same name, ${contribution.name}, has a higher priority, so Web UI keeps that one and ignores this`,
+        },
+      ]);
+      continue;
+    }
+    if (contribution.hasTemplate) {
+      dropped.push([
+        earlier.contribution,
+        {
+          outcome: 'reported',
+          note: `A later contribution of the same name, ${contribution.name}, replaces it, as Web UI's slots do`,
+        },
+      ]);
+      nodes[at] = node;
+      continue;
+    }
+    // No template: it changes the earlier one, which is decided with what it now says.
+    earlier.disabled = node.disabled;
+    earlier.order = node.order;
+    earlier.priority = node.priority;
+    dropped.push([
+      contribution,
+      {
+        outcome: 'reported',
+        note: `It holds no template, so it only changes the earlier contribution of the same name, ${contribution.name}, which is decided with its disabled, order and priority`,
+      },
+    ]);
+  }
+  const kept: { contribution: SlotContribution; order: number }[] = [];
+  for (const node of nodes) {
+    if (node.disabled)
+      dropped.push([
+        node.contribution,
+        { outcome: 'reported', note: 'It is disabled, so Web UI shows nothing of it' },
+      ]);
+    else kept.push({ contribution: node.contribution, order: node.order });
+  }
+  // Web UI's slot orders what it shows by `order`, keeping the package's order between equals.
+  kept.sort((a, b) => a.order - b.order);
+  return { kept, dropped };
 }
 
 /** The tabs of the package that become tabs of a type's view file. */

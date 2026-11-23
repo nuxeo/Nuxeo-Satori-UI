@@ -70,15 +70,34 @@ describe('the inventory of task layouts, tabs and layout blocks', () => {
       'var:override',
       'var:versionNote',
       'var:claimNumber',
+      'var:escalate',
+    ]);
+    // A field bound two ways edits its value, as Web UI writes it back; one bound one way shows it.
+    expect(task.fields.map((field) => field.edits)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
     ]);
     expect(read.files.find((file) => file.path === TASK)?.kind).toBe('task-layout');
   });
 
-  it("gives a task layout's conditions no document, which Web UI gives it as an id alone", () => {
+  it("gives a task layout's conditions no permissions, which Web UI's task page does not fetch", () => {
     const conditions = read.conditions.filter((condition) => condition.path === TASK);
-    expect(conditions.map((condition) => condition.documentInScope)).toEqual([false, false, false]);
+    expect(conditions.map((condition) => condition.permissionsInScope)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
     // Its nuxeo-connection writes the user, so a group test there is in scope.
-    expect(conditions.map((condition) => condition.userInScope)).toEqual([true, true, true]);
+    expect(conditions.map((condition) => condition.userInScope)).toEqual([true, true, true, true]);
   });
 
   it('knows a layout block by what it is, wherever it sits, and only then', () => {
@@ -137,7 +156,7 @@ describe('the inventory of task layouts, tabs and layout blocks', () => {
     const second = secondCount(pkg, parsed);
     expect(first.get(`block-use ${VIEW}`)).toBe(2);
     expect(first.get(`block-field ${VIEW}`)).toBe(4);
-    expect(first.get(`task-field ${TASK}`)).toBe(9);
+    expect(first.get(`task-field ${TASK}`)).toBe(10);
     expect(second).toEqual(first);
   });
 });
@@ -162,6 +181,14 @@ describe('the conversion of task layouts into task forms', () => {
             },
             { field: 'var:followUp', label: 'Follow up', widget: 'date' },
             { field: 'var:notes', labelKey: 'label.task.notes', widget: 'long-text' },
+            // The record's own property, which the task form shows read-only.
+            { field: 'cl:number', label: 'Claim' },
+            {
+              field: 'var:reviewer',
+              label: 'Reviewer',
+              widget: 'user',
+              visibleWhen: { type: 'app.rules.isType', parameters: ['Claim'] },
+            },
             {
               field: 'var:override',
               label: 'Override',
@@ -186,23 +213,20 @@ describe('the conversion of task layouts into task forms', () => {
       outcome: 'reported',
       note: expect.stringContaining('nuxeo-select'),
     });
-    expect(outcome(5)).toMatchObject({
-      outcome: 'reported',
-      note: expect.stringContaining('targetDocumentIds[0]'),
-    });
-    // Under a test of the document, which in a task layout decides on an id alone.
-    expect(outcome(6)).toMatchObject({
-      outcome: 'reported',
-      note: expect.stringContaining('targetDocumentIds[0]'),
-    });
-    expect(entry(input.conversion, `condition:${TASK}#1`)).toMatchObject({ outcome: 'reported' });
+    // The record's own field, and one under a type test of the record: Web UI's task page
+    // fetches the task's target whole, with its type, state, facets and properties.
+    expect(outcome(5)).toMatchObject({ outcome: 'converted' });
+    expect(outcome(6)).toMatchObject({ outcome: 'converted' });
+    expect(entry(input.conversion, `condition:${TASK}#1`)).toMatchObject({ outcome: 'converted' });
     expect(entry(input.conversion, `condition:${TASK}#2`)).toMatchObject({ outcome: 'converted' });
-    // A dom-if calling a filter function on that document is reported too, not proposed.
-    expect(entry(input.conversion, `condition:${TASK}#3`)).toMatchObject({
+    expect(entry(input.conversion, `condition:${TASK}#3`)).toMatchObject({ outcome: 'proposed' });
+    expect(outcome(8)).toMatchObject({ outcome: 'proposed' });
+    // But without its permissions: a permission test never passes there.
+    expect(entry(input.conversion, `condition:${TASK}#4`)).toMatchObject({
       outcome: 'reported',
-      note: expect.stringContaining('targetDocumentIds[0]'),
+      note: expect.stringContaining('without its permissions'),
     });
-    expect(outcome(8)).toMatchObject({ outcome: 'reported' });
+    expect(outcome(10)).toMatchObject({ outcome: 'reported' });
   });
 
   it("reports a task layout whose names' case the package does not give", () => {
@@ -370,15 +394,17 @@ describe('the conversion of layout blocks into cards', () => {
     });
   });
 
-  it('reports a block in a task layout, whose document is an id alone', () => {
+  it('makes a block of a task layout a card of the record, shown read-only by the task form', () => {
     const inTask = prepare({
       [TASK]: `<dom-module id="nuxeo-assessclaim-layout"><template>
 <acme-policy-terms document="[[document]]"></acme-policy-terms></template></dom-module>`,
     });
-    expect(entry(inTask.conversion, `block-use:${TASK}#1`)).toMatchObject({
-      outcome: 'reported',
-      note: expect.stringContaining('targetDocumentIds[0]'),
+    expect(inTask.conversion.app['tasks/ClaimReview.AssessClaim.layout.json']).toEqual({
+      version: 2,
+      cards: [{ id: 'acme-policy-terms', fields: [{ field: 'po:terms', label: 'Terms' }] }],
     });
+    expect(run(inTask, 2)?.status).toBe('pass');
+    expect(run(inTask, 10)?.status).toBe('pass');
   });
 });
 
@@ -388,12 +414,17 @@ describe('the conversion of tabs', () => {
     tabs: Record<string, unknown>[];
   };
 
-  it("adds each tab to its type's view file in Web UI's order, after the record page's own at 10", () => {
+  it("adds each tab to its type's view file after the record page's own, in Web UI's order", () => {
+    // The record page opens on its first tab, as Web UI's page opens on View: View stays first.
     expect(view.tabs.map((tab) => [tab.id, tab.label ?? tab.labelKey ?? null])).toEqual([
-      ['terms', 'Terms'],
       ['view', null],
+      ['terms', 'Terms'],
       ['cover', 'label.tab.cover'],
     ]);
+    expect(entry(input.conversion, `slot-contribution:${TABS}#3`)).toMatchObject({
+      outcome: 'converted',
+      note: expect.stringContaining('before its View tab, at order 5'),
+    });
     expect(view.tabs[2]).toMatchObject({
       labelKey: 'label.tab.cover',
       cards: [{ id: 'cover.acme-policy-cover' }],
@@ -481,8 +512,8 @@ describe('the checks on task forms, tabs and layout blocks', () => {
       'app/layouts/Claim/view.layout.json cards[0].fields[0].field: "var:" names a task variable, which only a task form has',
     ]);
     expect(findings('drop-block-card')).toEqual([
-      "layouts/Policy/edit.layout.json: po:holder is missing, though Web UI's edit layout of Policy shows it",
-      "layouts/Policy/edit.layout.json: po:startDate is missing, though Web UI's edit layout of Policy shows it",
+      "layouts/Policy/view.layout.json: po:holder is missing, though Web UI's view layout of Policy shows it",
+      "layouts/Policy/view.layout.json: po:startDate is missing, though Web UI's view layout of Policy shows it",
     ]);
     expect(findings('drop-tab')).toEqual([
       "layouts/Policy/view.layout.json tab terms: po:terms is missing, though Web UI's tab terms of Policy shows it",
@@ -508,11 +539,12 @@ describe('the checks on task forms, tabs and layout blocks', () => {
         found.path.startsWith('tasks/') || found.path === 'layouts/Policy/view.layout.json',
     );
     expect(holders.map((found) => `${found.path} ${found.at}`)).toEqual([
-      'layouts/Policy/view.layout.json tabs.0.visibleWhen',
-      'layouts/Policy/view.layout.json tabs.1.cards.2.visibleWhen',
+      'layouts/Policy/view.layout.json tabs.0.cards.2.visibleWhen',
+      'layouts/Policy/view.layout.json tabs.1.visibleWhen',
       'layouts/Policy/view.layout.json tabs.2.visibleWhen',
-      'layouts/Policy/view.layout.json tabs.1.cards.1.fields.2.visibleWhen',
-      'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.3.visibleWhen',
+      'layouts/Policy/view.layout.json tabs.0.cards.1.fields.2.visibleWhen',
+      'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.4.visibleWhen',
+      'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.5.visibleWhen',
     ]);
     for (const change of ['drop', 'invert'] as const)
       for (const found of ruleHolders(input.conversion).filter((holder) =>
@@ -543,7 +575,7 @@ describe('the checks on task forms, tabs and layout blocks', () => {
       return file;
     });
     expect(run(moved, 5)?.findings).toEqual([
-      'layouts/Policy/view.layout.json: it shows po:terms of the layout block acme-policy-terms to everyone, though Web UI shows the block only while a condition passes',
+      'layouts/Policy/view.layout.json: it shows po:terms of the layout block acme-policy-terms outside the card acme-policy-terms and its rule, though Web UI shows the block only while a condition passes',
     ]);
     const invented = edit(input, 'layouts/Policy/view.layout.json', (file) => {
       file.tabs.push({ id: 'extra', cards: [{ id: 'extra.x', fields: ['po:number'] }] });
@@ -554,17 +586,17 @@ describe('the checks on task forms, tabs and layout blocks', () => {
     ]);
   });
 
-  it('fails on a task form no task layout gives, and on a document field in a task form', () => {
+  it("fails on a task form no task layout gives, and on a property Web UI's task layout does not show", () => {
     const invented = edit(input, 'tasks/Other.Step.layout.json', () => ({ version: 2, cards: [] }));
     expect(run(invented, 2)?.findings).toEqual([
       'tasks/Other.Step.layout.json: the package has no task layout of that workflow and step',
     ]);
     const record = edit(input, 'tasks/ClaimReview.AssessClaim.layout.json', (file) => {
-      file.cards[0].fields.push('cl:number');
+      file.cards[0].fields.push('cl:amount');
       return file;
     });
     expect(run(record, 2)?.findings).toEqual([
-      "tasks/ClaimReview.AssessClaim.layout.json: it shows cl:number, which Web UI's task layout of ClaimReview.AssessClaim does not",
+      "tasks/ClaimReview.AssessClaim.layout.json: it shows cl:amount, which Web UI's task layout of ClaimReview.AssessClaim does not",
     ]);
   });
 
@@ -600,7 +632,7 @@ describe('the checks on task forms, tabs and layout blocks', () => {
       return file;
     });
     expect(run(moved, 5)?.findings).toEqual([
-      'layouts/Policy/view.layout.json: tabs.1.cards.0.fields.1.visibleWhen holds a rule that no condition of the package gives',
+      'layouts/Policy/view.layout.json: tabs.0.cards.0.fields.1.visibleWhen holds a rule that no condition of the package gives',
     ]);
   });
 
@@ -620,5 +652,173 @@ describe('the checks on task forms, tabs and layout blocks', () => {
     expect(run(ruled, 5)?.findings).toEqual([
       'tasks/ClaimReview.AssessClaim.layout.json: cards.0.fields.4.readOnlyWhen holds a rule that no condition of the package gives',
     ]);
+  });
+
+  it("fails on a guarded block's field moved under another block's rule", () => {
+    const two = prepare({
+      [VIEW]: `<dom-module id="nuxeo-policy-view-layout"><template>
+<nuxeo-filter document="[[document]]" permission="Write, WriteProperties"><template><acme-policy-terms document="[[document]]"></acme-policy-terms></template></nuxeo-filter>
+<nuxeo-filter document="[[document]]" facet="Versionable"><template><acme-policy-summary document="[[document]]"></acme-policy-summary></template></nuxeo-filter>
+</template><script>Polymer({ is: 'nuxeo-policy-view-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
+    });
+    const moved = edit(two, 'layouts/Policy/view.layout.json', (file) => {
+      const view = file.tabs.find((tab: { id: string }) => tab.id === 'view');
+      const [terms] = view.cards.splice(0, 1);
+      view.cards[0].fields.push(...terms.fields);
+      return file;
+    });
+    expect(run(moved, 5)?.findings).toEqual([
+      'layouts/Policy/view.layout.json: it shows po:terms of the layout block acme-policy-terms outside the card acme-policy-terms and its rule, though Web UI shows the block only while a condition passes',
+    ]);
+  });
+
+  it('holds a rule to its field though a block given no document names the same property', () => {
+    const named = prepare({
+      [VIEW]: `<dom-module id="nuxeo-policy-view-layout"><template>
+<nuxeo-filter document="[[document]]" permission="Write, WriteProperties"><template><div role="widget"><label>Terms</label><div>[[document.properties.po:terms]]</div></div></template></nuxeo-filter>
+<acme-policy-terms></acme-policy-terms>
+</template><script>Polymer({ is: 'nuxeo-policy-view-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
+    });
+    const dropped = edit(named, 'layouts/Policy/view.layout.json', (file) => {
+      const view = file.tabs.find((tab: { id: string }) => tab.id === 'view');
+      delete view.cards[0].fields[0].visibleWhen;
+      return file;
+    });
+    expect(run(dropped, 5)?.findings).toEqual([
+      'layouts/Policy/view.layout.json: it shows po:terms to everyone, though Web UI shows it only while condition 1 passes',
+    ]);
+  });
+
+  it('keeps a field Web UI edits editable however it is wrapped, and holds version 1 to what it cannot say', () => {
+    const wrapped = prepare({
+      [TASK]: `<dom-module id="nuxeo-assessclaim-layout"><template>
+<div role="widget"><label>Notes</label><nuxeo-textarea value="{{task.variables.notes}}"></nuxeo-textarea></div>
+<input role="widget" value="{{task.variables.decision::input}}">
+</template></dom-module>`,
+    });
+    const form = wrapped.conversion.app['tasks/ClaimReview.AssessClaim.layout.json'] as {
+      cards: { fields: unknown[] }[];
+    };
+    expect(form.cards[0].fields).toEqual([{ field: 'var:notes', label: 'Notes' }, 'var:decision']);
+    expect(run(wrapped, 2)?.status).toBe('pass');
+    // Version 1 cannot make a field read-only: a field Web UI only shows is written, and reported.
+    const edit1 = `${UI}/document/policy/nuxeo-policy-edit-layout.html`;
+    expect(entry(input.conversion, `block-field:${edit1}#1.1`)).toMatchObject({
+      outcome: 'reported',
+      to: 'layouts/Policy/edit.layout.json',
+      note: expect.stringContaining('version 1 cannot make a field read-only'),
+    });
+    const unsaid = {
+      ...input,
+      conversion: {
+        ...input.conversion,
+        report: {
+          ...input.conversion.report,
+          constructs: input.conversion.report.constructs.map((construct) =>
+            construct.id === `block-field:${edit1}#1.1`
+              ? { ...construct, outcome: 'converted' as const, note: undefined }
+              : construct,
+          ),
+        },
+      },
+    };
+    expect(run(unsaid, 2)?.findings).toEqual([
+      "layouts/Policy/edit.layout.json: po:holder is editable, though Web UI's div only shows it, and the report does not say so",
+    ]);
+  });
+});
+
+describe("tabs as Web UI's slots register them", () => {
+  const bundle = (items: string): Record<string, string> => ({
+    [TABS]: items,
+  });
+  const page = (name: string) =>
+    `<nuxeo-slot-content name="${name}Page" slot="DOCUMENT_VIEWS_PAGES"><template><nuxeo-filter document="[[document]]" type="Policy"><template><acme-policy-terms name="${name}" document="[[document]]"></acme-policy-terms></template></nuxeo-filter></template></nuxeo-slot-content>`;
+  const item = (name: string, extra = '') =>
+    `<nuxeo-slot-content name="${name}Item" slot="DOCUMENT_VIEWS_ITEMS"${extra}><template><nuxeo-filter document="[[document]]" type="Policy"><template><nuxeo-page-item name="${name}" label="${name}"></nuxeo-page-item></template></nuxeo-filter></template></nuxeo-slot-content>`;
+  const tabs = (input: HarnessInput) =>
+    (
+      (input.conversion.app['layouts/Policy/view.layout.json'] as { tabs?: { id: string }[] })
+        .tabs ?? []
+    ).map((tab) => tab.id);
+  const note = (input: HarnessInput, index: number) =>
+    entry(input.conversion, `slot-contribution:${TABS}#${index}`);
+
+  it('shows nothing of a disabled contribution', () => {
+    const disabled = prepare(bundle(item('a', ' disabled') + page('a')));
+    expect(tabs(disabled)).toEqual([]);
+    expect(note(disabled, 1)).toMatchObject({
+      outcome: 'reported',
+      note: 'It is disabled, so Web UI shows nothing of it',
+    });
+    expect(note(disabled, 2)?.note).toContain('No tab of the package opens it');
+  });
+
+  it('lets a later contribution of the same name replace, change or yield to an earlier one', () => {
+    const replaced = prepare(
+      bundle(
+        item('a') +
+          `<nuxeo-slot-content name="aItem" slot="DOCUMENT_VIEWS_ITEMS"><template><nuxeo-filter document="[[document]]" type="Policy"><template><nuxeo-page-item name="b" label="b"></nuxeo-page-item></template></nuxeo-filter></template></nuxeo-slot-content>` +
+          page('a') +
+          page('b'),
+      ),
+    );
+    expect(tabs(replaced)).toEqual(['view', 'b']);
+    expect(note(replaced, 1)?.note).toContain('replaces it');
+    const hidden = prepare(
+      bundle(
+        item('a') +
+          '<nuxeo-slot-content name="aItem" slot="DOCUMENT_VIEWS_ITEMS" disabled></nuxeo-slot-content>' +
+          page('a'),
+      ),
+    );
+    expect(tabs(hidden)).toEqual([]);
+    expect(note(hidden, 1)?.note).toBe('It is disabled, so Web UI shows nothing of it');
+    expect(note(hidden, 2)?.note).toContain('only changes the earlier contribution');
+    const ignored = prepare(
+      bundle(
+        item('a', ' priority="5"') +
+          `<nuxeo-slot-content name="aItem" slot="DOCUMENT_VIEWS_ITEMS"><template><nuxeo-page-item name="b"></nuxeo-page-item></template></nuxeo-slot-content>` +
+          page('a'),
+      ),
+    );
+    expect(tabs(ignored)).toEqual(['view', 'a']);
+    expect(note(ignored, 2)?.note).toContain('has a higher priority');
+    const stock = prepare(
+      bundle(
+        '<nuxeo-slot-content name="documentPermissionsItem" slot="DOCUMENT_VIEWS_ITEMS" disabled></nuxeo-slot-content>',
+      ),
+    );
+    expect(note(stock, 1)?.note).toContain("Web UI's own named documentPermissionsItem");
+  });
+
+  it("orders a tab with no order at 0, as Web UI's slot does, after the record page's own", () => {
+    const unordered = prepare(bundle(item('a', ' order="30"') + item('b') + page('a') + page('b')));
+    expect(tabs(unordered)).toEqual(['view', 'b', 'a']);
+    expect(note(unordered, 2)?.note).toContain('at order 0');
+  });
+
+  it('reports a tab on a type it cannot be written for, and says why for each', () => {
+    const both = prepare(
+      bundle(
+        item('a').replace('type="Policy"', 'type="Policy, Party"') +
+          page('a').replace('type="Policy"', 'type="Policy, Party"'),
+      ),
+    );
+    expect(tabs(both)).toEqual(['view', 'a']);
+    expect(note(both, 1)).toMatchObject({
+      outcome: 'reported',
+      to: 'layouts/Policy/view.layout.json tabs.a',
+      note: expect.stringContaining(
+        'Web UI shows it on Party too, where the package writes no view layout of Party',
+      ),
+    });
+    const preview = prepare({
+      ...bundle(item('a') + page('a')),
+      [VIEW]: `<dom-module id="nuxeo-policy-view-layout"><template><nuxeo-document-viewer role="widget" document="[[document]]"></nuxeo-document-viewer></template><script>Polymer({ is: 'nuxeo-policy-view-layout', behaviors: [Nuxeo.LayoutBehavior], properties: { /** @doctype Policy */ document: { type: Object } } });</script></dom-module>`,
+    });
+    expect(note(preview, 1)?.note).toContain(
+      "the view layout of Policy shows only the document's preview",
+    );
   });
 });

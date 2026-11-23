@@ -184,15 +184,17 @@ gives the same conversion. A conversion directory holds:
 
 **Layouts.** Each Web UI layout becomes the file of its type, from its `@doctype`, and its mode:
 
-- **`view`** is written in layout version 2, one card of fields, each with the widget
+- **`view`** is written in layout version 2: a card of the layout's own fields, and one for each
+  layout block it uses (M2, below), each field with the widget
   [layout-v2.md, section 10](../../docs/business-apps/layout-v2.md#10-what-the-studio-migration-writes)
   gives its element. The element-to-widget table is the catalogue's
   ([`elements.json`](catalogue/elements.json)), and the catalogue is held to the validator's widget
   registry when it loads. A view that only shows the document viewer gets no file: the app's
   document page shows the preview, as Web UI's did.
-- **`metadata`, `edit` and `create`** are written in version 1, because the app still refuses
-  version 2 in those modes and shows the generated layout instead (layout-v2.md, section 11). Each
-  field keeps its label and, in a form, its required flag:
+- **`metadata`, `edit` and `create`** are written in version 1. The app refuses version 2 in
+  `metadata` mode and shows the generated panel instead; it draws `edit` and `create` files of
+  version 2 since phase 2, which the converter does not write yet (layout-v2.md, sections 10 and
+  11). Each field keeps its label and, in a form, its required flag:
   - **The widget.** Version 1 cannot name a widget: the schema type picks it. A field whose element
     asks for one version 1 cannot show, such as a user picker, is still written, so that its value
     stays in the form, and it is reported.
@@ -318,8 +320,9 @@ WriteProperties` becomes `canWrite`, `Remove` becomes `canRemove`, `AddChildren`
   - a home card, by its page provider and its table, which its list needs.
 - **Where a rule travels:**
   - the `visibleWhen` of a view field, an action, a home card and its queue, and a menu entry;
+  - in M2, of a tab, of a layout block's card, and of a task form's field;
   - on the home and the menu, no record is open, so only a rule on the user travels;
-  - not to a version 1 field, which waits for the app to draw version 2 forms;
+  - not to a version 1 field, which waits for the converter to write version 2 forms;
   - not to a list's column, which is left out, or a search screen's table, which is reported.
 - **A condition is `converted` only where its rule was written**, and the report says where.
   Otherwise it is pending, and each thing it guards says why.

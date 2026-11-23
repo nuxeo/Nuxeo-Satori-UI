@@ -15,8 +15,9 @@
  *
  * It holds the traps a converter must not fall for:
  *
- * - a task layout's field bound to the document, which Web UI gives as an id alone, and fields
- *   under a filter and a dom-if testing that document;
+ * - a task layout's field of the record, which the task form shows read-only, fields under a
+ *   filter and a `dom-if` testing the record, and one under a permission test, which never passes
+ *   there: Web UI's task page fetches the task's target without its permissions;
  * - a task layout's field that only shows a variable, which a form must not let anyone change;
  * - a task layout whose workflow the package names in no schema, so its file's case is unknown;
  * - a block used without the document, a block inside a block, and a block used nowhere;
@@ -81,6 +82,7 @@ export function m2CorpusFiles(): Record<string, string> {
   <xs:element name="reviewer" type="xs:string"/>
   <xs:element name="override" type="xs:string"/>
   <xs:element name="versionNote" type="xs:string"/>
+  <xs:element name="escalate" type="xs:string"/>
 </xs:schema>`,
     'data/i18n/messages.json': JSON.stringify(
       {
@@ -124,6 +126,11 @@ export function m2CorpusFiles(): Record<string, string> {
       <nuxeo-input role="widget" label="Version note" value="{{task.variables.versionNote}}"></nuxeo-input>
     </template>
     <div role="widget"><label>Claim number</label><div>[[task.variables.claimNumber]]</div></div>
+    <nuxeo-filter document="[[document]]" permission="Write, WriteProperties">
+      <template>
+        <nuxeo-input role="widget" label="Escalate" value="{{task.variables.escalate}}"></nuxeo-input>
+      </template>
+    </nuxeo-filter>
   </template>
   <script>
     Polymer({

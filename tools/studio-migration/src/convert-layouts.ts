@@ -34,7 +34,7 @@ export { blockFieldId, blockOf, blockUseId, layoutCards } from './blocks';
 export type { LayoutSource, PlacedField, PlannedCard } from './blocks';
 import { LAYOUT_VERSION, labelOf, layoutPath } from './app-files';
 import { carry, guardOfSet, type Guard } from './guards';
-import { ALWAYS, VERSION_ONE_WIDGETS, displaysOnly, fieldWidget } from './widgets';
+import { ALWAYS, VERSION_ONE_WIDGETS, fieldWidget } from './widgets';
 import { tabDecisions, type TabPlan } from './convert-tabs';
 
 /** The document types a layout path may name: as the configuration service accepts them. */
@@ -89,7 +89,7 @@ export interface PlanOptions {
   readonly version: 1 | 2;
   /** True for an edit, create or task form, which keeps required flags. */
   readonly form: boolean;
-  /** True for a task layout: a field binds a variable of the task, and a block has no place. */
+  /** True for a task layout: a field binds a variable of the task, or a property of its record. */
   readonly task?: boolean;
   /**
    * True for a tab's page: the conditions around its block are the tab's, carried as the tab's
@@ -162,12 +162,6 @@ export function planFields(
           ? 'It binds no variable of the task'
           : 'It binds no property of the document',
       };
-    if (options.task && !binding.startsWith('var:'))
-      return {
-        kind: 'skip',
-        outcome: 'reported',
-        note: `It binds the document's ${binding}, and Web UI gives a task layout the task's first target by its id alone (nuxeo-document-task, targetDocumentIds[0]), so it shows nothing there; the app's task form would show the record's value: a person decides`,
-      };
     // A property counts as shown once a field shows it, not when a field merely names it: a
     // field under a condition, or of an element the catalogue does not know, leaves the next
     // field binding the same property to show it.
@@ -202,8 +196,8 @@ export function planFields(
           outcome: 'pending',
           note:
             field.condition !== null
-              ? `It shows only while condition ${field.condition + 1} of its file passes, and version 1 has no rules: it waits for the app to draw version 2 in ${mode} mode`
-              : `Its layout block sits in a condition, and version 1 has no rules: it waits for the app to draw version 2 in ${mode} mode`,
+              ? `It shows only while condition ${field.condition + 1} of its file passes, and version 1 has no rules: it waits for the converter to write version 2 in ${mode} mode`
+              : `Its layout block sits in a condition, and version 1 has no rules: it waits for the converter to write version 2 in ${mode} mode`,
         };
     }
     if (field.condition !== null) {
@@ -221,9 +215,12 @@ export function planFields(
     seen.add(binding);
     if (mode === 'metadata' && PANEL_ROWS.has(binding)) return { kind: 'panel', binding };
     const required = options.form && field.required;
+    // In a form, a field Web UI only shows, bound one way, is read-only. A task form shows the
+    // record's own properties read-only whatever its file says, so only a variable needs it.
+    const readOnly = options.form && !field.edits && !(options.task && !binding.startsWith('var:'));
     const written =
       version === 2
-        ? versionTwoField(field, choice, required, options.form && displaysOnly(field.element))
+        ? versionTwoField(field, choice, required, readOnly)
         : formField(field, required);
     const entry =
       guard?.kind === 'rule'
@@ -234,10 +231,20 @@ export function planFields(
         : written;
     // Written all the same, so that its value stays in the panel or the form, shown as its type
     // picks; reported, because that is not how Web UI shows it.
-    const reported =
-      version === 1 && choice.widget !== null && !VERSION_ONE_WIDGETS.has(choice.widget)
-        ? `Written to show as its schema type picks: version 1 cannot name the ${choice.widget} widget, and the converter writes version 1 in ${mode} mode (layout-v2.md, section 10)`
-        : undefined;
+    const reasons = [
+      ...(version === 1 && choice.widget !== null && !VERSION_ONE_WIDGETS.has(choice.widget)
+        ? [
+            `Written to show as its schema type picks: version 1 cannot name the ${choice.widget} widget, and the converter writes version 1 in ${mode} mode (layout-v2.md, section 10)`,
+          ]
+        : []),
+      // Version 1 cannot make a field read-only: written, so that its value stays in the form.
+      ...(version === 1 && readOnly
+        ? [
+            `Written editable: Web UI's ${field.element} only shows ${binding}, binding it one way, and version 1 cannot make a field read-only (extension-reference.md, section 9b)`,
+          ]
+        : []),
+    ];
+    const reported = reasons.length > 0 ? reasons.join('. ') : undefined;
     return {
       kind: 'write',
       entry,
@@ -259,12 +266,6 @@ function planCard(
 ): CardPlan {
   const use = card.use;
   if (use === null) return { kind: 'write' };
-  if (options.task)
-    return {
-      kind: 'skip',
-      outcome: 'reported',
-      note: "a block shows the document's properties, and Web UI gives a task layout the task's first target by its id alone (nuxeo-document-task, targetDocumentIds[0]), so its fields show nothing there: a person decides what the form shows",
-    };
   if (!use.document)
     return {
       kind: 'skip',
@@ -276,7 +277,7 @@ function planCard(
     return {
       kind: 'skip',
       outcome: 'pending',
-      note: `it shows only while condition ${use.conditions[0] + 1} of its file passes, and version 1 has no rules: it waits for the app to draw version 2 in ${options.mode} mode`,
+      note: `it shows only while condition ${use.conditions[0] + 1} of its file passes, and version 1 has no rules: it waits for the converter to write version 2 in ${options.mode} mode`,
     };
   const guard = guardOfSet(context.inventory, use.path, use.conditions);
   if (guard.kind !== 'rule') return { kind: 'skip', outcome: guard.kind, note: guard.note };
@@ -449,6 +450,8 @@ export function convertLayouts(context: ConvertContext): void {
   const { tabs, skipped } = tabDecisions(context);
   for (const [id, decision] of skipped) context.decide(id, decision);
   const tabsDone = new Set<TabPlan>();
+  /** The types whose view layout only shows the document's preview, so has no file. */
+  const previewOnly = new Set<string>();
   for (const layout of context.inventory.layouts) {
     const layoutId = `layout:${layout.path}#layout`;
     const uses = context.inventory.blockUses.filter((use) => use.path === layout.path);
@@ -500,6 +503,7 @@ export function convertLayouts(context: ConvertContext): void {
     if (options.version === 2) {
       if (cards.length === 0) {
         // A record page with nothing on it would show less than the document page does.
+        if (typeTabs.length > 0) previewOnly.add(type);
         context.decide(layoutId, {
           outcome: 'converted',
           to: "no file: the app's document page, which shows the record's preview, as this layout does",
@@ -509,15 +513,14 @@ export function convertLayouts(context: ConvertContext): void {
       if (typeTabs.length === 0) {
         context.files[path] = { version: 2, cards };
       } else {
-        // Web UI's own View tab comes at order 10, and a tab of the same order after it.
-        const ordered = [
-          { order: WEB_UI_VIEW_ORDER, tab: { id: 'view', cards } as Record<string, unknown> },
-          ...typeTabs.map((tab) => {
-            tabsDone.add(tab);
-            return { order: tab.order, tab: writeTab(context, path, tab) };
-          }),
-        ].sort((a, b) => a.order - b.order);
-        context.files[path] = { version: 2, tabs: ordered.map((entry) => entry.tab) };
+        // The record page opens on its first tab, as Web UI's document page opens on its View
+        // tab, so that one comes first; the others follow in Web UI's order.
+        const ordered = [...typeTabs].sort((a, b) => a.order - b.order);
+        for (const tab of ordered) tabsDone.add(tab);
+        context.files[path] = {
+          version: 2,
+          tabs: [{ id: 'view', cards }, ...ordered.map((tab) => writeTab(context, path, tab))],
+        };
       }
     } else {
       // An empty list of sections shows nothing beyond what the panel or form always shows, as a
@@ -526,7 +529,7 @@ export function convertLayouts(context: ConvertContext): void {
     }
     context.decide(layoutId, { outcome: 'converted', to: path });
   }
-  decideTabs(context, tabs, tabsDone);
+  decideTabs(context, tabs, tabsDone, previewOnly);
 }
 
 /** The order of Web UI's own View tab, `documentViewItem` in `nuxeo-web-ui-bundle.html`. */
@@ -577,6 +580,7 @@ function decideTabs(
   context: ConvertContext,
   tabs: readonly TabPlan[],
   done: ReadonlySet<TabPlan>,
+  previewOnly: ReadonlySet<string>,
 ): void {
   for (const tab of tabs) {
     const files = done.has(tab)
@@ -587,28 +591,40 @@ function decideTabs(
     const missing = tab.types.filter(
       (type) => !Object.hasOwn(context.files, layoutPath(type, 'view')),
     );
+    const why = (types: readonly string[]): string =>
+      types
+        .map((type) =>
+          previewOnly.has(type)
+            ? `the view layout of ${type} shows only the document's preview, so it has no file, and the app keeps the document page there`
+            : `the package writes no view layout of ${type}, so the app keeps the document page there`,
+        )
+        .join('; ');
+    const before =
+      tab.order < WEB_UI_VIEW_ORDER
+        ? `. Web UI puts it before its View tab, at order ${tab.order}, and opens the page on View; the record page opens on its first tab, so its own tab stays first`
+        : '';
+    const to = files.map((path) => `${path} tabs.${tab.id}`).join(', ');
+    // Shown on fewer types than Web UI shows it on: written where it can be, and reported.
     const decision: Decision =
-      files.length > 0
+      files.length === 0
         ? {
-            outcome: 'converted',
-            to: files.map((path) => `${path} tabs.${tab.id}`).join(', '),
-            ...(missing.length > 0
-              ? {
-                  note: `Not on ${missing.join(', ')}: the package writes no view layout of ${missing.length === 1 ? 'that type' : 'those types'}, whose record page would hold it`,
-                }
-              : {}),
-          }
-        : {
             outcome: 'reported',
-            note: `It shows on ${tab.types.join(', ')}, and the package writes no view layout of ${tab.types.length === 1 ? 'that type' : 'those types'}: the record page that would hold the tab is not drawn, and Web UI's document page is the app's own`,
-          };
+            note: `It shows on ${tab.types.join(', ')}, where the record page that would hold it is not drawn: ${why(tab.types)}`,
+          }
+        : missing.length > 0
+          ? {
+              outcome: 'reported',
+              to,
+              note: `Written for ${tab.types.filter((type) => !missing.includes(type)).join(', ')} only: Web UI shows it on ${missing.join(', ')} too, where ${why(missing)}${before}`,
+            }
+          : { outcome: 'converted', to, ...(before ? { note: before.slice(2) } : {}) };
     context.decide(tab.itemId, decision);
-    if (tab.pageId) context.decide(tab.pageId, decision);
-    if (files.length === 0 && tab.use) {
+    context.decide(tab.pageId, decision);
+    if (files.length === 0) {
       // Its page's block, and the block's fields, go nowhere either.
       context.decide(blockUseId(tab.use), { outcome: 'reported', note: decision.note ?? '' });
       blockOf(context.inventory, tab.use)?.fields.forEach((_, index) =>
-        context.decide(blockFieldId(tab.use as BlockUse, index), {
+        context.decide(blockFieldId(tab.use, index), {
           outcome: 'reported',
           note: 'Its tab is reported',
         }),
