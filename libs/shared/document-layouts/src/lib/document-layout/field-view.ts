@@ -152,14 +152,17 @@ function subFields(
 ): FieldView[] {
   const fields = definition.fields ?? {};
   const names = Object.keys(fields).length ? Object.keys(fields) : Object.keys(value);
+  // Own keys only, of both: with no subfields read, the names are the value's own, and one that
+  // every object inherits, `constructor` for one, found a function in `{}` where a type was
+  // expected, and describing it threw.
   return [...names]
     .sort((a, b) => a.localeCompare(b))
     .map((name) =>
       describeField(
         name,
         humanize(name),
-        fields[name] ?? { type: 'string' },
-        value[name],
+        (Object.hasOwn(fields, name) ? fields[name] : undefined) ?? { type: 'string' },
+        Object.hasOwn(value, name) ? value[name] : undefined,
         context,
         depth + 1,
       ),

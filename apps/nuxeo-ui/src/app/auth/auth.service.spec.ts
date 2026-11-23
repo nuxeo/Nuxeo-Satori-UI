@@ -114,6 +114,69 @@ describe('AuthService poweruser access', () => {
     expect(service.groups()).toEqual(['claims-team', 'member-services', 'members']);
     // The stored groups alone still decide isPowerUser, as before.
     expect(service.isPowerUser()).toBe(false);
+
+    // And they are what a reload restores, not the stored groups alone.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
+    });
+    expect(TestBed.inject(AuthService).groups()).toEqual([
+      'claims-team',
+      'member-services',
+      'members',
+    ]);
+  });
+
+  it("keeps a cookie session's nested and virtual groups when /me is read again", () => {
+    sessionStorage.setItem(
+      'agentic_ui_nuxeo_session',
+      JSON.stringify({
+        kind: 'cookie',
+        username: 'member01',
+        isAdministrator: false,
+        groups: ['claims-team'],
+        allGroups: ['claims-team', 'members'],
+      }),
+    );
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
+    });
+    const restored = TestBed.inject(AuthService);
+    const mock = TestBed.inject(HttpTestingController);
+
+    restored.refreshCurrentUser().subscribe();
+    mock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me'))
+      .flush({
+        id: 'member01',
+        properties: { username: 'member01', groups: ['claims-team'] },
+        extendedGroups: [{ name: 'claims-team' }, { name: 'member-services' }, { name: 'members' }],
+      });
+
+    expect(restored.groups()).toEqual(['claims-team', 'member-services', 'members']);
+    mock.verify();
+  });
+
+  it('gives a session stored before every group was kept its stored groups', () => {
+    sessionStorage.setItem(
+      'agentic_ui_nuxeo_session',
+      JSON.stringify({
+        kind: 'basic',
+        username: 'member01',
+        basic: btoa('member01:secret'),
+        isAdministrator: false,
+        groups: ['claims-team'],
+      }),
+    );
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
+    });
+    expect(TestBed.inject(AuthService).groups()).toEqual(['claims-team']);
   });
 
   it('sets isPowerUser and hasAdministrationAccess after login', () => {

@@ -21,6 +21,38 @@ describe('describeField', () => {
     expect(describe1('string', value).kind).toBe('empty');
   });
 
+  /**
+   * A complex value's sub-fields are read by own keys only. With no subfields read the names are
+   * the value's own, and one every object inherits found a function or an object in `{}` where a
+   * type was expected, and describing it threw; a listed one the value lacks found a function.
+   */
+  it('describes a complex value by its own keys only, inherited names included', () => {
+    const subs = (view: FieldView) =>
+      (view.groups?.[0] ?? []).map((sub) => [sub.key, sub.kind, sub.value]);
+    const unlisted = JSON.parse('{"code":"A","constructor":"x","__proto__":"y"}');
+    expect(subs(describe1('complex', unlisted))).toEqual(
+      expect.arrayContaining([
+        ['code', 'value', { text: 'A' }],
+        ['constructor', 'value', { text: 'x' }],
+        ['__proto__', 'value', { text: 'y' }],
+      ]),
+    );
+    expect(
+      subs(
+        describe1(
+          'complex',
+          { code: 'A' },
+          {
+            fields: { code: { type: 'string' }, toString: { type: 'string' } },
+          },
+        ),
+      ),
+    ).toEqual([
+      ['code', 'value', { text: 'A' }],
+      ['toString', 'empty', undefined],
+    ]);
+  });
+
   it('shows a string as text, and a vocabulary-bound one by its entry label', () => {
     expect(describe1('string', 'Northside').value).toEqual({ text: 'Northside' });
     expect(describe1('string', 'pending', { directory: 'claim_status' }).value).toEqual({
