@@ -29,6 +29,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readServerModel } from './nuxeo-content-model.mjs';
 import { attribute, withoutCommentsOrInstructions } from './verify-package-zip.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -484,6 +485,8 @@ for (const argv of [
   const { status } = spawnSync(process.execPath, [SCRIPT, ...argv], { encoding: 'utf8' });
   if (status !== 2) failures.push(`${JSON.stringify(argv)} exits ${status}, not 2`);
 }
+/** A password written in an address, which no message may repeat. */
+const SECRET = randomBytes(9).toString('hex');
 /** Made-up credentials, so that a refusal below is for the address, not for credentials missing. */
 const madeUp = () => ({
   ...process.env,
@@ -511,6 +514,8 @@ for (const [server, reason] of [
   ['https://someone:secret@nuxeo.invalid/nuxeo', 'the address carries credentials'],
   ['https://nuxeo.invalid/nuxeo?user=someone', 'with no query'],
   ['nuxeo.invalid', 'is not an address'],
+  // An address that does not parse is not echoed: it may still hold a password.
+  [`https://someone:${SECRET}@nuxeo.invalid:port/nuxeo`, 'is not an address'],
 ]) {
   negative++;
   const { status, stderr } = spawnSync(process.execPath, [SCRIPT, DEMO, '--model-server', server], {
@@ -519,6 +524,7 @@ for (const [server, reason] of [
   });
   if (status !== 2 || !stderr.includes(`--model-server: `) || !stderr.includes(reason))
     failures.push(`--model-server ${server} exits ${status}, not 2 for "${reason}"\n${stderr}`);
+  if (stderr.includes(SECRET)) failures.push(`--model-server ${server} printed the password in it`);
 }
 
 // The content model read live (`--model-server`), from a server that answers as Nuxeo does, with
@@ -536,6 +542,7 @@ await (async () => {
   let status = 200;
   let redirect = null;
   let doctypes = () => model.doctypes;
+  let big = null;
   const server = createServer((request, response) => {
     if (request.url === '/elsewhere') {
       seen.elsewhere++;
@@ -560,7 +567,13 @@ await (async () => {
     }
     const path = new URL(request.url, 'http://localhost').pathname;
     const named = /^\/nuxeo\/api\/v1\/config\/schemas\/([^/]+)$/.exec(path);
-    if (path === '/nuxeo/api/v1/config/types') json({ doctypes: doctypes(), schemas: {} });
+    if (path === '/nuxeo/api/v1/config/types' && big !== null) {
+      // Sent in pieces, so with no Content-Length: only counting as it arrives can stop it.
+      response.writeHead(200, { 'content-type': 'application/json' });
+      const body = Buffer.from(JSON.stringify({ doctypes: {}, padding: big }));
+      for (let at = 0; at < body.length; at += 256) response.write(body.subarray(at, at + 256));
+      response.end();
+    } else if (path === '/nuxeo/api/v1/config/types') json({ doctypes: doctypes(), schemas: {} });
     else if (path === '/nuxeo/api/v1/config/facets') json(model.facets);
     // The list, as Nuxeo answers it: no constraints, so no directory.
     else if (path === '/nuxeo/api/v1/config/schemas')
@@ -725,6 +738,30 @@ await (async () => {
       failures.push(`a server that redirects exits ${result.status}, not 2\n${result.output}`);
     if (seen.elsewhere > 0) failures.push('a redirect was followed');
     redirect = null;
+
+    // An answer over the cap is refused as it arrives, counted in bytes, not in characters: 2,000
+    // euro signs are 2,000 characters and 6,000 bytes. Under a cap they fit, they are read.
+    for (const [padding, maxBytes, refused] of [
+      ['x'.repeat(8192), 4096, true],
+      ['€'.repeat(2000), 4096, true],
+      ['€'.repeat(1000), 4096, false],
+    ]) {
+      refused ? negative++ : positive++;
+      big = padding;
+      let error = null;
+      try {
+        await readServerModel(address, credentials, { maxBytes });
+      } catch (caught) {
+        error = caught;
+      }
+      big = null;
+      const said = error?.message ?? 'read';
+      // At the padded answer itself: the demo's own schemas are over a kilobyte too.
+      if (refused !== said.includes(`/config/types answered more than ${maxBytes} bytes`))
+        failures.push(
+          `${padding.length} × "${padding[0]}" under a cap of ${maxBytes} bytes: ${said}`,
+        );
+    }
 
     // Every run, the ones that read and the ones that failed: none printed the credentials.
     negative++;

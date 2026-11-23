@@ -43,7 +43,8 @@ export function serverBase(server) {
   try {
     url = new URL(server);
   } catch {
-    return { problem: `${JSON.stringify(server)} is not an address, such as https://<host>/nuxeo` };
+    // Not echoed: an address that does not parse may still hold a password, `user:pass@host:x`.
+    return { problem: 'it is not an address, such as https://<host>/nuxeo' };
   }
   if (url.username || url.password)
     return { problem: 'the address carries credentials: they come from NUXEO_USER and NUXEO_PASS' };
@@ -66,10 +67,15 @@ export function serverBase(server) {
  *
  * @param {string} server the server's address, such as `http://localhost:8080/nuxeo`
  * @param {{ username: string, password: string }} credentials
- * @param {{ fetch?: typeof globalThis.fetch }} [options] `fetch`, for the tests
+ * @param {{ fetch?: typeof globalThis.fetch, maxBytes?: number }} [options] `fetch`, and the most
+ *   one answer may hold, for the tests
  * @returns {Promise<{ doctypes: object, facets: unknown[], schemas: unknown[] }>}
  */
-export async function readServerModel(server, credentials, { fetch = globalThis.fetch } = {}) {
+export async function readServerModel(
+  server,
+  credentials,
+  { fetch = globalThis.fetch, maxBytes = MAX_BYTES } = {},
+) {
   const where = serverBase(server);
   if (where.problem) throw new Error(where.problem);
   const headers = { Authorization: basicAuthorization(credentials), Accept: 'application/json' };
@@ -93,18 +99,33 @@ export async function readServerModel(server, credentials, { fetch = globalThis.
       }
       if (response.status !== 200)
         throw new Error(`GET ${url} answered ${response.status}, not 200`);
-      const declared = Number(response.headers.get('content-length'));
-      if (declared > MAX_BYTES) throw new Error(`GET ${url} answered more than ${MAX_BYTES} bytes`);
-      let text;
+      const tooLarge = () => new Error(`GET ${url} answered more than ${maxBytes} bytes`);
+      if (Number(response.headers.get('content-length')) > maxBytes) {
+        await response.body?.cancel();
+        throw tooLarge();
+      }
+      // Counted in bytes as they arrive, and stopped at the cap: with no Content-Length, reading
+      // the whole body first would hold all of it before the check.
+      const chunks = [];
+      let total = 0;
+      const reader = response.body?.getReader();
       try {
-        text = await response.text();
+        for (;;) {
+          const chunk = await reader?.read();
+          if (!chunk || chunk.done) break;
+          total += chunk.value.byteLength;
+          if (total > maxBytes) {
+            await reader.cancel();
+            throw tooLarge();
+          }
+          chunks.push(chunk.value);
+        }
       } catch (error) {
+        if (total > maxBytes) throw error;
         throw new Error(`GET ${url} was not read whole: ${error.message}`);
       }
-      if (text.length > MAX_BYTES)
-        throw new Error(`GET ${url} answered more than ${MAX_BYTES} bytes`);
       try {
-        return JSON.parse(text);
+        return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       } catch {
         throw new Error(`GET ${url} did not answer JSON`);
       }

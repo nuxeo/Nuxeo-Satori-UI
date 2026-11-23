@@ -225,6 +225,26 @@ describe('readContentModel', () => {
       'doctypes.Odd.parent: must be the name of a type',
     ]);
   });
+  it("refuses a schema's prefix that is not a text, or two that disagree, rather than read it as none", () => {
+    const broken = source();
+    broken.schemas.push(
+      { name: 'a', '@prefix': 123, fields: { title: 'string' } },
+      { name: 'b', prefix: null, fields: {} },
+      { name: 'c', '@prefix': 'c1', prefix: 'c2', fields: {} },
+      // Empty and missing are the name, as Nuxeo means them; the same prefix twice is one.
+      { name: 'd', '@prefix': '', prefix: 'dd', fields: {} },
+      { name: 'e', '@prefix': 'ee', prefix: 'ee', fields: {} },
+    );
+    expect(readContentModel(broken).problems).toEqual([
+      "schemas[6].@prefix: must be the schema's prefix, a text",
+      "schemas[7].prefix: must be the schema's prefix, a text",
+      'schemas[8]: its @prefix and prefix disagree, "c1" and "c2"',
+    ]);
+    broken.schemas.splice(6, 3);
+    const model = read(broken);
+    expect(model.schemas.get('d')?.prefix).toBe('dd');
+    expect(model.schemas.get('e')?.prefix).toBe('ee');
+  });
 });
 
 describe('propertiesOf', () => {

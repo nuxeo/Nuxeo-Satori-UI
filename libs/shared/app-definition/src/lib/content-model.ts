@@ -196,10 +196,33 @@ export function propertyTypeOf(property: PropertyModel): string {
   return property.list ? `${type}[]` : type;
 }
 
-/** The name Nuxeo writes a schema's properties with: its prefix, else, as for `file`, its name. */
-function prefixOf(raw: Record<string, unknown>, name: string): string {
-  const prefix = raw['@prefix'] ?? raw['prefix'];
-  return typeof prefix === 'string' && prefix !== '' ? prefix : name;
+/**
+ * The name Nuxeo writes a schema's properties with: its prefix, else, as for `file`, its name.
+ * Nuxeo answers it as `@prefix`, and per schema as `prefix` too; either may be missing or empty.
+ * One that is not a text, or two that disagree, is a problem: read as no prefix, the schema's
+ * properties would be found under its name, and a layout blamed for the model's fault.
+ */
+function prefixOf(
+  raw: Record<string, unknown>,
+  name: string,
+  at: string,
+  problems: string[],
+): string | null {
+  const given: string[] = [];
+  for (const key of ['@prefix', 'prefix']) {
+    const value = raw[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'string') {
+      problems.push(`${at}.${key}: must be the schema's prefix, a text`);
+      return null;
+    }
+    if (value !== '') given.push(value);
+  }
+  if (new Set(given).size > 1) {
+    problems.push(`${at}: its @prefix and prefix disagree, "${given[0]}" and "${given[1]}"`);
+    return null;
+  }
+  return given[0] ?? name;
 }
 
 function readSchema(raw: unknown, at: string, problems: string[]): SchemaModel | null {
@@ -208,6 +231,8 @@ function readSchema(raw: unknown, at: string, problems: string[]): SchemaModel |
     return null;
   }
   const name = raw['name'];
+  const prefix = prefixOf(raw, name, at, problems);
+  if (prefix === null) return null;
   const fields = raw['fields'] ?? {};
   if (!isRecord(fields)) {
     problems.push(`${at}.fields: must be an object of fields`);
@@ -215,7 +240,7 @@ function readSchema(raw: unknown, at: string, problems: string[]): SchemaModel |
   }
   return {
     name,
-    prefix: prefixOf(raw, name),
+    prefix,
     properties: readFields(fields, `${at}.fields`, problems),
   };
 }
