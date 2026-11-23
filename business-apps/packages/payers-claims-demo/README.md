@@ -132,10 +132,24 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 installed, and the server log's `Component Loading Status` has nothing pending or missing.
 `/nuxeo/agentic-ui-config/layouts.json` lists the four `view` layouts.
 
-**Before removing it, or replacing its stand-in model,** delete the seeded workspace,
-`/default-domain/workspaces/payers-demo`, and empty it from the trash. A document whose type is
-gone cannot be read, and would break the folder and the searches that hold it. Then
-`nuxeoctl mp-remove payers-claims-demo --accept=true`, and restart.
+### Removing it
+
+**First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it
+from the trash: do the same before replacing the stand-in model. A document whose type is gone
+cannot be read, and would break the folder and the searches that hold it.
+
+Then remove the package the way it was installed. `nuxeoctl mp-remove`, like `mp-install`,
+refuses while the server runs, and stopping the server stops the container, so a one-off script
+removes it when the container next starts, then removes itself. **Not run yet:** this was written
+from the install, which was.
+
+```bash
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-remove payers-claims-demo --accept=true > /var/log/nuxeo/payers-kit-remove.log 2>&1 || echo "payers kit: removal failed, see /var/log/nuxeo/payers-kit-remove.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-remove.sh && chmod 755 /tmp/zz-payers-kit-remove.sh
+```
+
+```bash
+docker cp /tmp/zz-payers-kit-remove.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
+```
 
 ## Seeding it
 
