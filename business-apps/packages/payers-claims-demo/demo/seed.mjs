@@ -270,9 +270,9 @@ async function ensure(parent, name, type, properties, file) {
 }
 
 /**
- * The document trashed from `parent/name`, or `null`. Nuxeo renames what it trashes, to
- * `<name>._<time>_.trashed`, unless it is configured not to, so the record's place no longer finds
- * it. Restoring it gives the name back.
+ * The document trashed from `parent/name`, or `null`, found in the repository itself. Nuxeo
+ * renames what it trashes, to `<name>._<time>_.trashed`, unless it is configured not to, so the
+ * record's place no longer finds it. Restoring it gives the name back.
  */
 async function trashedFrom(parent, name) {
   const folder = await find(`/path${pathOf(parent)}`);
@@ -387,28 +387,42 @@ async function check({ members, providers, claims, cases, documents }) {
 /** Every id a page provider returns, given one parameter or none. */
 async function results(pageProvider, parameter) {
   const parameters = parameter === undefined ? {} : { queryParams: parameter };
-  const entries = await everyPage(`/search/pp/${pageProvider}/execute`, parameters, pageProvider);
+  const entries = await everyPage(pageProvider, (index) =>
+    call(
+      'GET',
+      `/search/pp/${pageProvider}/execute?${new URLSearchParams({
+        ...parameters,
+        pageSize: `${PAGE_SIZE}`,
+        currentPageIndex: `${index}`,
+      })}`,
+    ),
+  );
   return entries.map((entry) => entry.uid);
 }
 
 /** Every document an NXQL query finds. */
+/**
+ * Every document an NXQL query finds in the repository, through `Repository.Query`. Not
+ * `search/lang/NXQL/execute`: with an OpenSearch search client installed, that one answers from the
+ * index, which can still hold a trashed document as live, so a record trashed a moment ago would
+ * not be found, and the seed would create a second one (`browse.service.ts`, which measured it).
+ */
 async function nxql(query) {
-  return everyPage('/search/lang/NXQL/execute', { query }, 'The NXQL query');
+  return everyPage('The NXQL query', (index) =>
+    call('POST', '/automation/Repository.Query', {
+      json: { params: { query, pageSize: PAGE_SIZE, currentPageIndex: index } },
+    }),
+  );
 }
 
 /**
  * Every entry of a paged search, page after page. A server may cap a page below the size asked
  * for, so one page is never taken for all of them.
  */
-async function everyPage(path, parameters, what) {
+async function everyPage(what, pageAt) {
   const entries = [];
   for (let index = 0; index < MAX_PAGES; index++) {
-    const query = new URLSearchParams({
-      ...parameters,
-      pageSize: `${PAGE_SIZE}`,
-      currentPageIndex: `${index}`,
-    });
-    const page = await call('GET', `${path}?${query}`);
+    const page = await pageAt(index);
     entries.push(...(page.entries ?? []));
     if (page.isNextPageAvailable !== true) return entries;
   }

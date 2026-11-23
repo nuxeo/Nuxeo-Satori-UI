@@ -6,7 +6,9 @@
  *
  * **What this proves, and what it does not.** The stand-in is an in-memory server written here,
  * from what Nuxeo's REST API is documented to do: documents by path and by id, batch upload, the
- * `Document.Untrash` operation, page providers, NXQL, and trash renaming a document to
+ * `Document.Untrash` operation, page providers, NXQL through `Repository.Query`, a search endpoint
+ * whose index has not yet seen what was trashed, as OpenSearch's can lag, and trash renaming a
+ * document to
  * `<name>._<time>_.trashed` (the document alone: its children are neither flagged nor moved, which
  * Nuxeo may do differently). So a pass proves the script's logic: preconditions, a second run that
  * adds nothing, a trashed record restored, a document of another type left alone, and checks that
@@ -205,8 +207,15 @@ function standIn({
         untrash(document);
         return send(200, view(document));
       }
-      if (method === 'GET' && path === '/search/lang/NXQL/execute') {
-        const query = TRASHED_QUERY.exec(url.searchParams.get('query') ?? '');
+      // The repository: what is trashed is trashed.
+      const repository = method === 'POST' && path === '/automation/Repository.Query';
+      // The search index, a moment behind: it has not seen anything trashed yet, so it finds none.
+      const searchIndex = method === 'GET' && path === '/search/lang/NXQL/execute';
+      if (repository || searchIndex) {
+        const body = repository ? JSON.parse(raw).params : null;
+        const query = TRASHED_QUERY.exec(
+          repository ? (body.query ?? '') : (url.searchParams.get('query') ?? ''),
+        );
         if (!query) return send(400, { message: 'a query the stand-in does not know' });
         const [, parent, like] = query;
         const pattern = new RegExp(
@@ -215,10 +224,12 @@ function standIn({
             .replace(/%/g, '.*')
             .replace(/_/g, '.')}$`,
         );
-        const found = [...byId.values()].filter(
-          (d) => d.isTrashed && parentOf(d)?.uid === parent && pattern.test(nameOf(d)),
-        );
-        return send(200, page(found, index));
+        const found = searchIndex
+          ? []
+          : [...byId.values()].filter(
+              (d) => d.isTrashed && parentOf(d)?.uid === parent && pattern.test(nameOf(d)),
+            );
+        return send(200, page(found, repository ? Number(body.currentPageIndex ?? 0) : index));
       }
       const execute = /^\/search\/pp\/([^/]+)\/execute$/.exec(path);
       if (method === 'GET' && execute) {
