@@ -71,6 +71,7 @@
             mat-header-cell
             *matHeaderCellDef
             mat-sort-header
+            [disableClear]="column.key === defaultSort()?.key"
             [sortActionDescription]="
               'satori-components.document-list.sort-by' | translate: { column: column.label }
             "
