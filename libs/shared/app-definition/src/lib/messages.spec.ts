@@ -6,6 +6,7 @@ import ts from 'typescript';
 // refusal added without a negative control fails here. The messages are read from the source:
 //
 // - the last argument of each `add(...)` call, and each `message:` of a finding built whole;
+// - each problem the model reader pushes, `problems.push(...)`;
 // - a message given back as a value: the text a function returns, and the text beside a `null` in
 //   a conditional, which is how a widget parameter's check and an image's rules say what is wrong.
 //
@@ -43,14 +44,22 @@ function messagesIn(file: string): string[][] {
       callee !== undefined &&
       ((ts.isIdentifier(callee) && callee.text === 'add') ||
         (ts.isPropertyAccessExpression(callee) && callee.name.text === 'add'));
+    const isProblem =
+      callee !== undefined &&
+      ts.isPropertyAccessExpression(callee) &&
+      callee.name.text === 'push' &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === 'problems';
     const message =
       isAdd && ts.isCallExpression(node)
         ? node.arguments[2]
-        : ts.isPropertyAssignment(node) &&
-            ts.isIdentifier(node.name) &&
-            node.name.text === 'message'
-          ? node.initializer
-          : undefined;
+        : isProblem && ts.isCallExpression(node)
+          ? node.arguments[0]
+          : ts.isPropertyAssignment(node) &&
+              ts.isIdentifier(node.name) &&
+              node.name.text === 'message'
+            ? node.initializer
+            : undefined;
     if (message) found.push(literals(message));
     if (ts.isReturnStatement(node) && node.expression && literals(node.expression).length > 0)
       found.push(literals(node.expression));
@@ -76,6 +85,8 @@ describe('the negative controls', () => {
         'actions.ts',
         'registries.ts',
         'image-source.ts',
+        'content-model.ts',
+        'layout-model.ts',
       ]),
     );
     expect(all.length).toBeGreaterThan(120);

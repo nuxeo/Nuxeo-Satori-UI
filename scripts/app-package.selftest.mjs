@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Negative controls for `app-package.mjs`, the package pipeline's first stage.
+ * Negative controls for `app-package.mjs`, the package pipeline's first stage, and for
+ * `app-package-model.mjs`, which exports the content model it can be held to.
  *
  * In CI that script runs on packages that are meant to pass, so every run of it is green, and a
  * check only ever seen green is an assertion. Each control here is the demo package broken in one
@@ -13,8 +14,9 @@
  *
  * Usage: node scripts/app-package.selftest.mjs
  */
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { createServer } from 'node:http';
 import {
   cpSync,
   existsSync,
@@ -31,6 +33,7 @@ import { attribute, withoutCommentsOrInstructions } from './verify-package-zip.m
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = join(REPO, 'scripts', 'app-package.mjs');
+const EXPORT = join(REPO, 'scripts', 'app-package-model.mjs');
 const DEMO = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
 // The demo's version, read rather than written down: raising it is how a package is released, and
 // that must not break these controls on the way to the tag.
@@ -393,6 +396,74 @@ expectBuilt(
   (scratch) => ['--allow-list', join(scratch, 'allow-list.json')],
 );
 
+// The content model, given as a file (package-pipeline.md, section 3). The demo's is beside it,
+// and these controls copy the package with it, so each is held to the model it carries.
+const MODEL = 'content-model.json';
+const withModel = (scratch) => ['--model', join(scratch, 'payers-claims-demo', MODEL)];
+/** The demo's received date shown as a yes or no: a widget the date property does not fit. */
+const BOOLEAN_RECEIVED = ({ edit }) =>
+  edit(
+    LAYOUT,
+    '{ "field": "claim:received", "widget": "date", "parameters": { "format": "long" } }',
+    '{ "field": "claim:received", "widget": "boolean" }',
+  );
+const RECEIVED_REFUSED =
+  'cards[0].fields[3].widget: the widget "boolean" does not show "claim:received", a date property: it takes boolean [parameter]';
+
+expectRefused(
+  'a widget that does not show its property, given the content model',
+  BOOLEAN_RECEIVED,
+  2,
+  RECEIVED_REFUSED,
+  withModel,
+);
+expectRefused(
+  'a field whose property the type does not have, given the content model',
+  ({ edit }) => edit(LAYOUT, '"claim:number",', '"claim:numbr",'),
+  2,
+  'cards[0].fields[0]: "claim:numbr" is not a property of the type "Claim" or of its facets [unknown]',
+  withModel,
+);
+expectRefused(
+  'a table column naming a subfield its property does not have, given the content model',
+  ({ edit }) =>
+    edit(
+      LAYOUT,
+      '"claim:number",',
+      '"claim:number", { "field": "claim:lines", "widget": "table", "parameters": { "columns": ["line:code", "line:cost"] } },',
+    ),
+  2,
+  'cards[0].fields[1].parameters.columns[1]: "claim:lines" has no subfield "cost" [unknown]',
+  withModel,
+);
+expectRefused(
+  'a layout for a type the content model does not have',
+  ({ edit }) => edit(MODEL, '"Claim": {', '"Claims": {'),
+  2,
+  'the file: the document type "Claim" is not in the content model [unknown]',
+  withModel,
+);
+expectBuilt('the demo package, held to its content model', unchanged, withModel);
+// The control on the controls above: the same layout passes with no model, so it is the model that
+// refuses it, and the model stays opt in.
+expectBuilt('a widget that does not show its property, with no content model', BOOLEAN_RECEIVED);
+
+// A model the validator cannot read stops the run, as a wrong allow-list does: exit 2, neither
+// refused nor built on a model nobody saw.
+negative++;
+{
+  const { scratch, directory, out } = packageWith(({ edit }) =>
+    edit(MODEL, '},\n  "facets": [', '},\n  "facet": ['),
+  );
+  const { status, output } = run(directory, out, withModel(scratch));
+  if (status !== 2 || !output.includes('"facet" is not a key of a content model'))
+    failures.push(
+      `a malformed content model exits ${status}, not 2, or does not say why\n${output}`,
+    );
+  if (existsSync(join(out, ZIP))) failures.push('a malformed content model left a zip');
+  rmSync(scratch, { recursive: true, force: true });
+}
+
 // The usage errors exit 2, apart from a refusal: the command's own, and the validator's, such as
 // an allow-list of the wrong shape.
 negative++;
@@ -413,6 +484,211 @@ for (const argv of [
   const { status } = spawnSync(process.execPath, [SCRIPT, ...argv], { encoding: 'utf8' });
   if (status !== 2) failures.push(`${JSON.stringify(argv)} exits ${status}, not 2`);
 }
+/** Made-up credentials, so that a refusal below is for the address, not for credentials missing. */
+const madeUp = () => ({
+  ...process.env,
+  NUXEO_USER: randomBytes(6).toString('hex'),
+  NUXEO_PASS: randomBytes(12).toString('hex'),
+});
+// One content model, a file or the server's: both is the command's usage, before any read.
+negative++;
+{
+  const argv = [DEMO, '--model', join(DEMO, MODEL), '--model-server', 'http://localhost:1/nuxeo'];
+  const { status, stderr } = spawnSync(process.execPath, [SCRIPT, ...argv], {
+    encoding: 'utf8',
+    env: madeUp(),
+  });
+  if (status !== 2 || !stderr.startsWith('usage: node scripts/app-package.mjs'))
+    failures.push(`--model with --model-server exits ${status}, not 2 for its usage\n${stderr}`);
+}
+// Credentials never go over plain HTTP to another machine, nor in the address. `.invalid` never
+// resolves, should a check be gone.
+for (const [server, reason] of [
+  [
+    'http://nuxeo.invalid/nuxeo',
+    'credentials are sent over HTTPS only, or over HTTP to this machine',
+  ],
+  ['https://someone:secret@nuxeo.invalid/nuxeo', 'the address carries credentials'],
+  ['https://nuxeo.invalid/nuxeo?user=someone', 'with no query'],
+  ['nuxeo.invalid', 'is not an address'],
+]) {
+  negative++;
+  const { status, stderr } = spawnSync(process.execPath, [SCRIPT, DEMO, '--model-server', server], {
+    encoding: 'utf8',
+    env: madeUp(),
+  });
+  if (status !== 2 || !stderr.includes(`--model-server: `) || !stderr.includes(reason))
+    failures.push(`--model-server ${server} exits ${status}, not 2 for "${reason}"\n${stderr}`);
+}
+
+// The content model read live (`--model-server`), from a server that answers as Nuxeo does, with
+// the demo's model. The credentials are made up for the run: what is checked is that they arrive,
+// in the header, on every read.
+await (async () => {
+  const model = JSON.parse(readFileSync(join(DEMO, MODEL), 'utf8'));
+  const credentials = {
+    username: randomBytes(6).toString('hex'),
+    password: randomBytes(12).toString('hex'),
+  };
+  const expected = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`;
+  const seen = { unauthorised: 0, schemas: new Set(), withoutFields: 0 };
+  let answer = (schema) => schema;
+  let status = 200;
+  const server = createServer((request, response) => {
+    const json = (body) => {
+      response.writeHead(status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(body));
+    };
+    if (request.headers.authorization !== expected) {
+      seen.unauthorised++;
+      response.writeHead(401);
+      response.end();
+      return;
+    }
+    const path = new URL(request.url, 'http://localhost').pathname;
+    const named = /^\/nuxeo\/api\/v1\/config\/schemas\/([^/]+)$/.exec(path);
+    if (path === '/nuxeo/api/v1/config/types') json({ doctypes: model.doctypes, schemas: {} });
+    else if (path === '/nuxeo/api/v1/config/facets') json(model.facets);
+    // The list, as Nuxeo answers it: no constraints, so no directory.
+    else if (path === '/nuxeo/api/v1/config/schemas')
+      json(model.schemas.map(({ name }) => ({ name, fields: {} })));
+    else if (named) {
+      const name = decodeURIComponent(named[1]);
+      seen.schemas.add(name);
+      if (request.headers['fetch-schema'] !== 'fields') seen.withoutFields++;
+      json(answer(model.schemas.find((schema) => schema.name === name)));
+    } else {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const address = `http://127.0.0.1:${server.address().port}/nuxeo`;
+  const env = {
+    ...process.env,
+    NUXEO_USER: credentials.username,
+    NUXEO_PASS: credentials.password,
+  };
+  /** A command, run without blocking this process, which serves the model meanwhile. */
+  const command = (argv, environment) =>
+    new Promise((done) => {
+      const child = spawn(process.execPath, argv, { env: environment });
+      let output = '';
+      child.stdout.on('data', (chunk) => (output += chunk));
+      child.stderr.on('data', (chunk) => (output += chunk));
+      child.on('close', (code) => done({ status: code, output }));
+    });
+  const live = (directory, out, environment = env) =>
+    command([SCRIPT, directory, '--out', out, '--model-server', address], environment);
+  const bareEnv = () => {
+    const bare = { ...process.env };
+    delete bare.NUXEO_USER;
+    delete bare.NUXEO_PASS;
+    return bare;
+  };
+  const scratch = mkdtempSync(join(tmpdir(), 'app-package-live-'));
+  try {
+    positive++;
+    let result = await live(DEMO, join(scratch, 'sound'));
+    if (result.status !== 0 || !result.output.includes(`read from ${address}`))
+      failures.push(
+        `the demo, held to the model read live: exit ${result.status}\n${result.output}`,
+      );
+    if (seen.unauthorised > 0)
+      failures.push(`${seen.unauthorised} reads came without the credentials`);
+    if (seen.withoutFields > 0)
+      failures.push(`${seen.withoutFields} schemas were read without fetch-schema: fields`);
+    if (seen.schemas.size !== model.schemas.length)
+      failures.push(
+        `${seen.schemas.size} of ${model.schemas.length} schemas were read on their own`,
+      );
+
+    // The server says the received date is a text: the layout's date widget is refused.
+    negative++;
+    answer = (schema) =>
+      schema.name === 'claim'
+        ? { ...schema, fields: { ...schema.fields, received: { type: 'string' } } }
+        : schema;
+    result = await live(DEMO, join(scratch, 'string'));
+    const reason =
+      'cards[0].fields[3].widget: the widget "date" does not show "claim:received", a string property: it takes date [parameter]';
+    if (
+      result.status !== 1 ||
+      !result.output.includes('step 2 refused it') ||
+      !result.output.includes(reason)
+    )
+      failures.push(
+        `a model read live whose property the widget does not fit: exit ${result.status}\n${result.output}`,
+      );
+    if (existsSync(join(scratch, 'string', ZIP)))
+      failures.push('a model read live left a zip it refused');
+
+    // A server that refuses a read stops the run, with exit 2, and the zip an earlier run left is
+    // removed, as a refusal removes it.
+    negative++;
+    answer = (schema) => schema;
+    status = 500;
+    mkdirSync(join(scratch, 'failing'), { recursive: true });
+    writeFileSync(join(scratch, 'failing', ZIP), 'an earlier run left this');
+    result = await live(DEMO, join(scratch, 'failing'));
+    if (result.status !== 2 || !result.output.includes('answered 500, not 200'))
+      failures.push(`a server that answers 500 exits ${result.status}, not 2\n${result.output}`);
+    if (existsSync(join(scratch, 'failing', ZIP)))
+      failures.push('a failed model read left the zip an earlier run wrote');
+    status = 200;
+
+    // The export: the model the server answers, written to a file the pipeline reads.
+    positive++;
+    const exported = join(scratch, 'exported.json');
+    const exporting = await command([EXPORT, '--server', address, '--out', exported], env);
+    if (exporting.status !== 0 || !existsSync(exported))
+      failures.push(`the export exits ${exporting.status}, with no file\n${exporting.output}`);
+    else {
+      const written = JSON.parse(readFileSync(exported, 'utf8'));
+      if (JSON.stringify(written) !== JSON.stringify(model))
+        failures.push('the exported model is not the one the server answered');
+      const held = run(DEMO, join(scratch, 'exported'), ['--model', exported]);
+      if (held.status !== 0)
+        failures.push(`the demo, held to the exported model: exit ${held.status}`);
+    }
+    for (const [argv, environment, expected] of [
+      [[EXPORT, '--server', address], env, 'usage:'],
+      [
+        [EXPORT, '--server', 'http://nuxeo.invalid/nuxeo', '--out', exported],
+        env,
+        '--server: credentials are sent over HTTPS only',
+      ],
+      [
+        [EXPORT, '--server', address, '--out', exported],
+        bareEnv(),
+        'NUXEO_USER and NUXEO_PASS must both be set',
+      ],
+    ]) {
+      negative++;
+      const { status: code, output } = await command(argv, environment);
+      if (code !== 2 || !output.includes(expected))
+        failures.push(
+          `${argv.slice(1).join(' ')} exports with exit ${code}, not 2 for "${expected}"\n${output}`,
+        );
+    }
+
+    // No credentials in the environment: exit 2, before any read.
+    negative++;
+    const before = seen.unauthorised;
+    result = await live(DEMO, join(scratch, 'bare'), bareEnv());
+    if (
+      result.status !== 2 ||
+      !result.output.includes('NUXEO_USER and NUXEO_PASS must both be set')
+    )
+      failures.push(`no credentials exits ${result.status}, not 2\n${result.output}`);
+    if (seen.unauthorised !== before)
+      failures.push('a run with no credentials still asked the server');
+    if (result.output.includes(credentials.password)) failures.push('a run printed the password');
+  } finally {
+    server.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+})();
 
 if (failures.length > 0) {
   console.error(`app-package selftest: ${failures.length} control(s) did not hold:\n`);

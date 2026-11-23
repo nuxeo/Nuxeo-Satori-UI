@@ -10,6 +10,17 @@
 export { ACTIONS_V2_KEYS, PLACEMENTS, validateActions, type ActionsOptions } from './lib/actions';
 export { APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
 export { type Finding } from './lib/checker';
+export {
+  propertiesOf,
+  propertyTypeOf,
+  readContentModel,
+  type ContentModel,
+  type ContentModelReading,
+  type DocumentTypeModel,
+  type FacetModel,
+  type PropertyModel,
+  type SchemaModel,
+} from './lib/content-model';
 export { LABELS_V2_KEYS, validateLabels, validateModuleSettings } from './lib/labels';
 export {
   LAYOUT_MODES,

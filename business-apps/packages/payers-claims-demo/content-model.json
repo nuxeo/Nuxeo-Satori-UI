@@ -1,0 +1,222 @@
+{
+  "doctypes": {
+    "Claim": {
+      "parent": "Document",
+      "facets": ["Versionable"],
+      "schemas": ["common", "dublincore", "uid", "claim"]
+    }
+  },
+  "facets": [
+    {
+      "name": "Versionable",
+      "schemas": [
+        {
+          "name": "uid",
+          "@prefix": "",
+          "fields": {
+            "major_version": "long",
+            "minor_version": "long",
+            "uid": "string"
+          }
+        }
+      ]
+    }
+  ],
+  "schemas": [
+    {
+      "entity-type": "schema",
+      "name": "claim",
+      "prefix": "claim",
+      "@prefix": "claim",
+      "fields": {
+        "number": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "NotNullConstraint",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "member": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "documentResolver",
+              "parameters": {
+                "store": "id"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "billedAmount": {
+          "type": "double",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "double",
+              "parameters": {}
+            }
+          ]
+        },
+        "received": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "payers_claim_status",
+                "validation": "true"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "lines": {
+          "type": "complex[]",
+          "fields": {
+            "code": "string",
+            "amount": "double",
+            "serviceDate": "date"
+          }
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "common",
+      "fields": {
+        "icon": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "title": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "created": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "modified": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "creator": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "includeGroups": "false",
+                "validation": "false"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "uid",
+      "fields": {
+        "major_version": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "minor_version": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "uid": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

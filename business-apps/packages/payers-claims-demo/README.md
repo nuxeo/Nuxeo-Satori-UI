@@ -15,6 +15,7 @@ fictional data. Phase 0's demo runs on it, and the pipeline's controls
 | `bundle/OSGI-INF/payers-claims-demo-config.xml`           | The component, which contributes the layout                    |
 | `package/package.xml`                                     | The Marketplace package: name, version, and what it depends on |
 | `build.mjs`                                               | Version 1's builder: the generator's, byte for byte            |
+| `content-model.json`                                      | A server's content model with a Claim type, for `--model`      |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No operation button.** Decision 3 is open, so the pipeline refuses every operation.
@@ -23,4 +24,12 @@ fictional data. Phase 0's demo runs on it, and the pipeline's controls
 
 ```bash
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
+```
+
+Held to its content model, which is as fictional as the package and is not in the zip
+([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
+
+```bash
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 \
+  --model business-apps/packages/payers-claims-demo/content-model.json
 ```

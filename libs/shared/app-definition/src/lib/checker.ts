@@ -19,7 +19,7 @@ export interface Finding {
   /**
    * `structure`: not version 2's shape.
    * `unknown`: it names a widget, computation, check, rule, action, module or key nobody
-   * registered, or something the package does not have.
+   * registered, or something the package, or the content model it was given, does not have.
    * `parameter`: a registered ID with parameters it does not take.
    *
    * What the app does with each, file by file, is in app-definition-v2.md, section 10.
