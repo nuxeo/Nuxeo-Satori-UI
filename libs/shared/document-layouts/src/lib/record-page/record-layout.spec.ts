@@ -29,8 +29,11 @@ const known = [
   'acme.rules.isVip',
 ];
 
+/** The row actions slot's: the platform's, and a customer's own registered in Layer 2 code. */
+const rowActions = ['app.rowActions.download', 'acme.rowActions.flag'];
+
 function read(content: Record<string, unknown>): RecordLayoutFile {
-  const file = readRecordLayout(content, known);
+  const file = readRecordLayout(content, { rules: known, rowActions });
   if ('invalid' in file) throw new Error(`refused: ${file.invalid}`);
   return file;
 }
@@ -106,6 +109,87 @@ describe('readRecordLayout', () => {
     ]);
   });
 
+  it('reads a card of related records: its page provider, parameters, columns, order and actions', () => {
+    const file = read({
+      version: 2,
+      columns: 2,
+      cards: [
+        {
+          id: 'claims',
+          labelKey: 'payers.member.claims',
+          span: 2,
+          related: {
+            pageProvider: 'member_claims',
+            parameters: [{ field: 'ecm:uuid' }, 'open'],
+            columns: [
+              'claim:number',
+              {
+                field: 'claim:billedAmount',
+                label: 'Billed',
+                widget: 'currency',
+                parameters: { currency: 'USD' },
+              },
+            ],
+            sort: [{ field: 'claim:serviceDate', order: 'desc' }, { field: 'dc:title' }],
+            pageSize: 25,
+            rowActions: ['app.rowActions.download'],
+          },
+        },
+      ],
+    });
+    expect(file.problems).toEqual([]);
+    const [card] = file.cards;
+    expect(card).toMatchObject({ id: 'claims', place: 'cards[0]', span: 2, fields: [] });
+    expect(card.label).toEqual({ keys: ['payers.member.claims'], fallback: null });
+    expect(card.related).toEqual({
+      pageProvider: 'member_claims',
+      parameters: [{ field: 'ecm:uuid' }, 'open'],
+      columns: [
+        {
+          kind: 'property',
+          place: 'cards[0].related.columns[0]',
+          xpath: 'claim:number',
+          label: { keys: ['layout.field.claim:number'], fallback: 'Number' },
+          widget: null,
+          parameters: {},
+          visibleWhen: null,
+        },
+        {
+          kind: 'property',
+          place: 'cards[0].related.columns[1]',
+          xpath: 'claim:billedAmount',
+          label: {
+            literal: 'Billed',
+            keys: ['layout.field.claim:billedAmount'],
+            fallback: 'Billed amount',
+          },
+          widget: 'currency',
+          parameters: { currency: 'USD' },
+          visibleWhen: null,
+        },
+      ],
+      sort: [
+        { field: 'claim:serviceDate', order: 'desc' },
+        { field: 'dc:title', order: 'asc' },
+      ],
+      pageSize: 25,
+      rowActions: ['app.rowActions.download'],
+    });
+  });
+
+  it('shows ten records on a page when the file gives no page size', () => {
+    const file = read({
+      version: 2,
+      cards: [{ id: 'claims', related: { pageProvider: 'member_claims', columns: ['dc:title'] } }],
+    });
+    expect(file.cards[0].related).toMatchObject({
+      parameters: [],
+      sort: [],
+      pageSize: 10,
+      rowActions: [],
+    });
+  });
+
   it('defaults a card to one column of one', () => {
     const file = read({ version: 2, cards: [{ id: 'a', fields: ['dc:title'] }] });
     expect(file.columns).toBe(1);
@@ -125,7 +209,7 @@ describe('readRecordLayout', () => {
 
   describe('refuses a file with a structural error, as layout-v2.md section 8 says', () => {
     it('a version 1 file, which has no view mode', () => {
-      expect(readRecordLayout({ version: 1, cards: [] }, known)).toEqual({
+      expect(readRecordLayout({ version: 1, cards: [] }, { rules: known })).toEqual({
         invalid: 'version: version must be 2, not 1',
       });
     });
@@ -134,7 +218,7 @@ describe('readRecordLayout', () => {
       // Two cards with no id: two structural findings, of which the first is named.
       const refused = readRecordLayout(
         { version: 2, cards: [{ fields: ['dc:title'] }, { fields: ['dc:title'] }] },
-        known,
+        { rules: known },
       );
       expect(refused).toEqual({
         invalid: expect.stringMatching(/^cards\[0\]\.id: .* \(and 1 more\)$/),
@@ -591,7 +675,7 @@ describe('readRecordLayout', () => {
               },
             ],
           },
-          known,
+          { rules: known, rowActions },
         ),
       ).toEqual({
         invalid: `${columns}[1].computed.parameters: parameters must be a list`,
@@ -624,18 +708,168 @@ describe('readRecordLayout', () => {
       );
     });
 
-    it('a card of related records, which this build does not draw yet', () => {
+    it('a column of related records naming a widget nobody registered, and only that column', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: ['claim:number', { field: 'claim:amount', widget: 'sparkline' }],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.columns.map((column) => column.xpath)).toEqual([
+        'claim:number',
+      ]);
+      expect(file.problems).toEqual([
+        'cards[0].related.columns[1].widget: the widget "sparkline" is not registered; cards[0].related.columns[1] left out',
+      ]);
+    });
+
+    it('a column of related records shown by a rule this build does not register', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: [
+                'claim:number',
+                { field: 'claim:amount', visibleWhen: 'app.rules.isNotBusy' },
+              ],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.columns).toHaveLength(1);
+      expect(file.problems).toEqual([
+        'cards[0].related.columns[1] names the rule "app.rules.isNotBusy", which this build does not register; left out',
+      ]);
+    });
+
+    it('a computed column of related records, which this build does not draw yet', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: [
+                'claim:number',
+                { id: 'label', computed: { type: 'core.template', parameters: ['{dc:title}'] } },
+              ],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.columns).toHaveLength(1);
+      expect(file.problems).toEqual([
+        'cards[0].related.columns[1] is a computed column, which this build does not draw yet; that column left out',
+      ]);
+    });
+
+    it('a second column of related records showing the same property', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: ['claim:number', { field: 'claim:number', label: 'Again' }],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.columns.map((column) => column.label.literal)).toEqual([
+        undefined,
+      ]);
+      expect(file.problems).toEqual([
+        'cards[0].related.columns[1] shows claim:number again; that column left out',
+      ]);
+    });
+
+    it("a table in a related list's cell, which this build does not draw yet", () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: [
+                'claim:number',
+                {
+                  field: 'claim:lines',
+                  widget: 'table',
+                  parameters: {
+                    columns: [
+                      'line:code',
+                      { field: 'line:cost', visibleWhen: 'app.rules.canWrite' },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.columns.map((column) => column.xpath)).toEqual([
+        'claim:number',
+      ]);
+      expect(file.problems).toEqual([
+        "cards[0].related.columns[1] is a table in a list's cell, which this build does not draw yet; that column left out",
+      ]);
+    });
+
+    it("a row action nobody registered, keeping a customer's own", () => {
+      const file = read({
+        version: 2,
+        cards: [
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: ['claim:number'],
+              rowActions: [
+                'app.rowActions.download',
+                'acme.rowActions.nope',
+                'acme.rowActions.flag',
+              ],
+            },
+          },
+        ],
+      });
+      expect(file.cards[0].related?.rowActions).toEqual([
+        'app.rowActions.download',
+        'acme.rowActions.flag',
+      ]);
+      expect(file.problems).toEqual([
+        'cards[0].related.rowActions[1]: the row action "acme.rowActions.nope" is not registered; cards[0].related.rowActions[1] left out',
+      ]);
+    });
+
+    it('a card of related records left with no column', () => {
       const file = read({
         version: 2,
         cards: [
           { id: 'a', fields: ['dc:title'] },
-          { id: 'claims', related: { pageProvider: 'member_claims', columns: ['dc:title'] } },
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              columns: [{ field: 'claim:amount', widget: 'sparkline' }],
+            },
+          },
         ],
       });
       expect(file.cards.map((card) => card.id)).toEqual(['a']);
-      expect(file.problems).toEqual([
-        'cards[1] lists related records, which this build does not draw yet; left out',
-      ]);
+      expect(file.problems).toContain('cards[1] has no column this build can show; left out');
     });
 
     it('a card left with no field, and a tab left with no card', () => {
@@ -689,7 +923,11 @@ describe('entryOf', () => {
     // A widget's own lists are not the file's fields: the finding is about the field.
     ['cards[0].fields[1].parameters.columns[0].widget', 'cards[0].fields[1]'],
     ['cards[0].fields[1].parameters.fields[0]', 'cards[0].fields[1]'],
-    ['cards[0].related.columns[1].widget', 'cards[0]'],
+    // A list's column and row action are entries of their own, as a field is.
+    ['cards[0].related.columns[1].widget', 'cards[0].related.columns[1]'],
+    ['tabs[1].cards[0].related.rowActions[2]', 'tabs[1].cards[0].related.rowActions[2]'],
+    ['cards[0].related.sort[0].field', 'cards[0]'],
+    ['cards[0].related.pageProvider', 'cards[0]'],
   ])('%s is about %s', (path, entry) => {
     expect(entryOf(path)).toBe(entry);
   });

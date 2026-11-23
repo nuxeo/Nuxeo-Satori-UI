@@ -51,6 +51,13 @@ server reads the name in any letter case, loads only the last of a repeated head
 above the manifest's first blank line, so `build.mjs` refuses a manifest with a second one there,
 another spelling, or none there at all, rather than check components the server would not load.
 
+Keep every line of the manifest a header — a name of 1 to 70 letters, digits, `-` and `_`, then
+`: ` and the value — or a continuation of the one above it, which starts with a space. The server
+reads the manifest with Java's `java.util.jar.Manifest`, which refuses the whole file at any other
+line and takes a blank line as the end of a section, so it expects `Name: ` after a blank line.
+`build.mjs` refuses a manifest Java would refuse, quoting the line, because the server would read
+none of its headers.
+
 The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
 wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
 Asset size limits apply to both source and packaged bytes, including manifest normalization.

@@ -1,0 +1,27 @@
+{
+  "name": "shared-home",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/home/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:shared", "scope:engine", "type:ui"],
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the home engine, which draws an app's home.json (app-definition-v2.md, section 10). An engine is shared code, so it carries scope:shared as well as scope:engine, and imports only shared code.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the proposal whose home example a spec draws: without it an edit to the example would replay a cached pass.",
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/docs/business-apps/app-definition-v2.md"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/shared/home"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

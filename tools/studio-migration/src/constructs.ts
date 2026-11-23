@@ -17,6 +17,8 @@ export type ConstructKind =
   | 'search'
   | 'search-field'
   | 'search-column'
+  | 'search-view'
+  | 'condition'
   | 'slot-contribution'
   | 'custom-code'
   | 'script'
@@ -29,6 +31,8 @@ export const COUNTED_KINDS: readonly ConstructKind[] = [
   'layout-field',
   'search-field',
   'search-column',
+  'search-view',
+  'condition',
   'slot-contribution',
   'script',
   'dashboard-card',
@@ -44,6 +48,8 @@ export interface Construct {
   readonly file: string;
   /** What it is, for people. */
   readonly label: string;
+  /** For a field or a column: the property it shows, as `<prefix>:<name>`, or the parameter it fills. */
+  readonly property?: string;
 }
 
 /** Files whose content is read construct by construct. A file of another kind is one construct. */
@@ -60,8 +66,20 @@ const CONTAINERS: ReadonlySet<FileKind> = new Set<FileKind>([
 
 export function constructsOf(inventory: Inventory): Construct[] {
   const constructs: Construct[] = [];
-  const add = (kind: ConstructKind, file: string, key: string, label: string): void => {
-    constructs.push({ id: `${kind}:${file}#${key}`, kind, file, label });
+  const add = (
+    kind: ConstructKind,
+    file: string,
+    key: string,
+    label: string,
+    property?: string | null,
+  ): void => {
+    constructs.push({
+      id: `${kind}:${file}#${key}`,
+      kind,
+      file,
+      label,
+      ...(property ? { property } : {}),
+    });
   };
 
   for (const layout of inventory.layouts) {
@@ -77,6 +95,7 @@ export function constructsOf(inventory: Inventory): Construct[] {
         layout.path,
         String(index + 1),
         fieldLabel(field.binding, field.label, field.element),
+        field.binding,
       ),
     );
   }
@@ -93,11 +112,29 @@ export function constructsOf(inventory: Inventory): Construct[] {
         search.path,
         String(index + 1),
         fieldLabel(field.binding, field.label, field.element),
+        field.binding,
       ),
     );
-    for (let index = 0; index < search.columns; index++) {
-      add('search-column', search.path, String(index + 1), `column ${index + 1}`);
-    }
+    search.columnDetails.forEach((column, index) =>
+      add(
+        'search-column',
+        search.path,
+        String(index + 1),
+        `column ${index + 1}${column.field ? `, ${column.field}` : ''}`,
+        column.field,
+      ),
+    );
+    search.views.forEach((view, index) =>
+      add('search-view', search.path, String(index + 1), `the ${view} view`),
+    );
+  }
+  for (const condition of inventory.conditions) {
+    add(
+      'condition',
+      condition.path,
+      String(condition.index + 1),
+      `a ${condition.element === 'template' ? 'dom-if' : condition.element} condition`,
+    );
   }
   for (const [path, contributions] of groupBy(inventory.slotContributions, (c) => c.path)) {
     contributions.forEach((contribution, index) =>

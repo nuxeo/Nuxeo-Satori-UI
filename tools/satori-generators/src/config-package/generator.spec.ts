@@ -1196,6 +1196,136 @@ describe('the generated build.mjs', () => {
     });
   });
 
+  // The server reads the manifest with `java.util.jar.Manifest`, which refuses the whole of it at
+  // the first line it cannot read. The bundle then has no headers, so the package installs and
+  // configures nothing. Every manifest refused below but one built before this check and passed
+  // verify-package-zip.mjs, and JDK 21's `new JarFile(jar).getManifest()` threw on the jar it built.
+  // The one, a blank first line, was refused already for leaving the components below it, and Java
+  // refuses its packaged bytes too. Every manifest built below, Java read. What is checked is the
+  // manifest as packaged, the unfolded source refolded at 72 bytes, because that is what Java reads.
+  describe('refuses a manifest Java cannot read, and builds one it can', () => {
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const configComponent = 'OSGI-INF/acme-config-config.xml';
+    const editManifest = (edit: (manifest: string) => string) =>
+      write(manifestPath, edit(readFileSync(join(dir, manifestPath), 'utf8')));
+    const refused =
+      'Java refuses the whole manifest, and the server would read none of its headers';
+    const notAHeader = `, which is not a header: a name of 1 to 70 letters, digits, "-" and "_", then ": " and the value; ${refused}`;
+    /** How a line is quoted: escaped as JSON, and cut short after 59 characters. */
+    const quoted = (line: string) =>
+      JSON.stringify([...line].length > 60 ? `${[...line].slice(0, 59).join('')}…` : line);
+
+    it('refuses a blank line in the main section followed by a header, with no Name: to begin a section', async () => {
+      await generate();
+      editManifest((manifest) => `${manifest}\nBundle-Description: x\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        `bundle/META-INF/MANIFEST.MF: has "Bundle-Description: x" after a blank line, which ends a section, and the next section must begin with "Name: "; ${refused}. Remove the blank line, or begin the section with Name:`,
+      );
+    });
+
+    it.each([
+      [
+        'after a Name: section',
+        (m: string) => `${m}\nName: a\nX-Note: b\n\nX-Other: c\n`,
+        'X-Other: c',
+      ],
+      ['that begins with Name: and no space', (m: string) => `${m}\nName:a\n`, 'Name:a'],
+      [
+        'that begins the manifest, after a blank first line',
+        (m: string) => `\n${m}`,
+        'Manifest-Version: 1.0',
+      ],
+    ])('refuses a section %s', async (_case, edit, line) => {
+      await generate();
+      editManifest(edit);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        `bundle/META-INF/MANIFEST.MF: has ${quoted(line)} after a blank line, which ends a section`,
+      );
+    });
+
+    it.each([
+      ['a space in its name', 'Bundle Description: x'],
+      ['a character Java does not allow in its name', 'X.Note: x'],
+      ['a letter outside ASCII in its name', 'Bündle: x'],
+      // Folded at 72 bytes, the colon ends the first line and its space begins the next, so Java
+      // and the build refuse it for that, whatever the limit. The verifier's controls pin the 70.
+      ['a name of 71 characters, one over Java’s limit', `${'X'.repeat(71)}: x`],
+      ['no space after its colon', 'Bundle-Description:x'],
+      ['a tab after its colon', 'Bundle-Description:\tx'],
+      ['no colon', 'Bundle-Description x'],
+      ['no name before its colon', ': x'],
+      ['a space before its colon', 'Bundle-Description : x'],
+      ['a byte-order mark before its name, which Java reads as part of it', '\uFEFFBundle-X: x'],
+    ])('refuses a header with %s', async (_case, header) => {
+      await generate();
+      editManifest((manifest) => `${manifest}${header}\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        `bundle/META-INF/MANIFEST.MF: has ${quoted(header).replace('\uFEFF', '\\ufeff')}${notAHeader}`,
+      );
+    });
+
+    it.each([
+      ['a space', (m: string) => ` ${m}`, ' Manifest-Version: 1.0'],
+      ['a line of nothing but a space', (m: string) => ` \n${m}`, ' '],
+    ])(
+      'refuses a manifest whose first line is %s, continuing no header',
+      async (_case, edit, line) => {
+        await generate();
+        editManifest(edit);
+        const { status, output } = build();
+        expect(status).toBe(1);
+        expect(output).toContain(
+          `bundle/META-INF/MANIFEST.MF: begins with ${quoted(line)}, which starts with a space and so continues a header above it, and there is none; ${refused}`,
+        );
+      },
+    );
+
+    it.each([
+      [
+        'a Name: section after a blank line',
+        (m: string) => `${m}\nName: ${configComponent}\nX-Note: a\n`,
+      ],
+      [
+        'sections after any number of blank lines, Name: in any letter case',
+        (m: string) => `${m}\n\n\nname: a\nX-Note: b\n\nNAME: \n`,
+      ],
+      ['a name of 70 characters, the most Java reads', (m: string) => `${m}${'X'.repeat(70)}: x\n`],
+      ['a name of letters, digits, "-" and "_"', (m: string) => `${m}X_Note-2: x\n`],
+      [
+        'values empty, holding a colon, or starting with a space',
+        (m: string) => `${m}X-Empty: \nX-Url: http://a:b\nX-Spaced:  x\n`,
+      ],
+      [
+        'a header wrapped onto a continuation line',
+        (m: string) =>
+          m.replace(
+            `Nuxeo-Component: ${configComponent}`,
+            'Nuxeo-Component: OSGI-INF/acme-config-co\n nfig.xml',
+          ),
+      ],
+      // Read as written, this line continues no header. Unfolding joins it to the blank line above,
+      // so the packaged manifest has neither, and Java reads that.
+      ['a line after a blank one that starts with a space', (m: string) => `${m}\n X-Note: a\n`],
+      // Java's 512-byte limit is on the packaged line, and the packaged line is at most 72.
+      ['a source line over 512 bytes', (m: string) => `${m}X-Long: ${'v'.repeat(600)}\n`],
+      ['lines ended by CR alone', (m: string) => m.replaceAll('\n', '\r')],
+      // Java ignores what follows the last line break, but the packaged manifest ends every line.
+      ['no line break after the last line', (m: string) => m.replace(/\n$/, '')],
+    ])('builds a manifest with %s', async (_case, edit) => {
+      await generate();
+      editManifest(edit);
+      const { status, output } = build();
+      expect(output).not.toContain('Java refuses');
+      expect(status).toBe(0);
+    });
+  });
+
   it.each([
     [
       'an unclosed element',

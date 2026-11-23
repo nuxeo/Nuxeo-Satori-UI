@@ -2,21 +2,45 @@
  * The verification harness: the ten checks of docs/business-apps/studio-migration.md, section 6,
  * run over a package and its conversion.
  *
- * Phase M0 runs the three that need no server: 1 (nothing dropped), 4 (labels) and 8 (theme).
- * The other seven say they did not run, and why. None of them passes for not having run. A
- * migration is ready only when all ten pass, nothing is pending, and every reported item has an
- * owner, so an M0 run is never ready, and says what stands in the way.
+ * Phase M1 runs nine of them. Five run in full without a server: 1 (nothing dropped), 2
+ * (fields), 4 (labels), 8 (theme) and 10 (package). Four have a half that needs the migration
+ * server, with Web UI and the new app on it: 3 (model), 5 (conditions), 6 (what people see) and
+ * 7 (what the server is asked). Their other half runs here, and each says what it did not run. A
+ * check whose findings are empty but which did not run whole is `partial`, never a pass. Check 9
+ * waits for M3's plugins.
+ *
+ * A migration is ready only when all ten pass, nothing is pending, nothing proposed waits for a
+ * decision, and every reported item has an owner. So an M1 run is never ready, and says what
+ * stands in the way.
  */
 import { mapThemeProperty, type Catalogue } from './catalogue';
+import { checkConditions } from './check-conditions';
+import { checkFields } from './check-fields';
+import { checkModel } from './check-model';
+import { checkPackage } from './check-package';
+import { checkRequests } from './check-requests';
+import { checkSeen } from './check-seen';
 import { contrastRatio, parseColour } from './colour';
 import { constructsOf, countsOf } from './constructs';
-import { EXPLAINED, OUTCOMES, readCatalogue, type Conversion, type ReportEntry } from './convert';
+import {
+  EXPLAINED,
+  OUTCOMES,
+  labelsOf,
+  platformVersion,
+  readCatalogue,
+  type Conversion,
+  type ReportEntry,
+} from './convert';
 import type { Inventory } from './inventory';
 import { secondCount } from './second-count';
 import type { StudioPackage } from './studio-package';
 import { resolveThemeProperty } from './theme';
 
-export type CheckStatus = 'pass' | 'fail' | 'not run';
+/**
+ * `partial`: the part that needs no server found nothing, and the rest did not run. It is not a
+ * pass, and it blocks readiness as a check that did not run does.
+ */
+export type CheckStatus = 'pass' | 'fail' | 'partial' | 'not run';
 
 export interface CheckResult {
   readonly number: number;
@@ -24,8 +48,14 @@ export interface CheckResult {
   readonly status: CheckStatus;
   /** What failed, one line each. Empty for a pass. */
   readonly findings: readonly string[];
-  /** For a check that did not run: why, and which phase runs it. */
+  /** For a check that did not run, whole or in part: what did not, why, and what runs it. */
   readonly reason?: string;
+}
+
+/** What one check found, and the part of it that did not run, if any. */
+export interface CheckOutcome {
+  readonly findings: readonly string[];
+  readonly rest?: string;
 }
 
 export interface HarnessResult {
@@ -40,6 +70,15 @@ export interface HarnessInput {
   readonly inventory: Inventory;
   readonly catalogue: Catalogue;
   readonly conversion: Conversion;
+  /** The deployment's allow-list of operations, which check 10 holds actions to. */
+  readonly allowList?: ReadonlySet<string>;
+  /**
+   * True when no allow-list was given, so `allowList` is the one the conversion's own report
+   * recorded. Check 10 then cannot speak for the deployment's, and says so.
+   */
+  readonly allowListFromReport?: boolean;
+  /** The platform version `app.json`'s range must hold; the platform's own when left out. */
+  readonly platformVersion?: string;
 }
 
 /** WCAG 2.1 AA, success criterion 1.4.3: the least contrast for text. */
@@ -55,33 +94,44 @@ export const CONTRAST_PAIRS: readonly (readonly [string, string])[] = [
   ['--mat-sys-error', '--mat-sys-surface'],
 ];
 
-const NOT_RUN: Readonly<Record<number, readonly [string, string]>> = {
-  2: [
-    'Fields',
-    'It compares converted layouts, which need layout version 2 (phase 1) and the converter of M1',
-  ],
-  3: ['Model', 'It reads the migration server, which M1 sets up'],
-  5: ['Conditions', 'It runs truth tables in Web UI on the migration server, in M2'],
-  6: ['What people see', 'It opens both apps on the migration server, in M1'],
-  7: ['What the server is asked', 'It records both apps’ requests on the migration server, in M1'],
-  9: ['Plugins', 'It tests the plugins that replace custom elements, in M3'],
-  10: [
-    'Package',
-    "It runs the package pipeline's checks, which come with the app definition schemas",
-  ],
-};
+const CHECKS: readonly (readonly [
+  number,
+  string,
+  ((input: HarnessInput) => CheckOutcome) | string,
+])[] = [
+  [1, 'Nothing dropped', (input) => ({ findings: nothingDropped(input) })],
+  [2, 'Fields', checkFields],
+  [3, 'Model', checkModel],
+  [4, 'Labels', (input) => ({ findings: labels(input) })],
+  [5, 'Conditions', checkConditions],
+  [6, 'What people see', checkSeen],
+  [7, 'What the server is asked', checkRequests],
+  [8, 'Theme', (input) => ({ findings: theme(input) })],
+  [9, 'Plugins', 'It tests the plugins that replace custom elements, in M3'],
+  [10, 'Package', checkPackage],
+];
 
-export function runHarness(input: HarnessInput): HarnessResult {
-  const checks: CheckResult[] = [];
-  for (let number = 1; number <= 10; number++) {
-    if (number === 1) checks.push(result(1, 'Nothing dropped', nothingDropped(input)));
-    else if (number === 4) checks.push(result(4, 'Labels', labels(input)));
-    else if (number === 8) checks.push(result(8, 'Theme', theme(input)));
-    else {
-      const [name, reason] = NOT_RUN[number];
-      checks.push({ number, name, status: 'not run', findings: [], reason });
-    }
-  }
+export function runHarness(given: HarnessInput): HarnessResult {
+  const input: HarnessInput = {
+    ...given,
+    allowList: given.allowList ?? new Set(given.conversion.report.allowList ?? []),
+    allowListFromReport: given.allowList === undefined,
+    platformVersion: given.platformVersion ?? platformVersion(),
+  };
+  const checks: CheckResult[] = CHECKS.map(([number, name, run]) => {
+    if (typeof run === 'string')
+      return { number, name, status: 'not run', findings: [], reason: run };
+    const outcome = run(input);
+    const status: CheckStatus =
+      outcome.findings.length > 0 ? 'fail' : outcome.rest ? 'partial' : 'pass';
+    return {
+      number,
+      name,
+      status,
+      findings: outcome.findings,
+      ...(outcome.rest ? { reason: outcome.rest } : {}),
+    };
+  });
 
   const entries = input.conversion.report.constructs ?? [];
   const pending = entries.filter((entry) => entry.outcome === 'pending').length;
@@ -92,6 +142,9 @@ export function runHarness(input: HarnessInput): HarnessResult {
       .filter((check) => check.status === 'fail')
       .map((check) => `check ${check.number} failed`),
     ...checks
+      .filter((check) => check.status === 'partial')
+      .map((check) => `check ${check.number} ran only in part`),
+    ...checks
       .filter((check) => check.status === 'not run')
       .map((check) => `check ${check.number} did not run`),
     ...(pending ? [`${pending} constructs are pending a later phase`] : []),
@@ -99,10 +152,6 @@ export function runHarness(input: HarnessInput): HarnessResult {
     ...(unowned ? [`${unowned} reported items have no owner`] : []),
   ];
   return { checks, ready: blockers.length === 0, blockers };
-}
-
-function result(number: number, name: string, findings: string[]): CheckResult {
-  return { number, name, status: findings.length === 0 ? 'pass' : 'fail', findings };
 }
 
 /**
@@ -162,40 +211,53 @@ export function nothingDropped({ pkg, inventory, conversion }: HarnessInput): st
   return findings;
 }
 
-/** Check 4. Every translation of the package is in the conversion, in its language, word for word. */
+/**
+ * Check 4. Every translation of the package is in the conversion's labels file of its language,
+ * word for word, and nothing else is. One the report reports, with its reason, is accounted for:
+ * the labels file refuses a key it cannot hold, or an empty text.
+ */
 export function labels({ pkg, inventory, conversion }: HarnessInput): string[] {
   const findings: string[] = [];
+  const reported = new Set(
+    (conversion.report.constructs ?? [])
+      .filter((entry) => entry.outcome === 'reported' && entry.note?.trim())
+      .map((entry) => entry.id),
+  );
   const expected = new Map<string, Map<string, unknown>>();
   for (const translations of inventory.translations) {
     const texts = readCatalogue(pkg, translations.path);
     const locale = expected.get(translations.locale) ?? new Map<string, unknown>();
-    for (const key of translations.keys)
+    for (const key of translations.keys) {
+      if (reported.has(`translation:${translations.path}#${key}`)) continue;
       locale.set(key, Object.hasOwn(texts, key) ? texts[key] : undefined);
+    }
     expected.set(translations.locale, locale);
   }
+  const converted = labelsOf(conversion);
   for (const [locale, texts] of expected) {
-    const converted = conversion.labels[locale];
-    if (!converted) {
-      findings.push(`labels/${locale}.json is missing, with all ${texts.size} of its translations`);
+    const file = `app/labels/${locale}.json`;
+    const ours = Object.hasOwn(converted, locale) ? converted[locale] : undefined;
+    if (!ours) {
+      if (texts.size > 0)
+        findings.push(`${file} is missing, with all ${texts.size} of its translations`);
       continue;
     }
     for (const [key, text] of texts) {
       if (typeof text !== 'string') continue;
-      if (!Object.hasOwn(converted, key)) findings.push(`labels/${locale}.json: ${key} is missing`);
-      else if (converted[key] !== text) {
+      if (!Object.hasOwn(ours, key)) findings.push(`${file}: ${key} is missing`);
+      else if (ours[key] !== text) {
         findings.push(
-          `labels/${locale}.json: ${key} reads ${JSON.stringify(converted[key])}, not ${JSON.stringify(text)}`,
+          `${file}: ${key} reads ${JSON.stringify(ours[key])}, not ${JSON.stringify(text)}`,
         );
       }
     }
-    for (const key of Object.keys(converted)) {
-      if (!texts.has(key))
-        findings.push(`labels/${locale}.json: ${key} is not a translation of the package`);
+    for (const key of Object.keys(ours)) {
+      if (!texts.has(key)) findings.push(`${file}: ${key} is not a translation of the package`);
     }
   }
-  for (const locale of Object.keys(conversion.labels)) {
+  for (const locale of Object.keys(converted)) {
     if (!expected.has(locale))
-      findings.push(`labels/${locale}.json: the package has no ${locale} translations`);
+      findings.push(`app/labels/${locale}.json: the package has no ${locale} translations`);
   }
   return findings;
 }

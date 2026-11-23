@@ -26,7 +26,7 @@ change materially.
 - RFC risk **R8**: _"Too few addressable IDs in Layer 1 would cap customisation and push work
   into Layer 2, undermining the maintenance economics."_
 - The RFC's own mitigation was to _"fix the addressable surface explicitly before Phase 2
-  begins, informed by real customer requests."_ **Phase 2 completed without that input.**
+  begins, informed by real customer requests."_ **Phase 2 was signed off without that input.**
 - Reinforcing evidence: **4 of 8 slots are reserved** (`routes`, `toolbar`, `contextMenu`,
   `tabs`) — read by nothing. The addressable surface is narrower than the slot list implies.
 
@@ -40,16 +40,22 @@ benefit claim in the product documentation is mechanical rather than observed.
 
 **Mitigation:** a design partner, framed as the Beta ask.
 
-### C3 · Accessibility — REOPENED 2026-09-23
+### C3 · Accessibility — NOT MET as of 2026-11-23
 
-**It was closed on 2026-08-24 and is open again.** Five consecutive `phase-6-a11y` captures from 2026-09-15 to 2026-09-16 fail 3 `button-name` checks (browse, browse cards, column panel). The last passing capture is `2026-08-24T14-40-16` (27/27). Undiagnosed, so
-this is unverified rather than known false.
+**It was closed on 2026-08-24, reopened on 2026-09-23, and is not met as of 2026-11-23.**
+`phase-6-a11y/2026-11-23T08-09-11`, captured on `main`, fails 15 of 35 checks. Fourteen are one
+WCAG 2.5.3 (Label in Name, Level A) defect that fails on every screen. With the navigation rail
+collapsed, the user-profile control shows only the signed-in user's avatar initials, while its
+accessible name is the full display name, which does not contain them. A speech-input user who
+says what they see does not reach the control. The fifteenth is a 404 from the local environment,
+not an accessibility finding. The September `button-name` failures do not reproduce.
 
-**A likely place to start, from the paragraph below:** the original `button-name` was caused by a
-translation key resolving to the empty string, and the current failures are the same rule class.
-`apps/nuxeo-ui/src/app/i18n/en-fallback.ts` documents that trap and the invariant it enforces —
-every key bound to an accessible name must be present there. Worth checking whether a key reaching
-browse, the card view or the column panel now resolves to empty or to a raw key.
+**Where it comes from:** the control's content is ours. The shell projects the avatar into the
+upstream navigation component's profile button, which takes its accessible name from a label
+that is hidden while the rail is collapsed. The initials arrived on 2026-10-26 (NXSAT-673). The
+35/35 capture of 2026-10-22 predates them, and it ran on an axe-core release that does not run
+this rule under the WCAG tags. The capture's install pins no version, and the newer release that
+it now resolves runs the rule.
 
 What was true of the August capture: **WCAG 2.1 AA was met on the fifteen cases scanned.** Seven
 rule classes and 77 nodes fixed, and `KNOWN_VIOLATIONS` empty, so that verdict was unconditional
@@ -61,9 +67,9 @@ empty string — deliberately, to suppress a tooltip — and the component binds
 tooltip and the accessible name. An empty accessible name is invisible unless you use a screen
 reader, so it outlived every other kind of review.
 
-**Residual risk, and it is real:** the scan
-covers 8 routes plus view-mode and panel states; **dialogs, the upload flow, dark mode and the
-pre-auth login surface are not covered**. "AA met" is a claim about what was scanned, and an
+**Residual risk, and it is real:** the 2026-11-23 capture makes 14 axe scans over 9 routes,
+including view-mode and panel states. The August pass counted fifteen cases over eight routes.
+**Dialogs, the upload flow, dark mode and the pre-auth login surface are not covered**. "AA met" is a claim about what was scanned, and an
 accessibility-obligated customer will ask for exactly that scope.
 
 **Mitigation:** Phase 6 step 3. Self-contained and demoable.

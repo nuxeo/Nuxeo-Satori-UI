@@ -142,7 +142,12 @@ manifest whose `Nuxeo-Component` the server would read differently. The server r
 only above the manifest's first blank line, in any letter case, keeping the last, so the build
 refuses a second one there, another spelling of it, or components named only below that line. A
 `Nuxeo-Component` in a later `Name:` section belongs to that entry; the server ignores it, and so
-does the build.
+does the build. It also refuses a manifest the server cannot read at all, which leaves the bundle
+no headers. The server reads it with Java's `java.util.jar.Manifest`, which takes every line as a
+header — a name of 1 to 70 letters, digits, `-` and `_`, then `: ` and the value — or as a
+continuation of one, which starts with a space, and takes a blank line as the end of a section, so
+whatever follows a blank line must begin a new section with `Name: `. A blank line among the
+headers is the usual way to break that.
 
 The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
 wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.

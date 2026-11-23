@@ -210,6 +210,16 @@ export default [
               sourceTag: 'type:integration-test',
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:core', 'type:testing'],
             },
+            // A tool under `tools/` that writes or checks configuration packages, such as the
+            // Studio migration (`tools/studio-migration`), reads the app definition's contract
+            // (`libs/shared/app-definition`) to do it. It may use shared code and the core, and
+            // nothing may depend on it: no rule here lists `type:tool`, as none lists
+            // `type:integration-test`. Without this rule a tagged tool could depend on nothing
+            // at all, and an untagged one is refused by `projectWithoutTagsCannotHaveDependencies`.
+            {
+              sourceTag: 'type:tool',
+              onlyDependOnLibsWithTags: ['scope:shared', 'scope:core'],
+            },
             // A customer extension library must see only what a customer sees: the
             // published platform entry points. **This rule cannot enforce that**, and the
             // limitation is worth stating rather than papering over.

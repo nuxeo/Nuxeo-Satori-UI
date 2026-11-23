@@ -39,15 +39,15 @@ fourth ships AI generators and guardrails so that writing the third is cheap.
 
 ## Executive summary
 
-|                     |                                                                                                                                                                                                   |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **What it is**      | A customer-brandable, extensible Angular content UI for Nuxeo, shipped as a marketplace package                                                                                                   |
-| **Who it is for**   | Enterprise Nuxeo customers needing a custom content UI; Nuxeo Professional Services; partners                                                                                                     |
-| **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                     |
-| **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                      |
-| **Maturity**        | Phases 0–5 complete with evidence; Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
-| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
-| **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                            |
+|                     |                                                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What it is**      | A customer-brandable, extensible Angular content UI for Nuxeo, shipped as a marketplace package                                                                                                                                                                                      |
+| **Who it is for**   | Enterprise Nuxeo customers needing a custom content UI; Nuxeo Professional Services; partners                                                                                                                                                                                        |
+| **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                                                                                                        |
+| **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                                                                                                         |
+| **Maturity**        | Phases 0, 4 and 5 complete with evidence, 4 with deviations; 1 and 2 back in progress since 2026-11-02; 3 superseded. Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
+| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                                                                                                       |
+| **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                                                                                                               |
 
 ---
 
@@ -139,17 +139,17 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 ### Not demonstrated
 
-| Gap                                    | Status                                                                                                     |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **A real customer has used it**        | Zero. No customer has installed, configured or extended it                                                 |
-| **The Layers 0/1 coverage assumption** | RFC and plan both flag it as needing validation against real customer requests. **Not verified**           |
-| **Published to a registry**            | `private: true`. Scope decided (`@nuxeo/satori-platform` on Nuxeo Nexus); publishing deliberately deferred |
-| **WCAG 2.1 AA**                        | **Met** on 15 scanned cases (2026-08-24). Not covered: dialogs, upload, dark mode, pre-auth login          |
-| **Coverage bar (>90%)**                | 10 of 11 in-scope projects meet it as of 2026-09-22; `shared-ai-client` short at 15.98% (was "3 of 15")    |
-| **4 of 8 extension slots**             | Reserved — `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing                                  |
-| **`selection` rule context**           | Still empty, so `canWriteSelection` / `canRemoveSelection` answer `false`                                  |
-| **SAST**                               | None. SCA is `npm audit` only                                                                              |
-| **Production observability**           | None wired in                                                                                              |
+| Gap                                    | Status                                                                                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A real customer has used it**        | Zero. No customer has installed, configured or extended it                                                                                               |
+| **The Layers 0/1 coverage assumption** | RFC and plan both flag it as needing validation against real customer requests. **Not verified**                                                         |
+| **Published to a registry**            | `private: true`. Scope decided (`@nuxeo/satori-platform` on Nuxeo Nexus); publishing deliberately deferred                                               |
+| **WCAG 2.1 AA**                        | **Not met** as of 2026-11-23: one 2.5.3 defect on every screen. Met on 15 cases on 2026-08-24. Never covered: dialogs, upload, dark mode, pre-auth login |
+| **Coverage bar (>90%)**                | 10 of 11 in-scope projects meet it as of 2026-09-22; `shared-ai-client` short at 15.98% (was "3 of 15")                                                  |
+| **4 of 8 extension slots**             | Reserved — `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing                                                                                |
+| **`selection` rule context**           | Still empty, so `canWriteSelection` / `canRemoveSelection` answer `false`                                                                                |
+| **SAST**                               | None. SCA is `npm audit` only                                                                                                                            |
+| **Production observability**           | None wired in                                                                                                                                            |
 
 ---
 

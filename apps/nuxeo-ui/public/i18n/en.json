@@ -1516,6 +1516,9 @@
   "document-layouts": {
     "loading-form": "Loading the form",
     "no": "No",
+    "related": {
+      "empty": "No records"
+    },
     "sections": "Property sections",
     "yes": "Yes"
   },
@@ -1536,6 +1539,17 @@
     "extension-outlet": {
       "loading": "Loading…"
     }
+  },
+  "home": {
+    "empty": "Nothing on the home is for you.",
+    "loading": "Loading the home",
+    "largest-only": "The largest only",
+    "loading-figure": "Counting",
+    "none": "No home is configured for this app.",
+    "open-queue": "Open the queue",
+    "refused": "The home could not be read.",
+    "title": "Home",
+    "unavailable": "Unavailable"
   },
   "kd": {
     "content-lake-upload": {

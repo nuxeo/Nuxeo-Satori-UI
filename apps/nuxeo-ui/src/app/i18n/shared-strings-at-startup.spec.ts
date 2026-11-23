@@ -124,9 +124,13 @@ describe('shared-component accessible names at startup, per language', () => {
         }
         requested.push(url);
         const upstream = url.includes('assets/satori-ui/');
-        if (upstream && url.endsWith('/en.json')) request.flush(VENDOR_EN);
-        else if (upstream && url.endsWith('/fr.json')) request.flush(VENDOR_FR);
-        // Exactly what the server does today for ja, nl, th and zh: the file is not there.
+        // The file names satori-ui 1.0.0 ships: regional only. A bare `en.json` or `fr.json`
+        // answers 404 like any other missing file, so a loader that stops mapping `en` to
+        // `en-US` fails the label assertions below instead of passing on a mock of a folder
+        // that no longer exists.
+        if (upstream && url.endsWith('/en-US.json')) request.flush(VENDOR_EN);
+        else if (upstream && url.endsWith('/fr-FR.json')) request.flush(VENDOR_FR);
+        // Exactly what the server does for ja, nl, th and zh, and for the bare names: the file is not there.
         else if (upstream) request.flush('', { status: 404, statusText: 'Not Found' });
         else if (url.endsWith('/ja.json')) request.flush(APP_JA);
         else if (url.endsWith('/fr.json')) request.flush(APP_FR);
@@ -228,6 +232,7 @@ describe('shared-component accessible names at startup, per language', () => {
     expect(requested).not.toContain('assets/satori-ui/i18n/ja.json');
     // The fallback language is one it does ship, so that request must still be made — otherwise
     // this would pass by fetching no upstream catalogue at all.
-    expect(requested).toContain('assets/satori-ui/i18n/en.json');
+    expect(requested).toContain('assets/satori-ui/i18n/en-US.json');
+    expect(requested).not.toContain('assets/satori-ui/i18n/en.json');
   });
 });

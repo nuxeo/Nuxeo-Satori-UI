@@ -7,7 +7,13 @@
     <!-- A version 2 layout sits where version 1's do (docs/business-apps/layout-v2.md, section 1).
          The view mode is new in version 2, so an app that reads only version 1 never asks for it. -->
     <layout type="Claim" mode="view" src="agentic-ui-config/layouts/Claim/view.layout.json" />
+    <layout type="Member" mode="view" src="agentic-ui-config/layouts/Member/view.layout.json" />
+    <layout type="Case" mode="view" src="agentic-ui-config/layouts/Case/view.layout.json" />
+    <layout type="Provider" mode="view" src="agentic-ui-config/layouts/Provider/view.layout.json" />
   </extension>
+
+  <!-- The types these layouts are for come from the stand-in model, the bundle's other
+       component (payers-claims-demo-model.xml), until the presales Payers model replaces it. -->
 
   <!-- app.json, actions.json, queues/ and labels/ travel in this package, and nothing contributes
        them yet: the app registry in nuxeo-agentic-core will (docs/business-apps/package-pipeline.md).

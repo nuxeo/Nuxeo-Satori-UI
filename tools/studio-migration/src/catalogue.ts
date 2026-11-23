@@ -8,9 +8,11 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PACKAGED_WIDGETS } from '@agentic-ui/shared/app-definition';
 
 export type How = 'automatic' | 'agent-proposes' | 'reported';
-export type ElementRole = 'field' | 'structure' | 'data' | 'action' | 'navigation' | 'theme';
+export type ElementRole =
+  'field' | 'structure' | 'data' | 'action' | 'navigation' | 'theme' | 'condition';
 
 export interface SlotEntry {
   readonly what: string;
@@ -27,6 +29,13 @@ export interface ElementEntry {
   readonly how: How;
   readonly becomes: string;
   readonly note?: string;
+  /**
+   * For a field element: the layout version 2 widget it becomes, or `null` when the property's
+   * schema type picks it, as for a plain text or number field.
+   */
+  readonly widget?: string | null;
+  /** A widget parameter, to the element attribute that gives its value. */
+  readonly parameters?: Readonly<Record<string, string>>;
 }
 
 /** A script Studio or Web UI generates, known by its shape (`script-shape.ts`). */
@@ -65,6 +74,7 @@ const ROLES: readonly ElementRole[] = [
   'action',
   'navigation',
   'theme',
+  'condition',
 ];
 const LAYER0_KEYS = ['themes'];
 
@@ -129,6 +139,24 @@ export function validate(catalogue: Catalogue): string[] {
       problems.push(`elements.json: ${name} has role "${entry.role}"`);
     if (!HOW.includes(entry.how)) problems.push(`elements.json: ${name} has how "${entry.how}"`);
     if (!entry.becomes) problems.push(`elements.json: ${name} does not say what it becomes`);
+    // Held to the registry the validator reads, so that a widget the platform lacks fails here
+    // rather than in every package converted with it.
+    if (entry.role === 'field' && !('widget' in entry))
+      problems.push(`elements.json: ${name} is a field, so it must say its widget, or null`);
+    if (entry.role !== 'field' && 'widget' in entry)
+      problems.push(`elements.json: ${name} is not a field, so it has no widget`);
+    if (typeof entry.widget === 'string' && !Object.hasOwn(PACKAGED_WIDGETS, entry.widget))
+      problems.push(
+        `elements.json: ${name} becomes the widget "${entry.widget}", which is not registered`,
+      );
+    for (const parameter of Object.keys(entry.parameters ?? {})) {
+      const widget =
+        typeof entry.widget === 'string' ? own(PACKAGED_WIDGETS, entry.widget) : undefined;
+      if (!widget || !Object.hasOwn(widget.parameters, parameter))
+        problems.push(
+          `elements.json: ${name} gives the parameter "${parameter}", which its widget does not take`,
+        );
+    }
   }
   const targeted = new Map<string, string>();
   for (const [property, token] of Object.entries(catalogue.tokens ?? {})) {

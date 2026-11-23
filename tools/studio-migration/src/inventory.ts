@@ -7,7 +7,14 @@
  * `unrecognised` rather than skipped; a file that cannot be read is listed in `problems` rather
  * than ending the run.
  */
-import { childLabel, elementsOf, isCustomElement, parseHtml, parseXml } from './markup';
+import {
+  attributesOf,
+  childLabel,
+  elementsOf,
+  isCustomElement,
+  parseHtml,
+  parseXml,
+} from './markup';
 import { scriptShape } from './script-shape';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { themeProperties, type ThemeProperty } from './theme';
@@ -50,6 +57,48 @@ export interface LayoutField {
   readonly binding: string | null;
   readonly label: string | null;
   readonly required: boolean;
+  /** The element's attributes, which give its widget's parameters, such as `directory-name`. */
+  readonly attributes: Readonly<Record<string, string>>;
+  /** The condition it sits in, by its place among its file's conditions, from 0; `null` for none. */
+  readonly condition: number | null;
+}
+
+/**
+ * A condition: a `nuxeo-filter`, or a `dom-if`, which shows what it holds only while it passes.
+ * Studio writes filters around buttons and fields; M2 turns them into registered rules.
+ */
+export interface Condition {
+  readonly path: string;
+  /** Its place among its file's conditions, from 0. */
+  readonly index: number;
+  /** `nuxeo-filter`, `dom-if`, or `template` for `<template is="dom-if">`. */
+  readonly element: string;
+  readonly attributes: Readonly<Record<string, string>>;
+}
+
+/** A column of a list of results, or of a dashboard card's list. */
+export interface ResultColumn {
+  /** Its heading, as written. */
+  readonly name: string | null;
+  /** Its `field`, or else the property its template shows. */
+  readonly field: string | null;
+  readonly sortBy: string | null;
+  /** The custom elements its template holds, which say how it shows the value. */
+  readonly elements: readonly string[];
+  /** The `format` of a `nuxeo-date` it holds. */
+  readonly dateFormat: string | null;
+  /** True when its template writes the value through `formatDate`. */
+  readonly formatsDate: boolean;
+  /** True when it sits in a condition, or its template holds one: it then shows only to some. */
+  readonly conditional: boolean;
+}
+
+/** A sort a results layout offers, from the options Studio's script writes. */
+export interface SortOption {
+  readonly field: string;
+  readonly order: 'asc' | 'desc';
+  /** The one the results open sorted by. */
+  readonly selected: boolean;
 }
 
 export interface DocumentLayout {
@@ -71,8 +120,17 @@ export interface SearchLayout {
   readonly part: 'form' | 'results';
   readonly fields: readonly LayoutField[];
   readonly columns: number;
-  /** The result views it offers: `nuxeo-data-table`, `nuxeo-data-grid`, `nuxeo-justified-grid`. */
+  /** The columns of its table, in order: `columns` of them. */
+  readonly columnDetails: readonly ResultColumn[];
+  /**
+   * The result views it offers, in the order it writes them: `nuxeo-data-table`,
+   * `nuxeo-data-grid`, `nuxeo-justified-grid`.
+   */
   readonly views: readonly string[];
+  /** For each of `views`, whether it sits in a condition, or holds one. */
+  readonly conditionalViews: readonly boolean[];
+  /** For results: the sorts its script offers. */
+  readonly sortOptions: readonly SortOption[];
 }
 
 export interface SlotContribution {
@@ -84,6 +142,13 @@ export interface SlotContribution {
   readonly elements: readonly string[];
   /** For each `nuxeo-operation-button` it holds, the operation it runs, or `null` for none. */
   readonly operations: readonly (string | null)[];
+  /** The custom elements its template holds, with their attributes, in order. */
+  readonly parts: readonly {
+    readonly element: string;
+    readonly attributes: Readonly<Record<string, string>>;
+  }[];
+  /** The conditions its template holds, by their place among the file's conditions. */
+  readonly conditions: readonly number[];
 }
 
 export interface DashboardCard {
@@ -91,6 +156,16 @@ export interface DashboardCard {
   readonly elements: readonly string[];
   /** The index of an earlier card with the same heading and content, which this one repeats. */
   readonly repeatOf: number | null;
+  /** The page provider its `nuxeo-page-provider` reads. */
+  readonly provider: string | null;
+  readonly pageSize: number | null;
+  /** That provider's `params`, as written. */
+  readonly params: string | null;
+  readonly columns: readonly ResultColumn[];
+  /** The operation a `nuxeo-operation` in it runs. */
+  readonly operation: string | null;
+  /** True when it sits in a condition or holds one. */
+  readonly conditional: boolean;
 }
 
 export interface Dashboard {
@@ -159,6 +234,8 @@ export interface Inventory {
   readonly elements: ReadonlyMap<string, number>;
   /** Every script in those files, so a customer's code in one is never passed over. */
   readonly scripts: readonly ScriptUse[];
+  /** Every condition in those files. */
+  readonly conditions: readonly Condition[];
   readonly problems: readonly InventoryProblem[];
 }
 
@@ -234,10 +311,17 @@ export function inventory(pkg: StudioPackage): Inventory {
       .map((file) => file.path);
 
   const scripts: ScriptUse[] = [];
-  /** Parses a Web UI file, counts its custom elements, records its scripts, and hands its document on. */
+  const conditions: Condition[] = [];
+  /** The condition each element of a file sits in, for the files read so far. */
+  const within = new Map<Element, number>();
+  /**
+   * Parses a Web UI file, counts its custom elements, records its scripts and conditions, and
+   * hands its document on.
+   */
   const webUi = (path: string): { document: Document; text: string } => {
     const text = read(path);
     const document = parseHtml(text);
+    conditions.push(...conditionsOf(path, document, within));
     let index = 0;
     for (const element of elementsOf(document)) {
       if (isCustomElement(element) && !WRAPPERS.has(element.localName)) {
@@ -282,7 +366,7 @@ export function inventory(pkg: StudioPackage): Inventory {
       element: moduleId(document, path),
       docType: annotation(text, 'doctype'),
       mode: /-([a-z]+)-layout\.html$/.exec(path)?.[1] ?? '',
-      fields: fieldsOf(document),
+      fields: fieldsOf(document, within),
     };
   });
 
@@ -291,14 +375,28 @@ export function inventory(pkg: StudioPackage): Inventory {
     .map((path) => {
       const { document, text } = webUi(path);
       const all = elementsOf(document);
+      const part = path.endsWith('-search-form.html') ? ('form' as const) : ('results' as const);
+      const columns = all.filter((element) => element.localName === 'nuxeo-data-table-column');
       return {
         path,
         element: moduleId(document, path),
         provider: annotation(text, 'search'),
-        part: path.endsWith('-search-form.html') ? ('form' as const) : ('results' as const),
-        fields: fieldsOf(document),
-        columns: all.filter((element) => element.localName === 'nuxeo-data-table-column').length,
-        views: RESULT_VIEWS.filter((view) => all.some((element) => element.localName === view)),
+        part,
+        fields: fieldsOf(document, within),
+        columns: columns.length,
+        columnDetails: columns.map((column) => columnOf(column, within)),
+        views: all
+          .filter((element) => RESULT_VIEWS.includes(element.localName))
+          .map((element) => element.localName),
+        conditionalViews: all
+          .filter((element) => RESULT_VIEWS.includes(element.localName))
+          .map((view) => within.has(view)),
+        sortOptions:
+          part === 'results'
+            ? all
+                .filter((element) => element.localName === 'script')
+                .flatMap((script) => sortOptionsOf(script.textContent ?? ''))
+            : [],
       };
     });
   // Studio annotates the form with `@search <provider>` but not always the results, which sit in
@@ -319,6 +417,7 @@ export function inventory(pkg: StudioPackage): Inventory {
       .filter((element) => element.localName === 'nuxeo-slot-content')
       .map((element) => {
         const order = element.getAttribute('order');
+        const inner = elementsOf(element);
         return {
           path,
           name: element.getAttribute('name') ?? '',
@@ -327,9 +426,19 @@ export function inventory(pkg: StudioPackage): Inventory {
           elements: elementsOf(element)
             .filter(isCustomElement)
             .map((inner) => inner.localName),
-          operations: elementsOf(element)
-            .filter((inner) => inner.localName === 'nuxeo-operation-button')
+          operations: inner
+            .filter((part) => part.localName === 'nuxeo-operation-button')
             .map((button) => button.getAttribute('operation')?.trim() || null),
+          parts: inner
+            .filter((part) => isCustomElement(part) && !CONDITIONS.has(part.localName))
+            .map((part) => ({ element: part.localName, attributes: attributesOf(part) })),
+          conditions: [
+            ...new Set(
+              [element, ...inner]
+                .map((part) => within.get(part))
+                .filter((index): index is number => index !== undefined),
+            ),
+          ],
         };
       }),
   );
@@ -356,10 +465,22 @@ export function inventory(pkg: StudioPackage): Inventory {
         const signature = markupOf(card);
         const earlier = signatures.indexOf(signature);
         signatures.push(signature);
+        const provider = inner.find((element) => element.localName === 'nuxeo-page-provider');
+        const pageSize = provider?.getAttribute('page-size')?.trim() ?? '';
         return {
           heading,
           elements: inner.map((element) => element.localName),
           repeatOf: earlier === -1 ? null : earlier,
+          provider: provider?.getAttribute('provider')?.trim() || null,
+          pageSize: /^\d+$/.test(pageSize) ? Number(pageSize) : null,
+          params: provider?.getAttribute('params') ?? null,
+          columns: elementsOf(card)
+            .filter((element) => element.localName === 'nuxeo-data-table-column')
+            .map((column) => columnOf(column, within)),
+          operation:
+            inner.find((element) => element.localName === 'nuxeo-operation')?.getAttribute('op') ??
+            null,
+          conditional: [card, ...elementsOf(card)].some((element) => within.has(element)),
         };
       });
     dashboard = { path: dashboardPath, cards };
@@ -420,6 +541,7 @@ export function inventory(pkg: StudioPackage): Inventory {
       [...elements].sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b)),
     ),
     scripts,
+    conditions,
     problems,
   };
 }
@@ -445,7 +567,7 @@ function markupOf(element: Element): string {
 }
 
 /** The fields of a layout: its elements marked `role="widget"`. */
-function fieldsOf(document: Document): LayoutField[] {
+function fieldsOf(document: Document, within: ReadonlyMap<Element, number>): LayoutField[] {
   return elementsOf(document)
     .filter((element) => element.getAttribute('role') === 'widget')
     .map((element) => ({
@@ -453,7 +575,116 @@ function fieldsOf(document: Document): LayoutField[] {
       binding: bindingOf(element),
       label: element.getAttribute('label') ?? childLabel(element),
       required: element.hasAttribute('required'),
+      attributes: attributesOf(element),
+      condition: conditionOfField(element, within),
     }));
+}
+
+/**
+ * The condition a field shows under: the one it sits in, or else the first one inside it. A
+ * wrapper such as `<div role="widget">` can take its binding from an element inside a
+ * `nuxeo-filter` it holds, and then shows that value only while the filter passes. Any condition
+ * inside the field counts, whether or not the binding comes from within it: a field left pending
+ * by mistake is a decision for M2, where one shown to everyone by mistake is widened access.
+ */
+function conditionOfField(field: Element, within: ReadonlyMap<Element, number>): number | null {
+  const own = within.get(field);
+  if (own !== undefined) return own;
+  for (const inner of elementsOf(field)) {
+    const index = within.get(inner);
+    if (index !== undefined) return index;
+  }
+  return null;
+}
+
+/** The elements that show what they hold only while a condition passes. */
+const CONDITIONS = new Set(['nuxeo-filter', 'dom-if']);
+
+function isCondition(element: Element): boolean {
+  return (
+    CONDITIONS.has(element.localName) ||
+    (element.localName === 'template' && element.getAttribute('is')?.trim() === 'dom-if')
+  );
+}
+
+/**
+ * A file's conditions, in document order, with the innermost one each element sits in recorded
+ * in `within`. Walked by hand rather than by climbing from each element, because what a template
+ * holds is in its content, which does not lead back to the template.
+ */
+function conditionsOf(path: string, document: Document, within: Map<Element, number>): Condition[] {
+  const found: Condition[] = [];
+  const visit = (node: ParentNode, current: number | null): void => {
+    for (const child of Array.from(node.children)) {
+      let inner = current;
+      if (isCondition(child)) {
+        inner = found.length;
+        found.push({
+          path,
+          index: inner,
+          element: child.localName,
+          attributes: attributesOf(child),
+        });
+      }
+      // The condition itself is not inside it: only what it holds is.
+      if (current !== null) within.set(child, current);
+      visit(child, inner);
+      const content = (child as Partial<HTMLTemplateElement>).content;
+      if (child.localName === 'template' && content) visit(content, inner);
+    }
+  };
+  visit(document, null);
+  return found;
+}
+
+/**
+ * A column of a list: its heading, the property it shows, and how. The property is its `field`,
+ * or else the one its template binds: `item.properties.dc:modified`, or `item.title` for the title.
+ */
+function columnOf(column: Element, within: ReadonlyMap<Element, number>): ResultColumn {
+  const inside = elementsOf(column);
+  const texts = [column, ...inside].flatMap((element) => [
+    ...Array.from(element.attributes, (attribute) => attribute.value),
+    element.localName === 'template'
+      ? ((element as HTMLTemplateElement).content?.textContent ?? '')
+      : '',
+  ]);
+  const all = texts.join('\n');
+  return {
+    name: column.getAttribute('name'),
+    field:
+      column.getAttribute('field')?.trim() ||
+      /\bitem\.properties\.([\w-]+:[\w-]+)/.exec(all)?.[1] ||
+      (/\bitem\.title\b/.test(all) ? 'dc:title' : null),
+    sortBy: column.getAttribute('sort-by')?.trim() || null,
+    elements: inside.filter(isCustomElement).map((element) => element.localName),
+    dateFormat:
+      inside.find((element) => element.localName === 'nuxeo-date')?.getAttribute('format') ?? null,
+    formatsDate: /\bformatDate\s*\(/.test(all),
+    conditional: [column, ...inside].some((element) => within.has(element)),
+  };
+}
+
+/**
+ * The sorts a results layout's script offers: Studio's template writes them as
+ * `this.sortOptions = [{field: 'dc:title', label: …, order: 'asc', selected: true}, …]`. They are
+ * read from the script's text by pattern, and nothing is run. Whether the script is Studio's
+ * template is its own construct's to say, by its shape: one that is not is customer code, pending
+ * M3, and its sorts are read by the same pattern all the same.
+ */
+export function sortOptionsOf(script: string): SortOption[] {
+  const start = script.search(/\bsortOptions\s*=\s*\[/);
+  if (start === -1) return [];
+  const list = script.slice(
+    start,
+    script.indexOf('];', start) === -1 ? undefined : script.indexOf('];', start),
+  );
+  return [...list.matchAll(/\{\s*field\s*:\s*(['"])([^'"]+)\1([^{}]*)\}/g)].flatMap((match) => {
+    const order = /\border\s*:\s*(['"])(asc|desc)\1/.exec(match[3])?.[2];
+    return order === 'asc' || order === 'desc'
+      ? [{ field: match[2], order, selected: /\bselected\s*:\s*true\b/.test(match[3]) }]
+      : [];
+  });
 }
 
 /**

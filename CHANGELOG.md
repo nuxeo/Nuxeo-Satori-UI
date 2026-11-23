@@ -29,6 +29,30 @@ the fragments named `defaults`. `level` was already one of `error` / `warning` /
 is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
 `removed` to notice this case should match the new codes instead.
 
+### Fixed (generators) — a configuration package's manifest is one Java can read
+
+A generated package's `build.mjs` packaged a `bundle/META-INF/MANIFEST.MF` that Java's
+`java.util.jar.Manifest` refuses outright, and `scripts/verify-package-zip.mjs` passed the result.
+The Nuxeo runtime reads a bundle's headers through that class, which throws at the first line it
+cannot read, so the bundle has no headers at all and the package installs and configures nothing.
+A blank line inside the main section with an ordinary header after it, a header name with a space
+or a dot in it or over 70 characters, a colon with no space after it, and a first line that starts
+with a space each built a package, and JDK 21 refused its jar with `invalid manifest format`,
+`invalid header field` or `misplaced continuation line`. No component went unchecked: the server
+loaded none.
+
+`build.mjs` now refuses a manifest Java would refuse, quoting the line: a line that is neither a
+header — a name of 1 to 70 letters, digits, `-` and `_`, then `: ` and the value — nor a
+continuation of one, a first line that starts with a space, or a section after a blank line that
+does not begin with `Name: `. It checks the manifest as packaged, the unfolded source refolded at
+72 bytes, so a source line longer than Java's 512-byte limit, or one with no line break at its
+end, still builds. The new check refuses nothing Java reads, and packaging is unchanged.
+`verify-package-zip.mjs` applies the same rules to the packaged jar, and two more, since its jar
+may come from anywhere: a line over 512 bytes with its line break, and text after the last line
+break, which Java ignores — a `Nuxeo-Component` header there loads nothing. Every copy of
+`build.mjs` made before this change keeps building such manifests until it is replaced with the
+template's.
+
 ### Fixed (generators) — a configuration package's components are the ones the server loads
 
 A generated package's `build.mjs` read `bundle/META-INF/MANIFEST.MF`'s components from the first
@@ -74,22 +98,22 @@ Windows 11; Explorer and `cmd` then cannot open or delete it. The refusal is unc
 
 The earlier parallel-browse proof of concept is removed, with its two routes and its navigation entry.
 
-- **The proof-of-concept navbar entry's registered ID is retired.** An `overrides` key naming it now addresses nothing. A
-  `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
-  own — with no path or label unless it gives them, which renders a blank item: delete it. Its
-  label key is on no entry any more: move a `labels` entry for it to
-  `nav.item.browse`.
+- **`app.navbar.browseAdfHx`, the proof of concept's navbar entry, is retired.** An `overrides` key
+  naming it now addresses nothing. A `navbar` slot entry naming it no longer patches a packaged
+  entry, so it becomes an entry of its own — with no path or label unless it gives them, which
+  renders a blank item: delete it. Its label key, `nav.item.browse-adf-hx`, is on no entry any
+  more: move a `labels` entry for it to `nav.item.browse`.
 - **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the proof-of-concept entry read
   "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
   it is now redundant, not harmful.
-- **Old links redirect.** The two retired proof-of-concept routes go to `/browse` and `/search`
+- **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
   with their query string intact, and a `?path=` folder opens in `/browse`.
 
 ### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the proof-of-concept browse URL helpers
 
 They built, recognised and parsed the proof-of-concept browse URLs, and chose between that route and
 `/browse` for document detail's way back. With the route retired, all seven go:
-three proof-of-concept URL functions (build, recognise, parse),
+`toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
 `toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
 `BROWSE_RETURN_MODE_PARAM`. Use `toBrowseRouterUrl`, `isBrowseRouterUrl` and
 `parseBrowseNuxeoPathFromRouterUrl`. Document detail no longer reads `?browseReturn=`; an old link
@@ -145,10 +169,11 @@ carrying it opens normally, with breadcrumbs into `/browse`.
 
 ### Removed (`@nuxeo-satori/platform`) — a peer dependency
 
-- **The third-party extensions package is no longer a peer dependency.** The extension engine
-  now has its own `filterEnabled`, `sortByOrder` and `mergeObjects` (`extension-element.spec.ts` and
-  `extension-merge.spec.ts` in `libs/shared/extensions`). No export changes. A consumer no longer
-  has to install the package, and can remove it unless its own code imports it.
+- **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine now has its
+  own `filterEnabled`, `sortByOrder` and `mergeObjects`, pinned case by case to the output 9.0.0
+  produced (`extension-element.spec.ts` and `extension-merge.spec.ts` in `libs/shared/extensions`).
+  No export changes. A consumer no longer has to install the package, and can remove it unless its
+  own code imports it.
 
 ### Fixed (`@nuxeo-satori/platform/extensions`)
 
