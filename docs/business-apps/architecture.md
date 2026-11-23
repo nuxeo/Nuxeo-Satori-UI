@@ -479,9 +479,11 @@ The waves of the plan's section 14, and what each tier delivers in them.
   - an experience carries `scope:experience`, and may not use the current app's features. That is
     why `apps/nuxeo-ui` takes the tag only as its features become modules and engines.
 
-  No project carries these tags before phase 1, so `npm run beta:module-boundaries` proves the
-  rules in CI. It lints imports between probe projects that carry each tag, with the real rule: 6
-  forbidden imports reported, 6 allowed ones quiet.
+  The first engine, `libs/shared/computations` (computations, above), carries `scope:engine`, and
+  imports only shared code. No module or experience exists before phase 1, so lint has no forbidden
+  import to fail on, and `npm run beta:module-boundaries` proves the rules in CI. It lints imports
+  between probe projects that carry each tag, with the real rule: 6 forbidden imports reported, 6
+  allowed ones quiet.
 
 - **Packages.** The engines and the domain modules ship in one package, `@nuxeo/satori-platform`.
   Each module is its own entry point (`@nuxeo/satori-platform/modules/<name>`), so an app built
