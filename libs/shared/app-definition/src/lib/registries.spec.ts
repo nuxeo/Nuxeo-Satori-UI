@@ -218,6 +218,7 @@ describe("the other files' JSON Schemas, held to their validators", () => {
     expect(layout['$defs'].id.pattern).toBe(ID.source);
     expect(layout['$defs'].xpath.pattern).toBe(XPATH.source);
     expect(layout['$defs'].related.properties.pageProvider.pattern).toBe(NAME.source);
+    expect(layout['$defs'].timeline.properties.events.items.pattern).toBe(NAME.source);
     expect(app['$defs'].appId.pattern).toBe(APP_ID.source);
     expect(queue['properties'].pageProvider.pattern).toBe(NAME.source);
     expect(queue['$defs'].facet.properties.aggregate.pattern).toBe(NAME.source);

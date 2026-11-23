@@ -453,7 +453,11 @@ describe('a timeline and comments', () => {
     expect(
       messages(
         card({
-          timeline: { events: ['documentModified', 'lifecycle_transition_event'], filter: false },
+          timeline: {
+            events: ['documentModified', 'lifecycle_transition_event'],
+            filter: false,
+            pageSize: 1,
+          },
         }),
       ),
     ).toEqual([]);

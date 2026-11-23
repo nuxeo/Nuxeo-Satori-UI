@@ -293,11 +293,11 @@ A card can show the record's history, newest first, in `view` mode:
 }
 ```
 
-| Key        | Meaning                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| `events`   | The kinds of event it shows, by the audit's event ID. Default: the record's own changes    |
-| `filter`   | `true` offers the reader a filter by kind of event, among `events`. Default `false`        |
-| `pageSize` | How many entries show first, and how many more each "Show more" adds: 1 to 100. Default 10 |
+| Key        | Meaning                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `events`   | The kinds of event it shows, by the audit's event ID. Default: the record's own changes                         |
+| `filter`   | `true` offers the reader a filter by kind of event, among `events` when it names more than one. Default `false` |
+| `pageSize` | How many entries show first, and how many more each "Show more" adds: 1 to 100. Default 10                      |
 
 - **Each entry says who, what and when:** the user by name, the kind of event and the audit's
   comment if it has one, and the time in the reader's own zone. A lifecycle transition also says
@@ -311,7 +311,8 @@ A card can show the record's history, newest first, in `view` mode:
   each thumbnail the app shows included, and they would fill the timeline.
 - **An event is the server's to name,** as a page provider is: a Studio project's own event is
   named in `events` as the audit writes it, and its label is `document-layouts.timeline.event.<ID>`
-  in the labels.
+  in the labels. A transition's entry is one sentence, `document-layouts.timeline.transition`, so
+  that a translation orders its states as its language does.
 
 ### Comments
 
@@ -495,9 +496,14 @@ becomes. In version 2's terms:
   - each entry names its user as a `user` field does, Nuxeo's own `system` excepted, and shows its
     time in the reader's zone ([pattern 29](../../AGENTS/08-bug-patterns.md));
   - the filter asks the server for one kind at a time, and "All events" for the card's kinds again;
-  - it is asked again when the page is given the record with another modification date, state or
-    lock, or checked in or out, or put in or out of the trash: as the document page does after an
-    edit or a transition.
+  - it is refreshed in place when the page is given the record with another modification date,
+    state or lock, or checked in or out, or put in or out of the trash: asked at once, and again
+    2.5 seconds later, since Nuxeo writes its audit a moment after the change (0.8 to 1.4 seconds,
+    measured). What a refresh brings joins the entries shown, which stay;
+  - a timeline drawn anew is asked once more 2.5 seconds after it first is, too. That is the
+    refresh a reader of the document page sees: it draws the record page anew each time it
+    reloads the record, after an edit or a transition and not after a lock, so the timeline starts
+    again from its first page, and a comment half written in a comments card is lost.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
@@ -531,7 +537,8 @@ becomes. In version 2's terms:
   - **a transition is audited with the state it reached only.** The state it left is read from the
     entry before it among those the timeline shows. A transition with none before it says only
     where it went: the oldest one loaded, until "Show more" loads the next, and the first a record
-    ever made, when the reader's filter shows state changes alone;
+    ever made, when the timeline shows state changes alone, by its `events` or by the reader's
+    filter;
   - **a comment is audited as a modification of the record:** adding or editing one saves the
     record, so it shows as Modified, and the timeline on the same page shows it once the record
     reloads. A comments card and the Comments panel load the thread apart, and one shows a comment

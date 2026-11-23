@@ -11,7 +11,7 @@ import {
 import { Subject, of, throwError, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
-import { RECORD_PAGE_TIME_ZONE } from './record-clock';
+import { RECORD_PAGE_TIME_ZONE, RECORD_TIMELINE_AUDIT_DELAY } from './record-clock';
 import type { RecordTimelineEntry } from './record-layout';
 import { RecordTimelineComponent } from './record-timeline';
 
@@ -70,6 +70,9 @@ const transitioned = (): AuditEntry[] => [
   entry('documentCreated', '2026-11-21T09:00:00.000Z', 'project', { principalName: 'asmith' }),
 ];
 
+/** The second ask's delay where a test wants one: short, and waited out by the test zone. */
+const AUDIT_DELAY = 30;
+
 const TIMELINE: RecordTimelineEntry = {
   events: ['documentCreated', 'documentModified', 'lifecycle_transition_event'],
   filter: false,
@@ -84,9 +87,12 @@ describe('RecordTimelineComponent', () => {
     >
   >;
   let principalLabel: ReturnType<typeof vi.fn>;
+  /** `null` unless a test wants the second ask: then every timeline asks twice. */
+  let auditDelay: number | null;
 
   beforeEach(() => {
     nextId = 100;
+    auditDelay = null;
     getAuditLog = vi.fn(() => of(page(transitioned())));
     principalLabel = vi.fn((kind: string, id: string) =>
       of(kind === 'user' && id === 'jdoe' ? 'Jane Doe' : id === 'asmith' ? 'Ann Smith' : null),
@@ -100,6 +106,7 @@ describe('RecordTimelineComponent', () => {
         // Ahead of UTC by a time that is not whole hours, so that an instant shown in UTC, or in
         // the zone the suite runs in, shows another time and, here, another day.
         { provide: RECORD_PAGE_TIME_ZONE, useValue: '+0530' },
+        { provide: RECORD_TIMELINE_AUDIT_DELAY, useFactory: () => auditDelay },
       ],
     });
   });
@@ -170,7 +177,7 @@ describe('RecordTimelineComponent', () => {
       ),
     );
     const root = await render({ ...TIMELINE, events: ['claimEscalated'] });
-    expect(root.querySelector('.record-timeline__event')?.textContent?.trim()).toBe(
+    expect(root.querySelector('.record-timeline__what')?.textContent?.trim()).toBe(
       'Claim escalated',
     );
     expect(root.querySelector('.record-timeline__comment')?.textContent?.trim()).toBe(
@@ -298,22 +305,149 @@ describe('RecordTimelineComponent', () => {
     expect(lines(root)).toHaveLength(3);
   });
 
-  it('asks again when the record changes, and not for an equal copy of it', async () => {
-    await render();
-    fixture.componentRef.setInput('document', claim());
-    await settle();
-    expect(getAuditLog).toHaveBeenCalledTimes(1);
+  describe('when the record changes', () => {
+    const [transition, modified, created] = transitioned();
 
-    // The host reloads the record after a transition: its state is new, and so is the history.
-    fixture.componentRef.setInput('document', claim({ state: 'closed' }));
+    beforeEach(() => {
+      auditDelay = AUDIT_DELAY;
+    });
+
+    it('asks once more when drawn anew, as its host may have drawn it for the change', async () => {
+      getAuditLog.mockReturnValueOnce(of(page([modified, created])));
+      getAuditLog.mockReturnValueOnce(of(page([transition, modified, created])));
+      const root = await render();
+      expect(getAuditLog).toHaveBeenCalledTimes(2);
+      expect(lines(root).map((line) => line.split(' · ')[0])).toEqual([
+        'State changed from Project to Approved',
+        'Modified',
+        'Created',
+      ]);
+    });
+
+    it("puts what the second ask finds in the audit's order, an older entry under a newer", async () => {
+      // The audit indexed the transition before the modification that preceded it.
+      getAuditLog.mockReturnValueOnce(of(page([transition, created])));
+      getAuditLog.mockReturnValueOnce(of(page([transition, modified, created])));
+      const root = await render();
+      expect(lines(root).map((line) => line.split(' · ')[0])).toEqual([
+        'State changed from Project to Approved',
+        'Modified',
+        'Created',
+      ]);
+    });
+
+    it('is refreshed in place, and again once the audit has written the change', async () => {
+      getAuditLog.mockReturnValue(of(page([modified, created])));
+      const root = await render();
+      fixture.componentRef.setInput('document', claim());
+      await settle();
+      // Drawn: asked, and once more after the delay. An equal copy of the record asks nothing.
+      expect(getAuditLog).toHaveBeenCalledTimes(2);
+
+      // The host hands over the record reloaded after a transition. Nuxeo writes the audit a
+      // moment later, so the first answer has nothing new, and the second has the transition.
+      getAuditLog.mockReturnValueOnce(of(page([modified, created])));
+      getAuditLog.mockReturnValueOnce(of(page([transition, modified, created])));
+      fixture.componentRef.setInput('document', claim({ state: 'closed' }));
+      fixture.detectChanges();
+      expect(getAuditLog).toHaveBeenCalledTimes(3);
+      // In place: the entries stay on screen, with no spinner in their stead.
+      expect(root.querySelector('nxs-spinner')).toBeNull();
+      expect(lines(root)).toHaveLength(2);
+
+      // The test zone waits for the second refresh's timer.
+      await settle();
+      expect(getAuditLog).toHaveBeenCalledTimes(4);
+      expect(getAuditLog).toHaveBeenLastCalledWith('c1', 20, 0, expect.anything());
+      expect(lines(root)[0]).toBe(
+        'State changed from Project to Approved · Jane Doe · Nov 24, 2026, 1:30:00 AM',
+      );
+      expect(lines(root)).toHaveLength(3);
+    });
+
+    it('keeps the pages "Show more" loaded, adding the new entries on top', async () => {
+      getAuditLog.mockReturnValueOnce(of(page([modified], true)));
+      // Its second ask, after the delay, finds nothing new.
+      getAuditLog.mockReturnValueOnce(of(page([modified], true)));
+      const root = await render({ ...TIMELINE, pageSize: 1 });
+      getAuditLog.mockReturnValueOnce(of(page([created], false)));
+      button(root, 'Show more')?.click();
+      await settle();
+      expect(lines(root)).toHaveLength(2);
+
+      getAuditLog.mockReturnValue(of(page([transition], true)));
+      fixture.componentRef.setInput('document', claim({ state: 'closed' }));
+      await settle();
+      expect(lines(root).map((line) => line.split(' · ')[0])).toEqual([
+        'State changed from Project to Approved',
+        'Modified',
+        'Created',
+      ]);
+    });
+
+    it('is refreshed for a lock, a check-in and the trash, and not for an equal copy', async () => {
+      await render();
+      for (const change of [
+        { lockOwner: 'jdoe' },
+        { lockOwner: 'jdoe', isCheckedOut: false },
+        { lockOwner: 'jdoe', isCheckedOut: false, isTrashed: true },
+      ]) {
+        const calls = getAuditLog.mock.calls.length;
+        fixture.componentRef.setInput('document', claim(change));
+        await settle();
+        // Once at once, and once after the audit's delay.
+        expect(getAuditLog.mock.calls.length).toBe(calls + 2);
+        fixture.componentRef.setInput('document', claim(change));
+        await settle();
+        expect(getAuditLog.mock.calls.length).toBe(calls + 2);
+      }
+    });
+
+    it('starts again, from a spinner, for another record', async () => {
+      const root = await render();
+      getAuditLog.mockReturnValueOnce(new Subject<AuditLogList>());
+      fixture.componentRef.setInput('document', claim({ uid: 'c2' }));
+      await settle();
+      expect(root.querySelector('nxs-spinner')).not.toBeNull();
+      expect(lines(root)).toEqual([]);
+      expect(getAuditLog).toHaveBeenLastCalledWith('c2', 20, 0, expect.anything());
+    });
+  });
+
+  it('moves the focus to the first entry "Show more" adds', async () => {
+    const [transition, modified, created] = transitioned();
+    getAuditLog.mockReturnValueOnce(of(page([transition], true)));
+    const root = await render({ ...TIMELINE, pageSize: 1 });
+    document.body.appendChild(root);
+    const more = button(root, 'Show more');
+    more?.focus();
+    getAuditLog.mockReturnValueOnce(of(page([modified, created], false)));
+    more?.click();
     await settle();
-    expect(getAuditLog).toHaveBeenCalledTimes(2);
-    fixture.componentRef.setInput(
-      'document',
-      claim({ state: 'closed', lastModified: '2026-11-23T11:00:00.000Z' }),
+    expect(document.activeElement?.getAttribute('data-entry-id')).toBe(String(modified.id));
+    root.remove();
+  });
+
+  it('keeps the names it has read while it reads a new one', async () => {
+    const [transition, , created] = transitioned();
+    const later = new Subject<string | null>();
+    principalLabel.mockImplementation((kind: string, id: string) =>
+      id === 'jdoe' ? of('Jane Doe') : later,
     );
+    getAuditLog.mockReturnValueOnce(of(page([transition], true)));
+    const root = await render({ ...TIMELINE, pageSize: 1 });
+    expect(lines(root)[0]).toContain('Jane Doe');
+    getAuditLog.mockReturnValueOnce(of(page([created], false)));
+    button(root, 'Show more')?.click();
     await settle();
-    expect(getAuditLog).toHaveBeenCalledTimes(3);
+    expect(lines(root)).toEqual([
+      'State changed from Project to Approved · Jane Doe · Nov 24, 2026, 1:30:00 AM',
+      'Created · asmith · Nov 21, 2026, 2:30:00 PM',
+    ]);
+    later.next('Ann Smith');
+    later.complete();
+    await settle();
+    expect(lines(root)[1]).toBe('Created · Ann Smith · Nov 21, 2026, 2:30:00 PM');
   });
 
   it('drops a page still on its way when the record changes, and never shows the last one', async () => {

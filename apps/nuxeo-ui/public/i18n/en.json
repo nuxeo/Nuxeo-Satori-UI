@@ -1543,8 +1543,8 @@
       "more": "Show more",
       "more-failed": "The next entries could not be loaded. Try Show more again.",
       "no-match": "Nothing of this kind recorded",
-      "reached": "to {{to}}",
-      "transition": "from {{from}} to {{to}}"
+      "reached": "State changed to {{to}}",
+      "transition": "State changed from {{from}} to {{to}}"
     },
     "yes": "Yes"
   },

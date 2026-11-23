@@ -35,6 +35,12 @@
   &:last-child {
     padding-block-end: 0;
   }
+
+  /* Focused from script only, after "Show more": the ring says where the reader goes on. */
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
 }
 
 .record-timeline__what,
@@ -46,13 +52,8 @@
   overflow-wrap: anywhere;
 }
 
-.record-timeline__event {
+.record-timeline__what {
   font-weight: 500;
-  color: var(--mat-sys-on-surface);
-}
-
-.record-timeline__transition {
-  margin-inline-start: 6px;
   color: var(--mat-sys-on-surface);
 }
 

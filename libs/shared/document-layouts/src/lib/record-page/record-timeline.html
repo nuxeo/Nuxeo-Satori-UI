@@ -35,22 +35,13 @@
       } @else {
         <ol class="record-timeline__entries" [attr.aria-label]="label()">
           @for (entry of entries(); track entry.id) {
-            <li class="record-timeline__entry" [attr.data-event]="entry.event">
-              <p class="record-timeline__what">
-                <span class="record-timeline__event">{{ entry.what }}</span>
-                @if (entry.transition; as transition) {
-                  <span class="record-timeline__transition">
-                    @if (transition.from) {
-                      {{
-                        'document-layouts.timeline.transition'
-                          | translate: { from: transition.from, to: transition.to }
-                      }}
-                    } @else {
-                      {{ 'document-layouts.timeline.reached' | translate: { to: transition.to } }}
-                    }
-                  </span>
-                }
-              </p>
+            <li
+              class="record-timeline__entry"
+              tabindex="-1"
+              [attr.data-entry-id]="entry.id"
+              [attr.data-event]="entry.event"
+            >
+              <p class="record-timeline__what">{{ entry.what }}</p>
               <p class="record-timeline__meta">
                 <span class="record-timeline__who">{{ entry.who }}</span>
                 <time class="record-timeline__when" [attr.datetime]="entry.datetime">{{
@@ -64,10 +55,12 @@
           }
         </ol>
         @if (current.next !== null) {
+          <!-- Disabled but focusable while it loads, so that the reader's focus is not dropped. -->
           <button
             mat-stroked-button
             type="button"
             class="record-timeline__more"
+            disabledInteractive
             [disabled]="current.loadingMore"
             (click)="showMore()"
           >

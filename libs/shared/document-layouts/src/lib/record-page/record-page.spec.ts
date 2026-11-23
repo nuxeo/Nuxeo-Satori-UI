@@ -24,6 +24,7 @@ import type { DocumentTypeDefinition } from '../layout.model';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
+import { RECORD_TIMELINE_AUDIT_DELAY } from './record-clock';
 import { RecordTimelineComponent } from './record-timeline';
 import { resolveRecordLayout, type ResolvedRecordLayout } from './resolve-record-layout';
 
@@ -225,6 +226,8 @@ describe('RecordPageComponent', () => {
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
         { provide: RECORD_PAGE_TIME_ZONE, useFactory: () => timeZone },
+        // The timeline's second ask is its own spec's: here, one ask per timeline.
+        { provide: RECORD_TIMELINE_AUDIT_DELAY, useValue: null },
       ],
     });
     TestBed.inject(ExtensionRuleRegistry).registerRules({
