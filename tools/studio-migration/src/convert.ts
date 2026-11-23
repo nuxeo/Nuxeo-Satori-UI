@@ -8,6 +8,9 @@
  * - `layouts/<Type>/<mode>.layout.json`, from the document layouts (`convert-layouts.ts`);
  * - `queues/<id>.json`, from the search screens and the dashboard's lists (`convert-lists.ts`);
  * - `actions.json`, from the operation buttons (`convert-slots.ts`);
+ * - `tasks/<workflow>.<step>.layout.json`, from the workflow task layouts (`convert-tasks.ts`), in
+ *   M2, which also writes the layout blocks a layout uses as its cards (`blocks.ts`) and the tabs
+ *   of a type's view file (`convert-tabs.ts`);
  * - `labels/<locale>.json`, from the translations.
  *
  * Beside it, as M0 did, `themes/<name>.json` holds the tokens of each theme's mappable properties

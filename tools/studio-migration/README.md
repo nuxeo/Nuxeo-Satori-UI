@@ -527,18 +527,23 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `drop-tab`                 | 2     | Drops a tab from a converted view layout                              |
 | `drop-tab-rule`            | 5     | Shows a tab Web UI shows only under a condition to every user         |
 | `change-tab-label`         | 6     | Changes the label of a converted tab                                  |
+| `make-display-editable`    | 2     | Makes a field Web UI only shows editable in a task form               |
 | `drop-block-use-entry`     | 1     | Drops a use of a layout block from the report without a word          |
 
-**On the sample**, every one of the 25 controls was applied to its conversion with `mutate` and
-checked. The 20 that find something to break each fail their check, with a finding of their own,
-`wrong-home-queue` and `drop-menu-entry` among them. The other five have nothing to break there,
-and say so: `widen-to-everyone`, `widen-column-to-everyone`, `invert-rule` and `drop-rule`,
-because the sample has no condition, and `bind-other-operation`, because its one button runs no
-operation. The tests apply all five to the made-up package, which has them.
+**On the sample**, every one of the 34 controls was applied to its conversion with `mutate` and
+checked. The 21 that find something to break each fail their check, with a finding of their own,
+`wrong-home-queue`, `drop-menu-entry` and M2's `var-in-layout` among them. The other 13 have
+nothing to break there, and say so: `widen-to-everyone`, `widen-column-to-everyone`, `invert-rule`
+and `drop-rule`, because the sample has no condition; `bind-other-operation`, because its one
+button runs no operation; and eight of M2's nine, because it has no task layout, tab or layout
+block. The tests apply every control to the made-up package with M2's corpus, which has them all,
+and each of M2's nine was also applied with `mutate` to that package's conversion and seen failing
+its check.
 
 Section 7's "invert a rule" is `invert-rule`. It and `drop-rule` take the first rule the
-conversion carries, on a layout field, an action, a home card, a menu entry or a queue. The tests
-also drop and invert each rule of the made-up package in turn, and check 5 fails for every one.
+conversion carries, on a layout field, a tab, a card, a task form's field, an action, a home card,
+a menu entry or a queue. The tests also drop and invert each rule of the made-up package in turn,
+M2's corpus included, and check 5 fails for every one.
 
 ## Tests
 
@@ -555,6 +560,20 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   - an operation button with parameters;
   - a dashboard list with a query parameter and a page size;
   - schemas with typed fields.
+
+  For M2, [`m2-corpus.ts`](src/testing/m2-corpus.ts) adds, on a type and a workflow of its own:
+  a task layout in Web UI's own format, and one whose names' case the package does not give; three
+  layout blocks a view and an edit layout and two tabs use, one of them under a condition, one
+  inside another, one given no document, and one used nowhere; and tabs that convert, beside tabs
+  on every type, under a path test, with no page, on a type with no view file, and a page with no
+  tab.
+
+- **A converted task form drawn by the app.** Web UI's own SerialDocumentReview task layouts,
+  converted with the variables schemas the reference server holds for them, gave
+  `tasks/SerialDocumentReview.Task6d8.layout.json`. Served with `config:dev`, the app's task
+  panel drew it on an open task of that step: the initiator's comment read-only, with its value,
+  and the comment editable. The stock files are not in this repository; the evidence is outside
+  it.
 - **Every refusal is seen failing.** Each refusal and catalogue rule has a negative control: an
   input broken in one way that must fail.
 - **Removing a guard turns a test red.** This was checked by mutation: undoing any one of these
@@ -598,6 +617,33 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     The first round found three that did not turn the suite red. No test sent a repeated field
     through the conversion. No test changed a list's parameters: `change-parameter` changes an
     action's first. The third was a mistake in the round itself. Each now has its test.
+
+  - **In M2, 47 guards**, broken in turn the same way, and each seen turning the suite red:
+    - **In the inventory:** the task layout's kind and its variables; its document out of scope;
+      a block known by its layout behaviour, in a file of one element; a block use's document,
+      condition and place among the fields.
+    - **In the second count:** task fields, block uses, and a block's fields at each use.
+    - **In the conditions:** a filter's and a `dom-if`'s test of a task layout's document.
+    - **In the converter:** a task layout's document field, and its block; the case of a task
+      form's names, and names differing in case only; a field Web UI only shows made read-only;
+      a block given no document; a block under a condition, in version 1 and in version 2; a field
+      of a block under a condition kept once behind a field everyone sees; a block inside a block;
+      a tab named as Web UI's own, with no page, under a condition that does not convert, whose
+      page is no block, or on every type; a tab's label, rule, order and card names; tabs left to
+      their converter.
+    - **In check 2:** a block's fields; a tab or a task form no Web UI one gives; read-only
+      against Web UI's element.
+    - **In check 3:** a task's variables, and their widgets.
+    - **In check 5:** a field of a block under a condition moved out of its card; a tab without
+      its rule; a tab's and a block card's rule held to their conditions; a field's rule found in
+      its own card; only a rule that always passes taken for a read-only field.
+    - **In check 6:** a tab's label.
+    - **In check 1:** a block use as a construct.
+
+    The first round found five that did not turn the suite red: no test had a block file of two
+    elements, a `dom-if` on a task layout's document, a block under a condition in version 1, a
+    field of a conditional block kept behind one everyone sees, or a rule moved to another card.
+    Each now has its test.
 
   - **An independent review** then found twelve ways to drop, widen or misread something that
     every check still passed. Examples: a property shown to everyone, dropped because an earlier
