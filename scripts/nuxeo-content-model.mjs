@@ -3,8 +3,8 @@
  * (docs/business-apps/package-pipeline.md): what `app-package.mjs --model-server` holds layouts to,
  * and what `app-package-model.mjs` writes to a file for `--model`.
  *
- * The result is `{ doctypes, facets, schemas }`, the shape `ContentModelService` resolves in the
- * app and `readContentModel` in `libs/shared/app-definition` reads:
+ * The result is `{ doctypes, facets, schemas }`, which `readContentModel` in
+ * `libs/shared/app-definition` reads, `NuxeoContentModel`'s shape:
  *
  * - `doctypes`, from `/api/v1/config/types`;
  * - `facets`, `/api/v1/config/facets`;
@@ -17,12 +17,18 @@
  * A redirect is refused rather than followed, so that the header goes nowhere it was not sent.
  * No message here carries them.
  */
-import { basicAuthorization } from './beta-harness/nuxeo-credentials.mjs';
+import {
+  basicAuthorization,
+  NUXEO_PASS_ENV,
+  NUXEO_USER_ENV,
+} from './beta-harness/nuxeo-credentials.mjs';
 
 /** How long one request may take. A model is a few hundred kilobytes. */
 const TIMEOUT_MS = 30_000;
 /** How many schemas are read at once: a hundred, one by one, would be slow; all at once, rude. */
 const PARALLEL = 8;
+/** The most one answer may hold. A whole model is well under a megabyte; one schema, kilobytes. */
+const MAX_BYTES = 16 * 1024 * 1024;
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
@@ -67,25 +73,44 @@ export async function readServerModel(server, credentials, { fetch = globalThis.
   const where = serverBase(server);
   if (where.problem) throw new Error(where.problem);
   const headers = { Authorization: basicAuthorization(credentials), Accept: 'application/json' };
+  // The first read that fails stops the others: no more requests carry the credentials once the
+  // model can no longer be read whole.
+  const stop = new AbortController();
   const read = async (path, extra = {}) => {
     const url = `${where.base}/api/v1/config/${path}`;
-    let response;
     try {
-      response = await fetch(url, {
-        headers: { ...headers, ...extra },
-        redirect: 'error',
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      let response;
+      try {
+        response = await fetch(url, {
+          headers: { ...headers, ...extra },
+          redirect: 'error',
+          signal: AbortSignal.any([stop.signal, AbortSignal.timeout(TIMEOUT_MS)]),
+        });
+      } catch (error) {
+        // `fetch failed` says nothing; its cause says why, by a code when it is an AggregateError.
+        const cause = error.cause?.code ?? (error.cause?.message || error.message);
+        throw new Error(`GET ${url} failed: ${cause}`);
+      }
+      if (response.status !== 200)
+        throw new Error(`GET ${url} answered ${response.status}, not 200`);
+      const declared = Number(response.headers.get('content-length'));
+      if (declared > MAX_BYTES) throw new Error(`GET ${url} answered more than ${MAX_BYTES} bytes`);
+      let text;
+      try {
+        text = await response.text();
+      } catch (error) {
+        throw new Error(`GET ${url} was not read whole: ${error.message}`);
+      }
+      if (text.length > MAX_BYTES)
+        throw new Error(`GET ${url} answered more than ${MAX_BYTES} bytes`);
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error(`GET ${url} did not answer JSON`);
+      }
     } catch (error) {
-      // `fetch failed` says nothing; its cause says why, by a code when it is an AggregateError.
-      const cause = error.cause?.code ?? (error.cause?.message || error.message);
-      throw new Error(`GET ${url} failed: ${cause}`);
-    }
-    if (response.status !== 200) throw new Error(`GET ${url} answered ${response.status}, not 200`);
-    try {
-      return await response.json();
-    } catch {
-      throw new Error(`GET ${url} did not answer JSON`);
+      stop.abort();
+      throw error;
     }
   };
 
@@ -101,18 +126,33 @@ export async function readServerModel(server, credentials, { fetch = globalThis.
   const schemas = new Array(names.length);
   let next = 0;
   const worker = async () => {
-    while (next < names.length) {
+    while (next < names.length && !stop.signal.aborted) {
       const index = next++;
       const schema = await read(`schemas/${encodeURIComponent(names[index])}`, {
         'fetch-schema': 'fields',
       });
-      if (!isRecord(schema) || schema.name !== names[index] || !isRecord(schema.fields))
+      if (!isRecord(schema) || schema.name !== names[index] || !isRecord(schema.fields)) {
+        stop.abort();
         throw new Error(`config/schemas/${names[index]} did not answer that schema`);
+      }
       schemas[index] = schema;
     }
   };
   await Promise.all(Array.from({ length: Math.min(PARALLEL, names.length) }, worker));
   return { doctypes: types.doctypes, facets, schemas };
+}
+
+/**
+ * The environment without `NUXEO_USER` and `NUXEO_PASS`, for a child process that needs neither:
+ * the validator and the builder read files, not servers.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function withoutCredentials(env) {
+  const rest = { ...env };
+  delete rest[NUXEO_USER_ENV];
+  delete rest[NUXEO_PASS_ENV];
+  return rest;
 }
 
 function isRecord(value) {

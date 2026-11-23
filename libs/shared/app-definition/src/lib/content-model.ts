@@ -1,11 +1,12 @@
 /**
  * The model reader: a server's content model, its document types, schemas and facets, as the
  * checks of a layout file need it (docs/business-apps/layout-v2.md, section 3). The package
- * pipeline, the designer and the Studio migration hold a layout to it; the app reads the same
- * responses through `ContentModelService`.
+ * pipeline holds a layout to it; the designer and the Studio migration are to.
  *
- * It reads what `ContentModelService.getContentModel()` resolves, `NuxeoContentModel` in
- * `libs/shared/nuxeo-client`, and what the pipeline's model file holds, which is the same:
+ * It reads `{ doctypes, facets, schemas }`: the pipeline's model file, and the shape of
+ * `NuxeoContentModel`, which `ContentModelService` in `libs/shared/nuxeo-client` resolves, though
+ * nothing calls it yet and its schemas are the list's, so they name no directory. The record page
+ * reads its model another way, one type at a time from `/config/types/<type>`.
  *
  * - `doctypes`: the `doctypes` of `/api/v1/config/types`. Each names its parent, its facets and
  *   its schemas, the inherited ones and those its facets bring included;

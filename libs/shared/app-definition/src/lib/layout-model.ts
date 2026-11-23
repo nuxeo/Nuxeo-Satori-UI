@@ -15,6 +15,11 @@
  * Not checked against the model: a related list's columns, which are the listed records' and not
  * this type's; the properties a computation, a rule or a widget parameter names; and a vocabulary
  * widget's `directory` against the one the property is bound to.
+ *
+ * Stricter than the record page in two places, as the pipeline is meant to be: a column whose
+ * widget does not show its subfield is refused here, where the page shows the value itself; and a
+ * table inside a table's column is held to its subfield's subfields, though the page does not draw
+ * one yet.
  */
 import { join, type Finding } from './checker';
 import {

@@ -108,7 +108,8 @@ A field has `field` or `computed`, never both. A computed field is never editabl
 
 A widget says how one value is shown, and in a form how it is entered. It declares the property
 types it accepts. A widget on a property of another type is refused wherever the content model is
-known: by the pipeline when it is given the model, by the designer, and by the migration server.
+known: by the app when it loads the page and by the pipeline when it is given the model, and the
+designer and the migration server are to refuse it too (section 11).
 
 | Widget          | For                            | Parameters                                                               | In a form                        |
 | --------------- | ------------------------------ | ------------------------------------------------------------------------ | -------------------------------- |

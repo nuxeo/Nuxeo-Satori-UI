@@ -50,7 +50,7 @@ import {
   missingNuxeoCredentialsMessage,
   readNuxeoCredentials,
 } from './beta-harness/nuxeo-credentials.mjs';
-import { readServerModel, serverBase } from './nuxeo-content-model.mjs';
+import { readServerModel, serverBase, withoutCredentials } from './nuxeo-content-model.mjs';
 import {
   attribute,
   attributesOf,
@@ -209,6 +209,7 @@ function run({
   ];
   const validation = spawnSync(process.execPath, [VALIDATOR, 'validate', root, ...flags], {
     encoding: 'utf8',
+    env: withoutCredentials(process.env),
     maxBuffer: OUTPUT_LIMIT,
   });
   process.stdout.write(validation.stdout ?? '');
@@ -238,6 +239,7 @@ function run({
   // 4. The zip, from version 1's builder, which checks the component XML the way the server does.
   const build = spawnSync(process.execPath, [builder, '--out', output], {
     encoding: 'utf8',
+    env: withoutCredentials(process.env),
     maxBuffer: OUTPUT_LIMIT,
   });
   if (build.status !== 0) {

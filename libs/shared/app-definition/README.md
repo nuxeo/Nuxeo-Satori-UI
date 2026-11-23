@@ -51,7 +51,10 @@ install and no transpiler.
     layout is then held to the document type its path names: a field whose property is on neither
     the type nor a facet it declares, a widget that does not show its property's type, and a table
     column or an address part naming a subfield the property lacks are each found. A model it
-    cannot read exits 2, with every problem.
+    cannot read exits 2, with every problem. Version 1 layouts are not held to it, and the run says
+    how many layouts were, or that none was.
+- **`model <file>`:** reads a content model alone, as `--model` does: exit 0 when it can be read
+  whole, 1 with every problem when it cannot. The export checks the file it writes with it.
 - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
   counted.
 - **Exit codes:**
@@ -104,8 +107,9 @@ install and no transpiler.
 - **`checker.ts`** holds what every file shares: ids, names, rules, values, computations and field
   entries.
 - **`content-model.ts`** is the model reader. `readContentModel` reads a server's document types,
-  facets and schemas, in the shape `ContentModelService` resolves them in the app: each property's
-  type, whether it is a list, its subfields and its directory. It refuses a model it cannot read
+  facets and schemas, `{ doctypes, facets, schemas }`, which is `NuxeoContentModel`'s shape: each
+  property's type, whether it is a list, its subfields and, when the schema was read with
+  `fetch-schema: fields`, its directory. It refuses a model it cannot read
   whole, since a layout held to a model read in part would be refused for what was left out.
   `propertiesOf` gives a type's properties, its facets' included, by `<prefix>:<name>`.
 - **`layout-model.ts`** holds a layout to the model, when `validateLayoutV2` is given one and the
@@ -150,7 +154,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 86 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 88 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -224,7 +228,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - leaving out the schemas of a facet the type declares;
     - reading `integer` as other than `long`;
     - `validateFile` not passing the model on, or the validator not running its checks;
-    - the command exiting 0 for a model it cannot read.
+    - the command exiting 0 for a model it cannot read, with `--model` or with `model <file>`;
+    - counting a file that is not a layout as held to the model.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;

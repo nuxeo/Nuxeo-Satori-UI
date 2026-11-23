@@ -196,10 +196,10 @@ describe('validateLayoutV2, given the content model', () => {
         { id: 't2', label: 'Two', cards: [{ id: 'b', fields: ['member:middleName'] }] },
       ],
     };
-    expect(messages(tabs)).toEqual([
-      'tabs[1].cards[0].fields[0]: "member:middleName" is not a property of the type "Member" or of its facets [unknown]',
-    ]);
-    for (const mode of ['metadata', 'edit', 'create'] as const) {
+    for (const mode of ['view', 'metadata', 'edit', 'create'] as const) {
+      expect(messages(tabs, { mode })).toEqual([
+        'tabs[1].cards[0].fields[0]: "member:middleName" is not a property of the type "Member" or of its facets [unknown]',
+      ]);
       expect(messages(withFields({ field: 'member:birthDate', widget: 'text' }), { mode })).toEqual(
         [
           'cards[0].fields[0].widget: the widget "text" does not show "member:birthDate", a date property: it takes string [parameter]',
@@ -270,7 +270,24 @@ describe('validateLayoutV2, given the content model', () => {
     const context = { assets: new Set<string>() };
     expect(
       validateFile({ kind: 'layout', type: 'Member', mode: 'view' }, layout, context, { model }),
-    ).toHaveLength(1);
+    ).toEqual([
+      {
+        path: 'cards[0].fields[0].widget',
+        kind: 'parameter',
+        message:
+          'the widget "text" does not show "member:birthDate", a date property: it takes string',
+      },
+    ]);
+    // The type is the path's, not any type: another path, another type's properties.
+    expect(
+      validateFile({ kind: 'layout', type: 'Claim', mode: 'view' }, layout, context, { model }),
+    ).toEqual([
+      {
+        path: '',
+        kind: 'unknown',
+        message: 'the document type "Claim" is not in the content model',
+      },
+    ]);
     expect(validateFile({ kind: 'layout', type: 'Member', mode: 'view' }, layout, context)).toEqual(
       [],
     );

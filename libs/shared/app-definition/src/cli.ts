@@ -1,6 +1,7 @@
 /**
  * npm run app-definition:validate -- <file or directory>... [--mode <mode>] [--allow-list <file>]
  *   [--registered <file>] [--platform <version>] [--model <file>]
+ * node libs/shared/app-definition/src/bin.mjs model <file>
  *
  * The check behind phase 0's demo step 1, which the package pipeline is to run first. A layout file
  * that names a widget the platform does not have is refused, and the message names the widget.
@@ -21,9 +22,12 @@
  * - **What the deployment registers in code**, a customer's own rules and actions, and the domain
  *   modules it has, come from `--registered`.
  * - **`app.json`'s platform range** is held to `--platform`, when it is given.
- * - **The server's content model**, from `--model`, holds each layout to the document type its
- *   path names: its properties, and the property types its widgets show. The file is
+ * - **The server's content model**, from `--model`, holds each version 2 layout to the document
+ *   type its path names: its properties, and the property types its widgets show. The file is
  *   `{ doctypes, facets, schemas }`, as `scripts/app-package-model.mjs` exports it from a server.
+ *   The run says how many layouts it held to the model, and says so when there were none.
+ * - **`model <file>`** reads a content model alone, as `--model` does, and exits 0 when the whole
+ *   of it can be read, 1 with every problem when it cannot: the export checks its file with it.
  * - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
  *   counted.
  *
@@ -47,7 +51,8 @@ export interface CliIo {
 
 const USAGE =
   'usage: app-definition validate <file or directory>... [--mode view|metadata|edit|create]' +
-  ' [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]\n';
+  ' [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]\n' +
+  '       app-definition model <file>\n';
 const CANNOT_TELL =
   'cannot tell which file of an app definition it is; name it as a package places it,' +
   ' such as layouts/<Type>/<mode>.layout.json or queues/<id>.json, or pass --mode for a layout';
@@ -56,6 +61,7 @@ const VERSION_ONE_FILES = ['bootstrap.json', 'manifest.json', 'layouts.json'];
 
 export function main(argv: readonly string[], io: CliIo): number {
   const [command, ...rest] = argv;
+  if (command === 'model') return checkModel(rest, io);
   const paths: string[] = [];
   let mode: LayoutMode | undefined;
   let allowList: string | undefined;
@@ -145,6 +151,7 @@ export function main(argv: readonly string[], io: CliIo): number {
   let refused = 0;
   let passed = 0;
   let versionOne = 0;
+  let heldToModel = 0;
   let operationRefused = false;
   const checked = new Set<string>();
   for (const { path, root, named } of found) {
@@ -181,6 +188,7 @@ export function main(argv: readonly string[], io: CliIo): number {
       versionOne++;
       continue;
     }
+    if (model && placed.file.kind === 'layout') heldToModel++;
     const findings = validateFile(
       placed.file,
       content,
@@ -209,7 +217,9 @@ export function main(argv: readonly string[], io: CliIo): number {
     io.out('No --allow-list was given, so every operation is refused.\n');
   if (model)
     io.out(
-      `Layouts were held to the content model in ${modelFile}: ${model.types.size} document ${model.types.size === 1 ? 'type' : 'types'}.\n`,
+      heldToModel > 0
+        ? `${heldToModel} ${heldToModel === 1 ? 'layout was' : 'layouts were'} held to the content model in ${modelFile}.\n`
+        : `No layout of version 2 was found, so none was held to the content model in ${modelFile}.\n`,
     );
   const total = checked.size;
   io.out(
@@ -289,12 +299,27 @@ function readModel(path: string): ContentModel | string {
   }
   const reading = readContentModel(content);
   if (reading.model) return reading.model;
-  const shown = reading.problems.slice(0, 20);
-  const more = reading.problems.length - shown.length;
-  return (
-    `is not a content model:\n${shown.map((problem) => `  - ${problem}`).join('\n')}` +
-    (more > 0 ? `\n  - and ${more} more` : '')
+  return `is not a content model:\n${reading.problems.map((problem) => `  - ${problem}`).join('\n')}`;
+}
+
+/** `model <file>`: whether the whole of a content model can be read, and every problem if not. */
+function checkModel(rest: readonly string[], io: CliIo): number {
+  const [path, ...more] = rest;
+  if (path === undefined || path.startsWith('--') || more.length > 0) {
+    io.err(USAGE);
+    return 2;
+  }
+  const read = readModel(path);
+  if (typeof read === 'string') {
+    io.out(`${path}: ${read}\n`);
+    return 1;
+  }
+  const count = (size: number, noun: string): string => `${size} ${noun}${size === 1 ? '' : 's'}`;
+  io.out(
+    `${path}: a content model of ${count(read.types.size, 'document type')}, ` +
+      `${count(read.facets.size, 'facet')} and ${count(read.schemas.size, 'schema')}.\n`,
   );
+  return 0;
 }
 
 const REGISTERED_KEYS = ['rules', 'rowActions', 'bulkActions', 'actions', 'modules'] as const;

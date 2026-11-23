@@ -396,7 +396,7 @@ expectBuilt(
   (scratch) => ['--allow-list', join(scratch, 'allow-list.json')],
 );
 
-// The content model, given as a file (package-pipeline.md, section 3). The demo's is beside it,
+// The content model, given as a file (package-pipeline.md, section 4). The demo's is beside it,
 // and these controls copy the package with it, so each is held to the model it carries.
 const MODEL = 'content-model.json';
 const withModel = (scratch) => ['--model', join(scratch, 'payers-claims-demo', MODEL)];
@@ -535,6 +535,7 @@ await (async () => {
   let answer = (schema) => schema;
   let status = 200;
   let redirect = null;
+  let doctypes = () => model.doctypes;
   const server = createServer((request, response) => {
     if (request.url === '/elsewhere') {
       seen.elsewhere++;
@@ -559,7 +560,7 @@ await (async () => {
     }
     const path = new URL(request.url, 'http://localhost').pathname;
     const named = /^\/nuxeo\/api\/v1\/config\/schemas\/([^/]+)$/.exec(path);
-    if (path === '/nuxeo/api/v1/config/types') json({ doctypes: model.doctypes, schemas: {} });
+    if (path === '/nuxeo/api/v1/config/types') json({ doctypes: doctypes(), schemas: {} });
     else if (path === '/nuxeo/api/v1/config/facets') json(model.facets);
     // The list, as Nuxeo answers it: no constraints, so no directory.
     else if (path === '/nuxeo/api/v1/config/schemas')
@@ -667,6 +668,22 @@ await (async () => {
       if (held.status !== 0)
         failures.push(`the demo, held to the exported model: exit ${held.status}`);
     }
+    // An answer the validator cannot read whole, a type naming a facet the server does not list,
+    // is not left behind as a file that --model would then refuse.
+    negative++;
+    doctypes = () => ({ Claim: { ...model.doctypes.Claim, facets: ['Unlisted'] } });
+    const unreadable = join(scratch, 'unreadable.json');
+    const refusedExport = await command([EXPORT, '--server', address, '--out', unreadable], env);
+    if (
+      refusedExport.status !== 1 ||
+      !refusedExport.output.includes('the facet "Unlisted" is not in facets') ||
+      existsSync(unreadable)
+    )
+      failures.push(
+        `an export the validator cannot read exits ${refusedExport.status}, not 1 with no file\n${refusedExport.output}`,
+      );
+    doctypes = () => model.doctypes;
+
     for (const [argv, environment, expected] of [
       [[EXPORT, '--server', address], env, 'usage:'],
       [

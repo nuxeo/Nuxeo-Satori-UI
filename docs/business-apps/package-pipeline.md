@@ -108,9 +108,11 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
   - a table column naming a subfield its property does not have, or whose widget does not show the
     subfield, and an address part naming a subfield the property does not have;
   - a layout for a type the model does not have.
+- **Version 1 layouts are not held to it**, as they are not validated. The run says how many
+  layouts it held to the model, and says so when there were none.
 - **The model file** is `{ doctypes, facets, schemas }`: the `doctypes` of `/api/v1/config/types`,
-  `/api/v1/config/facets`, and each schema of `/api/v1/config/schemas`. It is what the app's
-  `ContentModelService` reads, in the same shape. Export one from a server, with its credentials
+  `/api/v1/config/facets`, and each schema of `/api/v1/config/schemas`. It has the shape of
+  `NuxeoContentModel` in `libs/shared/nuxeo-client`. Export one from a server, with its credentials
   from the environment:
 
   ```bash
@@ -120,7 +122,8 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 
   It reads each schema on its own, `/api/v1/config/schemas/<name>` with `fetch-schema: fields`,
   because the list leaves out every field's constraints, and with them the directory a property is
-  bound to.
+  bound to. It then reads the file back as `--model` does, and removes it, exiting 1, when it
+  cannot be read whole.
 
 - **Read live instead:** `--model-server https://<host>/nuxeo`, with `NUXEO_USER` and `NUXEO_PASS`
   in the environment, reads the same model before step 1. A model that cannot be read stops the
@@ -135,7 +138,9 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
   model that refuses it. A malformed model, and a server that refuses a read, each exit 2. A fake
   server answering as Nuxeo does proves the live read and the export: the credentials arrive on
   every read, each schema is read with `fetch-schema: fields`, a model whose property the widget
-  does not fit refuses the layout, and the exported file is the model the server answered.
+  does not fit refuses the layout, and the exported file is the model the server answered. Run
+  against a local Nuxeo server, the export read 60 types, 65 facets and 98 schemas, with the
+  directories bound to `dc:coverage` and to each item of `dc:subjects`.
 
 ## 5. Publishing a package
 
@@ -185,5 +190,3 @@ reaches only when the integration branch does, and a tag names exactly what is p
 - **Not held to the model yet:** a related list's columns, which are other records'; a queue's
   columns; the properties a computation, a rule or a widget parameter names; a task form's fields;
   and a vocabulary widget's `directory` against the one its property is bound to.
-- **The live read was proved against a fake server only.** It was not run against a real Nuxeo
-  server: the local one was stopped when it was written.
