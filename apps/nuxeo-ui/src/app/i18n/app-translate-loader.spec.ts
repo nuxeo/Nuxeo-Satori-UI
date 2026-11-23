@@ -7,8 +7,6 @@ import {
 } from '@angular/common/http/testing';
 import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
-import { DocumentLayoutService } from '@agentic-ui/shared/document-layouts';
-import { of } from 'rxjs';
 
 import {
   AppTranslateLoader,
@@ -29,22 +27,24 @@ describe('AppTranslateLoader', () => {
   let loader: AppTranslateLoader;
   let httpMock: HttpTestingController;
 
-  /** `labelLanguages`: those the layouts index lists a business app's labels in; none by default. */
-  function configure(
-    labels: Record<string, string> = {},
-    labelLanguages: readonly string[] = [],
-  ): void {
+  /**
+   * `fromService`: the configuration service answered for the bootstrap, so the layouts index is
+   * read for the languages a business app's labels are listed in. By default it did not, as under
+   * a bare `nx serve`, and nothing more is asked for.
+   */
+  function configure(labels: Record<string, string> = {}, fromService = false): void {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: AppConfigService,
-          useValue: { manifest: signal({ labels }) },
-        },
-        {
-          provide: DocumentLayoutService,
-          useValue: { labelLanguages: () => of(labelLanguages) },
+          useValue: {
+            manifest: signal({ labels }),
+            diagnostics: signal({
+              bootstrapSource: fromService ? 'configuration-service' : 'packaged-default',
+            }),
+          },
         },
       ],
     });
@@ -355,46 +355,59 @@ describe('AppTranslateLoader', () => {
       });
     });
 
-    /** The upstream folders and the app catalogue, then the labels file the index lists. */
-    function flushWithLabels(app: CatalogueBody, answer: (request: TestRequest) => void): void {
+    const INDEX = '/agentic-ui-config/layouts.json';
+    const index = (labels: readonly string[]) => ({
+      format: 'nuxeo-agentic-ui-config/1',
+      layer: 'layouts',
+      layouts: [],
+      labels,
+    });
+
+    /**
+     * The upstream folders and the app catalogue, then the index, then the labels file it lists:
+     * the file is asked for only once the index has answered.
+     */
+    function flushWithLabels(
+      app: CatalogueBody,
+      listed: readonly string[],
+      answer?: (request: TestRequest) => void,
+    ): void {
       const requests = httpMock.match(() => true);
-      expect(requests.length).toBe(UPSTREAM_FOLDER_COUNT + 2);
+      expect(requests.map((request) => request.request.url).at(-1)).toBe(INDEX);
       requests.slice(0, UPSTREAM_FOLDER_COUNT).forEach((request) => request.flush({}));
       requests[UPSTREAM_FOLDER_COUNT].flush(app);
-      expect(requests[UPSTREAM_FOLDER_COUNT + 1].request.url).toBe(
-        '/agentic-ui-config/labels/en.json',
-      );
-      answer(requests[UPSTREAM_FOLDER_COUNT + 1]);
+      requests[UPSTREAM_FOLDER_COUNT + 1].flush(index(listed));
+      const labels = httpMock.match('/agentic-ui-config/labels/en.json');
+      expect(labels.length).toBe(answer ? 1 : 0);
+      if (answer) answer(labels[0]);
     }
 
     it('are asked for only in a language the layouts index lists', () => {
-      configure({}, ['en']);
-      loader.getTranslation('fr').subscribe();
-      const urls = httpMock
-        .match(() => true)
-        .map((request) => {
-          request.flush({});
-          return request.request.url;
-        });
-      // French is not listed, so nothing is asked for that cannot be there.
-      expect(urls).not.toContain('/agentic-ui-config/labels/fr.json');
-      expect(urls.length).toBe(UPSTREAM_FOLDER_COUNT + 1);
+      configure({}, true);
+      let merged: Record<string, string> | undefined;
+      loader.getTranslation('en').subscribe((value) => (merged = value));
+      // The index lists French only, so nothing is asked for in English.
+      flushWithLabels({ 'only.app': 'app' }, ['fr']);
+      expect(merged?.['only.app']).toBe('app');
     });
 
     it('come above the platform catalogue and below the manifest labels', () => {
-      configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' }, ['en']);
+      configure({ 'payers.member.claims': 'Claims, as the customer relabelled them' }, true);
       let merged: Record<string, string> | undefined;
       loader.getTranslation('en').subscribe((value) => (merged = value));
 
-      flushWithLabels({ 'layout.field.claim:memberId': 'Member', 'only.app': 'app' }, (request) =>
-        request.flush({
-          version: 2,
-          labels: {
-            'payers.member.claims': 'Claims',
-            'payers.member.cases': 'Cases',
-            'layout.field.claim:memberId': 'Member ID',
-          },
-        }),
+      flushWithLabels(
+        { 'layout.field.claim:memberId': 'Member', 'only.app': 'app' },
+        ['en'],
+        (request) =>
+          request.flush({
+            version: 2,
+            labels: {
+              'payers.member.claims': 'Claims',
+              'payers.member.cases': 'Cases',
+              'layout.field.claim:memberId': 'Member ID',
+            },
+          }),
       );
 
       expect(merged?.['payers.member.cases']).toBe('Cases');
@@ -405,17 +418,30 @@ describe('AppTranslateLoader', () => {
       expect(merged?.['payers.member.claims']).toBe('Claims, as the customer relabelled them');
     });
 
-    it('say so when a listed file cannot be read, and the rest still loads', () => {
-      configure({}, ['en']);
-      let merged: Record<string, string> | undefined;
-      loader.getTranslation('en').subscribe((value) => (merged = value));
-      flushWithLabels({ 'only.app': 'app' }, (request) =>
-        request.flush('oops', { status: 500, statusText: 'Server Error' }),
-      );
-      expect(merged?.['only.app']).toBe('app');
-      expect(warnings).toEqual([
-        '[agentic-ui-config] /agentic-ui-config/labels/en.json not read: HTTP 500',
-      ]);
+    it('say so when a listed file cannot be read, or is not JSON, and the rest still loads', () => {
+      for (const [answer, reason] of [
+        [
+          (r: TestRequest) => r.flush('oops', { status: 500, statusText: 'Server Error' }),
+          'HTTP 500',
+        ],
+        // A body that does not parse fails with its 200 status, as a browser reports it.
+        [
+          (r: TestRequest) =>
+            r.error(new ProgressEvent('error'), { status: 200, statusText: 'OK' }),
+          'it is not JSON',
+        ],
+      ] as const) {
+        TestBed.resetTestingModule();
+        warnings.length = 0;
+        configure({}, true);
+        let merged: Record<string, string> | undefined;
+        loader.getTranslation('en').subscribe((value) => (merged = value));
+        flushWithLabels({ 'only.app': 'app' }, ['en'], answer);
+        expect(merged?.['only.app']).toBe('app');
+        expect(warnings).toEqual([
+          `[agentic-ui-config] /agentic-ui-config/labels/en.json not read: ${reason}`,
+        ]);
+      }
     });
 
     it('are read for the language asked, beside bootstrap.json', () => {

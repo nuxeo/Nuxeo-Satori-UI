@@ -231,14 +231,17 @@ rmSync(LABELS, { recursive: true, force: true });
 if (labels.size === 0) {
   console.log(`no labels: ${LABELS.slice(ROOT.length + 1)} not served`);
 } else {
-  // The app asks for a language's labels in the languages it offers, which the bootstrap lists:
-  // the last fragment that sets them wins, as the app merges them.
-  const offered =
-    envelopes
+  // The app asks for a language's labels in the languages it offers, which the bootstrap lists
+  // (the last fragment that sets them wins, as the app merges them), and always in English, its
+  // fallback language.
+  const offered = [
+    'en',
+    ...(envelopes
       .find((envelope) => envelope.layer === 'bootstrap')
       ?.fragments.map((fragment) => fragment.content?.availableLanguages)
       .filter(Array.isArray)
-      .at(-1) ?? [];
+      .at(-1) ?? []),
+  ];
   mkdirSync(LABELS, { recursive: true });
   for (const [lang, { path, content }] of labels) {
     const out = join(LABELS, `${lang}.json`);
@@ -248,7 +251,7 @@ if (labels.size === 0) {
     );
     if (!offered.includes(lang)) {
       console.warn(
-        `warning: the app offers ${offered.join(', ') || 'no languages'}, so it never asks for ${lang}'s labels`,
+        `warning: the app asks for labels in ${[...new Set(offered)].join(', ')} only, so never for ${lang}'s`,
       );
     }
   }

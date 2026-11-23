@@ -275,15 +275,6 @@ export class DocumentLayoutService {
   }
 
   /**
-   * The languages a business app's labels are served in, as the layouts index lists them; empty
-   * when it lists none, or cannot be read. Read once per session with the rest of the index. Never
-   * errors.
-   */
-  labelLanguages(): Observable<readonly string[]> {
-    return this.index().pipe(map((index) => index.labelLanguages));
-  }
-
-  /**
    * A user's or group's display name, or `null` when it cannot be read. Never errors.
    *
    * Read by id, once per session, and for a group without its members, which `UserService` asks

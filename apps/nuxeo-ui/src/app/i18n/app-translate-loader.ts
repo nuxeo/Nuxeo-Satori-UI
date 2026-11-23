@@ -2,9 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
 import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
-import { DocumentLayoutService } from '@agentic-ui/shared/document-layouts';
+import { layoutsIndexUrl, readLayoutIndex } from '@agentic-ui/shared/document-layouts';
 import { TranslateLoader } from '@ngx-translate/core';
-import { Observable, catchError, forkJoin, map, of, switchMap, timeout } from 'rxjs';
+import { Observable, TimeoutError, catchError, forkJoin, map, of, switchMap, timeout } from 'rxjs';
 
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
 
@@ -143,8 +143,21 @@ export function packageLabelsUrl(bootstrapUrl: string, lang: string): string {
   return `${path.slice(0, path.lastIndexOf('/') + 1)}labels/${encodeURIComponent(lang)}.json`;
 }
 
-/** As long as the layouts get: the translations, and so the app's start, wait on this read. */
+/**
+ * How long the index and the labels file may take between them, as long as a layout gets: the
+ * translations, and so the app's start, wait on both.
+ */
 const LABELS_TIMEOUT_MS = 10_000;
+
+/** Why a read failed, as the console says it: a body that did not parse answers 200. */
+function readFailure(error: unknown): string {
+  if (error instanceof TimeoutError) return `no response within ${LABELS_TIMEOUT_MS / 1000} s`;
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status === 'number' && status >= 200 && status < 300) return 'it is not JSON';
+  if (typeof status === 'number' && status !== 0) return `HTTP ${status}`;
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message ? message : 'the request failed';
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -190,13 +203,17 @@ export function readPackageLabels(raw: unknown, source: string): Record<string, 
  * Nothing on a server serves or lists one until the app registry (decisions B and E);
  * `npm run config:dev -- --labels` does both for the dev server. A listed file that cannot be
  * read is said in the console, and its labels are absent.
+ *
+ * The index is read here, with this loader's own client, and only when the configuration service
+ * answered for the bootstrap: where it did not, as under a bare `nx serve`, there is no index to
+ * ask for. It is not read through `DocumentLayoutService`, whose Nuxeo client would be built
+ * before the configuration's Nuxeo origin is applied.
  */
 @Injectable({ providedIn: 'root' })
 export class AppTranslateLoader implements TranslateLoader {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
-  private readonly layouts = inject(DocumentLayoutService);
 
   getTranslation(lang: string): Observable<Record<string, string>> {
     // Only folders that ship this language. `catchError` stays on the ones that are asked: a
@@ -218,22 +235,24 @@ export class AppTranslateLoader implements TranslateLoader {
       .get<unknown>(translationUrl(lang, document.baseURI))
       .pipe(catchError(() => of(EN_FALLBACK_TRANSLATIONS)));
     const labelsUrl = packageLabelsUrl(this.bootstrapUrl, lang);
-    const package$ = this.layouts.labelLanguages().pipe(
+    const package$ = this.labelLanguages().pipe(
       switchMap((languages) =>
         languages.includes(lang)
           ? this.http.get<unknown>(labelsUrl).pipe(
-              timeout(LABELS_TIMEOUT_MS),
               map((raw) => readPackageLabels(raw, labelsUrl)),
               catchError((error: unknown) => {
-                const status = (error as { status?: unknown } | null)?.status;
-                console.warn(
-                  `[agentic-ui-config] ${labelsUrl} not read: ${typeof status === 'number' && status !== 0 ? `HTTP ${status}` : String((error as { message?: unknown } | null)?.message ?? error)}`,
-                );
+                console.warn(`[agentic-ui-config] ${labelsUrl} not read: ${readFailure(error)}`);
                 return of({});
               }),
             )
           : of({}),
       ),
+      // One limit for the index and the file together, so the start waits on one at most.
+      timeout(LABELS_TIMEOUT_MS),
+      catchError((error: unknown) => {
+        console.warn(`[agentic-ui-config] labels for ${lang} not read: ${readFailure(error)}`);
+        return of({});
+      }),
     );
 
     return forkJoin([...folders$, app$, package$]).pipe(
@@ -251,6 +270,22 @@ export class AppTranslateLoader implements TranslateLoader {
           ...this.config.manifest().labels,
         };
       }),
+    );
+  }
+
+  /**
+   * The languages the layouts index lists a business app's labels in. None where the configuration
+   * service did not answer, or the index cannot be read: its reader says why in the record page's
+   * console lines, so nothing more is said here.
+   */
+  private labelLanguages(): Observable<readonly string[]> {
+    if (this.config.diagnostics().bootstrapSource !== 'configuration-service') return of([]);
+    return this.http.get<unknown>(layoutsIndexUrl(this.bootstrapUrl)).pipe(
+      map((raw) => {
+        const index = readLayoutIndex(raw);
+        return 'invalid' in index ? [] : index.labelLanguages;
+      }),
+      catchError(() => of([])),
     );
   }
 }

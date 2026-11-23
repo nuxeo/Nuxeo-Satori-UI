@@ -1597,7 +1597,11 @@ They are not anonymous, though: being same-origin, they carry the browser's cook
 session's included. The server answers every user with the same files either way.
 
 `layouts.json` lists `{ type, mode, url, component, bundle, source }` per layout in force, plus the
-server's `diagnostics`. A layout file is fetched only when the index lists its type and mode, and
+server's `diagnostics`, and may list in `labels` the languages a business app's labels are served
+in (`docs/business-apps/app-definition-v2.md`, section 7). `AppTranslateLoader` reads the index for
+that list at startup, through the app's own `HttpClient`, only when the configuration service
+answered for the bootstrap, and then asks for `labels/<lang>.json` only in a language it lists.
+Today's servlet lists none; `npm run config:dev -- --labels` lists those it serves. A layout file is fetched only when the index lists its type and mode, and
 answers `{ format, layer: "layout", type, mode, component, bundle, source, content }`, where
 `content` is the layout file itself — format in `docs/extension-reference.md` §9b. A missing or
 malformed index or file, or no answer within 10 s (`LAYOUT_LOAD_TIMEOUT_MS`), falls back to the
