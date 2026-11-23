@@ -534,6 +534,30 @@ describe('compute: a reason quotes at most 60 characters of anything a file hold
 });
 
 describe('quote: a value as a reason names it', () => {
+  /** `value`, with a count of the properties read from it. */
+  const countedObject = <T extends object>(value: T) => {
+    const read = { count: 0 };
+    const proxy = new Proxy(value, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && key !== 'toJSON') read.count += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    return { proxy, read };
+  };
+  const omitted = (count: number) =>
+    Object.fromEntries(Array.from({ length: count }, (_, i) => [`k${i}`, undefined]));
+
+  it('reads no more than 122 values of an object whose properties JSON leaves out', () => {
+    // JSON.stringify reads all 100,000 to write `{}`, and so did quote, as each wrote nothing.
+    const { proxy, read } = countedObject(omitted(100_000));
+    expect(quote(proxy)).toBe('an object');
+    expect(read.count).toBeLessThanOrEqual(122);
+    const inside = countedObject(omitted(100_000));
+    expect(quote({ a: 1, b: inside.proxy })).toBe('an object');
+    expect(inside.read.count).toBeLessThanOrEqual(122);
+  });
+
   // Written as JSON.stringify writes it, without writing more than the cut keeps.
   it.each([
     ['a short object', { field: 'dc:title', widget: 'text' }],
@@ -549,6 +573,7 @@ describe('quote: a value as a reason names it', () => {
     ['an object that only inherits from Number.prototype', Object.create(Number.prototype)],
     ['a toJSON, given its key', { a: { toJSON: (key: string) => `key ${key}` } }],
     ['a toJSON that gives nothing', { a: { toJSON: () => undefined }, b: 1 }],
+    ['100 properties JSON leaves out, then one it writes', { ...omitted(100), z: 1 }],
     ['numbers', [1e21, 1e-7, -1.5, 0.1 + 0.2, Number.MAX_VALUE]],
     ['escapes', 'quote " backslash \\ newline \n tab \t \u0001   \u{1F600}'],
     ['a lone surrogate', '\uD83D'],
