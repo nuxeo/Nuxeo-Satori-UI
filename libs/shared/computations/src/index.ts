@@ -4,7 +4,8 @@
  * validator in `@agentic-ui/shared/app-definition` checks the same computations when a package is
  * built. Plain TypeScript, with no Angular and no HTTP.
  */
-export { compute } from './lib/compute';
+export { PACKAGED_CHECK_EVALUATORS, runCheck, type CheckEvaluator } from './lib/checks';
+export { compute, evaluateValue } from './lib/compute';
 export { isStoredCalendarDay } from './lib/dates';
 export { PACKAGED_COMPUTATION_EVALUATORS } from './lib/evaluators';
 export {

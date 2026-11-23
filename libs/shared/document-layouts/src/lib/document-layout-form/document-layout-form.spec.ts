@@ -134,7 +134,7 @@ describe('DocumentLayoutFormComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
-        { provide: DocumentLayoutService, useValue: { layoutFor } },
+        { provide: DocumentLayoutService, useValue: { formLayoutFor: layoutFor } },
         { provide: AppExtensionsService, useValue: { resolve } },
         {
           provide: DirectoryService,

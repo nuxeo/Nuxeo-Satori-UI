@@ -1514,6 +1514,13 @@
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."
   },
   "document-layouts": {
+    "form": {
+      "check": {
+        "at-most": "{{label}} cannot be more than {{bound}}.",
+        "failed": "{{label}} is not allowed.",
+        "not-before": "{{label}} cannot be before {{bound}}."
+      }
+    },
     "loading-form": "Loading the form",
     "no": "No",
     "related": {

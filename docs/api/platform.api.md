@@ -1725,6 +1725,9 @@ interface NxsEditorField {
     readonly label: string;
     readonly definition: NxsEditorFieldType;
     readonly multiline?: boolean;
+    readonly rows?: number;
+    readonly readOnly?: boolean;
+    readonly readOnlyText?: string;
     }
 }
 interface NxsEditorFieldType {
@@ -2065,7 +2068,9 @@ class NxsMetadataEditorComponent {
     readonly disabled: import("@angular/core").InputSignal<boolean>;
     readonly headingLevel: import("@angular/core").InputSignal<NxsHeadingLevel>;
     readonly tabsLabel: import("@angular/core").InputSignal<string>;
+    readonly fieldErrors: import("@angular/core").InputSignal<Readonly<Record<string, string>>>;
     readonly validChange: import("@angular/core").OutputEmitterRef<boolean>;
+    readonly valuesChange: import("@angular/core").OutputEmitterRef<Readonly<Record<string, unknown>>>;
     protected readonly id: string;
     protected readonly form: FormGroup<Record<string, AbstractControl<any, any, any>>>;
     protected readonly structure: import("@angular/core").WritableSignal<number>;
@@ -2081,7 +2086,6 @@ class NxsMetadataEditorComponent {
     dirtyProperties(): Record<string, unknown>;
     properties(): Record<string, unknown>;
     showServerErrors(errors: Readonly<Record<string, string>>): string[];
-    protected kindOf(definition: NxsEditorFieldType, depth: number): FieldKind;
     protected controlFor(field: EditorField): AbstractControl | null;
     protected asControl(control: AbstractControl): FormControl;
     protected asArray(control: AbstractControl): FormArray;
@@ -2091,6 +2095,8 @@ class NxsMetadataEditorComponent {
     protected errorOf(control: AbstractControl): FieldError | null;
     protected errorText(error: FieldError, label: string): string;
     protected isRequired(definition: NxsEditorFieldType): boolean;
+    protected kindFor(field: EditorField, depth: number): FieldKind;
+    protected passedOn(error: FieldError | null): boolean;
     protected inputType(definition: NxsEditorFieldType): 'number' | 'text';
     protected step(definition: NxsEditorFieldType): string | null;
     protected readOnlyText(control: AbstractControl): string;
@@ -2137,8 +2143,14 @@ class NxsMetadataEditorComponent {
     "required": false;
     "isSignal": true;
     };
+    "fieldErrors": {
+    "alias": "fieldErrors";
+    "required": false;
+    "isSignal": true;
+    };
     }, {
     "validChange": "validChange";
+    "valuesChange": "valuesChange";
     }, never, never, true, never>;
     }
 }

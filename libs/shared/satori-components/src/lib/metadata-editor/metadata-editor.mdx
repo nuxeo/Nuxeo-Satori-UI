@@ -30,6 +30,13 @@ dialogs.
   fields they name, each tied to its field's input by `aria-describedby`, and hands back any it
   cannot place.
 - **Sections or tabs.** The type's sections follow one another under headings, or become tabs.
+- **Room for a host's own rules.** A field listed `readOnly` is shown, not edited: with the text
+  the host gives in `readOnlyText`, or the editor's own reading of the value, never checked and
+  never sent. `fieldErrors` puts the host's own messages on the fields it edits, a check comparing
+  one field with another for one, and the form cannot be saved while one stands there; a message
+  for a field it does not edit, read-only or not listed, holds nothing up. `valuesChange` gives
+  the host the values as they are entered, for rules that read them. A multi-line field takes
+  `rows`.
 
 ## Demo showcase
 
@@ -87,8 +94,14 @@ Nuxeo's `/config/types` describes it with `fetch-schema: fields`: `type`, and op
 `@agentic-ui/shared/document-layouts` maps onto it directly.
 
 A field Dublin Core already has is not repeated in a section: the Dublin Core field takes its
-`required` flag and constraints instead, so a layout that makes `dc:nature` required makes Nature
-required. Turn `dublinCore` off for a type with no `dublincore` schema.
+`required` flag, its constraints and its `readOnly` flag instead, so a layout that makes
+`dc:nature` required makes Nature required. Turn `dublinCore` off for a type with no `dublincore`
+schema, or for a form that lists every field it shows.
+
+A field that turns `readOnly` while the form is open goes back to the value `values` gives it, so
+what it shows is what the document holds; one that turns editable again starts from that value.
+A field listed in several sections is read-only when any listing says so. When every field is
+read-only, `validate()` passes: there is nothing to correct.
 
 ## Examples
 

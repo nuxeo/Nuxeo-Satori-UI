@@ -368,5 +368,8 @@ export function firstError(control: AbstractControl): FieldError | null {
       return { key: `${key}${error['inclusive'] === false ? '-exclusive' : ''}`, params: error };
     }
   }
+  // A host's own check, such as one comparing the field with another, after the schema's.
+  if (typeof errors['check'] === 'string')
+    return { key: 'check', params: { message: errors['check'] } };
   return { key: 'invalid', params: {} };
 }

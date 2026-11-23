@@ -135,7 +135,11 @@ const text = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() !== '' ? value : undefined;
 
 /** A label as version 1 reads one: a literal first, then a translation key, then `fallback`. */
-function labelOf(entry: Json, keys: readonly string[], fallback: string | null): LayoutLabel {
+export function labelOf(
+  entry: Json,
+  keys: readonly string[],
+  fallback: string | null,
+): LayoutLabel {
   const literal = text(entry['label']);
   const labelKey = text(entry['labelKey']);
   return {
@@ -239,7 +243,7 @@ function undrawnColumnPlaces(content: Json): string[] {
 }
 
 /** Why the page could not answer the rule a computation's `core.choose`, at any depth, takes. */
-function refusedRuleInComputation(
+export function refusedRuleInComputation(
   computation: unknown,
   isRuleKnown: (id: string) => boolean,
 ): string | null {
@@ -286,7 +290,7 @@ export function propertiesReadBy(computation: unknown, found: Set<string>): void
   }
 }
 
-function describe(finding: Finding): string {
+export function describe(finding: Finding): string {
   return finding.path ? `${finding.path}: ${finding.message}` : finding.message;
 }
 

@@ -15,9 +15,12 @@
       [sections]="sections()"
       [display]="display()"
       [values]="values()"
+      [dublinCore]="dublinCore()"
+      [fieldErrors]="fieldErrors()"
       [disabled]="disabled()"
       [headingLevel]="headingLevel()"
       (validChange)="editorValidChange($event)"
+      (valuesChange)="editorValuesChange($event)"
     />
   } @else {
     <div class="document-layout-form__loading">

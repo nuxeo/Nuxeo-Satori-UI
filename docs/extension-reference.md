@@ -1848,11 +1848,16 @@ What a layout file does **not** do:
   read only as version 2, since version 1 has no `view` mode, and a `documentView` entry (section
   9a) still takes the tab first. A file for any mode other than `view`, `metadata`, `edit` and
   `create` is served but not rendered.
+- **An `edit` or `create` file may be version 2 too.** The form then draws only what the file
+  lists, with no Dublin Core fields of its own: its cards, each widget as its field's input,
+  fields required or read-only by rule, and checks across fields (layout-v2.md, section 11). A
+  `metadata` file of version 2 is still refused, and the generated panel shows.
 - **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
   still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
-  `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
-  in their place — and its `"required": true` and its schema constraints apply there, so a file
-  can make Nature required.
+  `create` form of version 1 the Dublin Core fields are the form's own, so a `dc:` field you list
+  is shown once, in their place — and its `"required": true` and its schema constraints apply
+  there, so a file can make Nature required. A version 2 form shows a `dc:` field only where the
+  file lists it.
 - **Not new controls, in version 1.** In the `metadata`, `edit` and `create` modes the schema type
   picks the control; a version 1 file cannot name a widget, and a `blob` field it lists is shown,
   not edited.

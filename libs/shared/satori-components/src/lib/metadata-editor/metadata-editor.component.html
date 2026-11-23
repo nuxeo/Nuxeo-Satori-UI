@@ -100,7 +100,7 @@
   @let label = field.labelKey ? (field.labelKey | translate) : field.label;
   @let definition = field.definition;
   @let error = errorOf(control);
-  @switch (kindOf(definition, depth)) {
+  @switch (kindFor(field, depth)) {
     @case ('text') {
       <mat-form-field
         appearance="outline"
@@ -111,7 +111,7 @@
         @if (field.multiline) {
           <textarea
             matInput
-            rows="2"
+            [rows]="field.rows ?? 2"
             [formControl]="asControl(control)"
             [required]="isRequired(definition)"
             [errorStateMatcher]="errorMatcher"
@@ -164,7 +164,7 @@
         [label]="label"
         [formControl]="asControl(control)"
         [required]="isRequired(definition)"
-        [error]="error?.key === 'server' ? errorText(error!, label) : ''"
+        [error]="passedOn(error) ? errorText(error!, label) : ''"
       />
     }
     @case ('boolean') {
@@ -325,7 +325,11 @@
       <div class="nxs-metadata-editor__read-only" [attr.data-xpath]="path">
         <span class="nxs-metadata-editor__read-only-label">{{ label }}</span>
         <span class="nxs-metadata-editor__read-only-value">
-          {{ readOnlyText(control) || ('satori-components.metadata-editor.no-value' | translate) }}
+          {{
+            (depth === 0 ? field.readOnlyText : undefined) ||
+              readOnlyText(control) ||
+              ('satori-components.metadata-editor.no-value' | translate)
+          }}
         </span>
       </div>
     }
