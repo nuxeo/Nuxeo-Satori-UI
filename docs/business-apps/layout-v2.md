@@ -383,8 +383,11 @@ convenience. Masking it for real, so that the API does not return it either, is 
 
 ## 10. What the Studio migration writes
 
-The converter of M1 writes version 2. The [migration document](studio-migration.md), section 3,
-lists what each Web UI element becomes. In version 2's terms:
+The converter of M1 writes version 2 for `view`. For `metadata`, `edit` and `create` it writes
+version 1, which the app renders in those modes, while version 2 there is still refused (section
+11): a field whose widget version 1 cannot name is written as its schema type shows it, and
+reported. The [migration document](studio-migration.md), section 3, lists what each Web UI element
+becomes. In version 2's terms:
 
 | Web UI element                            | Becomes                                                          |
 | ----------------------------------------- | ---------------------------------------------------------------- |
@@ -406,7 +409,8 @@ lists what each Web UI element becomes. In version 2's terms:
   [`libs/shared/app-definition`](../../libs/shared/app-definition/README.md), with negative
   controls. Every JSON example in this document is one of its tests: a change here that the
   validator does not follow fails them. The package pipeline runs them
-  ([package-pipeline.md](package-pipeline.md)); the Studio migration's converter will, in M1.
+  ([package-pipeline.md](package-pipeline.md)), and so does the Studio migration's harness, check
+  10, on every package M1 converts.
 - **What the app draws so far.** A `view` file draws the record page, `RecordPageComponent` in
   `libs/shared/document-layouts`, loaded as section 8 says.
 - **A card of related records** draws its list with `RecordListComponent`, in the same library,
