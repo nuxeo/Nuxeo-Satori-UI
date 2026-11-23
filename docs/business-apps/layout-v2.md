@@ -424,13 +424,15 @@ lists what each Web UI element becomes. In version 2's terms:
   - **`metadata`, `edit` and `create` files of version 2** are still refused, and the generated
     layout shows.
 
-  Where this document is silent, the record page decides two things. **A template's placeholder**
+  Where this document is silent, the record page decides three things. **A template's placeholder**
   shows its property as the first field on the page that shows it does, through that field's
   widget and parameters, so a `user` field's id is a name there too; a property no field shows is
   shown by its schema type. **A date with no widget**, alone, in a list or inside a complex
   value, shows as the `date` widget shows one: a stored day as written, and an instant on the
   reader's day ([pattern 29](../../AGENTS/08-bug-patterns.md)). Version 1's view shows every date
-  in UTC.
+  in UTC. **A computed field shown through `date` or `relative-date`** shows a result that is a
+  date as Nuxeo writes one, a day or a date and time with its zone, such as the date property a
+  `core.choose` gives; any other result is left out, and the console says why.
 
 - **Checking widgets against property types** happens wherever the content model is known. The app
   checks each field against the type's schemas when it loads the page, and leaves out one whose
