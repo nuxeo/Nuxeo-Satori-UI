@@ -746,7 +746,8 @@ await (async () => {
       ['€'.repeat(2000), 4096, true],
       ['€'.repeat(1000), 4096, false],
     ]) {
-      refused ? negative++ : positive++;
+      if (refused) negative++;
+      else positive++;
       big = padding;
       let error = null;
       try {
