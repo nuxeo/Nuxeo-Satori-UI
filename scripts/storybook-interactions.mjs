@@ -274,33 +274,44 @@ async function runStory(context, story) {
   /** Every response to Satori's loader, by path: what the built Storybook actually serves. */
   const catalogues = [];
   /**
-   * Satori catalogue requests not yet finished. The preview starts loading translations in an
+   * Translation catalogue requests not yet finished. The preview starts loading translations in an
    * `ENVIRONMENT_INITIALIZER` that does not block the story, so a catalogue can still be on its
    * way when the story reports finished; judging then failed a healthy story (review on #602).
    */
   const inFlight = new Set();
   if (satori) {
-    const isCatalogue = (request) => new URL(request.url()).pathname.includes(SATORI_CATALOGUES);
+    const pathOf = (request) => new URL(request.url()).pathname;
+    // Every translation catalogue the page asks for — Satori's and the application's own,
+    // served at `i18n/` — is waited for, because the untranslated-key check reads what both
+    // render; waiting for Satori's alone judged a story before its own strings arrived.
+    const isTranslation = (request) => /\/i18n\//.test(pathOf(request));
     page.on('request', (request) => {
-      if (isCatalogue(request)) inFlight.add(request);
+      if (isTranslation(request)) inFlight.add(request);
     });
-    page.on('requestfinished', (request) => inFlight.delete(request));
-    page.on('requestfailed', (request) => inFlight.delete(request));
-    page.on('response', (response) => {
-      const path = new URL(response.url()).pathname;
-      if (path.includes(SATORI_CATALOGUES)) catalogues.push({ path, status: response.status() });
-    });
-    // A transport failure — refused, reset, aborted — emits `requestfailed` and no `response`, so
-    // without this a catalogue that never arrived was simply absent from the record (review on #602).
-    page.on('requestfailed', (request) => {
-      const path = new URL(request.url()).pathname;
-      if (path.includes(SATORI_CATALOGUES)) {
+    // A catalogue counts as served only once its body has arrived. `response` fires on the
+    // headers, so recording it there let a download cut off half-way count as loaded, and the
+    // `requestfailed` that followed was then ignored for that path (review on #602).
+    page.on('requestfinished', async (request) => {
+      if (pathOf(request).includes(SATORI_CATALOGUES)) {
+        const response = await request.response().catch(() => null);
         catalogues.push({
-          path,
+          path: pathOf(request),
+          status: response?.status() ?? 0,
+          error: 'no response',
+        });
+      }
+      inFlight.delete(request);
+    });
+    // A transport failure — refused, reset, aborted, cut off — emits `requestfailed` instead.
+    page.on('requestfailed', (request) => {
+      if (pathOf(request).includes(SATORI_CATALOGUES)) {
+        catalogues.push({
+          path: pathOf(request),
           status: 0,
           error: request.failure()?.errorText ?? 'request failed',
         });
       }
+      inFlight.delete(request);
     });
   }
   try {
@@ -358,7 +369,7 @@ async function settleCatalogues(page, inFlight) {
     const paths = [...new Set([...inFlight].map((request) => new URL(request.url()).pathname))];
     return paths.map(
       (path) =>
-        `Satori's catalogue ${path} had not finished ${catalogueTimeout} ms ` +
+        `The translation catalogue ${path} had not finished ${catalogueTimeout} ms ` +
         'after the story did',
     );
   }
