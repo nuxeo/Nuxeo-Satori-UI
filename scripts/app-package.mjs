@@ -9,14 +9,17 @@
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
  *
  * First it removes the zip and checksum an earlier run left for the package's name and version, so
- * that a refused package leaves nothing installable behind. Then, in order, each step stopping the
- * run when it fails:
- *   1. the package's `build.mjs` is the generator's, byte for byte, so the code that builds it is
+ * that a refused package leaves nothing installable behind; a package.xml that is a symbolic link is
+ * not read for them. Then, in order, each step stopping the run when it fails:
+ *   1. nothing in the package is a symbolic link, so no step reads a file from elsewhere, and the
+ *      package's `build.mjs` is the generator's, byte for byte, so the code that builds it is
  *      code this repository reviewed;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
  *      it registers and its platform version. The layouts the component contributes are the files
- *      the validator read, in the modes it read them in: none inline, none from elsewhere;
+ *      the validator read, in the modes it read them in: none inline, none from elsewhere. A
+ *      component path that leaves `bundle/` or names a folder or a hard link is refused before it
+ *      is read (a missing one is the builder's to refuse, at step 4);
  *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package;
  *   4. `build.mjs` writes the zip, refusing what the server would;
@@ -36,8 +39,8 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, posix, relative, resolve } from 'node:path';
+import { existsSync, lstatSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   attribute,
@@ -99,14 +102,33 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     return 1;
   };
 
+  // No step reads through a symbolic link, so the package is searched for one before anything in
+  // it is read: a link can point anywhere, and what a step reads it may quote back. The builder
+  // refuses one in bundle/ or package/ at step 4; a linked build.mjs would have step 1 compare, and
+  // step 4 run, a file from elsewhere. Refused at step 1, below, once older output is cleared.
+  const found = firstLink(directory);
+
   // What an earlier run left for this package's name and version goes first, so that a run that
   // refuses the package leaves no installable zip behind, this run's or an older one's. The name
   // and version are the package's own, so they name a file only once they are single file names,
   // as the builder requires: a name such as `../x` must not reach outside the output directory.
+  // A package.xml reached through a link is not read: an older zip of that package stays.
   const descriptorFile = join(directory, 'package', 'package.xml');
-  const descriptor = existsSync(descriptorFile)
-    ? withoutCdata(withoutCommentsOrInstructions(readFileSync(descriptorFile, 'utf8')))
-    : null;
+  const throughLink =
+    typeof found === 'string' &&
+    (descriptorFile === found || descriptorFile.startsWith(found + sep));
+  let descriptor = null;
+  let unreadable = null;
+  if (!throughLink && existsSync(descriptorFile)) {
+    try {
+      descriptor = withoutCdata(
+        withoutCommentsOrInstructions(readFileSync(descriptorFile, 'utf8')),
+      );
+    } catch (error) {
+      // Unreadable, it names no older zip, and step 3 says so.
+      unreadable = error.code ?? error.message;
+    }
+  }
   const name = descriptor === null ? null : attribute(descriptor, 'package', 'name');
   const version = descriptor === null ? null : attribute(descriptor, 'package', 'version');
   const output = resolve(out ?? join(directory, 'dist'));
@@ -115,7 +137,20 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
     for (const left of [previous, `${previous}.sha256`]) rmSync(left, { force: true });
   }
 
-  // 1. The builder is the reviewed one.
+  // 1. The package holds its own files, and the builder is the reviewed one.
+  if (typeof found === 'string')
+    return refuse(
+      1,
+      `${relative(directory, found).split(sep).join('/') || 'the package folder'} is a symbolic ` +
+        'link, which is not followed. Put the file itself there, so the package holds only what ' +
+        'was reviewed.',
+    );
+  if (found !== null)
+    return refuse(
+      1,
+      `${relative(directory, found.path).split(sep).join('/') || 'the package folder'} cannot be ` +
+        `read (${found.code}), so it cannot be told whether it holds a symbolic link.`,
+    );
   const builder = join(directory, 'build.mjs');
   if (!existsSync(builder) || !readFileSync(builder).equals(readFileSync(TEMPLATE)))
     return refuse(
@@ -146,6 +181,7 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
   if (contributed) return refuse(2, contributed);
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
+  if (unreadable !== null) return refuse(3, `package/package.xml cannot be read (${unreadable}).`);
   if (descriptor === null) return refuse(3, 'package/package.xml is missing.');
   if (!name || !version)
     return refuse(3, 'package/package.xml has no <package name="..." version="...">.');
@@ -194,11 +230,67 @@ function run({ directory, out, tag, 'allow-list': allowList, registered, platfor
 }
 
 /**
+ * The first symbolic link at `path` or anywhere under it, `null` when there is none, or the place
+ * that could not be read, `{ path, code }`: a folder that cannot be read is reported rather than
+ * passed over. Not followed:
+ * a link inside a package can point anywhere.
+ */
+function firstLink(path) {
+  try {
+    const entry = lstatSync(path, { throwIfNoEntry: false });
+    if (!entry) return null;
+    if (entry.isSymbolicLink()) return path;
+    if (!entry.isDirectory()) return null;
+    for (const name of readdirSync(path).sort()) {
+      const found = firstLink(join(path, name));
+      if (found !== null) return found;
+    }
+    return null;
+  } catch (error) {
+    return { path, code: error.code ?? error.message };
+  }
+}
+
+/**
+ * The file a component path names inside the bundle, `''` when there is none (the builder's to
+ * refuse, at step 4), or why it is refused here. Step 1 has already refused any symbolic link in
+ * the package, so what is left is the path itself. A component is read only when the path is
+ * relative, stays inside `bundle/` once resolved (`..` cannot climb out), and names a regular file
+ * with one name: not a folder, and not a hard link, whose other name can be anywhere on the volume.
+ * Read, a component outside the bundle would have its layout attributes quoted back from wherever
+ * it is, to whoever runs the pipeline, an agent included.
+ */
+function componentFileOf(root, component) {
+  const refuse = (why) => ({
+    problem: `the manifest names the component ${component}, which ${why}. A package's components are files in its bundle.`,
+  });
+  if (isAbsolute(component)) return refuse('is an absolute path');
+  const file = resolve(root, component);
+  if (file === root) return refuse('is bundle/ itself');
+  if (!file.startsWith(root + sep)) return refuse('is outside bundle/');
+  let entry;
+  try {
+    entry = lstatSync(file, { throwIfNoEntry: false });
+  } catch (error) {
+    // A path through a file, such as `x.xml/y.xml`, names nothing: the builder's to refuse.
+    if (error.code === 'ENOTDIR') return '';
+    return refuse(`cannot be read: ${error.code ?? error.message}`);
+  }
+  if (!entry) return '';
+  if (!entry.isFile()) return refuse('is a folder, not a file');
+  // A checkout gives every file one name.
+  if (entry.nlink > 1) return refuse('has a second name, a hard link');
+  return file;
+}
+
+/**
  * What is wrong with the layouts the package's components contribute, or `null`. The validator read
  * the files at `layouts/<Type>/<mode>.layout.json`, each in the mode its path names; the server
  * serves what the component says. So a layout written inline, or contributed from another file or
  * in another mode, is one this stage did not check, and is refused rather than passed. A disabled
- * entry contributes nothing and is skipped, as the builder skips it.
+ * entry contributes nothing and is skipped, as the builder skips it. A component path that leaves
+ * `bundle/`, or names a folder or a hard link, is refused before anything is read
+ * (`componentFileOf`).
  */
 function layoutContributions(directory) {
   const bundle = join(directory, 'bundle');
@@ -211,10 +303,18 @@ function layoutContributions(directory) {
   // of what the server loads; a manifest with more than one header, or the header spelt another
   // way, is the builder's to refuse, at step 4.
   const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
+  const root = resolve(bundle);
   for (const component of componentPathsOf(text)) {
-    const file = join(bundle, component);
-    if (!existsSync(file)) continue;
-    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    const file = componentFileOf(root, component);
+    if (typeof file !== 'string') return file.problem;
+    if (file === '') continue;
+    let source;
+    try {
+      source = readFileSync(file, 'utf8');
+    } catch (error) {
+      return `the manifest names the component ${component}, which cannot be read: ${error.code ?? error.message}.`;
+    }
+    const xml = componentXmlOf(source);
     for (const [, tag] of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
       const { type, mode, src, enabled } = attributesOf(tag);
       if (enabled !== undefined && enabled.toLowerCase() !== 'true') continue;

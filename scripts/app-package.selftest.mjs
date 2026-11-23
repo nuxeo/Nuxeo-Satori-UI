@@ -16,12 +16,16 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   cpSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -88,9 +92,20 @@ const argsFor = (args, scratch) => (typeof args === 'function' ? args(scratch) :
 
 /**
  * Refused with exit 1 at `step`, saying `reason`, with no zip left: neither one of its own, nor the
- * one an earlier run of the same name and version left there, which `stale` plants first.
+ * one an earlier run of the same name and version left there, which `stale` plants first. When
+ * `never` is given, the output must not hold it. `reason`, like `args`, may be made from the
+ * control's scratch directory. `after` undoes what the control did that would stop its scratch
+ * directory being removed. `staleStays` requires the earlier zip to be left as it was: for a
+ * package whose name must not be read.
  */
-function expectRefused(what, change, step, reason, args = [], { stale = true } = {}) {
+function expectRefused(
+  what,
+  change,
+  step,
+  reason,
+  args = [],
+  { stale = true, staleStays = false, never, after } = {},
+) {
   negative++;
   const { scratch, directory, out } = packageWith(change);
   try {
@@ -103,12 +118,24 @@ function expectRefused(what, change, step, reason, args = [], { stale = true } =
     const problems = [];
     if (status !== 1) problems.push(`exit ${status}, not 1`);
     if (!output.includes(`step ${step} refused it`)) problems.push(`not refused at step ${step}`);
-    if (!output.includes(reason)) problems.push(`no "${reason}"`);
-    if (existsSync(join(out, ZIP))) problems.push('a zip is left');
-    if (existsSync(join(out, `${ZIP}.sha256`))) problems.push('a checksum is left');
+    const expected = typeof reason === 'function' ? reason(scratch) : reason;
+    if (!output.includes(expected)) problems.push(`no "${expected}"`);
+    if (never !== undefined && output.includes(never)) problems.push(`"${never}" is in the output`);
+    if (staleStays) {
+      // The package's name was not read, so the earlier zip of that name could not be cleared.
+      if (
+        !existsSync(join(out, ZIP)) ||
+        readFileSync(join(out, ZIP), 'utf8') !== 'an earlier run left this'
+      )
+        problems.push('the earlier zip did not stay as it was');
+    } else {
+      if (existsSync(join(out, ZIP))) problems.push('a zip is left');
+      if (existsSync(join(out, `${ZIP}.sha256`))) problems.push('a checksum is left');
+    }
     if (problems.length > 0)
       failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
   } finally {
+    after?.(directory);
     rmSync(scratch, { recursive: true, force: true });
   }
 }
@@ -324,6 +351,180 @@ expectRefused(
   },
   4,
   'spells its Nuxeo-Component header "nuxeo-component"',
+);
+// Nothing is read through a symbolic link in the bundle, and a component path must stay in bundle/
+// and name a file there. Step 2 refuses the rest before reading anything: read, a component outside would have its layout attributes quoted
+// back, from wherever it is. The marker below is such an attribute; `never` holds it out of the
+// output. Where a control's target is a folder, any read of it would crash instead of refusing.
+const MARKER = 'read-from-outside-the-package';
+const OUTSIDE = `<component name="outside"><extension target="org.nuxeo.agentic.ui.config" point="configuration"><layout type="Outside" mode="view" src="${MARKER}" /></extension></component>`;
+const DEMO_COMPONENT = 'OSGI-INF/payers-claims-demo-config.xml';
+/** The demo's manifest, naming its own component and `extra` after it. */
+const manifestNaming = (extra) =>
+  `${[...headersBut(), `Nuxeo-Component: ${DEMO_COMPONENT}, ${extra}`].join('\n')}\n`;
+expectRefused(
+  'a component path that climbs out of bundle/ with ..',
+  ({ directory, write }) => {
+    writeFileSync(join(directory, '..', 'outside.xml'), OUTSIDE);
+    write(MANIFEST, manifestNaming('../../outside.xml'));
+  },
+  2,
+  'names the component ../../outside.xml, which is outside bundle/',
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component path that is absolute, naming a folder any read of which would crash',
+  ({ directory, write }) => {
+    mkdirSync(join(directory, '..', 'outside-folder'));
+    write(MANIFEST, manifestNaming(join(directory, '..', 'outside-folder')));
+  },
+  2,
+  (scratch) =>
+    `names the component ${join(scratch, 'payers-claims-demo', '..', 'outside-folder')}, which is an absolute path`,
+);
+expectRefused(
+  'a component that is a link to a file outside the package',
+  ({ directory }) => {
+    const outside = join(directory, '..', 'outside.xml');
+    writeFileSync(outside, OUTSIDE);
+    const component = join(directory, 'bundle', DEMO_COMPONENT);
+    rmSync(component);
+    symlinkSync(outside, component);
+  },
+  1,
+  `bundle/${DEMO_COMPONENT} is a symbolic link, which is not followed`,
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component reached through a folder that is a link out of the package',
+  ({ directory, write }) => {
+    const outside = join(directory, '..', 'outside');
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'x.xml'), OUTSIDE);
+    symlinkSync(outside, join(directory, 'bundle', 'LINKED'));
+    write(MANIFEST, manifestNaming('LINKED/x.xml'));
+  },
+  1,
+  'bundle/LINKED is a symbolic link, which is not followed',
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component that is a hard link to a file outside the package',
+  ({ directory }) => {
+    const outside = join(directory, '..', 'outside.xml');
+    writeFileSync(outside, OUTSIDE);
+    const component = join(directory, 'bundle', DEMO_COMPONENT);
+    rmSync(component);
+    linkSync(outside, component);
+  },
+  2,
+  `names the component ${DEMO_COMPONENT}, which has a second name, a hard link`,
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component that names a folder of the bundle, which step 2 once crashed on',
+  ({ write }) => write(MANIFEST, manifestNaming('OSGI-INF')),
+  2,
+  'names the component OSGI-INF, which is a folder, not a file',
+);
+expectRefused(
+  'a bundle/ that is itself a link, which the validator would read through',
+  ({ directory }) => {
+    const elsewhere = join(directory, '..', 'elsewhere');
+    renameSync(join(directory, 'bundle'), elsewhere);
+    symlinkSync(elsewhere, join(directory, 'bundle'));
+  },
+  1,
+  'bundle is a symbolic link, which is not followed',
+);
+expectRefused(
+  'an actions.json that is a link to a file outside, which the validator would quote',
+  ({ directory }) => {
+    const outside = join(directory, '..', 'outside.txt');
+    writeFileSync(outside, MARKER);
+    const actions = join(directory, 'bundle', 'agentic-ui-config', 'actions.json');
+    rmSync(actions);
+    symlinkSync(outside, actions);
+  },
+  1,
+  'bundle/agentic-ui-config/actions.json is a symbolic link, which is not followed',
+  [],
+  { never: MARKER },
+);
+// Run as root, every file can be read, and Windows has no such mode bits, so these controls have
+// nothing to show there.
+const canHideFiles = process.platform !== 'win32' && process.getuid?.() !== 0;
+if (canHideFiles)
+  expectRefused(
+    'a component that cannot be read, which step 2 once crashed on',
+    ({ directory }) => chmodSync(join(directory, 'bundle', DEMO_COMPONENT), 0o000),
+    2,
+    `names the component ${DEMO_COMPONENT}, which cannot be read: EACCES`,
+  );
+expectRefused(
+  'a build.mjs that is a link, which steps 1 and 4 would follow to another package',
+  ({ directory }) => {
+    const elsewhere = join(directory, '..', 'build.mjs');
+    renameSync(join(directory, 'build.mjs'), elsewhere);
+    symlinkSync(elsewhere, join(directory, 'build.mjs'));
+  },
+  1,
+  'build.mjs is a symbolic link, which is not followed',
+);
+// Its name and version are not read through the link, so the earlier zip of that name stays: had
+// the link been read, the zip would have been cleared.
+expectRefused(
+  'a package.xml that is a link, which would be read before step 1',
+  ({ directory }) => {
+    const elsewhere = join(directory, '..', 'package.xml');
+    renameSync(join(directory, 'package', 'package.xml'), elsewhere);
+    symlinkSync(elsewhere, join(directory, 'package', 'package.xml'));
+  },
+  1,
+  'package/package.xml is a symbolic link, which is not followed',
+  [],
+  { staleStays: true },
+);
+// Step 2 names nothing here and leaves it to the builder, which refuses the package at step 4.
+expectRefused(
+  'a component path through a file, which step 2 once crashed on',
+  ({ write }) => write(MANIFEST, manifestNaming(`${DEMO_COMPONENT}/x.xml`)),
+  4,
+  'build.mjs refused the package',
+);
+if (canHideFiles)
+  expectRefused(
+    'a package.xml that cannot be read, which step 3 once called missing',
+    ({ directory }) => chmodSync(join(directory, 'package', 'package.xml'), 0o000),
+    3,
+    'package/package.xml cannot be read (EACCES)',
+    [],
+    {
+      stale: false,
+      after: (directory) => chmodSync(join(directory, 'package', 'package.xml'), 0o644),
+    },
+  );
+if (canHideFiles)
+  expectRefused(
+    'a folder of the package that cannot be read, which the search for links reports',
+    ({ directory }) => chmodSync(join(directory, 'bundle', 'agentic-ui-config', 'queues'), 0o000),
+    1,
+    'bundle/agentic-ui-config/queues cannot be read (EACCES)',
+    [],
+    {
+      after: (directory) =>
+        chmodSync(join(directory, 'bundle', 'agentic-ui-config', 'queues'), 0o755),
+    },
+  );
+expectRefused(
+  'a component that names the bundle itself',
+  ({ write }) => write(MANIFEST, manifestNaming('.')),
+  2,
+  'names the component ., which is bundle/ itself',
 );
 expectBuilt('a manifest whose lines end with a bare CR', ({ write }) =>
   write(
