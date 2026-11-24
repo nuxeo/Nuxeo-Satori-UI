@@ -39,6 +39,10 @@ import { QueueService, type QueueLoad } from '../queue.service';
 import { QUEUE_WHOLE_QUERY_TIMING } from '../whole-query-run';
 import { QueuePageComponent } from './queue-page';
 
+/** The second read's delay after a run, and how long a spec waits for it. */
+const REINDEX_MS = 1000;
+const REINDEX_WAIT_MS = REINDEX_MS + 100;
+
 const QUEUE = {
   version: 2,
   label: 'Unassigned claims',
@@ -161,7 +165,10 @@ describe('QueuePageComponent, over the whole query', () => {
             countReads: 25,
             failures: 2,
             settle: 2,
-            reindexMs: 30,
+            // Real time, so it has to outlast every await between the run ending and the list's
+            // first answer on a slow runner: at 30 ms CI answered after the window had closed, and
+            // the first read's count was named. REINDEX_WAIT_MS waits it out.
+            reindexMs: REINDEX_MS,
           },
         },
       ],
@@ -349,7 +356,7 @@ describe('QueuePageComponent, over the whole query', () => {
     await selectRow();
     expect(notice()).toBe('');
     // And once more a little later, for a list the search index serves: that count is named.
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await new Promise((resolve) => setTimeout(resolve, REINDEX_WAIT_MS));
     await settle();
     expect(execute.mock.calls.length).toBe(asked + 2);
     await answer(80);
@@ -369,7 +376,7 @@ describe('QueuePageComponent, over the whole query', () => {
     fixture.componentRef.setInput('id', 'other');
     await settle();
     const asked = execute.mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await new Promise((resolve) => setTimeout(resolve, REINDEX_WAIT_MS));
     await settle();
     expect(execute.mock.calls.length).toBe(asked);
   });
