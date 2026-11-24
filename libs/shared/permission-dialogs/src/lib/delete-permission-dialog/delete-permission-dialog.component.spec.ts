@@ -131,6 +131,24 @@ describe('DeletePermissionDialogComponent', () => {
     expect(close).toHaveBeenCalledWith(true);
   });
 
+  it('deletes only this entry, by its id, and leaves the principal’s other entries', async () => {
+    // Checked against the local server: `Document.RemovePermission` with `user: members,
+    // permission: Read` removed both of members' entries, Read and Write; with
+    // `id: members:Read:true:Administrator::` it removed Read and kept Write.
+    await open({ ace: ace({ id: 'members:Read:true:Administrator::', permission: 'Read' }) });
+
+    deleteButton().click();
+    await settle();
+
+    const request = http.expectOne(REMOVE_URL);
+    expect(request.request.body).toEqual({
+      params: { id: 'members:Read:true:Administrator::', acl: 'local' },
+      context: {},
+    });
+    expect(request.request.body.params).not.toHaveProperty('user');
+    request.flush({ uid: 'doc-1' });
+  });
+
   it('sends one request however often Delete is pressed while it is on its way', async () => {
     await open();
 

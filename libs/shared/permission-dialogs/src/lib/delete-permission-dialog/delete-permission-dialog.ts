@@ -72,12 +72,10 @@ export class DeletePermissionDialogComponent {
     if (this.deleting()) return;
     this.deleting.set(true);
 
+    // By the entry's id. `removePermission` sends `user`, which Nuxeo reads as every entry that
+    // principal holds in the ACL: deleting a Read row also deleted the same user's Write row.
     this.detailService
-      .removePermission(this.data.documentUid, {
-        user: this.data.ace.username,
-        permission: this.data.ace.permission,
-        acl: 'local',
-      })
+      .removePermissionById(this.data.documentUid, this.data.ace.id, 'local')
       .subscribe({
         next: () => {
           this.deleting.set(false);
