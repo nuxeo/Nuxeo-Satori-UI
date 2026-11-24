@@ -42,6 +42,16 @@ Each note records work that assumes a recommendation above before the decision i
 changes no decision's status: the decision stays open, and its owner may still take it another
 way.
 
+- **2, the Payers kit's claims review workflow (24 November 2026).** Built against the
+  recommendation, reopen the Beta scope so that phases 1 and 2 build workflow and business records:
+  the kit's version 0.4.0 contributes a route model, `PayersClaimReview`, with its two task forms
+  and a claim lifecycle, and phase 2's first three demo steps are a steps file
+  ([the kit's README](../../business-apps/packages/payers-claims-demo/README.md)). It is a
+  configuration package's content, with no code in the client. If decision 2 goes the other way,
+  the kit drops its workflow component, its zip, variable schemas, vocabulary and task forms, and
+  claims go back to the default lifecycle, a minor version below 1.0.0; the task form engine, which
+  is the platform's, stays. Decision 3 stays open: the workflow has no operation buttons.
+
 - **B and E, the app registry's first version (24 November 2026).** Built against the
   recommendations: `nuxeo-agentic-core` carries the registry, as a runtime essential (B), and it
   serves app definitions after sign-in, to the groups each app's `app.json` names (E). Tenants are

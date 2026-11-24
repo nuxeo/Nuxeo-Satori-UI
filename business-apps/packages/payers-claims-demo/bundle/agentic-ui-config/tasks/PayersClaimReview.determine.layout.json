@@ -1,0 +1,62 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "claim",
+      "labelKey": "payers.card.claim",
+      "fields": [
+        "claim:number",
+        {
+          "field": "claim:billedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        { "field": "claim:serviceDate", "widget": "date", "parameters": { "format": "long" } },
+        "claim:diagnosis"
+      ]
+    },
+    {
+      "id": "determination",
+      "labelKey": "payers.task.determination",
+      "fields": [
+        {
+          "field": "var:decision",
+          "labelKey": "payers.task.decision",
+          "widget": "vocabulary",
+          "parameters": { "directory": "PayersClaimDecision" },
+          "required": true
+        },
+        {
+          "field": "var:allowedAmount",
+          "labelKey": "payers.task.allowedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" },
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "var:decision" }, "approve"]
+          },
+          "required": true,
+          "checks": [
+            {
+              "type": "core.atMost",
+              "parameters": [{ "field": "claim:billedAmount" }],
+              "labelKey": "payers.task.allowedOverBilled"
+            }
+          ]
+        },
+        {
+          "field": "var:denialReason",
+          "labelKey": "payers.task.denialReason",
+          "widget": "long-text",
+          "parameters": { "rows": 3 },
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "var:decision" }, "deny"]
+          },
+          "required": true
+        }
+      ]
+    }
+  ]
+}

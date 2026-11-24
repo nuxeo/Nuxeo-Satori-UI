@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "claim",
+      "labelKey": "payers.card.claim",
+      "fields": [
+        "claim:number",
+        {
+          "field": "claim:billedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        {
+          "field": "claim:allowedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        { "field": "claim:serviceDate", "widget": "date", "parameters": { "format": "long" } },
+        "claim:diagnosis",
+        "claim:adjuster"
+      ]
+    }
+  ]
+}

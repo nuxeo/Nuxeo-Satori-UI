@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Determine: the claim's adjuster, or any adjuster when it has none, decides it. Its variables,
+     schema var_PayersClaimReview_determine, are the task form's var: fields
+     (agentic-ui-config/tasks/PayersClaimReview.determine.layout.json).
+
+     The first transition that holds is followed, so the order is the rule:
+       1. a denial with no reason is refused: the determination opens again, the claim unchanged;
+       2. a denial denies the claim;
+       3. an approval with no allowed amount, or one below 0 or above the billed amount, is
+          refused the same way;
+       4. an approval of a claim billed over 5,000 dollars goes to a supervisor;
+       5. any other approval approves the claim;
+       6. anything else, no decision, is refused.
+     So the server refuses what the form's field rules stop, for a client that skips the form. -->
+<document repository="default" id="determine">
+  <system>
+    <type>RouteNode</type>
+    <path>PayersClaimReview/determine</path>
+    <lifecycle-state>validated</lifecycle-state>
+    <lifecycle-policy>documentRouteElement</lifecycle-policy>
+    <facet>facet-var_PayersClaimReview_determine</facet>
+    <access-control/>
+  </system>
+  <schema xmlns:common="http://www.nuxeo.org/ecm/schemas/common/" name="common"></schema>
+  <schema xmlns:var_PayersClaimReview_determine="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview_determine" name="var_PayersClaimReview_determine"></schema>
+  <schema xmlns:dc="http://www.nuxeo.org/ecm/schemas/dublincore/" name="dublincore">
+    <dc:title><![CDATA[Determine the claim]]></dc:title>
+  </schema>
+  <schema xmlns:rnode="http://www.nuxeo.org/ecm/schemas/route_node/" name="route_node">
+    <rnode:nodeId><![CDATA[determine]]></rnode:nodeId>
+    <rnode:start><![CDATA[false]]></rnode:start>
+    <rnode:stop><![CDATA[false]]></rnode:stop>
+    <rnode:hasTask><![CDATA[true]]></rnode:hasTask>
+    <rnode:hasMultipleTasks><![CDATA[false]]></rnode:hasMultipleTasks>
+    <rnode:taskDocType><![CDATA[TaskDoc]]></rnode:taskDocType>
+    <rnode:taskDirective><![CDATA[Determine the claim]]></rnode:taskDirective>
+    <rnode:taskAssignees/>
+    <rnode:taskAssigneesExpr><![CDATA[(Document["claim:adjuster"] == null || Document["claim:adjuster"] == "") ? "group:claims-adjusters" : "user:" + Document["claim:adjuster"]]]></rnode:taskAssigneesExpr>
+    <rnode:taskDueDateExpr><![CDATA[CurrentDate.days(3)]]></rnode:taskDueDateExpr>
+    <rnode:allowTaskReassignment><![CDATA[true]]></rnode:allowTaskReassignment>
+    <rnode:variablesFacet><![CDATA[facet-var_PayersClaimReview_determine]]></rnode:variablesFacet>
+    <rnode:executeOnlyFirstTransition><![CDATA[true]]></rnode:executeOnlyFirstTransition>
+    <rnode:inputChain><![CDATA[]]></rnode:inputChain>
+    <rnode:outputChain><![CDATA[]]></rnode:outputChain>
+    <rnode:taskButtons>
+      <button>
+        <name><![CDATA[submit]]></name>
+        <label><![CDATA[Submit]]></label>
+        <filter><![CDATA[]]></filter>
+        <validate><![CDATA[true]]></validate>
+      </button>
+    </rnode:taskButtons>
+    <rnode:transitions>
+      <transition>
+        <name><![CDATA[denialWithoutReason]]></name>
+        <label><![CDATA[Refused: a denial needs a reason]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "deny" && (NodeVariables["denialReason"] == null || NodeVariables["denialReason"].trim() == "")]]></condition>
+        <chain><![CDATA[PayersClaimReview.RefuseDenial]]></chain>
+        <targetId><![CDATA[determine]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[deny]]></name>
+        <label><![CDATA[Deny]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "deny"]]></condition>
+        <chain><![CDATA[PayersClaimReview.Deny]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[approvalWithoutAmount]]></name>
+        <label><![CDATA[Refused: an approval needs an allowed amount, from 0 to the billed amount]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "approve" && (NodeVariables["allowedAmount"] == null || Document["claim:billedAmount"] == null || NodeVariables["allowedAmount"] < 0 || NodeVariables["allowedAmount"] > Document["claim:billedAmount"])]]></condition>
+        <chain><![CDATA[PayersClaimReview.RefuseApproval]]></chain>
+        <targetId><![CDATA[determine]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[toSupervisor]]></name>
+        <label><![CDATA[Over 5,000 dollars: to a supervisor]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "approve" && Document["claim:billedAmount"] > 5000]]></condition>
+        <chain><![CDATA[PayersClaimReview.Recommend]]></chain>
+        <targetId><![CDATA[supervisorApproval]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[approve]]></name>
+        <label><![CDATA[Approve]]></label>
+        <condition><![CDATA[NodeVariables["decision"] == "approve"]]></condition>
+        <chain><![CDATA[PayersClaimReview.ApproveDetermined]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[undecided]]></name>
+        <label><![CDATA[Refused: no decision]]></label>
+        <condition><![CDATA[true]]></condition>
+        <chain><![CDATA[PayersClaimReview.RefuseUndecided]]></chain>
+        <targetId><![CDATA[determine]]></targetId>
+      </transition>
+    </rnode:transitions>
+    <rnode:escalationRules/>
+    <rnode:taskX><![CDATA[0]]></rnode:taskX>
+    <rnode:taskY><![CDATA[200]]></rnode:taskY>
+  </schema>
+</document>

@@ -21,6 +21,11 @@
     "payers.action.approve": "Approve",
     "payers.action.approve.confirm": "Approve this claim?",
     "payers.action.approve.done": "The claim is approved.",
+    "payers.task.determination": "Determination",
+    "payers.task.decision": "Decision",
+    "payers.task.allowedAmount": "Allowed amount",
+    "payers.task.denialReason": "Reason for the denial",
+    "payers.task.allowedOverBilled": "No more than the billed amount",
     "payers.member.card": "Member",
     "payers.member.name": "Name",
     "payers.member.age": "Age",
@@ -58,6 +63,8 @@
     "layout.field.provider:specialty": "Specialty",
     "layout.field.provider:network": "Network",
     "layout.field.provider:phone": "Phone",
-    "layout.field.provider:address": "Address"
+    "layout.field.provider:address": "Address",
+    "layout.field.claim:diagnosis": "Diagnosis",
+    "layout.field.claim:adjuster": "Adjuster"
   }
 }

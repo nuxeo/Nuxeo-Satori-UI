@@ -12,7 +12,8 @@
         "type": "core.every",
         "parameters": [
           { "type": "app.rules.isType", "parameters": ["Claim"] },
-          { "type": "app.rules.inState", "parameters": ["project"] }
+          { "type": "app.rules.inState", "parameters": ["inReview", "pended"] },
+          { "type": "app.rules.inGroup", "parameters": ["claims-supervisors"] }
         ]
       },
       "transition": "approve",
