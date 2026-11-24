@@ -458,7 +458,11 @@ outside — a figure that is arithmetically true and evidence of nothing.
 `npm run beta:coverage` prints an `excluded` column beside every percentage for exactly this
 reason, and the entries are dated in `.ai/state/coverage-uninstrumented-allowlist.json`: to
 2026-11-30 when set, and on 2026-11-24 the 18 left were re-dated to 2026-12-31, because their specs
-were not written and expiry would have failed every PR's coverage step for code it did not touch. Regenerate rather than quoting these:
+were not written and expiry would have failed every PR's coverage step for code it did not touch.
+The same day those 18 got their specs and left the list, so its dated `files` section is empty:
+every file with code to run is inside a denominator, and the 2026-09-22 figures above describe the
+debt as it was. Four of the specs exposed defects, fixed in the same change. Regenerate rather than
+quoting these:
 
 ```bash
 # Counts NEWLINES, matching `wc -l` and the per-file figures in the allowlist. `split('\n').length`

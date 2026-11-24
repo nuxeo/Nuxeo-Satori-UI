@@ -97,20 +97,20 @@
       "sCovered": 363
     },
     "nuxeo-client": {
-      "lines": 87.76,
-      "statements": 87.76,
-      "branches": 78.16,
-      "functions": 88.53,
-      "sTotal": 2811,
-      "sCovered": 2467
+      "lines": 88.56,
+      "statements": 88.56,
+      "branches": 78.69,
+      "functions": 89.34,
+      "sTotal": 2997,
+      "sCovered": 2654
     },
     "permission-dialogs": {
       "lines": 100,
       "statements": 100,
-      "branches": 97.37,
+      "branches": 97.5,
       "functions": 100,
-      "sTotal": 66,
-      "sCovered": 66
+      "sTotal": 79,
+      "sCovered": 79
     },
     "satori-components": {
       "lines": 97.51,
@@ -185,12 +185,12 @@
       "sCovered": 105
     },
     "ui": {
-      "lines": 85.06,
-      "statements": 85.06,
-      "branches": 76.42,
-      "functions": 88.35,
-      "sTotal": 957,
-      "sCovered": 814
+      "lines": 86.49,
+      "statements": 86.49,
+      "branches": 76.81,
+      "functions": 89.27,
+      "sTotal": 1073,
+      "sCovered": 928
     },
     "satori-components-satori": {
       "lines": 98.16,
