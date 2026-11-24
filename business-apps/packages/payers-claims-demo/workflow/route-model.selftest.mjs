@@ -30,7 +30,10 @@
  *   the component listed in the manifest; each step with a task has its task form at
  *   `tasks/<workflow>.<step>.layout.json`, named in the app's contribution, every `var:` field of
  *   it a variable of the step or the workflow; and a vocabulary a form picks from is contributed,
- *   its ids the variable's values.
+ *   its ids the variable's values;
+ * - **the XML reader** (`xml.mjs`), and the claim lifecycle read with it (`demo/lifecycle.mjs`):
+ *   the stand-in model's lifecycle read, a well-formed comment skipped, and a malformed one
+ *   refused whole rather than read past, `<!<!---->-->` among them.
  *
  * What it does not show: that a server imports the model and runs it. `platform-check.mjs` holds
  * the same files to the server's own classes, and the beta harness's `payers-claims-workflow`
@@ -53,6 +56,8 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 import { KIT, MARKER, MODEL, ZIP_PATH } from './route-model.mjs';
+import { readLifecycle } from '../demo/lifecycle.mjs';
+import { child, childrenNamed, parseXml, textOf } from './xml.mjs';
 
 /**
  * The fields of the platform's `route_node` schema (nuxeo-routing-core 2025.10.18,
@@ -118,115 +123,6 @@ const TRANSITION_FIELDS = new Set([
 ]);
 const BUTTON_FIELDS = new Set(['name', 'label', 'filter', 'validate']);
 
-// ------------------------------------------------------------------ a strict XML reader
-
-const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
-const NAME = /[A-Za-z_][A-Za-z0-9_.:-]*/y;
-
-/**
- * The document element of `xml`, as `{ name, attributes, children, text }`, or a thrown error
- * naming where it is not well-formed: an unclosed or mismatched element, an attribute without
- * quotes or given twice, an unknown entity, or anything but space, comments and instructions
- * outside the one element.
- */
-export function parseXml(xml) {
-  let at = 0;
-  const fail = (message) => {
-    const line = xml.slice(0, at).split('\n').length;
-    throw new Error(`line ${line}: ${message}`);
-  };
-  const decode = (text) =>
-    text.replace(/&(#x[0-9A-Fa-f]+|#[0-9]+|[a-z]+);|&/g, (match, entity) => {
-      if (entity === undefined) fail('a bare & that is not a reference');
-      if (entity.startsWith('#x')) return String.fromCodePoint(parseInt(entity.slice(2), 16));
-      if (entity.startsWith('#')) return String.fromCodePoint(Number(entity.slice(1)));
-      if (!(entity in ENTITIES)) fail(`an unknown entity &${entity};`);
-      return ENTITIES[entity];
-    });
-  const skipMisc = () => {
-    for (;;) {
-      const rest = xml.slice(at);
-      const space = /^[ \t\r\n]+/.exec(rest);
-      if (space) at += space[0].length;
-      else if (rest.startsWith('<!--')) {
-        const end = xml.indexOf('-->', at + 4);
-        if (end < 0) fail('an unclosed comment');
-        at = end + 3;
-      } else if (rest.startsWith('<?')) {
-        const end = xml.indexOf('?>', at + 2);
-        if (end < 0) fail('an unclosed instruction');
-        at = end + 2;
-      } else return;
-    }
-  };
-  const name = () => {
-    NAME.lastIndex = at;
-    const match = NAME.exec(xml);
-    if (!match) fail('a name was expected');
-    at = NAME.lastIndex;
-    return match[0];
-  };
-  const element = () => {
-    if (xml[at] !== '<') fail('an element was expected');
-    at++;
-    const node = { name: name(), attributes: {}, children: [], text: '' };
-    for (;;) {
-      const space = /^[ \t\r\n]*/.exec(xml.slice(at))[0];
-      at += space.length;
-      if (xml.startsWith('/>', at)) {
-        at += 2;
-        return node;
-      }
-      if (xml[at] === '>') {
-        at++;
-        break;
-      }
-      if (!space) fail(`a space was expected before an attribute of <${node.name}>`);
-      const attribute = name();
-      if (attribute in node.attributes) fail(`<${node.name}> gives ${attribute} twice`);
-      const value = /^[ \t\r\n]*=[ \t\r\n]*("[^"<]*"|'[^'<]*')/.exec(xml.slice(at));
-      if (!value) fail(`the attribute ${attribute} of <${node.name}> has no quoted value`);
-      at += value[0].length;
-      node.attributes[attribute] = decode(value[1].slice(1, -1));
-    }
-    for (;;) {
-      if (at >= xml.length) fail(`<${node.name}> is not closed`);
-      if (xml.startsWith('</', at)) {
-        at += 2;
-        const closing = name();
-        if (closing !== node.name) fail(`</${closing}> closes <${node.name}>`);
-        const end = /^[ \t\r\n]*>/.exec(xml.slice(at));
-        if (!end) fail(`</${closing}> is not closed`);
-        at += end[0].length;
-        return node;
-      }
-      if (xml.startsWith('<![CDATA[', at)) {
-        const end = xml.indexOf(']]>', at);
-        if (end < 0) fail('an unclosed CDATA section');
-        node.text += xml.slice(at + 9, end);
-        at = end + 3;
-      } else if (xml.startsWith('<!--', at) || xml.startsWith('<?', at)) skipMisc();
-      else if (xml[at] === '<') node.children.push(element());
-      else {
-        const end = xml.indexOf('<', at);
-        const text = xml.slice(at, end < 0 ? xml.length : end);
-        if (text.includes(']]>')) fail(']]> in text');
-        node.text += decode(text);
-        at = end < 0 ? xml.length : end;
-      }
-    }
-  };
-  if (xml.charCodeAt(0) === 0xfeff) fail('a byte order mark');
-  skipMisc();
-  const root = element();
-  skipMisc();
-  if (at !== xml.length) fail('content after the document element');
-  return root;
-}
-
-const child = (node, name) => node?.children.find((c) => c.name === name) ?? null;
-const childrenNamed = (node, name) => node?.children.filter((c) => c.name === name) ?? [];
-const textOf = (node, name) => child(node, name)?.text.trim() ?? null;
 const local = (name) => name.slice(name.indexOf(':') + 1);
 
 // ------------------------------------------------------------------ the checks
@@ -833,6 +729,63 @@ refuse(
   'a template-resource naming another file',
   ({ edit }) => edit(WORKFLOW, `path="${ZIP_PATH}"`, 'path="data/Other.zip"'),
   /the template-resource names data\/Other\.zip/,
+);
+
+// The XML reader, and the claim lifecycle read with it (`demo/lifecycle.mjs`), on malformed
+// comments: each is refused whole, never read past, so no markup left around one is taken for a
+// contribution. `<!<!---->-->` is the shape a pattern that removes `<!--…-->` leaves as `<!-->`.
+const LIFECYCLE_XML = (inside) =>
+  '<component name="c">' +
+  inside +
+  '<extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="lifecycle">' +
+  '<lifecycle name="payersClaim" defaultInitial="submitted"><transitions/>' +
+  '<states><state name="submitted" initial="true"/></states></lifecycle></extension></component>';
+const readerRefuses = (what, read, expected) => {
+  controls++;
+  try {
+    read();
+    failures.push(`${what}: read, and not refused`);
+  } catch (error) {
+    if (!expected.test(error.message))
+      failures.push(`${what}: refused for another reason: ${error.message}`);
+  }
+};
+{
+  const lifecycle = readLifecycle();
+  controls++;
+  if (lifecycle.initial !== 'submitted' || lifecycle.states.size !== 7)
+    failures.push(`the claim lifecycle is not read from the stand-in model: ${lifecycle.initial}`);
+  controls++;
+  if (readLifecycle(LIFECYCLE_XML('<!-- an example -->')).initial !== 'submitted')
+    failures.push('a well-formed comment before the lifecycle stops it being read');
+}
+readerRefuses(
+  'a "<!<!---->-->" before the lifecycle',
+  () => readLifecycle(LIFECYCLE_XML('<!<!---->-->')),
+  /not well-formed XML: line 1: a "<!" that opens neither a comment nor CDATA/,
+);
+readerRefuses(
+  'a lifecycle after "<!<!---->--", as the document element itself',
+  () => parseXml(`<!<!---->--${LIFECYCLE_XML('')}`),
+  /a "<!" that opens neither a comment nor CDATA/,
+);
+readerRefuses(
+  'a lifecycle inside a comment that holds "--"',
+  () => readLifecycle(LIFECYCLE_XML('<!-- <!-- -->')),
+  /"--" inside a comment/,
+);
+readerRefuses(
+  'a lifecycle only in a comment',
+  () =>
+    readLifecycle(
+      `<component name="c"><!-- ${LIFECYCLE_XML('').replace('<component name="c">', '').replace('</component>', '')} --></component>`,
+    ),
+  /no lifecycle payersClaim in the stand-in model/,
+);
+readerRefuses(
+  'an unclosed comment',
+  () => readLifecycle(LIFECYCLE_XML('<!-- open')),
+  /"--" inside a comment|an unclosed comment/,
 );
 
 if (failures.length > 0) {

@@ -10,6 +10,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { child, childrenNamed, parseXml } from '../workflow/xml.mjs';
+
 export const MODEL_XML = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -21,35 +23,48 @@ export const LIFECYCLE = 'payersClaim';
 
 /**
  * `{ initial, transitions: Map<name, destination>, states: Map<state, transition names> }`, read
- * from `xml`. Comments are left out first, so an example in one is not read as a contribution.
- * Throws when the file has no such lifecycle, or one that names a transition it does not define.
+ * from `xml` by a strict XML parser (`workflow/xml.mjs`), as the server reads the component: so an
+ * example in a comment is not a contribution, and a file that is not well-formed is refused, not
+ * read as far as a pattern matches. Only a lifecycle contributed to the lifecycle service's
+ * `lifecycle` point counts. Throws when there is no such lifecycle, or one more, or one that names
+ * a transition it does not define.
  */
 export function readLifecycle(xml = readFileSync(MODEL_XML, 'utf8'), name = LIFECYCLE) {
-  const text = xml.replace(/<!--[\s\S]*?-->/g, '');
-  const match = new RegExp(
-    `<lifecycle\\s+name="${name}"\\s+defaultInitial="([^"]+)"\\s*>([\\s\\S]*?)</lifecycle>`,
-  ).exec(text);
-  if (!match) throw new Error(`no lifecycle ${name} in the stand-in model`);
-  const [, initial, body] = match;
-  const transitions = new Map();
-  const declared = /<transitions>([\s\S]*?)<\/transitions>\s*<states>/.exec(body)?.[1] ?? '';
-  for (const [, transition, destination] of declared.matchAll(
-    /<transition\s+name="([^"]+)"\s+destinationState="([^"]+)"/g,
-  ))
-    transitions.set(transition, destination);
-  const states = new Map();
-  for (const [, state, inner] of body.matchAll(
-    /<state\s+name="([^"]+)"[^>]*?(?:\/>|>([\s\S]*?)<\/state>)/g,
-  )) {
-    const out = [...(inner ?? '').matchAll(/<transition>\s*([^<\s]+)\s*<\/transition>/g)].map(
-      (m) => m[1],
+  let component;
+  try {
+    component = parseXml(xml);
+  } catch (error) {
+    throw new Error(`the stand-in model is not well-formed XML: ${error.message}`);
+  }
+  const found = childrenNamed(component, 'extension')
+    .filter(
+      (extension) =>
+        extension.attributes.target === 'org.nuxeo.ecm.core.lifecycle.LifeCycleService' &&
+        extension.attributes.point === 'lifecycle',
+    )
+    .flatMap((extension) => childrenNamed(extension, 'lifecycle'))
+    .filter((lifecycle) => lifecycle.attributes.name === name);
+  if (found.length !== 1)
+    throw new Error(
+      `${found.length === 0 ? 'no' : found.length} lifecycle ${name} in the stand-in model`,
     );
+  const [lifecycle] = found;
+  const initial = lifecycle.attributes.defaultInitial;
+  const transitions = new Map(
+    childrenNamed(child(lifecycle, 'transitions'), 'transition').map((transition) => [
+      transition.attributes.name,
+      transition.attributes.destinationState,
+    ]),
+  );
+  const states = new Map();
+  for (const state of childrenNamed(child(lifecycle, 'states'), 'state')) {
+    const out = childrenNamed(child(state, 'transitions'), 'transition').map((t) => t.text.trim());
     for (const transition of out)
       if (!transitions.has(transition))
         throw new Error(
-          `the state ${state} of ${name} names an undefined transition ${transition}`,
+          `the state ${state.attributes.name} of ${name} names an undefined transition ${transition}`,
         );
-    states.set(state, out);
+    states.set(state.attributes.name, out);
   }
   if (!states.has(initial)) throw new Error(`${name} starts in ${initial}, which it does not have`);
   return { initial, transitions, states };

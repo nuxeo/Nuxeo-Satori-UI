@@ -251,7 +251,8 @@ the builder after changing the source.
   check: the chains' operations and parameters beyond their number, which only a server runs.
 - **Without a server, and in CI:** `node workflow/route-model.selftest.mjs`, which checks that the
   zip is its source's, byte for byte, then the documents, the graph and what they name across the
-  kit (its header lists them), then breaks a copy of the kit in 23 ways, each refused for its own
+  kit (its header lists them), then breaks a copy of the kit in 23 ways, and the lifecycle's XML
+  in 5, among them a `<!<!---->-->` that a pattern stripping comments would read past, each refused for its own
   reason. `ci.yml` runs it on every pull request, so a source changed without its zip, or a zip
   changed by hand, fails there.
 - **The package pipeline**, below, and its selftest.
@@ -588,11 +589,16 @@ group rule, since an administrator is shown no queue: the queue narrowed to "pai
 CLAIM-000130 with one member link, reading "John Smith" and routed to the member, and the click
 opening the member's record page with its three cards. The other checks of step 3 are unchanged.
 
-**Since 0.4.0 its step 5 will fail one check** until that steps file changes: "the kit's bundle
-holds no code" allows `.json`, `.xml`, `.xsd` and the manifest, and the bundle now carries
-`data/PayersClaimReview.zip`, the route model's XML documents, and
-`data/vocabularies/PayersClaimDecision.csv`, a vocabulary's rows. Neither is code; the check's list
-needs both, which is a change to `payers-claims-demo.mjs`, not made here.
+**Since 0.4.0, step 5's "the kit's bundle holds no code" reads the workflow's files as data, by
+place** (`scripts/beta-harness/steps/payers-claims-demo/bundle-data.mjs`): JSON, XML, XSD and the
+manifest, anywhere; CSV under `data/vocabularies/`; and the route model's zip at
+`data/PayersClaimReview.zip` alone, when every entry it holds is a folder, the `.nuxeo-archive`
+marker, or an XML, JSON, properties or CSV file. Anything else is code: a script, a class, a jar, a
+zip anywhere else, a zip it cannot read, and an entry of any other kind inside the route model's.
+`node scripts/beta-harness/steps/payers-claims-demo.selftest.mjs` breaks a copy of the bundle in 11
+ways, among them a `.js` file in the bundle and one in the zip, each refused, and CI runs it. With
+`.js` taken as data on purpose, those two controls failed. The demo itself has not been run on
+0.4.0.
 
 ### The claims review workflow's demo
 
