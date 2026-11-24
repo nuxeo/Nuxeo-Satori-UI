@@ -277,6 +277,11 @@ jobs:
           # The gate runner's own counting: a gate that reports NOT RUN is never counted green,
           # and a run containing one is `pass-incomplete`, not `pass`.
           npm run beta:gate-selftest
+          # The coverage gate's full-run controls. SonarCloud runs the gate itself, but only after
+          # a 13-minute test run; this is the half that proves a project with no report still
+          # fails it there, and that the workflow still asks it to. Fixtures under `os.tmpdir()`,
+          # no test run, ~2 s.
+          npm run beta:coverage-selftest
           # The AGENTS/ staleness report's controls, and the published-links controls. Named here
           # as well as registered in `ALL_GATES`, for the reason the `beta:sanitizers-recovery`
           # step below gives: this job runs npm scripts, not the gate list, so a gate added to

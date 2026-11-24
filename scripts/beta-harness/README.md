@@ -298,11 +298,11 @@ Reports land in `$EVIDENCE_ROOT/beta/gates/<timestamp>-<phase>.json`.
 Three further checks are **not** in the pipeline, because they need something the
 pipeline cannot assume — a measurement run, or evidence that lives outside the repo:
 
-| Command                 | Checks                                          | Why it is separate                                                          |
-| ----------------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
-| `npm run beta:coverage` | no project lost coverage; `FLOORS` met          | needs a `--coverage` run first; CI runs it after Sonar's tests              |
-| `npm run beta:state`    | every "complete" phase cites a passing manifest | evidence lives outside the tree, so this is local-only and cannot run in CI |
-| `npm run beta:backend`  | the Nuxeo stack is up and serving               | starts containers; a side effect a gate should not have                     |
+| Command                 | Checks                                          | Why it is separate                                                             |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `npm run beta:coverage` | no project lost coverage; `FLOORS` met          | needs a `--coverage` run first; CI runs it after Sonar's tests, `--expect-all` |
+| `npm run beta:state`    | every "complete" phase cites a passing manifest | evidence lives outside the tree, so this is local-only and cannot run in CI    |
+| `npm run beta:backend`  | the Nuxeo stack is up and serving               | starts containers; a side effect a gate should not have                        |
 
 ### The `assertions` gate
 
@@ -375,11 +375,23 @@ allowed outside the measurement and no stale report, including one that counts a
 
 ```bash
 npm run beta:coverage -- --run               # run the tests, then check the ratchet
+npm run beta:coverage -- --expect-all        # after a run of every project, as in CI
 npm run beta:coverage -- --update-baseline   # lock in a rise
 ```
 
 `nuxeo-ui` is excluded and says so on every run: its Karma builder takes
 `--code-coverage`, not `--coverage.enabled`, and errors on the latter.
+
+A run is **partial** by default: a Vitest project with no report is taken to be outside the
+affected set and passes, which is what `nx test <project> --coverage.enabled=true` followed by
+the gate needs. `--expect-all` says the run covered every Vitest project, and makes a project
+with no usable report — none, unparsable, or listing no files — a blocking failure, baselined or
+not. `--run` implies it. SonarCloud passes it, because Vitest writes no report for a project
+whose tests fail and its test step is `run-many` with `continue-on-error`: on PR #679
+`shared-queues` and `studio-migration` were red there and the gate passed without naming them.
+`coverage.reportOnFailure` stays off on purpose — it would turn a red suite into a number the
+ratchet compares and `--update-baseline` records. `npm run beta:coverage-selftest` holds the
+check and SonarCloud's flag in place; it runs in `ci.yml`.
 
 ### Accessibility
 

@@ -312,5 +312,12 @@ jobs:
       #
       # Last on purpose. It was in no workflow and not in `beta:gate`, so nothing enforced it; a red
       # gate placed earlier would also skip the Sonar scan and the PR comment above it.
+      #
+      # `--expect-all` because the test step is `run-many`, every Vitest project, and is
+      # `continue-on-error`. A project whose tests fail writes no coverage-final.json (Vitest's
+      # `coverage.reportOnFailure` is false), and without the flag the gate reads a missing report
+      # as "outside the affected set" and passes. That is how `shared-queues` and `studio-migration`
+      # were red on PR #679 (run 45304435817) and absent from this step's output. If the test step
+      # ever becomes `affected`, drop the flag; `coverage-gate.selftest.mjs` holds the two together.
       - name: Coverage gate (ratchet and floors)
-        run: npm run beta:coverage
+        run: npm run beta:coverage -- --expect-all

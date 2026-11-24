@@ -35,14 +35,32 @@ import { spawnToolSync } from './package-command.mjs';
  * than enter at whatever it measures. That is for code written against the bar rather than
  * catching up to it — `satori-components`, the `nxs-` library NXSAT-308 builds new.
  *
+ * ## A full run, and a partial one
+ *
+ * By default the gate reads whatever reports are on disk, and a Vitest project without one is
+ * taken to be outside the affected set: `nx test x --coverage.enabled=true` then this gate is a
+ * normal local loop, and so is `sync-derived.mjs` measuring only the projects a merge disagreed on.
+ *
+ * That assumption is false after a run that covered every project, and it hid real failures.
+ * Vitest writes no report for a project whose tests fail (`coverage.reportOnFailure` defaults to
+ * false, and `coverage.clean` empties the directory first), and SonarCloud's test step is
+ * `run-many` with `continue-on-error`, so on PR #679 `shared-queues` and `studio-migration` were
+ * red and this gate passed without naming either. `--expect-all` says the run covered every
+ * Vitest project, and turns a project with no usable report into a blocking failure — baselined
+ * or not, because those two had no baseline entry yet and were not even listed. `--run` implies
+ * it: the gate ran every Vitest project itself.
+ *
  * Usage:
  *   node scripts/beta-harness/coverage-gate.mjs                    # check the ratchet
+ *   node scripts/beta-harness/coverage-gate.mjs --expect-all       # ...after a run of every project
  *   node scripts/beta-harness/coverage-gate.mjs --update-baseline  # re-record after a rise
  *   node scripts/beta-harness/coverage-gate.mjs --run              # run the tests first
  *   node scripts/beta-harness/coverage-gate.mjs --json
+ *   node scripts/beta-harness/coverage-gate.mjs --root <dir>       # another workspace (selftest)
  *
  * Exit 1 if any project's line coverage dropped by more than the tolerance, if a floor in
- * `FLOORS` is not met, or if --update-baseline is needed and has not been given.
+ * `FLOORS` is not met, if --expect-all is in force and a Vitest project has no usable report, or
+ * if --update-baseline is needed and has not been given.
  */
 
 import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
@@ -50,11 +68,24 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 import ts from 'typescript';
 
-const repoRoot = resolve(import.meta.dirname, '..', '..');
 const argv = process.argv.slice(2);
+const rootArg = argv.includes('--root') ? argv[argv.indexOf('--root') + 1] : undefined;
+if (argv.includes('--root') && !rootArg) {
+  console.error('coverage-gate: --root needs a directory.');
+  process.exit(1);
+}
+if (rootArg && argv.includes('--run')) {
+  // `--run` starts Nx in the current directory, so it would measure this checkout and then read
+  // another one's reports.
+  console.error('coverage-gate: --root reads reports another run wrote; it cannot take --run.');
+  process.exit(1);
+}
+const repoRoot = rootArg ? resolve(rootArg) : resolve(import.meta.dirname, '..', '..');
 const asJson = argv.includes('--json');
 const updateBaseline = argv.includes('--update-baseline');
 const runTests = argv.includes('--run');
+/** See "A full run, and a partial one" above. */
+const expectAll = argv.includes('--expect-all') || runTests;
 
 const baselinePath = resolve(repoRoot, '.ai/state/coverage-baseline.json');
 const coverageRoot = resolve(repoRoot, 'coverage');
@@ -220,6 +251,16 @@ const vacuous = [];
  */
 const stale = [];
 
+/**
+ * Vitest projects with no usable report this run, and why: no `coverage-final.json`, one that
+ * does not parse, or one that lists no files. `collect()` used to `continue` past all three
+ * without a trace, which is what let the main flow call each of them "outside the affected set".
+ * Blocking only under `--expect-all`; see "A full run, and a partial one" in the header.
+ *
+ * @type {{ project: string, report: string, why: string }[]}
+ */
+const unreported = [];
+
 const measured = await collect();
 
 if (measured.length === 0) {
@@ -371,6 +412,15 @@ for (const [project, floor] of Object.entries(FLOORS)) {
   }
 }
 
+/**
+ * Under `--expect-all`, every Vitest project without a usable report — the blind spot this flag
+ * exists for. Without it the list is empty and those projects fall through to `unmeasured` below,
+ * as they always did. Like `floorFailures`, computed before either baseline write, so
+ * `--update-baseline` keeps the old entry and still exits 1: an incomplete run is not one to
+ * record from.
+ */
+const missing = expectAll ? unreported : [];
+
 const baseline = existsSync(baselinePath) ? JSON.parse(await readFile(baselinePath, 'utf8')) : null;
 
 if (!baseline) {
@@ -382,7 +432,7 @@ if (!baseline) {
     process.exit(1);
   }
   await write(measured, 'initial baseline');
-  exitOnFloorFailures();
+  exitOnWriteBlockers();
   process.exit(0);
 }
 
@@ -465,13 +515,17 @@ for (const m of measured) {
 const projectNames = new Set(projects.map((p) => p.name));
 const baselineNames = Object.keys(baseline.projects ?? {});
 const vacuousNames = new Set(vacuous.map((v) => v.project));
+const missingNames = new Set(missing.map((m) => m.project));
 const unmeasured = baselineNames.filter(
   (p) =>
     !measured.some((m) => m.project === p) &&
     projectNames.has(p) &&
     // Not "outside the affected set" — these DID run, and produced nothing to measure.
     // Reporting them as unmeasured-but-unchanged is how the false 100% stayed invisible.
-    !vacuousNames.has(p),
+    !vacuousNames.has(p) &&
+    // Nor these: under `--expect-all` nothing is outside the affected set, so a Vitest project
+    // with no report is `missing`, which blocks.
+    !missingNames.has(p),
 );
 const orphaned = baselineNames.filter((p) => !projectNames.has(p));
 
@@ -507,11 +561,26 @@ for (const item of unmeasuredAll) {
   }
 }
 const unmeasuredNow = new Set(unmeasuredAll.map((u) => u.file));
+/**
+ * Whether this run can say an allowlist entry is stale. Only if its file is gone, or its project
+ * was measured: a project with no report lists no unmeasured files at all, so every entry of
+ * one that was not run — or whose tests failed — read as "now covered", and the gate told the
+ * reader to delete entries that were still true. The negative control for `--expect-all` found
+ * that: deleting `shared-queues`' report also called `libs/shared/queues/src/index.ts` stale.
+ */
+const measuredNames = new Set(measured.map((m) => m.project));
+const judgeable = (f) => {
+  if (!existsSync(resolve(repoRoot, f))) return true;
+  const owner = projects
+    .filter((p) => f.startsWith(`${p.root}/`))
+    .sort((a, b) => b.root.length - a.root.length)[0];
+  return !owner || measuredNames.has(owner.name);
+};
 const staleAllowlist = [
-  ...Object.keys(datedAllowlist).filter((f) => !unmeasuredNow.has(f)),
+  ...Object.keys(datedAllowlist).filter((f) => !unmeasuredNow.has(f) && judgeable(f)),
   // A `noStatements` entry is stale the moment the file starts producing statements: the
   // exemption said there was nothing to measure, and now there is.
-  ...[...noStatementsAllowlist].filter((f) => !unmeasuredNow.has(f)),
+  ...[...noStatementsAllowlist].filter((f) => !unmeasuredNow.has(f) && judgeable(f)),
 ];
 
 if (updateBaseline) {
@@ -535,7 +604,7 @@ if (updateBaseline) {
         ? `, pruned ${vacuous.length} unmeasurable entr(ies): ${vacuous.map((v) => v.project).join(', ')}`
         : ''),
   );
-  exitOnFloorFailures();
+  exitOnWriteBlockers();
   process.exit(0);
 }
 
@@ -557,6 +626,7 @@ report();
 process.exit(
   stale.length ||
     floorFailures.length ||
+    missing.length ||
     regressions.length ||
     orphaned.length ||
     unratcheted.length ||
@@ -581,7 +651,12 @@ async function collect() {
     // Keyed off the target's own `reportsDirectory`, so the baseline uses real Nx
     // project names rather than a directory basename guessed from the path.
     const file = resolve(repoRoot, p.reportsDirectory, 'coverage-final.json');
-    if (!existsSync(file)) continue;
+    const absent = (why) =>
+      unreported.push({ project: p.name, report: relative(repoRoot, file), why });
+    if (!existsSync(file)) {
+      absent('no coverage-final.json');
+      continue;
+    }
     const reportAge = (await stat(file)).mtimeMs;
     const newestSource = await newestSourceMtime(p.root);
     if (newestSource > reportAge) {
@@ -595,6 +670,7 @@ async function collect() {
     try {
       data = JSON.parse(await readFile(file, 'utf8'));
     } catch {
+      absent('coverage-final.json does not parse');
       continue;
     }
     // Deleting a source leaves no newer file behind, so the mtime test above cannot see it, and
@@ -616,7 +692,10 @@ async function collect() {
         });
     }
     const s = summarise(data);
-    if (s.files === 0) continue;
+    if (s.files === 0) {
+      absent('coverage-final.json lists no files');
+      continue;
+    }
     const specs = await countSpecs(p.root);
     const unmeasured = await findUnmeasured(p.root, data);
     // Two ways to produce a number that is not coverage. Both are separated out here rather
@@ -921,6 +1000,7 @@ function report() {
           ok:
             stale.length === 0 &&
             floorFailures.length === 0 &&
+            missing.length === 0 &&
             regressions.length === 0 &&
             orphaned.length === 0 &&
             unratcheted.length === 0 &&
@@ -929,6 +1009,10 @@ function report() {
             expired.length === 0 &&
             staleAllowlist.length === 0,
           stale,
+          // Whether a project with no report counted against the run, so a reader of the
+          // evidence can tell a full run's verdict from a partial one's.
+          expectAll,
+          missing,
           target: TARGET,
           floors: { configured: FLOORS, failures: floorFailures },
           rows,
@@ -979,7 +1063,14 @@ function report() {
     return;
   }
 
-  console.log(`\nCoverage ratchet — ${rows.length} project(s) measured, Beta target ${TARGET}%\n`);
+  console.log(`\nCoverage ratchet — ${rows.length} project(s) measured, Beta target ${TARGET}%`);
+  // Which claim the verdict below makes. A partial run's pass says nothing about a project that
+  // wrote no report, and the reader of a CI log should not have to know the flags to see that.
+  console.log(
+    expectAll
+      ? `  Full run (${runTests ? '--run' : '--expect-all'}): all ${vitest.length} Vitest project(s) must report.\n`
+      : '  Partial run: a project with no report is taken to be outside the affected set.\n',
+  );
   // `stmts` and `specs` are shown because a percentage without its denominator is what made
   // this gate wrong in the first place. `core` reports a truthful 100% over **7** statements
   // from one generated "should create" spec; printed as a bare `100%` it reads identically to
@@ -1043,7 +1134,15 @@ function report() {
   if (unmeasured.length) {
     console.log(`\n  Not measured this run (outside the affected set): ${unmeasured.join(', ')}`);
     console.log('  Their baseline entries are unchanged; this run says nothing about them.');
+    if (!expectAll) {
+      console.log(
+        '  If this run covered every project, re-run with --expect-all: a project whose tests\n' +
+          '  fail writes no report, and would be listed here rather than failed.',
+      );
+    }
   }
+
+  if (missing.length) reportMissing();
 
   if (vacuous.length) {
     console.log('\n  Unmeasurable — a report was produced, but it measures nothing:');
@@ -1147,6 +1246,7 @@ function report() {
   if (
     stale.length ||
     floorFailures.length ||
+    missing.length ||
     orphaned.length ||
     unratcheted.length ||
     falseCredit.length ||
@@ -1157,6 +1257,7 @@ function report() {
     const parts = [];
     if (stale.length) parts.push(`${stale.length} stale coverage report(s)`);
     if (floorFailures.length) parts.push(`${floorFailures.length} unmet coverage floor(s)`);
+    if (missing.length) parts.push(`${missing.length} project(s) with no coverage report`);
     if (orphaned.length) parts.push(`${orphaned.length} orphaned baseline entr(ies)`);
     if (unratcheted.length) parts.push(`${unratcheted.length} unratcheted project(s)`);
     if (falseCredit.length) parts.push(`${falseCredit.length} unmeasurable baseline entr(ies)`);
@@ -1245,12 +1346,43 @@ function report() {
   }
 }
 
-/** After a baseline write: a floor is not something `--update-baseline` can record its way past. */
-function exitOnFloorFailures() {
-  if (floorFailures.length === 0) return;
-  reportFloors();
-  console.log(`\ncoverage-gate: FAIL — ${floorFailures.length} unmet coverage floor(s).`);
+/**
+ * After a baseline write: neither a floor nor a full run that left a project unmeasured is
+ * something `--update-baseline` can record its way past.
+ */
+function exitOnWriteBlockers() {
+  if (floorFailures.length === 0 && missing.length === 0) return;
+  if (missing.length) reportMissing();
+  if (floorFailures.length) reportFloors();
+  const parts = [];
+  if (floorFailures.length) parts.push(`${floorFailures.length} unmet coverage floor(s)`);
+  if (missing.length) parts.push(`${missing.length} project(s) with no coverage report`);
+  console.log(`\ncoverage-gate: FAIL — ${parts.join(', ')}.`);
   process.exit(1);
+}
+
+/** The `--expect-all` verdict: each Vitest project that should have reported and did not. */
+function reportMissing() {
+  console.log(
+    `\n  NO COVERAGE REPORT — ${missing.length} Vitest project(s) wrote none usable, in a run ` +
+      'that covered every project:',
+  );
+  const width = Math.max(...missing.map((m) => m.project.length));
+  for (const m of missing) {
+    const was = baseline?.projects?.[m.project];
+    const entry = was ? `baselined at ${was.lines}%` : 'no baseline entry';
+    console.log(`    ${m.project.padEnd(width)}  ${m.why} (${m.report}), ${entry}`);
+  }
+  console.log(
+    "\n  A project whose tests fail writes no report: Vitest's `coverage.reportOnFailure` is\n" +
+      '  false, and `coverage.clean` empties the directory before the run. So look for\n' +
+      '  `<project>:test` among the failed tasks of the test run, and fix the test, not this gate.\n' +
+      '  One that passed and still wrote nothing has a `reportsDirectory` in project.json that\n' +
+      '  is not where its vite config writes.' +
+      (runTests
+        ? ''
+        : ' If the run really did skip it, it was not a full\n  run: drop --expect-all.'),
+  );
 }
 
 /** The `FLOORS` verdict, printed on every run so a met floor is visible as well as a missed one. */
