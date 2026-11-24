@@ -1280,6 +1280,8 @@ fails any source that is not.
 
 ## NXSAT-754 review follow-up — 24 November 2026
 
-PR #696 now composes the approved Arabic `common.date-mask` words by their named fields. `ar-SA`, `ar-DZ` and `ar-MA` show month/day/year hints in Arabic, matching their date adapters; complete field names survive two-digit-year formats. The regression suite also rejects duplicate field words and arbitrary prose. App-level tests read the actual imported Arabic JSON rather than a replacement mask.
+PR #696 fixes the exported legacy `dateMaskFor`/`DateMaskPipe` helper. It recognizes the approved Arabic day/month/year words and Hebrew field letters, then composes the date adapter’s field order and separators. Arabic regional library consumers receive a month/day/year hint; Hebrew library consumers receive dots instead of the catalogue’s incompatible slashes. Complete Arabic field names survive two-digit-year formats. Tests reject duplicate field words and arbitrary prose. Integration tests read the actual imported Arabic/Hebrew JSON and check that following each composed hint parses as 3 April 2026.
+
+The application’s newer `nxs-date-input` uses a separate `NxsDateMaskPipe`/`nxsDateMask` implementation. It returns an adapter-formatted numeric sample for unsupported word masks. This fix does not add Arabic-word hints to that input, and the exported-helper tests do not establish what that input displays.
 
 Copilot also found misleading Hebrew republish wording and Arabic/Hebrew instructions tied to a screen side. These are translation-owner corrections in Crowdin project 160, separate from the four interpolation placeholders already corrected. Do not resolve those review threads or claim the catalogue ready until the corrected wording is approved, downloaded and validated. Non-English exports have not been hand-edited.

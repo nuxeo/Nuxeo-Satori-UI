@@ -131,9 +131,12 @@ const FIELD_FOR_MASK_LETTER: Readonly<Record<string, DateField>> = {
   d: 'day',
   m: 'month',
   y: 'year',
+  י: 'day',
+  ח: 'month',
+  ש: 'year',
 };
 
-/** Latin mask letters and the Arabic catalogue words identify their fields independently of order. */
+/** Latin/Hebrew mask letters and Arabic catalogue words identify their fields independently of order. */
 function fieldsNamedByLetters(letters: string[]): DateField[] | null {
   const fields = letters.map(
     (run) => FIELD_FOR_MASK_WORD.get(run) ?? FIELD_FOR_MASK_LETTER[run[0]],

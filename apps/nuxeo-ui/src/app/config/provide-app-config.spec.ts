@@ -36,6 +36,7 @@ import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import { dateMaskFor, provideSatoriDateAdapter } from '@nuxeo/satori-platform/ui';
 
 import * as arabicCatalogue from '../../../public/i18n/ar.json';
+import * as hebrewCatalogue from '../../../public/i18n/he.json';
 import { appConfig } from '../app.config';
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
 import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
@@ -1007,11 +1008,48 @@ describe('syncDocumentFavicon', () => {
   });
 });
 
-/** The imported Crowdin value must work with regional date hints, not just a synthetic mask. */
-describe('approved Arabic catalogue date hint', () => {
-  for (const locale of ['ar-SA', 'ar-DZ', 'ar-MA']) {
-    it(`reorders the real catalogue hint for ${locale}`, () => {
-      expect(dateMaskFor(locale, arabicCatalogue.common['date-mask'])).toBe('شهر/يوم/سنة');
+/** Integration of the exported legacy helper and adapter using the actual approved catalogues. */
+describe('exported dateMaskFor catalogue hints and date parsing', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  const cases = [
+    ...['ar-SA', 'ar-DZ', 'ar-MA'].map((locale) => ({
+      locale,
+      mask: arabicCatalogue.common['date-mask'],
+      hint: 'شهر/يوم/سنة',
+      inputFor: (hint: string) =>
+        hint.replace('يوم', '03').replace('شهر', '04').replace('سنة', '2026'),
+    })),
+    {
+      locale: 'he',
+      mask: hebrewCatalogue.common['date-mask'],
+      hint: 'יי.חח.שששש',
+      inputFor: (hint: string) =>
+        hint.replace('יי', '03').replace('חח', '04').replace('שששש', '2026'),
+    },
+  ];
+
+  for (const { locale, mask, hint, inputFor } of cases) {
+    it(`composes the real catalogue hint and parses the indicated date under ${locale}`, () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideZonelessChangeDetection(),
+          { provide: LOCALE_ID, useValue: locale },
+          provideSatoriDateAdapter(),
+        ],
+      });
+      const actualHint = dateMaskFor(locale, mask);
+      expect(actualHint).toBe(hint);
+      const adapter = TestBed.inject<DateAdapter<Date>>(DateAdapter);
+      const parsed = adapter.parse(
+        inputFor(actualHint),
+        TestBed.inject(MAT_DATE_FORMATS).parse.dateInput,
+      );
+      expect(parsed).not.toBeNull();
+      expect(adapter.isValid(parsed!)).toBeTrue();
+      expect(adapter.getYear(parsed!)).toBe(2026);
+      expect(adapter.getMonth(parsed!)).toBe(3);
+      expect(adapter.getDate(parsed!)).toBe(3);
     });
   }
 });

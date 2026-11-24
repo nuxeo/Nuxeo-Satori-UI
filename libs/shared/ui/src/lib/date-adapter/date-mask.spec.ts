@@ -28,12 +28,12 @@ describe('dateMaskFor', () => {
   });
 
   /**
-   * A language's own mask is already right, and must come back untouched — including the
-   * localized letters or Arabic words a translator chose. Add a row when enabling another catalogue.
+   * Keep the catalogue's field labels and use the parser's separators. The Hebrew catalogue
+   * uses slashes while its adapter reads dots, so that hint must be composed even without a region.
    */
   describe.each(Object.entries(CATALOGUE_MASKS))('%s', (language, mask) => {
-    it('returns the catalogue value unchanged', () => {
-      expect(dateMaskFor(language, mask)).toBe(mask);
+    it('keeps the field labels and follows the parser separators', () => {
+      expect(dateMaskFor(language, mask)).toBe(language === 'he' ? 'יי.חח.שששש' : mask);
     });
   });
 
