@@ -60,7 +60,6 @@ import {
   directoryPickerLabel,
   filterDirectoryPickerEntries,
   ContentModelService,
-  type NuxeoDoctypeDefinition,
   isBlobHoldingDocType,
   isDomainParentType,
   isFolderishDocument,
@@ -89,10 +88,10 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { utcMidnightOf } from '../calendar-day';
-import { typeHoldsMainBlob } from './main-blob-type';
+import { type MainBlobContentModel, typeHoldsMainBlob } from './main-blob-type';
 
 /** No content model yet, or none the server would give: the stock type names decide alone. */
-const NO_DOCTYPES: Readonly<Record<string, NuxeoDoctypeDefinition>> = {};
+const NO_CONTENT_MODEL: MainBlobContentModel = { doctypes: {}, facets: [] };
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -255,29 +254,31 @@ export class CreateImportDialogComponent implements OnInit {
   private readonly contentModel = inject(ContentModelService);
 
   /**
-   * Nuxeo's doctypes, to tell which types keep a main file (`typeHoldsMainBlob`). The content
-   * model — `/config/types`, `/config/facets` and `/config/schemas` — is read once and cached
-   * for the application's lifetime. `null` until it has answered; empty if the server refused
-   * it, when the check falls back to the stock type names.
+   * Nuxeo's doctypes and facet definitions, to tell which types keep a main file
+   * (`typeHoldsMainBlob`), which reads a type's facets against the facet definitions as well as
+   * its own schemas. The content model — `/config/types`, `/config/facets` and `/config/schemas`
+   * — is read once and cached for the application's lifetime. `null` until it has answered; empty
+   * if the server refused it, when the check falls back to the stock type names.
    */
-  private readonly answeredDoctypes = toSignal(
+  private readonly answeredContentModel = toSignal(
     this.contentModel.getContentModel().pipe(
-      map((model): Readonly<Record<string, NuxeoDoctypeDefinition>> => model.doctypes),
-      catchError(() => of(NO_DOCTYPES)),
+      map(({ doctypes, facets }): MainBlobContentModel => ({ doctypes, facets })),
+      catchError(() => of(NO_CONTENT_MODEL)),
     ),
     { initialValue: null },
   );
 
   /**
    * The selected type is none of the stock four, and the content model that says whether it
-   * extends one, or carries the `file` schema, has not answered yet — which happens only in the
-   * session's first dialog, until its three cached reads return. Create waits rather than guess,
-   * so a type that extends File is never created without its file. File, Picture, Audio and Video
-   * never wait; any other type, Folder included, can, since only the content model rules it out.
+   * extends one, or carries the `file` schema itself or through a facet, has not answered yet —
+   * which happens only in the session's first dialog, until its three cached reads return. Create
+   * waits rather than guess, so a type that extends File is never created without its file. File,
+   * Picture, Audio and Video never wait; any other type, Folder included, can, since only the
+   * content model rules it out.
    */
   readonly mainFileUnsettled = computed(() => {
     const type = this.selectedDocType()?.type;
-    return !!type && !isBlobHoldingDocType(type) && this.answeredDoctypes() === null;
+    return !!type && !isBlobHoldingDocType(type) && this.answeredContentModel() === null;
   });
 
   /**
@@ -287,7 +288,7 @@ export class CreateImportDialogComponent implements OnInit {
    */
   readonly importTypesUnsettled = computed(
     () =>
-      this.answeredDoctypes() === null &&
+      this.answeredContentModel() === null &&
       !this.creatableTypes().some((dt) => isBlobHoldingDocType(dt.type)),
   );
 
@@ -422,17 +423,26 @@ export class CreateImportDialogComponent implements OnInit {
   readonly importBlobTypeNames = computed(() => this.importBlobTypeOptions().map((dt) => dt.type));
 
   /**
+   * Import's properties step has no type to start the files as: this folder allows none that
+   * keeps a main file — one that takes only Workspace and Folder, say. Each file would otherwise
+   * start as `File`, `resolveImportBlobDocType`'s fallback, which the folder does not allow, so
+   * Add properties stays disabled and `startImportProperties` does nothing.
+   */
+  readonly noImportBlobTypes = computed(() => this.importBlobTypeNames().length === 0);
+
+  /**
    * Dublin Core metadata fields for blob-holding import types: File, Picture, Audio, Video and
-   * any type that extends one of them or carries the `file` schema.
+   * any type that extends one of them, or carries the `file` schema, itself or through a facet,
+   * and is not folderish.
    */
   readonly showImportBlobMetadataFields = computed(() => {
     const type = this.importDocType();
     return !!type && this.holdsMainBlob(type);
   });
 
-  /** Whether `type` keeps a main file, by its ancestry in Nuxeo's content model. */
+  /** Whether `type` keeps a main file, by its ancestry and facets in Nuxeo's content model. */
   private holdsMainBlob(type: string): boolean {
-    return typeHoldsMainBlob(type, this.answeredDoctypes() ?? NO_DOCTYPES);
+    return typeHoldsMainBlob(type, this.answeredContentModel() ?? NO_CONTENT_MODEL);
   }
 
   readonly canEditImportPrevious = computed(() => this.importFileIndex() > 0);
@@ -1069,7 +1079,7 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   startImportProperties(): void {
-    if (this.importRestricted() || this.importTypesUnsettled()) return;
+    if (this.importRestricted() || this.importTypesUnsettled() || this.noImportBlobTypes()) return;
     const files = this.uploads.pending();
     if (files.length === 0) return;
 

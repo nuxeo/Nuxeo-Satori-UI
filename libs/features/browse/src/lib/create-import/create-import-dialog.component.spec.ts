@@ -30,6 +30,7 @@ import {
   type L10nDirectoryEntry,
   type NuxeoContentModel,
   type NuxeoDoctypeDefinition,
+  type NuxeoFacetDefinition,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -114,10 +115,45 @@ const RENTAL_CONTRACT_DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
   RentalContract: { parent: 'File' },
 };
 
-function useDoctypes(doctypes: Record<string, NuxeoDoctypeDefinition>): void {
-  mockContentModelService.getContentModel.mockReturnValue(
-    of({ doctypes, facets: [], schemas: [] }),
-  );
+/**
+ * A customer type that gets the `file` schema from a facet it declares, with the facet's schemas
+ * left out of its own. The local Nuxeo lists them there too; leaving them out proves the dialog
+ * hands the facet definitions to the check.
+ */
+const SCANNED_INVOICE_MODEL: Pick<NuxeoContentModel, 'doctypes' | 'facets'> = {
+  doctypes: {
+    Invoice: { parent: 'Document', facets: ['Downloadable', 'Scanned'], schemas: ['common'] },
+  },
+  facets: [
+    { name: 'Downloadable' },
+    { name: 'Scanned', schemas: [{ name: 'file', '@prefix': '' }] },
+  ],
+};
+
+/**
+ * Workspace and Section as the local Nuxeo reports them: both carry the `file` schema for their own
+ * use, and both are containers, not documents with a main file.
+ */
+const CONTAINER_DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
+  ...RENTAL_CONTRACT_DOCTYPES,
+  Folder: { parent: 'Document', facets: ['Folderish', 'NXTag'], schemas: ['common', 'dublincore'] },
+  Workspace: {
+    parent: 'Folder',
+    facets: ['Folderish', 'NXTag', 'SuperSpace'],
+    schemas: ['file', 'webcontainer', 'publishing', 'files', 'common', 'dublincore', 'facetedTag'],
+  },
+  Section: {
+    parent: 'Folder',
+    facets: ['Folderish', 'NXTag', 'SuperSpace', 'PublishSpace'],
+    schemas: ['file', 'common', 'dublincore', 'facetedTag'],
+  },
+};
+
+function useDoctypes(
+  doctypes: Record<string, NuxeoDoctypeDefinition>,
+  facets: NuxeoFacetDefinition[] = [],
+): void {
+  mockContentModelService.getContentModel.mockReturnValue(of({ doctypes, facets, schemas: [] }));
 }
 
 /** A content model that has not answered yet; call the result to make it answer. */
@@ -842,6 +878,38 @@ describe('CreateImportDialogComponent CSV', () => {
     expect(component.importRestricted()).toBe(false);
   });
 
+  it('keeps Add properties disabled where the folder allows no type with a main file', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await createDialog({ parentPath: '/default-domain/workspaces/demo' });
+    component.setActiveTab('import');
+    component.creatableTypes.set([
+      { type: 'Workspace', label: 'Workspace' },
+      { type: 'Folder', label: 'Folder' },
+    ]);
+    component.uploads.stage([jpegFile('plan.jpg')]);
+    fixture.detectChanges();
+    const addProperties = (): HTMLButtonElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('.btn-add-properties');
+
+    expect(component.importTypesUnsettled()).toBe(false);
+    expect(component.noImportBlobTypes()).toBe(true);
+    expect(addProperties()?.disabled).toBe(true);
+    component.startImportProperties();
+    expect(component.importEntries()).toEqual([]);
+    expect(component.view()).toBe('main');
+
+    // The same folder with one type that keeps a main file opens the step as before.
+    component.creatableTypes.set([
+      { type: 'Workspace', label: 'Workspace' },
+      { type: 'RentalContract', label: 'Rental Contract' },
+    ]);
+    fixture.detectChanges();
+    expect(addProperties()?.disabled).toBe(false);
+    component.startImportProperties();
+    expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    expect(component.view()).toBe('importProperties');
+  });
+
   it('shows staged import cards and action buttons only after files are selected', async () => {
     await createDialog({ parentPath: '/default-domain/workspaces/demo' });
     component.setActiveTab('import');
@@ -1081,6 +1149,20 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
     answer({ Domain: { parent: 'Folder' }, Folder: { parent: 'Document' } });
     fixture.detectChanges();
     expect(createButton()?.disabled).toBe(false);
+  });
+
+  it('keeps Create enabled for a Workspace or Section, whose file schema is not a main file', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await createDialog();
+    for (const type of ['Workspace', 'Section']) {
+      component.startCreateFromType({ type, label: type });
+      fixture.detectChanges();
+      stubForm(fixture).ready.set(true);
+      fixture.detectChanges();
+      expect(component.hasContentField()).toBe(false);
+      expect(component.createMissingMainFile()).toBe(false);
+      expect(createButton()?.disabled).toBe(false);
+    }
   });
 
   it('createDocument at repository root delegates Domain create to DocumentImportService', async () => {
@@ -2060,6 +2142,44 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.importBlobTypeNames()).toEqual(['RentalContract']);
 
       component.uploads.stage([jpegFile('lease.jpg')]);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    });
+
+    it('exposes a content field for a type whose facet contributes the file schema', async () => {
+      useDoctypes(SCANNED_INVOICE_MODEL.doctypes, SCANNED_INVOICE_MODEL.facets);
+      await createDialog();
+
+      component.startCreateFromType({ type: 'Invoice', label: 'Invoice' });
+      expect(component.hasContentField()).toBe(true);
+      expect(component.createMissingMainFile()).toBe(true);
+    });
+
+    it('offers a type whose facet contributes the file schema for imported files', async () => {
+      useDoctypes(SCANNED_INVOICE_MODEL.doctypes, SCANNED_INVOICE_MODEL.facets);
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'Invoice', label: 'Invoice' },
+        { type: 'Folder', label: 'Folder' },
+      ]);
+      expect(component.importBlobTypeNames()).toEqual(['Invoice']);
+
+      component.uploads.stage([jpegFile('invoice.jpg')]);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['Invoice']);
+    });
+
+    it('does not offer Workspace or Section for imported files', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'Workspace', label: 'Workspace' },
+        { type: 'Section', label: 'Section' },
+        { type: 'RentalContract', label: 'Rental Contract' },
+      ]);
+      expect(component.importBlobTypeNames()).toEqual(['RentalContract']);
+
+      component.uploads.stage([jpegFile('plan.jpg')]);
       component.startImportProperties();
       expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
     });
@@ -3080,6 +3200,9 @@ describe('CreateImportDialogComponent with the real create form and Expires fiel
 
   it('keeps every partial entry on the import form', async () => {
     const fixture = await render();
+    // A folder that takes File. Without this the folder context is whatever an earlier test left
+    // the mock returning, and one that allows no type with a main file opens no properties step.
+    fixture.componentInstance.creatableTypes.set([{ type: 'File', label: 'File' }]);
     fixture.componentInstance.uploads.stage([jpegFile('photo.png')]);
     fixture.componentInstance.startImportProperties();
     fixture.detectChanges();
