@@ -12433,6 +12433,25 @@ expectRed(
   /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
 );
 
+// A parent segment resolves away when the directory is READ, so the catalogues are the vendor's
+// as usual, but a key assembled from the raw spelling keeps `apps/../` and matches nothing. This
+// slipped through the fix for the `./` case above, which is why the resolver no longer filters
+// segments by name but puts the path through the same `join`/`relative` pair that reads it.
+expectRed(
+  'a stale install reached through an asset input with a parent segment',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: `apps/../${VENDOR_I18N}`, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
+);
+
 // A nested install must be compared against its OWN lock entry, not its parent's. Resolving from
 // the first `node_modules` segment named the parent, whose version agreeing with the lockfile
 // says nothing about the nested package actually being read.

@@ -4654,22 +4654,29 @@ const VENDOR_LOCALES_MANIFEST = 'languages.json';
  * there", which is a typo or a vendor that dropped the folder in a version bump; and looking the
  * package up in the lockfile to check the install is faithful.
  *
- * Normalised, and resolved from the LAST `node_modules` segment, because review of this gate found
- * two shapes where it silently handed back the pre-fix behaviour rather than a verdict:
+ * Resolved through the repository root, and from the LAST `node_modules` segment, because review
+ * of this gate found three shapes where it silently handed back the pre-fix behaviour rather than
+ * a verdict — all of them the same failure, a package root that does not name the package whose
+ * files are about to be read:
  *
- * - An asset input may be written `./node_modules/…` and a lockfile key never is, so the drift
- *   lookup missed, reported "no entry", and let the rule judge a stale install after all.
+ * - An asset input may be written `./node_modules/…` and a lockfile key never is.
+ * - It may contain a parent segment, `apps/../node_modules/…`, which the directory read resolves
+ *   away but a key built by hand keeps.
  * - A nested install — `node_modules/parent/node_modules/@scope/pkg` — resolved from the FIRST
  *   segment names `node_modules/parent`, a different package whose version agreeing with its own
  *   lock entry says nothing about the nested one.
  *
- * Both are the same failure: a package root that does not name the package whose files are about
- * to be read. One resolver, used by both rules, so the two cannot drift apart again.
+ * The first two were each fixed once by filtering the offending segment, and the second slipped
+ * through the first fix, so the spelling is no longer picked apart segment by segment: the path is
+ * put through the same `join`/`relative` pair that reads it, which collapses `.`, `..` and
+ * duplicate separators in one step and cannot be defeated by a spelling nobody thought of. One
+ * resolver, used by both rules, so the two cannot drift apart either.
  */
 function installedPackageRootOf(path) {
-  const segments = toPosixRel(path)
-    .split('/')
-    .filter((segment) => segment !== '' && segment !== '.');
+  const rel = toPosixRel(relative(repoRoot, join(repoRoot, path)));
+  // Outside the tree there is no lockfile entry to compare against, and no package to name.
+  if (rel === '' || rel === '..' || rel.startsWith('../')) return null;
+  const segments = rel.split('/');
   const index = segments.lastIndexOf('node_modules');
   if (index === -1) return null;
   const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
