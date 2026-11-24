@@ -16,7 +16,7 @@ import {
 } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
@@ -127,8 +127,12 @@ async function devServer(
   const server = createServer((request, response) => {
     asked.push(`${request.method} ${request.url} ${request.headers.authorization ?? ''}`.trim());
     const file = decodeURIComponent((request.url ?? '').replace(/^\/agentic-ui-config\//, ''));
-    const path = join(folder, ...file.split('/'));
-    const bytes = answer(file, existsSync(path) ? readFileSync(path) : null);
+    // Only what is inside `folder` is served, as `nx serve` serves only its folder: a `..` in the
+    // request does not climb out of it (CodeQL's js/path-injection).
+    const root = resolve(folder);
+    const path = resolve(root, ...file.split('/'));
+    const inside = path.startsWith(root + sep);
+    const bytes = answer(file, inside && existsSync(path) ? readFileSync(path) : null);
     if (bytes === null) response.writeHead(404).end('<!doctype html>');
     else response.writeHead(200, { 'content-type': 'application/json' }).end(bytes);
   });

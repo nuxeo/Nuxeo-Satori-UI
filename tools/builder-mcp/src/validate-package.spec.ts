@@ -53,6 +53,28 @@ function everyFile(root: string): string[] {
 /** The scratch copies are outside the repository, so the tests name their folder as a root. */
 const SCRATCH = { roots: [REPO_ROOT, scratch] };
 
+// The stopping tests' child processes run code that is fixed here. What varies, a marker's path and
+// the code a child passes on, goes in as `process.argv`, never spliced into the source: a value
+// quoted with `JSON.stringify` into code that runs is code construction (CodeQL's
+// js/bad-code-sanitization), whatever the value.
+
+/** Writes the file named by its first argument, a second and a half after it starts. */
+const GRANDCHILD = "setTimeout(() => require('fs').writeFileSync(process.argv[1], 'x'), 1500)";
+
+/**
+ * Starts a grandchild running the code of its second argument, with its first argument passed on,
+ * then waits a minute: a pipeline that started something and has not ended.
+ */
+const SPAWN_GRANDCHILD =
+  "require('child_process').spawn(process.execPath, ['-e', process.argv[2], process.argv[1]], { stdio: 'ignore' }); setTimeout(() => {}, 60000);";
+
+/**
+ * A server that runs a pipeline through `runNode` and says so: its arguments are the module that
+ * exports `runNode`, then the pipeline's own arguments, in `SPAWN_GRANDCHILD`'s order.
+ */
+const SERVER_RUNNING_A_PIPELINE =
+  "const [module, marker, spawnCode, grandchild] = process.argv.slice(1); const { runNode } = await import(module); runNode(['-e', spawnCode, marker, grandchild], 60000); setTimeout(() => process.stdout.write('started'), 300);";
+
 const LAYOUT = join('bundle', 'agentic-ui-config', 'layouts', 'Claim', 'view.layout.json');
 
 describe.skipIf(!PIPELINE_TESTS_RUN)(
@@ -355,14 +377,7 @@ describe('the pipeline process', () => {
     'is stopped whole when it takes too long: what it started stops too',
     async () => {
       const marker = join(scratch, 'grandchild-wrote');
-      const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 1500)`;
-      const run = await runNode(
-        [
-          '-e',
-          `require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setTimeout(() => {}, 60000);`,
-        ],
-        500,
-      );
+      const run = await runNode(['-e', SPAWN_GRANDCHILD, marker, GRANDCHILD], 500);
       expect(run.failure).toContain('was stopped');
       await new Promise((done) => setTimeout(done, 2500));
       expect(existsSync(marker)).toBe(false);
@@ -374,8 +389,6 @@ describe('the pipeline process', () => {
     'is stopped with the server: a signal to the server stops what it started',
     async () => {
       const marker = join(scratch, 'outlived-the-server');
-      const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 1500)`;
-      const pipeline = `require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setTimeout(() => {}, 60000);`;
       const module = new URL('./validate-package.ts', import.meta.url).href;
       // A server that starts a pipeline and says so, then is sent SIGTERM.
       const server = spawn(
@@ -383,7 +396,11 @@ describe('the pipeline process', () => {
         [
           '--input-type=module',
           '-e',
-          `import { runNode } from ${JSON.stringify(module)}; runNode(['-e', ${JSON.stringify(pipeline)}], 60000); setTimeout(() => process.stdout.write('started'), 300);`,
+          SERVER_RUNNING_A_PIPELINE,
+          module,
+          marker,
+          SPAWN_GRANDCHILD,
+          GRANDCHILD,
         ],
         { stdio: ['ignore', 'pipe', 'inherit'] },
       );
