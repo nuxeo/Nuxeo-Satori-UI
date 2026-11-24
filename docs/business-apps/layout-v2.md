@@ -677,6 +677,22 @@ becomes. In version 2's terms:
     console says so; in a template's placeholder, `{case:member}`, through the field that shows the
     property; and in a form's read-only field. A form's input still edits the stored id (the limits
     below).
+- **The Properties panel shows a reference by the record it names, too:** version 1's panel,
+  generated from the schemas or drawn from a `metadata` file, beside the record page or any
+  document page. It has no widgets, so a reference is a property whose schema binds it with a
+  `documentResolver` that stores an id, `store` `id` or `idOnly`, as `/config/types/<type>` reports
+  it; `case:member` is one. Its value, alone, in a list or inside a complex value, shows the
+  record's title as a link that opens it, through the same lookup and with the same rules as
+  above: one search for every record the panel names, each id once, only lower-case UUIDs sent,
+  "Unavailable" for a record the reader may not read, one that no longer exists or a value that is
+  not an id, and nothing while the record is read. The panel keeps its own lookup for as long as
+  it is drawn, so a record the record page beside it names is asked for once by each: a Case page
+  sends two searches for its member and its claim (measured). A resolver that stores a path,
+  `path` or `pathOnly`, holds no id, and its value shows as stored. `store` `id` accepts a bare id,
+  as the Payers kit's seed writes one, but Nuxeo's resolver itself writes `<repository>:<id>` for
+  it, and such a value is not an id the lookup asks for: it shows "Unavailable" here, as in a
+  `document-link` on the record page. On the record page, a field with no widget still shows a
+  reference's stored id: naming the `document-link` widget is what shows its title there.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
 - **The date rules read the page's clock**, `RECORD_PAGE_TODAY` and `RECORD_PAGE_TIME_ZONE` in
@@ -915,9 +931,11 @@ record itself is: one request per distinct value.
   property of every type its `types` lists, and not a reference. Without `types` there is no type
   to check `show` against.
 - **The app, when it loads the page,** checks every field against its type's schemas (section 11),
-  but cannot check this one as fully: the field types it reads carry no resolver, so it cannot tell
-  a reference from a string. To show the value by its schema type, it reads the schema of each
-  type `types` lists, as it reads the open record's; without `types`, the value is shown as text.
+  but cannot check this one as fully: the field types it reads say whether a `documentResolver`
+  stores an id, which the Properties panel reads (section 11), and not which types it links to, so
+  it could tell such a reference from a string but not check `show` against the linked type. To
+  show the value by its schema type, it reads the schema of each type `types` lists, as it reads
+  the open record's; without `types`, the value is shown as text.
 - **A linked record that lacks the property** shows no value, and says "Not available" to a screen
   reader, as an unreadable one would under this proposal. The lookup that is built, section 11's,
   shows one the reader may not read as "Unavailable".

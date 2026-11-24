@@ -85,6 +85,28 @@ function directoryOf(constraints: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Whether a `documentResolver` binds the value to a document by its id. Nuxeo reports its `store`
+ * as `id` (also for a resolver given none, or one it does not know), `idOnly`, `path` or
+ * `pathOnly`; the first two name a document by its id, the others by a path, which no lookup by id
+ * could read.
+ *
+ * **A limit:** `id` accepts a bare id, as the Payers kit's seed writes one, and Nuxeo's resolver
+ * itself writes `<repository>:<id>` for it. The lookup asks only for a bare, lower-case id, so such
+ * a value shows "Unavailable", in the Properties panel as in a `document-link` on the record page
+ * (layout-v2.md, section 11).
+ */
+function storesDocumentId(constraints: unknown): boolean {
+  if (!Array.isArray(constraints)) return false;
+  return constraints.some((constraint) => {
+    if (!isRecord(constraint) || constraint['name'] !== 'documentResolver') return false;
+    const store = isRecord(constraint['parameters'])
+      ? constraint['parameters']['store']
+      : undefined;
+    return store === 'id' || store === 'idOnly';
+  });
+}
+
 /** A constraint parameter as Nuxeo serialises it, always a string: `"2000"`, `"false"`. */
 function numberParameter(parameters: Record<string, unknown>, name: string): number | undefined {
   const value = parameters[name];
@@ -137,6 +159,8 @@ function readFieldType(raw: unknown): LayoutFieldType | null {
   if (typeof raw === 'string') return { type: raw };
   if (!isRecord(raw) || typeof raw['type'] !== 'string') return null;
   const directory = directoryOf(raw['constraints']) ?? directoryOf(raw['itemConstraints']);
+  const reference =
+    storesDocumentId(raw['constraints']) || storesDocumentId(raw['itemConstraints']);
   const fields = isRecord(raw['fields']) ? readFields(raw['fields']) : undefined;
   const { required, constraints } = readConstraints(raw['constraints']);
   const items = readConstraints(raw['itemConstraints']).constraints;
@@ -144,6 +168,7 @@ function readFieldType(raw: unknown): LayoutFieldType | null {
   return {
     type: raw['type'],
     ...(directory ? { directory } : {}),
+    ...(reference ? { documentReference: true as const } : {}),
     ...(fields ? { fields } : {}),
     ...(required ? { required } : {}),
     ...(Object.keys(checks).length ? { constraints: checks } : {}),

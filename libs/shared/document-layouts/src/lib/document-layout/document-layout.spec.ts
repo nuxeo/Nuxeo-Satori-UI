@@ -1,5 +1,6 @@
 import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
   AppExtensionsService,
@@ -14,8 +15,22 @@ import { Observable, Subject, of } from 'rxjs';
 import { DocumentLayoutService } from '../document-layout.service';
 import { readLayoutFile } from '../layout-file';
 import { DocumentTypeDefinition, LayoutSection, ResolvedLayout } from '../layout.model';
+import type { LinkedRecord } from '../record-page/linked-record';
 import { applyLayoutFile, readDocumentType } from '../resolve-layout';
 import { DOCUMENT_LAYOUT_TIME_ZONE, DocumentLayoutComponent } from './document-layout';
+
+const TITLES: Readonly<Record<string, string>> = {
+  'a00e20f3-1398-4b64-827e-628bfdada64c': 'Wei Chen',
+  '9cd9b1cf-6f0b-442f-afa0-c2539996ba30': 'John Smith',
+};
+
+/** What the search returns for `ids`: the records the reader may read. */
+const linked = (ids: readonly string[]): ReadonlyMap<string, LinkedRecord> =>
+  new Map(
+    ids
+      .filter((id) => id in TITLES)
+      .map((id): [string, LinkedRecord] => [id, { title: TITLES[id], url: `/doc/${id}` }]),
+  );
 
 const claimDocument = (overrides: Record<string, unknown> = {}): NuxeoDocument =>
   ({
@@ -97,6 +112,10 @@ describe('DocumentLayoutComponent', () => {
   let vocabularyLabel: ReturnType<
     typeof vi.fn<(directory: string, id: string) => Observable<string | null>>
   >;
+  /** The linked records' search: each call is one request, with the ids it was given. */
+  let linkedRecords: ReturnType<
+    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>>
+  >;
   const LABELS: Record<string, string> = {
     'claim_status/pending': 'Pending review',
     'claim_status/approved': 'Approved',
@@ -125,10 +144,19 @@ describe('DocumentLayoutComponent', () => {
     vocabularyLabel = vi.fn((directory: string, id: string) =>
       of(LABELS[`${directory}/${id}`] ?? null),
     );
+    linkedRecords = vi.fn((ids: readonly string[]) => of(linked(ids)));
     TestBed.configureTestingModule({
       imports: [DocumentLayoutComponent],
       providers: [
-        { provide: DocumentLayoutService, useValue: { layoutFor, vocabularyLabel } },
+        provideRouter([]),
+        {
+          provide: DocumentLayoutService,
+          useValue: {
+            layoutFor,
+            vocabularyLabel,
+            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
+          },
+        },
         { provide: AppExtensionsService, useValue: { resolve } },
         // A named offset rather than the host's zone, for every case that renders a date: a
         // midday instant is the next day at +13, Auckland in summer (pattern 29).
@@ -494,6 +522,137 @@ describe('DocumentLayoutComponent', () => {
         [...host().querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()),
       ).toEqual(['Details']);
       expect(value('claim:number')).toBe('CLM-1');
+    });
+  });
+
+  /**
+   * A reference to a document, a `documentResolver` that stores an id, as the generated panel
+   * beside a Case lists `case:member` (layout-v2.md, section 11): shown by the record's title, read
+   * through the record page's own lookup.
+   */
+  describe('a document reference', () => {
+    const WEI = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+    const JOHN = '9cd9b1cf-6f0b-442f-afa0-c2539996ba30';
+    /** A record the reader may not read, or that no longer exists: the search does not return it. */
+    const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
+    const reference = { documentReference: true };
+    const caseSection: LayoutSection = {
+      id: 'case',
+      label: { keys: [], fallback: 'Case' },
+      fields: [
+        field('case:number', 'string'),
+        field('case:member', 'string', reference),
+        field('case:household', 'string[]', reference),
+        field('case:history', 'complex[]', { fields: { by: { type: 'string', ...reference } } }),
+      ],
+    };
+    const caseDocument = (properties: Record<string, unknown>): NuxeoDocument =>
+      ({
+        uid: 'k1',
+        title: 'CASE-1',
+        type: 'Case',
+        path: '/k1',
+        lastModified: '',
+        properties: { 'case:number': 'CASE-1', ...properties },
+      }) as NuxeoDocument;
+    const caseLayout = layout({ type: 'Case', sections: [caseSection] });
+    const linksOf = (xpath: string) =>
+      [...host().querySelectorAll<HTMLAnchorElement>(`[data-field="${xpath}"] a`)].map((a) => ({
+        text: a.textContent?.trim(),
+        href: a.getAttribute('href'),
+      }));
+    const chipsOf = (xpath: string) =>
+      [...host().querySelectorAll(`[data-field="${xpath}"] .document-layout__chip`)].map((chip) =>
+        chip.textContent?.trim(),
+      );
+
+    it("shows the linked record's title, as a link that opens it through the app's router", async () => {
+      await render(caseDocument({ 'case:member': WEI }), caseLayout);
+      expect(value('case:member')).toBe('Wei Chen');
+      expect(linksOf('case:member')).toEqual([{ text: 'Wei Chen', href: `/doc/${WEI}` }]);
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      host().querySelector<HTMLAnchorElement>('[data-field="case:member"] a')?.click();
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(router.serializeUrl(navigate.mock.calls[0][0] as never)).toBe(`/doc/${WEI}`);
+      expect(host().textContent).not.toContain(WEI);
+    });
+
+    it('reads every record the panel names in one request, each id once', async () => {
+      await render(
+        caseDocument({
+          'case:member': WEI,
+          'case:household': [JOHN, WEI],
+          'case:history': [{ by: GONE }, { by: JOHN }],
+        }),
+        caseLayout,
+      );
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0][0]).toEqual([GONE, JOHN, WEI].sort());
+      expect(chipsOf('case:household')).toEqual(['John Smith', 'Wei Chen']);
+      expect(text('[data-field="case:history"] [data-subfield="by"] a')).toBe('John Smith');
+    });
+
+    it('shows a record it may not read, one that is gone and a value that is no id as unavailable, never the id', async () => {
+      const injected = `${WEI}' OR ecm:uuid IS NOT NULL OR ecm:uuid = '`;
+      await render(
+        caseDocument({ 'case:member': GONE, 'case:household': [JOHN, injected] }),
+        caseLayout,
+      );
+      expect(value('case:member')).toBe('Unavailable');
+      expect(linksOf('case:member')).toEqual([]);
+      expect(
+        host().querySelector('[data-field="case:member"] .document-layout__unavailable'),
+      ).not.toBeNull();
+      expect(chipsOf('case:household')).toEqual(['John Smith', 'Unavailable']);
+      expect(host().textContent).not.toContain(GONE);
+      expect(host().textContent).not.toContain(injected);
+      // The value that is not an id was never asked for.
+      expect(linkedRecords.mock.calls.flatMap(([ids]) => ids)).not.toContain(injected);
+    });
+
+    it('shows nothing of a record while it is read, not its id', async () => {
+      const answer = new Subject<ReadonlyMap<string, LinkedRecord> | null>();
+      linkedRecords.mockReturnValue(answer);
+      await render(caseDocument({ 'case:member': WEI, 'case:household': [JOHN] }), caseLayout);
+      expect(value('case:member')).toBe('');
+      expect(chipsOf('case:household')).toEqual([]);
+      expect(host().textContent).not.toContain(WEI);
+      answer.next(linked([WEI, JOHN]));
+      answer.complete();
+      fixture.detectChanges();
+      expect(value('case:member')).toBe('Wei Chen');
+      expect(chipsOf('case:household')).toEqual(['John Smith']);
+    });
+
+    it('asks nothing more for the record reloaded with the same references, and only for an id it adds', async () => {
+      await render(caseDocument({ 'case:member': WEI }), caseLayout);
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      fixture.componentRef.setInput('document', caseDocument({ 'case:member': WEI }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      fixture.componentRef.setInput(
+        'document',
+        caseDocument({ 'case:member': WEI, 'case:household': [JOHN] }),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(linkedRecords).toHaveBeenCalledTimes(2);
+      expect(linkedRecords.mock.calls[1][0]).toEqual([JOHN]);
+      expect(value('case:member')).toBe('Wei Chen');
+      expect(chipsOf('case:household')).toEqual(['John Smith']);
+    });
+
+    it('asks for nothing, and shows the value, where the property is no reference', async () => {
+      const plain = { ...caseSection, fields: [field('case:member', 'string')] };
+      await render(
+        caseDocument({ 'case:member': WEI }),
+        layout({ type: 'Case', sections: [plain] }),
+      );
+      expect(value('case:member')).toBe(WEI);
+      expect(linkedRecords).not.toHaveBeenCalled();
     });
   });
 });
