@@ -285,11 +285,14 @@ faxes wait for capture, in phase 7.
   [`.cursor/skills/app-builder/SKILL.md`](../../.cursor/skills/app-builder/SKILL.md), and says
   which of its steps are not built: publishing is a person's tag.
 - **The generators**, updated for app definition version 2: `app-package`, `app-layout`,
-  `app-queue` and `app-action`, in [`tools/satori-generators`](../../tools/satori-generators). A
-  record page is laid out from the type's schemas in a content model, from a file or read live.
-  Their specs hold a scaffold to the package pipeline: it passes, given the model and an
-  allow-list for its operation, and broken copies are refused. They are internal: they write
-  packages this repository's pipeline checks.
+  `app-form`, `app-queue`, `app-action`, `app-registry` and, for a demo's stand-in model,
+  `app-model`, in [`tools/satori-generators`](../../tools/satori-generators). A record page and a
+  form are laid out from the type's schemas in a content model, from a file or read live; the
+  component contributes each, and the app to the app registry with every file it serves. Their
+  specs hold a scaffold, and a demo kit written by the generators but for its home, menu and task
+  form, to the package pipeline: each passes, given the model and an allow-list for its operation,
+  and broken copies are refused.
+  They are internal: they write packages this repository's pipeline checks.
 - **The pipeline**, completed: versions, signatures, and promotion after a person approves.
   Versions are built ([package-pipeline.md](package-pipeline.md), section 8): a version that did
   not move as far as the changes need is refused, and each build writes what changed. Signatures

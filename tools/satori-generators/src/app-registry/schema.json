@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppRegistry",
+  "title": "Satori business app registry entry",
+  "description": "Has the package's component contribute its app to the app registry: the <app> element, from agentic-ui-config/app.json, naming every file of the app definition the registry serves. Writes it when there is none, and otherwise brings its files in step with the package's.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    }
+  },
+  "required": ["package"]
+}

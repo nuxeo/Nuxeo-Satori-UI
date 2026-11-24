@@ -94,18 +94,33 @@ describe('app-layout generator', () => {
   it('has the component contribute it, from the one place the pipeline accepts', async () => {
     await generate();
     const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    // In an extension of its own, before the one app-package wrote for the app.
     expect(xml).toContain(
       '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
         '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
-        '  </extension>\n</component>',
+        '  </extension>\n\n' +
+        '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+        '    <app id="acme-contracts" src="agentic-ui-config/app.json">\n',
     );
     await generate({ type: 'Counterparty' });
     const twice = tree.read(COMPONENT, 'utf-8') ?? '';
-    expect(twice.match(/<extension /g)).toHaveLength(1);
+    expect(twice.match(/<extension /g)).toHaveLength(2);
     expect(twice).toContain(
       '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
         '    <layout type="Counterparty" mode="view" src="agentic-ui-config/layouts/Counterparty/view.layout.json" />\n' +
         '  </extension>',
+    );
+  });
+
+  it('adds a layout extension before the app, or after the last one when there is no app', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    // A component with no app: the layouts' extension goes before </component>, as it always did.
+    const app = xml.indexOf('\n  <extension');
+    tree.write(COMPONENT, `${xml.slice(0, app)}\n</component>\n`);
+    await generate();
+    expect(tree.read(COMPONENT, 'utf-8')).toContain(
+      '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
+        '  </extension>\n</component>',
     );
   });
 
@@ -122,14 +137,17 @@ describe('app-layout generator', () => {
     );
     await generate();
     const written = tree.read(COMPONENT, 'utf-8') ?? '';
-    // The new extension is after the comment, outside it, and the commented entry refused nothing.
-    const comment = written.lastIndexOf('-->');
-    expect(
-      written.indexOf(
-        '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
-      ),
-    ).toBeGreaterThan(comment);
-    expect(written.slice(comment).match(/<extension /g)).toHaveLength(1);
+    // The new extension is outside the comment, which is left as it was, and its entry refused
+    // nothing.
+    const opened = written.lastIndexOf('<!-- <extension');
+    const closed = written.indexOf('-->', opened);
+    const at = written.indexOf(
+      '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
+    );
+    expect(at).toBeGreaterThan(-1);
+    expect(at < opened || at > closed).toBe(true);
+    expect(written.slice(opened, closed)).toContain('agentic-ui-config/old.json');
+    expect(written.slice(opened, closed)).not.toContain('layouts/Contract/view.layout.json');
   });
 
   describe('reads the component as the pipeline does', () => {
@@ -148,7 +166,11 @@ describe('app-layout generator', () => {
       );
       await generate();
       const written = tree.read(COMPONENT, 'utf-8') ?? '';
-      expect(written.indexOf(LAYOUT)).toBeGreaterThan(written.indexOf('</documentation>'));
+      const at = written.indexOf(LAYOUT);
+      expect(at).toBeGreaterThan(-1);
+      expect(
+        at < written.indexOf('<documentation>') || at > written.indexOf('</documentation>'),
+      ).toBe(true);
     });
 
     it('finds no entry in a CDATA section or a processing instruction', async () => {
@@ -180,6 +202,36 @@ describe('app-layout generator', () => {
     });
   });
 
+  it('refuses an entry outside the configuration point, where nothing registers it', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    tree.write(
+      COMPONENT,
+      xml.replace(
+        '</component>',
+        '  <extension target="org.nuxeo.agentic.ui.config" point="configurations">\n' +
+          '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
+          '  </extension>\n</component>',
+      ),
+    );
+    const before = tree.read(COMPONENT, 'utf-8');
+    await expect(generate()).rejects.toThrow(
+      `has the Contract/view layout outside an extension of org.nuxeo.agentic.ui.config's "configuration" point`,
+    );
+    expect(tree.read(COMPONENT, 'utf-8')).toBe(before);
+  });
+
+  it('reads an extension closed as </extension >, as the pipeline does', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    tree.write(
+      COMPONENT,
+      xml.replace('  </extension>\n</component>', '  </extension >\n</component>'),
+    );
+    await generate();
+    expect(tree.read(COMPONENT, 'utf-8')).toContain(
+      '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
+    );
+  });
+
   it('finds an extension whose attributes are quoted with apostrophes, and adds to it', async () => {
     const xml = tree.read(COMPONENT, 'utf-8') ?? '';
     tree.write(
@@ -191,7 +243,8 @@ describe('app-layout generator', () => {
     );
     await generate();
     const written = tree.read(COMPONENT, 'utf-8') ?? '';
-    expect(written.match(/<extension /g)).toHaveLength(1);
+    // Its own and the app's: no third.
+    expect(written.match(/<extension /g)).toHaveLength(2);
     expect(written).toContain(
       "<extension point='configuration' target='org.nuxeo.agentic.ui.config'>\n" +
         '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
