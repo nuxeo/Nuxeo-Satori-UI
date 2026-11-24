@@ -6325,10 +6325,19 @@ function checkStorybookSatoriCatalogues() {
           continue;
         }
         if (absent) {
-          warn(
+          // FAILS, and must. An earlier round of this branch made this a warning, reasoning that
+          // an uninstalled dependency cannot be judged — which is the convention elsewhere in
+          // this file and was still wrong here, because what this verdict asserts is not a claim
+          // about the package. The Storybook serves no catalogue at all at that path, so every
+          // `sat.*` key renders raw whatever the reason; the install only changes the remedy.
+          // Warning instead let the gate exit 0 on a tree `main` failed, which is the one thing
+          // `CLAUDE.md` is most emphatic about never doing.
+          fail(
             `${absent.root} is not installed, and ${main}${where} serves nothing at ` +
-              `${SATORI_STORYBOOK_CATALOGUE_DIR} because ${absent.dir} is not there, so whether ` +
-              '`staticDirs` is wrong could not be judged. Run `npm ci` and re-run the guardrails.',
+              `${SATORI_STORYBOOK_CATALOGUE_DIR} because ${absent.dir} is not there, so every ` +
+              '`sat.*` request 404s and the stories render raw keys. Run `npm ci` and re-run the ' +
+              'guardrails before editing `staticDirs` — the missing mount may be the install ' +
+              'rather than the configuration.',
           );
           continue;
         }

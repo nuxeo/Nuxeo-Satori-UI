@@ -13256,6 +13256,27 @@ expectRed(
   /could not be checked against package-lock\.json \(node_modules\/@hylandsoftware\/satori-ui\/package\.json declares no version\)[\s\S]*may be the install rather than the language asked for/,
 );
 
+/* The regression this branch itself introduced and review caught: an absent dependency reached
+ * through an ancestor mount turned the "serves nothing" verdict into a WARNING, so the gate
+ * exited 0 on a tree `main` failed. The install changes the remedy, not the fact that the
+ * Storybook serves no catalogue at that path, so this fails — and stays failing. */
+expectRed(
+  'an absent dependency serving no catalogue at all still fails',
+  'checkStorybookSatoriCatalogues',
+  {
+    'package-lock.json': lockPinning('1.0.0'),
+    // The scope exists so the mount is inside node_modules; satori-ui itself is not.
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /node_modules\/@hylandsoftware\/satori-ui is not installed, and[\s\S]*serves nothing at i18n\/@hylandsoftware\/satori-ui[\s\S]*may be the install rather than the configuration/,
+);
+
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
 falsePositiveControls += 1;
 expectSilent(
