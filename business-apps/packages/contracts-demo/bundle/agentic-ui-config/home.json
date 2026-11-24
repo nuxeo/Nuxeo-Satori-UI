@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "contracts.home.title",
+  "cards": [
+    {
+      "id": "renewals",
+      "labelKey": "contracts.home.renewals",
+      "kpi": { "pageProvider": "contracts_up_for_renewal" },
+      "queue": "up-for-renewal"
+    },
+    {
+      "id": "active",
+      "labelKey": "contracts.home.active",
+      "kpi": { "pageProvider": "contracts_active" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["contract-managers"] }
+    },
+    {
+      "id": "terminated",
+      "labelKey": "contracts.home.terminated",
+      "kpi": { "pageProvider": "contracts_terminated" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["legal-reviewers"] }
+    }
+  ]
+}

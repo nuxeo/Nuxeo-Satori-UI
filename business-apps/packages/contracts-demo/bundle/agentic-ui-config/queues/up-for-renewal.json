@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "contracts.queue.up-for-renewal",
+  "pageProvider": "contracts_up_for_renewal",
+  "columns": [
+    "contract:number",
+    { "field": "dc:title", "labelKey": "contracts.field.title" },
+    "contract:counterparty",
+    { "field": "contract:end", "widget": "relative-date" },
+    {
+      "field": "contract:value",
+      "widget": "currency",
+      "labelKey": "contracts.field.value",
+      "parameters": { "currency": { "field": "contract:currency" } }
+    },
+    { "field": "contract:owner", "widget": "user", "labelKey": "contracts.field.owner" }
+  ],
+  "sort": [
+    {
+      "field": "contract:end",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50
+}
