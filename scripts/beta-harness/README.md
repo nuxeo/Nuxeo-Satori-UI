@@ -50,7 +50,7 @@ Playwright and axe are deliberately **not** tracked dependencies, so they never
 affect the CI install. Install them locally once:
 
 ```bash
-npm install --no-save @playwright/test @axe-core/playwright
+npm install --no-save @playwright/test @axe-core/playwright@4.14.0 axe-core@4.14.1
 npx playwright install chromium
 ```
 
@@ -58,6 +58,15 @@ npx playwright install chromium
 `node_modules` against the lockfile plus `<x>`, which silently removes any _other_
 unsaved package. Installing axe on its own deleted Playwright and the next capture
 died with "Playwright is required to capture evidence but is not installed".
+
+**The axe engine is pinned**, in `axe-engine.mjs`, because `phase-6-a11y` publishes the WCAG
+verdict and an unpinned install changed that verdict without a commit: the 2026-10-22 capture
+ran axe-core 4.13.0 and the 2026-11-23 one ran 4.14.1 (gap 8 in `docs/accessibility.md`).
+`axe-core` is named as well as the wrapper because `@axe-core/playwright@4.14.0` accepts any
+`~4.14.0` engine. `phase-6-a11y` refuses any other pair with exit 2 before it scans, and each of
+its scans fails unless axe reports that it ran the pinned engine. a11y-scout pins 4.13.0
+(`a11y/versions.mjs`), and one `node_modules` holds one version of each, so install for the layer
+you are about to run: each refuses the other's install.
 
 Bring the Nuxeo stack up, then start the app in another terminal:
 
@@ -110,7 +119,10 @@ Loads `scripts/beta-harness/steps/phase-0-baseline.mjs` and writes to
 
 - `NN-*.png` — screenshots numbered by step
 - `*.webm` — video of the whole run
-- `manifest.json` — steps, checks, environment, screenshot audit, verdict
+- `manifest.json` — steps, checks, environment, screenshot audit, verdict. `environment`
+  records the untracked packages the run loaded (`playwright`, `axeCorePlaywright` and
+  `axeCore`, each `null` when not installed), because nothing else in the checkout says which
+  versions a `--no-save` install left behind
 - `INDEX.md` — narrative report with the images inlined, ready to paste into a
   PR description or attach to the RFC
 

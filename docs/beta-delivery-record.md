@@ -388,7 +388,8 @@ step 3 was in question from 2026-09-23, and on 2026-11-23 the bar is **not met**
 WCAG row of "Still open", above). The control was fixed the same day, and
 `phase-6-a11y/2026-11-23T18-53-44`, with axe-core 4.14.1, passes every axe check. The bar stays
 not met for the failures recorded in states the capture does not reach. Before quoting a later
-verdict, re-run `phase-6-a11y` and record the axe-core version.
+verdict, re-run `phase-6-a11y` and quote the axe-core version its manifest records
+(`environment.axeCore`). The capture is pinned to 4.14.1 and refuses any other.
 
 The number that matters more than the fixes: the previous capture scanned **three** surfaces and
 ratcheted **four** rule ids. Widening it to fifteen cases found **seven** rule classes and **77**
