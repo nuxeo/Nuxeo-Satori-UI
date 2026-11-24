@@ -67,6 +67,21 @@ export interface ExtensionRuleContext {
    * `app.rules.isNotBusy`.
    */
   readonly flags: Readonly<Record<string, boolean>>;
+  /**
+   * Today, for the date rules `app.rules.datePassed` and `app.rules.dateWithin`; absent, the
+   * browser's clock. The record page and its forms give their own, `RECORD_PAGE_TODAY`, so that a
+   * banner reads the day the page's dates and computations read, and a test or a demo that pins
+   * the page's day pins its banners too.
+   */
+  readonly today?: Date;
+  /**
+   * The zone the date rules read today's day and an instant's day in: an offset such as `+0530`;
+   * absent, the reader's own. The record page and its forms give theirs, `RECORD_PAGE_TIME_ZONE`,
+   * which is the zone their `date` fields show an instant in only when it is an offset: Angular's
+   * date formatting reads no IANA zone, which the rules would read. A zone the browser cannot read
+   * passes neither date rule.
+   */
+  readonly timeZone?: string;
 }
 
 /** An empty context, so a caller with nothing in focus need not build one. */

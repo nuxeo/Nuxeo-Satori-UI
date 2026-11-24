@@ -844,9 +844,13 @@ use them. Each takes the date first, a property as a layout names one or a liter
 `{ "type": "app.rules.dateWithin", "parameters": [{ "field": "dc:expired" }, 30] }` passes from 30
 days before the date to the day itself, and `datePassed` from the day after. A date is read as the
 record page's `date` widget reads one: a stored day, such as a `dc:expired` picked in the Edit form,
-as written, and an instant on the reader's own day. Today is the reader's day, from the browser's
-clock. No date, or a value that is not one, passes neither rule, nor does a number of days out of
-range. The layout validator refuses a number of days out of range, and in place of the date a
+as written, and an instant on the reader's own day. Today is the reader's day: the rule context's
+`today`, in its `timeZone`, where its caller gives them, and otherwise the browser's clock in the
+reader's zone. The record page and a version 2 form give theirs, `RECORD_PAGE_TODAY` and
+`RECORD_PAGE_TIME_ZONE`, so a test or a host that pins the page's day pins these rules there too
+([layout-v2.md](business-apps/layout-v2.md), section 11). A zone the browser cannot read passes
+neither rule. No date, or a value that is not one, passes neither rule, nor does a number of days
+out of range. The layout validator refuses a number of days out of range, and in place of the date a
 literal that is not one, such as `"2026-13-01"`, or a computation.
 
 **Scope, stated plainly.** "The focused document" means the document open on
