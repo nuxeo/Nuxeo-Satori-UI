@@ -27,6 +27,7 @@ import { Subject, of, throwError, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import type { LayoutFieldType } from '../layout.model';
+import type { LinkedRecord } from './linked-record';
 import type { RecordListEntry, RecordPropertyField } from './record-layout';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import { RecordListComponent } from './record-list';
@@ -63,7 +64,25 @@ const CLAIM_PROPERTIES: ReadonlyMap<string, LayoutFieldType> = new Map<string, L
   ['claim:number', { type: 'string' }],
   ['claim:billedAmount', { type: 'double' }],
   ['claim:status', { type: 'string', directory: 'claim_status' }],
+  ['claim:member', { type: 'string' }],
 ]);
+
+const WEI = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+const JOHN = '9cd9b1cf-6f0b-442f-afa0-c2539996ba30';
+const MARIA = '9a651335-d3d4-434c-a7b4-afe7e5c0edae';
+/** A member the reader may not read, or that no longer exists: the search does not return it. */
+const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
+const TITLES: Readonly<Record<string, string>> = {
+  [WEI]: 'Wei Chen',
+  [JOHN]: 'John Smith',
+  [MARIA]: 'Maria Alvarez',
+};
+const linked = (ids: readonly string[]): ReadonlyMap<string, LinkedRecord> =>
+  new Map(
+    ids
+      .filter((id) => id in TITLES)
+      .map((id): [string, LinkedRecord] => [id, { title: TITLES[id], url: `/doc/${id}` }]),
+  );
 
 const claim = (n: number, properties: Record<string, unknown> = {}): NuxeoDocument => ({
   uid: `c${n}`,
@@ -123,6 +142,10 @@ describe('RecordListComponent', () => {
     document: NuxeoDocument,
   ) => Observable<ReadonlyMap<string, LayoutFieldType> | null>;
   let vocabulary: Subject<string | null>;
+  /** The linked records' search: each call is one request, with the ids it was given. */
+  let linkedRecords: ReturnType<
+    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>>
+  >;
   let flagged: ExtensionRuleContext[];
   let warnings: string[];
 
@@ -135,6 +158,7 @@ describe('RecordListComponent', () => {
     });
     rowProperties = () => of(CLAIM_PROPERTIES);
     vocabulary = new Subject<string | null>();
+    linkedRecords = vi.fn((ids: readonly string[]) => of(linked(ids)));
     flagged = [];
     warnings = [];
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
@@ -161,6 +185,7 @@ describe('RecordListComponent', () => {
             vocabularyLabel: (directory: string, id: string) =>
               directory === 'claim_status' && id === 'open' ? vocabulary : of(null),
             principalLabel: () => of(null),
+            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
@@ -649,6 +674,85 @@ describe('RecordListComponent', () => {
     TestBed.inject(DocumentChangesService).notify();
     await settle();
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  describe('a document-link column', () => {
+    const MEMBERS: RecordListEntry = {
+      ...CLAIMS,
+      columns: [column('claim:number'), column('claim:member', 'document-link')],
+    };
+    const withMember = (n: number, member: unknown) => claim(n, { 'claim:member': member });
+    const memberColumn = () => list().columns()[1];
+
+    it("shows each member by title, a link opening it through the router, not the row's record", async () => {
+      const root = await render(['m1'], MEMBERS);
+      const rows = [withMember(1, WEI), withMember(2, JOHN)];
+      await answer(rows);
+      expect(memberColumn().text?.(rows[0])).toBe('Wei Chen');
+      expect(memberColumn().links?.(rows[0])).toEqual([
+        { text: 'Wei Chen', routerLink: `/doc/${WEI}` },
+      ]);
+      const link = root.querySelector<HTMLAnchorElement>(
+        'tr[data-uid="c1"] a.nxs-document-list__link',
+      );
+      expect(link?.textContent?.trim()).toBe('Wei Chen');
+      expect(link?.getAttribute('href')).toBe(`/doc/${WEI}`);
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      const opened = vi.fn();
+      list().open.subscribe(opened);
+      link?.click();
+      expect(opened).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(router.serializeUrl(navigate.mock.calls[0][0] as never)).toBe(`/doc/${WEI}`);
+      expect(warnings.some((w) => w.includes('document-link'))).toBe(false);
+    });
+
+    it('reads the members of the whole page in one request, each once', async () => {
+      await render(['m1'], MEMBERS);
+      await answer([
+        withMember(1, WEI),
+        withMember(2, JOHN),
+        withMember(3, WEI),
+        withMember(4, GONE),
+      ]);
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0][0]).toEqual([GONE, JOHN, WEI].sort());
+    });
+
+    it('shows a member it may not read, or a value that is no id, as unavailable, never the id', async () => {
+      const injected = `${WEI}' OR ecm:uuid IS NOT NULL OR ecm:uuid = '`;
+      const root = await render(['m1'], MEMBERS);
+      const rows = [withMember(1, GONE), withMember(2, injected)];
+      await answer(rows);
+      for (const row of rows) {
+        expect(memberColumn().text?.(row)).toBe('Unavailable');
+        expect(memberColumn().links?.(row)).toEqual([{ text: 'Unavailable', routerLink: null }]);
+      }
+      expect(root.querySelector('a.nxs-document-list__link')).toBeNull();
+      const table = root.querySelector('table')?.textContent ?? '';
+      expect(table).toContain('Unavailable');
+      expect(table).not.toContain(GONE);
+      expect(table).not.toContain(injected);
+      expect(linkedRecords.mock.calls.flatMap(([ids]) => ids)).toEqual([GONE]);
+    });
+
+    it('asks only for the members a new page adds, and nothing for a page read before', async () => {
+      await render(['m1'], MEMBERS);
+      const first = [withMember(1, WEI), withMember(2, JOHN)];
+      await answer(first, { numberOfPages: 2, isNextPageAvailable: true });
+      list().pageChange.emit(1);
+      await settle();
+      await answer([withMember(3, JOHN), withMember(4, MARIA)], {
+        currentPageIndex: 1,
+        numberOfPages: 2,
+      });
+      list().pageChange.emit(0);
+      await settle();
+      await answer(first, { numberOfPages: 2, isNextPageAvailable: true });
+      expect(linkedRecords.mock.calls.map(([ids]) => ids)).toEqual([[JOHN, WEI].sort(), [MARIA]]);
+      expect(memberColumn().text?.(first[0])).toBe('Wei Chen');
+    });
   });
 
   it("opens a row's record", async () => {

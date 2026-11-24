@@ -222,7 +222,21 @@
       </span>
     }
     @default {
-      {{ cellText(doc, key) }}
+      @let links = cellLinks(doc, key);
+      @if (links) {
+        @for (link of links; track $index) {
+          @if (!$first) {
+            <span class="nxs-document-list__separator">, </span>
+          }
+          @if (link.routerLink !== null) {
+            <a class="nxs-document-list__link" [routerLink]="link.routerLink">{{ link.text }}</a>
+          } @else {
+            <span class="nxs-document-list__link-text">{{ link.text }}</span>
+          }
+        }
+      } @else {
+        {{ cellText(doc, key) }}
+      }
     }
   }
 </ng-template>

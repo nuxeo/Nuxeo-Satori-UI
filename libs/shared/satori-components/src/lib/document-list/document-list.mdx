@@ -98,7 +98,11 @@ providers, as for any `nxs-thumbnail`.
 
 A column's `key` is one of the packaged columns — `title`, `type`, `modified`, `lastContributor`,
 `created`, `author`, `state`, `version`, `nature`, `coverage`, `subjects` — or the name of a Nuxeo
-property such as `dc:source`, whose value the cell shows as text.
+property such as `dc:source`, whose value the cell shows as text. A property column may give the
+cell's `text`, already formatted, or its `links`: each a text and a route of the app, such as the
+record the row's property names, opened through the router as a row is. A link with no route is
+its text alone. A cell's links are reached from the row with Right and Left, like its other
+controls, and open what they name, not the row; they need the host to provide the router.
 
 ## Where its data comes from
 

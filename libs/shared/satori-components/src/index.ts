@@ -69,6 +69,7 @@ export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.compo
 export {
   NxsDocumentListComponent,
   type NxsDocumentListColumn,
+  type NxsDocumentListLink,
   type NxsDocumentListRowAction,
   type NxsDocumentListSort,
 } from './lib/document-list/document-list.component';
