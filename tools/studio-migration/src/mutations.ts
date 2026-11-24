@@ -9,19 +9,39 @@
  * conditional field in a package with no conditions, says so and writes nothing.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { labelsPath } from './app-files';
+import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
 import { fieldOf, layoutFields } from './app-walk';
 import { labelsOf, type Conversion, type ConvertedTheme, type ReportEntry } from './convert';
+import { slotEntry, type Catalogue } from './catalogue';
+import { menuEntryId } from './convert-home';
+import { buttonAction } from './convert-slots';
+import type { Inventory, SlotContribution } from './inventory';
+import { slotRegistry } from './slot-registry';
+import type { StudioPackage } from './studio-package';
 
 export interface Mutation {
   readonly name: string;
   readonly description: string;
   /** The check that must fail once it is applied. */
   readonly caughtBy: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 10;
-  readonly apply: (conversion: Conversion) => {
+  /**
+   * Breaks the conversion. A control that writes what the package's own Web UI leaves out, such as
+   * a disabled button, reads that from the package too, and refuses without it.
+   */
+  readonly apply: (
+    conversion: Conversion,
+    source?: MutationSource,
+  ) => {
     readonly conversion: Conversion;
     readonly changed: string;
   };
+}
+
+/** The package a conversion was made from, for the controls that read it. */
+export interface MutationSource {
+  readonly pkg: StudioPackage;
+  readonly inventory: Inventory;
+  readonly catalogue: Catalogue;
 }
 
 export class MutationError extends Error {
@@ -117,11 +137,95 @@ const convertedInto = (conversion: Conversion, path: string): Set<string> =>
  */
 const PLATFORM_PREFIXES = ['dc', 'common', 'uid', 'file', 'files', 'note', 'picture', 'thumbnail'];
 
+/** A rule the conversion carries: the file, the object holding it and where it sits. */
+export interface RuleHolder {
+  readonly path: string;
+  readonly file: Json;
+  readonly holder: Json;
+  readonly at: string;
+}
+
+/**
+ * Every rule the conversion carries, each in its own copy of its file: on a layout field, an
+ * action, a home card, a menu entry or a queue.
+ */
+export function ruleHolders(conversion: Conversion): RuleHolder[] {
+  const found: RuleHolder[] = [];
+  const listed = (path: string, key: string) => {
+    const entries = (conversion.app[path] as Json | undefined)?.[key];
+    if (!Array.isArray(entries)) return;
+    entries.forEach((entry, index) => {
+      if (!isRecord(entry) || !('visibleWhen' in entry)) return;
+      const file = clone(conversion.app[path]) as Json;
+      found.push({
+        path,
+        file,
+        holder: (file[key] as Json[])[index],
+        at: `${key}.${index}.visibleWhen`,
+      });
+    });
+  };
+  for (const path of Object.keys(conversion.app).sort()) {
+    if (path.startsWith('layouts/') || path.startsWith('tasks/')) {
+      // A tab's rule and a card's: `tabs.1.visibleWhen`, `cards.2.visibleWhen`.
+      const content = conversion.app[path];
+      const holders: string[] = [];
+      const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+      const cardsAt = (cards: unknown, at: string): void =>
+        listOf(cards).forEach((card, index) => {
+          if (isRecord(card) && 'visibleWhen' in card) holders.push(`${at}cards.${index}`);
+        });
+      if (isRecord(content)) {
+        cardsAt(content['cards'], '');
+        listOf(content['tabs']).forEach((tab, index) => {
+          if (!isRecord(tab)) return;
+          if ('visibleWhen' in tab) holders.push(`tabs.${index}`);
+          cardsAt(tab['cards'], `tabs.${index}.`);
+        });
+      }
+      for (const at of holders) {
+        const file = clone(content) as Json;
+        const holder = at
+          .split('.')
+          .reduce<unknown>(
+            (value, key) =>
+              isRecord(value) || Array.isArray(value) ? (value as Json)[key] : undefined,
+            file,
+          );
+        if (isRecord(holder)) found.push({ path, file, holder, at: `${at}.visibleWhen` });
+      }
+      for (const shown of layoutFields(conversion.app[path] as Json)) {
+        if (!isRecord(shown.entry) || !('visibleWhen' in shown.entry)) continue;
+        const file = clone(conversion.app[path]) as Json;
+        // The same entry in the copy, by its place: `cards.0.fields.3`, `tabs.1.cards.0.fields.2`.
+        const entry = shown.at
+          .split('.')
+          .reduce<unknown>(
+            (at, key) => (isRecord(at) || Array.isArray(at) ? (at as Json)[key] : undefined),
+            file,
+          );
+        if (isRecord(entry))
+          found.push({ path, file, holder: entry, at: `${shown.at}.visibleWhen` });
+      }
+    }
+    if (path === 'actions.json') listed(path, 'actions');
+    if (path === 'home.json') listed(path, 'cards');
+    if (path === 'navigation.json') listed(path, 'entries');
+    if (path.startsWith('queues/') && isRecord(conversion.app[path])) {
+      const file = clone(conversion.app[path]) as Json;
+      if ('visibleWhen' in file) found.push({ path, file, holder: file, at: 'visibleWhen' });
+    }
+  }
+  return found;
+}
+
+const findRule = (conversion: Conversion): RuleHolder | null => ruleHolders(conversion)[0] ?? null;
+
 /** The entry as an object, so that a key can be set on it. */
 const asObject = (entry: unknown): Json =>
   typeof entry === 'string' ? { field: entry } : (entry as Json);
 
-export const MUTATIONS: readonly Mutation[] = [
+const M1_MUTATIONS: readonly Mutation[] = [
   {
     name: 'drop-translation',
     description: 'Drop one translation from one language',
@@ -405,6 +509,34 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
   {
+    name: 'invert-rule',
+    description: 'Invert the rule a converted condition became',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findRule(conversion);
+      if (!found) throw new MutationError('the conversion carries no rule to invert');
+      found.holder['visibleWhen'] = { type: 'core.not', parameters: [found.holder['visibleWhen']] };
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `inverted the rule at ${found.at} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-rule',
+    description: 'Drop the rule of something Web UI shows only under a condition',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findRule(conversion);
+      if (!found) throw new MutationError('the conversion carries no rule to drop');
+      delete found.holder['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule at ${found.at} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
     name: 'widen-column-to-everyone',
     description: 'Show a list column Web UI shows only under a condition to every user',
     caughtBy: 5,
@@ -413,7 +545,7 @@ export const MUTATIONS: readonly Mutation[] = [
       const column = entries.find(
         (entry) =>
           entry.kind === 'search-column' &&
-          entry.outcome === 'pending' &&
+          entry.outcome !== 'converted' &&
           entry.property &&
           /condition/.test(entry.note ?? ''),
       );
@@ -429,6 +561,47 @@ export const MUTATIONS: readonly Mutation[] = [
       return {
         conversion: withFile(conversion, path, queue),
         changed: `added the column ${column.property}, which Web UI shows only under a condition, to app/${path} for everyone`,
+      };
+    },
+  },
+  {
+    name: 'wrong-home-queue',
+    description: 'Point a card of the home at another queue',
+    caughtBy: 7,
+    apply: (conversion) => {
+      const home = conversion.app['home.json'];
+      const cards = isRecord(home) && Array.isArray(home['cards']) ? home['cards'] : [];
+      const queues = Object.keys(conversion.app)
+        .filter((path) => path.startsWith('queues/'))
+        .map((path) => path.slice('queues/'.length, -'.json'.length));
+      const card = cards.find((item) => isRecord(item) && typeof item['queue'] === 'string') as
+        Json | undefined;
+      const other = queues.find((id) => id !== card?.['queue']);
+      if (!card || other === undefined)
+        throw new MutationError(
+          'the conversion has no home card, or no other queue to point it at',
+        );
+      const file = clone(home) as Json;
+      const target = (file['cards'] as Json[]).find((item) => item['id'] === card['id']) as Json;
+      target['queue'] = other;
+      return {
+        conversion: withFile(conversion, 'home.json', file),
+        changed: `pointed ${String(card['id'])} in app/home.json at ${other}, not ${String(card['queue'])}`,
+      };
+    },
+  },
+  {
+    name: 'drop-menu-entry',
+    description: 'Drop an entry of the menu',
+    caughtBy: 7,
+    apply: (conversion) => {
+      const menu = conversion.app['navigation.json'];
+      const entries = isRecord(menu) && Array.isArray(menu['entries']) ? menu['entries'] : [];
+      if (entries.length === 0) throw new MutationError('the conversion has no menu entry to drop');
+      const [dropped, ...rest] = entries as Json[];
+      return {
+        conversion: withFile(conversion, 'navigation.json', { ...(menu as Json), entries: rest }),
+        changed: `dropped ${String(dropped['id'])} from app/navigation.json`,
       };
     },
   },
@@ -549,6 +722,395 @@ export const MUTATIONS: readonly Mutation[] = [
     },
   },
 ];
+
+/** The task forms, in path order. */
+const taskForms = (conversion: Conversion): string[] =>
+  Object.keys(conversion.app)
+    .filter((path) => path.startsWith('tasks/'))
+    .sort();
+
+/** The first tab of a view file other than its record page's own, `view`, in a copy of its file. */
+function findTab(
+  conversion: Conversion,
+  pick: (tab: Json) => boolean = () => true,
+): { path: string; file: Json; tabs: Json[]; index: number } | null {
+  for (const path of layouts(conversion)) {
+    const file = clone(conversion.app[path]) as Json;
+    const tabs = Array.isArray(file['tabs']) ? (file['tabs'] as Json[]) : [];
+    const index = tabs.findIndex((tab) => isRecord(tab) && tab['id'] !== 'view' && pick(tab));
+    if (index !== -1) return { path, file, tabs, index };
+  }
+  return null;
+}
+
+/** M2's controls: task forms, tabs and layout blocks (studio-migration.md, section 7). */
+const M2_MUTATIONS: readonly Mutation[] = [
+  {
+    name: 'drop-task-field',
+    description: 'Drop a field from a converted task form',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findField(
+        conversion,
+        (entry) => fieldOf(entry) !== null,
+        taskForms(conversion),
+      );
+      if (!found) throw new MutationError('no converted task form has a field to drop');
+      const [dropped] = found.holder.splice(found.index, 1);
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped ${fieldOf(dropped)} from app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'rename-task-variable',
+    description: "Name a variable the task's step and workflow do not have",
+    caughtBy: 3,
+    apply: (conversion) => {
+      const found = findField(
+        conversion,
+        (entry) => fieldOf(entry)?.startsWith('var:') === true,
+        taskForms(conversion),
+      );
+      if (!found) throw new MutationError('no converted task form has a variable to rename');
+      const entry = asObject(found.holder[found.index]);
+      const before = entry['field'] as string;
+      entry['field'] = `${before}Renamed`;
+      found.holder[found.index] = entry;
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `renamed ${before} to ${entry['field']} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'var-in-layout',
+    description: "Put a task's variable into a document's layout, where var: means nothing",
+    caughtBy: 10,
+    apply: (conversion) => {
+      const found = findField(conversion, (entry, path) => {
+        const file = conversion.app[path];
+        return isRecord(file) && file['version'] === 2 && fieldOf(entry) !== null;
+      });
+      if (!found) throw new MutationError('no converted layout of version 2 has a field');
+      const entry = asObject(found.holder[found.index]);
+      const before = entry['field'] as string;
+      entry['field'] = `var:${before.slice(before.indexOf(':') + 1)}`;
+      found.holder[found.index] = entry;
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `made ${before} the task variable ${entry['field']} in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-block-card',
+    description: "Drop a layout block's card from a converted layout",
+    caughtBy: 2,
+    apply: (conversion) => {
+      const blocks = new Set(
+        conversion.report.constructs
+          .filter((entry) => entry.kind === 'block-use' && entry.outcome === 'converted')
+          .map((entry) => entry.to ?? ''),
+      );
+      // A card holding a field the report says it converted there, which check 2 then misses.
+      const converted = (path: string): Set<string> =>
+        new Set(
+          conversion.report.constructs
+            .filter(
+              (entry) =>
+                entry.kind === 'block-field' &&
+                entry.outcome === 'converted' &&
+                (entry.to ?? '').split(', ').includes(path),
+            )
+            .flatMap((entry) => (entry.property ? [entry.property] : [])),
+        );
+      for (const path of layouts(conversion)) {
+        const file = clone(conversion.app[path]) as Json;
+        const holders: { at: string; cards: Json[] }[] = [];
+        if (Array.isArray(file['cards']))
+          holders.push({ at: 'cards', cards: file['cards'] as Json[] });
+        if (Array.isArray(file['sections']))
+          holders.push({ at: 'sections', cards: file['sections'] as Json[] });
+        (Array.isArray(file['tabs']) ? (file['tabs'] as Json[]) : []).forEach((tab) => {
+          if (isRecord(tab) && Array.isArray(tab['cards']))
+            holders.push({ at: `tabs.${String(tab['id'])}.cards`, cards: tab['cards'] as Json[] });
+        });
+        for (const { at, cards } of holders) {
+          const index = cards.findIndex(
+            (card) =>
+              isRecord(card) &&
+              blocks.has(`${path} ${at}.${String(card['id'])}`) &&
+              Array.isArray(card['fields']) &&
+              card['fields'].some((field) => converted(path).has(fieldOf(field) ?? '')),
+          );
+          if (index === -1) continue;
+          const [dropped] = cards.splice(index, 1);
+          return {
+            conversion: withFile(conversion, path, file),
+            changed: `dropped the card ${String(dropped['id'])}, a layout block's, from app/${path}`,
+          };
+        }
+      }
+      throw new MutationError("no converted layout has a layout block's card to drop");
+    },
+  },
+  {
+    name: 'drop-tab',
+    description: 'Drop a tab from a converted view layout',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findTab(conversion);
+      if (!found) throw new MutationError('no converted view layout has a tab of the package');
+      const [dropped] = found.tabs.splice(found.index, 1);
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the tab ${String(dropped['id'])} from app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-tab-rule',
+    description: 'Show a tab Web UI shows only under a condition to every user',
+    caughtBy: 5,
+    apply: (conversion) => {
+      const found = findTab(conversion, (tab) => 'visibleWhen' in tab);
+      if (!found) throw new MutationError('no converted tab carries a rule');
+      const tab = found.tabs[found.index];
+      delete tab['visibleWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `dropped the rule of the tab ${String(tab['id'])} in app/${found.path}, showing it to everyone`,
+      };
+    },
+  },
+  {
+    name: 'change-tab-label',
+    description: 'Change the label of a converted tab',
+    caughtBy: 6,
+    apply: (conversion) => {
+      // A tab whose label the package's own catalogue settles: a literal one may rest on Web UI's.
+      const found = findTab(conversion, (tab) => typeof tab['labelKey'] === 'string');
+      if (!found) throw new MutationError('no converted tab has a translated label');
+      const tab = found.tabs[found.index];
+      const before = tab['labelKey'];
+      delete tab['labelKey'];
+      tab['label'] = 'Something else';
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `labelled the tab ${String(tab['id'])} "Something else", not ${String(before)}, in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'make-display-editable',
+    description: 'Make a field Web UI only shows editable in a converted task form',
+    caughtBy: 2,
+    apply: (conversion) => {
+      const found = findField(
+        conversion,
+        (entry) => isRecord(entry) && entry['readOnlyWhen'] === 'core.true',
+        taskForms(conversion),
+      );
+      if (!found) throw new MutationError('no converted task form has a read-only field');
+      const entry = found.holder[found.index] as Json;
+      delete entry['readOnlyWhen'];
+      return {
+        conversion: withFile(conversion, found.path, found.file),
+        changed: `made ${fieldOf(entry)} editable in app/${found.path}`,
+      };
+    },
+  },
+  {
+    name: 'drop-block-use-entry',
+    description: 'Drop a use of a layout block from the report without a word',
+    caughtBy: 1,
+    apply: (conversion) => {
+      const entries = conversion.report.constructs;
+      const index = entries.findIndex((entry) => entry.kind === 'block-use');
+      if (index === -1) throw new MutationError('the report lists no use of a layout block');
+      return {
+        conversion: withEntries(conversion, [
+          ...entries.slice(0, index),
+          ...entries.slice(index + 1),
+        ]),
+        changed: `dropped ${entries[index].id} from report.json`,
+      };
+    },
+  },
+];
+
+/** The source a control reads, or a refusal saying how to give it. */
+function needSource(source: MutationSource | undefined): MutationSource {
+  if (!source)
+    throw new MutationError(
+      'it reads the package the conversion was made from: give it with --package <package.zip>',
+    );
+  return source;
+}
+
+/**
+ * The buttons Web UI's slots leave out for the reason `why` matches, each with the action the
+ * converter would have made of it: its id, operation and parameters.
+ */
+function leftOutButtons(
+  source: MutationSource,
+  why: RegExp,
+): {
+  readonly contribution: SlotContribution;
+  readonly id: string;
+  readonly operation: string;
+  readonly parameters: Record<string, unknown> | null;
+}[] {
+  const registry = slotRegistry(source.inventory);
+  const appId = appIdOf(source.pkg);
+  return placed(source.inventory.slotContributions).flatMap(({ contribution, overall }) => {
+    const decision = registry.dropped.get(contribution);
+    const entry = slotEntry(source.catalogue, contribution.slot);
+    if (!decision || !why.test(decision.note ?? '') || !entry) return [];
+    if (entry.slot !== 'toolbar' && entry.slot !== 'bulk-actions') return [];
+    const action = buttonAction(contribution, entry.slot);
+    if ('problem' in action) return [];
+    return [
+      {
+        contribution,
+        id: actionIdOf(appId, contribution.name, overall),
+        operation: action.operation,
+        parameters: action.parameters,
+      },
+    ];
+  });
+}
+
+/** The actions of a copy of the conversion's `actions.json`, which is made when there is none. */
+function actionsOf(conversion: Conversion): { file: Json; actions: Json[] } {
+  const file = (clone(conversion.app['actions.json'] ?? { version: 2, actions: [] }) as Json) ?? {};
+  if (!Array.isArray(file['actions'])) file['actions'] = [];
+  return { file, actions: file['actions'] as Json[] };
+}
+
+/**
+ * Gives the action a contribution of the same name owns the operation and parameters of the one
+ * Web UI left out for `why`: what a converter that kept the wrong one would write.
+ */
+function keepLeftOut(
+  conversion: Conversion,
+  source: MutationSource | undefined,
+  why: RegExp,
+  kind: string,
+) {
+  const { file, actions } = actionsOf(conversion);
+  for (const button of leftOutButtons(needSource(source), why)) {
+    const action = actions.find(
+      (candidate) => isRecord(candidate) && candidate['id'] === button.id,
+    );
+    if (!action) continue;
+    if (
+      action['operation'] === button.operation &&
+      JSON.stringify(action['parameters'] ?? {}) === JSON.stringify(button.parameters ?? {})
+    )
+      continue;
+    action['operation'] = button.operation;
+    if (button.parameters) action['parameters'] = button.parameters;
+    else delete action['parameters'];
+    return {
+      conversion: withFile(conversion, 'actions.json', file),
+      changed: `made ${button.id} run what the ${kind} "${button.contribution.name}" runs, ${button.operation} with ${JSON.stringify(button.parameters ?? {})}`,
+    };
+  }
+  throw new MutationError(`the package has no ${kind} button that differs from the one kept`);
+}
+
+/** Controls of Web UI's slot registration (`slot-registry.ts`), for actions and the menu. */
+const SLOT_MUTATIONS: readonly Mutation[] = [
+  {
+    name: 'revive-disabled-action',
+    description: 'Make an action of a button Web UI shows nothing of, being disabled',
+    caughtBy: 7,
+    apply: (conversion, source) => {
+      const { file, actions } = actionsOf(conversion);
+      const button = leftOutButtons(needSource(source), /is disabled/).find(
+        (candidate) => !actions.some((action) => isRecord(action) && action['id'] === candidate.id),
+      );
+      if (!button)
+        throw new MutationError('the package has no disabled button to make an action of');
+      actions.push({
+        id: button.id,
+        label: button.contribution.name || button.id,
+        operation: button.operation,
+        ...(button.parameters ? { parameters: button.parameters } : {}),
+      });
+      return {
+        conversion: withFile(conversion, 'actions.json', file),
+        changed: `made the action ${button.id} of the disabled button "${button.contribution.name}"`,
+      };
+    },
+  },
+  {
+    name: 'keep-replaced-action',
+    description: 'Keep a button a later one of the same name replaces, rather than the later one',
+    caughtBy: 7,
+    apply: (conversion, source) => keepLeftOut(conversion, source, /replaces it/, 'replaced'),
+  },
+  {
+    name: 'keep-outranked-action',
+    description: 'Keep a button a higher priority one of the same name outranks',
+    caughtBy: 7,
+    apply: (conversion, source) =>
+      keepLeftOut(conversion, source, /has a higher priority/, 'outranked'),
+  },
+  {
+    name: 'revive-disabled-menu-entry',
+    description: 'Make an entry of the menu of one Web UI shows nothing of, being disabled',
+    caughtBy: 7,
+    apply: (conversion, source) => {
+      const { inventory } = needSource(source);
+      const registry = slotRegistry(inventory);
+      const item = inventory.slotContributions.find(
+        (contribution) =>
+          contribution.slot === 'DRAWER_ITEMS' &&
+          /is disabled/.test(registry.dropped.get(contribution)?.note ?? ''),
+      );
+      const queue = Object.keys(conversion.app)
+        .sort()
+        .map((path) => /^queues\/([^/]+)\.json$/.exec(path)?.[1])
+        .find((id): id is string => id !== undefined);
+      if (!item || !queue)
+        throw new MutationError(
+          'the package has no disabled menu entry, or the conversion no queue',
+        );
+      const file = clone(conversion.app['navigation.json'] ?? { version: 2, entries: [] }) as Json;
+      if (!Array.isArray(file['entries'])) file['entries'] = [];
+      const id = menuEntryId(item);
+      (file['entries'] as Json[]).push({ id, queue });
+      return {
+        conversion: withFile(conversion, 'navigation.json', file),
+        changed: `made the menu entry ${id} of the disabled "${item.name}", opening queues/${queue}.json`,
+      };
+    },
+  },
+  {
+    name: 'change-action-order',
+    description: "Move an action from the place Web UI's slot gives it",
+    caughtBy: 6,
+    apply: (conversion) => {
+      const { file, actions } = actionsOf(conversion);
+      const action = actions.find(
+        (candidate) => isRecord(candidate) && typeof candidate['order'] === 'number',
+      );
+      if (!action) throw new MutationError('no converted action has an order to change');
+      action['order'] = (action['order'] as number) + 1000;
+      return {
+        conversion: withFile(conversion, 'actions.json', file),
+        changed: `moved ${String(action['id'])} to order ${String(action['order'])}`,
+      };
+    },
+  },
+];
+
+/** Every control, M1's and M2's. */
+export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS, ...SLOT_MUTATIONS];
 
 export function mutation(name: string): Mutation | null {
   return MUTATIONS.find((candidate) => candidate.name === name) ?? null;

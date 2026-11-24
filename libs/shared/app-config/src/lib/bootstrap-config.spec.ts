@@ -147,8 +147,9 @@ describe('branding.favicon', () => {
     ).toBeUndefined();
     // A key that is absent from the base is still *settable*, and still refused when unusable:
     // optional must not mean unvalidated.
-    expect(mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon)
-      .toEqual({ src: 'a.png', alt: '' });
+    expect(
+      mergeBootstrapConfig(base, { branding: { favicon: { src: 'a.png' } } }).branding.favicon,
+    ).toEqual({ src: 'a.png', alt: '' });
     expect(
       mergeBootstrapConfig(base, { branding: { favicon: { src: '/nuxeo/api/v1/me' } } }).branding
         .favicon,
@@ -1042,6 +1043,36 @@ describe('mergeBootstrapConfig', () => {
         session: { idleTimeoutMs: -1, warningBeforeMs: 'soon' },
       }).session,
     ).toEqual(DEFAULT_APP_BOOTSTRAP_CONFIG.session);
+  });
+
+  it('reads the notification interval, keeps the last valid one and lets null restore the default', () => {
+    const configured = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, {
+      notifications: { pollIntervalMs: 120_000 },
+    });
+    expect(configured.notifications).toEqual({ pollIntervalMs: 120_000 });
+
+    // A later fragment with a value that is not a positive number leaves the earlier one.
+    for (const bad of [0, -5, 'often', Number.NaN, true]) {
+      expect(
+        mergeBootstrapConfig(configured, { notifications: { pollIntervalMs: bad } }).notifications,
+        String(bad),
+      ).toEqual({ pollIntervalMs: 120_000 });
+    }
+    expect(mergeBootstrapConfig(configured, { notifications: 'x' }).notifications).toEqual({
+      pollIntervalMs: 120_000,
+    });
+    expect(
+      mergeBootstrapConfig(configured, { notifications: { pollIntervalMs: null } }).notifications,
+    ).toEqual({ pollIntervalMs: null });
+  });
+
+  it('reads the notification interval onto a configuration that predates the key', () => {
+    // A configuration constructed against the interface before `notifications` existed.
+    const { notifications: _absent, ...older } = DEFAULT_APP_BOOTSTRAP_CONFIG;
+    expect(mergeBootstrapConfig(older, {}).notifications).toEqual({ pollIntervalMs: null });
+    expect(
+      mergeBootstrapConfig(older, { notifications: { pollIntervalMs: 30_000 } }).notifications,
+    ).toEqual({ pollIntervalMs: 30_000 });
   });
 
   it('keeps only SSO endpoints that can actually be navigated to', () => {

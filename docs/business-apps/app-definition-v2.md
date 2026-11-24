@@ -18,8 +18,8 @@ every file, and every JSON example here is one of its tests: together they are o
 the Payers Claims app, checked as a whole.
 
 Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1.
-The app draws the home (section 10). Nothing reads the other files yet. Phase 1 renders queues,
-and phase 2 the actions and task forms.
+The app draws the home (section 10) and the queues (section 4). Nothing reads the other files yet.
+Phase 2 renders the actions and task forms.
 
 ## The short version
 
@@ -155,7 +155,7 @@ demo/                                starter kits only; not checked
 - **The id is the file name.** `queues/unassigned-claims.json` is the queue `unassigned-claims`,
   which phase 1's menu and home name.
 - **A list of records, as a related-records card has**
-  ([layout-v2.md, section 7](layout-v2.md#7-related-records)): `pageProvider`, `parameters`,
+  ([layout-v2.md, section 7](layout-v2.md#7-related-records-the-timeline-and-comments)): `pageProvider`, `parameters`,
   `columns`, `sort`, `pageSize` and `rowActions`. The one difference is that a queue has no open
   record, so its parameters are literals. A page provider for one person's work names the person
   in its own query, on the server.
@@ -167,6 +167,89 @@ demo/                                starter kits only; not checked
 - **`visibleWhen`** decides who sees the queue. Hiding a queue is not a security control: the page
   provider still returns only what the person may read.
 - **A queue needs a name:** `label` or `labelKey`.
+
+### Where the app reads it
+
+As the home (section 10): at `agentic-ui-config/queues/<id>.json`, beside the layouts, as the
+package writes it, with no envelope, until the app registry serves the app. Only the development
+server answers there:
+
+```bash
+npm run config:dev -- --queue path/to/queues/unassigned-claims.json
+```
+
+`--queue` may be given once for each queue. On a server the address is 404, and the queue's page
+says that no queue of that name is configured.
+
+### What the app does with it
+
+The app's page `/queues/<id>` reads the file, checks it with the validator, and draws it under its
+name. The home's links to queues open it. The engine is `libs/shared/queues`, and its
+`samples/documents/queues/documents.json` is a queue on the platform's own `default_search` page
+provider, for the development server.
+
+- **A `structure` finding** draws no queue: the page says the queue could not be read, and the
+  console names the findings.
+- **An `unknown` or a `parameter` finding** leaves out the column, facet, row action or bulk action
+  it is in, and the console says why; one of the file's own keys is ignored. A column the list
+  cannot draw is left out as in a related-records card, and a queue with no column left is one
+  that could not be read.
+- **The list** is the record page's (layout-v2.md, section 7): the page provider's records page by
+  page, the columns through their widgets, the order sorted on the server from a header, a row
+  opening its record, and the row actions that have a handler on the page, the platform's five
+  among them, which the app registers once for every list. After one of them changes a record, the
+  list reads its page again, with its buckets chosen. A column with a rule
+  shows to the people it passes for, answered as the queue's own rule is; a queue none of whose
+  columns is for the person signed in is hidden from them.
+- **An empty parameter** refuses the queue, as a related list is not asked with one: a page
+  provider asked with an empty value matches what its author did not mean, or nothing.
+- **A facet** is drawn from the page provider's `aggregations` in the results, a bucket per value
+  with its count, and choosing one sends it back as the search page sends its filters: a parameter
+  named after the aggregate, its chosen keys a JSON array, such as
+  `claim_type_agg=["medical","dental"]`. The list keeps the records in any chosen bucket of one
+  aggregate and in every aggregate chosen in, and starts again on its first page. A facet the
+  results have no aggregate for is not drawn, and the console says why: a page provider that
+  queries the repository has none. An aggregate named as the search's own parameters are, such as
+  `pageSize`, or with a `.` or a `-`, cannot be sent back, and its facet is left out.
+- **Selecting rows** offers the queue's bulk actions in the app's selection bar: those that the
+  `bulk-actions` slot resolves and that have a handler on the page, as row actions are offered.
+  Choosing a bucket clears the selection. Rows cannot be selected when no bulk action is offered.
+- **An action of the package's own**, from `actions.json`, is one the app does not register yet, so
+  it is left out of the rows and the selection bar. Phase 2 runs them.
+- **The rule** is the rule registry's, evaluated with the person, their groups and no record. The
+  page is hidden while it does not pass, and asks the page provider for nothing. A rule this build
+  does not register, one nested deeper than the registry answers, or a finding in it, hides the
+  queue from everyone: the registry would pass it, and show the queue to everyone.
+- **Hiding a queue is not a security control.** The address still answers, and the page provider
+  returns only what the person may read.
+- **Every result of the query.** While rows are selected, a queue offering a bulk action that can run
+  over a whole query ([extension-reference.md](../extension-reference.md), section 5) offers to
+  select all its results, with their number. Every result selected, the page offers those actions
+  in place of the selection bar, and rows cannot be selected meanwhile.
+  - **It always confirms,** naming the number of records. The action then runs on the server through
+    Nuxeo's Bulk Action Framework, over the page provider with the queue's parameters. The page shows
+    its progress as it reads the command's status, offers to stop it, and says how it ended: done,
+    done with some records failed, stopped, refused by the server, an answer the page could not
+    read, or no longer followed, in the last two cases saying it may still be running. An action that
+    changes records reads the list again when it ends, and once more a few seconds later, since a
+    list the search index serves may still hold the records changed; until that second read, it
+    names no count.
+  - **Not while a bucket is chosen.** The server builds the command from the page provider's query
+    and leaves out the buckets chosen, so it would reach records the list does not show. The page
+    says to clear the filters instead.
+  - **Not without a count.** A page provider whose results give no number of records cannot have all
+    of them selected: the confirmation must name it.
+  - **More than agreed.** The command is limited on the server to one record more than the person
+    agreed to (`queryLimit`), so a query that has come to hold more records, or a parameter the server
+    leaves out, reaches that many at most. When the server reports the one more, the page stops the
+    command and says so. A fast action such as `trash` has usually processed them all by then: the
+    limit is what bounds it. A count above the limit says the server did not keep to it, and the
+    page says that too.
+  - **Stopping** stops the command on the server. The batches already started still finish and count,
+    so the page waits a while for them before it gives the number processed, and says when it could
+    not.
+  - **Leaving the page** stops following the command, not the command: it goes on on the server.
+  - **The server decides** who may run which action and on which records, as for every action.
 
 ## 5. Actions
 
@@ -310,6 +393,38 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **The buttons** are the step's own, from the workflow: approve and deny, here. Whether a field
   can be required for one button only is phase 2's to decide.
 
+### Where the app reads it, and what it draws
+
+- **The address.** The app reads `tasks/<workflow>.<step>.layout.json` beside `layouts.json`, as
+  the package writes it, with no envelope, as it reads `home.json` (section 10). `<workflow>` is
+  the task's `workflowModelName` and `<step>` its `nodeName`, the step's node id.
+- **What happens when there is none.** Nothing served there (HTTP 404) leaves the task panel's own
+  form, and so does a file refused for a structural error.
+- **Only the development server serves it for now.** It does so from
+  `npm run config:dev -- --task <workflow>.<step>=<file>`. The configuration servlet does not, so a
+  production install without dev mode shows the task panel's own form until the app registry
+  serves an app's files (section 13).
+- **Where the form is drawn.** It is in the task panel, in place of the panel's participants
+  fields; the panel keeps its comment and the step's buttons. The component is `lib-task-form` in
+  `libs/shared/document-layouts`, registered as `nxs.components.taskForm`, so a customer library
+  can replace it.
+- **How it is drawn.** It is an edit form of layout version 2, as layout-v2.md, section 11,
+  describes one, over the record the task is on, its first target document, read with all its
+  properties.
+- **A `var:` field's type and value.** Its type comes from the step's variable schema, `var_<step>`,
+  which the task names in `taskInfo.schemas`, or from the workflow's, `var_<workflow>`. Its value
+  is the task's `variables`. A `var:` field naming neither schema's field is left out, as a field
+  its type lacks is.
+- **The record's own properties** show read-only, through their widgets.
+- **The step's buttons** are its `taskInfo.taskActions`:
+  - one that validates (`validate`, true unless Nuxeo says otherwise) checks the form first, then
+    completes the task with `PUT /api/v1/task/{id}/{action}`, sending the form's variables by name
+    and the comment;
+  - one that skips it, such as Cancel, sends none of the form.
+- **The server's validation messages** go on the fields they name. A property
+  `var_<schema>:<name>` is the field `var:<name>`; the messages the form cannot place are said in
+  the panel's toast.
+
 ## 7. Labels
 
 ```json labels/en.json
@@ -332,7 +447,17 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   `labels` replace a key in every language at once.
 - **A text** is not empty.
 - **Looking a key up:** in the person's language, in the package first and then in the
-  platform's catalogue.
+  platform's catalogue. A customer's manifest `labels` still win over both.
+- **How the app reads them:** at `labels/<lang>.json`, beside `bootstrap.json`, for the person's
+  language, and for the fallback language through the platform's own fallback, and only in a
+  language the layouts index (`layouts.json`) lists in its `labels`, so that nothing is asked for
+  that is not there. A listed file that cannot be read, a file that is not a version 2 labels
+  file, and a key or a text the validator refuses are each said in the console; the rest still
+  loads.
+- **Where they are served:** nothing on a server serves or lists them yet. The app registry that
+  will waits on decisions B and E, as the home does. Until then,
+  `npm run config:dev -- --labels <lang>=<file>` serves and lists them for the dev server. A card that names
+  its heading by a key with no text still shows its `id`, made readable (layout-v2.md, section 2).
 
 ## 8. Module settings
 
@@ -394,9 +519,22 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   `parameter` finding.
 - **Hiding an entry is not a security control.** The route still answers, and the page provider
   behind a queue still returns only what the person may read.
-- **Not drawn yet.** The file is proposed and checked. The shell's menu is still the manifest's
-  `navbar` slot, and phase 1's queue page is not in the app yet, so the app does not read
-  `navigation.json` (section 13).
+- **Joined to the platform's menu, for now.** The app reads `navigation.json` once, at startup, at
+  `agentic-ui-config/navigation.json` beside the home, served by the development server alone
+  (`npm run config:dev -- --navigation <file>`), and adds its entries to the shell's menu, the
+  `navbar` slot, after the platform's own unless an entry's `order` places it among them:
+  - an entry for a queue opens the queue's page, `/queues/<id>` (section 4), and with no name of its
+    own shows the queue's, read from its file, or its id;
+  - the entry for `home` opens `/home`;
+  - an entry for a platform page, such as `app.navbar.tasks`, is not added: the platform's own
+    entry for it is in the menu already, and the console says so;
+  - each is shown by its rule, as the person signed in. An entry whose rule this build cannot
+    answer is left out, as a home's card is;
+  - an entry's `icon` is looked up in the shell's icon set, Satori's, not in Material Symbols.
+    `inbox` and `home` are in both; `task_alt`, the example's, is not in Satori's.
+
+  Whether an app's entries replace the platform's or join them is still for the shell that switches
+  apps (section 13); joining them leaves every platform page reachable meanwhile.
 
 ## 10. The home
 
@@ -520,9 +658,8 @@ The app's page `/home` reads the file, checks it with the validator, and draws i
   unregistered `app.rules.inGroup` hides its card, as the registry's security-relevant rules do;
 - **a page provider the server does not have,** or a request it refuses, shows the card's title
   with no figure, and the console says why;
-- **links to queues** wait for phase 1's queue page. The app gives the home no queue address yet,
-  so a link alone is left out, and a KPI's link is not drawn. The app does not read queues either,
-  so a link with no name of its own shows the queue's id, not its name, until it does.
+- **a link to a queue** opens the queue's page, `/queues/<id>` (section 4). The home reads no queue
+  file, so a link with no name of its own shows the queue's id, not its name.
 
 The engine is `libs/shared/home`, and its `samples/documents/home.json` is a home on the
 platform's own `default_search` page provider, for the development server.
@@ -554,7 +691,7 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 | `app.json`        | The app is refused, and "Switch app" does not list it                 | The app is refused too: the shell runs no app it cannot read whole                    |
 | A queue           | The queue is left out                                                 | The column, facet or action it is in is left out. A key of the queue's own is ignored |
 | `actions.json`    | The action it is in is left out; all of them, if it is the file's own | The action it is in is left out. A key of the file's own is ignored                   |
-| A task form       | The step's generated form shows instead                               | The card or field it is in is left out, as in a layout                                |
+| A task form       | The task panel's own form shows instead                               | The card or field it is in is left out, as in a layout                                |
 | A labels file     | The file is not applied: the platform's labels show                   | The key is ignored                                                                    |
 | Module settings   | The app is refused, as for `app.json`                                 | The app is refused, as for `app.json`                                                 |
 | `navigation.json` | The menu is not drawn: the platform's shows                           | The entry it is in is left out. A key of the file's own is ignored                    |
@@ -565,7 +702,7 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   platform's keys says so in its platform range.
 - **A settings file for a module the app does not turn on** is never read, so it refuses nothing
   when the app loads.
-- **The menu's row** is what the app is to do once it draws the menu, which it does not yet.
+- **The menu's row** is what the app does: a refused file leaves the platform's menu alone.
 - **Nesting.** The validator reads rules, computations, a customer's rule's parameters and fields
   (a table's columns are fields, and may be tables) 256 levels deep, in every file, layouts
   included. Deeper is a `parameter` finding, so that a file
@@ -582,11 +719,15 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   start form.
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
-- **Serving the menu and the home.** The app registry serves them, once decisions B and E are
-  taken. Until then only the development server answers `home.json` (section 10).
-- **Drawing the menu.** `navigation.json` is checked, and the shell's menu is still the manifest's
-  `navbar` slot. Whether an app's entries replace the platform's or join them is for the shell
-  that switches apps, with the registry.
+- **Serving the menu, the home and the queues.** The app registry serves them, once decisions B and
+  E are taken. Until then only the development server answers `navigation.json`, `home.json` and
+  `queues/<id>.json` (sections 4, 9 and 10).
+- **Serving task forms.** The app registry is to serve them too. Until then only the development
+  server answers `tasks/<workflow>.<step>.layout.json` (section 6), so a production install
+  without dev mode shows the task panel's own form for every step.
+- **Replacing the platform's menu.** The app joins its entries to the manifest's `navbar` slot
+  (section 9). Whether an app's entries replace the platform's or join them is for the shell that
+  switches apps, with the registry.
 - **The home as the first page.** The app still opens `/dashboard` after sign-in; the home is at
   `/home`. Opening an app on its home is the shell's, with the registry.
 - **A bucket's name.** A KPI's bucket shows its key, as the server returns it. A vocabulary's

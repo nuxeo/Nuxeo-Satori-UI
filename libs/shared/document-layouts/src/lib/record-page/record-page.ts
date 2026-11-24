@@ -13,7 +13,11 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
-import { NXS_PRIMITIVE_IDS, type NxsTagStatus } from '@nuxeo/satori-platform/components';
+import {
+  NXS_PRIMITIVE_IDS,
+  NxsCommentsComponent,
+  type NxsTagStatus,
+} from '@nuxeo/satori-platform/components';
 import {
   ExtensionOutletComponent,
   ExtensionRuleContextService,
@@ -50,8 +54,14 @@ import {
   readLabels,
   sameLookups,
 } from './record-lookups';
-import { type RecordListEntry, propertiesReadBy } from './record-layout';
+import {
+  type RecordCommentsEntry,
+  type RecordListEntry,
+  type RecordTimelineEntry,
+  propertiesReadBy,
+} from './record-layout';
 import { RecordListComponent } from './record-list';
+import { RecordTimelineComponent } from './record-timeline';
 import {
   type ResolvedPropertyField,
   type ResolvedRecordCard,
@@ -101,13 +111,24 @@ export interface RecordRelatedShown {
   readonly source: string;
 }
 
+/** A timeline's card, as the page hands it to the timeline. */
+export interface RecordTimelineShown {
+  readonly timeline: RecordTimelineEntry;
+  /** The timeline's name for assistive technology: the card's heading, or its id. */
+  readonly label: string;
+}
+
 export interface RecordCardShown {
   readonly id: string;
   readonly heading: string | null;
   readonly span: number;
   readonly fields: readonly RecordFieldShown[];
-  /** For a card of related records; `null` for a card of fields. */
+  /** For a card of related records; `null` for any other card. */
   readonly related: RecordRelatedShown | null;
+  /** For a timeline's card; `null` for any other card. */
+  readonly timeline: RecordTimelineShown | null;
+  /** For a card of comments, the record's thread; `null` for any other card. */
+  readonly comments: RecordCommentsEntry | null;
 }
 
 export interface RecordPageShown {
@@ -147,9 +168,11 @@ function fieldShowing(
  * The record page: a document's main area drawn from its type's layout file, version 2, in
  * `view` mode (docs/business-apps/layout-v2.md). Cards fill one to three columns, or tabs hold
  * them; each field shows a property through a registered widget, or what a registered
- * computation works out from the record; a rule shows or hides a tab, a card or a field.
+ * computation works out from the record; a rule shows or hides a tab, a card or a field. A card
+ * may list related records instead, or show the record's timeline or its comments.
  *
- * Read-only. A hidden field is hidden from this page only: the REST API still returns it to
+ * Its fields are read-only; the comments card is where a user writes, and the server decides what
+ * it accepts. A hidden field is hidden from this page only: the REST API still returns it to
  * anyone the server lets read it, so nothing here is a security control.
  */
 @Component({
@@ -159,7 +182,9 @@ function fieldShowing(
     ExtensionOutletComponent,
     MatTabsModule,
     NgTemplateOutlet,
+    NxsCommentsComponent,
     RecordListComponent,
+    RecordTimelineComponent,
     TranslatePipe,
   ],
   templateUrl: './record-page.html',
@@ -280,9 +305,19 @@ export class RecordPageComponent {
             related: card.related
               ? this.showRelated(card, card.related, heading, layout, document, passes)
               : null,
+            timeline: card.timeline
+              ? { timeline: card.timeline, label: heading ?? humanize(card.id) }
+              : null,
+            comments: card.comments,
           };
         })
-        .filter((card) => card.fields.length > 0 || (card.related?.list.columns.length ?? 0) > 0);
+        .filter(
+          (card) =>
+            card.fields.length > 0 ||
+            (card.related?.list.columns.length ?? 0) > 0 ||
+            card.timeline !== null ||
+            card.comments !== null,
+        );
     if (layout.tabs) {
       const tabs = layout.tabs
         .filter((tab) => passes(tab.visibleWhen))

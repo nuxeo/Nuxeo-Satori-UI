@@ -2,6 +2,7 @@
  * npm run app-definition:validate -- <file or directory>... [--mode <mode>] [--allow-list <file>]
  *   [--registered <file>] [--platform <version>] [--model <file>]
  * node libs/shared/app-definition/src/bin.mjs model <file>
+ * node libs/shared/app-definition/src/bin.mjs changes <previous package> <package>
  *
  * The check behind phase 0's demo step 1, which the package pipeline is to run first. A layout file
  * that names a widget the platform does not have is refused, and the message names the widget.
@@ -30,14 +31,21 @@
  *   of it can be read, 1 with every problem when it cannot: the export checks its file with it.
  * - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
  *   counted.
+ * - **`changes <previous package> <package>`** compares two versions of one configuration package,
+ *   each a folder holding `bundle/` and `package/`, as `lib/changes.ts` says, and prints, as JSON,
+ *   every change, the version part they need raised, the part that was raised, why the version is
+ *   refused if it is, and the changelog. Nothing is followed through a link: a package holding one
+ *   is refused, exit 2. Exits 0 when the version moved as far as the changes need, 1 when not.
  *
  * Exit codes:
  * - 0: every file has no finding;
  * - 1: a file has a finding or cannot be read, or there was nothing to check;
  * - 2: the command was wrong.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
+import { changesBetween, DEFINITION_ROOT, judgeVersion, type PackageFiles } from './lib/changes';
 import { readContentModel, type ContentModel } from './lib/content-model';
 import { heldToModel, LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
 import { placeFile, validateFile, type PackageContext, type PlacedFile } from './lib/package';
@@ -52,7 +60,8 @@ export interface CliIo {
 const USAGE =
   'usage: app-definition validate <file or directory>... [--mode view|metadata|edit|create]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]\n' +
-  '       app-definition model <file>\n';
+  '       app-definition model <file>\n' +
+  '       app-definition changes <previous package> <package>\n';
 const CANNOT_TELL =
   'cannot tell which file of an app definition it is; name it as a package places it,' +
   ' such as layouts/<Type>/<mode>.layout.json or queues/<id>.json, or pass --mode for a layout';
@@ -62,6 +71,7 @@ const VERSION_ONE_FILES = ['bootstrap.json', 'manifest.json', 'layouts.json'];
 export function main(argv: readonly string[], io: CliIo): number {
   const [command, ...rest] = argv;
   if (command === 'model') return checkModel(rest, io);
+  if (command === 'changes') return compare(rest, io);
   const paths: string[] = [];
   let mode: LayoutMode | undefined;
   let allowList: string | undefined;
@@ -326,6 +336,108 @@ function checkModel(rest: readonly string[], io: CliIo): number {
       `${count(read.facets.size, 'facet')} and ${count(read.schemas.size, 'schema')}.\n`,
   );
   return 0;
+}
+
+/**
+ * `changes <previous package> <package>`: the two versions of a package compared, and whether its
+ * version moved as far as the changes need, printed as JSON.
+ */
+function compare(rest: readonly string[], io: CliIo): number {
+  const [previous, current, ...more] = rest;
+  if (
+    previous === undefined ||
+    current === undefined ||
+    previous.startsWith('--') ||
+    current.startsWith('--') ||
+    more.length > 0
+  ) {
+    io.err(USAGE);
+    return 2;
+  }
+  const read = [previous, current].map(packageFiles);
+  const [before, after] = read;
+  for (const [index, files] of read.entries())
+    if (typeof files === 'string') {
+      io.err(`${index === 0 ? previous : current}: ${files}\n`);
+      return 2;
+    }
+  const versionOf = (files: PackageFiles, name: string): string | null => {
+    const text = files.get(`${DEFINITION_ROOT}app.json`);
+    let app: unknown;
+    try {
+      app = text === undefined ? undefined : JSON.parse(text.replace(/^\uFEFF/, ''));
+    } catch {
+      return null;
+    }
+    const version = isRecord(app) ? app['packageVersion'] : undefined;
+    if (typeof version === 'string') return version;
+    io.err(`${name}: ${DEFINITION_ROOT}app.json names no packageVersion\n`);
+    return null;
+  };
+  const was = versionOf(before as PackageFiles, previous);
+  const is = versionOf(after as PackageFiles, current);
+  if (was === null || is === null) {
+    io.err(USAGE);
+    return 2;
+  }
+  const { changes, refusals } = changesBetween(before as PackageFiles, after as PackageFiles);
+  const judgement = judgeVersion(was, is, changes, refusals);
+  io.out(`${JSON.stringify(judgement, null, 2)}\n`);
+  return judgement.refused === null ? 0 : 1;
+}
+
+/**
+ * What `build.mjs`, the generator's, puts into the zip: every file of `bundle/` but its Markdown,
+ * and `package/`'s `package.xml` and `install.xml`. Anything else in the package is not shipped, so
+ * changing it changes no version.
+ */
+const PACKAGED = (name: string): boolean =>
+  name.startsWith('bundle/')
+    ? !name.endsWith('.md')
+    : name === 'package/package.xml' || name === 'package/install.xml';
+
+/**
+ * The files of a configuration package that its zip holds (`PACKAGED`), each by its path with
+ * `/`: its text, or, for a file that is not UTF-8 text, such as an image, its digest. A link is
+ * not followed, anywhere in `bundle/` or `package/`, and the package is refused rather than read
+ * in part.
+ */
+function packageFiles(directory: string): PackageFiles | string {
+  const files = new Map<string, string>();
+  const visit = (path: string, name: string): string | null => {
+    const entry = lstatSync(path, { throwIfNoEntry: false });
+    if (!entry) return null;
+    if (entry.isSymbolicLink()) return `${name} is a symbolic link, which is not followed`;
+    if (entry.isDirectory()) {
+      for (const child of readdirSync(path).sort()) {
+        const problem = visit(join(path, child), `${name}/${child}`);
+        if (problem) return problem;
+      }
+      return null;
+    }
+    if (!entry.isFile()) return `${name} is neither a file nor a folder`;
+    if (!PACKAGED(name)) return null;
+    const bytes = readFileSync(path);
+    const text = bytes.toString('utf8');
+    files.set(
+      name,
+      Buffer.from(text, 'utf8').equals(bytes)
+        ? text
+        : `\u0000sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+    );
+    return null;
+  };
+  try {
+    if (!statSync(directory).isDirectory()) return 'is not a folder';
+    for (const part of ['bundle', 'package']) {
+      const problem = visit(join(directory, part), part);
+      if (problem) return problem;
+    }
+  } catch (error) {
+    return `cannot be read: ${(error as Error).message}`;
+  }
+  if (!files.has(`${DEFINITION_ROOT}app.json`)) return `has no ${DEFINITION_ROOT}app.json`;
+  return files;
 }
 
 const REGISTERED_KEYS = [

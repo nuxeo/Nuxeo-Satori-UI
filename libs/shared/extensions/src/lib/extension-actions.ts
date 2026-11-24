@@ -202,6 +202,13 @@ export interface ExtensionRouteDescriptor extends ExtensionElement {
  */
 export interface ExtensionActionHandler {
   execute(context: ExtensionRuleContext): void;
+  /**
+   * Whether this handler does, on a selection, what the platform maps its id to over every result
+   * of a queue's query (`PACKAGED_WHOLE_QUERY_BULK_ACTIONS`). Only the platform's own handler for
+   * such an id says so. A handler that replaces it does not, and the action is then not offered over
+   * a whole query: the server would run the platform's mapping, not what the replacement does.
+   */
+  readonly wholeQuery?: boolean;
 }
 
 /**
@@ -267,6 +274,14 @@ export class ExtensionActionRegistry {
 
   has(id: string): boolean {
     return this.resolve(id) !== undefined;
+  }
+
+  /**
+   * Whether the handler that answers for `id` declares that it does what the platform maps `id` to
+   * over a whole query ({@link ExtensionActionHandler.wholeQuery}). False when none is registered.
+   */
+  runsOverWholeQuery(id: string): boolean {
+    return this.resolve(id)?.wholeQuery === true;
   }
 
   /** Every registered id, for the reference doc and for diagnostics. */

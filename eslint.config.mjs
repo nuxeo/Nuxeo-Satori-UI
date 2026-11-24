@@ -336,4 +336,17 @@ export default [
       '@angular-eslint/prefer-on-push-component-change-detection': 'off',
     },
   },
+  {
+    // A business-apps package's `build.mjs` is the generator's template
+    // (tools/satori-generators/src/config-package/files/build.mjs__tmpl__), copied byte for byte:
+    // scripts/app-package.mjs, step 1, refuses any other, so it cannot be edited in a package.
+    // These two rules flag what XML's and JSON's grammars require of it: XML's NameStartChar
+    // includes U+200C and U+200D, its NameChar the combining marks U+0300 to U+036F, and a JSON
+    // string excludes U+0000 to U+001F. Every other rule still applies.
+    files: ['business-apps/packages/*/build.mjs'],
+    rules: {
+      'no-misleading-character-class': 'off',
+      'no-control-regex': 'off',
+    },
+  },
 ];

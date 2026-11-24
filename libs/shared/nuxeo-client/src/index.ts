@@ -107,6 +107,10 @@ export type { NuxeoOAuth2Provider } from './lib/models/oauth.model';
 // Config
 export { NUXEO_API_ORIGIN, NUXEO_SERVER_URL } from './lib/nuxeo-api.config';
 export { CURRENT_USERNAME } from './lib/current-user.token';
+export {
+  NUXEO_BACKGROUND_REQUEST,
+  backgroundRequestContext,
+} from './lib/background-request.context';
 export { ADMIN_ACCESS_CHECKS, type AdminAccessChecks } from './lib/auth/admin-access.token';
 export {
   administrationAccessGuard,
@@ -166,8 +170,24 @@ export {
 } from './lib/services/document-import.service';
 export { TaskService } from './lib/services/task.service';
 export { CollectionService } from './lib/services/collection.service';
-export { PageProviderService } from './lib/services/page-provider.service';
-export type { PageProviderRequest, PageProviderSort } from './lib/services/page-provider.service';
+export {
+  PageProviderService,
+  isAggregateParameter,
+  isPageProviderName,
+} from './lib/services/page-provider.service';
+export {
+  BulkCommandService,
+  BulkCommandStatusError,
+  readBulkCommandStatus,
+  type BulkCommandQuery,
+  type BulkCommandState,
+  type BulkCommandStatus,
+} from './lib/services/bulk-command.service';
+export type {
+  PageProviderRequest,
+  PageProviderResults,
+  PageProviderSort,
+} from './lib/services/page-provider.service';
 export {
   BrowseService,
   BROWSE_TYPE_OPTION_LIMIT,
@@ -181,6 +201,7 @@ export {
   type ClipboardPasteEvent,
 } from './lib/services/browse-context.service';
 export { ClipboardTargetService } from './lib/services/clipboard-target.service';
+export { DocumentChangesService } from './lib/services/document-changes.service';
 export {
   browseTreeContextPath,
   cumulativeNuxeoPathPrefixes,

@@ -55,6 +55,13 @@ install and no transpiler.
     how many layouts were, or that none was.
 - **`model <file>`:** reads a content model alone, as `--model` does: exit 0 when it can be read
   whole, 1 with every problem when it cannot. The export checks the file it writes with it.
+- **`changes <previous package> <package>`:** compares two versions of one configuration package,
+  each a folder holding `bundle/` and `package/`, by the rules of
+  [package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8
+  (`src/lib/changes.ts`), and prints as JSON every change, the version part they need raised, the
+  part that was, why the version is refused if it is, and the changelog: exit 0 when the version
+  moved far enough, 1 when not, 2 for a folder that is no package or holds a link. The package
+  pipeline runs it at step 3, given `--previous`.
 - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
   counted.
 - **Exit codes:**
@@ -283,7 +290,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
   completes it.
 - **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
-  which loads it with `validateLayoutV2` and `loadable`, and draws its related records. The other
+  which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its timeline
+  and its comments. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
 - **The content model in the designer and the migration server.** The pipeline holds a package to
   a model when given one; the designer and the migration server are still to call
@@ -291,6 +299,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
   rule that reads a record (app-definition-v2.md, section 13). The menu and the home refuse a
   `{ "field" }` value in a rule, and still pass a rule that reads a record.
-- **The menu** is checked and not drawn. The home is drawn by `libs/shared/home`.
+- **The menu** is joined to the platform's by the app, and **the home** is drawn by
+  `libs/shared/home`. Whether an app's menu replaces the platform's is still open.
 - **The allow-list's real home and format** (decision 3), and each module's settings schema, which
   comes with the module.

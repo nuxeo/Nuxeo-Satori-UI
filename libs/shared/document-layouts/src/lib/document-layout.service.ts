@@ -1,4 +1,4 @@
-import { HttpBackend, HttpClient } from '@angular/common/http';
+import { HttpBackend, HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import {
@@ -10,6 +10,7 @@ import {
   L10nDirectoryEntry,
   NuxeoApiBase,
   type NuxeoDocument,
+  type NuxeoTask,
   directoryPickerLabel,
   directoryUsesL10nLabel,
   formatHierarchicalL10nLabel,
@@ -51,6 +52,13 @@ import {
   readDocumentType,
   readSchemaResponse,
 } from './resolve-layout';
+import { type FormLayoutFile, readFormLayout } from './form-layout/form-layout';
+import {
+  FORM_INPUTS_SHOWN_AS_VERSION_1,
+  formFacetSchemasToRead,
+  resolveFormLayout,
+  type ResolvedFormLayout,
+} from './form-layout/resolve-form-layout';
 import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
 import {
   ResolvedRecordLayout,
@@ -63,7 +71,7 @@ import {
 /** As for the bootstrap and manifest reads: `HttpClient` has no timeout of its own. */
 export const LAYOUT_LOAD_TIMEOUT_MS = 10_000;
 
-const EMPTY_INDEX: LayoutIndex = { entries: [], diagnostics: [] };
+const EMPTY_INDEX: LayoutIndex = { entries: [], diagnostics: [], labelLanguages: [] };
 
 /** The directory the configuration service answers from, taken from the bootstrap URL. */
 function configDirectory(bootstrapUrl: string): string {
@@ -73,6 +81,30 @@ function configDirectory(bootstrapUrl: string): string {
 
 export function layoutsIndexUrl(bootstrapUrl: string): string {
   return `${configDirectory(bootstrapUrl)}layouts.json`;
+}
+
+/** A part of a task form's name, as `placeFile` in libs/shared/app-definition reads one. */
+const TASK_FORM_PART = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
+
+/** The `var:` fields a task form names, in its cards or its tabs' cards. */
+function variableFieldsOf(file: FormLayoutFile): string[] {
+  const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
+  return cards
+    .flatMap((card) => card.fields)
+    .flatMap((field) =>
+      field.kind === 'property' && field.xpath.startsWith('var:') ? [field.xpath] : [],
+    );
+}
+
+/** A schema a workflow keeps variables in: a step's, `var_<step>`, or the workflow's own. */
+const VARIABLE_SCHEMA = /^var_[A-Za-z0-9_-]+$/;
+
+/**
+ * Where a workflow step's task form is: `tasks/<workflow>.<step>.layout.json`, beside the layouts
+ * (docs/business-apps/app-definition-v2.md, section 6).
+ */
+export function taskFormUrl(bootstrapUrl: string, workflow: string, step: string): string {
+  return `${configDirectory(bootstrapUrl)}tasks/${encodeURIComponent(workflow)}.${encodeURIComponent(step)}.layout.json`;
 }
 
 export function layoutFileUrl(bootstrapUrl: string, type: string, mode: string): string {
@@ -147,20 +179,34 @@ export function principalName(kind: 'user' | 'group', raw: unknown): string | nu
   return name === '' ? null : name;
 }
 
-/** Why the record page left a field out, as the console says it. */
+/**
+ * Why a version 2 page or form left a field out, as the console says it. `source` names the file,
+ * `<Type>/<mode> layout` by default.
+ */
 function skippedMessage(
   type: string,
   field: SkippedRecordField,
   unread: ReadonlyMap<string, string>,
+  mode = 'view',
+  source = `${type}/${mode} layout`,
 ): string {
   if (field.reason === 'widget-type') {
-    return `${type}/view layout: ${field.place} left out: the widget "${field.widget}" does not show ${field.xpath}, a ${field.type} property`;
+    return `${source}: ${field.place} left out: the widget "${field.widget}" does not show ${field.xpath}, a ${field.type} property`;
+  }
+  if (field.xpath.startsWith('var:')) {
+    return `${source}: ${field.place} left out: ${field.xpath} is not a variable of the step or its workflow`;
   }
   const schema = unread.get(prefixOfXpath(field.xpath));
   return schema
-    ? `${type}/view layout: ${field.place} left out: ${field.xpath} is in schema ${schema}, which was not read`
-    : `${type}/view layout: ${field.place} left out: ${field.xpath} is not on the ${type} type or this document's facets`;
+    ? `${source}: ${field.place} left out: ${field.xpath} is in schema ${schema}, which was not read`
+    : `${source}: ${field.place} left out: ${field.xpath} is not on the ${type} type or this document's facets`;
 }
+
+/** A contributed file in force: version 1, in any mode, or version 2 in a form mode. */
+type ContributedFile = LayoutFile | FormLayoutFile;
+
+const isVersion2 = (file: ContributedFile | null): file is FormLayoutFile =>
+  file !== null && 'version' in file && file.version === 2;
 
 /**
  * Resolves the layout a document shows in a mode, from its type and its own schemas.
@@ -192,8 +238,9 @@ export class DocumentLayoutService {
   private readonly slots = inject(ExtensionSlotRegistry);
 
   private index$: Observable<LayoutIndex> | null = null;
-  private readonly files = new Map<string, Observable<LayoutFile | null>>();
+  private readonly files = new Map<string, Observable<ContributedFile | null>>();
   private readonly recordFiles = new Map<string, Observable<RecordLayoutFile | null>>();
+  private readonly taskFiles = new Map<string, Observable<FormLayoutFile | null>>();
   private readonly types = new Map<string, Observable<DocumentTypeDefinition | null>>();
   private readonly schemas = new Map<string, Observable<DocumentTypeSchema | null>>();
   private readonly entries = new Map<string, Observable<VocabularyEntry | null>>();
@@ -401,8 +448,194 @@ export class DocumentLayoutService {
   ): Observable<ResolvedLayout | null> {
     return combineLatest([this.documentType(type), this.contributed(type, mode)]).pipe(
       switchMap(([definition, file]) =>
-        definition ? this.resolve(definition, mode, file, documentSchemas) : of(null),
+        definition
+          ? this.resolve(definition, mode, isVersion2(file) ? null : file, documentSchemas)
+          : of(null),
       ),
+    );
+  }
+
+  /**
+   * The edit or create form of a document type: its contributed file, of version 1 or 2, resolved
+   * against the type and the document's own schemas, or the generated layout when it has none or
+   * its file is refused. `null` when the type's schemas cannot be read. Never errors.
+   *
+   * A version 2 file is drawn by `lib-document-layout-form` as layout-v2.md says: cards, a widget
+   * as each field's input, fields required or read-only by rule, and checks across fields.
+   */
+  formLayoutFor(
+    type: string,
+    mode: 'edit' | 'create',
+    documentSchemas: readonly DocumentSchemaRef[] = [],
+  ): Observable<ResolvedLayout | ResolvedFormLayout | null> {
+    return combineLatest([this.documentType(type), this.contributed(type, mode)]).pipe(
+      switchMap(([definition, file]): Observable<ResolvedLayout | ResolvedFormLayout | null> => {
+        if (!definition) return of(null);
+        if (!isVersion2(file)) return this.resolve(definition, mode, file, documentSchemas);
+        return this.resolveForm(definition, mode, file, documentSchemas);
+      }),
+    );
+  }
+
+  /**
+   * The task form of a task's workflow step, resolved against the record the task is on and the
+   * step's variables (app-definition-v2.md, section 6). `null` when nothing is served for the step,
+   * when its file is refused or cannot be read, when the record's type cannot be read, or when a
+   * variable schema the file's `var:` fields need cannot be read: the task panel's own form shows
+   * then, and a failed read is asked again for the next task. Never errors.
+   *
+   * The variables are the fields of the variable schemas the task names in `taskInfo.schemas`,
+   * `var_<step>`, and of the workflow's own, `var_<workflow>`, which a task does not name: a field
+   * `<name>` is the variable `var:<name>`. A `var:` field naming a variable that neither has is
+   * left out, as a field its type lacks is. But when a schema could not be read and a `var:` field
+   * then names nothing, no form is drawn: the field might be in it, and a form without it would let
+   * the task complete unchecked. A workflow with no variables of its own has no schema to read, and
+   * leaves nothing out.
+   */
+  taskFormFor(task: NuxeoTask, document: NuxeoDocument): Observable<ResolvedFormLayout | null> {
+    const workflow = task.workflowModelName;
+    const step = task.nodeName;
+    if (!TASK_FORM_PART.test(workflow ?? '') || !TASK_FORM_PART.test(step ?? '')) return of(null);
+    return this.taskFile(workflow, step).pipe(
+      switchMap((file) =>
+        file
+          ? combineLatest([this.documentType(document.type), this.taskVariables(task)]).pipe(
+              switchMap(([definition, { variables, unread }]) => {
+                if (!definition) return of(null);
+                // A form missing the fields its variables needed would guard nothing: the task's
+                // own form shows instead, and the next task asks for the schemas again.
+                const missing = variableFieldsOf(file).filter((xpath) => !variables.has(xpath));
+                if (unread.length > 0 && missing.length > 0) {
+                  warn(
+                    `${workflow}.${step} task form not drawn, showing the task's own form: ${unread.join(', ')} could not be read, and ${missing.join(', ')} need it`,
+                  );
+                  return of(null);
+                }
+                return this.resolveForm(
+                  definition,
+                  'task',
+                  file,
+                  readDocumentSchemas('schemas' in document ? document.schemas : undefined),
+                  variables,
+                  `${workflow}.${step} task form`,
+                );
+              }),
+            )
+          : of(null),
+      ),
+    );
+  }
+
+  /**
+   * The record a task is on, read with all its properties and the schemas it carries, for its task
+   * form. `null` when it cannot be read. Never errors; read again for each task.
+   */
+  taskDocument(uid: string): Observable<NuxeoDocument | null> {
+    return this.api
+      .get<NuxeoDocument>(`/nuxeo/api/v1/id/${encodeURIComponent(uid)}`, undefined, {
+        properties: '*',
+      })
+      .pipe(
+        timeout(LAYOUT_LOAD_TIMEOUT_MS),
+        catchError((error: unknown) => {
+          warn(`document ${uid} not read for its task form: ${describe(error)}`);
+          return of(null);
+        }),
+      );
+  }
+
+  /** The step's variables and the workflow's, by `var:<name>`: the schemas read once per session. */
+  private taskVariables(task: NuxeoTask): Observable<{
+    readonly variables: ReadonlyMap<string, LayoutFieldType>;
+    /** The variable schemas that could not be read. */
+    readonly unread: readonly string[];
+  }> {
+    const named = (task.taskInfo?.schemas ?? [])
+      .map((schema) => schema?.name)
+      .filter((name): name is string => typeof name === 'string' && VARIABLE_SCHEMA.test(name));
+    const names = [...new Set([...named, `var_${task.workflowModelName}`])];
+    return forkJoin(names.map((name) => this.schema(name))).pipe(
+      map((schemas) => {
+        const variables = new Map<string, LayoutFieldType>();
+        for (const schema of schemas) {
+          if (!schema) continue;
+          for (const [name, definition] of Object.entries(schema.fields)) {
+            // The step's own first, as `names` lists it: a step's variable hides a workflow's.
+            if (!variables.has(`var:${name}`)) variables.set(`var:${name}`, definition);
+          }
+        }
+        return { variables, unread: names.filter((_, index) => !schemas[index]) };
+      }),
+    );
+  }
+
+  /**
+   * A step's task form, as the package writes it, with no envelope, as `home.json` is served:
+   * read once per session. Nothing served there, HTTP 404, is no form, and says nothing: most
+   * steps have none. Any other failure, or a file refused, is said in the console, and a failed
+   * read is asked again for the next task.
+   */
+  private taskFile(workflow: string, step: string): Observable<FormLayoutFile | null> {
+    const key = `${workflow}.${step}`;
+    let cached = this.taskFiles.get(key);
+    if (!cached) {
+      const url = taskFormUrl(this.bootstrapUrl, workflow, step);
+      cached = this.http.get<unknown>(url).pipe(
+        timeout(LAYOUT_LOAD_TIMEOUT_MS),
+        map((content) => {
+          const isObject =
+            typeof content === 'object' && content !== null && !Array.isArray(content);
+          const file = isObject
+            ? readFormLayout(content as Record<string, unknown>, 'task', {
+                rules: this.rules.registeredRuleIds(),
+              })
+            : { invalid: 'a task form is a JSON object' };
+          if ('invalid' in file) {
+            warn(
+              `${key} task form from ${url} refused, showing the task's own form: ${file.invalid}`,
+            );
+            return null;
+          }
+          for (const problem of file.problems) warn(`${key} task form: ${problem}`);
+          return file;
+        }),
+        catchError((error: unknown) => {
+          if (error instanceof HttpErrorResponse && error.status === 404) return of(null);
+          this.taskFiles.delete(key);
+          warn(`${key} task form not loaded from ${url}: ${describe(error)}`);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+      this.taskFiles.set(key, cached);
+    }
+    return cached;
+  }
+
+  /** A version 2 form file for one document: its facet schemas read, its fields held to them. */
+  private resolveForm(
+    definition: DocumentTypeDefinition,
+    mode: 'edit' | 'create' | 'task',
+    file: FormLayoutFile,
+    documentSchemas: readonly DocumentSchemaRef[],
+    variables: ReadonlyMap<string, LayoutFieldType> = new Map(),
+    source?: string,
+  ): Observable<ResolvedFormLayout> {
+    const wanted = formFacetSchemasToRead(definition, documentSchemas, file);
+    const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
+      ? forkJoin(wanted.map(({ name }) => this.schema(name)))
+      : of([]);
+    return reads.pipe(
+      map((read) => {
+        const facets = read.filter((schema): schema is DocumentTypeSchema => schema !== null);
+        const unread = new Map(
+          wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
+        );
+        const { layout, skipped } = resolveFormLayout(definition, file, facets, variables);
+        for (const field of skipped)
+          warn(skippedMessage(definition.name, field, unread, mode, source));
+        return layout;
+      }),
     );
   }
 
@@ -573,7 +806,7 @@ export class DocumentLayoutService {
     return cached;
   }
 
-  private contributed(type: string, mode: LayoutMode): Observable<LayoutFile | null> {
+  private contributed(type: string, mode: LayoutMode): Observable<ContributedFile | null> {
     const key = `${type}/${mode}`;
     let cached = this.files.get(key);
     if (!cached) {
@@ -614,7 +847,12 @@ export class DocumentLayoutService {
     return this.index$;
   }
 
-  private fetchFile(type: string, mode: LayoutMode): Observable<LayoutFile | null> {
+  /**
+   * A file of version 1, or in the edit and create modes of version 2 too. A `metadata` file of
+   * version 2 is still refused, and the generated panel shows (layout-v2.md, section 11). Rules
+   * are checked against this build's registry here, once per session, as for a `view` file.
+   */
+  private fetchFile(type: string, mode: LayoutMode): Observable<ContributedFile | null> {
     const url = layoutFileUrl(this.bootstrapUrl, type, mode);
     return this.http.get<unknown>(url).pipe(
       timeout(LAYOUT_LOAD_TIMEOUT_MS),
@@ -624,6 +862,8 @@ export class DocumentLayoutService {
           warn(`${type}/${mode} layout from ${url} ignored: ${envelope.invalid}`);
           return null;
         }
+        if (mode !== 'metadata' && envelope.content['version'] === 2)
+          return this.formFile(type, mode, url, envelope.content);
         const file = readLayoutFile(envelope.content);
         if ('invalid' in file) {
           warn(
@@ -639,5 +879,37 @@ export class DocumentLayoutService {
         return of(null);
       }),
     );
+  }
+
+  /** A version 2 edit or create file, read as the form draws it; `null`, and the generated form, when refused. */
+  private formFile(
+    type: string,
+    mode: 'edit' | 'create',
+    url: string,
+    content: Record<string, unknown>,
+  ): FormLayoutFile | null {
+    const file = readFormLayout(content, mode, { rules: this.rules.registeredRuleIds() });
+    if ('invalid' in file) {
+      warn(
+        `${type}/${mode} layout from ${url} refused, showing the generated form: ${file.invalid}`,
+      );
+      return null;
+    }
+    for (const problem of file.problems) warn(`${type}/${mode} layout: ${problem}`);
+    const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
+    for (const field of cards.flatMap((card) => card.fields)) {
+      // A computed field is never edited, so only a property's input can differ.
+      const instead =
+        field.kind === 'property' &&
+        field.widget !== null &&
+        Object.hasOwn(FORM_INPUTS_SHOWN_AS_VERSION_1, field.widget)
+          ? FORM_INPUTS_SHOWN_AS_VERSION_1[field.widget]
+          : undefined;
+      if (instead)
+        warn(
+          `${type}/${mode} layout: ${field.place}: the widget "${field.widget}" is edited as ${instead} in this build`,
+        );
+    }
+    return file;
   }
 }

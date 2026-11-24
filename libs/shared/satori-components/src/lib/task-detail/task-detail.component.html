@@ -202,7 +202,18 @@
   </div>
 }
 
-@if (choosesParticipants()) {
+<lib-extension-outlet
+  class="nxs-task-detail__form"
+  [componentId]="taskFormId"
+  [componentInputs]="{
+    task: task(),
+    disabled: submitting(),
+    headingLevel: panelHeadingLevel(),
+    onForm: onForm(),
+  }"
+/>
+
+@if (choosesParticipants() && !taskForm()) {
   <nxs-user-group-picker
     class="nxs-task-detail__field nxs-task-detail__participants"
     multiple

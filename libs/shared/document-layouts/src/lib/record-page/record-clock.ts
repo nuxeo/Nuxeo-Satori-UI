@@ -21,3 +21,15 @@ export const RECORD_PAGE_TIME_ZONE = new InjectionToken<string | undefined>(
   'RECORD_PAGE_TIME_ZONE',
   { providedIn: 'root', factory: () => undefined },
 );
+
+/**
+ * How long, in milliseconds, after a timeline first asks the audit, or after the record changes,
+ * it asks once more; `null`, never. Nuxeo writes its audit through a stream into the search index,
+ * and an entry was readable 0.8 to 1.4 seconds after the edit that wrote it (measured on Nuxeo
+ * 2025), so the first answer after a change usually lacks it. A token, so that a test need not
+ * wait, and a host whose audit is written at once may ask once only.
+ */
+export const RECORD_TIMELINE_AUDIT_DELAY = new InjectionToken<number | null>(
+  'RECORD_TIMELINE_AUDIT_DELAY',
+  { providedIn: 'root', factory: () => 2500 },
+);

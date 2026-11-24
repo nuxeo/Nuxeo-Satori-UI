@@ -1,0 +1,194 @@
+:host {
+  display: inline-flex;
+}
+
+.notification-bell {
+  position: relative;
+}
+
+// Material's icon button suppresses the browser's focus ring, so the bell draws its own, as the
+// header's settings button does (AGENTS/08-bug-patterns.md, pattern 16). A standalone `:focus`
+// selector, chained to Material's class so it wins over MDC's `outline-style: none`.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+.notification-bell.mat-mdc-icon-button:focus {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-color: var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+.notification-bell__badge {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 4px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.notification-panel {
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(34rem, calc(100vh - 6rem));
+  display: flex;
+}
+
+.notification-panel__dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  box-shadow: var(--mat-sys-level3);
+
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}
+
+// Nested under the panel, so that the theme's typography, which styles headings and paragraphs
+// as `html[data-app-theme] .mat-typography h2` and so on, does not outrank a single class here.
+.notification-panel {
+  .notification-panel__header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-block: 8px;
+    padding-inline: 16px 4px;
+    border-block-end: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  .notification-panel__title {
+    flex: 1;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .notification-panel__mark-read {
+    white-space: nowrap;
+  }
+
+  .notification-panel__body {
+    overflow-y: auto;
+    padding-block: 8px;
+  }
+
+  .notification-panel__section + .notification-panel__section {
+    border-block-start: 1px solid var(--mat-sys-outline-variant);
+    margin-block-start: 8px;
+    padding-block-start: 8px;
+  }
+
+  .notification-panel__section-title {
+    margin: 0;
+    padding-block: 4px;
+    padding-inline: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .notification-panel__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .notification-panel__item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding-block: 8px;
+    padding-inline: 16px;
+    color: inherit;
+    text-decoration: none;
+
+    &:hover {
+      background: var(--mat-sys-surface-container-highest);
+    }
+
+    // Standalone `:focus`, for the same reason as the bell's.
+    &:focus {
+      outline: 2px solid var(--mat-sys-primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .notification-panel__item--new .notification-panel__primary {
+    font-weight: 600;
+  }
+
+  .notification-panel__icon {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-block-start: 2px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .notification-panel__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .notification-panel__primary {
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .notification-panel__new {
+    display: inline-block;
+    margin-inline-end: 6px;
+    padding-inline: 6px;
+    border-radius: 8px;
+    background: var(--mat-sys-primary-container);
+    color: var(--mat-sys-on-primary-container);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    vertical-align: 1px;
+  }
+
+  .notification-panel__secondary,
+  .notification-panel__when {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--mat-sys-on-surface-variant);
+    overflow-wrap: anywhere;
+  }
+
+  .notification-panel__state,
+  .notification-panel__empty,
+  .notification-panel__note {
+    margin: 0;
+    padding-block: 6px;
+    padding-inline: 16px;
+    font-size: 13px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .notification-panel__state--failed {
+    color: var(--mat-sys-error);
+  }
+
+  .notification-panel__note {
+    margin-block-start: 8px;
+    font-size: 12px;
+  }
+}

@@ -58,3 +58,10 @@ export function columnWidget(column: ResultColumn): string | null {
  * a date, chips for a list. Version 1 cannot name any other (extension-reference.md, section 9b).
  */
 export const VERSION_ONE_WIDGETS: ReadonlySet<string> = new Set(['date', 'chips']);
+
+/**
+ * The rule a read-only field of a form carries: it passes always. A field Web UI only shows, bound
+ * one way (`LayoutField.edits`), is read-only in a form of version 2, so that the app neither edits
+ * nor sends what Web UI never changes.
+ */
+export const ALWAYS = 'core.true';

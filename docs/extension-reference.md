@@ -334,9 +334,10 @@ that is not `true` or `false` is ignored, and a later fragment's value wins.
 { "version": 1, "featureToggles": { "permissions.externalUsers": false } }
 ```
 
-| Toggle                      | Default | What it controls                                                                                                                                                                                                                                 |
-| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server. |
+| Toggle                      | Default | What it controls                                                                                                                                                                                                                                                                  |
+| --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server.                                  |
+| `notifications.bell`        | `true`  | The notification centre's bell in the shell's header (`libs/shared/notifications`). Turning it off removes the bell and stops its checks. The header has no slot, so this toggle is the bell's only switch; its check interval is the bootstrap's `notifications.pollIntervalMs`. |
 
 ---
 
@@ -353,7 +354,7 @@ carry packaged entries.
 | `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11 |
 | `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 17 packaged actions, section 8     |
 | `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10     |
-| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a    |
+| `rowActions`       | Each row's menu, in browse and in related records  | **Populated** — 5 packaged actions, section 10a    |
 | `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9         |
 | `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7     |
 | `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a |
@@ -469,7 +470,9 @@ they are not interchangeable.
 | Replace a translation key   | `labels["nav.item.collections"]` (Layer 0)  | Your text wherever that key resolves, the same in every language.         |
 
 The manifest's `labels` map is not keyed by language: `AppTranslateLoader` layers the same map
-over every language's catalogue. Per-language wording is not configurable today.
+over every language's catalogue. Per-language wording comes from a business app's own labels files,
+one per language (`docs/business-apps/app-definition-v2.md`, section 7), which sit below the
+manifest's `labels` and above the platform's catalogue.
 
 **Setting `label` disables the key for that entry**, deliberately and by design: a manifest
 literal is an instruction to show exactly that string, so it must win. If you set both, `label`
@@ -665,6 +668,10 @@ Entries dropped for an unreachable `path` are reported the same way, on
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
+An app definition's menu, `navigation.json`, adds its entries for queues and its home to this slot
+at startup, as `appMenu.<id>`, after the entries below unless their `order` places them among them
+(app-definition-v2.md, section 9). The prefix keeps a file from replacing one of these IDs.
+
 | ID                              | Label               | Path                   | Order | Rule                                 | Notes    |
 | ------------------------------- | ------------------- | ---------------------- | ----- | ------------------------------------ | -------- |
 | `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                    | Disabled |
@@ -798,9 +805,9 @@ by the rules' library, so it would match nothing, and the layout validator refus
 
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
-when you navigate away, so all of them answer `false` everywhere else — with one
-exception: browse's row menu (section 10a) resolves its own slot with each row's
-document in focus, for that slot only. `app.rules.fieldIn` with a literal first
+when you navigate away, so all of them answer `false` everywhere else — with two
+exceptions, both of the `rowActions` slot (section 10a): browse's row menu and a record page's
+list of related records resolve it with each row's document in focus, for that slot only. `app.rules.fieldIn` with a literal first
 parameter is not a rule about the document: it reads none, so it answers the same on
 every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
@@ -929,14 +936,14 @@ Registered by `PACKAGED_BULK_ACTIONS` in
 `libs/shared/extensions/src/lib/packaged-actions.ts`, rendered by the selection
 topbar that appears when at least one document is selected.
 
-| ID                                | Label               | Icon            | Order | Enabled when                     |
-| --------------------------------- | ------------------- | --------------- | ----- | -------------------------------- |
-| `app.bulkActions.downloadZip`     | Download All as Zip | `download`      | 10    | always                           |
-| `app.bulkActions.addToCollection` | Add to Collection   | `library_add`   | 20    | always                           |
-| `app.bulkActions.compare`         | Compare             | `compare`       | 30    | `app.rules.hasMultipleSelection` |
-| `app.bulkActions.addToClipboard`  | Add to Clipboard    | `content_paste` | 40    | always                           |
-| `app.bulkActions.publish`         | Publish Document    | `publish`       | 50    | always                           |
-| `app.bulkActions.delete`          | Delete selected     | `delete`        | 60    | always                           |
+| ID                                | Label               | Icon            | Order | Enabled when                     | Over a whole query     |
+| --------------------------------- | ------------------- | --------------- | ----- | -------------------------------- | ---------------------- |
+| `app.bulkActions.downloadZip`     | Download All as Zip | `download`      | 10    | always                           | no                     |
+| `app.bulkActions.addToCollection` | Add to Collection   | `library_add`   | 20    | always                           | no                     |
+| `app.bulkActions.compare`         | Compare             | `compare`       | 30    | `app.rules.hasMultipleSelection` | no                     |
+| `app.bulkActions.addToClipboard`  | Add to Clipboard    | `content_paste` | 40    | always                           | no                     |
+| `app.bulkActions.publish`         | Publish Document    | `publish`       | 50    | always                           | no                     |
+| `app.bulkActions.delete`          | Delete selected     | `delete`        | 60    | always                           | `trash`, `value: true` |
 
 None of them carries a `rule`, deliberately: all six are offered whatever the
 user may do with the selection, exactly as they were before they became
@@ -965,6 +972,12 @@ The descriptor decides where and when; a registered handler decides what. A
 descriptor with no handler renders and is inert rather than throwing, so a
 manifest can be written before the Layer 2 library that backs it ships.
 
+**On a queue's page** (`/queues/<id>`, app-definition-v2.md, section 4) the topbar offers only the
+queue file's `bulkActions`: those this slot resolves **and** that have a registered handler, in this
+slot's order. The page names them in `SelectionService.offeredBulkActions` while it is shown, and
+puts `null`, every action, back when it goes. A queue's own action with no handler is not offered
+there, since it would do nothing. Offering fewer actions is not a security control either.
+
 ```ts
 import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
@@ -972,6 +985,36 @@ inject(ExtensionActionRegistry).register({
   'acme.bulkActions.archive': inject(AcmeArchiveActionService),
 });
 ```
+
+### Over every result of a queue's query
+
+A queue's page can also run a bulk action over every result of its query rather than the rows
+selected, on the server, through Nuxeo's Bulk Action Framework. Which actions can, and what each one
+runs there, is code: `PACKAGED_WHOLE_QUERY_BULK_ACTIONS` in
+`libs/shared/extensions/src/lib/whole-query-actions.ts`, read with `wholeQueryBulkAction(id)`. The
+table's last column says it: only Delete, as the framework's `trash` sent `value: true`, after which
+the queue's list is read again. The other five work on the documents a person has in hand, and
+Nuxeo has no framework action for any of them that it opens over HTTP.
+
+- **A file cannot name what runs.** A queue file lists bulk actions by id, and a manifest may hide,
+  relabel or reorder their descriptors, but neither can map an id to another framework action or send
+  it other parameters.
+- **What it does on a selection, over the whole query.** An action is offered over a whole query
+  only while what the table maps is what it does on a selection. A descriptor that hands its work to
+  another action's handler (`action`) is not offered. Neither is one whose handler does not declare
+  the mapping its own: the app's handler for `app.bulkActions.delete` carries `wholeQuery: true`, and
+  a customer's handler registered in its place does not, so Delete is then not offered over the
+  whole query rather than trashing what the customer's handler would, say, archive.
+  `ExtensionActionRegistry.runsOverWholeQuery(id)` answers it.
+- **The server decides.** A stock Nuxeo 2025.10 does not open `trash` over HTTP: it answers HTTP 403
+  to everyone but an administrator, and the page says that the server does not let the person run it
+  over a whole query. A deployment opens it with `httpEnabled="true"` on the `trash` action. Either
+  way the server checks the person's permission on every record: one they may not trash is counted as
+  failed, and the page reports how many.
+- **A customer's own bulk action cannot run over a whole query yet.** The table has no registration
+  for Layer 2, and an action of a package's own, from `actions.json`, waits for decision 3.
+
+What the page does with them is in app-definition-v2.md, section 4.
 
 Handlers are objects with an `execute(context)` method — the usual
 service shape. Re-registering one of our IDs replaces
@@ -1021,6 +1064,7 @@ Components are referenced by ID and must already be compiled in. Contributing a 
 | `nxs.components.adminGroupDetailsPage` | One group at `/administration/users-groups/group/:groupId`: members, nested groups, and permissions                                                      |
 | `nxs.components.publishDialog`         | The Publish dialog that `app.toolbar.publish` and `app.bulkActions.publish` both open                                                                    |
 | `nxs.components.taskDetail`            | The task panel of the Tasks page at `/tasks/:taskId`: a task's actions, abandon, delegate, reassign, workflow graph                                      |
+| `nxs.components.taskForm`              | A task's own form inside that panel, from its step's `tasks/<workflow>.<step>.layout.json`; given `task`, `disabled` and `onForm`, to hand its form back |
 | `nxs.components.trashList`             | The trash at `/trash`: trashed documents as a table, grid or list, with restore and permanent delete for one document or a selection                     |
 | `nxs.components.storyboard`            | The strip of frames under a video that seeks it, wherever the document viewer shows a video — the document page's View tab and the asset screens         |
 | `nxs.components.assetGrid`             | The cards of the asset search screen's grid view at `/documents`: thumbnail, name, type pill and the selection checkbox                                  |
@@ -1848,11 +1892,16 @@ What a layout file does **not** do:
   read only as version 2, since version 1 has no `view` mode, and a `documentView` entry (section
   9a) still takes the tab first. A file for any mode other than `view`, `metadata`, `edit` and
   `create` is served but not rendered.
+- **An `edit` or `create` file may be version 2 too.** The form then draws only what the file
+  lists, with no Dublin Core fields of its own: its cards, each widget as its field's input,
+  fields required or read-only by rule, and checks across fields (layout-v2.md, section 11). A
+  `metadata` file of version 2 is still refused, and the generated panel shows.
 - **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
   still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
-  `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
-  in their place — and its `"required": true` and its schema constraints apply there, so a file
-  can make Nature required.
+  `create` form of version 1 the Dublin Core fields are the form's own, so a `dc:` field you list
+  is shown once, in their place — and its `"required": true` and its schema constraints apply
+  there, so a file can make Nature required. A version 2 form shows a `dc:` field only where the
+  file lists it.
 - **Not new controls, in version 1.** In the `metadata`, `edit` and `create` modes the schema type
   picks the control; a version 1 file cannot name a widget, and a `blob` field it lists is shown,
   not edited.
@@ -1990,22 +2039,36 @@ is a separate slot, `rowActions` — section 10a.
 
 ---
 
-## 10a. `rowActions` — the menu on each row of browse's list
+## 10a. `rowActions` — the menu on each row of a list of documents
 
 Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
-rendered as the "Actions for …" menu at the end of each row of browse's document list.
+rendered as the "Actions for …" menu at the end of each row of three lists:
+
+- **browse's document list**, which offers every entry of the slot;
+- **a record page's list of related records**, which offers only the IDs its layout file lists
+  under `rowActions`, and only those with a handler (`docs/business-apps/layout-v2.md`, section 7);
+- **a queue's list** (`/queues/<id>`), the same list as the related records', for the IDs its queue
+  file lists (`docs/business-apps/app-definition-v2.md`, section 4).
 
 Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
 document rules of section 4 read the row's own permissions and properties, not the folder's. A
 row whose entries are all hidden has no menu button.
 
-| ID                        | Label    | Icon                        | Order | Shown when                                |
-| ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |
-| `app.rowActions.download` | Download | `download`                  | 10    | not trashed, holds a file                 |
-| `app.rowActions.rename`   | Rename   | `drive_file_rename_outline` | 20    | not trashed, `canWrite`, not `Immutable`¹ |
-| `app.rowActions.copyTo`   | Copy to… | `file_copy`                 | 30    | not trashed                               |
-| `app.rowActions.moveTo`   | Move to… | `drive_file_move`           | 40    | not trashed, `canRemove`                  |
-| `app.rowActions.delete`   | Delete   | `delete`                    | 50    | not trashed, `canRemove`                  |
+A record page's list of related records ([layout-v2.md](business-apps/layout-v2.md), section 7)
+differs in two more ways. A row's context
+there has none of the flags the page publishes about its own record. A row action whose `rule` or
+`enabledRule` names a surface-state rule (section 4) other than `app.rules.isNote`, itself or inside
+`core.every`, `core.some` or `core.not`, is not offered there, nor one whose rule nests more than 32
+levels deep, and the console says why. Those rules are refused by ID, so a customer's own evaluator
+registered under one is refused too.
+
+| ID                        | Label    | Icon           | Order | Shown when                                |
+| ------------------------- | -------- | -------------- | ----- | ----------------------------------------- |
+| `app.rowActions.download` | Download | `download`     | 10    | not trashed, holds a file                 |
+| `app.rowActions.rename`   | Rename   | `note_edit`    | 20    | not trashed, `canWrite`, not `Immutable`¹ |
+| `app.rowActions.copyTo`   | Copy to… | `copy`         | 30    | not trashed                               |
+| `app.rowActions.moveTo`   | Move to… | `add_to_drive` | 40    | not trashed, `canRemove`                  |
+| `app.rowActions.delete`   | Delete   | `trash`        | 50    | not trashed, `canRemove`                  |
 
 ¹ As Edit in section 8: Nuxeo marks versions and publications `Immutable`, and their
 `permissions` enricher still lists `Write` while the server refuses to change them, so a
@@ -2020,6 +2083,34 @@ trash, as the header's Delete does; a collection goes through the collection's o
 
 A collection listed in browse also keeps its **Edit** entry, first in its menu. That entry is not a
 slot descriptor, and a manifest cannot hide it.
+
+**Where the behaviour is registered.** `providePackagedRowActions()`, from
+`@nuxeo/satori-platform/ui`, registers the five handlers once for the whole app, in the packaged
+tier (`registerPackaged`), and the app's `provideAppExtensions()` calls it. Each handler runs on the
+context's focused document, the row's, so the same handler serves every list. A customer's
+`register()` for one of these IDs outranks it, whichever registers first.
+
+**After a change, the lists read again.** A rename, copy, move or delete that succeeds calls
+`DocumentChangesService.notify()`, from `@nuxeo/satori-platform/nuxeo-client`, and every list
+following it reloads the page on screen: browse's, each list of related records on a record page,
+and a queue's, which keeps its chosen buckets. Every list follows every change, since a copy or a move can add a row to another list. A
+download changes nothing and reloads nothing. A handler of your own that changes documents, for one
+of your IDs or in place of one of these, calls it too:
+
+```ts
+const changes = inject(DocumentChangesService);
+const destroyRef = inject(DestroyRef);
+inject(ExtensionActionRegistry).register({
+  'acme.rowActions.archive': {
+    execute: ({ document }) => {
+      if (!document) return;
+      archive(document)
+        .pipe(takeUntilDestroyed(destroyRef))
+        .subscribe(() => changes.notify());
+    },
+  },
+});
+```
 
 Add your own entry the same way as to any action slot, with a handler that reads the row from the
 context it receives:

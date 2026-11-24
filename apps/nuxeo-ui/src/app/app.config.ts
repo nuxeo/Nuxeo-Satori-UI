@@ -1,5 +1,12 @@
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
-import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom, inject } from '@angular/core';
+import {
+  APP_INITIALIZER,
+  ApplicationConfig,
+  Injector,
+  importProvidersFrom,
+  inject,
+  provideAppInitializer,
+} from '@angular/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding, withHashLocation } from '@angular/router';
 import { MAT_FAB_DEFAULT_OPTIONS } from '@angular/material/button';
@@ -17,6 +24,7 @@ import { routes } from './app.routes';
 import { AppTranslateLoader } from './i18n/app-translate-loader';
 import { registerShippedLocaleData } from './i18n/register-locale-data';
 import { AppThemeService } from './theme/app-theme.service';
+import { startAppMenu } from './business-apps.menu-start';
 
 // At module load rather than in an `APP_INITIALIZER`, because `registerLocaleData` populates a
 // global registry that `DatePipe` reads on its first evaluation — which can happen in a
@@ -50,6 +58,11 @@ export const appConfig: ApplicationConfig = {
       deps: [AppThemeService],
       multi: true,
     },
+    // The app's menu, navigation.json, joined to the platform's before the shell first reads it
+    // (docs/business-apps/app-definition-v2.md, section 9). Its code is loaded lazily, so neither
+    // engine it uses is in the first bundle, and it never rejects, not even when that code cannot
+    // be fetched: a menu that cannot be read leaves the platform's.
+    provideAppInitializer(() => startAppMenu(inject(Injector))),
     provideAnimations(),
     provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding(), withHashLocation()),

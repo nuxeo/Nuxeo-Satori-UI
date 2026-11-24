@@ -1,0 +1,28 @@
+{
+  "name": "shared-notifications",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/notifications/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:shared", "scope:engine", "type:ui"],
+  "$tagsComment": "Tier 3 of docs/business-apps/architecture.md: the notification centre, which section 4 lists among the engines every module shares ('Timeline, search and reports, notifications'). An engine is shared code, so it carries scope:shared as well as scope:engine, and imports only shared code and other engines.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "$inputsComment": "nx.json's test inputs, plus the catalogue the bell's specs read its text from, and the time zone override (AGENTS/08-bug-patterns.md, pattern 29).",
+      "inputs": [
+        "default",
+        "^production",
+        { "env": "SATORI_TEST_TZ" },
+        "{workspaceRoot}/apps/nuxeo-ui/public/i18n/en.json"
+      ],
+      "options": {
+        "reportsDirectory": "coverage/libs/shared/notifications"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

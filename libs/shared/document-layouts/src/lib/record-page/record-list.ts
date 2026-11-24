@@ -6,6 +6,8 @@ import {
   inject,
   input,
   linkedSignal,
+  model,
+  output,
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
@@ -26,25 +28,28 @@ import {
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
+  SURFACE_RULE_EVALUATORS,
   type ExtensionActionDescriptor,
+  type ExtensionRuleContext,
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import {
+  DocumentChangesService,
   type NuxeoDocument,
   type NuxeoDocumentList,
   PageProviderService,
+  type PageProviderResults,
   type PageProviderSort,
   documentNavigationUrl,
-  resolvePaginatedListTotal,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { catchError, forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
+import { catchError, forkJoin, map, merge, of, startWith, switchMap, tap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType } from '../layout.model';
 import { type RecordValueContext, showValue, viewText } from './record-field-view';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
-import type { RecordListEntry, RecordPropertyField } from './record-layout';
+import { type RecordListEntry, type RecordPropertyField, ruleRefusal } from './record-layout';
 import {
   LookupCollector,
   NO_LABELS,
@@ -81,6 +86,8 @@ interface ListRequest {
   readonly pageSize: number;
   readonly pageIndex: number;
   readonly sort: readonly PageProviderSort[];
+  /** The buckets chosen, by aggregate, in a stable order; none chosen is none sent. */
+  readonly aggregates: Readonly<Record<string, readonly string[]>>;
   /** Not sent: a column that appears needs its rows' definitions read, which a response brings. */
   readonly columns: readonly string[];
   readonly attempt: number;
@@ -99,13 +106,54 @@ const SORTABLE_TYPES: ReadonlySet<string> = new Set([
 const sameRequest = (a: ListRequest | null, b: ListRequest | null): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
 
+/** The aggregates with a bucket chosen, in the order of their ids, each one's keys sorted. */
+function chosenBuckets(
+  aggregates: Readonly<Record<string, readonly string[]>>,
+): Readonly<Record<string, readonly string[]>> {
+  return Object.fromEntries(
+    Object.keys(aggregates)
+      .sort()
+      .filter((aggregate) => aggregates[aggregate].length > 0)
+      .map((aggregate) => [aggregate, [...new Set(aggregates[aggregate])].sort()]),
+  );
+}
+
+/**
+ * The rules that answer from what the page publishes about its own record, the one in focus
+ * (`ExtensionRuleContext.flags`): whether it is a favourite, locked, subscribed, in the clipboard,
+ * has a version, whether AI is on, whether an operation on it is in flight. A row is another
+ * record, and nothing publishes that for it. `app.rules.isNote` is in the same map and reads the
+ * document, which a row's context has. Known by ID: a customer's own evaluator registered under
+ * one of these IDs is refused too.
+ */
+const PAGE_STATE_RULES: ReadonlySet<string> = new Set(
+  Object.keys(SURFACE_RULE_EVALUATORS).filter((id) => id !== 'app.rules.isNote'),
+);
+
+const refusePageState = (id: string): string | null =>
+  PAGE_STATE_RULES.has(id)
+    ? `names the rule "${id}", which is refused for a row: as packaged, it answers for the page's own record`
+    : null;
+
+/**
+ * A row's rule context, for its menu and for running a choice from it: the row in focus, and none
+ * of the state the page publishes about its own record. A rule of a customer's own that reads
+ * `flags` finds none for a row.
+ */
+const rowContext = (base: ExtensionRuleContext, row: NuxeoDocument): ExtensionRuleContext => ({
+  ...base,
+  document: row,
+  flags: {},
+});
+
 /**
  * A list of records: one page of a page provider's results at a time, one row per record, each
  * column a property shown through its widget (layout-v2.md, section 7). A related-records card
- * shows one, and a queue will.
+ * shows one, and so does a queue (app-definition-v2.md, section 4).
  *
  * A row opens its record. The headers sort, on the server; the list opens in the file's order.
  * A row offers the row actions the file lists that are registered here, while their rules pass.
+ * A queue also filters the list by the buckets chosen in its facets, and lets rows be selected.
  * The page provider returns only what the user may read: nothing here is a security control.
  */
 @Component({
@@ -128,8 +176,23 @@ export class RecordListComponent {
   readonly stateHeadingLevel = input<NxsHeadingLevel>(4);
   /** Where the list is written, for the console: `Member/view layout: cards[2]`. */
   readonly source = input('');
+  /**
+   * The buckets chosen in the page provider's aggregates, by aggregate id: a queue's facets. The
+   * list keeps the records in any chosen bucket of an aggregate, and starts again on its first
+   * page when they change.
+   */
+  readonly aggregates = input<Readonly<Record<string, readonly string[]>>>({});
+  /** Whether rows can be selected, for a queue's bulk actions. */
+  readonly selectable = input(false);
+  /** The selected rows' ids, on every page. Two-way: `[(selectedIds)]`. */
+  readonly selectedIds = model<readonly string[]>([]);
+  /** What an empty list says; the related-records card's text when `null`. */
+  readonly emptyHeading = input<string | null>(null);
+  /** Each page as the server returned it, with its aggregates: what a queue's facets show. */
+  readonly loaded = output<PageProviderResults>();
 
   private readonly pages = inject(PageProviderService);
+  private readonly documentChanges = inject(DocumentChangesService);
   private readonly layouts = inject(DocumentLayoutService);
   private readonly extensions = inject(AppExtensionsService);
   private readonly actions = inject(ExtensionActionRegistry);
@@ -148,10 +211,19 @@ export class RecordListComponent {
     JSON.stringify([this.list().pageProvider, this.parameters(), this.list().sort]),
   );
 
-  protected readonly pageIndex = linkedSignal({ source: this.identity, computation: () => 0 });
+  /** The buckets chosen, written the same way for the same choice. */
+  private readonly chosen = computed(() => chosenBuckets(this.aggregates()), {
+    equal: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  });
+
+  /** Another list, or other buckets chosen, starts on the first page; the order chosen stays. */
+  protected readonly pageIndex = linkedSignal({
+    source: computed(() => JSON.stringify([this.identity(), this.chosen()])),
+    computation: () => 0,
+  });
 
   /** The order chosen from a header; `null`, the file's. */
-  private readonly chosenSort = linkedSignal<string, NxsDocumentListSort | null>({
+  protected readonly chosenSort = linkedSignal<string, NxsDocumentListSort | null>({
     source: this.identity,
     computation: () => null,
   });
@@ -183,6 +255,7 @@ export class RecordListComponent {
         pageSize: list.pageSize,
         pageIndex: this.pageIndex(),
         sort: chosen ? [{ field: chosen.key, order: chosen.direction }] : list.sort,
+        aggregates: this.chosen(),
         columns: this.shownColumns().map((column) => column.xpath),
         attempt: this.attempt(),
       };
@@ -205,8 +278,12 @@ export class RecordListComponent {
                 pageSize: request.pageSize,
                 pageIndex: request.pageIndex,
                 sort: request.sort,
+                ...(Object.keys(request.aggregates).length > 0
+                  ? { aggregates: request.aggregates }
+                  : {}),
               })
               .pipe(
+                tap((page) => this.loaded.emit(page)),
                 switchMap((page) => this.withProperties(page)),
                 startWith(LOADING),
                 catchError((error: unknown) => {
@@ -254,6 +331,11 @@ export class RecordListComponent {
     merge(this.translate.onLangChange, this.translate.onTranslationChange)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.translations.update((n) => n + 1));
+    // A row action, here or on another list, may have renamed, moved or trashed one of these rows,
+    // or copied a record into this list: the page on screen is asked for again.
+    this.documentChanges.changes
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.attempt.update((n) => n + 1));
   }
 
   protected readonly documents = computed<readonly NuxeoDocument[]>(() => {
@@ -268,11 +350,18 @@ export class RecordListComponent {
     return state.status === 'failed' ? state.error : null;
   });
 
+  /**
+   * How many records the list holds: the server's count, or `-1`, unknown, where it gave none, as
+   * Nuxeo's `-2` past `resultsCountLimit` is. Never an estimate: the list shows it, and tells
+   * assistive technology it is the number of rows.
+   */
   protected readonly totalSize = computed(() => {
     const state = this.state();
-    return state.status === 'loaded'
-      ? resolvePaginatedListTotal(state.page, this.list().pageSize, this.pageIndex())
-      : -1;
+    if (state.status !== 'loaded') return -1;
+    const counts = [state.page.totalSize, state.page.resultsCount].filter(
+      (count): count is number => typeof count === 'number' && count >= 0,
+    );
+    return counts.length > 0 ? Math.max(...counts) : -1;
   });
 
   protected readonly hasNextPage = computed(() => {
@@ -282,10 +371,11 @@ export class RecordListComponent {
     return page.isNextPageAvailable ?? page.currentPageIndex + 1 < page.numberOfPages;
   });
 
-  /** The header that shows the order: the one chosen, or the file's first key while a column has it. */
-  protected readonly shownSort = computed<NxsDocumentListSort | null>(() => {
-    const chosen = this.chosenSort();
-    if (chosen) return chosen;
+  /**
+   * The file's order, by its first key, for the list's header while a column shows that property:
+   * it shows it while no other is chosen, and turns it round rather than clearing it.
+   */
+  protected readonly defaultSort = computed<NxsDocumentListSort | null>(() => {
     const [first] = this.list().sort;
     if (!first || !this.shownColumns().some((column) => column.xpath === first.field)) return null;
     return { key: first.field, direction: first.order };
@@ -312,10 +402,10 @@ export class RecordListComponent {
     const base = this.ruleContext.context();
     const menus: Record<string, NxsMenuAction[]> = {};
     for (const row of this.documents()) {
-      const context = { ...base, document: row };
+      const context = rowContext(base, row);
       const entries = this.extensions
         .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
-        .filter((action) => listed.has(action.id) && this.runnable(action))
+        .filter((action) => listed.has(action.id) && this.offered(action))
         .map((action): NxsMenuAction => ({
           id: action.id,
           label: descriptorLabel(action, (key) => this.translate.instant(key)),
@@ -327,18 +417,14 @@ export class RecordListComponent {
     return menus;
   });
 
+  /**
+   * `null` goes back to the file's order, and so does the header of that order turned back to its
+   * own direction: the file's order whole, with every key it sorts by, not its first alone.
+   */
   protected onSort(sort: NxsDocumentListSort | null): void {
-    // The header of the file's own order cycles from its direction to none, which would leave the
-    // rows in that order under a header that says they are not: it turns the order round instead.
-    const shown = this.shownSort();
-    const next =
-      sort === null && this.chosenSort() === null && shown
-        ? {
-            key: shown.key,
-            direction: shown.direction === 'asc' ? ('desc' as const) : ('asc' as const),
-          }
-        : sort;
-    this.chosenSort.set(next);
+    const own = this.defaultSort();
+    const isOwn = sort !== null && own?.key === sort.key && own.direction === sort.direction;
+    this.chosenSort.set(isOwn ? null : sort);
     this.pageIndex.set(0);
   }
 
@@ -349,13 +435,13 @@ export class RecordListComponent {
   /**
    * Asks again. After a failure under an order chosen from a header, the order may be what failed:
    * Nuxeo refuses some sorts, such as a text field in OpenSearch. Retrying then goes back to the
-   * file's order, rather than sending the same refusal again.
+   * file's order, rather than sending the same refusal again. Every retry counts an attempt, so it
+   * is always sent.
    */
   protected onRetry(): void {
     if (this.state().status === 'failed' && this.chosenSort() !== null) {
       this.chosenSort.set(null);
       this.pageIndex.set(0);
-      return;
     }
     this.attempt.update((n) => n + 1);
   }
@@ -370,24 +456,40 @@ export class RecordListComponent {
    */
   protected onRowAction({ action, document }: NxsDocumentListRowAction): void {
     if (!this.list().rowActions.includes(action.id)) return;
-    const context = { ...this.ruleContext.context(), document };
+    const context = rowContext(this.ruleContext.context(), document);
     const descriptor = this.extensions
       .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
       .find((candidate) => candidate.id === action.id);
-    if (!descriptor || !this.runnable(descriptor)) return;
+    if (!descriptor || !this.offered(descriptor)) return;
     if (!this.extensions.evaluateRule(descriptor.enabledRule, context)) return;
     this.actions.execute(descriptor, context);
   }
 
   /**
-   * Whether something on this page runs the action. One with no handler here would do nothing
-   * when chosen: it is not offered, and the console says so once. The platform's own row actions
-   * are registered by the browse list, so a record page has none of them yet.
+   * Whether a row offers the action, its rules aside: something on this page runs it, and a row
+   * can answer its rules. Otherwise it is not offered, and the console says why once.
+   *
+   * - One with no handler here would do nothing when chosen. The platform's own row actions are
+   *   registered once for the whole app, by `providePackagedRowActions()`.
+   * - One whose `rule` or `enabledRule` names a rule that answers for the page's own record
+   *   ({@link PAGE_STATE_RULES}), itself or inside `core.every`, `core.some` or `core.not`, would
+   *   show or run on that record's state, not the row's. A customer's own composite is not looked
+   *   into: the rules inside it see the row's context, which has no page flags. One whose rule has
+   *   already answered no for the row is not offered either way.
+   * - One whose rule nests deeper than the rule registry answers, as a field's does.
    */
-  private runnable(action: ExtensionActionDescriptor): boolean {
-    if (this.actions.has(action.action ?? action.id)) return true;
-    this.tell(`the row action "${action.id}" has nothing to run it on this page; not offered`);
-    return false;
+  private offered(action: ExtensionActionDescriptor): boolean {
+    if (!this.actions.has(action.action ?? action.id)) {
+      this.tell(`the row action "${action.id}" has nothing to run it on this page; not offered`);
+      return false;
+    }
+    const refused =
+      ruleRefusal(action.rule, refusePageState) ?? ruleRefusal(action.enabledRule, refusePageState);
+    if (refused) {
+      this.tell(`the row action "${action.id}" ${refused}; not offered`);
+      return false;
+    }
+    return true;
   }
 
   private valueContext(): RecordValueContext {

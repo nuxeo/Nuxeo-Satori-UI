@@ -265,6 +265,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.note-image-picker-dialog.select-all': 'Select all',
   'document-layouts.loading-form': 'Loading the form',
   'document-layouts.sections': 'Property sections',
+  'document-layouts.timeline.loading': 'Loading the history',
   'kd.content-lake-upload.loading': 'Loading',
   'kd.content-lake-upload.up-one-folder-level': 'Up one folder level',
   'kd.kd-citation-dialog.citation-references': 'Citation references',
@@ -287,6 +288,9 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'nav.loading': 'Loading',
   'nav.refresh': 'Refresh',
   'nav.tree.toggle': 'Toggle {{ name }}',
+  // The header's bell: its name carries the unread count (libs/shared/notifications).
+  'notifications.bell.label': 'Notifications, {{ count }} unread',
+  'notifications.panel.close': 'Close notifications',
   'satori-components.action-menu.more-actions': 'More actions',
   'satori-components.admin-group-details-page.loading': 'Loading',
   'satori-components.admin-group-details-page.remove-member': 'Remove {{ name }} from this group',
@@ -353,6 +357,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
     'Hi! Could you comment on this document and...',
   'permissions.update-permission-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',
+  'queues.filters': 'Filters',
   'sat.platform-nav.collapse': 'Collapse navigation',
   'sat.platform-nav.expand': 'Expand navigation',
   'satori-components.favorite-toggle.add': 'Add to favorites',

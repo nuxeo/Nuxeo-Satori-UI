@@ -40,9 +40,9 @@ Nuxeo Server                     ← via Angular dev proxy (:8080) in dev; same-
 
 The business apps work on `integration/enterprise-grade-app` adds three tags to `eslint.config.mjs`.
 They are the tiers of [docs/business-apps/architecture.md](../docs/business-apps/architecture.md),
-section 4. Three projects carry them so far, all engines: `libs/shared/computations`,
-`libs/shared/document-layouts`, the record page, and `libs/shared/home`, the home. The first module
-arrives in phase 1.
+section 4. Four projects carry them so far, all engines: `libs/shared/computations`,
+`libs/shared/document-layouts`, the record page, `libs/shared/home`, the home, and
+`libs/shared/queues`, the queues. The first module arrives in phase 1.
 
 | Tag                | Tier               | Carried by                                               | May depend on                                                             |
 | ------------------ | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -103,7 +103,7 @@ libs/
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo/satori-platform/components-satori
 
 business-apps/
-  packages/                      ← App definition packages the package pipeline builds; payers-claims-demo is phase 0's demo
+  packages/                      ← App definition packages the package pipeline builds; payers-claims-demo is the Payers kit, phase 0's and phase 1's demo
 ```
 
 ---

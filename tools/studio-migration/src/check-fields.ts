@@ -2,7 +2,8 @@
  * Check 2, fields (docs/business-apps/studio-migration.md, section 6): each converted layout shows
  * the fields its Web UI layout binds, in the same mode, with the same required flags and the
  * widgets layout-v2.md, section 10, expects; and each list shows its columns, in order, with
- * theirs.
+ * theirs. M2 adds the fields of the layout blocks a layout uses, each tab of a type's page, which
+ * shows its block's fields, and each task form, which shows its task layout's variables.
  *
  * What Web UI shows is read from the package, field by field, less the repeats and the fields
  * that sit in a condition, which check 5 holds. The report is read only to excuse a field that
@@ -10,17 +11,19 @@
  * readiness instead.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { LAYOUT_VERSION, layoutPath } from './app-files';
-import { layoutFields, listColumns, parametersOf, sameJson, widgetOf } from './app-walk';
+import { listColumns, parametersOf, sameJson, widgetOf } from './app-walk';
+import { layoutCards } from './blocks';
 import { PANEL_ROWS } from './convert-layouts';
 import { queueOwners } from './convert-lists';
+import { formPlaces, shownIn } from './forms';
 import type { CheckOutcome, HarnessInput } from './harness';
 import type { ResultColumn } from './inventory';
-import { VERSION_ONE_WIDGETS, columnWidget, fieldWidget } from './widgets';
+import { ALWAYS, VERSION_ONE_WIDGETS, columnWidget, fieldWidget } from './widgets';
 
-const XPATH = /^[A-Za-z_][\w-]*:[A-Za-z_][\w-]*$/;
+/** A property, `<prefix>:<name>`, or a variable of a task, `var:<name>`. */
+const FIELD = /^[A-Za-z_][\w-]*:[A-Za-z_][\w-]*$/;
 
-export function checkFields({ inventory, catalogue, conversion }: HarnessInput): CheckOutcome {
+export function checkFields({ pkg, inventory, catalogue, conversion }: HarnessInput): CheckOutcome {
   const findings: string[] = [];
   const app = conversion.app;
   const entries = new Map((conversion.report.constructs ?? []).map((entry) => [entry.id, entry]));
@@ -29,58 +32,62 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
     const entry = entries.get(id);
     return entry !== undefined && entry.outcome !== 'converted' && Boolean(entry.note?.trim());
   };
-  const layoutFiles = new Set(Object.keys(app).filter((path) => path.startsWith('layouts/')));
-  const compared = new Set<string>();
+  const formFiles = new Set(
+    Object.keys(app).filter((path) => path.startsWith('layouts/') || path.startsWith('tasks/')),
+  );
+  const versioned = new Set<string>();
+  const places = formPlaces(pkg, inventory);
 
-  for (const layout of inventory.layouts) {
-    const type = layout.docType;
-    if (type === null || !Object.hasOwn(LAYOUT_VERSION, layout.mode)) continue;
-    const path = layoutPath(type, layout.mode);
-    // The first layout of a type and mode is the one written; a later one is reported.
-    if (compared.has(path)) continue;
-    compared.add(path);
-    layoutFiles.delete(path);
-    const version = LAYOUT_VERSION[layout.mode];
+  for (const place of places) {
+    const { path, options } = place;
+    formFiles.delete(path);
+    const version = options.version;
     const file = app[path];
-    if (file !== undefined && (!isRecord(file) || file['version'] !== version)) {
-      findings.push(
-        `${path}: it is not version ${version}, which the app reads in ${layout.mode} mode`,
-      );
+    if (!versioned.has(path)) {
+      versioned.add(path);
+      if (file !== undefined && (!isRecord(file) || file['version'] !== version))
+        findings.push(
+          `${path}: it is not version ${version}, which the app reads in ${options.mode} mode`,
+        );
     }
-    const shown = layoutFields(file);
-    const form = layout.mode === 'edit' || layout.mode === 'create';
+    const shown = shownIn(file, place.tab);
+    const where = place.tab === null || place.tab === 'view' ? '' : ` tab ${place.tab}`;
     const expected = new Set<string>();
-    const conditional = new Set(
-      layout.fields.filter((field) => field.condition !== null).map((field) => field.binding),
-    );
+    const { cards, fields } = layoutCards(inventory, place.source);
+    // A field that shows only while a condition passes is check 5's: its own, or its block's.
+    const conditional = (field: (typeof fields)[number]): boolean =>
+      field.field.condition !== null ||
+      (!options.inTab && (cards[field.card].use?.conditions.length ?? 0) > 0);
+    const hidden = new Set(fields.filter(conditional).map((field) => field.field.binding));
     const seen = new Set<string>();
-    layout.fields.forEach((field, index) => {
-      const id = `layout-field:${layout.path}#${index + 1}`;
+    for (const placedField of fields) {
+      const { field, id } = placedField;
       const binding = field.binding;
-      if (field.element === 'nuxeo-document-viewer') return;
-      if (binding === null || !XPATH.test(binding) || seen.has(binding)) return;
+      if (field.element === 'nuxeo-document-viewer') continue;
+      if (binding === null || !FIELD.test(binding) || seen.has(binding)) continue;
+      // A block not given the document shows nothing of its own.
+      const use = cards[placedField.card].use;
+      if (use !== null && !use.document) continue;
       // Shown once a field shows it: a field under a condition, or of an element the catalogue
       // does not know, leaves the next one binding the same property to show it.
-      if (field.condition !== null) return;
+      if (conditional(placedField)) continue;
       const choice = fieldWidget(catalogue, field.element, field.attributes);
-      if (choice === null) return;
+      if (choice === null) continue;
       seen.add(binding);
       const matches = shown.filter((candidate) => candidate.field === binding);
-      if (layout.mode === 'metadata' && PANEL_ROWS.has(binding)) {
+      if (options.mode === 'metadata' && PANEL_ROWS.has(binding)) {
         if (matches.length > 0)
           findings.push(`${path}: it lists ${binding}, which the Properties panel already shows`);
-        return;
+        continue;
       }
       expected.add(binding);
       if (matches.length === 0) {
         if (!excused(id))
-          findings.push(
-            `${path}: ${binding} is missing, though Web UI's ${layout.mode} layout of ${type} shows it`,
-          );
-        return;
+          findings.push(`${path}${where}: ${binding} is missing, though ${place.what} shows it`);
+        continue;
       }
       if (matches.length > 1)
-        findings.push(`${path}: it shows ${binding} ${matches.length} times, not once`);
+        findings.push(`${path}${where}: it shows ${binding} ${matches.length} times, not once`);
       const [match] = matches;
       const want = choice.widget;
       if (version === 1) {
@@ -96,29 +103,60 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
         const actual = widgetOf(match.entry);
         if (actual !== want)
           findings.push(
-            `${path}: ${binding} shows as ${describe(actual)}, not as ${describe(want)}`,
+            `${path}${where}: ${binding} shows as ${describe(actual)}, not as ${describe(want)}`,
           );
         else if (!sameJson(parametersOf(match.entry), choice.parameters ?? {}))
           findings.push(
-            `${path}: ${binding}'s ${want} widget has the parameters ${JSON.stringify(parametersOf(match.entry))}, not ${JSON.stringify(choice.parameters ?? {})}`,
+            `${path}${where}: ${binding}'s ${want} widget has the parameters ${JSON.stringify(parametersOf(match.entry))}, not ${JSON.stringify(choice.parameters ?? {})}`,
           );
       }
-      const required = isRecord(match.entry) && match.entry['required'] === true;
-      if (form && required !== field.required)
+      // In a form, a field Web UI only shows, bound one way, is read-only, and one it edits is
+      // not. A task form shows the record's own properties read-only whatever its file says.
+      const readOnly = isRecord(match.entry) && match.entry['readOnlyWhen'] === ALWAYS;
+      const record = options.task === true && !binding.startsWith('var:');
+      if (options.form && version === 2 && !record && readOnly === field.edits)
         findings.push(
-          `${path}: ${binding} is ${required ? '' : 'not '}required, but Web UI's is ${field.required ? '' : 'not '}required`,
+          `${path}${where}: ${binding} is ${readOnly ? 'read-only' : 'editable'}, but Web UI's ${field.element} ${readOnly ? 'edits' : 'only shows'} it`,
         );
-    });
+      if (options.form && version === 1 && !field.edits && !excused(id))
+        findings.push(
+          `${path}: ${binding} is editable, though Web UI's ${field.element} only shows it, and the report does not say so`,
+        );
+      const required = isRecord(match.entry) && match.entry['required'] === true;
+      // A task form can require only its variables; the report says when Web UI required more.
+      if (options.form && record && field.required && !excused(id))
+        findings.push(
+          `${path}${where}: ${binding} is required in Web UI, which a task form cannot say of the record's property, and the report does not say so`,
+        );
+      if (options.form && !record && required !== field.required)
+        findings.push(
+          `${path}${where}: ${binding} is ${required ? '' : 'not '}required, but Web UI's is ${field.required ? '' : 'not '}required`,
+        );
+    }
     for (const field of shown) {
       if (field.field === null) {
         findings.push(`${path}: ${field.at} shows no property`);
-      } else if (!expected.has(field.field) && !conditional.has(field.field)) {
-        findings.push(`${path}: it shows ${field.field}, which Web UI's layout does not`);
+      } else if (!expected.has(field.field) && !hidden.has(field.field)) {
+        findings.push(`${path}${where}: it shows ${field.field}, which ${place.what} does not`);
       }
     }
   }
-  for (const path of layoutFiles)
-    findings.push(`${path}: the package has no Web UI layout of that type and mode`);
+  // A tab no tab of the package gives.
+  for (const path of versioned) {
+    const file = app[path];
+    const tabs = isRecord(file) && Array.isArray(file['tabs']) ? file['tabs'] : [];
+    for (const tab of tabs) {
+      const id = isRecord(tab) ? tab['id'] : undefined;
+      if (!places.some((place) => place.path === path && place.tab === id))
+        findings.push(`${path}: it has a tab ${String(id)}, which no tab of the package gives`);
+    }
+  }
+  for (const path of formFiles)
+    findings.push(
+      path.startsWith('tasks/')
+        ? `${path}: the package has no task layout of that workflow and step`
+        : `${path}: the package has no Web UI layout of that type and mode`,
+    );
 
   // Lists: each queue against the one list that owns its path, a search screen's results or a
   // dashboard card's list, as the converter decides it. A list under a condition owns none: it is
@@ -129,7 +167,7 @@ export function checkFields({ inventory, catalogue, conversion }: HarnessInput):
         findings.push(
           ...compareColumns(
             path,
-            owner.card.columns.filter((column) => column.field !== null),
+            owner.card.columns.filter((column) => column.field !== null && !column.conditional),
             app[path],
           ),
         );

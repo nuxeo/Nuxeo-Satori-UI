@@ -2,8 +2,8 @@
 <!--
   STAND-IN MODEL, until the presales Payers model arrives.
 
-  Everything here is fictional: the document types, schemas and page providers the kit's layouts
-  and queue name, and nothing more. When the presales model arrives, this file and schemas/ are
+  Everything here is fictional: the document types, schemas and page providers the kit's layouts,
+  queues and home name, and nothing more. When the presales model arrives, this file and schemas/ are
   replaced by theirs, and the layouts follow its property names. Records of these types must be
   deleted from a server before its model goes: a document whose type is gone cannot be read.
 
@@ -20,6 +20,7 @@
     <schema name="case" prefix="case" src="schemas/case.xsd" />
     <schema name="provider" prefix="provider" src="schemas/provider.xsd" />
     <schema name="claimdoc" prefix="claimdoc" src="schemas/claimdoc.xsd" />
+    <schema name="payers_claim_search" prefix="claimsearch" src="schemas/claimsearch.xsd" />
   </extension>
 
   <!-- None of the four record types holds a file or is a folder, so each opens as a record
@@ -48,6 +49,13 @@
     <!-- A file: it keeps its preview, and is listed on its claim's page. -->
     <doctype name="ClaimDocument" extends="File">
       <schema name="claimdoc" />
+    </doctype>
+    <!-- The claim queues' search document, as DefaultSearch is default_search's: never saved, it
+         holds the facets a queue sends back (schemas/claimsearch.xsd). No folder lists it among
+         its subtypes, so nothing offers to create one, and it is hidden from navigation. -->
+    <doctype name="PayersClaimSearch" extends="Document">
+      <facet name="HiddenInNavigation" />
+      <schema name="payers_claim_search" />
     </doctype>
   </extension>
 
@@ -112,16 +120,97 @@
       <maxPageSize>100</maxPageSize>
     </coreQueryPageProvider>
 
+    <!-- The claim queues and the home's KPIs. A queue's facets and a KPI's buckets are the
+         aggregates of its page provider's results, which only the search index answers: a
+         coreQueryPageProvider queries the repository and returns none. So these three are
+         SearchServicePageProvider, the class the platform's default_search is replaced with
+         (nxserver/config/search-classreplacer-config.xml), each with the search document
+         PayersClaimSearch, whose fields hold a queue's chosen buckets. An aggregate's id, its
+         field and the parameter the app sends back are one name.
+
+         The index is written a moment after the repository, so these lag a change by about a
+         second; the seed asks them again until they agree with what it wrote. -->
+
     <!-- The unassigned-claims queue: claims no adjuster holds yet, still to be decided. -->
-    <coreQueryPageProvider name="payers_unassigned_claims">
-      <pattern>
-        SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND claim:adjuster IS NULL
-        AND claim:status IN ('submitted', 'inReview')
-        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
-      </pattern>
+    <genericPageProvider name="payers_unassigned_claims"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>PayersClaimSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'Claim' AND claim:adjuster IS NULL
+          AND claim:status IN ('submitted', 'inReview')
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="claim_status_agg" type="terms" parameter="claim:status">
+          <field schema="payers_claim_search" name="claim_status_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
       <sort column="claim:received" ascending="true" />
       <pageSize>50</pageSize>
       <maxPageSize>100</maxPageSize>
-    </coreQueryPageProvider>
+    </genericPageProvider>
+
+    <!-- The my-claims queue: the claims one adjuster holds, given their user name. The queue and
+         the home pass "$currentUser", which the REST API's page provider endpoint replaces with
+         the person signed in before the query runs (QueryExecutor in nuxeo-search-rest-api;
+         measured on Nuxeo 2025.10.18, as two adjusters), so each is asked for their own claims
+         and no one's name is in a file. Whether version 2 says so is open
+         (app-definition-v2.md, section 13). -->
+    <genericPageProvider name="payers_my_claims"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>PayersClaimSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart quoteParameters="true" escapeParameters="true">
+          ecm:primaryType = 'Claim' AND claim:adjuster = ?
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="claim_status_agg" type="terms" parameter="claim:status">
+          <field schema="payers_claim_search" name="claim_status_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="claim:serviceDate" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+
+    <!-- The pending-determination queue, and the list behind the home's "Pending determination"
+         KPI: claims in review or pended, whoever holds them, oldest first. -->
+    <genericPageProvider name="payers_pending_claims"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>PayersClaimSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'Claim' AND claim:status IN ('inReview', 'pended')
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="claim_status_agg" type="terms" parameter="claim:status">
+          <field schema="payers_claim_search" name="claim_status_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="claim_adjuster_agg" type="terms" parameter="claim:adjuster">
+          <field schema="payers_claim_search" name="claim_adjuster_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="claim:received" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
   </extension>
 </component>

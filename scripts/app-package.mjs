@@ -7,23 +7,30 @@
  *
  *   node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
- *     [--model <file> | --model-server <address>]
+ *     [--model <file> | --model-server <address>] [--previous <package directory>]
  *
- * First it removes the zip and checksum an earlier run left for the package's name and version, so
- * that a refused package leaves nothing installable behind. Then, in order, each step stopping the
- * run when it fails:
- *   1. the package's `build.mjs` is the generator's, byte for byte, so the code that builds it is
+ * First it removes the zip, checksum and changelog an earlier run left for the package's name and version, so
+ * that a refused package leaves nothing installable behind; a package.xml that is a symbolic link is
+ * not read for them. Then, in order, each step stopping the run when it fails:
+ *   1. nothing in the package is a symbolic link, so no step reads a file from elsewhere, and the
+ *      package's `build.mjs` is the generator's, byte for byte, so the code that builds it is
  *      code this repository reviewed;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
  *      it registers and its platform version, and, when one is given, the server's content model.
  *      The layouts the component contributes are the files the validator read, in the modes it
- *      read them in: none inline, none from elsewhere;
- *   3. `app.json`'s `packageVersion` is `package.xml`'s version, and a tag, when given, is
- *      `app-package/<name>/<version>` for this package;
+ *      read them in: none inline, none from elsewhere. A component path that leaves `bundle/` or
+ *      names a folder or a hard link is refused before it is read (a missing one is the builder's
+ *      to refuse, at step 4);
+ *   3. `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s
+ *      version, and a tag, when given, is
+ *      `app-package/<name>/<version>` for this package; given the package as it was before,
+ *      `--previous`, the version moved as far as what changed needs (the validator's `changes`,
+ *      `libs/shared/app-definition/src/lib/changes.ts`), and the package's name did not change;
  *   4. `build.mjs` writes the zip, refusing what the server would;
  *   5. `verify-package-zip.mjs` finds a well-formed Nuxeo Package;
- *   6. the zip's SHA-256 goes beside it, as `<zip>.sha256`, in the form `sha256sum -c` reads.
+ *   6. the zip's SHA-256 goes beside it, as `<zip>.sha256`, in the form `sha256sum -c` reads, and,
+ *      given `--previous`, what changed since, as `<name>-<version>.changes.md`.
  *
  * Node 24 and the system's `unzip`, which reads the zip back at step 5, run all of it: no install
  * and no credential, so that a package's checks need nothing a customer's repository does not have.
@@ -41,9 +48,17 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, posix, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   EXIT_PRECONDITION,
@@ -76,7 +91,7 @@ const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
-  ' [--model <file> | --model-server <address>]';
+  ' [--model <file> | --model-server <address>] [--previous <package directory>]';
 // `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 /** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
@@ -90,6 +105,7 @@ const VALUED = [
   '--platform',
   '--model',
   '--model-server',
+  '--previous',
 ];
 
 function parse(argv) {
@@ -165,6 +181,7 @@ function run({
   platform,
   model,
   unread,
+  previous,
 }) {
   const near = relative(process.cwd(), resolve(directory));
   const shown = near === '' ? '.' : near.startsWith('..') ? resolve(directory) : near;
@@ -173,20 +190,40 @@ function run({
     return 1;
   };
 
+  // No step reads through a symbolic link, so the package is searched for one before anything in
+  // it is read: a link can point anywhere, and what a step reads it may quote back. The builder
+  // refuses one in bundle/ or package/ at step 4; a linked build.mjs would have step 1 compare, and
+  // step 4 run, a file from elsewhere. Refused at step 1, below, once older output is cleared.
+  const found = firstLink(directory);
+
   // What an earlier run left for this package's name and version goes first, so that a run that
   // refuses the package leaves no installable zip behind, this run's or an older one's. The name
   // and version are the package's own, so they name a file only once they are single file names,
   // as the builder requires: a name such as `../x` must not reach outside the output directory.
+  // A package.xml reached through a link is not read: an older zip of that package stays.
   const descriptorFile = join(directory, 'package', 'package.xml');
-  const descriptor = existsSync(descriptorFile)
-    ? withoutCdata(withoutCommentsOrInstructions(readFileSync(descriptorFile, 'utf8')))
-    : null;
+  const throughLink =
+    typeof found === 'string' &&
+    (descriptorFile === found || descriptorFile.startsWith(found + sep));
+  let descriptor = null;
+  let unreadable = null;
+  if (!throughLink && existsSync(descriptorFile)) {
+    try {
+      descriptor = withoutCdata(
+        withoutCommentsOrInstructions(readFileSync(descriptorFile, 'utf8')),
+      );
+    } catch (error) {
+      // Unreadable, it names no older zip, and step 3 says so.
+      unreadable = error.code ?? error.message;
+    }
+  }
   const name = descriptor === null ? null : attribute(descriptor, 'package', 'name');
   const version = descriptor === null ? null : attribute(descriptor, 'package', 'version');
   const output = resolve(out ?? join(directory, 'dist'));
   if (FILE_NAME.test(name ?? '') && FILE_NAME.test(version ?? '')) {
-    const previous = join(output, `${name}-${version}.zip`);
-    for (const left of [previous, `${previous}.sha256`]) rmSync(left, { force: true });
+    const earlier = join(output, `${name}-${version}.zip`);
+    for (const left of [earlier, `${earlier}.sha256`, changesFile(output, name, version)])
+      rmSync(left, { force: true });
   }
   // A content model `--model-server` could not read.
   if (unread !== undefined) {
@@ -194,7 +231,20 @@ function run({
     return EXIT_PRECONDITION;
   }
 
-  // 1. The builder is the reviewed one.
+  // 1. The package holds its own files, and the builder is the reviewed one.
+  if (typeof found === 'string')
+    return refuse(
+      1,
+      `${relative(directory, found).split(sep).join('/') || 'the package folder'} is a symbolic ` +
+        'link, which is not followed. Put the file itself there, so the package holds only what ' +
+        'was reviewed.',
+    );
+  if (found !== null)
+    return refuse(
+      1,
+      `${relative(directory, found.path).split(sep).join('/') || 'the package folder'} cannot be ` +
+        `read (${found.code}), so it cannot be told whether it holds a symbolic link.`,
+    );
   const builder = join(directory, 'build.mjs');
   if (!existsSync(builder) || !readFileSync(builder).equals(readFileSync(TEMPLATE)))
     return refuse(
@@ -227,6 +277,7 @@ function run({
   if (contributed) return refuse(2, contributed);
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
+  if (unreadable !== null) return refuse(3, `package/package.xml cannot be read (${unreadable}).`);
   if (descriptor === null) return refuse(3, 'package/package.xml is missing.');
   if (!name || !version)
     return refuse(3, 'package/package.xml has no <package name="..." version="...">.');
@@ -237,11 +288,39 @@ function run({
       `app.json's packageVersion is ${app.packageVersion}, and package.xml's version is ${version}.` +
         ' They are one version: raise both together.',
     );
+  // The third place: the manifest's Bundle-Version, its lines unfolded as the builder unfolds
+  // them. A manifest that names no Bundle-Version has nothing to disagree with.
+  const manifestFile = join(directory, 'bundle', 'META-INF', 'MANIFEST.MF');
+  if (existsSync(manifestFile)) {
+    const headers = readFileSync(manifestFile, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n /g, '');
+    const bundleVersion = /^Bundle-Version:[ \t]*([^\n]*)$/im.exec(headers)?.[1]?.trim();
+    if (bundleVersion !== undefined && bundleVersion !== version)
+      return refuse(
+        3,
+        `the manifest's Bundle-Version is ${bundleVersion}, and package.xml's version is ${version}.` +
+          " They are one version: raise package.xml's, app.json's and the manifest's together.",
+      );
+  }
   if (tag !== undefined && tag !== `app-package/${name}/${version}`)
     return refuse(
       3,
       `the tag ${tag} is not app-package/${name}/${version}, this package as it is.`,
     );
+  let changelog = null;
+  if (previous !== undefined) {
+    const compared = sinceThePrevious(previous, directory, name);
+    if (typeof compared === 'number') return compared;
+    if (compared.refused !== null) {
+      for (const change of compared.changes) console.error(`  - ${change.level}: ${change.what}`);
+      return refuse(3, compared.refused);
+    }
+    changelog = compared.changelog;
+    // The changelog's first sentence: how many changes, what they need, what was raised.
+    process.stdout.write(`${compared.changelog.split('\n')[0]}\n`);
+  }
 
   // 4. The zip, from version 1's builder, which checks the component XML the way the server does.
   const build = spawnSync(process.execPath, [builder, '--out', output], {
@@ -265,9 +344,11 @@ function run({
     return refuse(5, `${basename(zip)} is not a well-formed Nuxeo Package, and is removed.`);
   }
 
-  // 6. Its checksum, which the publishing job checks before it signs anything.
+  // 6. Its checksum, which the publishing job checks before it signs anything, and what changed.
   const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
   writeFileSync(`${zip}.sha256`, `${digest}  ${basename(zip)}\n`);
+  if (changelog !== null)
+    writeFileSync(changesFile(output, name, version), `# ${name} ${version}\n\n${changelog}`);
   const where = relative(process.cwd(), zip);
   process.stdout.write(
     `${name} ${version}: checked, built and verified: ${where.startsWith('..') ? zip : where}, sha256 ${digest}\n`,
@@ -275,12 +356,127 @@ function run({
   return 0;
 }
 
+/** Where the changelog goes, beside the zip. */
+function changesFile(output, name, version) {
+  return join(output, `${name}-${version}.changes.md`);
+}
+
+/**
+ * The package against the one it was before (`--previous`): the validator's judgement of the
+ * version, as JSON, or the exit code when the comparison could not be made. The previous package is
+ * the operator's input, such as the base branch's copy; one with another name is another package,
+ * and is refused.
+ */
+function sinceThePrevious(previous, directory, name) {
+  if (!existsSync(previous) || !lstatSync(previous).isDirectory()) {
+    console.error(`--previous ${previous} is not a folder.\n${USAGE}`);
+    return 2;
+  }
+  const descriptor = join(previous, 'package', 'package.xml');
+  let previousName = null;
+  try {
+    if (!lstatSync(descriptor).isSymbolicLink())
+      previousName = attribute(
+        withoutCdata(withoutCommentsOrInstructions(readFileSync(descriptor, 'utf8'))),
+        'package',
+        'name',
+      );
+  } catch {
+    // Named below.
+  }
+  if (previousName === null) {
+    console.error(
+      `--previous ${previous} has no package/package.xml naming its package (a link is not followed).\n${USAGE}`,
+    );
+    return 2;
+  }
+  if (previousName !== name)
+    return {
+      changes: [],
+      refused:
+        `the previous package is ${previousName}, and this one is ${name}. A package keeps its` +
+        ' name from one version to the next; a new name is a new package, compared with nothing.',
+    };
+  const compared = spawnSync(
+    process.execPath,
+    [VALIDATOR, 'changes', resolve(previous), resolve(directory)],
+    { encoding: 'utf8', env: withoutCredentials(process.env), maxBuffer: OUTPUT_LIMIT },
+  );
+  if (compared.status !== 0 && compared.status !== 1) {
+    process.stderr.write(compared.stderr ?? '');
+    return 2;
+  }
+  try {
+    return JSON.parse(compared.stdout);
+  } catch {
+    process.stderr.write(compared.stdout ?? '');
+    process.stderr.write(compared.stderr ?? '');
+    return 2;
+  }
+}
+
+/**
+ * The first symbolic link at `path` or anywhere under it, `null` when there is none, or the place
+ * that could not be read, `{ path, code }`: a folder that cannot be read is reported rather than
+ * passed over. Not followed:
+ * a link inside a package can point anywhere.
+ */
+function firstLink(path) {
+  try {
+    const entry = lstatSync(path, { throwIfNoEntry: false });
+    if (!entry) return null;
+    if (entry.isSymbolicLink()) return path;
+    if (!entry.isDirectory()) return null;
+    for (const name of readdirSync(path).sort()) {
+      const found = firstLink(join(path, name));
+      if (found !== null) return found;
+    }
+    return null;
+  } catch (error) {
+    return { path, code: error.code ?? error.message };
+  }
+}
+
+/**
+ * The file a component path names inside the bundle, `''` when there is none (the builder's to
+ * refuse, at step 4), or why it is refused here. Step 1 has already refused any symbolic link in
+ * the package, so what is left is the path itself. A component is read only when the path is
+ * relative, stays inside `bundle/` once resolved (`..` cannot climb out), and names a regular file
+ * with one name: not a folder, and not a hard link, whose other name can be anywhere on the volume.
+ * Read, a component outside the bundle would have its layout attributes quoted back from wherever
+ * it is, to whoever runs the pipeline, an agent included.
+ */
+function componentFileOf(root, component) {
+  const refuse = (why) => ({
+    problem: `the manifest names the component ${component}, which ${why}. A package's components are files in its bundle.`,
+  });
+  if (isAbsolute(component)) return refuse('is an absolute path');
+  const file = resolve(root, component);
+  if (file === root) return refuse('is bundle/ itself');
+  if (!file.startsWith(root + sep)) return refuse('is outside bundle/');
+  let entry;
+  try {
+    entry = lstatSync(file, { throwIfNoEntry: false });
+  } catch (error) {
+    // A path through a file, such as `x.xml/y.xml`, names nothing: the builder's to refuse.
+    if (error.code === 'ENOTDIR') return '';
+    return refuse(`cannot be read: ${error.code ?? error.message}`);
+  }
+  if (!entry) return '';
+  if (!entry.isFile()) return refuse('is a folder, not a file');
+  // A checkout gives every file one name.
+  if (entry.nlink > 1) return refuse('has a second name, a hard link');
+  return file;
+}
+
 /**
  * What is wrong with the layouts the package's components contribute, or `null`. The validator read
  * the files at `layouts/<Type>/<mode>.layout.json`, each in the mode its path names; the server
  * serves what the component says. So a layout written inline, or contributed from another file or
  * in another mode, is one this stage did not check, and is refused rather than passed. A disabled
- * entry contributes nothing and is skipped, as the builder skips it.
+ * entry contributes nothing and is skipped, as the builder skips it. A component path that leaves
+ * `bundle/`, or names a folder or a hard link, is refused before anything is read
+ * (`componentFileOf`).
  */
 function layoutContributions(directory) {
   const bundle = join(directory, 'bundle');
@@ -293,10 +489,18 @@ function layoutContributions(directory) {
   // of what the server loads; a manifest with more than one header, or the header spelt another
   // way, is the builder's to refuse, at step 4.
   const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
+  const root = resolve(bundle);
   for (const component of componentPathsOf(text)) {
-    const file = join(bundle, component);
-    if (!existsSync(file)) continue;
-    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    const file = componentFileOf(root, component);
+    if (typeof file !== 'string') return file.problem;
+    if (file === '') continue;
+    let source;
+    try {
+      source = readFileSync(file, 'utf8');
+    } catch (error) {
+      return `the manifest names the component ${component}, which cannot be read: ${error.code ?? error.message}.`;
+    }
+    const xml = componentXmlOf(source);
     for (const [, tag] of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
       const { type, mode, src, enabled } = attributesOf(tag);
       if (enabled !== undefined && enabled.toLowerCase() !== 'true') continue;

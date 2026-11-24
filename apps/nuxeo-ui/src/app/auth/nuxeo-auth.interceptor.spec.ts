@@ -7,7 +7,7 @@ import {
   withXhr,
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
+import { NUXEO_API_ORIGIN, backgroundRequestContext } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from './auth.service';
 import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
@@ -70,6 +70,45 @@ describe('nuxeoAuthInterceptor', () => {
     const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
     expect(sessionTimeout.expireDueToServer).toHaveBeenCalled();
+  });
+
+  describe('a background request (NUXEO_BACKGROUND_REQUEST)', () => {
+    // The notification bell checks on a timer. If its responses counted as activity, a tab left
+    // open would never reach the idle timeout: the session would stay alive with nobody there.
+    it('does not record activity, so the idle timer is not reset', () => {
+      http.get('/nuxeo/api/v1/task', { context: backgroundRequestContext() }).subscribe();
+      httpMock.expectOne('/nuxeo/api/v1/task').flush({ entries: [] });
+      expect(sessionTimeout.recordActivity).not.toHaveBeenCalled();
+
+      // The same request from the user does: the difference is the token, not the URL.
+      http.get('/nuxeo/api/v1/task').subscribe();
+      httpMock.expectOne('/nuxeo/api/v1/task').flush({ entries: [] });
+      expect(sessionTimeout.recordActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it('still carries the credentials', () => {
+      auth.basicCredentials.and.returnValue(btoa('test-user:test-pass'));
+      http
+        .post(
+          '/nuxeo/api/v1/automation/Repository.Query',
+          {},
+          { context: backgroundRequestContext() },
+        )
+        .subscribe();
+      const req = httpMock.expectOne('/nuxeo/api/v1/automation/Repository.Query');
+      expect(req.request.headers.get('Authorization')).toBe(`Basic ${btoa('test-user:test-pass')}`);
+      req.flush({ entries: [] });
+    });
+
+    it('still ends the session on HTTP 401: a background read must not hide an expired one', () => {
+      http
+        .get('/nuxeo/api/v1/task', { context: backgroundRequestContext() })
+        .subscribe({ error: () => undefined });
+      httpMock
+        .expectOne('/nuxeo/api/v1/task')
+        .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+      expect(sessionTimeout.expireDueToServer).toHaveBeenCalled();
+    });
   });
 
   it('does not expire the session on HTTP 403', () => {

@@ -26,7 +26,7 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
-getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>
+getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>
   // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>
 getSectionTree(): Observable<NuxeoDocumentList>
@@ -121,6 +121,22 @@ resetContext(): void  // restore repository root path (e.g. on sign-out)
 Path helpers: `libs/shared/nuxeo-client/src/lib/utils/browse-path.utils.ts`
 (`parseBrowseNuxeoPathFromRouterUrl`, `cumulativeNuxeoPathPrefixes`, `topLevelNuxeoFolderPath`,
 `nuxeoPathsEqualFlexible`, …).
+
+---
+
+## DocumentChangesService (`document-changes.service.ts`)
+
+Says that documents changed, so the lists following it read their page again: browse's listing
+and each `RecordListComponent`, a record page's related records and a queue's. The platform's row
+actions notify it after a rename, copy, move or delete, since they run from one app-wide
+registration and cannot reload the list they came from. Every list follows every change. Each follower hears of it before `notify()` returns: browse
+reloads at once, a record list on the next change detection. `BrowseContextService
+.requestContentRefresh()` instead asks browse alone, through an effect.
+
+```typescript
+readonly changes: Observable<void>  // one emission per change; follow with takeUntilDestroyed()
+notify(): void  // documents were renamed, copied, moved, trashed or otherwise changed
+```
 
 ---
 
@@ -260,7 +276,8 @@ bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 
 ```typescript
 notifyTasksChanged(): void
-getUserTasks(userId: string, pageSize?: number): Observable<NuxeoTask[]>
+getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>
+  // context reaches every request it makes, the task list and any target read for a title
 getTask(taskId: string): Observable<NuxeoTask>
 getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>
 ```
@@ -398,6 +415,12 @@ it — which renders a broken image beside a still-selected item.
 thumbnail batch, which drops the previews to `null` and degrades the popup to its placeholder. It
 does **not** clear the selection. Callers as of this writing: `search`, `trash`, `assets`, `browse`.
 
+**`offeredBulkActions`** is a signal of the bulk action ids the page holding the selection offers, or
+`null` for every one the `bulk-actions` slot resolves. A queue's page sets those of its file's
+`bulkActions` that have a handler, `[]` while it shows no queue, and puts `null` back when it goes;
+the shell's selection topbar reads it, and offers those of them the slot resolves for the rows
+selected. It is not a security control.
+
 That is deliberately the conservative half. The complete fix is for this service to own preview
 lifetime — hold the blobs, or refetch on demand — so a selection keeps its thumbnails across a
 search. That is a design change to a shared service and has not been made.
@@ -520,6 +543,104 @@ component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, {
 
 ---
 
+## RowActionsService (`libs/shared/ui/src/lib/row-actions/row-actions.service.ts`)
+
+What the platform's row actions do, `app.rowActions.download`, `.rename`, `.copyTo`, `.moveTo` and
+`.delete`, on whichever list offered them. Import: `@nuxeo/satori-platform/ui`. Not provided in
+root: `providePackagedRowActions()` provides it and registers the five handlers once with
+`registerPackaged`, so a customer's `register()` outranks them. `provideAppExtensions()` calls it.
+Its messages go through an environment `NxsToastService` when one is provided, and otherwise
+through its own: it does not provide one to the environment, so a component that forgets
+`provideNxsToast()` still fails. A spec that runs these actions lists `providePackagedRowActions()`
+in `providers`, with `{ provide: NxsToastService, useValue }` to hear its messages.
+
+| Member                       | Notes                                                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `download(doc): void`        | Saves the main file under its own name, through a blob URL revoked at once.                                                                                                        |
+| `rename(doc): void`          | `nxs-rename-dialog`, refused on an `Immutable` document even if a manifest clears the rule.                                                                                        |
+| `copyTo(doc)`, `moveTo(doc)` | `nxs-folder-picker-dialog`, opened on the folder the document is in; a move does not offer that folder, and no folder can be its own destination. Then `Document.Copy` or `.Move`. |
+| `delete(doc): void`          | Confirms, then trashes. A collection goes through the collection's own confirmation; a Collections folder still holding collections is refused.                                    |
+| After a change that succeeds | Asks the folder tree to reload, takes a moved or trashed document out of the selection (all of it, for a collection), and calls `DocumentChangesService.notify()`.                 |
+
+---
+
+## PageProviderService (`page-provider.service.ts`)
+
+Runs a page provider defined on the server: `GET /api/v1/search/pp/<name>/execute`, as the user.
+The record page's related records and a queue's list read through it.
+
+```typescript
+execute(name: string, request: PageProviderRequest): Observable<PageProviderResults>
+isAggregateParameter(name: string): boolean
+```
+
+`PageProviderRequest` carries `parameters`, `pageSize`, `pageIndex`, `sort`, `properties` and
+`aggregates`: the buckets chosen in each aggregate, sent as `<aggregate>=<JSON array>` as the search
+page sends its filters. `PageProviderResults` is the page with the server's `aggregations`. It
+refuses, without a request, a name that is not a page provider's, a page size outside 1 to 1000, a
+sort that is not `<prefix>:<name>`, and an aggregate the search reads for itself (`pageSize`,
+`sortBy`, `properties` and the like) or named with a `.` or a `-`.
+
+```typescript
+isPageProviderName(name: string): boolean
+```
+
+---
+
+## BulkCommandService (`bulk-command.service.ts`)
+
+Nuxeo's Bulk Action Framework over REST, as the user: an action over a page provider's whole
+result on the server, its status, and stopping it. A queue's page runs a bulk action over every
+result of its query through it (`docs/api-integrations.md`, section 34).
+
+```typescript
+runOverPageProvider(name: string, query: BulkCommandQuery, action: string,
+  actionParameters: Readonly<Record<string, unknown>>): Observable<BulkCommandStatus> // POST …/search/pp/<name>/bulk/<action>
+status(commandId: string): Observable<BulkCommandStatus>  // GET …/bulk/<commandId>
+abort(commandId: string): Observable<BulkCommandStatus>   // PUT …/bulk/<commandId>/abort
+readBulkCommandStatus(body: unknown): BulkCommandStatus   // BulkCommandStatusError on anything but a bulkStatus
+```
+
+`BulkCommandQuery` carries the page provider's `parameters` only. There is no way to send a bucket:
+the server leaves chosen buckets out of the command, which would then reach records the list does
+not show. `BulkCommandStatus.ended` is true once the server writes `completed`, not merely
+`ABORTED`: after a stop, the batches already started still finish. It refuses, without a request, a
+name that is not a page provider's, an action that is not a name, an empty parameter and a command
+id that is not a UUID.
+
+---
+
+## QueueService (`libs/shared/queues/src/lib/queue.service.ts`)
+
+Reads an app's `queues/<id>.json` beside the layouts and the home, past the interceptors.
+
+```typescript
+load(id: string): Observable<QueueLoad>   // file | none (404, or an id that is not one) | unreadable
+queueFileUrl(bootstrapUrl: string, id: string): string
+queueLink(id: string): readonly string[]  // ['/queues', id]
+```
+
+---
+
+## NotificationSources (`libs/shared/notifications/src/lib/notification-sources.ts`)
+
+Where the notification bell's items come from. Every request is a background request. Nothing
+writes.
+
+```typescript
+tasks(user: string): Observable<TaskNotification[]>            // TaskService.getUserTasks, newest first
+followed(user: string, since: Date, page?: number): Observable<FollowedPage>
+  // Repository.Query: notif:notifications/*/subscribers/* = 'user:<id>', dc:modified > since, 20 to a page
+changes(wanted: readonly ChangesWanted[], audit: boolean): Observable<ChangesRead & { refused: boolean }>
+  // audit: one Audit.QueryWithPageProvider (administrators only); else one @audit per record; both paged
+```
+
+`NotificationCenter` (provided by the bell) holds the state and runs the checks with
+`NotificationPoller`; `NotificationReadState` keeps what each user has seen, by item, in
+`localStorage`.
+
+---
+
 ## DocumentLayoutService (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)
 
 Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports
@@ -527,10 +648,13 @@ the `<lib-document-layout>` and `<lib-document-layout-form>` components that use
 `readValidationFailure` — not the service — and no `@nuxeo/satori-platform` entry point
 re-exports the library.
 
-| Member                                                                                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `layoutFor(type: string, mode: LayoutMode, documentSchemas: readonly DocumentSchemaRef[] = []): Observable<ResolvedLayout \| null>` | The contributed file for `type`/`mode` if `agentic-ui-config/layouts.json` lists one, else the layout generated from `GET /config/types/<type>` (`fetch-schema: fields`). `documentSchemas` is the `schemas` list of the document's own read: each schema in it the type lacks — one a dynamic facet added — and the layout could show is read from `GET /config/schemas/<name>` (`fetch-schema: fields`), and its section follows the type's own; a layout file may name its fields. The index and files are read without the interceptors, so with no `Authorization` header — though, being same-origin, with the browser's cookies; index, files, types and schemas are each read once per session, except that a failed type or schema read is retried. `null` when the type cannot be read; a schema that cannot be read is left out, and so is a section a layout file leaves with no field to show — as the generated layout leaves out a schema with no fields. Never errors; every fallback is logged under `[agentic-ui-layouts]`. |
-| `vocabularyLabel(directory: string, id: string): Observable<string \| null>`                                                        | The label of one vocabulary entry, from `GET /directory/<directory>/<entry id>` (`translate-directoryEntry: label`, in English) — one read per value a document shows, and one for its parent in an `l10n…` vocabulary, labelled `Parent/Child`; never the whole vocabulary. An `l10n…` value stores the path (`art/architecture`) while the entry's id is its last segment (`architecture`, parent `art`), so the leaf is what is read and the path never is — encoded it is an HTTP 400 and unencoded a 404 (NXSAT-726). Each entry is read once per session; a failed read is logged under `[agentic-ui-layouts]` and retried. `null` when the entry cannot be read. Never errors.                                                                                                                                                                                                                                                                                                                                                         |
+| Member                                                                                                                                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layoutFor(type: string, mode: LayoutMode, documentSchemas: readonly DocumentSchemaRef[] = []): Observable<ResolvedLayout \| null>`                                   | The contributed file for `type`/`mode` if `agentic-ui-config/layouts.json` lists one, else the layout generated from `GET /config/types/<type>` (`fetch-schema: fields`). `documentSchemas` is the `schemas` list of the document's own read: each schema in it the type lacks — one a dynamic facet added — and the layout could show is read from `GET /config/schemas/<name>` (`fetch-schema: fields`), and its section follows the type's own; a layout file may name its fields. The index and files are read without the interceptors, so with no `Authorization` header — though, being same-origin, with the browser's cookies; index, files, types and schemas are each read once per session, except that a failed type or schema read is retried. `null` when the type cannot be read; a schema that cannot be read is left out, and so is a section a layout file leaves with no field to show — as the generated layout leaves out a schema with no fields. Never errors; every fallback is logged under `[agentic-ui-layouts]`. |
+| `formLayoutFor(type: string, mode: 'edit' \| 'create', documentSchemas: readonly DocumentSchemaRef[] = []): Observable<ResolvedLayout \| ResolvedFormLayout \| null>` | The edit or create form: as `layoutFor` for a version 1 file or none, and for a version 2 file (`docs/business-apps/layout-v2.md`, section 11) the file read with `readFormLayout` and resolved with `resolveFormLayout` against the type and the facet schemas its fields name. A version 2 file with a structural error is refused, and the generated form shows; a field naming what this build lacks, or a rule it cannot answer, is left out. `layoutFor` never hands over a version 2 file, and a `metadata` file of version 2 is still refused. Never errors; every fallback is logged under `[agentic-ui-layouts]`.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `taskFormFor(task: NuxeoTask, document: NuxeoDocument): Observable<ResolvedFormLayout \| null>`                                                                       | The task form of the task's workflow step, `tasks/<workflow>.<step>.layout.json` beside `layouts.json`, read as the package writes it, with no envelope and past the interceptors, once per session (`docs/business-apps/app-definition-v2.md`, section 6). Resolved against the record's type and the step's variables: the fields of the `var_*` schemas the task names in `taskInfo.schemas`, then of `var_<workflowModelName>`, each `var:<name>`. `null` when nothing is served for the step (404, silently), when the file is refused or cannot be read, when the type cannot be read, or when a variable schema the file's `var:` fields need cannot be read: the task panel's own form shows, and a failed read is asked again for the next task. Never errors. Only `npm run config:dev -- --task` serves the file for now.                                                                                                                                                                                                          |
+| `taskDocument(uid: string): Observable<NuxeoDocument \| null>`                                                                                                        | `GET /id/<uid>` with `properties: *`: the record a task is on, for its task form. `null` when it cannot be read. Never errors.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `vocabularyLabel(directory: string, id: string): Observable<string \| null>`                                                                                          | The label of one vocabulary entry, from `GET /directory/<directory>/<entry id>` (`translate-directoryEntry: label`, in English) — one read per value a document shows, and one for its parent in an `l10n…` vocabulary, labelled `Parent/Child`; never the whole vocabulary. An `l10n…` value stores the path (`art/architecture`) while the entry's id is its last segment (`architecture`, parent `art`), so the leaf is what is read and the path never is — encoded it is an HTTP 400 and unencoded a 404 (NXSAT-726). Each entry is read once per session; a failed read is logged under `[agentic-ui-layouts]` and retried. `null` when the entry cannot be read. Never errors.                                                                                                                                                                                                                                                                                                                                                         |
 
 ---
 
@@ -566,8 +690,15 @@ Consumers reading it would have built against a synchronous, non-nullable contra
 Low-level HTTP wrapper. **Do not inject directly in features or components.**
 
 ```typescript
-get<T>(path: string, options?: HttpOptions): Observable<T>
-post<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
-put<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
-delete<T>(path: string, options?: HttpOptions): Observable<T>
+apiUrl(path: string): string
+get<T>(path: string, params?: HttpParams, headers?: Record<string, string>, context?: HttpContext): Observable<T>
+post<T>(path: string, body: unknown, headers?: Record<string, string>, context?: HttpContext): Observable<T>
+put<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>
+delete<T>(path: string, headers?: Record<string, string>): Observable<T>
+nxqlSearch(query: string, pageSize: number, headers?: Record<string, string>): Observable<NuxeoDocumentList>
 ```
+
+A request the application sends on its own, on a timer, passes `backgroundRequestContext()` as
+`context` (`background-request.context.ts`): the auth interceptor then does not count its response
+as activity for the idle timer, so it cannot keep a session open. It still carries the credentials,
+and a 401 still ends the session. The notification bell's reads are the only ones today.

@@ -11,7 +11,7 @@
     "extension-rule": {
       "factory": "./src/extension-rule/generator",
       "schema": "./src/extension-rule/schema.json",
-      "description": "Add a named rule evaluator to an existing extension library. A rule gates whether a surface is offered \u2014 it is not authorisation."
+      "description": "Add a named rule evaluator to an existing extension library. A rule gates whether a surface is offered — it is not authorisation."
     },
     "extension-action": {
       "factory": "./src/extension-action/generator",
@@ -33,6 +33,30 @@
       "factory": "./src/config-package/generator",
       "schema": "./src/config-package/schema.json",
       "description": "Scaffold a Nuxeo Marketplace package that configures Satori (Layer 0 and Layer 1 fragments), with a build target that checks the fragments and writes the installable zip."
+    },
+    "app-package": {
+      "factory": "./src/app-package/generator",
+      "schema": "./src/app-package/schema.json",
+      "description": "Scaffold a business app: an app definition package, version 2, with app.json, labels/en.json, the component that contributes its layouts, and version 1's package files. With --type and the content model it writes the first record page too; without one, the pipeline refuses the package until a layout is added, as it refuses every package that contributes nothing. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
+    "app-layout": {
+      "factory": "./src/app-layout/generator",
+      "schema": "./src/app-layout/schema.json",
+      "description": "Write a version 2 view layout, a document type's record page, from the type's schemas in the server's content model (a file, or read live), and have the package's component contribute it. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
+    "app-queue": {
+      "factory": "./src/app-queue/generator",
+      "schema": "./src/app-queue/schema.json",
+      "description": "Write a queue for a business app: a page provider's records, with columns, a sort and a page size. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
+    "app-action": {
+      "factory": "./src/app-action/generator",
+      "schema": "./src/app-action/schema.json",
+      "description": "Add an action to a business app: a lifecycle transition or an allowed Automation operation, on the record page or a queue. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
     }
   }
 }

@@ -27,6 +27,7 @@ import {
   type ExtensionActionHandler,
 } from '@nuxeo/satori-platform/extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { TaskFormComponent } from '@agentic-ui/shared/document-layouts';
 import {
   NXS_ASSET_FACETS_DRAWER_ID,
   NXS_ASSET_GRID_ID,
@@ -37,6 +38,7 @@ import {
   NXS_PUBLISH_DIALOG_ID,
   NXS_STORYBOARD_ID,
   NXS_TASK_DETAIL_ID,
+  NXS_TASK_FORM_ID,
   NXS_TRASH_LIST_ID,
   NxsAdminGroupDetailsPageComponent,
   NxsAdminUserDetailsPageComponent,
@@ -50,6 +52,7 @@ import {
   NxsTrashListComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
+import { providePackagedRowActions } from '@nuxeo/satori-platform/ui';
 
 import { AuthService } from '../auth/auth.service';
 
@@ -65,8 +68,13 @@ type BulkActionModule = typeof import('./bulk-action.services');
  * registration eager — so the descriptors are always addressable — while the
  * code stays where it was.
  */
-function bulkHandler(injector: Injector, name: keyof BulkActionModule): ExtensionActionHandler {
+function bulkHandler(
+  injector: Injector,
+  name: keyof BulkActionModule,
+  options: { readonly wholeQuery?: true } = {},
+): ExtensionActionHandler {
   return {
+    ...options,
     execute: (context) => {
       void import('./bulk-action.services')
         // The keyed lookup widens to a union of the six service classes, which
@@ -133,6 +141,10 @@ function provideAppContributions(): EnvironmentProviders {
         [EXTENSION_SLOTS.toolbar]: PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
         [EXTENSION_SLOTS.tabs]: PACKAGED_DOCUMENT_TABS,
         [EXTENSION_SLOTS.contextMenu]: PACKAGED_BROWSE_CONTEXT_MENU,
+        // The menu on each row of a list. Its handlers act on the row alone, so
+        // they are registered once for the whole app, by
+        // `providePackagedRowActions()` below, and run from every list that
+        // offers them: browse's, a record page's related records, and a queue's.
         [EXTENSION_SLOTS.rowActions]: PACKAGED_ROW_ACTIONS,
       },
 
@@ -145,7 +157,11 @@ function provideAppContributions(): EnvironmentProviders {
         'app.bulkActions.compare': bulkHandler(injector, 'BulkCompareActionService'),
         'app.bulkActions.addToClipboard': bulkHandler(injector, 'BulkAddToClipboardActionService'),
         'app.bulkActions.publish': bulkHandler(injector, 'BulkPublishActionService'),
-        'app.bulkActions.delete': bulkHandler(injector, 'BulkDeleteActionService'),
+        // Trashing the selection is what `app.bulkActions.delete` maps to over a whole query, the
+        // framework's `trash` (PACKAGED_WHOLE_QUERY_BULK_ACTIONS), so this handler declares it.
+        'app.bulkActions.delete': bulkHandler(injector, 'BulkDeleteActionService', {
+          wholeQuery: true,
+        }),
       },
 
       // Drawer panels that live in lazy-loaded feature libraries, so a manifest
@@ -200,6 +216,11 @@ function provideAppContributions(): EnvironmentProviders {
         // The task panel of the tasks page: reading a task and completing it. The page renders it
         // through its ID, so a customer library can re-register it.
         [NXS_TASK_DETAIL_ID]: NxsTaskDetailComponent,
+        // A task's own form, inside that panel: the fields its workflow step's task form draws
+        // (app-definition-v2.md, section 6). By class, not behind `import()`: the shell's
+        // translation loader imports the document-layouts engine eagerly for the labels index, so
+        // a lazy import of it would load nothing later, and the module-boundary rule rejects the mix.
+        [NXS_TASK_FORM_ID]: TaskFormComponent,
         // The trash list. `/trash` renders it through this ID, so a customer library can replace
         // it, and falls back to the packaged component when no registration resolves.
         [NXS_TRASH_LIST_ID]: NxsTrashListComponent,
@@ -292,7 +313,19 @@ function provideRuleContextWiring(): Provider {
   };
 }
 
-/** Layer 1 registration, the live rule context, and manifest-declared routes. */
+/**
+ * Layer 1 registration, the live rule context, manifest-declared routes, and the platform's row
+ * actions.
+ *
+ * The row actions are registered with `registerPackaged`, not through the `actions` above, which
+ * `provideSatoriExtensions()` registers in the customer tier: a customer's `register()` for an
+ * `app.rowActions.*` id must outrank the platform's handler whichever runs first.
+ */
 export function provideAppExtensions(): (Provider | EnvironmentProviders)[] {
-  return [provideAppContributions(), provideRuleContextWiring(), provideExtensionRoutes()];
+  return [
+    provideAppContributions(),
+    provideRuleContextWiring(),
+    provideExtensionRoutes(),
+    providePackagedRowActions(),
+  ];
 }

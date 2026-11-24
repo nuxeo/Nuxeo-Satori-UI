@@ -35,11 +35,11 @@ describe('inventory', () => {
 
   it('lists a file it does not know as unrecognised, never drops it', () => {
     const result = of({
-      bundle: { [`${UI}/workflow/review/nuxeo-review-task-layout.html`]: '<p></p>' },
+      bundle: { [`${UI}/mystery/review/nuxeo-review-panel.html`]: '<p></p>' },
     });
     expect(
       result.files.filter((file) => file.kind === 'unrecognised').map((file) => file.path),
-    ).toEqual([`${UI}/workflow/review/nuxeo-review-task-layout.html`]);
+    ).toEqual([`${UI}/mystery/review/nuxeo-review-panel.html`]);
     expect(classify('notes.txt', 'package', SYNTHETIC_BUNDLE)).toBe('unrecognised');
   });
 
@@ -81,6 +81,8 @@ describe('inventory', () => {
         required: false,
         condition: null,
       },
+      { element: 'div', binding: 'cl:reserve', label: 'Reserve', required: false, condition: 0 },
+      { element: 'div', binding: 'cl:tags', label: 'Tags', required: false, condition: 1 },
     ]);
     expect(fields(1)).toEqual([
       {
@@ -116,10 +118,22 @@ describe('inventory', () => {
     ]);
     expect(synthetic.conditions.map((c) => [c.path, c.index, c.element, c.attributes])).toEqual([
       [
+        `${UI}/document/claim/nuxeo-claim-view-layout.html`,
+        0,
+        'nuxeo-filter',
+        { document: '[[document]]', type: 'Claim' },
+      ],
+      [
+        `${UI}/document/claim/nuxeo-claim-view-layout.html`,
+        1,
+        'template',
+        { is: 'dom-if', if: "[[hasFacet(document, 'Versionable')]]" },
+      ],
+      [
         `${UI}/document/claim/nuxeo-claim-metadata-layout.html`,
         0,
         'nuxeo-filter',
-        { document: '[[document]]', group: 'adjusters' },
+        { document: '[[document]]', user: '[[user]]', group: 'adjusters' },
       ],
       [
         `${UI}/search/claims/nuxeo-claims-search-results.html`,
@@ -131,7 +145,7 @@ describe('inventory', () => {
         `${UI}/nuxeo-Acme-Claims-bundle.html`,
         0,
         'nuxeo-filter',
-        { document: '[[document]]', permission: 'WriteProperties' },
+        { document: '[[document]]', permission: 'Write, WriteProperties' },
       ],
     ]);
     const domIf = of({
@@ -147,7 +161,7 @@ describe('inventory', () => {
           ),
       },
     });
-    expect(domIf.layouts[0].fields.map((field) => field.condition)).toEqual([null, 0, null]);
+    expect(domIf.layouts[0].fields.map((field) => field.condition)).toEqual([null, 0, null, 1, 2]);
     expect(domIf.conditions[0]).toMatchObject({
       element: 'template',
       attributes: { is: 'dom-if' },
@@ -282,7 +296,7 @@ describe('inventory', () => {
       'nuxeo-data-table': 3,
       'nuxeo-card': 3,
       'nuxeo-date': 3,
-      'nuxeo-filter': 3,
+      'nuxeo-filter': 4,
       'nuxeo-input': 2,
       'nuxeo-operation-button': 2,
       'nuxeo-page-provider': 2,

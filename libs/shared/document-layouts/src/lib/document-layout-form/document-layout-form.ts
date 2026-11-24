@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  LOCALE_ID,
   computed,
   effect,
   inject,
@@ -23,25 +24,44 @@ import {
   ExtensionComponentRegistry,
   ExtensionOutletComponent,
   ExtensionRuleContextService,
+  ExtensionRuleRegistry,
   type DocumentLayoutChange,
   type ExtensionDocumentLayoutDescriptor,
+  type ExtensionRule,
 } from '@nuxeo/satori-platform/extensions';
-import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import type { NuxeoDocument, NuxeoTask } from '@nuxeo/satori-platform/nuxeo-client';
 import { distinctUntilChanged, map, merge, of, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
+import { formView, type FormView } from '../form-layout/form-view';
+import type { ResolvedFormLayout } from '../form-layout/resolve-form-layout';
 import { layoutLabelText, toEditorSections } from '../layout-label';
 import { documentToCreate, layoutSlotEntry } from '../layout-slot';
-import { DocumentSchemaRef, ResolvedLayout } from '../layout.model';
+import { DocumentSchemaRef, LayoutLabel, ResolvedLayout } from '../layout.model';
 import { readDocumentSchemas } from '../resolve-layout';
+import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from '../record-page/record-clock';
+import { showValue, viewText, type RecordValueContext } from '../record-page/record-field-view';
+import {
+  LookupCollector,
+  NO_LABELS,
+  labelLookups,
+  readLabels,
+  sameLookups,
+  type Lookups,
+} from '../record-page/record-lookups';
 
-/** The two modes that are forms. */
-export type LayoutFormMode = 'edit' | 'create';
+/**
+ * The modes that are forms: a document's edit and create forms, and a workflow task's form over
+ * the record it is on (app-definition-v2.md, section 6).
+ */
+export type LayoutFormMode = 'edit' | 'create' | 'task';
 
 interface FormTarget {
   readonly type: string;
   readonly mode: LayoutFormMode;
   readonly schemas: readonly DocumentSchemaRef[];
+  /** A task form's task and record; `null` in the other modes. */
+  readonly task: { readonly task: NuxeoTask; readonly document: NuxeoDocument } | null;
 }
 
 const sameTarget = (a: FormTarget | null, b: FormTarget | null): boolean =>
@@ -51,10 +71,33 @@ const sameTarget = (a: FormTarget | null, b: FormTarget | null): boolean =>
     a.type === b.type &&
     a.mode === b.mode &&
     a.schemas.length === b.schemas.length &&
-    a.schemas.every((schema, i) => schema.name === b.schemas[i]?.name));
+    a.schemas.every((schema, i) => schema.name === b.schemas[i]?.name) &&
+    a.task?.task.id === b.task?.task.id &&
+    a.task?.document.uid === b.task?.document.uid);
+
+/** A task's variables as a form's values: each `<name>` is the field `var:<name>`. */
+function variableValues(task: NuxeoTask | null): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(task?.variables ?? {}).map(([name, value]) => [`var:${name}`, value]),
+  );
+}
 
 const NO_VALUES: NxsEditorValues = {};
+const NO_ERRORS: Readonly<Record<string, string>> = {};
 const NOTHING_REPORTED: DocumentLayoutChange = { properties: {}, valid: false };
+
+/** A layout from a version 2 file, rather than version 1's or a generated one. */
+const isVersion2 = (layout: ResolvedLayout | ResolvedFormLayout): layout is ResolvedFormLayout =>
+  'version' in layout && layout.version === 2;
+
+/** What the editor is given, compared whole, so that a value typed that changes nothing redraws nothing. */
+const sameJson = <T>(a: T, b: T): boolean => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/** The words a failed check says when the file gives it no label of its own. */
+const CHECK_TEXT_KEYS: Readonly<Record<string, string>> = {
+  'core.notBefore': 'document-layouts.form.check.not-before',
+  'core.atMost': 'document-layouts.form.check.at-most',
+};
 
 /**
  * The edit or create form for a document type: the type's layout in that mode, in the metadata
@@ -64,9 +107,20 @@ const NOTHING_REPORTED: DocumentLayoutChange = { properties: {}, valid: false };
  * schemas — and, for an edit, from the schemas the document's dynamic facets add. A layout that
  * cannot be resolved leaves the Dublin Core fields, so the form degrades rather than breaks.
  *
+ * A file of version 2 draws only what it lists (layout-v2.md): its cards as the form's sections,
+ * or its tabs, each widget as its field's input, fields required or read-only while a rule passes,
+ * and checks across fields, each saying beside its field why it failed. Its rules see the values
+ * being entered, so a field shown by another field's value appears as soon as it is chosen. None
+ * of it is a security control: the server's permissions decide what anyone can change.
+ *
  * The host owns Save: it calls `validate()`, then sends `changedProperties()` — what the user
  * changed, so a create leaves untouched fields to their server defaults — and hands Nuxeo's
  * validation messages back to `showServerErrors()`.
+ *
+ * In the `task` mode it is a workflow task's form, given the `task` and the `document` it is on: the
+ * step's task form, `tasks/<workflow>.<step>.layout.json`, when one is served, and nothing at all
+ * otherwise, so that the task panel shows its own. `taskFormDrawn()` says which, and
+ * `taskVariables()` gives the step's variables to complete the task with.
  */
 @Component({
   selector: 'lib-document-layout-form',
@@ -83,8 +137,13 @@ const NOTHING_REPORTED: DocumentLayoutChange = { properties: {}, valid: false };
 })
 export class DocumentLayoutFormComponent {
   readonly mode = input.required<LayoutFormMode>();
-  /** The document edited. Its type and facets choose the layout, its properties fill the form. */
+  /**
+   * The document edited, or for a task form the record the task is on. Its type and facets choose
+   * the layout, its properties fill the form.
+   */
   readonly document = input<NuxeoDocument | null>(null);
+  /** The task a task form is for. Ignored in the other modes. */
+  readonly task = input<NuxeoTask | null>(null);
   /** The type created. Ignored for an edit, which reads the document's. */
   readonly type = input<string | null>(null);
   /** The folder a new document is created in. */
@@ -101,13 +160,20 @@ export class DocumentLayoutFormComponent {
   private readonly extensions = inject(AppExtensionsService);
   private readonly components = inject(ExtensionComponentRegistry);
   private readonly ruleContext = inject(ExtensionRuleContextService);
+  private readonly rules = inject(ExtensionRuleRegistry);
   private readonly translate = inject(TranslateService);
+  private readonly locale = inject(LOCALE_ID);
+  private readonly today = inject(RECORD_PAGE_TODAY);
+  private readonly timeZone = inject(RECORD_PAGE_TIME_ZONE);
   private readonly editor = viewChild(NxsMetadataEditorComponent);
   private readonly outlet = viewChild(ExtensionOutletComponent);
 
-  /** The type the form is for: the document's for an edit, the one asked for for a create. */
+  /**
+   * The type the form is for: the document's for an edit and a task form, the one asked for for a
+   * create.
+   */
   readonly formType = computed<string | null>(() =>
-    this.mode() === 'edit' ? (this.document()?.type ?? null) : this.type(),
+    this.mode() === 'create' ? this.type() : (this.document()?.type ?? null),
   );
 
   /**
@@ -117,7 +183,8 @@ export class DocumentLayoutFormComponent {
   readonly entry = computed<ExtensionDocumentLayoutDescriptor | null>(() => {
     const mode = this.mode();
     const type = this.formType();
-    if (!type) return null;
+    // A task form has no slot of its own: the task panel's component is replaced whole instead.
+    if (!type || mode === 'task') return null;
     const document = mode === 'edit' ? this.document() : documentToCreate(type, this.parentPath());
     return layoutSlotEntry(this.extensions, this.components, mode, {
       ...this.ruleContext.context(),
@@ -162,10 +229,14 @@ export class DocumentLayoutFormComponent {
       const mode = this.mode();
       const document = this.document();
       const schemas =
-        mode === 'edit' && document && 'schemas' in document
+        mode !== 'create' && document && 'schemas' in document
           ? readDocumentSchemas(document.schemas)
           : [];
-      return { type, mode, schemas };
+      const task = this.task();
+      if (mode === 'task') {
+        return task && document ? { type, mode, schemas, task: { task, document } } : null;
+      }
+      return { type, mode, schemas, task: null };
     },
     { equal: sameTarget },
   );
@@ -175,11 +246,22 @@ export class DocumentLayoutFormComponent {
       distinctUntilChanged(),
       switchMap((target) =>
         target
-          ? this.layouts.layoutFor(target.type, target.mode, target.schemas).pipe(
-              map((layout): { target: FormTarget; layout: ResolvedLayout | null } => ({
-                target,
-                layout,
-              })),
+          ? (target.task
+              ? this.layouts.taskFormFor(target.task.task, target.task.document)
+              : this.layouts.formLayoutFor(
+                  target.type,
+                  target.mode === 'task' ? 'edit' : target.mode,
+                  target.schemas,
+                )
+            ).pipe(
+              map(
+                (
+                  layout,
+                ): { target: FormTarget; layout: ResolvedLayout | ResolvedFormLayout | null } => ({
+                  target,
+                  layout,
+                }),
+              ),
             )
           : of(null),
       ),
@@ -188,7 +270,7 @@ export class DocumentLayoutFormComponent {
   );
 
   /** `undefined` while resolving; `null` when the type could not be read. */
-  private readonly layout = computed<ResolvedLayout | null | undefined>(() => {
+  private readonly layout = computed<ResolvedLayout | ResolvedFormLayout | null | undefined>(() => {
     const resolved = this.resolved();
     return resolved && resolved.target === this.target() ? resolved.layout : undefined;
   });
@@ -196,24 +278,180 @@ export class DocumentLayoutFormComponent {
   /** Bumped when the language or a catalogue changes, so labels resolved with `instant` follow. */
   private readonly translations = signal(0);
 
-  protected readonly sections = computed(() => {
-    this.translations();
-    const layout = this.layout();
-    return layout
-      ? toEditorSections(layout, (label) => layoutLabelText(this.translate, label))
-      : [];
-  });
+  /** What the editor last said is being entered: what a version 2 file's rules and checks read. */
+  private readonly entered = signal<NxsEditorValues>(NO_VALUES);
 
-  protected readonly display = computed(() => this.layout()?.display ?? 'sections');
+  /** The console has been told, once per form, what a version 2 file's rules or checks could not do. */
+  private readonly told = new Set<string>();
 
-  /** `contributed` or `generated`; `none` when the type could not be read and only Dublin Core shows. */
-  protected readonly layoutSource = computed(() => this.layout()?.source ?? 'none');
-
-  protected readonly values = computed<NxsEditorValues>(() =>
-    this.mode() === 'edit' ? (this.document()?.properties ?? NO_VALUES) : NO_VALUES,
+  /**
+   * The users, groups and vocabulary entries a version 2 form's read-only fields name: those are
+   * shown by name, as on the record page. An editable field's input reads its own.
+   */
+  private readonly lookups = computed<Lookups>(
+    () => {
+      const layout = this.layout();
+      const collector = new LookupCollector();
+      if (!layout || !isVersion2(layout)) return collector.lookups();
+      const properties = this.values();
+      const cards = layout.tabs ? layout.tabs.flatMap((tab) => tab.cards) : layout.cards;
+      for (const field of cards.flatMap((card) => card.fields)) {
+        // The record's own properties in a task form, and any field a rule can make read-only.
+        const mayBeReadOnly =
+          field.kind === 'property' &&
+          (field.readOnlyWhen !== null ||
+            (layout.kind === 'task' && !field.xpath.startsWith('var:')));
+        if (mayBeReadOnly)
+          collector.value(
+            field.widget,
+            field.parameters,
+            field.definition,
+            properties[field.xpath],
+          );
+      }
+      return collector.lookups();
+    },
+    { equal: sameLookups },
   );
 
-  /** The form is on screen: a contributed one, or the layout resolved — even to nothing. */
+  /** Shown as the stored ids until the labels arrive, and as the id wherever one cannot be read. */
+  private readonly labels = toSignal(
+    toObservable(this.lookups).pipe(switchMap((lookups) => readLabels(this.layouts, lookups))),
+    { initialValue: NO_LABELS },
+  );
+
+  /** A version 2 form for the values being entered; `null` for any other layout. */
+  private readonly view = computed<FormView | null>(() => {
+    this.translations();
+    const layout = this.layout();
+    if (!layout || !isVersion2(layout)) return null;
+    const document = this.ruleDocument();
+    const value = (xpath: string): unknown => document.properties[xpath];
+    const ruleContext = { ...this.ruleContext.context(), document };
+    const passes = (rule: unknown): boolean =>
+      rule === null || this.rules.evaluate(rule as ExtensionRule, ruleContext);
+    const label = (entry: LayoutLabel): string | null => layoutLabelText(this.translate, entry);
+    const flagText = (flag: boolean): string =>
+      this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no');
+    const widgets: RecordValueContext = {
+      locale: this.locale,
+      today: this.today(),
+      timeZone: this.timeZone,
+      ...labelLookups(this.labels()),
+      property: value,
+      label,
+      flagText,
+      rule: passes,
+    };
+    return formView(layout, {
+      value,
+      rule: passes,
+      label,
+      valueText: (input, widget) => viewText(showValue(input, widget, widgets), flagText),
+      checkText: (type, field, bound) =>
+        this.translate.instant(CHECK_TEXT_KEYS[type] ?? 'document-layouts.form.check.failed', {
+          label: field,
+          bound,
+        }),
+      today: widgets.today,
+      tell: (message) => this.tell(message),
+    });
+  });
+
+  /**
+   * The document a version 2 file's rules read: the one edited, or the one being created, with
+   * the form's values and then the values being entered over its own. The form's values include
+   * a task's variables, so a read-only `var:` field, which the editor does not give back, is still
+   * read as the task holds it.
+   */
+  private readonly ruleDocument = computed<NuxeoDocument>(() => {
+    const type = this.formType() ?? '';
+    const base =
+      this.mode() === 'create'
+        ? documentToCreate(type, this.parentPath())
+        : (this.document() ?? documentToCreate(type, null));
+    return {
+      ...base,
+      properties: { ...base.properties, ...this.values(), ...this.entered() },
+    };
+  });
+
+  protected readonly sections = computed(
+    () => {
+      this.translations();
+      const view = this.view();
+      if (view) return view.sections;
+      const layout = this.layout();
+      return layout && !isVersion2(layout)
+        ? toEditorSections(layout, (label) => layoutLabelText(this.translate, label))
+        : [];
+    },
+    { equal: sameJson },
+  );
+
+  protected readonly display = computed(() => {
+    const layout = this.layout();
+    if (!layout) return 'sections';
+    return isVersion2(layout) ? (this.view()?.display ?? 'sections') : layout.display;
+  });
+
+  /** The failed checks of a version 2 file, by field. */
+  protected readonly fieldErrors = computed(() => this.view()?.errors ?? NO_ERRORS, {
+    equal: sameJson,
+  });
+
+  /** A version 2 file draws only what it lists; any other layout comes after the Dublin Core fields. */
+  protected readonly dublinCore = computed(() => {
+    const layout = this.layout();
+    return !layout || !isVersion2(layout);
+  });
+
+  /**
+   * `contributed` or `generated`, or `version-2` for a version 2 file; `none` when the type could
+   * not be read and only Dublin Core shows.
+   */
+  protected readonly layoutSource = computed(() => {
+    const layout = this.layout();
+    if (!layout) return 'none';
+    return isVersion2(layout) ? 'version-2' : layout.source;
+  });
+
+  /**
+   * A task's variables, as `var:<name>`, compared whole: the same task fetched again, after a
+   * delegation say, holds the same variables, and the editor keeps what was typed.
+   */
+  private readonly taskValues = computed(() => variableValues(this.task()), { equal: sameJson });
+
+  /** The document's properties; in a task form, the task's variables too, as `var:<name>`. */
+  protected readonly values = computed<NxsEditorValues>(() => {
+    const mode = this.mode();
+    if (mode === 'create') return NO_VALUES;
+    const properties = this.document()?.properties ?? NO_VALUES;
+    return mode === 'task' ? { ...properties, ...this.taskValues() } : properties;
+  });
+
+  /** A task form is on screen: the task's step has one, served and drawn. */
+  readonly taskFormDrawn = computed(() => {
+    const layout = this.layout();
+    return this.mode() === 'task' && !!layout && isVersion2(layout) && layout.kind === 'task';
+  });
+
+  /**
+   * The editor shows: a form resolved, even to nothing, or in a task form one the step has. A task
+   * with no task form shows nothing, and no spinner while that is found out, so the task panel's
+   * own form is all that shows.
+   */
+  protected readonly showsEditor = computed(
+    () => this.layout() !== undefined && (this.mode() !== 'task' || this.taskFormDrawn()),
+  );
+  protected readonly showsSpinner = computed(
+    () => this.layout() === undefined && this.mode() !== 'task',
+  );
+
+  /**
+   * The form is resolved: a contributed one, or the layout, even to nothing. In the `task` mode
+   * that can be nothing drawn at all; `taskFormDrawn()` says whether a task form is on screen.
+   */
   readonly ready = computed(() => this.usesEntry() || this.layout() !== undefined);
 
   constructor() {
@@ -232,8 +470,16 @@ export class DocumentLayoutFormComponent {
         const wasValid = this.reported().valid;
         this.reported.set(NOTHING_REPORTED);
         this.showErrors.set(false);
+        this.told.clear();
         if (wasValid) this.validChange.emit(false);
       });
+    });
+    // What was entered is forgotten when the editor starts over, which it does for a new `values`
+    // object, and only then: a create form whose folder changes keeps what was typed, and its
+    // rules must keep reading it. The editor gives its values again once it is built.
+    effect(() => {
+      this.values();
+      untracked(() => this.entered.set(NO_VALUES));
     });
   }
 
@@ -242,6 +488,20 @@ export class DocumentLayoutFormComponent {
     this.showErrors.set(true);
     if (this.usesEntry()) return this.reported().valid;
     return this.editor()?.validate() ?? false;
+  }
+
+  /**
+   * A task form's variables to complete the task with, by their names: every variable the form
+   * edits, as entered. Neither a read-only field nor a record property is one.
+   */
+  taskVariables(): Record<string, unknown> {
+    if (!this.taskFormDrawn()) return {};
+    const entered = this.editor()?.properties() ?? {};
+    return Object.fromEntries(
+      Object.entries(entered)
+        .filter(([xpath]) => xpath.startsWith('var:'))
+        .map(([xpath, value]) => [xpath.slice('var:'.length), value]),
+    );
   }
 
   /**
@@ -265,6 +525,16 @@ export class DocumentLayoutFormComponent {
 
   protected editorValidChange(valid: boolean): void {
     this.validChange.emit(valid);
+  }
+
+  protected editorValuesChange(values: NxsEditorValues): void {
+    this.entered.set(values);
+  }
+
+  private tell(message: string): void {
+    if (this.told.has(message)) return;
+    this.told.add(message);
+    console.warn(`[agentic-ui-layouts] ${message}`);
   }
 
   private readonly onChange = (change: DocumentLayoutChange): void => {

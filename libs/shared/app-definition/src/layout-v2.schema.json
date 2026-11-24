@@ -112,20 +112,27 @@
         },
         "related": {
           "$ref": "#/$defs/related"
+        },
+        "timeline": {
+          "$ref": "#/$defs/timeline"
+        },
+        "comments": {
+          "$ref": "#/$defs/comments"
         }
       },
+      "description": "A card shows one of fields, related records, a timeline or comments.",
       "oneOf": [
         {
-          "required": ["fields"],
-          "not": {
-            "required": ["related"]
-          }
+          "required": ["fields"]
         },
         {
-          "required": ["related"],
-          "not": {
-            "required": ["fields"]
-          }
+          "required": ["related"]
+        },
+        {
+          "required": ["timeline"]
+        },
+        {
+          "required": ["comments"]
         }
       ]
     },
@@ -397,6 +404,43 @@
               "app.rowActions.delete"
             ]
           }
+        }
+      }
+    },
+    "timeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "View mode only. The record's history from the server's audit, newest first.",
+      "properties": {
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The audit events it shows, by ID, such as documentModified. Without it, the record's own changes (layout-v2.md, section 7).",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+          }
+        },
+        "filter": {
+          "type": "boolean",
+          "description": "Offers the reader a filter by kind of event. Default false."
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "comments": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "View mode only. The record's comments and their replies.",
+      "properties": {
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
         }
       }
     }

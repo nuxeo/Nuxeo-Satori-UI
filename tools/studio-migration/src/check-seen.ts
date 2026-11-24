@@ -13,12 +13,18 @@
  * server: it has not run, and the check says so.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
-import { LAYOUT_VERSION, isBound, labelOf, layoutPath } from './app-files';
-import { layoutFields, listColumns } from './app-walk';
+import { appIdOf, isBound, labelOf } from './app-files';
+import { listColumns } from './app-walk';
+import { layoutCards } from './blocks';
 import { listed } from './check-model';
-import { labelsOf, readCatalogue } from './convert';
+import { labelsOf, readCatalogue, recordedAllowList } from './convert';
 import { PANEL_ROWS } from './convert-layouts';
+import { own } from './catalogue';
+import { homeCards, menuEntries } from './convert-home';
 import { menuLabel, queueOwners } from './convert-lists';
+import { actionOwners } from './convert-slots';
+import { formPlaces, shownIn, tabOf } from './forms';
+import { slotRegistry } from './slot-registry';
 import type { CheckOutcome, HarnessInput } from './harness';
 import { fieldWidget } from './widgets';
 
@@ -72,6 +78,17 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
       return normal(appTexts[fallbackKey]);
     return name === null ? null : readable(name);
   };
+  /**
+   * What Web UI shows for a label its element translates as a key, `[[i18n(label)]]`, as a page
+   * item, a menu icon and an operation button do: the text the package gives the key, or else the
+   * label as written, as Web UI shows a key no catalogue holds.
+   */
+  const translated = (label: string | null): Resolved => {
+    if (label === null || label.trim() === '') return null;
+    const key = label.trim();
+    const value = Object.hasOwn(webTexts, key) ? webTexts[key] : undefined;
+    return typeof value === 'string' ? normal(value) : normal(key);
+  };
   const compare = (where: string, webLabel: Resolved, appLabel: Resolved): void => {
     if (webLabel === null || webLabel === UNKNOWN || appLabel === UNKNOWN) return;
     if (appLabel !== webLabel)
@@ -80,29 +97,40 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
       );
   };
 
-  const compared = new Set<string>();
-  for (const layout of inventory.layouts) {
-    if (layout.docType === null || !Object.hasOwn(LAYOUT_VERSION, layout.mode)) continue;
-    const path = layoutPath(layout.docType, layout.mode);
-    // The first layout of a type and mode is the one written; a later one is reported.
-    if (compared.has(path)) continue;
-    compared.add(path);
-    const fields = layoutFields(conversion.app[path]);
+  // Layouts, with the layout blocks they use, their tabs, and task forms: each field named as
+  // Web UI names it, and each tab as its page item does.
+  for (const place of formPlaces(pkg, inventory)) {
+    const fields = shownIn(conversion.app[place.path], place.tab);
+    const { cards, fields: placed } = layoutCards(inventory, place.source);
     const seen = new Set<string>();
-    for (const field of layout.fields) {
+    for (const { field, card } of placed) {
       // The field that shows a property is the first one in no condition and of an element the
       // catalogue knows, as check 2 reads it.
       if (field.binding === null || seen.has(field.binding) || field.condition !== null) continue;
+      if (!place.options.inTab && (cards[card].use?.conditions.length ?? 0) > 0) continue;
       if (fieldWidget(catalogue, field.element, field.attributes) === null) continue;
       seen.add(field.binding);
-      if (layout.mode === 'metadata' && PANEL_ROWS.has(field.binding)) continue;
+      if (place.options.mode === 'metadata' && PANEL_ROWS.has(field.binding)) continue;
       const match = fields.find((candidate) => candidate.field === field.binding);
       if (!match) continue;
       const name = field.binding.slice(field.binding.indexOf(':') + 1);
       compare(
-        `${path}: ${field.binding}`,
+        `${place.path}: ${field.binding}`,
         web(field.label),
         shown(match.entry, `layout.field.${field.binding}`, name),
+      );
+    }
+    const tab = place.tabPlan;
+    const written = tab ? tabOf(conversion.app[place.path], tab.id) : null;
+    if (tab && written) {
+      const item = tab.item.parts.find((part) => part.element === 'nuxeo-page-item');
+      // Web UI translates a page item's label as a key, and shows the key itself when no
+      // catalogue has it; with no label it shows nothing, where the app shows the tab's id.
+      const label = item ? (own(item.attributes, 'label') ?? null) : null;
+      compare(
+        `${place.path}: the tab ${tab.id}`,
+        translated(label),
+        shown(written.tab, null, tab.id),
       );
     }
   }
@@ -115,7 +143,7 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
     const sources =
       owner.kind === 'search'
         ? owner.search.columnDetails.filter((column) => !column.conditional)
-        : owner.card.columns;
+        : owner.card.columns.filter((column) => !column.conditional);
     const name =
       owner.kind === 'search' ? menuLabel({ inventory }, owner.search) : owner.card.heading;
     if (name !== null) compare(`${path}: its name`, web(name), shown(queue, null, null));
@@ -129,6 +157,115 @@ export function checkSeen({ pkg, inventory, catalogue, conversion }: HarnessInpu
         );
     }
   }
+
+  // The home's cards and the menu's entries, named as the dashboard and the left menu name them.
+  // One with no name of its own shows its queue's, compared above.
+  for (const card of homeCards(inventory)) {
+    const written = listItem(conversion.app['home.json'], 'cards', card.id);
+    const source = inventory.dashboard?.cards[card.index];
+    if (written && source && ('label' in written || 'labelKey' in written))
+      compare(`home.json: ${card.id}`, web(source.heading), shown(written, null, null));
+  }
+  for (const entry of menuEntries(inventory, catalogue)) {
+    const written = listItem(conversion.app['navigation.json'], 'entries', entry.id);
+    const icon = entry.item.parts.find((part) => part.element === 'nuxeo-menu-icon');
+    if (written && icon && ('label' in written || 'labelKey' in written))
+      compare(
+        `navigation.json: ${entry.id}`,
+        translated(own(icon.attributes, 'label') ?? null),
+        shown(written, null, null),
+      );
+  }
+
+  // Each action and menu entry where Web UI's slot places it: its order, as the package writes it
+  // or a later contribution of its name changes it, and none where Web UI's is left to its default.
+  const placedAt = (written: unknown): number | null =>
+    isRecord(written) && typeof written['order'] === 'number' ? written['order'] : null;
+  const actionsFile = conversion.app['actions.json'];
+  const actionList =
+    isRecord(actionsFile) && Array.isArray(actionsFile['actions']) ? actionsFile['actions'] : [];
+  const owners = actionOwners(inventory, catalogue, appIdOf(pkg), recordedAllowList(conversion));
+  for (const [id, owner] of owners) {
+    const written = actionList.find((action) => isRecord(action) && action['id'] === id);
+    // Named as its button is: the button Web UI's slot keeps, not one it left out.
+    if (isRecord(written))
+      compare(
+        `actions.json: ${id}`,
+        translated(own(owner.attributes, 'label') ?? null),
+        shown(written, null, null),
+      );
+    const want = Number.isInteger(owner.order) ? owner.order : null;
+    if (written !== undefined && placedAt(written) !== want)
+      findings.push(
+        `actions.json: ${id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${owner.contribution.name}" at ${owner.order}`,
+      );
+  }
+  const registry = slotRegistry(inventory);
+  for (const entry of menuEntries(inventory, catalogue)) {
+    const written = listItem(conversion.app['navigation.json'], 'entries', entry.id);
+    const order = registry.kept.get(entry.item)?.order;
+    const want = order !== undefined && Number.isInteger(order) ? order : null;
+    if (written !== undefined && placedAt(written) !== want)
+      findings.push(
+        `navigation.json: ${entry.id} is at order ${placedAt(written) ?? 'none'}, where Web UI's slot places "${entry.item.name}" at ${want ?? 'none'}`,
+      );
+  }
+
+  // Equals in the places Web UI's slot gives them: the app keeps a file's order between equal
+  // orders, so two of one order the file lists the other way round show the other way round.
+  const placeOf = (list: unknown[], id: string): number =>
+    list.findIndex((item) => isRecord(item) && item['id'] === id);
+  const misplaced = (
+    file: string,
+    list: unknown[],
+    ranked: readonly {
+      readonly id: string;
+      readonly slot: string;
+      readonly order: number;
+      readonly rank: number;
+      readonly name: string;
+    }[],
+  ): void => {
+    for (const a of ranked)
+      for (const b of ranked) {
+        if (a.slot !== b.slot || a.order !== b.order || a.rank >= b.rank) continue;
+        const [first, second] = [placeOf(list, a.id), placeOf(list, b.id)];
+        if (first !== -1 && second !== -1 && first > second)
+          findings.push(
+            `${file}: ${b.id} comes before ${a.id}, where Web UI's slot shows "${a.name}" first, both at order ${a.order}`,
+          );
+      }
+  };
+  misplaced(
+    'actions.json',
+    actionList,
+    [...owners].map(([id, owner]) => ({
+      id,
+      slot: owner.contribution.slot,
+      order: owner.order,
+      rank: owner.rank,
+      name: owner.contribution.name,
+    })),
+  );
+  const menuFile = conversion.app['navigation.json'];
+  misplaced(
+    'navigation.json',
+    isRecord(menuFile) && Array.isArray(menuFile['entries']) ? menuFile['entries'] : [],
+    menuEntries(inventory, catalogue).flatMap((entry) => {
+      const kept = registry.kept.get(entry.item);
+      return kept
+        ? [
+            {
+              id: entry.id,
+              slot: entry.item.slot,
+              order: kept.order,
+              rank: kept.rank,
+              name: entry.item.name,
+            },
+          ]
+        : [];
+    }),
+  );
 
   const values =
     'The values half opens the same records in both apps, as the same user, and needs the migration server';
@@ -161,4 +298,14 @@ export function readable(name: string): string {
     .map((word) => (word.length > 1 && word === word.toUpperCase() ? word : word.toLowerCase()));
   const text = words.join(' ');
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : name;
+}
+
+/** The card or entry of a home or menu file with the given id. */
+function listItem(
+  file: unknown,
+  key: 'cards' | 'entries',
+  id: string,
+): Record<string, unknown> | undefined {
+  const items = isRecord(file) && Array.isArray(file[key]) ? file[key] : [];
+  return items.find((item): item is Record<string, unknown> => isRecord(item) && item['id'] === id);
 }

@@ -1597,7 +1597,12 @@ They are not anonymous, though: being same-origin, they carry the browser's cook
 session's included. The server answers every user with the same files either way.
 
 `layouts.json` lists `{ type, mode, url, component, bundle, source }` per layout in force, plus the
-server's `diagnostics`. A layout file is fetched only when the index lists its type and mode, and
+server's `diagnostics`, and may list in `labels` the languages a business app's labels are served
+in (`docs/business-apps/app-definition-v2.md`, section 7). `AppTranslateLoader` reads the index for
+that list at startup, once per session and without the interceptors like every other read of this
+address, only when the configuration service answered for the bootstrap; it then asks for
+`labels/<lang>.json` only in a language the list names.
+Today's servlet lists none; `npm run config:dev -- --labels` lists those it serves. A layout file is fetched only when the index lists its type and mode, and
 answers `{ format, layer: "layout", type, mode, component, bundle, source, content }`, where
 `content` is the layout file itself — format in `docs/extension-reference.md` §9b. A missing or
 malformed index or file, or no answer within 10 s (`LAYOUT_LOAD_TIMEOUT_MS`), falls back to the
@@ -1911,7 +1916,250 @@ list; `nxs-saved-search-actions` for the permission read.
 - The counts are the signed-in person's: a user in `members` only counted 2,167 records of
   `default_search` where an administrator counted 2,249.
 
-**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`.
+**The menu, `navigation.json`:** `HomeService.loadNavigation()` reads
+`/nuxeo/agentic-ui-config/navigation.json` (`/agentic-ui-config/navigation.json` under `nx serve`)
+the same way, without interceptors, once, at startup: `startAppMenu`
+(`apps/nuxeo-ui/src/app/business-apps.menu-start.ts`), an `APP_INITIALIZER`, loads
+`registerAppMenu` (`business-apps.menu.ts`) lazily, which waits for the configuration to load before
+it reads anything, since `NuxeoApiBase` keeps the API origin it first reads. Only
+`npm run config:dev -- --navigation <file>` serves the file; on a server it is 404 and the
+platform's menu shows alone. For each entry that opens a queue and has no literal name of its own,
+it then reads `queues/<id>.json` once (section 33), for the queue's name. **Startup waits for all
+of it**: the menu's chunk, the file, then the queues' files, each read with the home's 10-second
+timeout. It never rejects, not even when the chunk cannot be fetched: the platform's menu shows,
+and the console says why.
+
+**Used by:** `HomePageComponent` (`libs/shared/home/src/lib/home-page/home-page.ts`), at `/home`;
+`registerAppMenu`, at startup, for the menu.
+
+---
+
+## 33. Queues — `queues/<id>.json` and the Queue's Page Provider
+
+| Field           | Value                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `QueueService` (`libs/shared/queues/src/lib/queue.service.ts`) for the file; `PageProviderService` (`libs/shared/nuxeo-client/src/lib/services/page-provider.service.ts`) for the list |
+| **Method**      | `load(id)`, once per visit of `/queues/<id>`; `execute(pageProvider, request)`, once per page, order or choice of buckets while the queue is shown                                     |
+| **HTTP Method** | `GET`                                                                                                                                                                                  |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/queues/<id>.json` (`/agentic-ui-config/queues/<id>.json` under `nx serve`) — without interceptors, no `Authorization` header                                 |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                               |
+| **Server side** | None for the file: the configuration servlet does not answer there (404), and only `npm run config:dev -- --queue <file>` serves it. Nuxeo's page provider for the list                |
+
+**Query parameters of the page provider read:**
+
+| Parameter                | Value                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pageSize`               | The queue's `pageSize`, 10 when it has none                                                                                      |
+| `currentPageIndex`       | The page on screen, from 0                                                                                                       |
+| `queryParams`            | The queue's literal `parameters`, one each, in order; none when it has none                                                      |
+| `sortBy`, `sortOrder`    | The queue's `sort`, or the header chosen; none when neither                                                                      |
+| `<aggregate>`, per facet | The buckets chosen in that facet's aggregate, as a JSON array: `dc_creator_agg=["nxsat332-writer"]`; none when nothing is chosen |
+
+**Request headers:** `properties: *`, `enrichers.document: permissions`.
+
+**Notes:**
+
+- A chosen bucket is sent as the search page sends its filters (`SearchService.search`). Measured on
+  the local server with `default_search`, as an administrator: `dc_creator_agg=["nxsat332-writer"]`
+  returns that author's 12 records only, and the response echoes the choice in
+  `aggregations.<id>.selection`. Two keys of one aggregate are alternatives:
+  `dc_nature_agg=["application"]` and `["article"]` return 1 record each, and
+  `["application","article"]` returns 2. Aggregates together keep the records in all of them: that
+  author and `dc_modified_agg=["last24h"]` return none.
+- `aggregations.<id>.extendedBuckets` holds the buckets and the chosen ones that now hold no
+  record, at `docCount: 0`; the facets read it first, so a chosen bucket can still be cleared. An
+  aggregate's own counts are worked out with the other aggregates' choices and not its own.
+- `PageProviderService` refuses, without a request, an aggregate named as the search's own
+  parameters (`pageSize`, `sortBy`, `queryParams`, `properties` and others), or with a `.` or a
+  `-`, which the rendering parameters use: it would change the request rather than filter it.
+- A page provider that queries the repository answers no aggregates, so its facets are not drawn.
+
+**Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), at
+`/queues/<id>`, through `RecordListComponent`
+(`libs/shared/document-layouts/src/lib/record-page/record-list.ts`).
+
+---
+
+## 34. Queues — a bulk action over every result, through the Bulk Action Framework
+
+| Field           | Value                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `BulkCommandService` (`libs/shared/nuxeo-client/src/lib/services/bulk-command.service.ts`)                                    |
+| **Methods**     | `runOverPageProvider(pageProvider, query, action, actionParameters)`, `status(commandId)`, `abort(commandId)`                 |
+| **HTTP Method** | `POST`, then `GET` every 200 ms until the server has counted, then once a second, and `PUT` to stop                           |
+| **Endpoints**   | `/nuxeo/api/v1/search/pp/<pageProvider>/bulk/<action>` — the command over the page provider's whole result, answered HTTP 202 |
+|                 | `/nuxeo/api/v1/bulk/<commandId>` — its status                                                                                 |
+|                 | `/nuxeo/api/v1/bulk/<commandId>/abort` — stops it                                                                             |
+| **Server side** | Nuxeo's Bulk Action Framework (`nuxeo-core-bulk`) and the REST bundle's `BulkActionObject`                                    |
+
+**Query parameters of the command:** `queryParams`, the queue's literal `parameters`, one each, in
+order, as the list sends them, and `queryLimit`, one more than the number the person agreed to.
+Nothing else: no page, order or bucket.
+
+**Body:** the action's parameters, from the platform's table and never from a file
+(`wholeQueryBulkAction`, extension-reference.md, section 5): `{ "value": true }` for `trash`.
+
+**Response (the submission and every status read):**
+
+```json
+{
+  "entity-type": "bulkStatus",
+  "commandId": "1e0ad81f-3592-4ad2-9878-023539dd2733",
+  "state": "RUNNING",
+  "processed": 1000,
+  "total": 2314,
+  "errorCount": 0,
+  "skipCount": 0,
+  "error": false,
+  "action": "setProperties",
+  "username": "Administrator",
+  "submitted": "2026-11-23T17:45:06.262Z",
+  "scrollEnd": "2026-11-23T17:45:06.468Z",
+  "completed": null
+}
+```
+
+`state` goes `SCHEDULED`, `SCROLLING_RUNNING`, `RUNNING`, then `COMPLETED` or `ABORTED`. `total`
+is `0` until the server has read the whole query. `errorMessage` appears with the first failure.
+`result` holds what an action produces, such as `csvExport`'s `{ "url": "nxbigblob/<commandId>" }`.
+
+**Measured on the local Nuxeo 2025.10.18, as an administrator (2026-11-23):**
+
+- **The actions it registers**, from the bundles' `org.nuxeo.ecm.core.bulk` contributions. Opened
+  over HTTP (`httpEnabled="true"`): `setProperties`, `csvExport`, `automation`, `automationUi` and
+  `publicAction`, and the HxAI connector's `ingest` and `nucleusMapping`. Registered but not opened:
+  `trash`, `removeProxy`, `setSystemProperties`, `deletion` and about twenty internal ones.
+- **Who may run what.** `BulkActionObject` answers HTTP 403, `Action name: <action> is not exposed
+to HTTP`, to anyone but an administrator for an action not opened over HTTP. A command's status
+  and stopping it are allowed to the person who ran it and to administrators only. Not measured as a
+  person who is not an administrator: no such account was used.
+- **Parameters.** The command reads the page provider's parameters as the list does: `member_claims`
+  given a member's id counted 3 records in the list and 3 in the command. A named parameter, such as
+  `ecm_parentId` for `advanced_document_content`, is applied too.
+- **What it leaves out, silently.** A chosen bucket (`dc_last_contributor_agg=["nobody-at-all"]`):
+  the list counted 0 and the command 3. A `queryParams` value for a page provider that takes none:
+  the command ran over the provider's whole result, 2,314 records instead of 3. Neither is an
+  error. So the page never sends a bucket, does not offer every result while one is chosen, and
+  limits the command.
+- **`queryLimit` caps the command.** `SearchObject` reads it and the command builder applies it:
+  over `member_claims`'s 3 records, `queryLimit=2` read and processed 2, and `4` processed 3. The
+  page sends one more than agreed, so a widened command processes that many at most, and its
+  `total` above the agreed number says it was widened. Measured live: 5,010 agreed, 5,015 on the
+  server, 5,011 trashed and 4 untouched.
+- **Speed.** `trash` over 5,010 notes went from the end of the scroll to `completed` in 70 ms, so
+  stopping a command once its `total` is known comes too late for it: the limit is what bounds it.
+  5,000 records showed `4,900 of 5,000` at the page's first read after the count.
+- **Refusals at submission.** An action the server does not know: HTTP 400 with no body. A
+  `setProperties` property that does not exist: HTTP 400, `Unknown xpath …`. A page provider that
+  does not exist: HTTP 500, a `NullPointerException`.
+- **A parameter missing.** `trash` sent without `value` is taken (HTTP 202), then fails on its first
+  record, and the failure **stops the server's `trash` processor** until Nuxeo restarts: the command
+  stays `RUNNING` at 0 processed, and every later `trash` command waits behind it. That is why the
+  platform's table fixes the parameters.
+- **Stopping.** `PUT …/abort` answers `ABORTED` at once with the count so far; the batches already
+  started still finish and still count, and `completed` is written when they have. Measured:
+  `ABORTED` at 1,000 processed, final at 2,100 of 2,314.
+- **An answer that is not a status.** A 202 whose body is not a `bulkStatus` leaves the page unable
+  to tell whether the command runs: it says so, and reads the list again, rather than reporting a
+  refusal.
+- **The list after a command.** A page provider the search index serves may still hold the records
+  a command changed when it completes, so the page reads the list again at the end and once more
+  three seconds later, and offers no count until the second read has answered. Measured over 42 records on `document_content`, the list read at the end
+  was already empty; the larger runs were not checked for it.
+- **Counts.** A page provider counts its results, so `resultsCount` is a real total for
+  `payers_unassigned_claims`, `member_claims` and `default_search`. One that answers `-2` cannot
+  have every result selected.
+
+**Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), through
+`runWholeQuery` (`libs/shared/queues/src/lib/whole-query-run.ts`).
+
+---
+
+## 35. Notification Bell — Open Tasks, Followed Records and Their Audit
+
+| Field           | Value                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Service**     | `NotificationSources` (`libs/shared/notifications/src/lib/notification-sources.ts`), through `TaskService`, `NuxeoApiBase` and `DocumentDetailService` |
+| **Method**      | `tasks(user)`, `followed(user, since, page)` and `changes(wanted, audit)`, at each check: every 60 seconds by default (`notifications.pollIntervalMs`) |
+| **HTTP Method** | `GET` for the tasks and `@audit`; `POST` for the two Automation operations                                                                             |
+| **Endpoints**   | `/nuxeo/api/v1/task?userId=<user>&pageSize=100` with `X-NXfetch.task: targetDocumentIds,actors` (the read the tasks page makes)                        |
+|                 | `/nuxeo/api/v1/automation/Repository.Query`, with `properties: dublincore`                                                                             |
+|                 | `/nuxeo/api/v1/automation/Audit.QueryWithPageProvider`, for an administrator                                                                           |
+|                 | `/nuxeo/api/v1/id/{uid}/@audit?startEventDate=…&eventId=documentModified&eventId=lifecycle_transition_event`, for anyone else, per record              |
+| **Context**     | `backgroundRequestContext()` on every request: the idle timer does not count them                                                                      |
+
+**Followed records** — the documents whose `notif:notifications` list the reader, the property
+`Document.Subscribe` writes:
+
+```json
+{
+  "params": {
+    "query": "SELECT * FROM Document WHERE notif:notifications/*/subscribers/* = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND dc:modified > TIMESTAMP '<seven days ago, ISO>'",
+    "queryParams": ["user:<user>"],
+    "pageSize": 20,
+    "currentPageIndex": 0,
+    "sortBy": "dc:modified",
+    "sortOrder": "DESC"
+  },
+  "context": {}
+}
+```
+
+**Changes, for an administrator** — one request for every followed record whose `dc:modified` moved:
+
+```json
+{
+  "params": {
+    "query": "SELECT * FROM LogEntry WHERE docUUID IN (?, ?) AND eventId IN (?, ?) AND eventDate >= TIMESTAMP '<earliest lower bound, ISO>'",
+    "queryParams": ["<uid>", "<uid>", "documentModified", "lifecycle_transition_event"],
+    "pageSize": 50,
+    "currentPageIndex": 0,
+    "sortBy": "eventDate",
+    "sortOrder": "DESC"
+  },
+  "context": {}
+}
+```
+
+**Notes** (measured on the local Nuxeo 2025.10, 2026-11-23):
+
+- **There is no notification API.** `/api/v1/notification`, `/api/v1/me/notifications` and
+  `/api/v1/me/subscriptions` answer 404, so the bell reads tasks, subscriptions and the audit.
+- **`Repository.Query`, not the search endpoint.** The search endpoint is served by the search
+  index: for the same subscriber query it reported `resultsCount: 37` and returned no entries,
+  where the repository returned the 10 live records. A record followed a moment ago must be there.
+- **The audit query is for administrators only.** `nuxeo-automation-features`'
+  `bindings-contrib.xml` binds `Audit.QueryWithPageProvider` (and `Audit.Query`) with
+  `<administrator>true</administrator>`; anyone else gets **404**, not 401, so a refusal never ends
+  the session. Every audit page provider on the server (`EVENTS_VIEW`, `DOCUMENT_HISTORY_PROVIDER`,
+  `ADMIN_HISTORY`) is reached only through that operation, or one record at a time through `@audit`.
+  So a reader who is not an administrator gets one `@audit` read per followed record that changed,
+  four at a time. A 404 or 403 from the operation switches the reader to those reads for the session.
+- **Values go as `queryParams`**, which Nuxeo quotes: a quote in a user id or a uid is a value, and
+  `IN (?, ?)` takes one placeholder per value. An instant goes as a `TIMESTAMP '…'` literal, the form
+  `nxql.utils.ts` documents, written from `toISOString()` with its zone and checked
+  (`timestampLiteral`); a quoted ISO string also answered here, but may not on another repository
+  backend. `sortBy`/`sortOrder` order
+  the audit query; an `ORDER BY` in its text is ignored. `NOT IN` answers 500; `!=` works.
+- **Pages.** `currentPageIndex` pages both operations. A check reads the next page of followed
+  records only while the whole of the last one was modified after the newest `dc:modified` the last
+  check saw (a change to many records at once), up to 5 pages; and the next page of the audit,
+  query or `@audit`, while `isNextPageAvailable`, up to 4 pages of 50, so that the reader's own
+  entries, which are read too, cannot crowd other people's out.
+- **The task list is answered oldest first**, and `sortBy=created&sortOrder=desc` changes nothing,
+  so the bell reads 100 and keeps the newest 20.
+- **What moves `dc:modified`**, which is how the bell finds the records that changed: an edit, a
+  comment (Nuxeo audits it as `documentModified` on its record) and a lifecycle transition do; a
+  lock, an unlock, a check-in and a permission change do not. So the bell lists `documentModified`
+  and `lifecycle_transition_event` only. An edit's audit entry is dated 0 to 3 ms after its
+  `dc:modified`, and readable a second or so after the change, so a record whose audit has no entry
+  at or after its `dc:modified` yet is read once more at the next check.
+- The reader's own changes are read, and left out of the list on the client: they say whether the
+  audit has caught up with a change the reader made. `principalName != ?` works in the audit query,
+  but leaving them out there made every change of the reader's own look not caught up, and read it
+  twice more.
+
+**Used by:** `NotificationBellComponent` (`libs/shared/notifications`), in the shell's header.
 
 ---
 

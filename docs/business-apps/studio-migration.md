@@ -127,14 +127,15 @@ not migrate, and the report says why and what to do instead.
 | Structured conditions: type, facet, permission, group, lifecycle state, path                                                                      | Rules from the registered list                                                                           | Automatic      |
 | Free JavaScript conditions that match a known pattern (`user.isMember(…)`, `user.hasPermission(doc, …)`, `document.facets.indexOf(…)`)            | The equivalent structured rule, proven with truth tables (section 6)                                     | Agent proposes |
 | Any other free JavaScript condition                                                                                                               | Nothing                                                                                                  | Reported       |
-| Tabs with a page or a listing                                                                                                                     | Tabs, with a list over the page provider                                                                 | Automatic      |
+| Tabs whose page is a layout block                                                                                                                 | Tabs of each type's record page                                                                          | Automatic      |
+| Tabs whose page is a listing                                                                                                                      | A card of related records over the page provider; not written yet (section 10)                           | Reported       |
 | Dashboard (`nuxeo-home`) cards: a page provider, tasks, recently viewed                                                                           | Home cards                                                                                               | Automatic      |
 | Theme: `--nuxeo-*` custom properties and a logo                                                                                                   | Theme tokens and a logo (Layer 0), through a token map                                                   | Automatic      |
 | Theme properties with no token                                                                                                                    | Nothing: no custom CSS (parity decision 5)                                                               | Reported       |
 | Translations, including added languages                                                                                                           | `labels/<locale>.json`                                                                                   | Automatic      |
 | Login branding: images, logo, colours                                                                                                             | Sign-in branding in the bootstrap configuration                                                          | Automatic      |
 | Workflow task layouts                                                                                                                             | Task forms per workflow step                                                                             | Automatic      |
-| Reusable layout blocks                                                                                                                            | Reusable blocks in layout version 2                                                                      | Automatic      |
+| Reusable layout blocks                                                                                                                            | A card wherever a layout uses one: version 2 has no reusable block                                       | Automatic      |
 | Custom elements and code in the custom bundle                                                                                                     | A Layer 2 Angular plugin (section 4)                                                                     | Agent proposes |
 | HTML blocks with inline scripts, uploaded CSS                                                                                                     | Nothing (parity decisions 2 and 5)                                                                       | Reported       |
 | Features of the JSF UI                                                                                                                            | Out of scope: Studio is retiring them                                                                    | —              |
@@ -227,6 +228,17 @@ A migrated package is ready when checks 1 to 10 pass, a person has accepted or r
 - **Check 10 and version 1.** It is the package pipeline's validator, plus version 1's contract
   for the `metadata`, `edit` and `create` files, which that validator leaves unchecked.
 
+**In phase M2**, checks 1, 2, 3, 5, 6 and 10 cover task forms, tabs and layout blocks:
+
+- **1:** each task layout and its fields, each layout block, and each use of a block with the
+  block's fields there, counted twice.
+- **2:** the fields of each block a layout uses, of each tab, and of each task form.
+- **3:** a task form's variables against its step's and its workflow's variables schemas.
+- **5:** the rule of each tab, of each block's card and of each task form's field, and nothing of
+  theirs shown to everyone.
+- **6:** the labels of tabs, task forms and blocks.
+- **10:** the task forms, through the validator's own rules for them.
+
 **In phase M0**:
 
 - **What runs:** the harness runs checks 1, 4 and 8, which need no server. Each other check says
@@ -267,17 +279,29 @@ all of them on every change:
 - **For check 2:** drop a field, turn a date widget into text, make a required field optional.
 - **For check 3:** name a field the package's own schema lacks.
 - **For check 5:** slip a free JavaScript condition in, or show a field or a list column Web UI
-  shows only under a condition to everyone. "Invert a rule" waits for M2, which converts the
-  first rules.
+  shows only under a condition to everyone. M2 adds inverting a converted rule (`invert-rule`)
+  and dropping one (`drop-rule`).
 - **For check 6:** change a field's label.
-- **For check 7:** point a list at another page provider, change one parameter, or bind a button
-  to another operation.
+- **For check 7:** point a list at another page provider, change one parameter, bind a button to
+  another operation, point a home card at another queue, or drop a menu entry.
 - **For check 10:** name a widget the platform does not have.
 
+**In M2**, nine more, for task forms, tabs and layout blocks: drop a task form's field (2), name a
+variable its step and workflow lack (3), put a task's variable in a document's layout (10), drop a
+block's card or a tab (2), make a field Web UI only shows editable in a task form (2), drop a
+tab's rule (5), change a tab's label (6), and drop a block's use from the report (1).
+
+**For Web UI's slot registration** (`nuxeo-slots.js`: `disabled`, `priority`, and a later
+contribution of the same name replacing or changing an earlier one), which actions, the menu and
+tabs follow, five more: make an action of a disabled button, keep a replaced or an outranked
+button rather than the one Web UI keeps, or a menu entry of a disabled one (7), and move an action
+from the order Web UI's slot gives it (6).
+
 Each fails its check on the made-up test package. On the sample's conversion, each that finds
-something to break fails its check too. The three that do not, `widen-to-everyone`,
-`widen-column-to-everyone` and `bind-other-operation`, find no condition and no operation button
-to break there, and say so.
+something to break fails its check too. The thirteen that do not say so: `widen-to-everyone`,
+`widen-column-to-everyone`, `invert-rule`, `drop-rule` and `bind-other-operation` find no
+condition and no operation button to break there, and eight of M2's nine no task layout, tab or
+layout block.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -311,12 +335,15 @@ For the sample, M1's report lists:
   has neither;
 - 4 slot contributions:
   - the button with no operation, reported;
-  - the menu entry and its page, pending phase 1's `navigation.json`;
+  - the menu entry, converted to an entry of `navigation.json` that opens the search screen's queue,
+    and its page, converted to that queue;
   - the theme, converted;
 - the dashboard's 5 cards:
   - the repeated one, reported;
   - the favourites card, which reads an operation, proposed;
-  - the other three, pending phase 1's `home.json`, the first with its list written as a queue;
+  - the first card, converted to a card of `home.json` that opens its list, written as a queue. The
+    app does not draw a card that is only a link to a queue until phase 1's queue page exists;
+  - the tasks and recently viewed cards, pending: `home.json` has no card for either yet;
 - the theme's 105 properties against the token map, 8 of them set a token in its first version;
 - the theme's blue and its error red, below WCAG 2.1 AA on its own page background, at contrasts
   of 4.43 and 4.17;
@@ -352,22 +379,60 @@ These sit inside the [development plan](development-plan.md):
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
 
+**Where M2 stands, 23 November 2026:**
+
+- **Built: task forms, tabs and layout blocks.** A workflow task layout becomes the task form of
+  its step, `tasks/<workflow>.<step>.layout.json`, its fields bound to the task's variables as
+  `var:` fields, with the names' case from the package's variables schemas. A layout block becomes
+  a card wherever a layout uses it. A tab becomes a tab of the view file of each type its
+  conditions name, holding its page's block, with its conditions as its rule. Checks 1, 2, 3, 5, 6
+  and 10 hold them, with nine more negative controls. They are read from Web UI's own sources
+  (`nuxeo-document-task.js`, `nuxeo-browser.js`, the stock task layouts and tabs) and tested on the
+  synthetic corpus: the sample holds none of them.
+- **Reported, against section 3's table:** what has no version 2 equivalent, or cannot be told from
+  the package. A permission test in a task layout, whose document Web UI's task page fetches
+  without its permissions; a task layout whose names' case the package does not give; a tab on
+  every type, on a type with no view file, or whose page is not a block; a tab whose page is a
+  listing; a block inside a block, or given no document. A field Web UI only shows becomes a
+  read-only field of a task form, and is reported in a version 1 form, which cannot say so.
+- **Built: conditions.** A `nuxeo-filter`'s structured tests become the registered rules that
+  decide exactly as they do, read from both sides' code. A known JavaScript pattern is proposed:
+  one call of a filter function in a `dom-if`, which is all a Polymer binding holds, or `this.`
+  calls and `document.facets.indexOf(…)` in a filter's `expression`. Anything else is reported.
+  The rule travels as the `visibleWhen` of what the condition hides: a view field where it shows
+  its property, an action by its button, a menu entry by its icon and its page's search form, and
+  a home card and its queue by its list. Check 5 holds every rule to its condition's truth table,
+  without a server.
+- **Reported, against the table above:** a `path` test, which no registered rule makes, and
+  `hasPermission` for a permission no rule holds alone, such as `Write`. A group test whose file
+  holds no user is reported too: a document layout and the stock home are given none, so it never
+  passes in Web UI. So is `!document.facets.indexOf(…) !== -1`, which is always true, and a
+  condition whose truth table would be too large to run.
+- **Not yet:**
+  - a tab whose page is a listing, which would be a card of related records;
+  - version 2 in the `edit` and `create` forms, which the app now draws, so that a field or a block
+    under a condition there carries its rule;
+  - conditions on version 1 fields, list columns and search tables;
+  - the truth tables' server half, which evaluates each original in Web UI on the migration
+    server.
+
 **Where M1 stands, 23 November 2026:**
 
 - **Built:** in [`tools/studio-migration`](../../tools/studio-migration/README.md), the
   declarative track:
-  - layouts, search screens as queues, the dashboard's lists as queues, operation buttons as
-    actions, the theme and the translations, written as an app definition the package pipeline's
-    validator accepts;
+  - layouts, search screens as queues, the dashboard's lists as queues and cards of
+    `home.json`, the left menu's search entries as entries of `navigation.json`, operation buttons
+    as actions, the theme and the translations, written as an app definition the package
+    pipeline's validator accepts;
   - checks 2, 3, 5, 6, 7 and 10. Checks 3, 5, 6 and 7 run in part until the migration server
-    exists. With M0's, there are twenty-one negative controls.
+    exists. With M0's, there are twenty-three negative controls.
 - **On the sample:**
   - checks 1, 2, 4, 5 and 10 pass;
   - checks 3, 6 and 7 run in part;
   - check 8 finds the two colours below AA.
 - **Waiting:**
   - the migration lab server, for the server halves of checks 3, 5, 6 and 7;
-  - phase 1's `home.json` and `navigation.json`, for the dashboard's cards and the drawer;
+  - card kinds of `home.json` for the tasks and recently viewed cards;
   - M2, for conditions, tabs, task forms and layout blocks;
   - real packages: only the sample has arrived, and phase 4 needs three.
 
@@ -394,8 +459,9 @@ These sit inside the [development plan](development-plan.md):
 
 ## 12. Not checked
 
-- A package with conditions, custom elements, task layouts, tabs or several languages: the sample
-  has none of them.
+- A package with conditions, custom elements, task layouts, tabs, layout blocks or several
+  languages: the sample has none of them. M2 reads Web UI's own sources for them, and tests them
+  on the synthetic corpus only.
 - Web UI and the new app side by side on one LTS 2025 server with the sample installed: neither
   local server has it.
 - Studio's Git access to the generated UI files, on a real project.

@@ -18,12 +18,17 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
+  chmodSync,
   cpSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -92,9 +97,20 @@ const argsFor = (args, scratch) => (typeof args === 'function' ? args(scratch) :
 
 /**
  * Refused with exit 1 at `step`, saying `reason`, with no zip left: neither one of its own, nor the
- * one an earlier run of the same name and version left there, which `stale` plants first.
+ * one an earlier run of the same name and version left there, which `stale` plants first. When
+ * `never` is given, the output must not hold it. `reason`, like `args`, may be made from the
+ * control's scratch directory. `after` undoes what the control did that would stop its scratch
+ * directory being removed. `staleStays` requires the earlier zip to be left as it was: for a
+ * package whose name must not be read.
  */
-function expectRefused(what, change, step, reason, args = [], { stale = true } = {}) {
+function expectRefused(
+  what,
+  change,
+  step,
+  reason,
+  args = [],
+  { stale = true, staleStays = false, never, after } = {},
+) {
   negative++;
   const { scratch, directory, out } = packageWith(change);
   try {
@@ -107,12 +123,24 @@ function expectRefused(what, change, step, reason, args = [], { stale = true } =
     const problems = [];
     if (status !== 1) problems.push(`exit ${status}, not 1`);
     if (!output.includes(`step ${step} refused it`)) problems.push(`not refused at step ${step}`);
-    if (!output.includes(reason)) problems.push(`no "${reason}"`);
-    if (existsSync(join(out, ZIP))) problems.push('a zip is left');
-    if (existsSync(join(out, `${ZIP}.sha256`))) problems.push('a checksum is left');
+    const expected = typeof reason === 'function' ? reason(scratch) : reason;
+    if (!output.includes(expected)) problems.push(`no "${expected}"`);
+    if (never !== undefined && output.includes(never)) problems.push(`"${never}" is in the output`);
+    if (staleStays) {
+      // The package's name was not read, so the earlier zip of that name could not be cleared.
+      if (
+        !existsSync(join(out, ZIP)) ||
+        readFileSync(join(out, ZIP), 'utf8') !== 'an earlier run left this'
+      )
+        problems.push('the earlier zip did not stay as it was');
+    } else {
+      if (existsSync(join(out, ZIP))) problems.push('a zip is left');
+      if (existsSync(join(out, `${ZIP}.sha256`))) problems.push('a checksum is left');
+    }
     if (problems.length > 0)
       failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
   } finally {
+    after?.(directory);
     rmSync(scratch, { recursive: true, force: true });
   }
 }
@@ -182,6 +210,13 @@ expectRefused(
     ),
   3,
   `app.json's packageVersion is ${OTHER}, and package.xml's version is ${VERSION}`,
+);
+expectRefused(
+  "the manifest's Bundle-Version apart from package.xml's",
+  ({ edit }) =>
+    edit('bundle/META-INF/MANIFEST.MF', `Bundle-Version: ${VERSION}`, `Bundle-Version: ${OTHER}`),
+  3,
+  `the manifest's Bundle-Version is ${OTHER}, and package.xml's version is ${VERSION}`,
 );
 expectRefused(
   'a tag for another version',
@@ -329,6 +364,180 @@ expectRefused(
   4,
   'spells its Nuxeo-Component header "nuxeo-component"',
 );
+// Nothing is read through a symbolic link in the bundle, and a component path must stay in bundle/
+// and name a file there. Step 2 refuses the rest before reading anything: read, a component outside would have its layout attributes quoted
+// back, from wherever it is. The marker below is such an attribute; `never` holds it out of the
+// output. Where a control's target is a folder, any read of it would crash instead of refusing.
+const MARKER = 'read-from-outside-the-package';
+const OUTSIDE = `<component name="outside"><extension target="org.nuxeo.agentic.ui.config" point="configuration"><layout type="Outside" mode="view" src="${MARKER}" /></extension></component>`;
+const DEMO_COMPONENT = 'OSGI-INF/payers-claims-demo-config.xml';
+/** The demo's manifest, naming its own component and `extra` after it. */
+const manifestNaming = (extra) =>
+  `${[...headersBut(), `Nuxeo-Component: ${DEMO_COMPONENT}, ${extra}`].join('\n')}\n`;
+expectRefused(
+  'a component path that climbs out of bundle/ with ..',
+  ({ directory, write }) => {
+    writeFileSync(join(directory, '..', 'outside.xml'), OUTSIDE);
+    write(MANIFEST, manifestNaming('../../outside.xml'));
+  },
+  2,
+  'names the component ../../outside.xml, which is outside bundle/',
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component path that is absolute, naming a folder any read of which would crash',
+  ({ directory, write }) => {
+    mkdirSync(join(directory, '..', 'outside-folder'));
+    write(MANIFEST, manifestNaming(join(directory, '..', 'outside-folder')));
+  },
+  2,
+  (scratch) =>
+    `names the component ${join(scratch, 'payers-claims-demo', '..', 'outside-folder')}, which is an absolute path`,
+);
+expectRefused(
+  'a component that is a link to a file outside the package',
+  ({ directory }) => {
+    const outside = join(directory, '..', 'outside.xml');
+    writeFileSync(outside, OUTSIDE);
+    const component = join(directory, 'bundle', DEMO_COMPONENT);
+    rmSync(component);
+    symlinkSync(outside, component);
+  },
+  1,
+  `bundle/${DEMO_COMPONENT} is a symbolic link, which is not followed`,
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component reached through a folder that is a link out of the package',
+  ({ directory, write }) => {
+    const outside = join(directory, '..', 'outside');
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'x.xml'), OUTSIDE);
+    symlinkSync(outside, join(directory, 'bundle', 'LINKED'));
+    write(MANIFEST, manifestNaming('LINKED/x.xml'));
+  },
+  1,
+  'bundle/LINKED is a symbolic link, which is not followed',
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component that is a hard link to a file outside the package',
+  ({ directory }) => {
+    const outside = join(directory, '..', 'outside.xml');
+    writeFileSync(outside, OUTSIDE);
+    const component = join(directory, 'bundle', DEMO_COMPONENT);
+    rmSync(component);
+    linkSync(outside, component);
+  },
+  2,
+  `names the component ${DEMO_COMPONENT}, which has a second name, a hard link`,
+  [],
+  { never: MARKER },
+);
+expectRefused(
+  'a component that names a folder of the bundle, which step 2 once crashed on',
+  ({ write }) => write(MANIFEST, manifestNaming('OSGI-INF')),
+  2,
+  'names the component OSGI-INF, which is a folder, not a file',
+);
+expectRefused(
+  'a bundle/ that is itself a link, which the validator would read through',
+  ({ directory }) => {
+    const elsewhere = join(directory, '..', 'elsewhere');
+    renameSync(join(directory, 'bundle'), elsewhere);
+    symlinkSync(elsewhere, join(directory, 'bundle'));
+  },
+  1,
+  'bundle is a symbolic link, which is not followed',
+);
+expectRefused(
+  'an actions.json that is a link to a file outside, which the validator would quote',
+  ({ directory }) => {
+    const outside = join(directory, '..', 'outside.txt');
+    writeFileSync(outside, MARKER);
+    const actions = join(directory, 'bundle', 'agentic-ui-config', 'actions.json');
+    rmSync(actions);
+    symlinkSync(outside, actions);
+  },
+  1,
+  'bundle/agentic-ui-config/actions.json is a symbolic link, which is not followed',
+  [],
+  { never: MARKER },
+);
+// Run as root, every file can be read, and Windows has no such mode bits, so these controls have
+// nothing to show there.
+const canHideFiles = process.platform !== 'win32' && process.getuid?.() !== 0;
+if (canHideFiles)
+  expectRefused(
+    'a component that cannot be read, which step 2 once crashed on',
+    ({ directory }) => chmodSync(join(directory, 'bundle', DEMO_COMPONENT), 0o000),
+    2,
+    `names the component ${DEMO_COMPONENT}, which cannot be read: EACCES`,
+  );
+expectRefused(
+  'a build.mjs that is a link, which steps 1 and 4 would follow to another package',
+  ({ directory }) => {
+    const elsewhere = join(directory, '..', 'build.mjs');
+    renameSync(join(directory, 'build.mjs'), elsewhere);
+    symlinkSync(elsewhere, join(directory, 'build.mjs'));
+  },
+  1,
+  'build.mjs is a symbolic link, which is not followed',
+);
+// Its name and version are not read through the link, so the earlier zip of that name stays: had
+// the link been read, the zip would have been cleared.
+expectRefused(
+  'a package.xml that is a link, which would be read before step 1',
+  ({ directory }) => {
+    const elsewhere = join(directory, '..', 'package.xml');
+    renameSync(join(directory, 'package', 'package.xml'), elsewhere);
+    symlinkSync(elsewhere, join(directory, 'package', 'package.xml'));
+  },
+  1,
+  'package/package.xml is a symbolic link, which is not followed',
+  [],
+  { staleStays: true },
+);
+// Step 2 names nothing here and leaves it to the builder, which refuses the package at step 4.
+expectRefused(
+  'a component path through a file, which step 2 once crashed on',
+  ({ write }) => write(MANIFEST, manifestNaming(`${DEMO_COMPONENT}/x.xml`)),
+  4,
+  'build.mjs refused the package',
+);
+if (canHideFiles)
+  expectRefused(
+    'a package.xml that cannot be read, which step 3 once called missing',
+    ({ directory }) => chmodSync(join(directory, 'package', 'package.xml'), 0o000),
+    3,
+    'package/package.xml cannot be read (EACCES)',
+    [],
+    {
+      stale: false,
+      after: (directory) => chmodSync(join(directory, 'package', 'package.xml'), 0o644),
+    },
+  );
+if (canHideFiles)
+  expectRefused(
+    'a folder of the package that cannot be read, which the search for links reports',
+    ({ directory }) => chmodSync(join(directory, 'bundle', 'agentic-ui-config', 'queues'), 0o000),
+    1,
+    'bundle/agentic-ui-config/queues cannot be read (EACCES)',
+    [],
+    {
+      after: (directory) =>
+        chmodSync(join(directory, 'bundle', 'agentic-ui-config', 'queues'), 0o755),
+    },
+  );
+expectRefused(
+  'a component that names the bundle itself',
+  ({ write }) => write(MANIFEST, manifestNaming('.')),
+  2,
+  'names the component ., which is bundle/ itself',
+);
 expectBuilt('a manifest whose lines end with a bare CR', ({ write }) =>
   write(
     MANIFEST,
@@ -396,6 +605,379 @@ expectBuilt(
   },
   (scratch) => ['--allow-list', join(scratch, 'allow-list.json')],
 );
+
+// Versions (package-pipeline.md, section 8): given the package as it was, `--previous`, the
+// version must move as far as what changed needs. Each control builds the previous package and this
+// one from the demo, each at a version of its own, and changes one of them in one way. JSON is
+// edited as JSON, so the controls hold whatever the demo's files say.
+const NEXT_MINOR = VERSION.replace(
+  /^(\d+)\.(\d+)\.\d+.*$/,
+  (_, major, minor) => `${major}.${Number(minor) + 1}.0`,
+);
+const APP = 'bundle/agentic-ui-config/app.json';
+const LABELS = 'bundle/agentic-ui-config/labels/en.json';
+const ACTIONS = 'bundle/agentic-ui-config/actions.json';
+const HOME = 'bundle/agentic-ui-config/home.json';
+const NAVIGATION = 'bundle/agentic-ui-config/navigation.json';
+
+/** `directory`'s package at `version`, in the three places that carry it. */
+function setVersion(directory, version) {
+  for (const [file, from, to] of [
+    [APP, `"packageVersion": "${VERSION}"`, `"packageVersion": "${version}"`],
+    ['package/package.xml', `version="${VERSION}">`, `version="${version}">`],
+    ['bundle/META-INF/MANIFEST.MF', `Bundle-Version: ${VERSION}`, `Bundle-Version: ${version}`],
+  ]) {
+    const path = join(directory, file);
+    const text = readFileSync(path, 'utf8');
+    if (!text.includes(from)) throw new Error(`the control cannot set the version in ${file}`);
+    writeFileSync(path, text.replace(from, to));
+  }
+}
+
+/** A JSON file of `directory`, changed by `change` and written back. */
+function jsonEdit(directory, file, change) {
+  const path = join(directory, file);
+  const content = JSON.parse(readFileSync(path, 'utf8'));
+  change(content);
+  writeFileSync(path, `${JSON.stringify(content, null, 2)}\n`);
+}
+
+/** The first queue file of `directory`'s package, relative to it. */
+function firstQueue(directory) {
+  const queues = join(directory, 'bundle/agentic-ui-config/queues');
+  const name = readdirSync(queues).find((file) => file.endsWith('.json'));
+  if (!name) throw new Error('the demo has no queue for the control to move');
+  return `bundle/agentic-ui-config/queues/${name}`;
+}
+
+/** The first schema file of `directory`'s bundle, relative to it: outside the app definition. */
+function firstSchema(directory) {
+  const schemas = join(directory, 'bundle/schemas');
+  const name = readdirSync(schemas).find((file) => file.endsWith('.xsd'));
+  if (!name) throw new Error('the demo has no schema for the control to change');
+  return `bundle/schemas/${name}`;
+}
+
+/**
+ * The first queue removed, with the home's cards and the menu's entries that name it: the demo's
+ * home and menu name every one of its queues, and a package that names a queue it lacks is refused
+ * at step 2, before step 3 could judge the removal.
+ */
+const removeQueue = (directory) => {
+  const queue = firstQueue(directory);
+  const id = basename(queue, '.json');
+  rmSync(join(directory, queue));
+  for (const [file, list] of [
+    [HOME, 'cards'],
+    [NAVIGATION, 'entries'],
+  ])
+    if (existsSync(join(directory, file)))
+      jsonEdit(directory, file, (content) => {
+        content[list] = content[list].filter((item) => item.queue !== id);
+      });
+};
+const changeLabelText = (directory) =>
+  jsonEdit(directory, LABELS, (labels) => {
+    const [key] = Object.keys(labels.labels);
+    labels.labels[key] = `${labels.labels[key]} (changed)`;
+  });
+
+/**
+ * The previous package at `from`, changed by `before`, and this one at `to`, changed by `after`,
+ * run with `--previous`. `refused`: exit 1 at step 3 for that reason, no zip and no changelog.
+ * Otherwise built, with a changelog holding each of `changelog`.
+ */
+function expectVersion(
+  what,
+  { from, to, before = () => undefined, after = () => undefined },
+  expected,
+) {
+  if (expected.refused) negative++;
+  else positive++;
+  const scratch = mkdtempSync(join(tmpdir(), 'app-package-version-'));
+  const previous = join(scratch, 'previous');
+  const directory = join(scratch, 'payers-claims-demo');
+  const out = join(scratch, 'out');
+  try {
+    for (const [copy, version, change] of [
+      [previous, from, before],
+      [directory, to, after],
+    ]) {
+      cpSync(DEMO, copy, { recursive: true, filter: (path) => basename(path) !== 'dist' });
+      setVersion(copy, version);
+      change(copy);
+    }
+    const zip = join(out, `payers-claims-demo-${to}.zip`);
+    const changes = join(out, `payers-claims-demo-${to}.changes.md`);
+    // An earlier run's changelog for the same version: a refused run must not leave it, and a
+    // built one must replace it.
+    mkdirSync(out, { recursive: true });
+    writeFileSync(changes, 'an earlier run left this');
+    const { status, output } = run(directory, out, ['--previous', previous]);
+    const problems = [];
+    if (expected.refused) {
+      if (status !== 1) problems.push(`exit ${status}, not 1`);
+      if (!output.includes('step 3 refused it')) problems.push('not refused at step 3');
+      if (!output.includes(expected.refused)) problems.push(`no "${expected.refused}"`);
+      if (existsSync(zip)) problems.push('a zip is left');
+      if (existsSync(changes)) problems.push('a changelog is left');
+    } else {
+      if (status !== 0) problems.push(`exit ${status}, not 0`);
+      if (!existsSync(zip)) problems.push('no zip');
+      const text = existsSync(changes) ? readFileSync(changes, 'utf8') : '';
+      if (!text.startsWith(`# payers-claims-demo ${to}\n`))
+        problems.push('no changelog, under its heading');
+      for (const line of expected.changelog)
+        if (!text.includes(line)) problems.push(`the changelog has no "${line}"`);
+    }
+    if (problems.length > 0)
+      failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+expectVersion(
+  'content changed, and the version did not move',
+  { from: VERSION, to: VERSION, after: changeLabelText },
+  {
+    refused: `and the version is still ${VERSION}. Raise it to ${OTHER} at least, a patch version`,
+  },
+);
+expectVersion(
+  'a breaking change below 1.0.0, raising only the patch',
+  { from: VERSION, to: OTHER, after: removeQueue },
+  { refused: 'need a minor version (below 1.0.0, a breaking change raises the minor' },
+);
+expectVersion(
+  'an addition from 1.0.0, raising only the patch',
+  {
+    from: '1.0.0',
+    to: '1.0.1',
+    after: (directory) =>
+      cpSync(
+        join(directory, firstQueue(directory)),
+        join(directory, 'bundle/agentic-ui-config/queues/added-queue.json'),
+      ),
+  },
+  {
+    refused:
+      'need a minor version, and 1.0.1 raises the patch. For one: The queue added-queue is added.',
+  },
+);
+expectVersion(
+  'a label key removed from 1.0.0, raising only the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) =>
+      jsonEdit(directory, LABELS, (labels) => (labels.labels['payers.only.before'] = 'Gone')),
+  },
+  {
+    refused:
+      'need a major version, and 1.1.0 raises the minor. For one: The label payers.only.before, in en, is removed',
+  },
+);
+expectVersion(
+  'an action removed below 1.0.0, raising only the patch',
+  {
+    from: VERSION,
+    to: OTHER,
+    before: (directory) =>
+      jsonEdit(directory, ACTIONS, (file) =>
+        file.actions.push({ ...file.actions[0], id: 'payers.claim.reopen' }),
+      ),
+  },
+  { refused: 'For one: The action payers.claim.reopen is removed' },
+);
+expectVersion(
+  "the app's address changed from 1.0.0, raising only the minor",
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.address = 'claims-desk')),
+  },
+  {
+    refused:
+      "need a major version, and 1.1.0 raises the minor. For one: The app's address is claims-desk",
+  },
+);
+expectVersion(
+  'a group losing the app from 1.0.0, raising only the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    // A group the demo does not give the app, so that the package as it is has lost it.
+    before: (directory) => jsonEdit(directory, APP, (app) => app.groups.push('claims-auditors')),
+  },
+  { refused: 'For one: The group claims-auditors no longer has the app.' },
+);
+expectVersion(
+  'a platform range that leaves out a version it admitted, from 1.0.0, raising only the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <1.0.0')),
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <0.9.0')),
+  },
+  { refused: 'a server on a version the old range admitted cannot run this one' },
+);
+expectVersion(
+  'a change outside the app definition from 1.0.0, raising only the patch',
+  {
+    from: '1.0.0',
+    to: '1.0.1',
+    after: (directory) => {
+      const schema = join(directory, firstSchema(directory));
+      writeFileSync(schema, `${readFileSync(schema, 'utf8')}<!-- changed -->\n`);
+    },
+  },
+  { refused: 'need a minor version, and 1.0.1 raises the patch' },
+);
+expectVersion(
+  'a version lower than the previous one',
+  { from: OTHER, to: VERSION },
+  { refused: `${VERSION} is lower than the previous version, ${OTHER}` },
+);
+expectVersion(
+  "app.json's id changed",
+  {
+    from: VERSION,
+    to: NEXT_MINOR,
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.id = 'payers-claims-two')),
+  },
+  { refused: "app.json's id is payers-claims-two, and was payers-claims. An app keeps its id" },
+);
+expectVersion(
+  "the package's name changed",
+  {
+    from: VERSION,
+    to: NEXT_MINOR,
+    before: (directory) => {
+      const descriptor = join(directory, 'package/package.xml');
+      writeFileSync(
+        descriptor,
+        readFileSync(descriptor, 'utf8').replace(
+          'name="payers-claims-demo"',
+          'name="payers-claims-old"',
+        ),
+      );
+    },
+  },
+  { refused: 'the previous package is payers-claims-old, and this one is payers-claims-demo' },
+);
+expectVersion(
+  'a breaking change in a later prerelease of a patch version',
+  { from: '1.0.1-rc.1', to: '1.0.1-rc.2', after: removeQueue },
+  {
+    refused:
+      'need a major version, and 1.0.1-rc.2 is a prerelease of 1.0.1, which raises the patch.',
+  },
+);
+expectVersion(
+  "the manifest's Bundle-Version changed alone, at the same version",
+  {
+    from: VERSION,
+    to: VERSION,
+    after: (directory) => {
+      const manifest = join(directory, 'bundle/META-INF/MANIFEST.MF');
+      writeFileSync(
+        manifest,
+        readFileSync(manifest, 'utf8').replace(
+          `Bundle-Version: ${VERSION}`,
+          'Bundle-Version: 9.9.9',
+        ),
+      );
+    },
+  },
+  { refused: `the manifest's Bundle-Version is 9.9.9, and package.xml's version is ${VERSION}` },
+);
+
+expectVersion(
+  'unchanged, at the same version',
+  { from: VERSION, to: VERSION },
+  { changelog: [`No change since ${VERSION}.`] },
+);
+expectVersion(
+  'only the version raised, in its three places',
+  { from: VERSION, to: OTHER },
+  { changelog: [`No change since ${VERSION}; the version moved to ${OTHER} all the same.`] },
+);
+expectVersion(
+  'a change, raising the patch',
+  { from: VERSION, to: OTHER, after: changeLabelText },
+  {
+    changelog: [
+      `Since ${VERSION}: 1 change, which needs a patch version. ${OTHER} raises the patch.`,
+      '## Changed',
+      ', in en, changed.',
+    ],
+  },
+);
+expectVersion(
+  'a breaking change below 1.0.0, raising the minor',
+  { from: VERSION, to: NEXT_MINOR, after: removeQueue },
+  {
+    changelog: [
+      '## Breaking',
+      'is removed: a link to it, a menu entry or a home card naming it stops working.',
+    ],
+  },
+);
+expectVersion(
+  'a change outside the app definition from 1.0.0, raising the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    after: (directory) => {
+      const schema = join(directory, firstSchema(directory));
+      writeFileSync(schema, `${readFileSync(schema, 'utf8')}<!-- changed -->\n`);
+    },
+  },
+  { changelog: ['## To judge', 'changed.', 'which a person decides'] },
+);
+expectVersion(
+  'a platform range that admits more, from 1.0.0, raising the minor',
+  {
+    from: '1.0.0',
+    to: '1.1.0',
+    before: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <0.9.0')),
+    after: (directory) => jsonEdit(directory, APP, (app) => (app.platform = '>=0.0.1 <1.0.0')),
+  },
+  { changelog: ['## Added', 'it admits more platform versions.'] },
+);
+expectVersion(
+  'a Markdown file in the bundle and a JSON file re-spaced, neither of which the zip shows',
+  {
+    from: VERSION,
+    to: VERSION,
+    before: (directory) => writeFileSync(join(directory, 'bundle/NOTES.md'), 'one\n'),
+    after: (directory) => {
+      writeFileSync(join(directory, 'bundle/NOTES.md'), 'two\n');
+      const labels = join(directory, LABELS);
+      writeFileSync(labels, JSON.stringify(JSON.parse(readFileSync(labels, 'utf8'))));
+    },
+  },
+  { changelog: [`No change since ${VERSION}.`] },
+);
+expectVersion(
+  'a breaking change in a later prerelease of a major version',
+  { from: '1.0.0-rc.1', to: '1.0.0-rc.2', after: removeQueue },
+  { changelog: ['## Breaking', '1.0.0-rc.2 is a later prerelease of the same version.'] },
+);
+
+// The previous package is the operator's input: one that is not there stops the run, exit 2.
+{
+  negative++;
+  const { scratch, directory, out } = packageWith();
+  try {
+    const { status, output } = run(directory, out, ['--previous', join(scratch, 'not-there')]);
+    if (status !== 2 || !output.includes('is not a folder'))
+      failures.push(`a --previous that is not there exits ${status}, not 2\n${output}`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 // The content model, given as a file (package-pipeline.md, section 4). The demo's is beside it,
 // and these controls copy the package with it, so each is held to the model it carries.

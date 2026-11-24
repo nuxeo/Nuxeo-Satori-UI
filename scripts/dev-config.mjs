@@ -12,6 +12,10 @@
  *   npm run config:dev -- --bootstrap acme.json --manifest acme-manifest.json
  *   npm run config:dev -- --layout Claim/metadata=claim.layout.json
  *   npm run config:dev -- --home home.json
+ *   npm run config:dev -- --labels en=labels/en.json --labels fr=labels/fr.json
+ *   npm run config:dev -- --queue queues/unassigned-claims.json
+ *   npm run config:dev -- --navigation navigation.json
+ *   npm run config:dev -- --task claimDetermination.determine=determine.layout.json
  *
  * `--layout <Type>/<mode>=<file>` serves a per-type layout file as the servlet does: listed in
  * `layouts.json` and answered at `layouts/<Type>/<mode>.layout.json`. A later one for the same
@@ -24,9 +28,34 @@
  * any `home.json` written before is removed, so the app finds no home, as on a server. A later
  * `--home` replaces an earlier one.
  *
- * The dev server serves only files that existed when it started, so run this before `nx serve`;
- * edits to a file it already serves are picked up on reload. A bare configuration object is not
- * accepted by the application, which is why copying a defaults file there no longer works.
+ * `--labels <lang>=<file>` serves a package's labels for one language at `labels/<lang>.json`, as
+ * the package writes them (app-definition-v2.md, section 7). Like the home, nothing on a server
+ * answers there until the app registry. The app reads the file for the person's language, above the
+ * platform's catalogue and below the manifest's `labels`. Without `--labels`, any written before
+ * are removed. A later file for the same language replaces an earlier one.
+ *
+ * `--queue <file>` serves an app's queue at `queues/<id>.json`, the id being the file's name, as
+ * the package writes it, with no envelope (app-definition-v2.md, section 4). The servlet does not
+ * answer there either, for the same reason as the home. Without `--queue`, no queue is served, and
+ * any written before are removed. A later `--queue` for the same id replaces an earlier one.
+ *
+ * `--navigation <file>` serves an app's menu at `navigation.json`, as `--home` serves its home
+ * (app-definition-v2.md, section 9). Without it, any `navigation.json` written before is removed, so
+ * the platform's menu shows alone, as on a server. A later `--navigation` replaces an earlier one.
+ *
+ * `--task <workflow>.<step>=<file>` serves a workflow step's task form at
+ * `tasks/<workflow>.<step>.layout.json`, as the package writes it, with no envelope
+ * (app-definition-v2.md, section 6). The servlet does not answer there either, for the same
+ * reason as the home, so a server without dev mode shows the task panel's own form. Every run
+ * writes the tasks it is given and removes any written before; a later `--task` for the same step
+ * replaces an earlier one.
+ *
+ * Run this once before `nx serve`: a dev server started while `agentic-ui-config/` did not exist
+ * serves nothing under it until it is restarted. Once the folder exists, a file written there, or
+ * edited, is served after a moment, when the dev server's watcher sees it (measured on Angular 22's
+ * dev server: under a second), so later runs need no restart; reload the page. A bare configuration
+ * object is not accepted by the application, which is why copying a defaults file there no longer
+ * works.
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -36,18 +65,33 @@ const ROOT = resolve(import.meta.dirname, '..');
 const DEFAULTS = join(ROOT, 'nuxeo-agentic-core/src/main/resources/agentic-ui-config');
 const TARGET = join(ROOT, 'apps/nuxeo-ui/public/agentic-ui-config');
 
-const extra = { bootstrap: [], manifest: [], layout: [], home: [] };
+const extra = {
+  bootstrap: [],
+  manifest: [],
+  layout: [],
+  home: [],
+  labels: [],
+  queue: [],
+  navigation: [],
+  task: [],
+};
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 2) {
   const layer = args[i]?.replace(/^--/, '');
   if (!Object.hasOwn(extra, layer ?? '') || !args[i + 1]) {
     console.error(
       'usage: dev-config.mjs [--bootstrap <fragment.json>]... [--manifest <fragment.json>]... ' +
-        '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>]',
+        '[--layout <Type>/<mode>=<layout.json>]... [--home <home.json>] ' +
+        '[--labels <lang>=<labels.json>]... [--queue <queues/<id>.json>]... ' +
+        '[--navigation <navigation.json>] [--task <workflow>.<step>=<layout.json>]...',
     );
     process.exit(2);
   }
-  extra[layer].push(layer === 'layout' ? args[i + 1] : resolve(args[i + 1]));
+  extra[layer].push(
+    layer === 'layout' || layer === 'labels' || layer === 'task'
+      ? args[i + 1]
+      : resolve(args[i + 1]),
+  );
 }
 
 // The servlet leaves out a fragment over this size or with a repeated key (ConfigSnapshot.java), so
@@ -126,6 +170,64 @@ for (const spec of extra.layout) {
   });
 }
 
+// Each `--labels` names a language as the platform names its catalogues: `en`, or one with a
+// region, such as `pt-BR`. Its file is read here, before anything is written, so that a mistyped
+// language or file changes nothing.
+const labels = new Map();
+for (const entry of extra.labels) {
+  const at = entry.indexOf('=');
+  const lang = entry.slice(0, at);
+  const file = entry.slice(at + 1);
+  if (at <= 0 || !/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(lang) || file === '') {
+    console.error(`--labels takes <lang>=<labels.json>, such as en=labels/en.json, not ${entry}`);
+    process.exit(2);
+  }
+  const path = resolve(file);
+  labels.set(lang, { path, content: read(path) });
+}
+
+// Each queue is served as the package writes it, at its id, which is its file's name; the app
+// checks it with the validator when it reads it, and the pipeline when the package is built.
+// app-definition-v2.md, section 2: an id is 1 to 64 letters, digits, `.`, `_` or `-`. Read here,
+// as the labels are, before anything is written, so that a mistyped name or file changes nothing.
+const QUEUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const QUEUES = join(TARGET, 'queues');
+const queues = new Map();
+for (const path of extra.queue) {
+  const id = basename(path).replace(/\.json$/, '');
+  if (!path.endsWith('.json') || !QUEUE_ID.test(id)) {
+    console.error(
+      `--queue ${path}: expected <id>.json, the id 1 to 64 letters, digits, ".", "_" or "-", ` +
+        'starting with a letter or a digit, as a queue file is named in a package',
+    );
+    process.exit(2);
+  }
+  queues.set(id, { path, content: read(path) });
+}
+
+// The menu's file, read here too, before anything is written.
+const navigation = extra.navigation.at(-1);
+const navigationContent = navigation === undefined ? undefined : read(navigation);
+
+// A task form is served as the package writes it, as the home is; the app reads it with the
+// validator when the task opens. The parts are those `placeFile` in libs/shared/app-definition
+// takes from a package's `tasks/` file name. Checked and read here, before anything is written, as
+// the layouts are, so a mistake leaves the configuration served before it as it was.
+const TASK_PART = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
+const tasks = new Map();
+for (const spec of extra.task) {
+  const match = /^([^.=/]+)\.([^.=/]+)=(.+)$/.exec(spec);
+  if (!match || !TASK_PART.test(match[1]) || !TASK_PART.test(match[2])) {
+    console.error(
+      `--task ${spec}: expected <workflow>.<step>=<file>, the workflow model's name and the ` +
+        "step's node id, each a letter then letters, digits, '_' or '-'",
+    );
+    process.exit(2);
+  }
+  const path = resolve(match[3]);
+  tasks.set(`${match[1]}.${match[2]}`, { path, content: read(path) });
+}
+
 const envelopes = ['bootstrap', 'manifest'].map((layer) => {
   const defaults = join(DEFAULTS, `${layer}.defaults.json`);
   const fragments = [
@@ -180,7 +282,7 @@ for (const { type, mode, content, ...provenance } of layouts.values()) {
 }
 writeFileSync(
   join(TARGET, 'layouts.json'),
-  `${JSON.stringify({ format: 'nuxeo-agentic-ui-config/1', layer: 'layouts', layouts: index, diagnostics: [] }, null, 2)}\n`,
+  `${JSON.stringify({ format: 'nuxeo-agentic-ui-config/1', layer: 'layouts', layouts: index, labels: [...labels.keys()], diagnostics: [] }, null, 2)}\n`,
 );
 console.log(
   `wrote ${join(TARGET, 'layouts.json').slice(ROOT.length + 1)}: ${index.map((l) => `${l.type}/${l.mode}`).join(', ') || 'no layouts'}`,
@@ -199,3 +301,72 @@ if (home === undefined) {
     `wrote ${HOME.slice(ROOT.length + 1)}: ${home.startsWith(ROOT) ? home.slice(ROOT.length + 1) : home}`,
   );
 }
+
+// A package's labels, one file per language, served as the package writes them; the app checks
+// each with the validator when it reads it, and the pipeline when the package is built.
+const LABELS = join(TARGET, 'labels');
+rmSync(LABELS, { recursive: true, force: true });
+if (labels.size === 0) {
+  console.log(`no labels: ${LABELS.slice(ROOT.length + 1)} not served`);
+} else {
+  // The app asks for a language's labels in the languages it offers, which the bootstrap lists
+  // (the last fragment that sets them wins, as the app merges them), and always in English, its
+  // fallback language.
+  const offered = [
+    'en',
+    ...(envelopes
+      .find((envelope) => envelope.layer === 'bootstrap')
+      ?.fragments.map((fragment) => fragment.content?.availableLanguages)
+      .filter(Array.isArray)
+      .at(-1) ?? []),
+  ];
+  mkdirSync(LABELS, { recursive: true });
+  for (const [lang, { path, content }] of labels) {
+    const out = join(LABELS, `${lang}.json`);
+    writeFileSync(out, `${JSON.stringify(content, null, 2)}\n`);
+    console.log(
+      `wrote ${out.slice(ROOT.length + 1)}: ${path.startsWith(ROOT) ? path.slice(ROOT.length + 1) : path}`,
+    );
+    if (!offered.includes(lang)) {
+      console.warn(
+        `warning: the app asks for labels in ${[...new Set(offered)].join(', ')} only, so never for ${lang}'s`,
+      );
+    }
+  }
+}
+
+// The queues, served at the end, as the package writes them.
+rmSync(QUEUES, { recursive: true, force: true });
+if (queues.size > 0) mkdirSync(QUEUES, { recursive: true });
+for (const [id, { content }] of queues) {
+  writeFileSync(join(QUEUES, `${id}.json`), `${JSON.stringify(content, null, 2)}\n`);
+}
+console.log(
+  queues.size === 0
+    ? `no queues: ${QUEUES.slice(ROOT.length + 1)} not served`
+    : `wrote ${QUEUES.slice(ROOT.length + 1)}: ${[...queues.keys()].join(', ')}`,
+);
+
+// The menu is served as the package writes it, as the home is.
+const NAVIGATION = join(TARGET, 'navigation.json');
+if (navigation === undefined) {
+  rmSync(NAVIGATION, { force: true });
+  console.log(`no menu: ${NAVIGATION.slice(ROOT.length + 1)} not served`);
+} else {
+  writeFileSync(NAVIGATION, `${JSON.stringify(navigationContent, null, 2)}\n`);
+  console.log(
+    `wrote ${NAVIGATION.slice(ROOT.length + 1)}: ${navigation.startsWith(ROOT) ? navigation.slice(ROOT.length + 1) : navigation}`,
+  );
+}
+
+const TASKS = join(TARGET, 'tasks');
+rmSync(TASKS, { recursive: true, force: true });
+for (const [name, { path, content }] of tasks) {
+  mkdirSync(TASKS, { recursive: true });
+  const file = join(TASKS, `${name}.layout.json`);
+  writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`);
+  console.log(
+    `wrote ${file.slice(ROOT.length + 1)}: ${path.startsWith(ROOT) ? path.slice(ROOT.length + 1) : path}`,
+  );
+}
+if (tasks.size === 0) console.log(`no task forms: ${TASKS.slice(ROOT.length + 1)} not served`);

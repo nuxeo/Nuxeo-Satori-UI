@@ -7,7 +7,7 @@
   />
 }
 @if (!usesEntry()) {
-  @if (ready()) {
+  @if (showsEditor()) {
     <nxs-metadata-editor
       class="document-layout-form__editor"
       [attr.data-layout-type]="formType()"
@@ -15,11 +15,14 @@
       [sections]="sections()"
       [display]="display()"
       [values]="values()"
+      [dublinCore]="dublinCore()"
+      [fieldErrors]="fieldErrors()"
       [disabled]="disabled()"
       [headingLevel]="headingLevel()"
       (validChange)="editorValidChange($event)"
+      (valuesChange)="editorValuesChange($event)"
     />
-  } @else {
+  } @else if (showsSpinner()) {
     <div class="document-layout-form__loading">
       <nxs-spinner [diameter]="28" [label]="'document-layouts.loading-form' | translate" />
     </div>

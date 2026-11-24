@@ -66,6 +66,18 @@ export function labelOf(
   return label === '' ? {} : { label };
 }
 
+/**
+ * A label Web UI translates as a key, as `nuxeo-operation-button`, `nuxeo-menu-icon` and
+ * `nuxeo-page-item` render `[[i18n(label)]]`: a key the package translates is a `labelKey`, and any
+ * other is shown as written, as Web UI shows a key no catalogue holds.
+ */
+export function translatedLabelOf(
+  text: string | null,
+  translated: ReadonlySet<string>,
+): ReturnType<typeof labelOf> {
+  return text !== null && translated.has(text.trim()) ? { labelKey: text.trim() } : labelOf(text);
+}
+
 /** A name made of an id's characters: what is not one becomes `-`, and it starts with a letter or digit. */
 export function slug(text: string): string {
   const cleaned = text

@@ -20,6 +20,7 @@ import {
   createChecker,
   FIELD_KEYS,
   join,
+  NAME,
   unreadable,
   type Checker,
   type Finding,
@@ -47,8 +48,12 @@ export interface ValidationOptions {
 
 const FILE_KEYS = ['$schema', 'version', 'columns', 'cards', 'tabs'];
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
-const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', 'fields', 'related'];
+/** What a card shows: exactly one of these. Every one but `fields` is for `view` mode only. */
+const CARD_CONTENTS = ['fields', 'related', 'timeline', 'comments'] as const;
+const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', ...CARD_CONTENTS];
 const RELATED_KEYS = ['pageProvider', 'parameters', 'columns', 'sort', 'pageSize', 'rowActions'];
+const TIMELINE_KEYS = ['events', 'filter', 'pageSize'];
+const COMMENTS_KEYS = ['pageSize'];
 
 /** The keys each part of a file may hold, which the JSON Schema must list too (its own test checks). */
 export const LAYOUT_V2_KEYS = {
@@ -57,6 +62,8 @@ export const LAYOUT_V2_KEYS = {
   card: CARD_KEYS,
   field: FIELD_KEYS,
   related: RELATED_KEYS,
+  timeline: TIMELINE_KEYS,
+  comments: COMMENTS_KEYS,
   check: CHECK_KEYS,
 } as const;
 
@@ -123,20 +130,26 @@ function layout(
       }
     }
     if ('visibleWhen' in item) c.rule(item['visibleWhen'], join(path, 'visibleWhen'));
-    const hasFields = 'fields' in item;
-    const hasRelated = 'related' in item;
-    if (hasFields === hasRelated)
-      c.add(path, 'structure', 'a card has "fields" or "related", one of the two');
-    if (hasFields) {
+    if (CARD_CONTENTS.filter((key) => key in item).length !== 1)
+      c.add(path, 'structure', 'a card has one of "fields", "related", "timeline" or "comments"');
+    if ('fields' in item) {
       const fields = item['fields'];
       if (!Array.isArray(fields)) c.add(join(path, 'fields'), 'structure', 'fields must be a list');
       else
         fields.forEach((entry, index) => c.field(entry, join(join(path, 'fields'), index), form));
     }
-    if (hasRelated) {
+    if ('related' in item) {
       if (!view)
         c.add(join(path, 'related'), 'structure', 'related records belong in view mode only');
       else related(c, item['related'], join(path, 'related'));
+    }
+    if ('timeline' in item) {
+      if (!view) c.add(join(path, 'timeline'), 'structure', 'a timeline belongs in view mode only');
+      else timeline(c, item['timeline'], join(path, 'timeline'));
+    }
+    if ('comments' in item) {
+      if (!view) c.add(join(path, 'comments'), 'structure', 'comments belong in view mode only');
+      else comments(c, item['comments'], join(path, 'comments'));
     }
   };
 
@@ -194,6 +207,56 @@ function related(c: Checker, item: unknown, path: string): void {
   }
   c.unknownKeys(item, RELATED_KEYS, path);
   c.list(item, path, { openRecord: true });
+}
+
+/**
+ * A card's timeline: the record's history from the server's audit, newest first (layout-v2.md,
+ * section 7). An event is the server's to define, as a page provider is, so it is held to the form
+ * of a name and to no list: one the server never writes shows nothing.
+ */
+function timeline(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'timeline is an object');
+    return;
+  }
+  c.unknownKeys(item, TIMELINE_KEYS, path);
+  if ('events' in item) {
+    const events = item['events'];
+    if (!Array.isArray(events) || events.length === 0)
+      c.add(join(path, 'events'), 'structure', 'events is a list of at least one event');
+    else
+      events.forEach((event, index) => {
+        if (typeof event !== 'string' || !NAME.test(event))
+          c.add(
+            join(join(path, 'events'), index),
+            'structure',
+            'an event is named by its ID, as the audit writes it: "documentModified"',
+          );
+      });
+  }
+  if ('filter' in item && typeof item['filter'] !== 'boolean')
+    c.add(join(path, 'filter'), 'structure', 'filter is true or false');
+  pageSize(c, item, path);
+}
+
+/** A card's comments: the record's comment thread (layout-v2.md, section 7). */
+function comments(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'comments is an object');
+    return;
+  }
+  c.unknownKeys(item, COMMENTS_KEYS, path);
+  pageSize(c, item, path);
+}
+
+/** `pageSize`, where a card may give one: 1 to 100, as a list's is. */
+function pageSize(c: Checker, item: Record<string, unknown>, path: string): void {
+  const size = item['pageSize'];
+  if (
+    'pageSize' in item &&
+    !(Number.isInteger(size) && (size as number) >= 1 && (size as number) <= 100)
+  )
+    c.add(join(path, 'pageSize'), 'structure', 'pageSize is a whole number from 1 to 100');
 }
 
 /**

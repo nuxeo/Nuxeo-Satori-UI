@@ -4,13 +4,24 @@ import { TestBed } from '@angular/core/testing';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import { firstValueFrom } from 'rxjs';
 
-import { HomeService, homeFileUrl, type HomeLoad } from './home.service';
+import { HomeService, homeFileUrl, navigationFileUrl, type HomeLoad } from './home.service';
 
 describe('where the home is read', () => {
   it('is beside the layouts, in the directory the configuration service answers from', () => {
     expect(homeFileUrl('/agentic-ui-config/bootstrap.json')).toBe('/agentic-ui-config/home.json');
     expect(homeFileUrl('/nuxeo/agentic-ui-config/bootstrap.json?v=2#x')).toBe(
       '/nuxeo/agentic-ui-config/home.json',
+    );
+  });
+});
+
+describe('where the menu is read', () => {
+  it('is beside the home', () => {
+    expect(navigationFileUrl('/agentic-ui-config/bootstrap.json')).toBe(
+      '/agentic-ui-config/navigation.json',
+    );
+    expect(navigationFileUrl('/nuxeo/agentic-ui-config/bootstrap.json?v=2#x')).toBe(
+      '/nuxeo/agentic-ui-config/navigation.json',
     );
   });
 });
@@ -47,6 +58,18 @@ describe('HomeService', () => {
       kind: 'file',
       content,
     });
+  });
+
+  it('reads the menu as it reads the home, and finds none where nothing is served', async () => {
+    const content = { version: 2, entries: [] };
+    const read = firstValueFrom(service.loadNavigation());
+    http.expectOne('/agentic-ui-config/navigation.json').flush(content);
+    expect(await read).toEqual<HomeLoad>({ kind: 'file', content });
+    const none = firstValueFrom(service.loadNavigation());
+    http
+      .expectOne('/agentic-ui-config/navigation.json')
+      .flush('', { status: 404, statusText: 'Not Found' });
+    expect(await none).toEqual<HomeLoad>({ kind: 'none' });
   });
 
   it('finds no home where nothing is served, as on a server today', async () => {

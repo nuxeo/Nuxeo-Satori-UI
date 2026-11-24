@@ -169,3 +169,29 @@ describe('ExtensionActionRegistry', () => {
     });
   });
 });
+
+describe('ExtensionActionRegistry.runsOverWholeQuery', () => {
+  it('answers what the handler that runs the id declares, and false for none', () => {
+    const registry = new ExtensionActionRegistry();
+    expect(registry.runsOverWholeQuery('app.bulkActions.delete')).toBe(false);
+    registry.register({ 'app.bulkActions.delete': { execute: () => undefined, wholeQuery: true } });
+    expect(registry.runsOverWholeQuery('app.bulkActions.delete')).toBe(true);
+    // A customer's replacement answers now, and it does not declare it.
+    const replacement = registry.register({
+      'app.bulkActions.delete': { execute: () => undefined },
+    });
+    expect(registry.runsOverWholeQuery('app.bulkActions.delete')).toBe(false);
+    replacement.unregister();
+    expect(registry.runsOverWholeQuery('app.bulkActions.delete')).toBe(true);
+  });
+
+  it('is outranked by a customer handler over a packaged one that declares it', () => {
+    const registry = new ExtensionActionRegistry();
+    registry.registerPackaged({
+      'app.bulkActions.delete': { execute: () => undefined, wholeQuery: true },
+    });
+    expect(registry.runsOverWholeQuery('app.bulkActions.delete')).toBe(true);
+    registry.register({ 'app.bulkActions.delete': { execute: () => undefined } });
+    expect(registry.runsOverWholeQuery('app.bulkActions.delete')).toBe(false);
+  });
+});

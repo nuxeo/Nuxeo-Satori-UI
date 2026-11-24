@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "payers.queue.mine",
+  "pageProvider": "payers_my_claims",
+  "parameters": ["$currentUser"],
+  "columns": [
+    "claim:number",
+    { "field": "claim:member", "widget": "document-link" },
+    { "field": "claim:serviceDate", "widget": "date" },
+    { "field": "claim:billedAmount", "widget": "currency", "parameters": { "currency": "USD" } },
+    {
+      "field": "claim:status",
+      "widget": "status-badge",
+      "parameters": {
+        "tones": {
+          "submitted": "info",
+          "inReview": "info",
+          "pended": "warning",
+          "approved": "positive",
+          "paid": "positive",
+          "denied": "negative"
+        }
+      }
+    }
+  ],
+  "sort": [{ "field": "claim:serviceDate", "order": "desc" }],
+  "pageSize": 50,
+  "facets": [{ "aggregate": "claim_status_agg", "labelKey": "payers.facet.status" }],
+  "rowActions": ["payers.claim.approve", "app.rowActions.download"],
+  "bulkActions": ["app.bulkActions.downloadZip"],
+  "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+}

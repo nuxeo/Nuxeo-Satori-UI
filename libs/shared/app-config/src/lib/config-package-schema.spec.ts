@@ -49,7 +49,13 @@ describe('the configuration package schemas', () => {
     expect(keys(bootstrap.properties, ['$schema', 'presales'])).toEqual(
       keys(DEFAULT_APP_BOOTSTRAP_CONFIG),
     );
-    for (const section of ['branding', 'integrations', 'session', 'sso'] as const) {
+    for (const section of [
+      'branding',
+      'integrations',
+      'session',
+      'notifications',
+      'sso',
+    ] as const) {
       const definition = deref(bootstrap, bootstrap.properties?.[section] ?? {});
       expect(keys(definition.properties), section).toEqual(
         keys(DEFAULT_APP_BOOTSTRAP_CONFIG[section]),

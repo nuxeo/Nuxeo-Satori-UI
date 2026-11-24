@@ -37,9 +37,10 @@ The business apps tiers have three more tags:
 - **`scope:experience`:** an experience app. It uses modules and engines, not the current app's
   features.
 
-Three engines carry them so far, `libs/shared/computations`, `libs/shared/document-layouts` and
-`libs/shared/home`, and no module or experience exists, so `npm run beta:module-boundaries` proves
-the rules on probe projects.
+Five engines carry them so far, `libs/shared/computations`, `libs/shared/document-layouts`,
+`libs/shared/home`, `libs/shared/notifications` and `libs/shared/queues`, and no module or
+experience exists, so
+`npm run beta:module-boundaries` proves the rules on probe projects.
 
 → Full detail: `AGENTS/00-architecture.md`
 

@@ -41,6 +41,17 @@ const result = compute(field.computed, context);
   are deterministic.
 - **`isStoredCalendarDay(value)`**, whether a date is a stored day or an instant (below), so that
   the record page's `date` widget can format with the same rule.
+- **`runCheck(check, field, context, evaluators?)`** runs a check across fields in a form
+  (layout-v2.md, section 6) on the property `field`: `{ ok: true, value: true }` when it passes,
+  `false` when it fails, and a reason when it cannot say. It never throws.
+  **`PACKAGED_CHECK_EVALUATORS`** are the two checks by ID, frozen: `core.notBefore`, a date not
+  before its parameter's, compared as days, so an end on the start's day passes; and `core.atMost`,
+  a number not above its parameter's, a text that is a number included. A check passes when either
+  value is missing or empty, which is `required`'s to refuse, and refuses a value it cannot compare,
+  a text against a date, for the form to leave unanswered rather than block a save the server
+  would take.
+- **`evaluateValue(value, context)`** evaluates one value as a computation's parameter is, a
+  literal, a property or a computation: what a check compares. It never throws.
 - **The caps**, `MAX_DEPTH` (10) and `MAX_TEMPLATE_LENGTH` (1000).
 
 ### A parameter
@@ -166,6 +177,8 @@ Where layout-v2.md is silent, these are the choices, each tested.
 
 ## What holds it to the rest
 
+- **The registered checks.** The check evaluators' IDs must be `PACKAGED_CHECKS`' IDs, both ways,
+  and each signature one parameter, as `runCheck` takes.
 - **The registered computations.** The evaluators' IDs must be `PACKAGED_COMPUTATIONS`' IDs, both
   ways. For every number of parameters from none to two past the most, an evaluator must take
   exactly the numbers its `Signature` allows, `optional` included, and refuse the others in the
@@ -238,6 +251,12 @@ npx nx run-many -t lint,typecheck,test -p shared-computations
     `.not`, nor an `expect.not` inside one, only one expectation holding all of a reason, and
     reporting a reason with no text to look for;
   - each run in its own zone, and the config's zones the ones the suite's literals are written for.
+
+  And for the checks across fields, each of these, broken alone, failed a test in `checks.spec.ts`:
+  an end on its start's day passing `core.notBefore`, the bound itself passing `core.atMost`, a
+  number written as text, an empty side passing, looking a check up among own keys only, one
+  parameter exactly, catching a throwing evaluator and saying what it threw, and `evaluateValue`
+  never throwing.
 
 ## Not done yet
 
