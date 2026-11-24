@@ -5,7 +5,8 @@
  *
  *   1. An adjuster's home, with KPIs from the page providers' aggregates.
  *   2. A queue opened, its rows in the server's order, and narrowed by a facet on the server.
- *   3. A member: age, combined address, and the member's claims and cases.
+ *   3. A member, opened from the queue's member link: age, combined address, and the member's
+ *      claims and cases.
  *   4. Member services see the social security number, which an adjuster does not.
  *   5. The layout file behind the page: configuration, no code.
  *
@@ -39,7 +40,8 @@
  *
  * Load-bearing checks, by step: the home's cards and their figures as the seed implies them, the
  * other group's cards absent; the queue's rows in the server's order, and narrowed by a facet on
- * the server; the member's age, address and related lists; the SSN nowhere on the adjuster's
+ * the server; the queue's member link, named for the member and linking to it; the member's age,
+ * address and related lists; the SSN nowhere on the adjuster's
  * Member page with the Properties panel drawn, and the adjuster unable to change the member, whose
  * Edit form would list it; the SSN on member services' Member card; the served layout file the
  * kit's own, and the page drawn as it says. Negative ones: the other group's cards and menu
@@ -582,10 +584,41 @@ export default async function run(page, h) {
   // ── 3. A member ────────────────────────────────────────────────────────────────────────────
   await h.step('3. A member: age, combined address, and the claims and cases lists');
   h.note(
-    'the member is opened by its address: the queue\'s member column is a "document-link", ' +
-      'which shows the stored id in this build (layout-v2.md, section 11)',
+    'the member is opened from the narrowed queue, through its member column: a "document-link", ' +
+      "which shows the member's title as a link that opens the member (layout-v2.md, section 11)",
   );
-  await h.goToDoc(memberDoc.uid);
+  // A row step 2 left on screen whose claim is the member's: the queue's member link opens it.
+  const viaClaim = expectedChosen.find(
+    (number) => CLAIMS.find((claim) => claim.number === number)?.member === MEMBER.number,
+  );
+  h.requirePrecondition(
+    `one of the ${chosen} claims step 2 leaves on screen is ${MEMBER.number}'s`,
+    viaClaim !== undefined,
+    `none of ${JSON.stringify(expectedChosen)} is the member's: change data.mjs`,
+  );
+  const memberName = `${MEMBER.firstName} ${MEMBER.lastName}`;
+  // The cell shows nothing while the member is read, and the link once it is.
+  const memberLink = page
+    .locator('.queue-page tbody tr', { hasText: viaClaim })
+    .locator('a.nxs-document-list__link');
+  await memberLink.first().waitFor({ timeout: 15_000 }).catch(deferred);
+  const drawnLinks = await memberLink
+    .evaluateAll((links) =>
+      links.map((link) => ({
+        text: link.textContent?.trim() ?? '',
+        href: link.getAttribute('href') ?? '',
+      })),
+    )
+    .catch(unread);
+  h.check(
+    `the queue's member column links ${viaClaim} to its member, by name: ${memberName}`,
+    drawnLinks?.length === 1 &&
+      drawnLinks[0].text === memberName &&
+      drawnLinks[0].href.endsWith(`/doc/${memberDoc.uid}`),
+    `drawn ${JSON.stringify(drawnLinks)}`,
+  );
+  await memberLink.first().click().catch(deferred);
+  await page.waitForURL(new RegExp(`#/doc/${memberDoc.uid}$`), { timeout: 15_000 }).catch(deferred);
   await recordSettled(page, ['member', 'claims', 'cases']);
   const adjusterPage = await readRecordPage(page);
   const viewFile = kitFile('layouts/Member/view.layout.json');
