@@ -132,8 +132,10 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 > [the Angular 21 migration record](../../docs/angular-21-migration.md#coverage) has the
 > line-by-line comparison that shows no covered line was lost. None is a 0/0 any more — the artefact that once scored `tasks` and `assets` 100% with no spec files: the gate
 > now calls a report that measures nothing unmeasurable, and fails a baseline entry for one. A
-> figure covers only the statements v8 instrumented; files no test imports sit outside it, listed
-> in `.ai/state/coverage-uninstrumented-allowlist.json` — 21 of them as dated debt, 2 in `assets`.
+> figure covers only the statements v8 instrumented; a file no test imports sits outside it, and
+> `beta:coverage` fails unless `.ai/state/coverage-uninstrumented-allowlist.json` lists it. Since
+> 2026-11-24 that file lists no dated debt, only files with nothing to execute: types, barrels,
+> route tables and plain constant tables.
 
 ### Shared libraries — 13, 94,085 lines
 

@@ -69,9 +69,20 @@ export class ShareDialogComponent {
   private readonly toast = inject(NxsToastService);
 
   copyLink(): void {
-    navigator.clipboard.writeText(this.data.url).then(
-      () => this.toast.show(this.translate.instant('shared-ui.message.link-copied-to-clipboard')),
-      () => this.toast.error(this.translate.instant('shared-ui.message.failed-to-copy-link')),
-    );
+    const failed = () =>
+      this.toast.error(this.translate.instant('shared-ui.message.failed-to-copy-link'));
+    // Only a secure context (HTTPS, or localhost) has `navigator.clipboard`. Served over plain
+    // HTTP it is undefined, and reading `writeText` from it threw before either toast could show.
+    // Checked here rather than deferred into a promise, which could lose the click's activation.
+    if (!navigator.clipboard?.writeText) {
+      failed();
+      return;
+    }
+    navigator.clipboard
+      .writeText(this.data.url)
+      .then(
+        () => this.toast.show(this.translate.instant('shared-ui.message.link-copied-to-clipboard')),
+        failed,
+      );
   }
 }
