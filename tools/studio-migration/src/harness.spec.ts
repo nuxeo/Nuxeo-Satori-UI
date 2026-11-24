@@ -157,7 +157,11 @@ describe('each deliberate breakage fails the check that guards it', () => {
       const result = check({ ...input, conversion: broken }, mutation.caughtBy);
       expect(result?.status).toBe('fail');
       expect(result?.findings.length).toBeGreaterThan(0);
-      expect(runHarness({ ...input, conversion: broken }).ready).toBe(false);
+      // Its failure stands in the way. Not `ready` alone: check 9 never runs, so no migration is
+      // ready yet, broken or not.
+      expect(runHarness({ ...input, conversion: broken }).blockers).toContain(
+        `check ${mutation.caughtBy} failed`,
+      );
     });
   }
 
