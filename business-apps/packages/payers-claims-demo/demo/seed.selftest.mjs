@@ -12,7 +12,10 @@
  * `Repository.Query`, a search endpoint whose index has not yet seen what was trashed, as
  * OpenSearch's can lag, and trash renaming a document to `<name>._<time>_.trashed` (the document
  * alone: its children are neither flagged nor moved, which Nuxeo may do differently). So a pass
- * proves the script's logic: preconditions, a second run that adds nothing, a trashed record
+ * proves the script's logic: preconditions, version 0.3.0 refused, each claim brought along the
+ * claim lifecycle to its status, from a new claim's state and from 0.3.0's, a claim that cannot be
+ * stopping the run, and a claim read back in another state failing it, a second run that adds and
+ * moves nothing, a trashed record
  * restored, a document of another type left alone, a user or a group the seed did not create left
  * alone, the demo's people put back, and checks that fail when a page provider, its aggregates or
  * a user's rights are wrong. It says nothing about whether a real server accepts

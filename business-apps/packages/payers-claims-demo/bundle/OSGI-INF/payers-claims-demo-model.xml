@@ -3,7 +3,8 @@
   STAND-IN MODEL, until the presales Payers model arrives.
 
   Everything here is fictional: the document types, schemas and page providers the kit's layouts,
-  queues and home name, and nothing more. When the presales model arrives, this file and schemas/ are
+  queues and home name, and the claim lifecycle the claims review workflow follows, with what keeps
+  claim:status in step with it. When the presales model arrives, this file and schemas/ are
   replaced by theirs, and the layouts follow its property names. Records of these types must be
   deleted from a server before its model goes: a document whose type is gone cannot be read.
 

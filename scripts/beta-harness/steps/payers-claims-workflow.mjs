@@ -367,17 +367,25 @@ export default async function run(page, h) {
       status: body?.properties?.['claim:status'] ?? null,
       allowedAmount: body?.properties?.['claim:allowedAmount'] ?? null,
     }));
-  /** The tasks open on a claim, as the supervisor, who may read both steps' tasks. */
+  /**
+   * The tasks open on a claim, as the adjuster and as the supervisor, each of whom may read their
+   * own step's, or `null` when either is not answered with a list: so "none open" is never what a
+   * refused or failed read looks like.
+   */
   const openTasks = async (claim) => {
     const asked = await asSupervisor('GET', `/id/${claim.uid}/@task`);
     const mine = await rest(page, h.baseUrl, 'GET', `/id/${claim.uid}/@task`);
-    const all = [...(asked.body?.entries ?? []), ...(mine.body?.entries ?? [])];
+    if (![asked, mine].every(({ status, body }) => status === 200 && Array.isArray(body?.entries)))
+      return null;
+    const all = [...asked.body.entries, ...mine.body.entries];
     return [...new Map(all.map((task) => [task.id, task])).values()].filter(
       (task) => task.state === 'opened',
     );
   };
   const taskOn = async (claim, step) =>
-    (await openTasks(claim)).find((task) => task.nodeName === step) ?? null;
+    (await openTasks(claim))?.find((task) => task.nodeName === step) ?? null;
+  /** Whether the claim was read, and has no task open. */
+  const noTaskOpen = async (claim) => (await openTasks(claim))?.length === 0;
   const actorsOf = (task) => (task?.actors ?? []).map((actor) => actor?.id ?? actor);
 
   for (const [name, claim] of Object.entries(claims)) {
@@ -458,9 +466,11 @@ export default async function run(page, h) {
   await act(page, 'Submit');
   const toSupervisor = await until(() => taskOn(claims.over, SUPERVISOR));
   const overAfter = await read(claims.over);
+  const overOpen = await openTasks(claims.over);
   h.check(
     "the adjuster's determination is ended",
-    !(await openTasks(claims.over)).some((task) => task.id === claims.over.task?.id),
+    Array.isArray(overOpen) && !overOpen.some((task) => task.id === claims.over.task?.id),
+    JSON.stringify(overOpen?.map((task) => task.nodeName) ?? 'the tasks were not read'),
   );
   h.check(
     "a supervisor's approval is open on the claim, for claims-supervisors",
@@ -522,12 +532,12 @@ export default async function run(page, h) {
   await page.waitForLoadState('load', { timeout: 120_000 });
   await h.goTo(`/#/tasks/${toSupervisor?.id}`);
   await formSettled(page);
+  const shownAllowed = await readOnlyValue(page, 'claim:allowedAmount');
   h.check(
-    "the supervisor's form shows the allowed amount read-only, from the claim",
-    ((await readOnlyValue(page, 'claim:allowedAmount')) ?? '')
-      .replace(/[^0-9.]/g, '')
-      .startsWith(String(claims.over.allowedAmount)),
-    await readOnlyValue(page, 'claim:allowedAmount'),
+    `the supervisor's form shows the allowed amount, $${claims.over.allowedAmount}, read-only, from the claim`,
+    shownAllowed !== null &&
+      Number(shownAllowed.replace(/[^0-9.]/g, '')) === claims.over.allowedAmount,
+    String(shownAllowed),
   );
   const offered = await actionLabels(page);
   h.check(
@@ -547,7 +557,7 @@ export default async function run(page, h) {
     approved?.state === 'approved' && approved?.status === 'approved',
     JSON.stringify(approved ?? (await read(claims.over))),
   );
-  h.check('no task is left open on the claim', (await openTasks(claims.over)).length === 0);
+  h.check('no task is left open on the claim', await noTaskOpen(claims.over));
   const workflows = await rest(page, h.baseUrl, 'GET', `/id/${claims.over.uid}/@workflow`);
   h.check(
     "the claim's workflow is no longer running",
@@ -676,10 +686,7 @@ export default async function run(page, h) {
       Number(approvedAlone?.allowedAmount) === claims.atThreshold.allowedAmount,
     JSON.stringify({ answered: atThreshold.status, claim: approvedAlone }),
   );
-  h.check(
-    'no supervisor: no task is open on it',
-    (await openTasks(claims.atThreshold)).length === 0,
-  );
+  h.check('no supervisor: no task is open on it', await noTaskOpen(claims.atThreshold));
   // The claims' histories, which the audit writes a moment after each change: the claim of step 1
   // went to a supervisor, and this one did not, by the event the route model's chain records.
   const events = async (claim) =>

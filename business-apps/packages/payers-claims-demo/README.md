@@ -15,7 +15,8 @@ break copies of it.
   claims and their own; member services, and supervisors, see the claims pending determination.
   The home's KPIs count from the queues' page providers, through their aggregates.
 - **A stand-in model,** until the presales Payers model arrives: the types, schemas and page
-  providers those files name. It is fictional, and replaced whole when theirs comes.
+  providers those files name, and since 0.4.0 a claim lifecycle. It is fictional, and replaced
+  whole when theirs comes.
 - **A seed script** writes a few members, with their claims and cases, and the four people who
   work them, in the groups the files' rules name. Run it twice and nothing is added the second
   time.
@@ -219,8 +220,9 @@ the builder after changing the source.
   is shared by the whole server; the task form reads whatever `var_*` schema the task names.
 - **A denial with no reason, sent past the form, is refused by the server too.** No constraint can
   make a field required for one decision only, so the route model does it: its first transition
-  holds, the claim stays in review, and the determination opens again. The request is answered
-  with success, not an error: what is refused is the denial. The same is done for an approval with
+  holds, the claim stays in review, and the determination opens again. The request itself
+  completes the task, so it is expected to be answered with success, not an error: what is refused
+  is the denial. The steps file records the status it gets. The same is done for an approval with
   no allowed amount, or one above the billed amount, which the form's check refuses.
 
 ### How it was verified, with no deploy
