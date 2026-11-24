@@ -271,6 +271,54 @@ expectRefused(
   2,
   'contributes the Claim/edit layout from agentic-ui-config/layouts/Claim/view.layout.json',
 );
+// And the other way round: a layout file the validator passes and no component contributes is one
+// the server would never serve. Phase 3's contracts kit met it: an Edit form written, and passed.
+/** A sound version 2 form for a Claim: it passes the validator, so only its contribution is missing. */
+const CLAIM_FORM = '{"version":2,"cards":[{"id":"claim","fields":["claim:number"]}]}';
+const CLAIM_FORM_FILE = 'bundle/agentic-ui-config/layouts/Claim/edit.layout.json';
+const CLAIM_FORM_ENTRY =
+  '<layout type="Claim" mode="edit" src="agentic-ui-config/layouts/Claim/edit.layout.json" />';
+expectRefused(
+  'a layout file no component contributes, which the server would never serve',
+  ({ write }) => write(CLAIM_FORM_FILE, CLAIM_FORM),
+  2,
+  `${CLAIM_FORM_FILE} is a layout no component contributes, so the server would never serve it. Add ${CLAIM_FORM_ENTRY}`,
+);
+expectRefused(
+  'a layout file only a disabled entry names',
+  ({ edit, write }) => {
+    write(CLAIM_FORM_FILE, CLAIM_FORM);
+    edit(
+      COMPONENT,
+      CONTRIBUTION,
+      `${CONTRIBUTION}\n    ${CLAIM_FORM_ENTRY.replace(' />', ' enabled="false" />')}`,
+    );
+  },
+  2,
+  `${CLAIM_FORM_FILE} is a layout OSGI-INF/payers-claims-demo-config.xml names only in a disabled entry`,
+);
+expectRefused(
+  'a contributed layout whose file is taken away from the contribution, leaving the file',
+  ({ edit }) => edit(COMPONENT, CONTRIBUTION, ''),
+  2,
+  `${LAYOUT} is a layout no component contributes`,
+);
+expectRefused(
+  'a file under layouts/ at no place a layout has, which the validator does not read',
+  ({ write }) => write('bundle/agentic-ui-config/layouts/Claim/notes.txt', 'a note'),
+  2,
+  'bundle/agentic-ui-config/layouts/Claim/notes.txt is not a layout any component can contribute',
+);
+expectBuilt(
+  'a layout file the component contributes, as the generators write it',
+  ({ edit, write }) => {
+    write(CLAIM_FORM_FILE, CLAIM_FORM);
+    edit(COMPONENT, CONTRIBUTION, `${CONTRIBUTION}\n    ${CLAIM_FORM_ENTRY}`);
+  },
+);
+expectBuilt('a Markdown note among the layouts, which the zip does not hold', ({ write }) =>
+  write('bundle/agentic-ui-config/layouts/README.md', '# Layouts\n'),
+);
 
 // The app registry serves the app as the component names it, so the component names it once, from
 // the app.json the validator read, with exactly the package's files.

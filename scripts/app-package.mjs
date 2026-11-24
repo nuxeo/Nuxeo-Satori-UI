@@ -20,9 +20,11 @@
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
  *      it registers and its platform version, and, when one is given, the server's content model.
  *      The layouts the component contributes are the files the validator read, in the modes it
- *      read them in: none inline, none from elsewhere. The package contributes its app to the app
- *      registry once, from its `app.json`, naming every file of the app definition the registry
- *      serves and nothing else. A manifest that is not a file, and a component path that leaves
+ *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
+ *      contributed, since the server would never serve one that is not. The package contributes
+ *      its app to the app registry once, from its `app.json`, naming every file of the app
+ *      definition the registry serves and nothing else. A manifest that is not a file, and a
+ *      component path that leaves
  *      `bundle/` or names a folder or a hard link, are refused before they are read (a missing one
  *      is the builder's to refuse, at step 4);
  *   3. `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s
@@ -504,6 +506,11 @@ function componentFileOf(root, component) {
  * entry contributes nothing and is skipped, as the builder skips it. A manifest that is not a file
  * is refused before it is read, as is a component path that leaves `bundle/`, or names a folder or
  * a hard link (`componentFileOf`).
+ *
+ * The other way round too: a file under `agentic-ui-config/layouts/` that no enabled entry
+ * contributes is one the validator passed and the server would never serve, so it is refused,
+ * naming the file and the entry that would contribute it (`uncontributedLayout`). It is the step
+ * that reads the contributions, so it is here.
  */
 function layoutContributions(directory) {
   const bundle = join(directory, 'bundle');
@@ -520,10 +527,17 @@ function layoutContributions(directory) {
   // way, is the builder's to refuse, at step 4.
   const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
   const root = resolve(bundle);
+  /** The files the enabled entries contribute, and those only a disabled entry names. */
+  const contributed = new Set();
+  const disabled = new Map();
+  let missing = false;
   for (const component of componentPathsOf(text)) {
     const file = componentFileOf(root, component);
     if (typeof file !== 'string') return file.problem;
-    if (file === '') continue;
+    if (file === '') {
+      missing = true;
+      continue;
+    }
     let source;
     try {
       source = readFileSync(file, 'utf8');
@@ -533,7 +547,10 @@ function layoutContributions(directory) {
     const xml = componentXmlOf(source);
     for (const [, tag] of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
       const { type, mode, src, enabled } = attributesOf(tag);
-      if (enabled !== undefined && enabled.toLowerCase() !== 'true') continue;
+      if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
+        if (src !== undefined) disabled.set(posix.normalize(src), component);
+        continue;
+      }
       const checked = `agentic-ui-config/layouts/${type}/${mode}.layout.json`;
       if (src === undefined)
         return (
@@ -545,7 +562,46 @@ function layoutContributions(directory) {
           `${component} contributes the ${type}/${mode} layout from ${src}. Contribute it from ` +
           `${checked}, where the validator reads it in that mode.`
         );
+      contributed.add(checked);
     }
+  }
+  // A component that is missing is the builder's to refuse, at step 4: the layouts it would have
+  // contributed are not called uncontributed first.
+  if (missing) return null;
+  return uncontributedLayout(bundle, contributed, disabled);
+}
+
+/**
+ * The first file under `bundle/agentic-ui-config/layouts/` that no enabled `<layout>` entry
+ * contributes, said with the entry that would, or `null`. The server serves a layout only as a
+ * component names it, so such a file would never be seen, though the validator passed it. A
+ * Markdown file is not packaged (`build.mjs`), so it is not one. Step 1 has refused any symbolic
+ * link, so the walk follows none.
+ */
+function uncontributedLayout(bundle, contributed, disabled) {
+  const layouts = join(bundle, 'agentic-ui-config', 'layouts');
+  if (!existsSync(layouts) || !lstatSync(layouts).isDirectory()) return null;
+  for (const path of filesUnder(layouts).sort()) {
+    if (path.endsWith('.md')) continue;
+    const src = `agentic-ui-config/layouts/${path}`;
+    if (contributed.has(src)) continue;
+    const shown = `bundle/${src}`;
+    const place = /^([^/]+)\/([^/]+)\.layout\.json$/.exec(path);
+    if (!place)
+      return (
+        `${shown} is not a layout any component can contribute: a layout is ` +
+        'layouts/<Type>/<mode>.layout.json. Move it there and contribute it, or remove it, since ' +
+        'the server would never serve it.'
+      );
+    const entry = `<layout type="${place[1]}" mode="${place[2]}" src="${src}" />`;
+    const why = disabled.has(src)
+      ? `${disabled.get(src)} names only in a disabled entry`
+      : 'no component contributes';
+    return (
+      `${shown} is a layout ${why}, so the server would never serve it. Add ${entry} to the ` +
+      'component\'s org.nuxeo.agentic.ui.config "configuration" extension, as the app-layout and ' +
+      'app-form generators do, or remove the file.'
+    );
   }
   return null;
 }

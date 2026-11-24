@@ -78,7 +78,11 @@ live from a server needs that server's credentials (section 4). The validator ru
 Step 2 also holds the component to what the validator read: every layout it contributes comes from
 `agentic-ui-config/layouts/<Type>/<mode>.layout.json`, in the mode its path names. One written
 inline, or contributed from another file or in another mode, is refused, because the server serves
-what the component says. It finds the components as the builder, the verifier and the server do:
+what the component says. The other way round as well: a file under `agentic-ui-config/layouts/`
+that no enabled `<layout>` entry contributes is refused, with the entry that would contribute it,
+since the validator passed it and the server would never serve it. So is one that only a disabled
+entry names, and a file there at no layout's place. A Markdown file there is not packaged, and is
+let be. It finds the components as the builder, the verifier and the server do:
 the `Nuxeo-Component` headers of the manifest's main section, in any letter case, and it checks
 those of every such header. A manifest that names them in more than one header, or spells the
 header another way, is the builder's to refuse, at step 4: the server would load only the last. A
