@@ -2213,9 +2213,10 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   decide what they show.
 - **An app the person may not see is 404**, and so is a file its package does not name, a path the
   listing does not give, and any other address under `/nuxeo/agentic-ui-apps/`.
-- **Every response is `Cache-Control: private, no-cache`**, with an ETag, so the browser
-  revalidates and a shared cache keeps nothing. The listing differs from person to person and
-  varies on `Cookie` and `Authorization`. `X-Content-Type-Options: nosniff` and the configuration
+- **Every answer of the registry's is `Cache-Control: private, no-cache`**, so the browser
+  revalidates and a shared cache keeps nothing; a 200 or a 304 has an ETag, and the servlet's own
+  401 is `no-store`. The listing differs from person to person and varies on `Cookie` and
+  `Authorization`. `X-Content-Type-Options: nosniff` and the configuration
   servlet's `Content-Security-Policy` are on every answer. GET and HEAD only: anything else is 405.
 - **Diagnostics** are the configuration envelope's: `level`, `code`, `message`, the `app` it is
   about, and the contribution's `component`, `bundle` and `source`. A person gets those about the
@@ -2231,8 +2232,13 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   "Switch app" in the settings menu offers the others; choosing one reloads the page. A sign-in
   whose listing opens another app reloads the page once, so that the menu and the labels read at
   startup are the new app's.
-- **Measured on the local server** (Nuxeo 2025.10.18, 24 November 2026): see the pull request that
-  built the registry for the requests and their answers.
+- **Measured on the local server** (Nuxeo 2025.10.18, 24 November 2026, with the Payers kit 0.3.0
+  and its `<app>`): a user in `claims-adjusters` was listed `payers-claims` with its eight files,
+  each served 200, and the listing again with its ETag was 304; a user in `members` alone, and
+  `Administrator`, were listed no app, and the first got 404 for `payers-claims/home.json`; no
+  credentials and a wrong password were 401 with no `WWW-Authenticate` under `X-No-Basic-Header`;
+  POST was 405. That server ran the registry before its chain ended with `ANONYMOUS_AUTH`, so a
+  request with no credentials there was 401, not `Anonymous`.
 
 **Used by:** `HomeService` (the home and the menu), `QueueService` (a queue), `DocumentLayoutService`
 (a task form), `AppTranslateLoader` (the labels), and the shell's "Switch app".

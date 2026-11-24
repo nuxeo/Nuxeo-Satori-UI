@@ -125,12 +125,18 @@ describe('AppRegistryService', () => {
   });
 
   it.each([
-    ['answers 404, as a server without a registry', 404, null],
-    ['answers 401, as before anyone signs in', 401, null],
-    ['answers something that is not its listing', 200, { format: 'other' }],
-  ])('has no app when the registry %s', async (_, status, body) => {
+    ['answers 404, as a server without a registry, quietly', 404, null, false],
+    ['answers 401, as before anyone signs in, quietly', 401, null, false],
+    ['answers 500, and the console says so', 500, null, true],
+    [
+      'answers something that is not its listing, and the console says so',
+      200,
+      { format: 'other' },
+      true,
+    ],
+  ])('has no app when the registry %s', async (_, status, body, said) => {
     const registry = setUp();
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const load = registry.load();
 
     await answer(body, status);
@@ -139,8 +145,11 @@ describe('AppRegistryService', () => {
     expect(registry.state().kind).toBe('none');
     expect(registry.apps()).toEqual([]);
     expect(registry.current()).toBeNull();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('[agentic-ui-apps] no app registry'));
-    info.mockRestore();
+    const calls = warn.mock.calls.filter(([message]) =>
+      String(message).startsWith('[agentic-ui-apps] no app registry'),
+    );
+    expect(calls.length).toBe(said ? 1 : 0);
+    warn.mockRestore();
   });
 
   it('opens the app last chosen while the person may still see it, and the first otherwise', async () => {
@@ -245,7 +254,7 @@ describe('AppRegistryService', () => {
 
     it('reads the development server alone where the registry did not answer', async () => {
       const registry = setUp();
-      vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const read = firstValueFrom(registry.file('home.json', `${DEV}home.json`));
       await answer(null, 404);
 
@@ -266,7 +275,7 @@ describe('AppRegistryService', () => {
   describe('refresh', () => {
     it('says the app open would change, as when someone else signs in', async () => {
       const registry = setUp();
-      vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const load = registry.load();
       await answer(null, 401);
       await load;

@@ -8,7 +8,7 @@ import {
   HttpHeaders,
 } from '@angular/common/http';
 import { Injectable, InjectionToken, Injector, computed, inject, signal } from '@angular/core';
-import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   Observable,
@@ -185,7 +185,6 @@ export class AppRegistryService implements AppDefinitionFiles {
   private readonly injector = inject(Injector);
   private readonly reload = inject(APP_REGISTRY_RELOAD);
   private readonly storage = inject(APP_REGISTRY_STORAGE);
-  private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
 
   private readonly listing = signal<AppRegistryState>({ kind: 'pending' });
   private readonly remembered = signal<string | null>(this.readChoice());
@@ -242,12 +241,6 @@ export class AppRegistryService implements AppDefinitionFiles {
   /** Where the registry serves one of an app's files. */
   fileUrl(app: RegistryApp, path: string): string {
     return `${this.origin()}${APP_REGISTRY_PATH}${app.url}${path.split('/').map(encodeURIComponent).join('/')}`;
-  }
-
-  /** Where the development server serves a file of an app definition, beside `bootstrap.json`. */
-  developmentUrl(path: string): string {
-    const bootstrap = this.bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
-    return `${bootstrap.slice(0, bootstrap.lastIndexOf('/') + 1)}${path}`;
   }
 
   file(path: string, developmentUrl: string | null): Observable<unknown> {
@@ -315,8 +308,9 @@ export class AppRegistryService implements AppDefinitionFiles {
   /** The console is where support finds what the registry said, as for the configuration. */
   private report(state: AppRegistryState): void {
     if (state.kind === 'none') {
-      // No registry on this server, or no one signed in yet: the ordinary cases, said quietly.
-      console.info(`[agentic-ui-apps] no app registry: ${state.reason}`);
+      // No registry on this server (404), or no one signed in yet (401): the ordinary cases, said
+      // nowhere. Anything else is a registry that answered and could not be read.
+      if (!/^HTTP 40[14]$/.test(state.reason)) warn(`no app registry: ${state.reason}`);
       return;
     }
     if (state.kind !== 'listed') return;

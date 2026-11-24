@@ -50,7 +50,8 @@ way.
   - **B, the registry in an add-on of its own or a separate service:** the `<app>` element,
     `AppRegistryEndpoint` and `AgenticUiAppsServlet` move together, out of
     `nuxeo-agentic-core`. Every package's `<app>` then targets the new component and `<require>`s
-    it, and the pipeline's step 2 checks that target. A separate service needs
+    it, and the pipeline's step 2, which reads `<app>` wherever a component has it, would have to
+    hold it to that target. A separate service needs
     `/nuxeo/agentic-ui-apps/` routed to it, or the client's `APP_REGISTRY_PATH` changed. The
     client's reads, `APP_DEFINITION_FILES`, stay as they are.
   - **E, app definitions served before sign-in, to everyone:** the registry's path loses its
