@@ -93,6 +93,7 @@
           class="record-page__comments"
           [documentUid]="document().uid"
           [pageSize]="comments.pageSize"
+          [readOnly]="readOnly()"
         />
       } @else if (card.external; as external) {
         <lib-record-external

@@ -23,6 +23,7 @@
       "@agentic-ui/feature-collections": ["libs/features/collections/src/index.ts"],
       "@agentic-ui/feature-document-detail": ["libs/features/document-detail/src/index.ts"],
       "@agentic-ui/feature-knowledge-discovery": ["libs/features/knowledge-discovery/src/index.ts"],
+      "@agentic-ui/feature-layout-designer": ["libs/features/layout-designer/src/index.ts"],
       "@agentic-ui/feature-search": ["libs/features/search/src/index.ts"],
       "@agentic-ui/feature-search/search-filters-drawer": [
         "libs/features/search/src/lib/search-filters-drawer/search-filters-drawer.component.ts"

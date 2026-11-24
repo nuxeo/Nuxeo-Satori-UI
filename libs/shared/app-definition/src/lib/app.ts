@@ -7,6 +7,7 @@
  */
 import { createChecker, ID, join, unreadable, type Checker, type Finding } from './checker';
 import { describeLogoSrcForm } from './image-source';
+import { PLATFORM_ROUTES } from './platform-routes';
 import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 import { parseRange, parseVersion, satisfies } from './semver';
 
@@ -61,6 +62,7 @@ export function validateApp(content: unknown, options: AppOptions = {}): Finding
       'structure',
       'an address is lower-case letters, digits and "-", starting with a letter',
     );
+  else address(c, app);
   if (typeof app['packageVersion'] !== 'string' || !parseVersion(app['packageVersion']))
     c.add('packageVersion', 'structure', `needs the package's semantic version, such as "1.4.0"`);
   platform(c, app['platform'], options.platformVersion);
@@ -68,6 +70,36 @@ export function validateApp(content: unknown, options: AppOptions = {}): Finding
   if ('modules' in app) modules(c, app['modules']);
   if ('branding' in app) branding(c, app['branding']);
   return c.findings;
+}
+
+/**
+ * A written address must not be a page the platform has already (`PLATFORM_ROUTES`): an app at
+ * `/contracts` would take the platform's component showcase, and the shell, opening apps at their
+ * address, could reach only one of them. An id that is one, with no address, is the same clash,
+ * and is said rather than refused (`addressTakenById`): the contracts kit was built before this
+ * rule, with the id `contracts` and no address, and still builds until it gives itself one.
+ */
+function address(c: Checker, app: Record<string, unknown>): void {
+  const value = app['address'];
+  if (typeof value !== 'string' || !PLATFORM_ROUTES.includes(value)) return;
+  c.add(
+    'address',
+    'structure',
+    `the address "${value}" is the platform's own page, /${value}: choose one no platform route has`,
+  );
+}
+
+/**
+ * What to say of an `app.json` that gives no address and whose id, its address therefore, is a
+ * platform route, or `undefined`. Not a finding: refusing it would refuse a package built before
+ * the rule. The command line says it, and the `app-package` generator writes every new app's
+ * address, which `validateApp` then holds to the rule.
+ */
+export function addressTakenById(content: unknown): string | undefined {
+  if (!isRecord(content) || 'address' in content) return undefined;
+  const id = content['id'];
+  if (typeof id !== 'string' || !PLATFORM_ROUTES.includes(id)) return undefined;
+  return `with no "address", the app's address is its id, "${id}", which is the platform's own page, /${id}: give the app an "address" no platform route has`;
 }
 
 function platform(c: Checker, range: unknown, version: string | undefined): void {

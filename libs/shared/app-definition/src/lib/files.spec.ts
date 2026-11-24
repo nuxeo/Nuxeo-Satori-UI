@@ -1,5 +1,5 @@
 import { validateActions } from './actions';
-import { validateApp } from './app';
+import { addressTakenById, validateApp } from './app';
 import type { Finding } from './checker';
 import { validateLabels, validateModuleSettings } from './labels';
 import { validateLayoutV2, validateTaskForm } from './layout-v2';
@@ -47,6 +47,20 @@ describe('app.json', () => {
     expect(show(validateApp(branded, { registries: withCases, platformVersion: '0.5.0' }))).toEqual(
       [],
     );
+    // An id that is a platform route passes with an address of its own: the address is where the
+    // shell opens it.
+    expect(show(validateApp(app({ id: 'contracts', address: 'contract-desk' })))).toEqual([]);
+  });
+
+  it('says, and does not refuse, an id that is a platform route with no address', () => {
+    // Refused, it would refuse the contracts kit, built before the rule; the command says it.
+    expect(show(validateApp(app({ id: 'contracts' })))).toEqual([]);
+    expect(addressTakenById(app({ id: 'contracts' }))).toBe(
+      `with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts: give the app an "address" no platform route has`,
+    );
+    expect(addressTakenById(app({ id: 'contracts', address: 'contract-desk' }))).toBeUndefined();
+    expect(addressTakenById(app({ id: 'claims' }))).toBeUndefined();
+    expect(addressTakenById([])).toBeUndefined();
   });
 
   const rows: readonly Row[] = [
@@ -68,6 +82,20 @@ describe('app.json', () => {
       input: app({ address: 'Claims Desk' }),
       found: [
         'address: an address is lower-case letters, digits and "-", starting with a letter [structure]',
+      ],
+    },
+    {
+      what: "an address that is one of the platform's routes",
+      input: app({ address: 'contracts' }),
+      found: [
+        `address: the address "contracts" is the platform's own page, /contracts: choose one no platform route has [structure]`,
+      ],
+    },
+    {
+      what: 'an address that is a route under settings/, which is reserved whole',
+      input: app({ address: 'settings' }),
+      found: [
+        `address: the address "settings" is the platform's own page, /settings: choose one no platform route has [structure]`,
       ],
     },
     {

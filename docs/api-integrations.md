@@ -2301,7 +2301,47 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ---
 
-## 37. Record Page — a Record of Another System, through a Connector
+## 37. Layout Designer — a Record Page's File, the Content Model and Records to Preview With
+
+| Field           | Value                                                                                                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `LayoutDesignerService` (`libs/features/layout-designer/src/lib/layout-designer.service.ts`), with `DocumentLayoutService` and `ContentModelService`     |
+| **HTTP Method** | `GET`, and a `POST` that reads for a card from another system (section 38): the designer writes nothing, and saves the file as a download                |
+| **Endpoints**   | `<config>/layouts.json` and `<config>/layouts/<Type>/view.layout.json` — the record pages served, and one of them, each read anew, past the interceptors |
+|                 | `/nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas` — the content model the file is held to, read once per session                      |
+|                 | `/nuxeo/api/v1/config/types/<Type>` — the type the preview resolves the file against, as the record page reads it                                        |
+|                 | `/nuxeo/api/v1/config/schemas/<name>` — a schema the record's facets add that the file names, as the record page reads it                                |
+|                 | `/nuxeo/api/v1/search/lang/NXQL/execute` — the records of the type to preview with                                                                       |
+|                 | `/nuxeo/api/v1/id/<uid>` — the record the preview draws, read as the document page reads it (`getFullDocument`)                                          |
+| **Auth**        | The person's own, through the interceptors, but for the two configuration files, which the layout reads send with the session's cookies only             |
+
+**The records query:**
+
+| Parameter          | Value                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`            | `SELECT * FROM Document WHERE ecm:primaryType = ? AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0 ORDER BY dc:modified DESC` |
+| `queryParams`      | The type, as a parameter: never written into the query's text                                                                                |
+| `pageSize`         | `20`                                                                                                                                         |
+| `properties` (hdr) | `dublincore`                                                                                                                                 |
+
+**Notes:**
+
+- **Administrators only, and not a security control.** The route is behind the administrator gate,
+  and every read is the person's own, so Nuxeo's permissions decide what it returns.
+- **The preview draws the record page read-only:** no comment box and no row action, so drawing it
+  writes nothing. Its related lists, timeline and lookups read what they read on the View tab, and
+  a card from another system asks `Connector.Read` (section 38): a `POST` that reads, and writes
+  nothing on the server.
+- **Measured on the local server** (Nuxeo 2025.10.18, 24 November 2026, with the Payers kit served by
+  `npm run config:dev`): the Member page opened with its first member previewed, every request a
+  `GET`. The shell's own notification bell still posts its `Repository.Query` and
+  `Audit.QueryWithPageProvider` reads, as on every page.
+
+**Used by:** `LayoutDesignerPageComponent`, at `/#/administration/layout-designer`.
+
+---
+
+## 38. Record Page — a Record of Another System, through a Connector
 
 | Field           | Value                                                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |

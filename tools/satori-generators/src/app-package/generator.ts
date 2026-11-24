@@ -5,13 +5,25 @@ import { formatFiles, generateFiles, type Tree } from '@nx/devkit';
 
 import appLayoutGenerator from '../app-layout/generator';
 import { isWindowsDeviceName, SATORI_NAMES, titleCase } from '../config-package/generator';
-import { APP_ID, CONFIG_ROOT, listOption, parseJson, schemaFor, writeJson } from './package-files';
+import {
+  APP_ID,
+  CONFIG_ROOT,
+  contributeApp,
+  listOption,
+  parseJson,
+  platformRoutes,
+  PLATFORM_ROUTES_FILE,
+  readAppPackage,
+  schemaFor,
+  writeJson,
+} from './package-files';
 import { generatorFilesDir } from '../util/generator-files-dir';
 
 export interface AppPackageSchema {
   name: string;
   owner: string;
   appId?: string;
+  address?: string;
   title?: string;
   vendor?: string;
   version?: string;
@@ -136,8 +148,10 @@ function defaultPlatform(tree: Tree): string | null {
  *   platform range and groups (app-definition-v2.md, section 3), and `labels/en.json` with its
  *   name.
  * - `bundle/OSGI-INF/<name>-config.xml`: the component, required after Satori's defaults, that
- *   `app-layout` adds each layout to. No bootstrap fragment: on a server shared by several apps it
- *   would rebrand them all (package-pipeline.md, section 1).
+ *   `app-layout` and `app-form` add each layout to. It contributes the app to the app registry
+ *   (app-definition-v2.md, section 10), as `app-registry` writes the `<app>` element, naming the
+ *   files the registry serves; the other generators keep it in step. No bootstrap fragment: on a
+ *   server shared by several apps it would rebrand them all (package-pipeline.md, section 1).
  * - `package/`, `bundle/META-INF/MANIFEST.MF` and `build.mjs`: version 1's configuration package.
  *   `build.mjs` is the `config-package` generator's, byte for byte, which the pipeline's step 1
  *   requires.
@@ -147,7 +161,14 @@ function defaultPlatform(tree: Tree): string | null {
  *   contributes nothing is refused by the pipeline's step 5, so without a type the package passes
  *   only once `app-layout` has added a layout.
  *
- * Queues and actions are `app-queue`'s and `app-action`'s.
+ * Forms, queues and actions are `app-form`'s, `app-queue`'s and `app-action`'s; a stand-in model,
+ * for a demo whose types no server has yet, is `app-model`'s.
+ *
+ * - **The app's address**, where the shell is to open it, is written in `app.json`: `--address`, or
+ *   the id. One that is a platform route, such as `contracts` (`PLATFORM_ROUTES` in
+ *   `libs/shared/app-definition`), is refused here, as the validator refuses it once written: an
+ *   id that is one needs an `--address`. Left out, as a package written by hand may, the validator
+ *   only says so.
  *
  * ## Internal
  *
@@ -188,6 +209,18 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
   if (!APP_ID.test(appId)) {
     throw new Error(
       `--appId "${appId}" must be lower-case letters, digits and "-", starting with a letter, at most 63 characters: it is the app's id in the registry.`,
+    );
+  }
+  if (options.address !== undefined && !APP_ID.test(options.address)) {
+    throw new Error(
+      `--address "${options.address}" must be lower-case letters, digits and "-", starting with a letter, at most 63 characters: it is where the shell opens the app.`,
+    );
+  }
+  // Refused here rather than at the pipeline's step 2, where the validator would refuse it.
+  const address = options.address ?? appId;
+  if (platformRoutes().includes(address)) {
+    throw new Error(
+      `The app's address would be "${address}"${options.address === undefined ? ', its id' : ''}, which is the platform's own page, /${address} (${PLATFORM_ROUTES_FILE}). Give --address another, such as --address=${address}-app.`,
     );
   }
   const version = options.version ?? '0.1.0';
@@ -250,6 +283,9 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
     labelKey: appLabel,
     packageVersion: version,
     platform,
+    // Written, so that the validator holds it to the platform's routes: one left out is said, not
+    // refused, for the packages built before the rule.
+    address,
     groups,
     branding: { applicationTitle: title },
   });
@@ -259,6 +295,8 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
     version: 2,
     labels: { [appLabel]: title },
   });
+  // The app, for the app registry: without it "Switch app" cannot list the app on a server.
+  contributeApp(tree, readAppPackage(tree, projectRoot), { create: true });
 
   const layout =
     options.type === undefined
@@ -285,7 +323,7 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
     console.log(`
 Generated ${projectRoot}
 
-  App:                  ${appId} (${title}), for ${groups.join(', ')}
+  App:                  ${appId} (${title}), for ${groups.join(', ')}, contributed to the app registry
   Marketplace package:  ${options.name} ${version}
   Nuxeo component:      ${component}
   Platform:             ${platform}
@@ -295,11 +333,16 @@ ${
     ? ''
     : `The pipeline refuses a package that contributes nothing (step 5): add a record page first.
 `
-}Add a record page, a queue and an action:
+}Add a record page, a form, a queue and an action:
 
   npx nx g ./tools/satori-generators:app-layout --package=${projectRoot} --type=<Type> --model=<content-model.json>
+  npx nx g ./tools/satori-generators:app-form --package=${projectRoot} --type=<Type> --mode=edit --model=<content-model.json>
   npx nx g ./tools/satori-generators:app-queue --package=${projectRoot} --id=<queue> --pageProvider=<page provider>
   npx nx g ./tools/satori-generators:app-action --package=${projectRoot} --id=${appId}.<name> --transition=<transition>
+
+For a demo whose types are on no server yet, a stand-in model first:
+
+  npx nx g ./tools/satori-generators:app-model --package=${projectRoot} --type=<Type> --properties=<name>[:<type>],...
 
 Then check and build it:
 
