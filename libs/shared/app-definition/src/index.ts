@@ -51,6 +51,7 @@ export {
   type PackageOptions,
   type PlacedFile,
 } from './lib/package';
+export { PLATFORM_ROUTES } from './lib/platform-routes';
 export { QUEUE_V2_KEYS, validateQueue } from './lib/queue';
 export {
   APP_RULES,

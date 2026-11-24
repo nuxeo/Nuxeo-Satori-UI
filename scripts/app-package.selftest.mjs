@@ -335,6 +335,19 @@ expectBuilt(
   [],
   'note: no component contributes the app, so the app registry will not serve it on a server',
 );
+// An app's address, its id when it has none, is where the shell is to open it: one that is a page
+// the platform has already is refused (PLATFORM_ROUTES in libs/shared/app-definition).
+expectRefused(
+  "an app whose address is one of the platform's routes",
+  ({ edit }) =>
+    edit(
+      'bundle/agentic-ui-config/app.json',
+      '"id": "payers-claims",',
+      '"id": "payers-claims",\n  "address": "contracts",',
+    ),
+  2,
+  `address: the address "contracts" is the platform's own page, /contracts`,
+);
 expectRefused(
   "an app contributed under an id that is not app.json's",
   ({ edit }) =>

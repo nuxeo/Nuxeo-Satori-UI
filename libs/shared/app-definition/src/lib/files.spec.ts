@@ -47,6 +47,9 @@ describe('app.json', () => {
     expect(show(validateApp(branded, { registries: withCases, platformVersion: '0.5.0' }))).toEqual(
       [],
     );
+    // An id that is a platform route passes with an address of its own: the address is where the
+    // shell opens it.
+    expect(show(validateApp(app({ id: 'contracts', address: 'contract-desk' })))).toEqual([]);
   });
 
   const rows: readonly Row[] = [
@@ -68,6 +71,27 @@ describe('app.json', () => {
       input: app({ address: 'Claims Desk' }),
       found: [
         'address: an address is lower-case letters, digits and "-", starting with a letter [structure]',
+      ],
+    },
+    {
+      what: "an address that is one of the platform's routes",
+      input: app({ address: 'contracts' }),
+      found: [
+        `address: the address "contracts" is the platform's own page, /contracts: choose one no platform route has [structure]`,
+      ],
+    },
+    {
+      what: "an id that is one of the platform's routes, with no address of its own",
+      input: app({ id: 'contracts' }),
+      found: [
+        `id: with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts: give the app an "address" no platform route has [structure]`,
+      ],
+    },
+    {
+      what: 'an id that is a route under settings/, which is reserved whole',
+      input: app({ id: 'settings' }),
+      found: [
+        `id: with no "address", the app's address is its id, "settings", which is the platform's own page, /settings: give the app an "address" no platform route has [structure]`,
       ],
     },
     {

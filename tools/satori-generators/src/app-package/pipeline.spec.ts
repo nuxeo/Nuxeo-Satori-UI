@@ -320,6 +320,31 @@ describe.skipIf(process.platform === 'win32')(
       });
     });
 
+    it('an app whose id is a platform route is refused at step 2, and passes with an address of its own', async () => {
+      const scaffoldAs = async (address?: string): Promise<string> => {
+        const own = createTreeWithEmptyWorkspace();
+        await appPackageGenerator(own, {
+          name: 'acme-contracts',
+          owner: 'acme',
+          appId: 'contracts',
+          address,
+          platform: '>=0.2.0 <1.0.0',
+          type: 'Contract',
+          model: CONTRACTS_MODEL,
+        });
+        const directory = join(scratch, `route-${address ?? 'none'}`);
+        flush(own, ROOT, directory);
+        return directory;
+      };
+      const clash = pipeline(await scaffoldAs(), ['--platform', PLATFORM]);
+      expect(clash.output).toContain(
+        `id: with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts`,
+      );
+      expect(clash.output).toContain('step 2 refused it');
+      expect(clash.status).toBe(1);
+      expect(pipeline(await scaffoldAs('contract-desk'), ['--platform', PLATFORM]).status).toBe(0);
+    });
+
     it('a package with no record page is refused at step 5: it contributes nothing', async () => {
       const bare = createTreeWithEmptyWorkspace();
       await appPackageGenerator(bare, {

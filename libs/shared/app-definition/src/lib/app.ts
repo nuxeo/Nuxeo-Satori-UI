@@ -7,6 +7,7 @@
  */
 import { createChecker, ID, join, unreadable, type Checker, type Finding } from './checker';
 import { describeLogoSrcForm } from './image-source';
+import { PLATFORM_ROUTES } from './platform-routes';
 import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 import { parseRange, parseVersion, satisfies } from './semver';
 
@@ -61,6 +62,7 @@ export function validateApp(content: unknown, options: AppOptions = {}): Finding
       'structure',
       'an address is lower-case letters, digits and "-", starting with a letter',
     );
+  else address(c, app);
   if (typeof app['packageVersion'] !== 'string' || !parseVersion(app['packageVersion']))
     c.add('packageVersion', 'structure', `needs the package's semantic version, such as "1.4.0"`);
   platform(c, app['platform'], options.platformVersion);
@@ -68,6 +70,29 @@ export function validateApp(content: unknown, options: AppOptions = {}): Finding
   if ('modules' in app) modules(c, app['modules']);
   if ('branding' in app) branding(c, app['branding']);
   return c.findings;
+}
+
+/**
+ * The app's address, written or, when `app.json` gives none, its id, must not be a page the
+ * platform has already (`PLATFORM_ROUTES`): an app at `/contracts` would take the platform's
+ * component showcase, and the shell, opening apps at their address, could reach only one of them.
+ */
+function address(c: Checker, app: Record<string, unknown>): void {
+  const written = typeof app['address'] === 'string';
+  const value = written ? app['address'] : app['id'];
+  if (typeof value !== 'string' || !PLATFORM_ROUTES.includes(value)) return;
+  if (written)
+    c.add(
+      'address',
+      'structure',
+      `the address "${value}" is the platform's own page, /${value}: choose one no platform route has`,
+    );
+  else
+    c.add(
+      'id',
+      'structure',
+      `with no "address", the app's address is its id, "${value}", which is the platform's own page, /${value}: give the app an "address" no platform route has`,
+    );
 }
 
 function platform(c: Checker, range: unknown, version: string | undefined): void {
