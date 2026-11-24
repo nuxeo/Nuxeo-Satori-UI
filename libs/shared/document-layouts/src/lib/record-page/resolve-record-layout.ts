@@ -7,6 +7,7 @@ import type {
 import { prefixOfXpath } from '../resolve-layout';
 import {
   propertiesReadBy,
+  type RecordBannerEntry,
   type RecordCardEntry,
   type RecordComputedField,
   type RecordFieldEntry,
@@ -39,10 +40,19 @@ export interface ResolvedRecordTab extends Omit<RecordTabEntry, 'cards'> {
   readonly cards: readonly ResolvedRecordCard[];
 }
 
+/**
+ * What a record page shows of the record's own file before its cards, for a record whose file is
+ * its content: `picture`, a Picture's views, for a record with the `picture` schema; `null` for a
+ * record with no such file.
+ */
+export type RecordPreview = 'picture' | null;
+
 /** A `view` file resolved for one document: what its record page shows. */
 export interface ResolvedRecordLayout {
   readonly type: string;
   readonly columns: number;
+  readonly banners: readonly RecordBannerEntry[];
+  readonly preview: RecordPreview;
   readonly tabs: readonly ResolvedRecordTab[] | null;
   readonly cards: readonly ResolvedRecordCard[];
   /**
@@ -153,6 +163,7 @@ export function resolveRecordLayout(
   type: DocumentTypeDefinition,
   file: RecordLayoutFile,
   facetSchemas: readonly DocumentTypeSchema[] = [],
+  preview: RecordPreview = null,
 ): {
   readonly layout: ResolvedRecordLayout;
   readonly skipped: readonly SkippedRecordField[];
@@ -211,6 +222,8 @@ export function resolveRecordLayout(
     layout: {
       type: type.name,
       columns: file.columns,
+      banners: file.banners,
+      preview,
       tabs,
       cards: tabs ? [] : cards(file.cards),
       properties,

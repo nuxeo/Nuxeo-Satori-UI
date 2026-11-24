@@ -796,6 +796,8 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                                       |
 | `app.rules.fieldIn`              | A property of the focused document, named first, holds one of the other `parameters` |
 | `app.rules.inState`              | The focused document's lifecycle state is one of the `parameters`                    |
+| `app.rules.datePassed`           | A date, named first, is before today                                                 |
+| `app.rules.dateWithin`           | A date, named first, is today or within the number of days named second              |
 
 `app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
 record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
@@ -836,13 +838,25 @@ Texts match exactly, numbers as numbers (a stored `5000` matches `5000`, `"5000"
 may match. A literal first parameter is compared as it is. A computation there is not evaluated
 by the rules' library, so it would match nothing, and the layout validator refuses one.
 
+`app.rules.datePassed` and `app.rules.dateWithin` are layout version 2's too, and any manifest may
+use them. Each takes the date first, a property as a layout names one or a literal, and
+`dateWithin` then a whole number of days from 0 to 36500:
+`{ "type": "app.rules.dateWithin", "parameters": [{ "field": "dc:expired" }, 30] }` passes from 30
+days before the date to the day itself, and `datePassed` from the day after. A date is read as the
+record page's `date` widget reads one: a stored day, such as a `dc:expired` picked in the Edit form,
+as written, and an instant on the reader's own day. Today is the reader's day, from the browser's
+clock. No date, or a value that is not one, passes neither rule, nor does a number of days out of
+range. The layout validator refuses a number of days out of range, and in place of the date a
+literal that is not one, such as `"2026-13-01"`, or a computation.
+
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
 when you navigate away, so all of them answer `false` everywhere else — with two
 exceptions, both of the `rowActions` slot (section 10a): browse's row menu and a record page's
 list of related records resolve it with each row's document in focus, for that slot only. `app.rules.fieldIn` with a literal first
 parameter is not a rule about the document: it reads none, so it answers the same on
-every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. In particular the two
+every surface, and `fieldIn("gold", "gold")` is `true` with nothing in focus. So are
+`app.rules.datePassed` and `app.rules.dateWithin` with a literal date: they read only the clock. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
 columns by type, because a list has no single focused document. An earlier
 version of this document described the first five as functional with no caveat
@@ -1219,7 +1233,8 @@ ID reaches it. The uses resolved by ID are these:
 Search shows no avatar, breadcrumb trail or status tag.
 
 Banners and chip sets resolve through their own IDs too. Document detail's trashed-document and
-version banners, search's AI error banner and create-import's two location hints render through
+version banners, search's AI error banner, create-import's two location hints and a record page's
+banners ([layout-v2.md](business-apps/layout-v2.md), section 2) render through
 `nxs.primitives.banner`; create-import's subject, nature and coverage chips and the search filters'
 chips render through `nxs.primitives.chipSet`. The banners pass their message and buttons as
 `componentInputs`, and the chip sets pass `removeHandler`, since the outlet binds no outputs. Each
@@ -1920,11 +1935,13 @@ the Properties panel, and a type with only a `metadata` file gets a generated `e
 
 What a layout file does **not** do:
 
-- **`view` is layout version 2.** A `view` file draws the record page, in the View tab: cards,
-  named widgets, computed fields and rules ([layout-v2.md](business-apps/layout-v2.md)). It is
-  read only as version 2, since version 1 has no `view` mode, and a `documentView` entry (section
-  9a) still takes the tab first. A file for any mode other than `view`, `metadata`, `edit` and
-  `create` is served but not rendered.
+- **`view` is layout version 2.** A `view` file draws the record page, in the View tab: banners,
+  cards, named widgets, computed fields and rules ([layout-v2.md](business-apps/layout-v2.md)). It
+  is read only as version 2, since version 1 has no `view` mode, and a `documentView` entry
+  (section 9a) still takes the tab first. A record with a file or a note keeps its own View tab,
+  but for a Picture, or any record with the `picture` schema, whose record page shows its picture
+  views above its cards (layout-v2.md, section 11). A file for any mode other than `view`,
+  `metadata`, `edit` and `create` is served but not rendered.
 - **An `edit` or `create` file may be version 2 too.** The form then draws only what the file
   lists, with no Dublin Core fields of its own: its cards, each widget as its field's input,
   fields required or read-only by rule, and checks across fields (layout-v2.md, section 11). A

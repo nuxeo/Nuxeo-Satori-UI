@@ -1,0 +1,159 @@
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+
+import { daysFromToday } from './date-rules';
+import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
+import { EMPTY_EXTENSION_RULE_CONTEXT, type ExtensionRuleContext } from './extension-rules';
+
+/**
+ * Layout version 2's date rules (docs/business-apps/layout-v2.md, section 5), and the reading of a
+ * date they share with the computations (AGENTS/08-bug-patterns.md, pattern 29).
+ *
+ * The zone is given to `daysFromToday` rather than taken from the process, so these cases prove
+ * the same thing on every machine: in UTC, where CI runs, a stored day and an instant read in the
+ * wrong zone fall on the right day, and a test of the process's own zone would prove nothing.
+ */
+
+const EAST = 'Asia/Calcutta'; // +05:30
+const WEST = 'America/New_York'; // -05:00 in November
+
+describe('daysFromToday', () => {
+  // 17:30 on the 24th in the east, 07:00 on the 24th in the west.
+  const noon = new Date('2026-11-24T12:00:00Z');
+
+  it('reads a stored day as written, in every zone', () => {
+    for (const zone of [EAST, WEST, 'UTC']) {
+      expect(daysFromToday('2026-11-24', noon, zone)).toBe(0);
+      expect(daysFromToday('2026-11-25T00:00:00.000Z', noon, zone)).toBe(1);
+      expect(daysFromToday('2026-11-23T00:00:00Z', noon, zone)).toBe(-1);
+      expect(daysFromToday('2026-12-24T00:00:00+00:00', noon, zone)).toBe(30);
+    }
+  });
+
+  it("reads a stored day in UTC where the reader's own day is another", () => {
+    // 22:00 on the 24th in the west, already the 25th in UTC: the stored 25th is tomorrow there.
+    const evening = new Date('2026-11-25T03:00:00Z');
+    expect(daysFromToday('2026-11-25T00:00:00.000Z', evening, WEST)).toBe(1);
+    expect(daysFromToday('2026-11-25T00:00:00.000Z', evening, EAST)).toBe(0);
+  });
+
+  it("reads an instant on the reader's own day", () => {
+    // 01:30 on the 25th in the east, 15:00 on the 24th in the west.
+    expect(daysFromToday('2026-11-24T20:00:00Z', noon, EAST)).toBe(1);
+    expect(daysFromToday('2026-11-24T20:00:00Z', noon, WEST)).toBe(0);
+    // Midnight in a zone other than UTC is an instant, not a stored day.
+    expect(daysFromToday('2026-11-25T00:00:00+05:30', noon, WEST)).toBe(0);
+  });
+
+  it("counts today from the reader's own midnight", () => {
+    // 23:00 on the 24th in the east, 13:30 on the 24th in the west; a minute later, the 25th east.
+    expect(daysFromToday('2026-11-25', new Date('2026-11-24T18:29:00Z'), EAST)).toBe(1);
+    expect(daysFromToday('2026-11-25', new Date('2026-11-24T18:31:00Z'), EAST)).toBe(0);
+    expect(daysFromToday('2026-11-25', new Date('2026-11-24T18:31:00Z'), WEST)).toBe(1);
+  });
+
+  it('counts across months, years and a leap day', () => {
+    expect(daysFromToday('2028-03-01', new Date('2028-02-28T12:00:00Z'), 'UTC')).toBe(2);
+    expect(daysFromToday('2027-01-01', noon, 'UTC')).toBe(38);
+  });
+
+  it('finds no date in anything else', () => {
+    for (const value of [
+      '2026-11-24T12:00:00', // no zone: a different instant in every zone
+      '2023-02-29',
+      '2026-13-01',
+      '2026-11-24T24:00:00Z',
+      '24/11/2026',
+      '',
+      1764000000000,
+      null,
+      undefined,
+      { field: 'dc:expired' },
+    ])
+      expect(daysFromToday(value, noon, 'UTC')).toBeNull();
+    expect(daysFromToday('2026-11-24', new Date(Number.NaN), 'UTC')).toBeNull();
+  });
+});
+
+function asset(expired: unknown): NuxeoDocument {
+  return {
+    uid: 'a1',
+    title: 'Trail jacket, front',
+    type: 'Picture',
+    path: '/a1',
+    lastModified: '2026-11-24T00:00:00.000Z',
+    properties: { 'dc:expired': expired },
+  };
+}
+
+const on = (document: NuxeoDocument | null): ExtensionRuleContext => ({
+  ...EMPTY_EXTENSION_RULE_CONTEXT,
+  document,
+});
+
+const evaluate = (id: string, context: ExtensionRuleContext, ...parameters: unknown[]): boolean =>
+  DOCUMENT_RULE_EVALUATORS[id](context, parameters, () => false);
+
+const expired = { field: 'dc:expired' };
+
+/**
+ * The day `offset` days from the reader's today, as Nuxeo stores a day: its midnight UTC, or as
+ * `2026-11-24` with `bare`. Derived from the reader's own day on purpose: these cases are about each
+ * rule's window, and hold in any zone, from UTC-12 to UTC+14. How a stored day and an instant are read
+ * in a zone is `daysFromToday`'s cases above, with literals in zones chosen either side of UTC.
+ */
+function storedDay(offset: number, bare = false): string {
+  const now = new Date();
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const written = `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+  return bare ? written : `${written}T00:00:00.000Z`;
+}
+
+describe('the date rules, read against the clock', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('datePassed: the day is before today, and today has not passed', () => {
+    const passed = (value: string) => evaluate('app.rules.datePassed', on(asset(value)), expired);
+    expect(passed(storedDay(-1))).toBe(true);
+    expect(passed(storedDay(0))).toBe(false);
+    expect(passed(storedDay(7, true))).toBe(false);
+  });
+
+  it('dateWithin: from today to the given days ahead, both included, and not once it has passed', () => {
+    const within = (value: unknown, days: unknown) =>
+      evaluate('app.rules.dateWithin', on(asset(value)), expired, days);
+    expect(within(storedDay(0), 30)).toBe(true);
+    expect(within(storedDay(30), 30)).toBe(true);
+    expect(within(storedDay(31), 30)).toBe(false);
+    expect(within(storedDay(-1), 30)).toBe(false);
+    expect(within(storedDay(0, true), 0)).toBe(true);
+    expect(within(storedDay(1, true), 0)).toBe(false);
+  });
+
+  it('dateWithin: does not pass on days the validator refuses', () => {
+    const within = (days: unknown) =>
+      evaluate('app.rules.dateWithin', on(asset(storedDay(0, true))), expired, days);
+    for (const days of [-1, 36501, 1.5, '30', null, undefined]) expect(within(days)).toBe(false);
+    expect(within(36500)).toBe(true);
+  });
+
+  it('do not pass with no date, no record, or a computation they do not evaluate', () => {
+    for (const id of ['app.rules.datePassed', 'app.rules.dateWithin']) {
+      expect(evaluate(id, on(asset(null)), expired, 30)).toBe(false);
+      expect(evaluate(id, on(asset('not a date')), expired, 30)).toBe(false);
+      expect(evaluate(id, on(null), expired, 30)).toBe(false);
+      const computed = { computed: { type: 'core.template', parameters: [storedDay(-1, true)] } };
+      expect(evaluate(id, on(asset(storedDay(-1, true))), computed, 30)).toBe(false);
+    }
+  });
+
+  it('read a literal date as it is, with nothing in focus', () => {
+    expect(evaluate('app.rules.datePassed', on(null), storedDay(-20, true))).toBe(true);
+    expect(evaluate('app.rules.dateWithin', on(null), storedDay(6, true), 7)).toBe(true);
+  });
+});

@@ -1,4 +1,5 @@
 import {
+  BANNER_TONES,
   PACKAGED_REGISTRIES,
   loadable,
   validateLayoutV2,
@@ -16,9 +17,9 @@ import { notDrawnColumn } from './widget-support';
  * (docs/business-apps/layout-v2.md).
  *
  * Tolerant, as section 8 of that document asks. A structural error refuses the whole file, and
- * the record page is then today's document page. A card, tab or field that names something this
- * build does not have — a widget, a computation, a rule — or that gives a widget a parameter it
- * cannot take is left out, the console says why, and the rest of the file still shows. So a file
+ * the record page is then today's document page. A banner, card, tab or field that names something
+ * this build does not have — a widget, a computation, a rule — or that gives a widget a parameter
+ * it cannot take is left out, the console says why, and the rest of the file still shows. So a file
  * written for a later platform shows everything this one knows. So is one whose rule nests deeper
  * than the rule registry answers ({@link MAX_RULE_LEVELS}): it would pass, and show what it hides.
  */
@@ -151,10 +152,25 @@ export interface RecordTabEntry {
   readonly cards: readonly RecordCardEntry[];
 }
 
+/** A banner's tone, in layout version 2's words: `info`, `warning` or `negative`. */
+export type RecordBannerTone = (typeof BANNER_TONES)[number];
+
+/** A message above the record page's cards, shown while its rule passes (layout-v2.md, section 2). */
+export interface RecordBannerEntry {
+  readonly id: string;
+  readonly place: string;
+  /** The message. A key with no text in the reader's language shows the banner's id, made readable. */
+  readonly label: LayoutLabel;
+  readonly tone: RecordBannerTone;
+  readonly visibleWhen: RecordRule | null;
+}
+
 /** A `view` file that the app can show, with what it left out of it. */
 export interface RecordLayoutFile {
   /** 1 to 3. */
   readonly columns: number;
+  /** The banners above the cards, in order; empty when the file has none. */
+  readonly banners: readonly RecordBannerEntry[];
   /** The tabs, or `null` when the file lists its cards directly. */
   readonly tabs: readonly RecordTabEntry[] | null;
   /** The cards of a file without tabs; empty when it has tabs. */
@@ -193,15 +209,16 @@ export function labelOf(
 }
 
 /**
- * The entry a finding is about: the innermost tab, card, field, list column or row action its path
- * passes through, as `tabs[0].cards[1].fields[2]` or `cards[3].related.columns[1]`. A widget's own
+ * The entry a finding is about: the banner, or the innermost tab, card, field, list column or row
+ * action its path passes through, as `banners[1]`, `tabs[0].cards[1].fields[2]` or
+ * `cards[3].related.columns[1]`. A widget's own
  * lists — a table's `parameters.columns` — are not fields of the file, so a finding inside one
  * names the field whose widget it is. `null` for a finding about the file as a whole.
  */
 export function entryOf(path: string): string | null {
   let entry: string | null = null;
   for (const match of path.matchAll(
-    /(?:^|\.)(tabs|cards|fields|related\.columns|related\.rowActions)\[(\d+)\]/g,
+    /(?:^|\.)(banners|tabs|cards|fields|related\.columns|related\.rowActions)\[(\d+)\]/g,
   )) {
     const end = (match.index ?? 0) + match[0].length;
     // Only a chain from the start of the path: `cards[0].fields[1].parameters.columns[0]` stops
@@ -634,9 +651,28 @@ export function readRecordLayout(
       return [{ ...common, ...none, fields }];
     });
 
+  // A banner a finding is about, such as one naming a rule this build does not register, is left
+  // out alone; the validator has already refused a file whose banners are not a list of objects.
+  const banners = (Array.isArray(content['banners']) ? content['banners'] : []).flatMap(
+    (banner: unknown, index): RecordBannerEntry[] => {
+      const place = `banners[${index}]`;
+      if (!isRecord(banner) || !kept(place, banner)) return [];
+      const tone = BANNER_TONES.find((each) => each === banner['tone']) ?? 'info';
+      return [
+        {
+          id: String(banner['id']),
+          place,
+          label: labelOf(banner, [], humanize(String(banner['id']))),
+          tone,
+          visibleWhen: (banner['visibleWhen'] as RecordRule | undefined) ?? null,
+        },
+      ];
+    },
+  );
+
   const columns = typeof content['columns'] === 'number' ? content['columns'] : 1;
   if (!Array.isArray(content['tabs'])) {
-    return { columns, tabs: null, cards: cards(content['cards'], ''), problems };
+    return { columns, banners, tabs: null, cards: cards(content['cards'], ''), problems };
   }
   const tabs = content['tabs'].flatMap((tab: unknown, index): RecordTabEntry[] => {
     const place = `tabs[${index}]`;
@@ -653,5 +689,5 @@ export function readRecordLayout(
       },
     ];
   });
-  return { columns, tabs, cards: [], problems };
+  return { columns, banners, tabs, cards: [], problems };
 }

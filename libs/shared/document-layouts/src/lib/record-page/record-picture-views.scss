@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+.record-picture__figure {
+  margin: 0;
+}
+
+/* The picture fits its frame whole, never cropped, and the frame keeps its height while it loads. */
+.record-picture__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  max-height: 560px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container);
+  overflow: hidden;
+}
+
+.record-picture__image {
+  display: block;
+  max-width: 100%;
+  max-height: 544px;
+  object-fit: contain;
+}
+
+.record-picture__caption {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-picture__views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.record-picture__view-size {
+  margin-inline-start: 6px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+/* The view on show: the pressed state is said in colour and weight, not colour alone. */
+.record-picture__view[aria-pressed='true'] {
+  font-weight: 600;
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}

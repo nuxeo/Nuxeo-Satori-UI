@@ -2,7 +2,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
-import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
+import { DOCUMENT_RULE_EVALUATORS, ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 import { firstValueFrom } from 'rxjs';
 
@@ -241,6 +241,102 @@ describe('DocumentLayoutService: record pages', () => {
       expect(plain?.cards[0].fields).toHaveLength(2);
     },
   );
+
+  it('draws the record page of a Picture, its views first, though it holds a file', async () => {
+    const picture = {
+      ...CLAIM,
+      schemas: [
+        ...CLAIM.schemas,
+        { name: 'file', '@prefix': 'file', fields: { content: 'blob' } },
+        { name: 'picture', '@prefix': 'picture', fields: { views: 'complex[]' } },
+      ],
+    };
+    const layout = recordLayout();
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+    http.expectOne(CLAIM_TYPE).flush(picture);
+    const resolved = await layout;
+    expect(resolved?.preview).toBe('picture');
+    expect(resolved?.cards[0].fields).toHaveLength(2);
+    expect(warnings).toEqual([]);
+  });
+
+  it('draws it for a record whose facet adds the picture schema', async () => {
+    const facetted = firstValueFrom(
+      service.recordLayoutFor('Claim', [
+        { name: 'dublincore', prefix: 'dc' },
+        { name: 'claim', prefix: 'claim' },
+        { name: 'file', prefix: 'file' },
+        { name: 'picture', prefix: 'picture' },
+      ]),
+    );
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+    http.expectOne(CLAIM_TYPE).flush(CLAIM);
+    expect((await facetted)?.preview).toBe('picture');
+    // A plain Claim has no preview: its record holds no file.
+    expect((await recordLayout())?.preview).toBeNull();
+  });
+
+  it("keeps a Video's own view, its player, though Nuxeo's Video facet brings the picture schema", async () => {
+    // A Video's schemas, as Nuxeo 2025 reports them: `file`, `video` and `picture`, among others.
+    const video = {
+      ...CLAIM,
+      schemas: [
+        ...CLAIM.schemas,
+        { name: 'file', '@prefix': 'file', fields: { content: 'blob' } },
+        { name: 'video', '@prefix': 'vid', fields: { duration: 'double' } },
+        { name: 'picture', '@prefix': 'picture', fields: { views: 'complex[]' } },
+      ],
+    };
+    const layout = recordLayout();
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope(VIEW));
+    http.expectOne(CLAIM_TYPE).flush(video);
+    expect(await layout).toBeNull();
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout not drawn for a Claim with a file or a note, which the View tab shows first; a record page beside it comes later',
+    ]);
+  });
+
+  it("carries the file's banners to the record page, leaving out one whose rule this build lacks", async () => {
+    TestBed.inject(ExtensionRuleRegistry).registerRules({
+      'app.rules.dateWithin': DOCUMENT_RULE_EVALUATORS['app.rules.dateWithin'],
+    });
+    const banners = [
+      {
+        id: 'rights-ending',
+        tone: 'warning',
+        label: 'Rights ending',
+        visibleWhen: { type: 'app.rules.dateWithin', parameters: [{ field: 'dc:expired' }, 30] },
+      },
+      { id: 'notice', labelKey: 'acme.asset.notice' },
+      { id: 'licensed', label: 'Licensed', visibleWhen: 'acme.rules.licensed' },
+    ];
+    const layout = recordLayout();
+    http.expectOne(INDEX).flush(index('Claim/view'));
+    http.expectOne(VIEW_FILE).flush(envelope({ ...VIEW, banners }));
+    http.expectOne(CLAIM_TYPE).flush(CLAIM);
+    expect((await layout)?.banners).toEqual([
+      {
+        id: 'rights-ending',
+        place: 'banners[0]',
+        label: { literal: 'Rights ending', keys: [], fallback: 'Rights ending' },
+        tone: 'warning',
+        visibleWhen: banners[0].visibleWhen,
+      },
+      {
+        id: 'notice',
+        place: 'banners[1]',
+        label: { keys: ['acme.asset.notice'], fallback: 'Notice' },
+        tone: 'info',
+        visibleWhen: null,
+      },
+    ]);
+    expect(warnings).toEqual([
+      '[agentic-ui-layouts] Claim/view layout: banners[2].visibleWhen: the rule "acme.rules.licensed" is not registered; banners[2] left out',
+    ]);
+  });
 
   it("tells the console what it left out of a table's columns", async () => {
     const layout = recordLayout();

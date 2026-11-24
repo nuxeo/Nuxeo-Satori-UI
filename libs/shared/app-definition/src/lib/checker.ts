@@ -47,6 +47,38 @@ export const FIELD_KEYS = [
   ...FORM_KEYS,
 ];
 export const CHECK_KEYS = ['type', 'parameters', 'label', 'labelKey'];
+const DATE_TEXT =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-](\d{2}):(\d{2})))?$/;
+
+/**
+ * A literal date a date rule reads as one: a day that exists, `2026-12-01`, or an ISO 8601 date and
+ * time with its zone, as `daysFromToday` in `libs/shared/extensions` reads them. A time with no
+ * zone is not one: it names a different instant in every zone.
+ */
+function isDateText(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const match = DATE_TEXT.exec(value);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second, zoneHour, zoneMinute] = match
+    .slice(1)
+    .map((part) => Number(part ?? 0));
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const last = month === 2 ? (leap ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31;
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= last &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    zoneHour <= 23 &&
+    zoneMinute <= 59
+  );
+}
+
+/** The furthest a date rule looks ahead of today: a hundred years, in days. */
+export const DATE_RULE_MAX_DAYS = 36500;
 /** A task form's own variables, as a field writes them: `var:<name>`. */
 const VARIABLE = 'var:';
 
@@ -311,6 +343,30 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
         if (!['days', 'months', 'years'].includes(item as string)) {
           add(path, 'parameter', `${owner} takes "days", "months" or "years" here`);
         }
+        return;
+      case 'date':
+        if (isFieldReference(item)) {
+          value(item, path);
+          return;
+        }
+        if (!isDateText(item))
+          add(
+            path,
+            'parameter',
+            `${owner} takes a property or a date here, as "2026-12-01" or an ISO 8601 date and time with its zone`,
+          );
+        return;
+      case 'days':
+        if (!(
+          Number.isInteger(item) &&
+          (item as number) >= 0 &&
+          (item as number) <= DATE_RULE_MAX_DAYS
+        ))
+          add(
+            path,
+            'parameter',
+            `${owner} takes a whole number of days from 0 to ${DATE_RULE_MAX_DAYS} here`,
+          );
         return;
       case 'template': {
         if (typeof item !== 'string') {

@@ -10,7 +10,10 @@ import {
   type ExtensionRuleContext,
 } from './extension-rules';
 
-/** Layout version 2's three rules (docs/business-apps/layout-v2.md, section 5). */
+/**
+ * Layout version 2's three rules on a field, a state and a group (docs/business-apps/layout-v2.md,
+ * section 5). Its two date rules are `date-rules.spec.ts`'s.
+ */
 
 function claim(properties: Record<string, unknown>, state?: string): NuxeoDocument {
   return {

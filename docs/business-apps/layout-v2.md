@@ -19,6 +19,7 @@ no expression language and no code in configuration.
   - fields and cards shown or hidden by a rule;
   - related records;
   - the record's timeline and its comments;
+  - banners above the cards, each shown by a rule, such as a picture's rights ending;
   - in forms, fields that are required or read-only by rule, and checks across fields.
 - **Version 1 files keep working**, unchanged. A file says which version it is, and nothing turns
   a version 1 file into a version 2 one.
@@ -67,11 +68,62 @@ record page is today's document page.
 | --------- | ---------------------------------------------------------------------------------------------- |
 | `version` | Required: `2`                                                                                  |
 | `columns` | How many columns the cards fill, 1 to 3. Default 1. `view` mode only                           |
+| `banners` | Messages above the cards, each shown while its rule passes (below). `view` mode only           |
 | `cards`   | The cards, in order                                                                            |
 | `tabs`    | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
 | `$schema` | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
 
 A file has `cards` or `tabs`, never both.
+
+### Banners
+
+A banner says something about the record that the reader should see before its cards, such as a
+picture whose rights are ending. It shows above the cards, or above the tabs, while its rule passes:
+
+```json
+{
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "rights-ended",
+      "tone": "negative",
+      "labelKey": "acme.asset.rightsEnded",
+      "visibleWhen": { "type": "app.rules.datePassed", "parameters": [{ "field": "dc:expired" }] }
+    },
+    {
+      "id": "rights-ending",
+      "tone": "warning",
+      "labelKey": "acme.asset.rightsEnding",
+      "visibleWhen": {
+        "type": "app.rules.dateWithin",
+        "parameters": [{ "field": "dc:expired" }, 30]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "rights",
+      "labelKey": "acme.asset.rights",
+      "fields": [{ "field": "dc:expired", "widget": "date" }, "dc:rights"]
+    }
+  ]
+}
+```
+
+| Key                 | Meaning                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `id`                | Required, unique in the file, as a card's: banners and cards share the file's ids              |
+| `label`, `labelKey` | The message, as a literal or a translation key. One of them is required                        |
+| `tone`              | `info`, `warning` or `negative`: the words a `status-badge` uses for its tones. Default `info` |
+| `visibleWhen`       | A rule (section 5). The banner shows only while it passes; without one, it always shows        |
+
+- **The message is text,** as a card's heading is. It names no property, so a date the reader needs
+  is shown by a field: the `rights` card above shows the day the rights end.
+- **Each banner is decided alone.** The two above never show together, because their rules never
+  pass together: a date that has passed is not within the next 30 days.
+- **A banner is not a security control,** any more than a hidden field is. Refusing a download
+  whose rights have ended is the server's to do.
 
 ### Cards
 
@@ -194,17 +246,24 @@ registered rules. They are written exactly as the manifest writes them today
 - or an ID with parameters: `{ "type": "app.rules.isType", "parameters": ["Claim"] }`;
 - combined with `core.every`, `core.some` and `core.not`.
 
-Version 2 adds three rules to the 29 or so that exist:
+Version 2 adds five rules to the 29 or so that exist:
 
-| Rule                | Parameters                  | True when                                                                  |
-| ------------------- | --------------------------- | -------------------------------------------------------------------------- |
-| `app.rules.fieldIn` | A property, then the values | The property's value is one of the values; for a list, any of its items is |
-| `app.rules.inState` | The lifecycle states        | The record's lifecycle state is one of them                                |
-| `app.rules.inGroup` | The groups                  | The user is in one of the groups                                           |
+| Rule                   | Parameters                                | True when                                                                  |
+| ---------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| `app.rules.fieldIn`    | A property, then the values               | The property's value is one of the values; for a list, any of its items is |
+| `app.rules.inState`    | The lifecycle states                      | The record's lifecycle state is one of them                                |
+| `app.rules.inGroup`    | The groups                                | The user is in one of the groups                                           |
+| `app.rules.datePassed` | A date                                    | The date is before today                                                   |
+| `app.rules.dateWithin` | A date, then a number of days, 0 to 36500 | The date is today, or no more than that many days after it                 |
 
 - **What a rule sees.** It is evaluated with the open record, the user and their groups. In a form
   it also sees the values being entered, so a field shown by another field's value appears as soon
   as that value is chosen.
+- **A date** is a property, `{ "field": "dc:expired" }`, or a literal: a day, `"2026-12-01"`, or an
+  ISO 8601 date and time with its zone. The validator refuses any other literal, a day that does
+  not exist included. It is read as the `date` widget reads one (section 11): a stored day as
+  written, and an instant on the reader's day. Today is the reader's day, from the browser's clock.
+  A property with no date, or a value that is not one, passes neither date rule.
 - **A rule is never a security control.** A field hidden from a group is still readable through the
   API to anyone the server lets read it. Protecting a field is decision I, a platform decision.
 
@@ -334,14 +393,16 @@ A card can show the record's comments and their replies, in `view` mode:
 
 ## 8. What is refused, and when
 
-| When                                     | A structural error                                                   | An ID the platform does not have                                                  |
-| ---------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| When the package is built (the pipeline) | The package is refused, naming the file and the place                | The package is refused, naming the file, the place and the ID                     |
-| When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That card, field, list column or row action is left out, and the console says why |
+| When                                     | A structural error                                                   | An ID the platform does not have                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| When the package is built (the pipeline) | The package is refused, naming the file and the place                | The package is refused, naming the file, the place and the ID                             |
+| When the app loads the file              | The file is refused, and the generated layout shows, as in version 1 | That banner, card, field, list column or row action is left out, and the console says why |
 
 - **In a list of related records,** a finding about one column or one row action leaves out that
   one. A finding about the list itself, such as a key version 2 does not have, leaves out its card,
   and so does one about a timeline or comments.
+- **A finding about a banner,** such as a rule this build does not register, leaves out that
+  banner.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -353,9 +414,10 @@ What counts as structural:
 - `cards` and `tabs` together;
 - an `id` that is missing, malformed or used twice;
 - a card with more than one of `fields`, `related`, `timeline` and `comments`, or none;
+- a banner with no `label` or `labelKey`, or a `tone` other than its three;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `related`, `timeline` or `comments` outside it;
+- form-only keys in `view` mode, or `banners`, `related`, `timeline` or `comments` outside it;
 - a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
 - a `var:` property, which only a task form has
@@ -569,6 +631,44 @@ becomes. In version 2's terms:
     A tab that a customer's code contributes is not drawn anew by it either.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
+- **The date rules read the browser's clock**, as the rules' library does everywhere, not the
+  record page's own `RECORD_PAGE_TODAY`, which its computations and dates read. In the app both are
+  the browser's clock; only a test, or a host that provides `RECORD_PAGE_TODAY`, sets one and not
+  the other and sees them disagree.
+- **Banners** are drawn above everything else on the page, the picture and the tabs included, one
+  under the other in the file's order, each while its rule passes for the open record and the user,
+  through the component ID `nxs.primitives.banner`, so that an override of the ID reaches them
+  ([extension reference](../extension-reference.md), section 6a). `info` and `warning` are its tones
+  of those names, and `negative` is its `error`. A banner is met in place, so a screen reader does
+  not announce it as it appears. Its message is its `label`, else the text of its `labelKey`, else
+  its id made readable, as a card's heading is.
+- **A Picture's record page shows its picture first.** A record with the `picture` schema, a
+  Picture or any record a facet gives it, has its record page though it holds a file, and the page
+  shows its picture views above the cards, under the banners, as Nuxeo lists them in
+  `picture:views`. That is `RecordPictureViewsComponent`, in the same library:
+  - one view shows large: `Medium` first, else `Small`, `FullHD` or `OriginalJpeg`, else the first,
+    so that a view sized for a screen loads first where the record has one. A button for each view shows its name and size,
+    and shows that view instead; the caption names the view shown, its size and its format;
+  - **each view is fetched as a file, through the application,** with
+    `DocumentDetailService.fetchBlobByXpath` and `picture:views/<n>/content`, which sends the
+    application's authentication, and shown from a blob URL. No `<img>` is given a Nuxeo address
+    ([AGENTS/07-security.md](../../AGENTS/07-security.md)). It is fetched with the reason `view`, as
+    the document page's preview is, so that Nuxeo audits it as a view;
+  - a view is fetched when it is first shown, and a view shown before is shown again from its blob
+    URL. A record reloaded with the same views, as after an edit, asks for nothing; a picture
+    replaced on the record has new files, which are fetched, and the blob URLs of the old ones are
+    revoked at once, as are another record's. All of them are revoked when the page is left;
+  - a view that cannot be fetched shows the error state, with Retry for a server error; a picture
+    whose views Nuxeo has not made yet, as just after an upload, says so. For a record of the type
+    `Picture` the document page asks the server again, up to six times half a second apart, and
+    the page shows the views when it is given the record. A record that has the `picture` schema
+    from a facet is not asked again, and nor is any once those six have passed: it shows the views
+    when it is next opened;
+  - the record's own file is not shown, nor the picture's information, EXIF and IPTC that the
+    document page's viewer lists: a field shows a property a kit wants, such as `dc:rights`;
+  - **the document page still reads the record's own file,** the original, for the packaged viewer
+    the record page has taken the place of: one request more per page, which nothing shows, and
+    which the console does not mention. Not reading it is the next step.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;
@@ -587,9 +687,11 @@ becomes. In version 2's terms:
     `core.some` or `core.not`, is not offered: nothing publishes that state for a row. Those are
     the surface rules but `app.rules.isNote`, which reads the document, refused by ID. A row's rules see none of
     the page's flags, so a customer's own rule that reads them finds none;
-  - **a record with a file or a note**, such as a File, a Picture, a Video or a Note, or any
-    record a facet gives the `file` or `note` schema, keeps its own View tab, its preview or its
-    editor: a record page beside a preview comes later;
+  - **a record with a file or a note but no picture**, such as a File or a Note, or any record a
+    facet gives the `file` or `note` schema and not the `picture` one, keeps its own View tab, its
+    preview or its editor: a record page beside its preview comes later. So does **a video**: Nuxeo's
+    `Video` facet declares the `picture` schema as well as `video`, for its still frames, so a
+    record with the `video` schema keeps its player, whatever else it has;
   - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
     that column is left out, and the rest of the table shows;
   - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or

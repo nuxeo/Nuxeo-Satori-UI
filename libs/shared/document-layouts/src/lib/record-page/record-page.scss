@@ -14,6 +14,18 @@
   align-items: start;
 }
 
+/* Above everything else, one under the other: what the reader should see before the cards. */
+.record-page__banners {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* A record's own picture, the whole width, above the cards and the tabs. */
+.record-page__preview {
+  margin-bottom: 16px;
+}
+
 .record-page__card {
   grid-column: span var(--record-card-span, 1);
   min-width: 0;

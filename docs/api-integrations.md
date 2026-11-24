@@ -621,6 +621,14 @@ Classic Web UI sends `clientReason=view` when loading blob content for preview a
 
 **Usage:** Fetched via `HttpClient` with `responseType: 'blob'`, converted to an Object URL (`URL.createObjectURL`) for use in `<img>` and `<iframe>` elements. This approach ensures auth credentials are sent via the interceptor, which is not possible with direct `src` attribute binding.
 
+**A Picture's views on its record page** use the same endpoint through
+`fetchBlobByXpath(uid, 'picture:views/<n>/content')`, with `clientReason=view`: `<n>` is the
+view's place in the record's `picture:views`, as `RecordPictureViewsComponent`
+(`libs/shared/document-layouts`) reads them. Measured on the local Nuxeo 2025 on 24 November 2026:
+a 1600 × 1067 PNG upload had five views, `Thumbnail`, `Small`, `Medium`, `FullHD` and
+`OriginalJpeg`, each an `image/jpeg` file
+([layout-v2.md](business-apps/layout-v2.md), section 11).
+
 ---
 
 ## 10. Document Detail — PDF Rendition
