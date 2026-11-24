@@ -14,14 +14,15 @@
  * not read for them. Then, in order, each step stopping the run when it fails:
  *   1. nothing in the package is a symbolic link, so no step reads a file from elsewhere, and the
  *      package's `build.mjs` is the generator's, byte for byte, so the code that builds it is
- *      code this repository reviewed;
+ *      code this repository reviewed; and a `package/install.xml` there is a file, not a folder,
+ *      since no step before the builder reads it;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
  *      it registers and its platform version, and, when one is given, the server's content model.
  *      The layouts the component contributes are the files the validator read, in the modes it
- *      read them in: none inline, none from elsewhere. A component path that leaves `bundle/` or
- *      names a folder or a hard link is refused before it is read (a missing one is the builder's
- *      to refuse, at step 4);
+ *      read them in: none inline, none from elsewhere. A manifest that is not a file, and a
+ *      component path that leaves `bundle/` or names a folder or a hard link, are refused before
+ *      they are read (a missing one is the builder's to refuse, at step 4);
  *   3. `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s
  *      version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package; given the package as it was before,
@@ -252,6 +253,13 @@ function run({
       `build.mjs is not the generator's, byte for byte. Copy ${relative(REPO, TEMPLATE)} over it,` +
         ' so that what builds the package is code this repository reviewed.',
     );
+  // No step before the builder reads install.xml, so a folder there was refused only at step 4.
+  const installXml = join(directory, 'package', 'install.xml');
+  if (existsSync(installXml) && !lstatSync(installXml).isFile())
+    return refuse(
+      1,
+      'package/install.xml is not a file. Put the file itself there: it is what installs the bundle.',
+    );
 
   // 2. The app definition, as the validator reads it.
   const root = join(directory, 'bundle', 'agentic-ui-config');
@@ -474,15 +482,18 @@ function componentFileOf(root, component) {
  * the files at `layouts/<Type>/<mode>.layout.json`, each in the mode its path names; the server
  * serves what the component says. So a layout written inline, or contributed from another file or
  * in another mode, is one this stage did not check, and is refused rather than passed. A disabled
- * entry contributes nothing and is skipped, as the builder skips it. A component path that leaves
- * `bundle/`, or names a folder or a hard link, is refused before anything is read
- * (`componentFileOf`).
+ * entry contributes nothing and is skipped, as the builder skips it. A manifest that is not a file
+ * is refused before it is read, as is a component path that leaves `bundle/`, or names a folder or
+ * a hard link (`componentFileOf`).
  */
 function layoutContributions(directory) {
   const bundle = join(directory, 'bundle');
   const manifest = join(bundle, 'META-INF', 'MANIFEST.MF');
   // A bundle with no manifest, or a component it cannot find, is the builder's to refuse.
   if (!existsSync(manifest)) return null;
+  // A folder there names no component, and reading it would throw.
+  if (!lstatSync(manifest).isFile())
+    return "bundle/META-INF/MANIFEST.MF is not a file. A bundle's manifest is a file, which names its components.";
   // The components this stage checks must be the ones the server loads, so they are found as
   // build.mjs finds them: its TextDecoder drops a byte-order mark, and componentPathsOf reads the
   // rest as the server's manifest reader does. Every header's components are checked, a superset

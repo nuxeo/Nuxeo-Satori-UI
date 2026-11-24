@@ -1029,7 +1029,9 @@ describe('the generated build.mjs', () => {
     expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
   });
 
-  // A standalone build: the package pipeline refuses such a package at an earlier step.
+  // A standalone build. The package pipeline (`scripts/app-package.mjs`) refuses each before its
+  // step 4 runs this builder: a folder as package.xml at step 3, as one that cannot be read; as
+  // install.xml at step 1; and as MANIFEST.MF at step 2. `app-package.selftest.mjs` holds each.
   it.each([
     ['package/package.xml', 'is not a file'],
     ['package/install.xml', 'is not a file'],
@@ -1069,6 +1071,34 @@ describe('the generated build.mjs', () => {
     expect(output).toContain(`src="${path}" names no file in bundle/`);
     expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
   });
+
+  // A path through a symbolic link that leads back to itself names nothing: the file system
+  // answers ELOOP. The link is refused as a link, and the path as naming no file.
+  it.each([
+    [
+      'a Nuxeo-Component',
+      () =>
+        write('bundle/META-INF/MANIFEST.MF', 'Manifest-Version: 1.0\nNuxeo-Component: x/c.xml\n'),
+      'Nuxeo-Component names x/c.xml, which is not a packaged file in bundle/',
+    ],
+    [
+      'a layout src',
+      () => contribute('<layout type="Claim" mode="view" src="x/a.json" />'),
+      'src="x/a.json" names no file in bundle/',
+    ],
+  ])(
+    'refuses %s through a link that loops, rather than crashing',
+    async (_case, change, message) => {
+      await generate();
+      symlinkSync('x', join(dir, 'bundle/x'));
+      change();
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(message);
+      expect(output).toContain('bundle/x: is a symbolic link');
+      expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+    },
+  );
 
   it('reads a Nuxeo-Component line continued as a JAR manifest continues it', async () => {
     await generate();
