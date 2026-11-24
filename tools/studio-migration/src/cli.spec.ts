@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { main, type CliIo } from './cli';
@@ -318,5 +318,133 @@ describe('studio-migration convert, check and mutate', () => {
     const checked = run(['check', 'acme.zip', empty], files);
     expect(checked.code).toBe(1);
     expect(checked.err).toContain('holds no report.json');
+  });
+});
+
+describe('studio-migration decisions and report', () => {
+  const files = {
+    'acme.zip': syntheticPackage(),
+    'allow.json': Buffer.from(JSON.stringify({ operations: ['Claim.Approve'] })),
+  };
+  const converted = (): string => {
+    const out = join(mkdtempSync(join(tmpdir(), 'studio-cli-')), 'conversion');
+    run(['convert', 'acme.zip', out, '--allow-list', 'allow.json'], files);
+    return out;
+  };
+  /** Fills in every decision of the conversion's decisions.json. */
+  const fill = (directory: string): void => {
+    const path = join(directory, 'decisions.json');
+    const file = JSON.parse(readFileSync(path, 'utf8'));
+    for (const item of file.decisions) {
+      item.owner = 'Migration lead';
+      item.decision = 'Rebuilt by hand';
+    }
+    writeFileSync(path, JSON.stringify(file));
+  };
+
+  it('writes decisions.json beside the report, for a person to fill in, and never over one', () => {
+    const out = converted();
+    const written = run(['decisions', out], files);
+    expect(written).toMatchObject({ code: 0, err: '' });
+    expect(written.out).toBe(
+      `Wrote ${join(out, 'decisions.json')}: 14 reported items, each with an owner and a decision to fill in\n`,
+    );
+    const file = JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8'));
+    expect(file.decisions).toHaveLength(14);
+    expect(run(['check', 'acme.zip', out], files).out).toContain(
+      '  - 14 reported items have no owner',
+    );
+
+    fill(out);
+    const again = run(['decisions', out], files);
+    expect(again.code).toBe(1);
+    expect(again.err).toBe(`${join(out, 'decisions.json')} exists, and is never written over\n`);
+    expect(JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8')).decisions[0].owner).toBe(
+      'Migration lead',
+    );
+    const checked = run(['check', 'acme.zip', out, '--allow-list', 'allow.json'], files);
+    expect(checked.code).toBe(0);
+    expect(checked.out).toContain('Verdict: not ready');
+    expect(checked.out).not.toMatch(/reported items? ha/);
+  });
+
+  it('carries the decisions of an earlier conversion that still hold, and says which do not', () => {
+    const earlier = converted();
+    run(['decisions', earlier], files);
+    fill(earlier);
+    const old = JSON.parse(readFileSync(join(earlier, 'decisions.json'), 'utf8'));
+    old.decisions[0].note = 'An earlier reason';
+    const out = converted();
+    const carried = run(['decisions', out, '--from', 'old.json'], {
+      ...files,
+      'old.json': Buffer.from(JSON.stringify(old)),
+    });
+    expect(carried.code).toBe(0);
+    expect(carried.out).toContain('  carried from old.json: 13\n  not carried: 1\n');
+    expect(carried.out).toMatch(
+      /\n {4}- old\.json: layout-field:.*#3 was decided when the report gave another reason, so it is not taken: decide it again\n$/,
+    );
+    expect(run(['check', 'acme.zip', out], files).out).toContain(
+      '  - 1 reported item has no owner',
+    );
+
+    const missing = run(['decisions', converted(), '--from', 'missing.json'], files);
+    expect(missing.code).toBe(1);
+    expect(missing.err).toMatch(/^missing\.json: ENOENT/);
+    const other = run(['decisions', converted(), '--from', 'other.json'], {
+      ...files,
+      'other.json': Buffer.from(
+        JSON.stringify({ ...old, package: { name: 'Other', version: '1' } }),
+      ),
+    });
+    expect(other.code).toBe(1);
+    expect(other.err).toContain('other.json is for Other 1, and the report for Acme-Claims 1.0.0');
+    expect(run(['decisions'], files).code).toBe(2);
+    expect(run(['decisions', out, '--from'], files).code).toBe(2);
+  });
+
+  it('prints the report, and exits 0 whatever it says', () => {
+    const out = converted();
+    run(['decisions', out], files);
+    const printed = run(['report', 'acme.zip', out, '--allow-list', 'allow.json'], files);
+    expect(printed.code).toBe(0);
+    expect(printed.out).toMatch(/^Migration report: Acme-Claims 1\.0\.0\n/);
+    expect(printed.out).toContain('Decisions needed: 14 reported items, 0 of them decided');
+    expect(printed.out).toMatch(
+      /\nCoverage: 100%, 65 of the package's 65 constructs in the report\n/,
+    );
+
+    const none = { ...files, 'none.json': Buffer.from('{"operations": []}') };
+    const failing = run(['report', 'acme.zip', out, '--allow-list', 'none.json'], none);
+    expect(failing.code).toBe(0);
+    expect(failing.out).toMatch(/\n {2}10 {2}Package +FAIL\n/);
+
+    const json = JSON.parse(run(['report', 'acme.zip', out, '--json'], files).out);
+    expect(json.coverage).toEqual({ accounted: 65, constructs: 65, percent: 100 });
+    expect(json.reported).toHaveLength(14);
+    expect(run(['report', 'acme.zip'], files).code).toBe(2);
+  });
+
+  it('lists the controls of the decisions, and applies one to a copy, which the verdict names', () => {
+    expect(run(['mutate', '--list']).out).toMatch(
+      /^drop-owner +decisions +Take the owner off the decision of a reported item$/m,
+    );
+    const out = converted();
+    const broken = join(mkdtempSync(join(tmpdir(), 'studio-cli-')), 'broken');
+    const nothing = run(['mutate', out, 'drop-owner', broken], files);
+    expect(nothing.code).toBe(1);
+    expect(nothing.err).toMatch(/^the conversion has no decisions\.json to break/);
+
+    run(['decisions', out], files);
+    fill(out);
+    const mutated = run(['mutate', out, 'drop-owner', broken], files);
+    expect(mutated.code).toBe(0);
+    expect(mutated.out).toMatch(
+      /^drop-owner: took the owner off layout-field:.*#3\. Written to .*; the verdict must now name it among what stands in the way\.\n$/,
+    );
+    expect(run(['check', 'acme.zip', broken], files).out).toContain(
+      '  - 1 reported item has no owner',
+    );
+    expect(run(['check', 'acme.zip', out], files).out).not.toMatch(/reported items? ha/);
   });
 });

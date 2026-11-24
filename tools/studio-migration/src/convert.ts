@@ -40,6 +40,7 @@ import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
 import { convertSlots } from './convert-slots';
 import { convertTasks } from './convert-tasks';
+import { DECISIONS_FILE } from './decisions';
 import type { FileKind, Inventory } from './inventory';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -70,8 +71,6 @@ export interface ReportEntry {
   readonly to?: string;
   /** Why, for what is proposed, reported or pending. */
   readonly note?: string;
-  /** Who decides, for what is reported. Unset until someone takes it on. */
-  readonly owner?: string;
   /** For a condition: the registered rule it becomes, or is proposed to become. */
   readonly rule?: unknown;
 }
@@ -107,6 +106,11 @@ export interface Conversion {
   readonly themes: Readonly<Record<string, ConvertedTheme>>;
   /** Copied files, by their path in the conversion: `themes/<name>/<file>`. */
   readonly assets: Readonly<Record<string, Buffer>>;
+  /**
+   * `decisions.json` as read, which people write and no conversion does: who owns each reported
+   * item, and what they decided (`decisions.ts`). Absent when the directory holds none.
+   */
+  readonly decisions?: unknown;
 }
 
 export interface ConvertOptions {
@@ -498,6 +502,8 @@ export function writeConversion(directory: string, conversion: Conversion): void
     writeFileSync(full, content);
   };
   write('report.json', `${JSON.stringify(conversion.report, null, 2)}\n`);
+  if (conversion.decisions !== undefined)
+    write(DECISIONS_FILE, `${JSON.stringify(conversion.decisions, null, 2)}\n`);
   for (const [path, content] of Object.entries(conversion.app))
     write(`app/${path}`, `${JSON.stringify(content, null, 2)}\n`);
   for (const [path, content] of Object.entries(conversion.appAssets)) write(`app/${path}`, content);
@@ -550,5 +556,9 @@ export function readConversion(directory: string): Conversion {
         assets[`themes/${file}/${asset}`] = readFileSync(join(path, asset));
     }
   }
-  return { report, app, appAssets, themes, assets };
+  // People write it, beside the report, and no conversion does.
+  const decisions = existsSync(join(directory, DECISIONS_FILE))
+    ? { decisions: json(DECISIONS_FILE) }
+    : {};
+  return { report, app, appAssets, themes, assets, ...decisions };
 }

@@ -1109,9 +1109,139 @@ const SLOT_MUTATIONS: readonly Mutation[] = [
   },
 ];
 
-/** Every control, M1's and M2's. */
+/** Every control of the checks, M1's and M2's. */
 export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS, ...SLOT_MUTATIONS];
 
-export function mutation(name: string): Mutation | null {
-  return MUTATIONS.find((candidate) => candidate.name === name) ?? null;
+/**
+ * A control of the decisions: readiness, which holds the conversion's `decisions.json` to its
+ * report, must then name what broke among what stands in the way. Each breaks one decision of a
+ * file that has them, so the conversion it is given needs one, filled in.
+ */
+export interface DecisionMutation extends Omit<Mutation, 'caughtBy'> {
+  readonly caughtBy: 'decisions';
+}
+
+/** The conversion's decisions, copied, and the first that names an owner and what they decided. */
+function decided(conversion: Conversion): { file: Json; items: Json[]; item: Json } {
+  const file = conversion.decisions === undefined ? undefined : clone(conversion.decisions);
+  if (!isRecord(file) || !Array.isArray(file['decisions']))
+    throw new MutationError(
+      'the conversion has no decisions.json to break: `decisions` writes one, for a person to fill in',
+    );
+  const items = file['decisions'] as Json[];
+  const item = items.find(
+    (candidate) =>
+      isRecord(candidate) &&
+      typeof candidate['owner'] === 'string' &&
+      candidate['owner'].trim() !== '' &&
+      typeof candidate['decision'] === 'string' &&
+      candidate['decision'].trim() !== '',
+  );
+  if (!item)
+    throw new MutationError('no decision of decisions.json names an owner and what they decided');
+  return { file, items, item };
+}
+
+const withDecisions = (conversion: Conversion, decisions: Json): Conversion => ({
+  ...conversion,
+  decisions,
+});
+
+export const DECISION_MUTATIONS: readonly DecisionMutation[] = [
+  {
+    name: 'drop-owner',
+    description: 'Take the owner off the decision of a reported item',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { file, item } = decided(conversion);
+      item['owner'] = '';
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `took the owner off ${String(item['id'])}`,
+      };
+    },
+  },
+  {
+    name: 'drop-decision',
+    description: 'Leave the owner of a reported item with nothing decided',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { file, item } = decided(conversion);
+      item['decision'] = '';
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `emptied the decision on ${String(item['id'])}`,
+      };
+    },
+  },
+  {
+    name: 'stale-decision',
+    description:
+      'Change the reason the report gives for a decided item, as converting again after a change would',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { item } = decided(conversion);
+      const id = String(item['id']);
+      const constructs = conversion.report.constructs.map((entry) =>
+        entry.id === id ? { ...entry, note: `${entry.note ?? ''} (changed)` } : entry,
+      );
+      return {
+        conversion: withEntries(conversion, constructs),
+        changed: `changed the reason the report gives for ${id}, which decisions.json decided`,
+      };
+    },
+  },
+  {
+    name: 'decide-unlisted',
+    description: 'Decide an item the report does not list',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { file, items, item } = decided(conversion);
+      const id = `${String(item['id'])}-unlisted`;
+      items.push({ ...item, id });
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `decided ${id}, which the report does not list`,
+      };
+    },
+  },
+  {
+    name: 'decide-converted',
+    description: 'Decide an item the report gives as converted',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { file, items, item } = decided(conversion);
+      const entry = conversion.report.constructs.find(
+        (candidate) => candidate.outcome === 'converted',
+      );
+      if (!entry) throw new MutationError('the report converts nothing to decide');
+      const { id, kind: _kind, file: _file, ...pinned } = entry;
+      items.push({ id, ...pinned, owner: item['owner'], decision: item['decision'] });
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `decided ${id}, which the report gives as converted`,
+      };
+    },
+  },
+  {
+    name: 'decide-twice',
+    description: 'Decide one reported item twice',
+    caughtBy: 'decisions',
+    apply: (conversion) => {
+      const { file, items, item } = decided(conversion);
+      items.push({ ...item, owner: `${String(item['owner'])} (another)` });
+      return {
+        conversion: withDecisions(conversion, file),
+        changed: `decided ${String(item['id'])} a second time, with another owner`,
+      };
+    },
+  },
+];
+
+export function mutation(name: string): Mutation | DecisionMutation | null {
+  return (
+    MUTATIONS.find((candidate) => candidate.name === name) ??
+    DECISION_MUTATIONS.find((candidate) => candidate.name === name) ??
+    null
+  );
 }

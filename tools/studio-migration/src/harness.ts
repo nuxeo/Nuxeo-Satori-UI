@@ -10,8 +10,9 @@
  * waits for M3's plugins.
  *
  * A migration is ready only when all ten pass, nothing is pending, nothing proposed waits for a
- * decision, and every reported item has an owner. So an M1 run is never ready, and says what
- * stands in the way.
+ * decision, and every reported item has an owner and a decision, in the conversion's
+ * `decisions.json` (`decisions.ts`), with nothing wrong in that file. So an M1 run is never ready,
+ * and says what stands in the way.
  */
 import { mapThemeProperty, type Catalogue } from './catalogue';
 import { checkConditions } from './check-conditions';
@@ -22,6 +23,7 @@ import { checkRequests } from './check-requests';
 import { checkSeen } from './check-seen';
 import { contrastRatio, parseColour } from './colour';
 import { constructsOf, countsOf } from './constructs';
+import { holdDecisions } from './decisions';
 import {
   EXPLAINED,
   OUTCOMES,
@@ -117,8 +119,11 @@ export function runHarness(given: HarnessInput): HarnessResult {
 
   const entries = input.conversion.report.constructs ?? [];
   const pending = entries.filter((entry) => entry.outcome === 'pending').length;
-  const unowned = entries.filter((entry) => entry.outcome === 'reported' && !entry.owner).length;
   const proposed = entries.filter((entry) => entry.outcome === 'proposed').length;
+  const { unowned, undecided, findings } = holdDecisions(
+    input.conversion.report,
+    input.conversion.decisions,
+  );
   const blockers = [
     ...checks
       .filter((check) => check.status === 'fail')
@@ -131,7 +136,16 @@ export function runHarness(given: HarnessInput): HarnessResult {
       .map((check) => `check ${check.number} did not run`),
     ...(pending ? [`${pending} constructs are pending a later phase`] : []),
     ...(proposed ? [`${proposed} proposals wait for a person to accept or reject them`] : []),
-    ...(unowned ? [`${unowned} reported items have no owner`] : []),
+    ...(unowned
+      ? [`${unowned} reported ${unowned === 1 ? 'item has' : 'items have'} no owner`]
+      : []),
+    ...(undecided
+      ? [
+          `${undecided} reported ${undecided === 1 ? 'item has' : 'items have'} an owner but no decision`,
+        ]
+      : []),
+    // What is wrong with decisions.json: a decision it holds that the harness does not take.
+    ...findings,
   ];
   return { checks, ready: blockers.length === 0, blockers };
 }
@@ -221,11 +235,17 @@ export function nothingDropped({ pkg, inventory, conversion }: HarnessInput): st
     (construct) => (byId.get(construct.id) ?? []).length > 0,
   ).length;
   if (constructs.length > 0 && accounted < constructs.length) {
-    findings.push(
-      `coverage is ${Math.floor((accounted / constructs.length) * 1000) / 10}%, not 100%`,
-    );
+    findings.push(`coverage is ${coverage(accounted, constructs.length)}%, not 100%`);
   }
   return findings;
+}
+
+/**
+ * The share of a package's constructs its report accounts for, as a percentage rounded down to a
+ * tenth, so that 99.96% is never shown as 100%. A package of no construct is wholly accounted for.
+ */
+export function coverage(accounted: number, constructs: number): number {
+  return constructs === 0 ? 100 : Math.floor((accounted / constructs) * 1000) / 10;
 }
 
 /**
