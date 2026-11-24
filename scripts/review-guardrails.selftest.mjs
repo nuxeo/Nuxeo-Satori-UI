@@ -12491,6 +12491,39 @@ expectRed(
   /^(?![\s\S]*does not list it in `languages`)[\s\S]*node_modules\/parent\/node_modules\/@hylandsoftware\/satori-ui is installed at 1\.0\.0-alpha\.171/,
 );
 
+// A missing catalogue directory is read as "a typo, or a vendor that dropped the folder" — and
+// that is only sound for a FAITHFUL install. A stale one can simply predate the directory, so the
+// verdict has to come after the drift check, not before it. Both of the old readings send the
+// reader to edit `angular.json` when the fix is `npm ci`.
+expectRed(
+  'a stale install missing a directory the locked version ships',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    // The package is installed, and stale, and has no `i18n` at all.
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /^(?![\s\S]*path is a typo)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The other half: with a faithful install a missing directory really is a typo or a dropped
+// folder, and must still say so. Deferring to the drift check must not swallow that verdict.
+expectRed(
+  'a faithful install missing the directory the asset rule names',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed but has no node_modules\/@hylandsoftware\/satori-ui\/i18n[\s\S]*path is a typo/,
+);
+
 // And when the comparison cannot be made at all the rule still judges, but says that it did so
 // on trust. Staying silent here is how this blind spot survived in the first place.
 expectWarn(
@@ -12982,6 +13015,21 @@ expectRed(
   },
   null,
   /node_modules\/parent\/node_modules\/@hylandsoftware\/satori-ui is installed at 1\.0\.0-alpha\.171/,
+);
+
+// The missing-mount verdict at this site has the same ordering problem: a stale install can be
+// missing a folder the locked version ships, which is neither a typo nor a dropped folder.
+expectRed(
+  'a stale install missing the Storybook mount the locked version ships',
+  'checkStorybookSatoriCatalogues',
+  {
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /^(?![\s\S]*path is a typo)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
 );
 
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.

@@ -5096,12 +5096,27 @@ function checkUpstreamCatalogueLanguages() {
             );
             readable = false;
           } else if (existsSync(join(repoRoot, packageRoot))) {
-            fail(
-              `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset rule ` +
-                `copies to "${served}". Either the path is a typo or this version of the package ` +
-                'dropped the directory — either way that build serves nothing from it and the ' +
-                'loader 404s for any language it was the source of.',
-            );
+            // "A typo, or a vendor that dropped the folder" holds only for a FAITHFUL install.
+            // A stale one missing a directory the locked version ships is neither, and both of
+            // those verdicts send the reader to edit `angular.json` when the fix is `npm ci`.
+            const drift = installedVersionDrift(packageRoot);
+            if (drift.state === 'drift') {
+              fail(
+                `${packageRoot} is installed at ${drift.installed} but package-lock.json pins ` +
+                  `${drift.locked}, and it has no ${inputDir}, which the ${where} asset rule ` +
+                  `copies to "${served}". A directory the locked version ships can be absent ` +
+                  'simply because the install is stale, so this gate cannot tell that from a ' +
+                  'wrong path or a dropped folder. Run `npm ci` and re-run the guardrails before ' +
+                  'editing the asset rule.',
+              );
+            } else {
+              fail(
+                `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset ` +
+                  `rule copies to "${served}". Either the path is a typo or this version of the ` +
+                  'package dropped the directory — either way that build serves nothing from it ' +
+                  'and the loader 404s for any language it was the source of.',
+              );
+            }
             readable = false;
           } else {
             warn(
@@ -6160,10 +6175,26 @@ function checkStorybookSatoriCatalogues() {
                 `not checked against it${where}.`,
             );
           } else {
-            fail(
-              `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does ` +
-                'not exist. Either the path is a typo or the package no longer ships that folder.',
-            );
+            // As in `checkUpstreamCatalogueLanguages`: "a typo, or the package no longer ships
+            // it" is only a sound reading of a missing directory when the install is the locked
+            // one. A stale install can be missing a folder the locked version ships.
+            const drift = packageRoot === null ? null : installedVersionDrift(packageRoot);
+            if (drift?.state === 'drift') {
+              fail(
+                `${packageRoot} is installed at ${drift.installed} but package-lock.json pins ` +
+                  `${drift.locked}, and ${main}${where} serves ` +
+                  `${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does not exist. A ` +
+                  'directory the locked version ships can be absent simply because the install ' +
+                  'is stale, so this gate cannot tell that from a wrong path or a dropped ' +
+                  'folder. Run `npm ci` and re-run the guardrails before editing `staticDirs`.',
+              );
+            } else {
+              fail(
+                `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which ` +
+                  'does not exist. Either the path is a typo or the package no longer ships that ' +
+                  'folder.',
+              );
+            }
           }
           judgeable = false;
           continue;
