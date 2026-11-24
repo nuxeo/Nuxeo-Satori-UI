@@ -456,8 +456,9 @@ with a 1,330-line filters drawer outside it; `nuxeo-client` reports 90.28% with 
 outside — a figure that is arithmetically true and evidence of nothing.
 
 `npm run beta:coverage` prints an `excluded` column beside every percentage for exactly this
-reason, and the entries are dated to 2026-11-30 in
-`.ai/state/coverage-uninstrumented-allowlist.json`. Regenerate rather than quoting these:
+reason, and the entries are dated in `.ai/state/coverage-uninstrumented-allowlist.json`: to
+2026-11-30 when set, and on 2026-11-24 the 18 left were re-dated to 2026-12-31, because their specs
+were not written and expiry would have failed every PR's coverage step for code it did not touch. Regenerate rather than quoting these:
 
 ```bash
 # Counts NEWLINES, matching `wc -l` and the per-file figures in the allowlist. `split('\n').length`

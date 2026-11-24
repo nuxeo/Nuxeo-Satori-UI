@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: [main, 'integration/**']
   push:
-    # Match CodeQL's triggers: a new feature branch has no analysis until its PR opens.
+    # Within CodeQL's triggers: the job waits for CodeQL's analysis of its revision, and a branch
+    # CodeQL does not run on (a new feature branch, until its PR opens) never has one. CodeQL also
+    # runs for `staging/**`, which this job does not.
     branches: [main, 'integration/**']
 
 permissions:

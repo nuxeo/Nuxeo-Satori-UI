@@ -152,6 +152,12 @@ jobs:
       - name: Run Crowdin context push controls
         run: npm run review:crowdin-selftest
 
+      # Its subject is CodeQL's triggers, including `staging/**`, and windows-gate.yml, the only
+      # other place it runs, never runs for staging work. Here it runs for every push to a
+      # `fix/**` or `feature/**` branch, which is how PRs into staging are checked. No GitHub calls.
+      - name: Run CodeQL trigger and Windows wait controls
+        run: node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs
+
       # Tooling that runs outside CI — the review-loop harvest and the Confluence publisher both
       # need credentials CI does not have — so these offline controls are the only part of either
       # that CI can exercise. The harvest silently dropped every "Previously missed" finding, and

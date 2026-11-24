@@ -112,26 +112,8 @@ const CHECKS: readonly (readonly [
 ];
 
 export function runHarness(given: HarnessInput): HarnessResult {
-  const input: HarnessInput = {
-    ...given,
-    allowList: given.allowList ?? new Set(given.conversion.report.allowList ?? []),
-    allowListFromReport: given.allowList === undefined,
-    platformVersion: given.platformVersion ?? platformVersion(),
-  };
-  const checks: CheckResult[] = CHECKS.map(([number, name, run]) => {
-    if (typeof run === 'string')
-      return { number, name, status: 'not run', findings: [], reason: run };
-    const outcome = run(input);
-    const status: CheckStatus =
-      outcome.findings.length > 0 ? 'fail' : outcome.rest ? 'partial' : 'pass';
-    return {
-      number,
-      name,
-      status,
-      findings: outcome.findings,
-      ...(outcome.rest ? { reason: outcome.rest } : {}),
-    };
-  });
+  const input = completed(given);
+  const checks: CheckResult[] = CHECKS.map((check) => runOne(check, input));
 
   const entries = input.conversion.report.constructs ?? [];
   const pending = entries.filter((entry) => entry.outcome === 'pending').length;
@@ -152,6 +134,41 @@ export function runHarness(given: HarnessInput): HarnessResult {
     ...(unowned ? [`${unowned} reported items have no owner`] : []),
   ];
   return { checks, ready: blockers.length === 0, blockers };
+}
+
+/**
+ * One check, as {@link runHarness} runs it, or `undefined` for a number the harness has no check
+ * of. Each check reads only its input, so this is the check {@link runHarness} reports: a spec
+ * asking what one check finds runs that check, not the ten.
+ */
+export function runCheck(given: HarnessInput, number: number): CheckResult | undefined {
+  const check = CHECKS.find(([candidate]) => candidate === number);
+  return check && runOne(check, completed(given));
+}
+
+/** The input with what was left out filled in: the report's allow-list, the platform's version. */
+function completed(given: HarnessInput): HarnessInput {
+  return {
+    ...given,
+    allowList: given.allowList ?? new Set(given.conversion.report.allowList ?? []),
+    allowListFromReport: given.allowList === undefined,
+    platformVersion: given.platformVersion ?? platformVersion(),
+  };
+}
+
+function runOne([number, name, run]: (typeof CHECKS)[number], input: HarnessInput): CheckResult {
+  if (typeof run === 'string')
+    return { number, name, status: 'not run', findings: [], reason: run };
+  const outcome = run(input);
+  const status: CheckStatus =
+    outcome.findings.length > 0 ? 'fail' : outcome.rest ? 'partial' : 'pass';
+  return {
+    number,
+    name,
+    status,
+    findings: outcome.findings,
+    ...(outcome.rest ? { reason: outcome.rest } : {}),
+  };
 }
 
 /**
