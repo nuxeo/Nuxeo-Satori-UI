@@ -152,6 +152,14 @@ export class AppShellComponent implements OnDestroy {
   protected readonly navItems = computed(() => this.navDescriptors().map(toAppNavItem));
 
   readonly displayName = computed(() => this.auth.username() ?? 'User');
+  /**
+   * The initials the profile avatar draws, worked out here and passed to the avatar, so the
+   * profile control's accessible name can contain exactly what the avatar shows (WCAG 2.5.3).
+   * At size 28 the avatar upper-cases the first two characters of its input, and one below that.
+   * Upper-casing comes first here because it can lengthen a string ("ﬁ" becomes "FI"): the result
+   * is then two characters the avatar draws unchanged.
+   */
+  readonly profileInitials = computed(() => this.displayName().toUpperCase().slice(0, 2));
   readonly drawerOpen = signal(false);
   readonly activeDrawerItem = signal<AppNavItem | null>(null);
   readonly clipboardCount = signal(this.readClipboardCount());
