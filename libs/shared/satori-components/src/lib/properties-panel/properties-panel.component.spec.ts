@@ -188,6 +188,30 @@ describe('NxsPropertiesPanelComponent', () => {
     expect(text('Created')).toBe('April 2, 2026');
   });
 
+  /**
+   * The Expires row reads every `dc:expired` on its UTC day, and the edit form does not: since it
+   * follows the layout view, it opens an instant on the reader's day. This case pins the row's
+   * half of that documented difference (`docs/extension-reference.md`, "`dc:expired` is read two
+   * ways"). 6 March picked in Web UI at +05:30 is stored as 18:30Z on the 5th. The row shows the
+   * 5th in every zone, while the form opens it on the 6th at +05:30; `metadata-editor-form.spec.ts`
+   * asserts that half for the same value. A stored day is the same day on both. The values are new
+   * to this file, because `DatePipe` memoises a value an earlier render used.
+   */
+  it('shows a day Web UI wrote at local midnight east of UTC on its UTC day, a stored day as is', async () => {
+    host.doc.set({
+      ...FILE,
+      properties: { ...FILE.properties, 'dc:expired': '2024-03-05T18:30:00.000Z' },
+    });
+    await render();
+    expect(text('Expires')).toBe('March 5, 2024');
+    host.doc.set({
+      ...FILE,
+      properties: { ...FILE.properties, 'dc:expired': '2024-03-06T00:00:00.000Z' },
+    });
+    await render();
+    expect(text('Expires')).toBe('March 6, 2024');
+  });
+
   it('labels vocabulary values through the host’s lookup, keeping the ID when it has none', async () => {
     host.labels.set((directory, id) =>
       directory === 'nature' ? 'Report' : directory === 'l10nsubjects' ? '' : `${directory}:${id}`,

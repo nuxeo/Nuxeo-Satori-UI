@@ -139,17 +139,17 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 ### Not demonstrated
 
-| Gap                                    | Status                                                                                                                                                   |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A real customer has used it**        | Zero. No customer has installed, configured or extended it                                                                                               |
-| **The Layers 0/1 coverage assumption** | RFC and plan both flag it as needing validation against real customer requests. **Not verified**                                                         |
-| **Published to a registry**            | `private: true`. Scope decided (`@nuxeo/satori-platform` on Nuxeo Nexus); publishing deliberately deferred                                               |
-| **WCAG 2.1 AA**                        | **Not met** as of 2026-11-23: one 2.5.3 defect on every screen. Met on 15 cases on 2026-08-24. Never covered: dialogs, upload, dark mode, pre-auth login |
-| **Coverage bar (>90%)**                | 10 of 11 in-scope projects meet it as of 2026-09-22; `shared-ai-client` short at 15.98% (was "3 of 15")                                                  |
-| **4 of 8 extension slots**             | Reserved — `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing                                                                                |
-| **`selection` rule context**           | Still empty, so `canWriteSelection` / `canRemoveSelection` answer `false`                                                                                |
-| **SAST**                               | None. SCA is `npm audit` only                                                                                                                            |
-| **Production observability**           | None wired in                                                                                                                                            |
+| Gap                                    | Status                                                                                                                                                                                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A real customer has used it**        | Zero. No customer has installed, configured or extended it                                                                                                                                                                                          |
+| **The Layers 0/1 coverage assumption** | RFC and plan both flag it as needing validation against real customer requests. **Not verified**                                                                                                                                                    |
+| **Published to a registry**            | `private: true`. Scope decided (`@nuxeo/satori-platform` on Nuxeo Nexus); publishing deliberately deferred                                                                                                                                          |
+| **WCAG 2.1 AA**                        | **Not met** as of 2026-11-23. The one 2.5.3 defect that day's capture found on every screen was fixed the same day, and the re-run passes every axe check. Met on 15 cases on 2026-08-24. Never covered: dialogs, upload, dark mode, pre-auth login |
+| **Coverage bar (>90%)**                | 10 of 11 in-scope projects meet it as of 2026-09-22; `shared-ai-client` short at 15.98% (was "3 of 15")                                                                                                                                             |
+| **4 of 8 extension slots**             | Reserved — `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing                                                                                                                                                                           |
+| **`selection` rule context**           | Still empty, so `canWriteSelection` / `canRemoveSelection` answer `false`                                                                                                                                                                           |
+| **SAST**                               | None. SCA is `npm audit` only                                                                                                                                                                                                                       |
+| **Production observability**           | None wired in                                                                                                                                                                                                                                       |
 
 ---
 
