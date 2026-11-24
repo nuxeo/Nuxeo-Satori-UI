@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/schema",
   "$id": "SatoriAppPackage",
   "title": "Satori business app package",
-  "description": "Scaffolds an app definition package, version 2: app.json, labels/en.json, the OSGi component that contributes its layouts, and version 1's package files with the generator's build.mjs. With type and a content model it writes the first record page: the pipeline refuses a package that contributes nothing. app-layout, app-queue and app-action add to it.",
+  "description": "Scaffolds an app definition package, version 2: app.json, labels/en.json, the OSGi component that contributes its layouts and its app to the app registry, and version 1's package files with the generator's build.mjs. With type and a content model it writes the first record page: the pipeline refuses a package that contributes nothing. app-layout, app-queue and app-action add to it.",
   "type": "object",
   "properties": {
     "name": {
@@ -25,6 +25,11 @@
     "appId": {
       "type": "string",
       "description": "The app's id in the registry, app.json's id: lower-case letters, digits and '-', at most 63 characters. It stays the same from one version to the next, and begins the labels' keys. Defaults to the package name.",
+      "pattern": "^[a-z][a-z0-9-]{0,62}$"
+    },
+    "address": {
+      "type": "string",
+      "description": "Where the shell is to open the app, under its own address: app.json's address, of the same form as appId, which it defaults to. Refused when it is a platform route, such as contracts (PLATFORM_ROUTES in libs/shared/app-definition), as the pipeline refuses it: an app id that is one needs an address.",
       "pattern": "^[a-z][a-z0-9-]{0,62}$"
     },
     "title": {

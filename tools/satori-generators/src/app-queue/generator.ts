@@ -2,6 +2,8 @@ import { formatFiles, type Tree } from '@nx/devkit';
 
 import {
   addLabels,
+  appContributionSaid,
+  contributeApp,
   humanize,
   ID,
   isRecord,
@@ -99,6 +101,8 @@ export default async function appQueueGenerator(tree: Tree, options: AppQueueSch
   const keptLabels = addLabels(tree, pkg, {
     [labelKey]: options.label?.trim() || humanize(options.id),
   });
+  // The queue is a file the app registry serves: named, when the component contributes the app.
+  const app = contributeApp(tree, pkg, { create: false });
 
   await formatFiles(tree);
 
@@ -108,7 +112,7 @@ Wrote ${file}
 
   Page provider:  ${options.pageProvider}
   Columns:        ${columns.join(', ')}
-${keptLabels.length > 0 ? `  Kept the text labels/en.json already had for ${keptLabels.join(', ')}\n` : ''}
+${keptLabels.length > 0 ? `  Kept the text labels/en.json already had for ${keptLabels.join(', ')}\n` : ''}${appContributionSaid(pkg, app)}
 Check that ${options.pageProvider} exists, and how many parameters it takes, with the Builder MCP
 server's describe_page_provider. Then:
 

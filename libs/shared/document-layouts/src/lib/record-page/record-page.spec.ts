@@ -314,10 +314,12 @@ describe('RecordPageComponent', () => {
   async function render(
     document = member(),
     content: Record<string, unknown> = MEMBER_PAGE,
+    readOnly = false,
   ): Promise<HTMLElement> {
     fixture = TestBed.createComponent(RecordPageComponent);
     fixture.componentRef.setInput('document', document);
     fixture.componentRef.setInput('layout', layoutOf(content));
+    if (readOnly) fixture.componentRef.setInput('readOnly', true);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -1161,6 +1163,29 @@ describe('RecordPageComponent', () => {
       expect(relatedList()['shownColumns']()).toHaveLength(3);
     });
 
+    it('offers the row actions the file lists, and none on a read-only page', async () => {
+      const withActions = {
+        ...CLAIMS_PAGE,
+        cards: [
+          CLAIMS_PAGE.cards[0],
+          {
+            ...CLAIMS_PAGE.cards[1],
+            related: { ...CLAIMS_PAGE.cards[1].related, rowActions: ['app.rowActions.download'] },
+          },
+        ],
+      };
+      await render(member(), withActions);
+      expect(relatedList().list().rowActions).toEqual(['app.rowActions.download']);
+      await render(member(), withActions, true);
+      expect(relatedList().list().rowActions).toEqual([]);
+      // The rest of the list is drawn as it is anywhere else.
+      expect(
+        relatedList()
+          .list()
+          .columns.map((column) => column.xpath),
+      ).toEqual(['claim:number', 'claim:status']);
+    });
+
     it('does not ask for the list while a parameter has no value on the record, and says why', async () => {
       await render(member({ 'member:status': '' }), CLAIMS_PAGE);
       expect(relatedList().parameters()).toBeNull();
@@ -1283,6 +1308,18 @@ describe('RecordPageComponent', () => {
       expect(
         root.querySelector('[data-card-id="notes"] .nxs-comments__text')?.textContent?.trim(),
       ).toBe('Called the provider');
+    });
+
+    it('draws the thread without the comment box on a read-only page', async () => {
+      documents.getAllComments.mockReturnValue(of(thread('First')));
+      const editable = await render(member(), HISTORY_PAGE);
+      expect(editable.querySelector('[data-card-id="notes"] textarea')).not.toBeNull();
+
+      const root = await render(member(), HISTORY_PAGE, true);
+      const notes = root.querySelector<HTMLElement>('[data-card-id="notes"]');
+      expect(notes?.querySelector('.nxs-comments__text')?.textContent?.trim()).toBe('First');
+      expect(notes?.querySelector('textarea')).toBeNull();
+      expect(documents.createComment).not.toHaveBeenCalled();
     });
 
     it('asks for neither while the rule of its card does not pass', async () => {

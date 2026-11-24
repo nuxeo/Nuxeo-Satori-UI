@@ -132,6 +132,12 @@ install and no transpiler.
   property's own.
 - **`image-source.ts`** holds the rules for a branding image's address. They are version 1's own,
   copied unchanged from `libs/shared/app-config`, which cannot be imported here without Angular.
+- **`platform-routes.ts`** is the one list of the platform's own routes, `PLATFORM_ROUTES`, which
+  `validateApp` refuses as an app's written address, in the pipeline and in the shell, which then
+  leaves the app out of "Switch app". An id that is one, with no address, is said
+  by the command line, `addressTakenById`, not refused: the contracts kit was built so, before the
+  rule. This library cannot read the application, so `platform-routes.spec.ts` in `apps/nuxeo-ui`
+  holds the list to `app.routes.ts`, both ways.
 
 ## What holds it to the rest
 
@@ -194,7 +200,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - skipping the tab title;
     - letting a branding image climb out with `..`, or hold a backslash;
     - a relative image outside `assets/`;
-    - the image rules drifting from version 1's.
+    - the image rules drifting from version 1's;
+    - a written address that is a platform route.
   - **`actions.json`:**
     - ignoring the allow-list;
     - letting it take a platform id, or rebind an id registered in code;
@@ -293,9 +300,10 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its timeline
   and its comments. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
-- **The content model in the designer and the migration server.** The pipeline holds a package to
-  a model when given one; the designer and the migration server are still to call
-  `readContentModel` and `validateLayoutV2` with it.
+- **The content model in the migration server.** The pipeline holds a package to a model when given
+  one, and the layout designer, `libs/features/layout-designer`, holds the `view` file it edits to
+  the server's; the migration server is still to call `readContentModel` and `validateLayoutV2` with
+  it.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
   rule that reads a record (app-definition-v2.md, section 13). The menu and the home refuse a
   `{ "field" }` value in a rule, and still pass a rule that reads a record.

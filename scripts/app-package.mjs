@@ -20,9 +20,11 @@
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
  *      it registers and its platform version, and, when one is given, the server's content model.
  *      The layouts the component contributes are the files the validator read, in the modes it
- *      read them in: none inline, none from elsewhere. The package contributes its app to the app
- *      registry once, from its `app.json`, naming every file of the app definition the registry
- *      serves and nothing else. A manifest that is not a file, and a component path that leaves
+ *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
+ *      contributed, since the server would never serve one that is not. The package contributes
+ *      its app to the app registry once, from its `app.json`, naming every file of the app
+ *      definition the registry serves and nothing else. A manifest that is not a file, and a
+ *      component path that leaves
  *      `bundle/` or names a folder or a hard link, are refused before they are read (a missing one
  *      is the builder's to refuse, at step 4);
  *   3. `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s
@@ -504,6 +506,11 @@ function componentFileOf(root, component) {
  * entry contributes nothing and is skipped, as the builder skips it. A manifest that is not a file
  * is refused before it is read, as is a component path that leaves `bundle/`, or names a folder or
  * a hard link (`componentFileOf`).
+ *
+ * The other way round too: a file under `agentic-ui-config/layouts/` that no enabled entry
+ * contributes is one the validator passed and the server would never serve, so it is refused,
+ * naming the file and the entry that would contribute it (`uncontributedLayout`). It is the step
+ * that reads the contributions, so it is here.
  */
 function layoutContributions(directory) {
   const bundle = join(directory, 'bundle');
@@ -520,10 +527,21 @@ function layoutContributions(directory) {
   // way, is the builder's to refuse, at step 4.
   const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
   const root = resolve(bundle);
+  /**
+   * The files the enabled entries contribute, those only a disabled entry names, and those only an
+   * entry outside the configuration's extension point names, where nothing registers it.
+   */
+  const contributed = new Set();
+  const disabled = new Map();
+  const misplaced = new Map();
+  let missing = false;
   for (const component of componentPathsOf(text)) {
     const file = componentFileOf(root, component);
     if (typeof file !== 'string') return file.problem;
-    if (file === '') continue;
+    if (file === '') {
+      missing = true;
+      continue;
+    }
     let source;
     try {
       source = readFileSync(file, 'utf8');
@@ -531,9 +549,13 @@ function layoutContributions(directory) {
       return `the manifest names the component ${component}, which cannot be read: ${error.code ?? error.message}.`;
     }
     const xml = componentXmlOf(source);
-    for (const [, tag] of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
-      const { type, mode, src, enabled } = attributesOf(tag);
-      if (enabled !== undefined && enabled.toLowerCase() !== 'true') continue;
+    const configuration = configurationExtensions(xml);
+    for (const match of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
+      const { type, mode, src, enabled } = attributesOf(match[1]);
+      if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
+        if (src !== undefined) disabled.set(posix.normalize(src), component);
+        continue;
+      }
       const checked = `agentic-ui-config/layouts/${type}/${mode}.layout.json`;
       if (src === undefined)
         return (
@@ -545,7 +567,66 @@ function layoutContributions(directory) {
           `${component} contributes the ${type}/${mode} layout from ${src}. Contribute it from ` +
           `${checked}, where the validator reads it in that mode.`
         );
+      if (configuration.some(([from, to]) => match.index > from && match.index < to))
+        contributed.add(checked);
+      else misplaced.set(checked, component);
     }
+  }
+  // A component that is missing is the builder's to refuse, at step 4: the layouts it would have
+  // contributed are not called uncontributed first.
+  if (missing) return null;
+  return uncontributedLayout(bundle, contributed, disabled, misplaced);
+}
+
+/**
+ * Where Nuxeo registers a `<layout>` or an `<app>` in a component's markup: its extensions to
+ * `org.nuxeo.agentic.ui.config`'s "configuration" point, each as `[start, end]`. One anywhere else,
+ * a misspelt point or another component's target, is registered by nothing.
+ */
+function configurationExtensions(xml) {
+  return [
+    ...xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g')),
+  ].flatMap((extension) => {
+    const { target, point } = attributesOf(extension[1]);
+    return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration'
+      ? [[extension.index, extension.index + extension[0].length]]
+      : [];
+  });
+}
+
+/**
+ * The first file under `bundle/agentic-ui-config/layouts/` that no enabled `<layout>` entry
+ * contributes, said with the entry that would, or `null`. The server serves a layout only as a
+ * component names it, so such a file would never be seen, though the validator passed it. A
+ * Markdown file is not packaged (`build.mjs`), so it is not one. Step 1 has refused any symbolic
+ * link, so the walk follows none.
+ */
+function uncontributedLayout(bundle, contributed, disabled, misplaced) {
+  const layouts = join(bundle, 'agentic-ui-config', 'layouts');
+  if (!existsSync(layouts) || !lstatSync(layouts).isDirectory()) return null;
+  for (const path of filesUnder(layouts).sort()) {
+    if (path.endsWith('.md')) continue;
+    const src = `agentic-ui-config/layouts/${path}`;
+    if (contributed.has(src)) continue;
+    const shown = `bundle/${src}`;
+    const place = /^([^/]+)\/([^/]+)\.layout\.json$/.exec(path);
+    if (!place)
+      return (
+        `${shown} is not a layout any component can contribute: a layout is ` +
+        'layouts/<Type>/<mode>.layout.json. Move it there and contribute it, or remove it, since ' +
+        'the server would never serve it.'
+      );
+    const entry = `<layout type="${place[1]}" mode="${place[2]}" src="${src}" />`;
+    const why = misplaced.has(src)
+      ? `${misplaced.get(src)} names only outside an extension of org.nuxeo.agentic.ui.config's "configuration" point, where nothing registers it`
+      : disabled.has(src)
+        ? `${disabled.get(src)} names only in a disabled entry`
+        : 'no component contributes';
+    return (
+      `${shown} is a layout ${why}, so the server would never serve it. Add ${entry} to the ` +
+      'component\'s org.nuxeo.agentic.ui.config "configuration" extension, as the app-layout and ' +
+      'app-form generators do, or remove the file.'
+    );
   }
   return null;
 }
@@ -567,7 +648,8 @@ function filesUnder(directory, prefix = '') {
  * names exactly the files of the app definition the registry serves. A file it holds and does not
  * name would never be served; one it names and does not hold would be missing on the server. A
  * disabled entry contributes nothing and is skipped. A package that contributes no app is said and
- * built, for now: the Builder kit's generators do not write the contribution yet. Called after
+ * built, for now: the Builder kit's generators write the contribution (`app-package` and
+ * `app-registry`), and refusing one without it is the user's to decide. Called after
  * `layoutContributions`, which has refused any component path that leaves `bundle/`.
  */
 function appContributions(directory, root) {
@@ -580,16 +662,7 @@ function appContributions(directory, root) {
     const file = componentFileOf(resolve(bundle), component);
     if (typeof file !== 'string' || file === '') continue;
     const xml = componentXmlOf(readFileSync(file, 'utf8'));
-    // Where Nuxeo registers an <app>: in an extension to the configuration's point. One anywhere
-    // else, a misspelt point or another component's target, is registered by nothing.
-    const configuration = [
-      ...xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g')),
-    ].flatMap((extension) => {
-      const { target, point } = attributesOf(extension[1]);
-      return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration'
-        ? [[extension.index, extension.index + extension[0].length]]
-        : [];
-    });
+    const configuration = configurationExtensions(xml);
     for (const match of xml.matchAll(new RegExp(`<app${TAG}`, 'g'))) {
       const attributes = attributesOf(match[1]);
       if (attributes.enabled !== undefined && attributes.enabled.toLowerCase() !== 'true') continue;
@@ -610,11 +683,12 @@ function appContributions(directory, root) {
   const app = JSON.parse(readFileSync(join(root, 'app.json'), 'utf8').replace(/^\uFEFF/, ''));
   const element = `<app id="${app.id}" src="agentic-ui-config/app.json">`;
   if (apps.length === 0) {
-    // Said, not refused, for now: the app-package, app-queue and app-action generators do not
-    // write the contribution yet, and what they scaffold must still build.
+    // Said, not refused, for now: a package written before the generators wrote the contribution
+    // must still build until the user decides to refuse it.
     process.stdout.write(
       `note: no component contributes the app, so the app registry will not serve it on a server. ` +
-        `Add ${element} to the component, with a <file path="..."> for each file of the app definition.\n`,
+        `Add ${element} to the component, with a <file path="..."> for each file of the app definition: ` +
+        `the app-registry generator writes it.\n`,
     );
     return null;
   }
@@ -644,7 +718,8 @@ function appContributions(directory, root) {
   if (unnamed.length > 0)
     return (
       `${component} does not name ${unnamed.join(', ')} in the app ${id}, so the app registry would ` +
-      `not serve ${unnamed.length === 1 ? 'it' : 'them'}. Add a <file path="..."> for each.`
+      `not serve ${unnamed.length === 1 ? 'it' : 'them'}. Add a <file path="..."> for each, as the ` +
+      'app-registry generator does.'
     );
   return null;
 }
