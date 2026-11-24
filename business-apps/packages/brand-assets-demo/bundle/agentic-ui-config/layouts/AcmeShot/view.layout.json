@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "shot",
+      "labelKey": "brand.shot.card",
+      "fields": [
+        "dc:title",
+        "acmeshot:product",
+        "acmeshot:colorway",
+        "acmeshot:shot",
+        { "field": "acmeshot:due", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "field": "acmeshot:asset",
+          "widget": "document-link",
+          "parameters": { "types": ["AcmeAsset"] }
+        }
+      ]
+    }
+  ]
+}
