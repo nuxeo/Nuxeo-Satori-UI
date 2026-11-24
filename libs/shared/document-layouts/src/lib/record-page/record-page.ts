@@ -231,6 +231,13 @@ function fieldShowing(
 export class RecordPageComponent {
   readonly document = input.required<NuxeoDocument>();
   readonly layout = input.required<ResolvedRecordLayout>();
+  /**
+   * The page without the ways it offers to change a record: a comments card shows its thread
+   * without the comment box, Reply, Edit or Delete, and a related list offers no row action. What
+   * the layout designer previews with, so that drawing the page it is editing writes nothing. A
+   * convenience, not a control: the server's permissions decide what anyone may change.
+   */
+  readonly readOnly = input(false);
 
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
@@ -422,6 +429,7 @@ export class RecordPageComponent {
     return {
       list: {
         ...list,
+        rowActions: this.readOnly() ? [] : list.rowActions,
         columns: list.columns
           .filter((column) => passes(column.visibleWhen))
           .map((column) => ({ ...column, visibleWhen: null })),

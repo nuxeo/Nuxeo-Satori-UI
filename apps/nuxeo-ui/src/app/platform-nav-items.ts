@@ -73,6 +73,9 @@ export function visibleSettingsDrawerItems(themingEnabled: boolean): DrawerLinkI
     : SETTINGS_DRAWER_ITEMS.filter((item) => item.path !== THEMES_SETTINGS_PATH);
 }
 
+/** The layout designer, which `app.routes.ts` mounts for administrators. */
+export const LAYOUT_DESIGNER_PATH = '/administration/layout-designer';
+
 export const ADMINISTRATION_DRAWER_ITEMS: DrawerLinkItem[] = [
   {
     labelKey: 'drawer.administration-analytics',
@@ -99,6 +102,12 @@ export const ADMINISTRATION_DRAWER_ITEMS: DrawerLinkItem[] = [
     labelKey: 'drawer.administration-nxql-search',
     label: 'NXQL Search',
     path: '/administration/nxql-search',
+  },
+  // Administrators only, as its route is: power users have their own list, below.
+  {
+    labelKey: 'drawer.administration-layout-designer',
+    label: 'Layout Designer',
+    path: LAYOUT_DESIGNER_PATH,
   },
 ];
 

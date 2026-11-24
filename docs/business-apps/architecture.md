@@ -291,7 +291,10 @@ inspection with the right type and link. It keeps working offline and uploads wh
 **Builder.** The agent kit is the app builder skill, an MCP server and the existing generators and
 config-package tools. It runs in the coding tools presales already use, against a development
 server. The designer is the same work for administrators, inside the shell: it writes the same
-package, previews it, and publishes only with approval. Neither writes the data model or code.
+package, previews it, and publishes only with approval. Neither writes the data model or code. Its
+first slice edits a record page's layout file, previews it with the record page engine and saves it
+as a download; publishing waits for a write API the app registry does not have
+([development plan](development-plan.md), phase 6).
 
 **The template stays.** `apps/nuxeo-satori-template` remains the route for customers who write
 Layer 2 code until plugins load at run time, and afterwards for changes the plugin API cannot

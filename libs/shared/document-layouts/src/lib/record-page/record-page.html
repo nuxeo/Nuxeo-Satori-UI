@@ -93,6 +93,7 @@
           class="record-page__comments"
           [documentUid]="document().uid"
           [pageSize]="comments.pageSize"
+          [readOnly]="readOnly()"
         />
       } @else {
         <dl class="record-page__fields">

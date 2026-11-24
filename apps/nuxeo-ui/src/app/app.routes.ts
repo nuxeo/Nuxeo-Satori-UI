@@ -119,6 +119,16 @@ export const routes: Routes = [
         path: 'trash',
         loadChildren: () => import('@agentic-ui/feature-trash').then((m) => m.trashRoutes),
       },
+      // The layout designer (docs/business-apps/development-plan.md, phase 6), declared before
+      // `administration` so that its two segments are matched here, not by that feature's children.
+      // `adminGuard` waits for the session, then the feature's own route lets administrators alone
+      // in. Not a security control: the designer writes nothing to the server.
+      {
+        path: 'administration/layout-designer',
+        canActivate: [adminGuard],
+        loadChildren: () =>
+          import('@agentic-ui/feature-layout-designer').then((m) => m.layoutDesignerRoutes),
+      },
       {
         path: 'administration',
         canActivate: [adminGuard],
