@@ -8,9 +8,11 @@
  * the harness refuses, saying why. A mutation that finds nothing of its kind to break, such as a
  * conditional field in a package with no conditions, says so and writes nothing.
  *
- * The controls of the report's decisions (`DECISION_MUTATIONS`) break one decision of the
- * conversion's `decisions.json` instead. No check fails then: readiness, which holds that file to
- * the report, must name what broke among what stands in the way.
+ * The controls of the report's decisions (`DECISION_MUTATIONS`) break the conversion's
+ * `decisions.json` against its report instead, in one way each: a decision's owner or what was
+ * decided taken off, the report changed under a decision, or an entry added that must not be
+ * taken. No check fails then: readiness, which holds that file to the report, must name what broke
+ * among what stands in the way.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
@@ -377,6 +379,22 @@ const M1_MUTATIONS: readonly Mutation[] = [
           entries.map((entry) => (entry === target ? bare : entry)),
         ),
         changed: `removed the reason from ${target.id} in report.json`,
+      };
+    },
+  },
+  {
+    name: 'other-version',
+    description: 'Make the report one of another version of the package',
+    caughtBy: 1,
+    apply: (conversion) => {
+      const { report } = conversion;
+      const version = `${report.package.version}.1`;
+      return {
+        conversion: {
+          ...conversion,
+          report: { ...report, package: { ...report.package, version } },
+        },
+        changed: `made the report one of ${report.package.name} ${version}`,
       };
     },
   },
@@ -1119,8 +1137,8 @@ export const MUTATIONS: readonly Mutation[] = [...M1_MUTATIONS, ...M2_MUTATIONS,
 
 /**
  * A control of the decisions: readiness, which holds the conversion's `decisions.json` to its
- * report, must then name what broke among what stands in the way. Each breaks one decision of a
- * file that has them, so the conversion it is given needs one, filled in.
+ * report, must then name what broke among what stands in the way. Each works from a decision the
+ * file holds and readiness takes, so the conversion it is given needs one, filled in.
  */
 export interface DecisionMutation extends Omit<Mutation, 'caughtBy'> {
   readonly caughtBy: 'decisions';

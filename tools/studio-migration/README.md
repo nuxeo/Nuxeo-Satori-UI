@@ -485,6 +485,10 @@ check that did not run does.
     A parser that misses something would otherwise go unnoticed, because the converter and the
     harness read the same parse.
 
+    The report must also be of the package given: its name and version, and Studio's commit and
+    build time from the bundle's manifest. A construct's id is its place in its file, so a report
+    of another build can name the same ids for other constructs.
+
   - **2, fields.** Each converted layout shows the fields its Web UI layout binds: each once, in
     the same mode, with the same required flag and the expected widget. M2 adds the fields of the
     layout blocks each layout uses; each tab of a view file, which shows its block's fields; and
@@ -576,6 +580,7 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 | `drop-report-entry`          | 1     | Drops a layout from the report without a word                         |
 | `invent-report-entry`        | 1     | Lists a layout the package does not have                              |
 | `unexplained-report`         | 1     | Reports something without saying why                                  |
+| `other-version`              | 1     | Makes the report one of another version of the package                |
 | `drop-field`                 | 2     | Drops a field from a converted layout                                 |
 | `date-to-text`               | 2     | Turns a date widget into text, in a layout or a list                  |
 | `drop-required`              | 2     | Makes a required field of a form optional                             |
@@ -610,7 +615,7 @@ apply every one to the made-up package, and `mutate` applies one to a copy:
 The four that write what Web UI leaves out read the package too: `mutate` takes it with
 `--package <package.zip>`, and refuses without it.
 
-**On the sample**, every one of the 39 controls was applied to its conversion with `mutate` and
+**On the sample**, every one of the 39 controls of the checks there were then was applied to its conversion with `mutate` and
 checked. The 21 that find something to break each fail their check, with a finding of their own,
 `wrong-home-queue`, `drop-menu-entry` and M2's `var-in-layout` among them. The other 18 have
 nothing to break there, and say so: `widen-to-everyone`, `widen-column-to-everyone`, `invert-rule`
@@ -620,30 +625,33 @@ and the five of the slot registration, because it has no disabled, replaced or o
 contribution and no action. The slot controls were applied with `mutate` to the made-up package's
 conversion, and each failed its check. The tests apply every control to the made-up package with M2's corpus, which has them all,
 and each of M2's nine was also applied with `mutate` to that package's conversion and seen failing
-its check.
+its check. The fortieth, `other-version`, came with the report: the tests apply it to the made-up
+package, and it was applied with `mutate` to that package's conversion, with and without M2's
+corpus, and seen failing check 1.
 
 Section 7's "invert a rule" is `invert-rule`. It and `drop-rule` take the first rule the
 conversion carries, on a layout field, a tab, a card, a task form's field, an action, a home card,
 a menu entry or a queue. The tests also drop and invert each rule of the made-up package in turn,
 M2's corpus included, and check 5 fails for every one.
 
-**The decisions' controls.** Six more, in the same file, break one decision of a `decisions.json`
-filled in. No check fails then: readiness must name what broke among what stands in the way,
-which `mutate --list` shows as `decisions`. Each needs a decisions file with a decision filled in,
-and says so when the conversion has none.
+**The decisions' controls.** Six more, in the same file, break a `decisions.json` filled in against
+its report, in one way each: they take a decision's owner or what was decided off, change the
+report under a decision, or add an entry that must not be taken. No check fails then: readiness
+must name what broke among what stands in the way, which `mutate --list` shows as `decisions`.
+Each needs a decisions file with a decision filled in, and says so when the conversion has none.
 
-| Mutation           | Breaks                                                                            | Readiness then says                                |
-| ------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `drop-owner`       | Takes the owner off a reported item's decision                                    | 1 reported item has no owner                       |
-| `drop-decision`    | Leaves a reported item's owner with nothing decided                               | 1 reported item has an owner but no decision       |
-| `stale-decision`   | Changes the reason the report gives for a decided item, as converting again would | it was decided when the report gave another reason |
-| `decide-unlisted`  | Decides an item the report does not list                                          | it is not in the report                            |
-| `decide-converted` | Decides an item the report gives as converted                                     | only a reported item takes a decision              |
-| `decide-twice`     | Decides one reported item twice                                                   | it is decided 2 times                              |
+| Mutation           | Breaks                                                                            | Readiness then says                                     |
+| ------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `drop-owner`       | Takes the owner off a reported item's decision                                    | 1 reported item has no owner                            |
+| `drop-decision`    | Leaves a reported item's owner with nothing decided                               | 1 reported item has an owner but no decision            |
+| `stale-decision`   | Changes the reason the report gives for a decided item, as converting again would | it was made on another reason than the report gives now |
+| `decide-unlisted`  | Decides an item the report does not list                                          | it is not in the report                                 |
+| `decide-converted` | Decides an item the report gives as converted                                     | only a reported item takes a decision                   |
+| `decide-twice`     | Decides one reported item twice                                                   | it is decided 2 times                                   |
 
 The tests apply each to the made-up package with M2's corpus and a decisions file filled in, and
-each adds a line of its own to what stands in the way. Each breaks a decision readiness takes, so
-that it cannot pass by breaking one readiness already leaves aside. Each was also applied with
+each adds a line of its own to what stands in the way. Each works from a decision readiness takes,
+so that it cannot pass by breaking one readiness already leaves aside. Each was also applied with
 `mutate` to the made-up package's conversion, with and without M2's corpus, its decisions filled
 in, and `check` named it, where the unbroken copy had nothing of the decisions in the way. The
 sample is not in this repository, and was not used.
@@ -655,22 +663,31 @@ demo shows it: 100% of the package accounted for, and every reported item with a
 
 **The decisions** ([`src/decisions.ts`](src/decisions.ts)). `report.json` is the converter's, the
 same for the same package every time. What people decide is kept beside it, in `decisions.json`,
-which no conversion writes, so that converting again, once the catalogue has learnt something,
-loses none of it.
+which no conversion writes, so that converting the same package again, once the catalogue has
+learnt something, loses none of it.
 
+- **For one build of the package.** A file of decisions names the package's name and version, and
+  Studio's commit and build time, as the report records them, and is taken only for a report of
+  that build. A construct's id is its place in its file, so another build can give an id to
+  another construct, and a decision would land on it: decisions are never taken across builds.
+  Check 1 holds the report itself to the package given in the same way.
 - **`decisions <conversion>`** writes `decisions.json`, in the provisional format
-  `studio-migration-decisions/1`: the package and its version, and an entry for every reported
-  item, in the report's order. Each entry copies what it is made on from the report, the item's
+  `studio-migration-decisions/1`: the build, and an entry for every reported item, in the
+  report's order. Each entry copies what it is made on from the report, the item's
   label, property, outcome, where it was written, its reason and its rule, and leaves `owner` and
   `decision` for a person to fill in. It never writes over a `decisions.json` the conversion holds.
 - **`--from <earlier decisions.json>`** carries each decision of a file written for an earlier
-  conversion of the package, at any version of it, where the decision still holds for this report.
-  It lists each that does not, and why. It refuses the decisions of another package.
-- **A decision is taken** only when what it copied still matches the report. One made on another
-  reason, label, property, place or rule was made on something else, and is not taken: it is
-  decided again. Nor is one of an item the report does not list, or does not report, one listed
-  twice, one holding a key a decision does not take, such as a verdict, or one whose owner or
-  decision is not text. A file of another format, of another package or version, or with no list,
+  conversion of the same build, where the decision still holds for this report. It lists each
+  that said something and does not carry, and why; the earlier file is read and never changed, so
+  it still holds them. An entry of the earlier file that says nothing is passed over. It refuses
+  the decisions of another package, version or Studio build. It says how many entries are left
+  to fill in.
+- **A decision is taken** only when what it copied still matches the report, whatever the order
+  of a rule's keys. One made on another reason, label, property, place or rule was made on
+  something else, and is not taken: it is decided again. Nor is one of an item the report does not
+  list, or does not report, one listed twice, one holding a key a decision does not take, such as
+  a verdict, or one whose owner or decision is not text. An item the report lists twice is its
+  first entry's, as everywhere else. A file of another format, of another build, or with no list,
   is taken not at all. Each is a line of what stands in the way.
 - **Readiness** then counts the reported items with no owner, and those whose owner says nothing
   decided, as `check` prints them. An owner or a decision of spaces alone is none.
@@ -681,9 +698,11 @@ loses none of it.
 `--json` gives the same as data. It reads the package, the conversion and its decisions, and writes
 nothing.
 
-- **The header:** the package and its version, the platform it targets, its bundle; Studio's
-  branch, commit and build time, from the bundle's manifest; the app's id and platform range; the
-  converter; the allow-list.
+- **The header:** the package handed in and its version, the platform it targets, its bundle;
+  Studio's branch, commit and build time, from its bundle's manifest; the app's id and platform
+  range; the converter; the allow-list the harness held the actions to, and whether it is the
+  deployment's, given with `--allow-list`, or the one the conversion recorded. Whether the report
+  is of that package is check 1's.
 - **The summary:** the package's constructs, as the inventory reads them, by kind, with the outcome
   of each one's first entry in the report: how many are converted, proposed, reported and of those
   decided, generated, left on the server, pending, and missing from the report. An entry whose
@@ -691,8 +710,10 @@ nothing.
   report lists, rounded down to a tenth, so that 99.96% never reads as 100%.
 - **What the harness found:** the ten checks, and the verdict with what stands in its way.
 - **The decisions needed:** every reported item, with its reason, where it was written, and its
-  owner and decision, or none; what was not taken from `decisions.json`; and every proposal.
-- **Each file:** its constructs by outcome, and where those converted went.
+  owner and decision, each or none; what was not taken from `decisions.json`; and every proposal.
+- **Each file:** its constructs by outcome, and where those converted went. What the harness
+  found is not split by file: its findings name the conversion's files rather than the package's,
+  and are given whole, above.
 
 Screenshots and the request logs wait for the migration server. The reviewer's approval is the
 reviewer's: no command records it.
@@ -828,30 +849,35 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     label, and check 6's equals in Web UI's places. Three rounds found five no test reached, each
     now tested.
 
-  - **For the report and its decisions, 49 guards**, broken the same way, each seen turning the
+  - **For the report and its decisions, 66 guards**, broken the same way, each seen turning the
     suite red:
-    - **Reading `decisions.json`:** its format, its package's name and version, its list; a
-      decision of no item or of an empty id; one listed twice; a key a decision does not take; an
-      item the report does not list, or does not report, and the word that accepting a proposal
-      is not built; each of the six things a decision copies, compared as JSON; an owner or a
-      decision that is not text, or only spaces; each reported item once; a file it takes nothing
-      of, named.
-    - **Carrying an earlier file:** only what still holds, and never another package's.
+    - **Reading `decisions.json`:** its format; its build, by name, version, Studio's commit and
+      build time; its list; a decision of no item or of an empty id; one listed twice; a key a
+      decision does not take; an item the report does not list, or does not report, and the word
+      that accepting a proposal is not built; each of the six things a decision copies, compared
+      as JSON whatever the order of its keys; an owner or a decision that is not text, or only
+      spaces; each reported item once, by the first entry of its id; a file it takes nothing of,
+      named.
+    - **Carrying an earlier file:** only what still holds, never another build's, an entry that
+      says nothing passed over, and the entries left to fill in counted.
     - **Readiness:** each of its three kinds of line.
-    - **The report:** a construct missing, and an outcome that is none; decided only with an owner
-      and a decision; the coverage of what the report lists; an item, and a proposal, listed once,
-      by its first entry; what a file became, only of what was converted; an owner shown only
-      when named.
+    - **Check 1:** the report of the package given, by name, version, Studio's commit and build
+      time.
+    - **The report:** the package handed in, and the allow-list the harness used; a construct
+      missing, and an outcome that is none; decided only with an owner and a decision; the
+      coverage of what the report lists; an item, and a proposal, listed once, by its first entry;
+      what a file became, only of what was converted; an owner and a decision each shown, or none.
     - **Elsewhere:** `decisions.json` written and read with the conversion, never written over;
-      the command's errors; `mutate --list` and `mutate` naming the decisions; two controls
-      breaking what they say; a control needing a decision filled in, and breaking one readiness
-      takes.
+      the command's errors; `mutate --list` and `mutate` naming the decisions; three controls
+      breaking what they say; a control needing a decision filled in, and working from one
+      readiness takes.
 
-    Before the round, four guards were seen to have no test reaching them: the copied rule
+    Before the first round, four guards were seen to have no test reaching them: the copied rule
     compared as JSON rather than as an object, a decision of spaces, a proposal listed twice, and
     what a file became taken from what was reported. Each got its test, and the round found none.
     After it, reading the code found that a control could break a decision readiness already left
-    aside. It now breaks one readiness takes, and its test fails on the old choice.
+    aside. It now works from one readiness takes, and its test fails on the old choice. The second
+    round, of the 17 guards the review's fixes brought, found none.
 
   - **An independent review of the slot registration** found eleven things. Fixed, each with a
     test: a contribution with no template that comes first was not registered, so its priority did

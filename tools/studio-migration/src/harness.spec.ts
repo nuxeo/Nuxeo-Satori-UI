@@ -311,6 +311,23 @@ describe('check 1, nothing dropped', () => {
   it('agrees with the second count on the whole synthetic package', () => {
     expect(check(prepare(), 1)?.findings).toEqual([]);
   });
+
+  it('fails a report of another version of the package, or of another Studio build of it', () => {
+    const input = prepare();
+    const { report } = input.conversion;
+    const of = (change: Partial<typeof report>) =>
+      check({ ...input, conversion: { ...input.conversion, report: { ...report, ...change } } }, 1)
+        ?.findings;
+    expect(of({ package: { ...report.package, name: 'Other-Project' } })).toEqual([
+      'the report is of Other-Project 1.0.0, not of the package given, Acme-Claims 1.0.0',
+    ]);
+    expect(of({ studio: { ...report.studio, commit: 'abc123' } })).toEqual([
+      "the report is of Studio's commit abc123, built null, not of the package's, commit null, built null",
+    ]);
+    expect(of({ studio: { ...report.studio, buildTime: '2026-11-20T10:00:00Z' } })).toEqual([
+      "the report is of Studio's commit null, built 2026-11-20T10:00:00Z, not of the package's, commit null, built null",
+    ]);
+  });
 });
 
 describe('check 8, theme', () => {

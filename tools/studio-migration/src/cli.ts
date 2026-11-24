@@ -14,11 +14,12 @@
  *                                                             the report, for the person who approves it
  *
  * `--allow-list` names the deployment's operations, `{ "operations": [...] }` (decision 3): a button
- * becomes an action only when its operation is on it. `check` reads the list the conversion was
- * made with unless it is given one.
+ * becomes an action only when its operation is on it. `check` and `report` read the list the
+ * conversion was made with unless they are given one.
  *
  * `decisions` writes the conversion's `decisions.json`, an entry for each reported item, for people
- * to say who owns it and what they decided; `--from` carries each decision of an earlier file that
+ * to say who owns it and what they decided; `--from` carries each decision of an earlier file, for
+ * the same build of the package, that
  * still holds. `check` and `report` read it from the conversion.
  *
  * Exit codes: 0 done, and for `check`, no check failed; 1 a check failed, or something could not be
@@ -188,7 +189,7 @@ export function main(argv: readonly string[], io: CliIo): number {
         const conversion = readConversion(args[0]);
         const from = values.get('--from');
         const earlier = from === undefined ? undefined : { raw: readJson(io, from), file: from };
-        const { file, carried, notCarried } = decisionsFor(conversion.report, earlier);
+        const { file, carried, notCarried, blank } = decisionsFor(conversion.report, earlier);
         const path = join(args[0], DECISIONS_FILE);
         try {
           // `wx`: written only where no file is, so a person's decisions are never written over.
@@ -201,12 +202,13 @@ export function main(argv: readonly string[], io: CliIo): number {
           );
         }
         const lines = [
-          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, each with an owner and a decision to fill in`,
+          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them with an owner or a decision to fill in`,
         ];
         if (from !== undefined) {
           lines.push(`  carried from ${from}: ${carried}`);
           if (notCarried.length > 0) {
-            lines.push(`  not carried: ${notCarried.length}`);
+            // Printed once: the earlier file is read, never changed, so it still holds each.
+            lines.push(`  not carried, and still in ${from}: ${notCarried.length}`);
             for (const line of notCarried) lines.push(`    - ${line}`);
           }
         }
@@ -361,7 +363,11 @@ export function reportSummary(summary: MigrationSummary): string {
     `Studio: branch ${studio.branch ?? 'not recorded'}, commit ${studio.commit ?? 'not recorded'}, built ${studio.buildTime ?? 'at a time not recorded'}`,
     `App: ${header.app.id ?? 'no app.json'}${header.app.platform ? `, for platform ${header.app.platform}` : ''}`,
     `Converter: ${header.converter.name} ${header.converter.version}, phase ${header.converter.phase}`,
-    `Allow-list: ${header.allowList.join(', ') || 'none'}`,
+    `Allow-list: ${header.allowList.operations.join(', ') || 'none'}, ${
+      header.allowList.from === 'deployment'
+        ? "the deployment's, as given"
+        : 'as the conversion recorded it, not the deployment’s word for it'
+    }`,
     '',
     `Summary: ${plural(all.total, 'construct')}, by kind and outcome`,
   ];
@@ -407,11 +413,7 @@ export function reportSummary(summary: MigrationSummary): string {
       `      why: ${item.note}`,
     );
     if (item.to !== undefined) lines.push(`      written to: ${item.to}`);
-    lines.push(
-      item.owner === null
-        ? '      owner: none'
-        : `      owner: ${item.owner}; decided: ${item.decision ?? 'nothing yet'}`,
-    );
+    lines.push(`      owner: ${item.owner ?? 'none'}; decided: ${item.decision ?? 'nothing yet'}`);
   }
   if (summary.decisionFindings.length > 0) {
     lines.push('  Not taken from decisions.json:');

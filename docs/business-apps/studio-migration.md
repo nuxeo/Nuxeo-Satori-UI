@@ -303,11 +303,12 @@ something to break fails its check too. The thirteen that do not say so: `widen-
 condition and no operation button to break there, and eight of M2's nine no task layout, tab or
 layout block.
 
-**For the report's decisions** (section 8), six more, which break one decision of a
-`decisions.json` filled in: take a decided item's owner off, or its decision; change the reason
-the report gives for it, as converting again would; decide an item the report does not list, one
-it converts, or one item twice. No check fails then: readiness must name each among what stands in
-its way, and does, on the made-up package with and without M2's corpus.
+**For the report's decisions** (section 8), six more, which break a `decisions.json` filled in
+against its report: take a decided item's owner off, or its decision; change the reason the report
+gives for it, as converting again would; decide an item the report does not list, one it
+converts, or one item twice. No check fails then: readiness must name each among what stands in
+its way, and does, on the made-up package with and without M2's corpus. One more, for check 1,
+makes the report one of another version of the package, which check 1 fails.
 
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
@@ -363,12 +364,15 @@ it, the same for the same package every time.
 
 **Owners and decisions** are people's, so they are kept beside it, in the conversion's
 `decisions.json` (provisional format `studio-migration-decisions/1`), which no conversion writes:
-converting again, once the catalogue has learnt something, loses none of them. The `decisions`
-command writes the file, an entry for each reported item for a person to fill in with its owner
-and what they decided, and carries those of an earlier file that still hold. Each decision copies
-what it was made on from the report, the item's label, property, outcome, where it was written,
-its reason and its rule; where the report no longer says the same, the decision is not taken, and
-is made again. Readiness needs a decision taken for every reported item, and nothing wrong in the
+converting the same package again, once the catalogue has learnt something, loses none of them.
+The `decisions` command writes the file, an entry for each reported item for a person to fill in
+with its owner and what they decided, and carries those of an earlier file of the same build that
+still hold. A file is for one build of the package, its version and Studio's commit and build
+time, because a construct's id is its place in its file and another build can give it to another
+construct; check 1 holds the report to the package given the same way. Each decision copies what
+it was made on from the report, the item's label, property, outcome, where it was written, its
+reason and its rule; where the report no longer says the same, the decision is not taken, and is
+made again. Readiness needs a decision taken for every reported item, and nothing wrong in the
 file.
 
 **Printed,** with the `report` command: the header, the summary by kind and outcome with the
@@ -376,7 +380,9 @@ coverage, what the harness found, every reported item with its owner and decisio
 and each file with what it became. The screenshots wait for the migration server.
 
 **Not yet:** accepting or rejecting a proposal, which needs the converter to write what a person
-accepts, and recording a reviewer's approval of the report.
+accepts; recording a reviewer's approval of the report; what the harness found, per file, since
+its findings name the conversion's files; and carrying decisions to a new build of the package,
+which needs constructs known by more than their place.
 
 Evidence (screenshots, request logs, truth tables) is kept outside the repository, like the Beta's
 phase evidence. The summary goes into the pull request that adds the migrated package.
@@ -404,12 +410,15 @@ These sit inside the [development plan](development-plan.md):
 
 **Where the report stands, 24 November 2026:**
 
-- **Built:** section 8's report, for step 5 of phase 4's demo. Every reported item takes an owner
-  and a decision in the conversion's `decisions.json`, which readiness holds to the report, and
-  `report` prints the header, the summary by kind and outcome with its coverage, the harness's
-  verdict, the decisions needed and each file. Six negative controls break a decision each.
-- **Not yet:** accepting or rejecting a proposal, and a reviewer's approval, which no command
-  records.
+- **Built:** most of section 8's report, for step 5 of phase 4's demo. Every reported item takes
+  an owner and a decision in the conversion's `decisions.json`, which readiness holds to the
+  report, and `report` prints the header, the summary by kind and outcome with its coverage, the
+  harness's verdict, the decisions needed and what each file became. Six negative controls break
+  the decisions, one way each, and check 1 now holds the report to the package given, with a
+  control of its own.
+- **Not yet:** accepting or rejecting a proposal; a reviewer's approval, which no command records;
+  what the harness found, file by file, and the screenshots; carrying decisions to a new build of
+  the package.
 - **Not checked:** on a real package. The sample is not in this repository, and the report was
   run on the made-up package only.
 

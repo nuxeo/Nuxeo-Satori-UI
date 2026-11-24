@@ -63,7 +63,7 @@ describe('the report of a sound conversion', () => {
       studio: { branch: null, commit: null, buildTime: null },
       app: { id: 'acme-claims', platform: expect.stringMatching(/^>=\d+\.\d+\.\d+ <1\.0\.0$/) },
       converter: { name: '@nuxeo-satori/studio-migration', version: '0.0.0', phase: 'M1' },
-      allowList: ['Claim.Approve'],
+      allowList: { operations: ['Claim.Approve'], from: 'deployment' },
     });
   });
 
@@ -166,6 +166,29 @@ describe('the report of a sound conversion', () => {
     ).toMatchObject({ tallies: { converted: 2, reported: 1 }, became: ['app/labels/fr.json'] });
   });
 
+  it('heads it with the package handed in, and the allow-list the conversion recorded when given none', () => {
+    const { allowList: _given, ...recorded } = input;
+    const bumped = {
+      ...recorded,
+      conversion: {
+        ...input.conversion,
+        report: {
+          ...input.conversion.report,
+          package: { ...input.conversion.report.package, version: '0.9.0' },
+        },
+      },
+    };
+    const header = summarise(bumped);
+    expect(header.header.package.version).toBe('1.0.0');
+    expect(header.header.allowList).toEqual({ operations: ['Claim.Approve'], from: 'conversion' });
+    expect(header.checks[0].findings).toContain(
+      'the report is of Acme-Claims 0.9.0, not of the package given, Acme-Claims 1.0.0',
+    );
+    expect(reportSummary(header)).toContain(
+      'Allow-list: Claim.Approve, as the conversion recorded it, not the deployment’s word for it\n',
+    );
+  });
+
   it('gives the harness’s own findings and verdict', () => {
     const result = runHarness({ ...input, conversion: decided(input.conversion, 2) });
     expect(summary.checks).toEqual(result.checks);
@@ -227,7 +250,7 @@ describe('the report as text', () => {
     expect(text).toContain(
       'Studio: branch not recorded, commit not recorded, built at a time not recorded',
     );
-    expect(text).toContain('Allow-list: Claim.Approve');
+    expect(text).toContain("Allow-list: Claim.Approve, the deployment's, as given\n");
     expect(text).toMatch(
       /\n {2}kind +total +converted +proposed +reported +decided +generated +server +pending +missing\n/,
     );
@@ -245,11 +268,22 @@ describe('the report as text', () => {
       `  - cl:adjuster ("Adjuster"), in ${UI}/document/claim/nuxeo-claim-edit-layout.html\n` +
         `      id: layout-field:${UI}/document/claim/nuxeo-claim-edit-layout.html#3\n`,
     );
-    expect(text).toContain('      written to: layouts/Claim/edit.layout.json\n      owner: none\n');
+    expect(text).toContain(
+      '      written to: layouts/Claim/edit.layout.json\n      owner: none; decided: nothing yet\n',
+    );
     expect(text).toContain('      owner: Migration lead; decided: Rebuilt by hand\n');
     expect(text).toMatch(/\nProposals: 2, each waiting for a person to accept or reject it\n/);
     expect(text).toContain(
       '  data/i18n/messages-fr.json (translations): converted 3\n      became: app/labels/fr.json\n',
+    );
+  });
+
+  it('shows what an item’s decision says even where it names no owner', () => {
+    const conversion = decided(input.conversion);
+    const raw = conversion.decisions as { decisions: Record<string, unknown>[] };
+    raw.decisions[0]['owner'] = '';
+    expect(reportSummary(summarise({ ...input, conversion }))).toContain(
+      '      written to: layouts/Claim/edit.layout.json\n      owner: none; decided: Rebuilt by hand\n',
     );
   });
 

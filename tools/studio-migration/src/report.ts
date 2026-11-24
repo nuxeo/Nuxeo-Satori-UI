@@ -2,21 +2,24 @@
  * A migration's report as docs/business-apps/studio-migration.md, section 8, lays it out, for the
  * person who approves it:
  *
- * - **the header:** the package and its version, Studio's branch, commit and build time, the
- *   platform the package targets and the one the app asks for, the converter and the allow-list;
+ * - **the header:** the package given and its version, Studio's branch, commit and build time,
+ *   the platform the package targets and the one the app asks for, the converter, and the
+ *   allow-list the harness held the actions to, the deployment's or the one the conversion
+ *   recorded. Check 1 says whether the report is of that package;
  * - **the summary:** the package's constructs by kind and outcome, with how many reported ones are
  *   decided, and the coverage, which must be 100%;
  * - **what the harness found:** its ten checks and the verdict, with what stands in the way;
  * - **the decisions needed:** every reported item with its owner and what they decided, and every
  *   proposal, which waits for a person;
- * - **each file:** what its constructs became.
+ * - **each file:** what its constructs became. What the harness found is not split by file: its
+ *   findings name the conversion's files, and are given whole.
  *
  * The counts are of the package's constructs as the inventory reads them, each with the outcome of
  * its first entry in the report, so that an entry the report leaves out is counted `missing`
  * rather than not at all. The coverage is check 1's. Screenshots wait for the migration server.
  */
 import { constructsOf, type ConstructKind } from './constructs';
-import { OUTCOMES, type Outcome, type ReportEntry } from './convert';
+import { OUTCOMES, studioBuildOf, type Outcome, type ReportEntry } from './convert';
 import { holdDecisions } from './decisions';
 import { coverage, runHarness, type CheckResult, type HarnessInput } from './harness';
 import type { FileKind } from './inventory';
@@ -70,7 +73,11 @@ export interface MigrationSummary {
     /** `app.json`'s id and platform range, `null` where the conversion has none. */
     readonly app: { readonly id: string | null; readonly platform: string | null };
     readonly converter: { readonly name: string; readonly version: string; readonly phase: string };
-    readonly allowList: readonly string[];
+    /** The operations the harness held the actions to, and whose list it was. */
+    readonly allowList: {
+      readonly operations: readonly string[];
+      readonly from: 'deployment' | 'conversion';
+    };
   };
   readonly kinds: readonly KindCount[];
   readonly all: KindCount;
@@ -94,7 +101,7 @@ export interface MigrationSummary {
 export const TALLIES: readonly Tally[] = [...OUTCOMES, 'not an outcome', 'missing'];
 
 export function summarise(input: HarnessInput): MigrationSummary {
-  const { inventory, conversion } = input;
+  const { pkg, inventory, conversion } = input;
   const { report } = conversion;
   const result = runHarness(input);
   const entries = Array.isArray(report.constructs) ? report.constructs : [];
@@ -190,17 +197,20 @@ export function summarise(input: HarnessInput): MigrationSummary {
   };
   return {
     header: {
+      // The package handed in, not the report's word for it: check 1 compares the two.
       package: {
-        name: report.package.name,
-        version: report.package.version,
-        bundle: report.package.bundle,
-        targetPlatform: report.package.targetPlatform ?? null,
-        targetPlatformName: report.package.targetPlatformName ?? null,
+        name: pkg.descriptor.name,
+        version: pkg.descriptor.version,
+        bundle: pkg.bundlePath,
+        targetPlatform: pkg.descriptor.targetPlatform,
+        targetPlatformName: pkg.descriptor.targetPlatformName,
       },
-      studio: report.studio,
+      studio: studioBuildOf(pkg),
       app: { id: field('id'), platform: field('platform') },
       converter: report.converter,
-      allowList: report.allowList ?? [],
+      allowList: input.allowList
+        ? { operations: [...input.allowList].sort(), from: 'deployment' }
+        : { operations: [...(report.allowList ?? [])].sort(), from: 'conversion' },
     },
     kinds,
     all,

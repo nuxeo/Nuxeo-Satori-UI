@@ -316,18 +316,11 @@ export function convert(
     ...(decided.get(construct.id) ?? decide(construct, inventory, catalogue, context.carried)),
   }));
 
-  const manifest = readManifest(
-    pkg.bundleFiles.get('META-INF/MANIFEST.MF')?.toString('utf8') ?? '',
-  );
   return {
     report: {
       format: REPORT_FORMAT,
       package: { ...inventory.descriptor, bundle: pkg.bundlePath },
-      studio: {
-        branch: manifest.get('Studio-Git-Branch-Name') ?? null,
-        commit: manifest.get('Studio-Git-Commit-Hash') ?? null,
-        buildTime: manifest.get('Studio-Build-Time') ?? null,
-      },
+      studio: studioBuildOf(pkg),
       converter: converterIdentity(),
       allowList: [...allowList].sort(),
       constructs: entries,
@@ -430,6 +423,18 @@ export function labelsOf(
 }
 
 /** A JAR manifest's main attributes. A line that starts with a space carries on the one before. */
+/** The Studio project's branch, commit and build time, from the bundle's manifest. */
+export function studioBuildOf(pkg: StudioPackage): MigrationReport['studio'] {
+  const manifest = readManifest(
+    pkg.bundleFiles.get('META-INF/MANIFEST.MF')?.toString('utf8') ?? '',
+  );
+  return {
+    branch: manifest.get('Studio-Git-Branch-Name') ?? null,
+    commit: manifest.get('Studio-Git-Commit-Hash') ?? null,
+    buildTime: manifest.get('Studio-Build-Time') ?? null,
+  };
+}
+
 function readManifest(text: string): Map<string, string> {
   const attributes = new Map<string, string>();
   let last: string | null = null;

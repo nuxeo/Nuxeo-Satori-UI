@@ -347,7 +347,7 @@ describe('studio-migration decisions and report', () => {
     const written = run(['decisions', out], files);
     expect(written).toMatchObject({ code: 0, err: '' });
     expect(written.out).toBe(
-      `Wrote ${join(out, 'decisions.json')}: 14 reported items, each with an owner and a decision to fill in\n`,
+      `Wrote ${join(out, 'decisions.json')}: 14 reported items, 14 of them with an owner or a decision to fill in\n`,
     );
     const file = JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8'));
     expect(file.decisions).toHaveLength(14);
@@ -380,9 +380,12 @@ describe('studio-migration decisions and report', () => {
       'old.json': Buffer.from(JSON.stringify(old)),
     });
     expect(carried.code).toBe(0);
-    expect(carried.out).toContain('  carried from old.json: 13\n  not carried: 1\n');
+    expect(carried.out).toContain(
+      ': 14 reported items, 1 of them with an owner or a decision to fill in\n' +
+        '  carried from old.json: 13\n  not carried, and still in old.json: 1\n',
+    );
     expect(carried.out).toMatch(
-      /\n {4}- old\.json: layout-field:.*#3 was decided when the report gave another reason, so it is not taken: decide it again\n$/,
+      /\n {4}- old\.json: layout-field:.*#3 was made on another reason than the report gives now, so it is not taken: decide it again\n$/,
     );
     expect(run(['check', 'acme.zip', out], files).out).toContain(
       '  - 1 reported item has no owner',

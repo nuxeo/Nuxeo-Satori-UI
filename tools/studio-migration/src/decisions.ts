@@ -4,14 +4,20 @@
  *
  * The converter writes `report.json`, the same for the same package every time. What people
  * decide is kept beside it, in `decisions.json`, which no conversion writes, so that converting
- * again, after the catalogue has learnt something, loses none of it. The `decisions` command writes
- * the file with an entry for every reported item, and a person fills in each `owner` and
- * `decision`.
+ * the same package again, after the catalogue has learnt something, loses none of it. The
+ * `decisions` command writes the file with an entry for every reported item, and a person fills
+ * in each `owner` and `decision`.
  *
- * Each decision copies what it was made on from the report: the item's label, property, outcome,
- * where it was written, its reason and its rule. A decision whose copy no longer matches the report
- * was made on something else, and is not taken. Readiness (section 6) needs a decision taken for
- * every reported item, naming an owner and saying what they decided, and nothing wrong in the file.
+ * A file of decisions is for one build of the package: its name, its version, and Studio's commit
+ * and build time, as the report records them. A construct's id is its place in its file, so
+ * another build can give the same id to another construct; decisions are never taken across
+ * builds.
+ *
+ * Each decision also copies what it was made on from the report: the item's label, property,
+ * outcome, where it was written, its reason and its rule. A decision whose copy no longer matches
+ * the report was made on something else, and is not taken. Readiness (section 6) needs a decision
+ * taken for every reported item, naming an owner and saying what they decided, and nothing wrong
+ * in the file.
  *
  * Only a reported item takes a decision. Accepting or rejecting a proposal is not built yet: the
  * converter would have to write what a person accepts, and until it does, a proposal waits.
@@ -48,9 +54,17 @@ export interface OwnerDecision extends Pick<ReportEntry, PinnedKey> {
   readonly decision: string;
 }
 
+/** The build of the package a file of decisions is for, as its report records it. */
+export interface DecisionsBuild {
+  readonly name: string;
+  readonly version: string;
+  readonly commit: string | null;
+  readonly buildTime: string | null;
+}
+
 export interface DecisionsFile {
   readonly format: typeof DECISIONS_FORMAT;
-  readonly package: { readonly name: string; readonly version: string };
+  readonly package: DecisionsBuild;
   readonly decisions: readonly OwnerDecision[];
 }
 
@@ -81,7 +95,7 @@ export function holdDecisions(report: MigrationReport, raw: unknown): HeldDecisi
   const reading: Reading =
     raw === undefined
       ? { findings: [], taken: new Map() }
-      : readDecisions(report, raw, DECISIONS_FILE, { sameVersion: true });
+      : readDecisions(report, raw, DECISIONS_FILE);
   let unowned = 0;
   let undecided = 0;
   for (const entry of reportedEntries(report)) {
@@ -100,9 +114,9 @@ export function holdDecisions(report: MigrationReport, raw: unknown): HeldDecisi
 /**
  * The file the `decisions` command writes for a report: an entry for every reported item, in the
  * report's order, with what it was made on. Each takes its owner and decision from `earlier`, a
- * file written for an earlier conversion of the same package, where that one still holds for this
- * report, and is left blank otherwise. `notCarried` says which of the earlier ones did not carry,
- * and why.
+ * file written for an earlier conversion of the same build of the package, where that one still
+ * holds for this report, and is left blank otherwise. `notCarried` says which of the earlier ones
+ * that said something did not carry, and why; `blank` counts the entries left to fill in.
  */
 export function decisionsFor(
   report: MigrationReport,
@@ -111,30 +125,32 @@ export function decisionsFor(
   readonly file: DecisionsFile;
   readonly carried: number;
   readonly notCarried: readonly string[];
+  readonly blank: number;
 } {
-  const reading = earlier
-    ? readDecisions(report, earlier.raw, earlier.file, { sameVersion: false })
-    : undefined;
+  // An entry that says nothing has nothing to carry, and nothing to lose: it is passed over.
+  const silent = (item: unknown): boolean =>
+    isRecord(item) && ![item['owner'], item['decision']].some(saysSomething);
+  const reading = earlier ? readDecisions(report, earlier.raw, earlier.file, silent) : undefined;
   if (reading?.refused) throw new DecisionsError(reading.refused);
   let carried = 0;
+  let blank = 0;
   const decisions = reportedEntries(report).map((entry): OwnerDecision => {
     const before = reading?.taken.get(entry.id);
-    if (before && (before.owner || before.decision)) carried++;
-    return {
+    if (before) carried++;
+    const decision: OwnerDecision = {
       id: entry.id,
       ...pinnedOf(entry),
       owner: before?.owner ?? '',
       decision: before?.decision ?? '',
     };
+    if (!decision.owner.trim() || !decision.decision.trim()) blank++;
+    return decision;
   });
   return {
-    file: {
-      format: DECISIONS_FORMAT,
-      package: { name: report.package.name, version: report.package.version },
-      decisions,
-    },
+    file: { format: DECISIONS_FORMAT, package: buildOf(report), decisions },
     carried,
     notCarried: reading?.findings ?? [],
+    blank,
   };
 }
 
@@ -142,13 +158,21 @@ export class DecisionsError extends Error {
   override readonly name = 'DecisionsError';
 }
 
-/** The reported entries of the report, each id once, in the report's order. */
+/** Whether an owner or a decision says anything: text that is not only spaces. */
+function saysSomething(value: unknown): boolean {
+  return typeof value === 'string' ? value.trim() !== '' : value !== undefined;
+}
+
+/**
+ * The reported entries of the report, in its order. An id listed twice is its first entry's, as
+ * everything else reads it, so it is here only when that first entry is reported.
+ */
 function reportedEntries(report: MigrationReport): ReportEntry[] {
   const seen = new Set<string>();
   return (Array.isArray(report.constructs) ? report.constructs : []).filter((entry) => {
-    if (entry.outcome !== 'reported' || seen.has(entry.id)) return false;
+    if (seen.has(entry.id)) return false;
     seen.add(entry.id);
-    return true;
+    return entry.outcome === 'reported';
   });
 }
 
@@ -158,16 +182,32 @@ function pinnedOf(entry: ReportEntry): Pick<ReportEntry, PinnedKey> {
   return pinned as Pick<ReportEntry, PinnedKey>;
 }
 
+function buildOf(report: MigrationReport): DecisionsBuild {
+  return {
+    name: report.package?.name,
+    version: report.package?.version,
+    commit: report.studio?.commit ?? null,
+    buildTime: report.studio?.buildTime ?? null,
+  };
+}
+
+function describeBuild(build: Record<string, unknown>): string {
+  return (
+    `${String(build['name'])} ${String(build['version'])}` +
+    (build['commit'] ? `, commit ${String(build['commit'])}` : '') +
+    (build['buildTime'] ? `, built ${String(build['buildTime'])}` : '')
+  );
+}
+
 /**
- * Reads a file of decisions against a report. Its findings name `file`. With `sameVersion`, the
- * file must be for the report's package at its version, as a conversion's own is; without it, of
- * its name only, as one carried from an earlier conversion is.
+ * Reads a file of decisions against a report. Its findings name `file`. An entry `passOver` picks
+ * is left out, as if the file did not hold it.
  */
 function readDecisions(
   report: MigrationReport,
   raw: unknown,
   file: string,
-  { sameVersion }: { readonly sameVersion: boolean },
+  passOver: (item: unknown) => boolean = () => false,
 ): Reading {
   const none: Reading = { findings: [], taken: new Map() };
   if (!isRecord(raw) || raw['format'] !== DECISIONS_FORMAT) {
@@ -176,12 +216,15 @@ function readDecisions(
       refused: `${file} is not a ${DECISIONS_FORMAT} file, so none of it is taken`,
     };
   }
-  const pkg = isRecord(raw['package']) ? raw['package'] : {};
-  const { name, version } = report.package;
-  if (pkg['name'] !== name || (sameVersion && pkg['version'] !== version)) {
+  const given = isRecord(raw['package']) ? raw['package'] : {};
+  const build = buildOf(report);
+  const differs = (['name', 'version', 'commit', 'buildTime'] as const).some(
+    (key) => (given[key] ?? null) !== build[key],
+  );
+  if (differs) {
     return {
       ...none,
-      refused: `${file} is for ${String(pkg['name'])} ${String(pkg['version'])}, and the report for ${name} ${version}, so none of it is taken`,
+      refused: `${file} is for ${describeBuild(given)}, and the report for ${describeBuild({ ...build })}, so none of it is taken`,
     };
   }
   if (!Array.isArray(raw['decisions'])) {
@@ -194,7 +237,7 @@ function readDecisions(
     if (!entries.has(entry.id)) entries.set(entry.id, entry);
   const times = new Map<string, number>();
   for (const item of items) {
-    if (isRecord(item) && typeof item['id'] === 'string')
+    if (!passOver(item) && isRecord(item) && typeof item['id'] === 'string')
       times.set(item['id'], (times.get(item['id']) ?? 0) + 1);
   }
 
@@ -202,6 +245,7 @@ function readDecisions(
   const taken = new Map<string, OwnerDecision>();
   const named = new Set<string>();
   items.forEach((item, index) => {
+    if (passOver(item)) return;
     if (!isRecord(item) || typeof item['id'] !== 'string' || item['id'] === '') {
       findings.push(`${file}: decision ${index + 1} names no item`);
       return;
@@ -234,7 +278,7 @@ function readDecisions(
     const moved = PINNED.filter((key) => !same(item[key], entry[key]));
     if (moved.length > 0) {
       findings.push(
-        `${file}: ${id} was decided when the report gave another ${moved.map((key) => PINNED_WORDS[key]).join(' and ')}, so it is not taken: decide it again`,
+        `${file}: ${id} was made on another ${moved.map((key) => PINNED_WORDS[key]).join(' and ')} than the report gives now, so it is not taken: decide it again`,
       );
       return;
     }
@@ -255,7 +299,20 @@ function readDecisions(
   return { findings, taken };
 }
 
-/** Whether a copied field says what the report says: both absent, or the same JSON. */
+/**
+ * Whether a copied field says what the report says: both absent, or the same JSON whatever the
+ * order of its keys, as an editor that sorts them would leave it.
+ */
 function same(copied: unknown, reported: unknown): boolean {
-  return JSON.stringify(copied) === JSON.stringify(reported);
+  return JSON.stringify(canonical(copied)) === JSON.stringify(canonical(reported));
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonical(value[key])]),
+  );
 }

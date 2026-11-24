@@ -87,7 +87,12 @@ describe('the decisions file the `decisions` command writes', () => {
 
   it('names the package, at its version, in the format the harness reads', () => {
     expect(file.format).toBe(DECISIONS_FORMAT);
-    expect(file.package).toEqual({ name: 'Acme-Claims', version: '1.0.0' });
+    expect(file.package).toEqual({
+      name: 'Acme-Claims',
+      version: '1.0.0',
+      commit: null,
+      buildTime: null,
+    });
     expect([carried, notCarried]).toEqual([0, []]);
   });
 
@@ -134,6 +139,15 @@ describe('the decisions file the `decisions` command writes', () => {
     );
   });
 
+  it('reads an item the report lists twice by its first entry, as readiness and the report do', () => {
+    const converted = conversion.report.constructs.find((entry) => entry.outcome === 'converted');
+    if (!converted) throw new Error('the made-up package converts');
+    const later = { ...converted, outcome: 'reported' as const, note: 'A later entry' };
+    const twice = { ...conversion.report, constructs: [...conversion.report.constructs, later] };
+    expect(decisionsFor(twice).file.decisions.map((item) => item.id)).not.toContain(converted.id);
+    expect(holdDecisions(twice, undefined).unowned).toBe(reported.length);
+  });
+
   it('is taken as it is, and leaves every reported item without an owner', () => {
     expect(holdDecisions(conversion.report, clone(file))).toMatchObject({
       findings: [],
@@ -158,7 +172,7 @@ describe('carrying the decisions of an earlier conversion', () => {
     });
     expect(carried).toBe(reportedIn(conversion).length - 1);
     expect(notCarried).toEqual([
-      `old.json: ${second.id} was decided when the report gave another reason, so it is not taken: decide it again`,
+      `old.json: ${second.id} was made on another reason than the report gives now, so it is not taken: decide it again`,
       'old.json: file:gone.html#file is not in the report',
     ]);
     const byId = new Map(file.decisions.map((item) => [item.id, item]));
@@ -170,13 +184,61 @@ describe('carrying the decisions of an earlier conversion', () => {
     expect(byId.get(second.id)).toMatchObject({ owner: '', decision: '', note: second.note });
   });
 
-  it('carries them from another version of the package, as a new build of the project is', () => {
-    const earlier = changed(conversion, (file) => {
-      file['package'] = { name: 'Acme-Claims', version: '0.9.0' };
+  it('passes over an earlier entry that says nothing, and counts what is left to fill in', () => {
+    const earlier = changed(conversion, (_file, items) => {
+      // Blank, and on an item the report no longer gives as it was: nothing to carry, or to lose.
+      items[0]['owner'] = '';
+      items[0]['decision'] = ' ';
+      items[0]['note'] = 'An earlier reason';
+      items.push({ ...items[1], owner: '', decision: '' });
+      items[2]['decision'] = '';
     });
-    expect(decisionsFor(conversion.report, { raw: earlier, file: 'old.json' }).carried).toBe(
-      reportedIn(conversion).length,
+    const result = decisionsFor(conversion.report, { raw: earlier, file: 'old.json' });
+    expect(result.notCarried).toEqual([]);
+    expect(result.carried).toBe(reportedIn(conversion).length - 1);
+    expect(result.blank).toBe(2);
+    expect(decisionsFor(conversion.report).blank).toBe(reportedIn(conversion).length);
+  });
+
+  it('refuses the decisions of another version or another Studio build, whose ids may name other constructs', () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [
+        { version: '0.9.0' },
+        'old.json is for Acme-Claims 0.9.0, and the report for Acme-Claims 1.0.0, so none of it is taken',
+      ],
+      [
+        { commit: 'abc123' },
+        'old.json is for Acme-Claims 1.0.0, commit abc123, and the report for Acme-Claims 1.0.0, so none of it is taken',
+      ],
+      [
+        { buildTime: '2026-11-20T10:00:00Z' },
+        'old.json is for Acme-Claims 1.0.0, built 2026-11-20T10:00:00Z, and the report for Acme-Claims 1.0.0, so none of it is taken',
+      ],
+    ];
+    for (const [change, refusal] of cases) {
+      const earlier = changed(conversion, (file) => {
+        file['package'] = { ...(file['package'] as Json), ...change };
+      });
+      expect(() => decisionsFor(conversion.report, { raw: earlier, file: 'old.json' })).toThrow(
+        new DecisionsError(refusal),
+      );
+    }
+    // The report's own build, read from the bundle's manifest, is held the same way.
+    const built = {
+      ...conversion.report,
+      studio: { branch: 'master', commit: 'def456', buildTime: '2026-11-21T09:00:00Z' },
+    };
+    expect(() =>
+      decisionsFor(built, { raw: clone(decidedFile(conversion)), file: 'old.json' }),
+    ).toThrow(
+      'old.json is for Acme-Claims 1.0.0, and the report for Acme-Claims 1.0.0, commit def456, built 2026-11-21T09:00:00Z, so none of it is taken',
     );
+    expect(decisionsFor(built).file.package).toEqual({
+      name: 'Acme-Claims',
+      version: '1.0.0',
+      commit: 'def456',
+      buildTime: '2026-11-21T09:00:00Z',
+    });
   });
 
   it('refuses the decisions of another package, or a file that is not one', () => {
@@ -344,7 +406,7 @@ describe('holding the decisions to the report', () => {
       const now = withEntry(conversion, edit, change).report;
       const held = holdDecisions(now, clone(decidedFile(conversion)));
       expect(held.findings).toEqual([
-        `decisions.json: ${edit} was decided when the report gave another ${words}, so it is not taken: decide it again`,
+        `decisions.json: ${edit} was made on another ${words} than the report gives now, so it is not taken: decide it again`,
       ]);
       expect(held.unowned).toBe(1);
     }
@@ -370,7 +432,7 @@ describe('holding the decisions to the report', () => {
       delete items[0]['note'];
     });
     expect(findings(raw)).toEqual([
-      `decisions.json: ${first.id} was decided when the report gave another reason, so it is not taken: decide it again`,
+      `decisions.json: ${first.id} was made on another reason than the report gives now, so it is not taken: decide it again`,
     ]);
   });
 
@@ -424,6 +486,33 @@ describe('readiness and the decisions', () => {
       `${reported} reported items have no owner`,
       'decisions.json is not a studio-migration-decisions/1 file, so none of it is taken',
     ]);
+    // Nothing reported: no item lacks an owner, and the file is still in the way.
+    const none = {
+      ...input.conversion,
+      report: {
+        ...input.conversion.report,
+        constructs: input.conversion.report.constructs.filter(
+          (entry) => entry.outcome !== 'reported',
+        ),
+      },
+      decisions: { format: 'something else' },
+    };
+    expect(ownerLines(runHarness({ ...input, conversion: none }).blockers)).toEqual([
+      'decisions.json is not a studio-migration-decisions/1 file, so none of it is taken',
+    ]);
+  });
+
+  it('takes a copied rule whatever the order of its keys, as an editor that sorts them leaves it', () => {
+    const rule = { type: 'core.every', parameters: ['x'] };
+    const id = reportedIn(input.conversion)[0].id;
+    const now = withEntry(input.conversion, id, { rule }).report;
+    const raw = JSON.parse(JSON.stringify(decisionsFor(now).file)) as Json;
+    const items = raw['decisions'] as Json[];
+    items[0]['rule'] = { parameters: ['x'], type: 'core.every' };
+    for (const item of items) Object.assign(item, { owner: 'Migration lead', decision: 'Kept' });
+    expect(holdDecisions(now, raw)).toMatchObject({ findings: [], unowned: 0 });
+    items[0]['rule'] = { parameters: ['y'], type: 'core.every' };
+    expect(holdDecisions(now, raw).unowned).toBe(1);
   });
 });
 
@@ -520,7 +609,7 @@ describe('each deliberate breakage of the decisions stands in the way of readine
         'stale-decision',
         [
           '1 reported item has no owner',
-          `decisions.json: ${id} was decided when the report gave another reason, so it is not taken: decide it again`,
+          `decisions.json: ${id} was made on another reason than the report gives now, so it is not taken: decide it again`,
         ],
       ],
       ['decide-unlisted', [`decisions.json: ${id}-unlisted is not in the report`]],

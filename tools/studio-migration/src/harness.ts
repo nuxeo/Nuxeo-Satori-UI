@@ -30,7 +30,9 @@ import {
   labelsOf,
   platformVersion,
   readCatalogue,
+  studioBuildOf,
   type Conversion,
+  type MigrationReport,
   type ReportEntry,
 } from './convert';
 import type { Inventory } from './inventory';
@@ -186,13 +188,30 @@ function runOne([number, name, run]: (typeof CHECKS)[number], input: HarnessInpu
 }
 
 /**
- * Check 1. Every construct of the package is in the report once, with an outcome, and with a
- * reason where the outcome needs one; nothing in the report is invented; and the two counts of
- * the package agree.
+ * Check 1. The report is of the package given, its name, version and Studio build; every
+ * construct of the package is in it once, with an outcome, and with a reason where the outcome
+ * needs one; nothing in it is invented; and the two counts of the package agree.
  */
 export function nothingDropped({ pkg, inventory, conversion }: HarnessInput): string[] {
   const findings: string[] = [];
   const constructs = constructsOf(inventory);
+
+  // Construct ids are places in files, so a report of another build can hold the same ids for
+  // other constructs, and the decisions made on it with them.
+  const of = conversion.report.package as Partial<MigrationReport['package']> | undefined;
+  const { name, version } = pkg.descriptor;
+  if (of?.name !== name || of?.version !== version) {
+    findings.push(
+      `the report is of ${String(of?.name)} ${String(of?.version)}, not of the package given, ${name} ${version}`,
+    );
+  }
+  const studio = studioBuildOf(pkg);
+  const recorded = conversion.report.studio as Partial<MigrationReport['studio']> | undefined;
+  if (recorded?.commit !== studio.commit || recorded?.buildTime !== studio.buildTime) {
+    findings.push(
+      `the report is of Studio's commit ${String(recorded?.commit)}, built ${String(recorded?.buildTime)}, not of the package's, commit ${String(studio.commit)}, built ${String(studio.buildTime)}`,
+    );
+  }
 
   const first = countsOf(constructs);
   const second = secondCount(pkg, inventory);
