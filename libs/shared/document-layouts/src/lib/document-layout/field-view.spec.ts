@@ -1,4 +1,11 @@
-import { FieldView, ValueContext, describeField, vocabularyValues } from './field-view';
+import type { LayoutFieldType } from '../layout.model';
+import {
+  FieldView,
+  ValueContext,
+  describeField,
+  linkedRecordIds,
+  vocabularyValues,
+} from './field-view';
 
 // Every case names its zone, as an offset, rather than inheriting the suite's. CI runs in UTC,
 // where an instant's UTC day and its day in the reader's zone are the same day, so a date case that
@@ -308,6 +315,94 @@ describe('vocabularyValues', () => {
         { definition: { type: 'string' }, value: 'pending' },
         { definition: { type: 'date', directory: 'claim_status' }, value: '2026-09-14' },
         { definition: { type: 'string', directory: 'claim_status' }, value: ['pending'] },
+      ]),
+    ).toEqual([]);
+  });
+});
+
+const WEI = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+const JOHN = '9cd9b1cf-6f0b-442f-afa0-c2539996ba30';
+/** A record the reader may not read, or that no longer exists. */
+const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
+const REFERENCE = { type: 'string', documentReference: true } as const;
+
+describe('a document reference', () => {
+  /** Wei is read, John is still being read, and any other is unavailable. */
+  const links: ValueContext = {
+    ...context,
+    record: (id) =>
+      id === WEI
+        ? { text: 'Wei Chen', url: `/doc/${WEI}` }
+        : id === JOHN
+          ? null
+          : { text: 'Unavailable', url: null },
+  };
+  const reference = (
+    value: unknown,
+    definition: LayoutFieldType = REFERENCE,
+    given: ValueContext = links,
+  ): FieldView => describeField('x:f', 'F', definition, value, given);
+
+  it("shows the linked record's title and route, never the stored id", () => {
+    expect(reference(WEI).value).toEqual({ record: { text: 'Wei Chen', url: `/doc/${WEI}` } });
+  });
+
+  it('shows a record it may not read, and a value that is no id, as unavailable', () => {
+    expect(reference(GONE).value).toEqual({ record: { text: 'Unavailable', url: null } });
+    expect(reference('/default-domain/members/wei').value).toEqual({
+      record: { text: 'Unavailable', url: null },
+    });
+  });
+
+  it('shows nothing of a record while it is read, not its id', () => {
+    expect(reference(JOHN)).toEqual({ key: 'x:f', label: 'F', kind: 'value', value: { text: '' } });
+  });
+
+  it('lists each record of a list of references, leaving out one still being read', () => {
+    expect(reference([WEI, JOHN, GONE], { ...REFERENCE, type: 'string[]' }).chips).toEqual([
+      { record: { text: 'Wei Chen', url: `/doc/${WEI}` } },
+      { record: { text: 'Unavailable', url: null } },
+    ]);
+  });
+
+  it('shows a reference inside a complex value the same way', () => {
+    const view = reference({ member: WEI }, { type: 'complex', fields: { member: REFERENCE } });
+    expect(view.groups?.[0]?.[0]?.value).toEqual({
+      record: { text: 'Wei Chen', url: `/doc/${WEI}` },
+    });
+  });
+
+  it('shows the stored value where nothing reads the record, as on the record page', () => {
+    expect(reference(WEI, REFERENCE, context).value).toEqual({ text: WEI });
+    // And a property that is no reference is never looked up.
+    expect(reference(WEI, { type: 'string' }).value).toEqual({ text: WEI });
+  });
+});
+
+describe('linkedRecordIds', () => {
+  it('names the ids the references hold, in sub-fields and lists too, each once, sorted', () => {
+    expect(
+      linkedRecordIds([
+        { definition: REFERENCE, value: WEI },
+        { definition: { ...REFERENCE, type: 'string[]' }, value: [JOHN, '', null, WEI] },
+        {
+          definition: { type: 'complex[]', fields: { member: REFERENCE } },
+          value: [{ member: GONE }, {}, null],
+        },
+      ]),
+    ).toEqual([GONE, JOHN, WEI].sort());
+  });
+
+  it('names no value that is not an id, nor one that no reference holds', () => {
+    const injected = `${WEI}' OR ecm:uuid IS NOT NULL OR ecm:uuid = '`;
+    expect(
+      linkedRecordIds([
+        { definition: REFERENCE, value: injected },
+        { definition: REFERENCE, value: `default:${WEI}` },
+        { definition: REFERENCE, value: WEI.toUpperCase() },
+        { definition: REFERENCE, value: [WEI] },
+        { definition: { type: 'string' }, value: JOHN },
+        { definition: { ...REFERENCE, type: 'date' }, value: JOHN },
       ]),
     ).toEqual([]);
   });

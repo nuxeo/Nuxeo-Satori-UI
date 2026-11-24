@@ -3,7 +3,7 @@ import { isStoredCalendarDay } from '@agentic-ui/shared/computations';
 import type { TrustedHtmlConfig } from '@nuxeo/satori-platform/nuxeo-client';
 import DOMPurify from 'dompurify';
 
-import { describeField, type FieldView } from '../document-layout/field-view';
+import { describeField, type FieldView, type ValueView } from '../document-layout/field-view';
 import type { LayoutFieldType, LayoutLabel } from '../layout.model';
 import { humanize } from '../resolve-layout';
 import {
@@ -315,8 +315,8 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
  * nested deeper as text.
  */
 function fieldText(field: FieldView, flagText: (flag: boolean) => string): string {
-  const one = (value: { readonly text: string } | { readonly flag: boolean }): string =>
-    'text' in value ? value.text : flagText(value.flag);
+  const one = (value: ValueView): string =>
+    'text' in value ? value.text : 'flag' in value ? flagText(value.flag) : value.record.text;
   if (field.value) return one(field.value);
   if (field.chips) return field.chips.map(one).join(', ');
   if (!field.groups) return '';

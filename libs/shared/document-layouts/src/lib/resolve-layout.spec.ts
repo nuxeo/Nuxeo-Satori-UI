@@ -183,6 +183,37 @@ describe('readSchema', () => {
     );
   });
 
+  it('reads a documentResolver that stores an id as a reference, and one that stores a path not', () => {
+    const resolver = (store: string) => ({
+      'entity-type': 'validation_constraint',
+      name: 'documentResolver',
+      parameters: { store, validation: 'true' },
+    });
+    // As the local Nuxeo 2025 answers `/config/types/Case` for the Payers kit's `case:member`.
+    const string = { 'entity-type': 'validation_constraint', name: 'string', parameters: {} };
+    expect(
+      readSchema({
+        name: 'case',
+        prefix: 'case',
+        fields: {
+          member: { type: 'string', constraints: [string, resolver('id')] },
+          claim: { type: 'string', constraints: [resolver('idOnly')] },
+          household: { type: 'string[]', constraints: [], itemConstraints: [resolver('id')] },
+          folder: { type: 'string', constraints: [resolver('path')] },
+          place: { type: 'string', constraints: [resolver('pathOnly')] },
+          number: { type: 'string', constraints: [string] },
+        },
+      })?.fields,
+    ).toEqual({
+      member: { type: 'string', documentReference: true },
+      claim: { type: 'string', documentReference: true },
+      household: { type: 'string[]', documentReference: true },
+      folder: { type: 'string' },
+      place: { type: 'string' },
+      number: { type: 'string' },
+    });
+  });
+
   it('addresses a schema with no prefix by its name, as for a type', () => {
     expect(
       readSchema({ 'entity-type': 'schema', name: 'file', fields: { content: 'blob' } }),

@@ -1681,14 +1681,19 @@ authenticated through `NuxeoApiBase`, with `query` set to
 value of its own, which Nuxeo quotes before the query runs, and `pageSize` the number of ids. No
 `properties` header: the title, type, path and facets come with every record. Only a value that is
 an `ecm:uuid`, a lower-case UUID, is ever sent; one search asks for 100 at most. It is not cached
-by the service: `LinkedRecordLookup`, provided by the record page, whose lists share it, and by
-the form, asks once per page or list for the ids each new set adds, and keeps what it read for that
-page's life; a queue's list has its own. A record the reader may not read, or that no longer exists, is not returned, and shows
+by the service: `LinkedRecordLookup`, provided by the record page, whose lists share it, by the
+form and by the Properties panel, asks once per page or list for the ids each new set adds, and
+keeps what it read for that page's life; a queue's list has its own. A record the reader may not read, or that no longer exists, is not returned, and shows
 "Unavailable". A failed search is logged and asked again by the next set that names its ids.
 
-**Usage:** the Properties panel on document detail (`metadata` mode); the record page, its lists
-and the queues (`view` mode), for the vocabulary labels, the user and group names and the linked
-records their values name.
+The Properties panel has no widgets: it reads a property as a reference when `/config/types/<type>`
+reports a `documentResolver` among its `constraints` (`itemConstraints` for a list) whose `store`
+is `id` or `idOnly`. Nuxeo reports `id` for a resolver given no `store` too. One that stores a
+path, `path` or `pathOnly`, is shown as stored.
+
+**Usage:** the Properties panel on document detail (`metadata` mode), for the vocabulary labels
+and the linked records its values name; the record page, its lists and the queues (`view` mode),
+for the vocabulary labels, the user and group names and the linked records their values name.
 
 ---
 

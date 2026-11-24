@@ -54,7 +54,8 @@ function sameNames(a: NameLookups, b: NameLookups): boolean {
   return key(a) === key(b);
 }
 
-const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
+/** Whether two sorted lists of ids are the same: a signal's `equal`, so an equal set asks nothing. */
+export const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((id, index) => id === b[index]);
 
 /**
