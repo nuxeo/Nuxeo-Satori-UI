@@ -637,7 +637,9 @@ becomes. In version 2's terms:
   tabs, fields and a related list's columns, and in a version 2 form, its fields' rules. The page
   gives them to the rules as the rule context's `today` and `timeZone`, so a banner on a date reads
   the day the date field beside it shows, and a test or a host that pins the page's day pins its
-  banners too. In the app both tokens are the browser's: its clock, and the reader's zone.
+  banners too. In the app both tokens are the browser's: its clock, and the reader's zone. A zone
+  given to `RECORD_PAGE_TIME_ZONE` is an offset, such as `+0530`: the `date` widget formats with
+  Angular, which reads no IANA zone, so one would reach the rules and not the fields beside them.
   Elsewhere, in a queue's or a home card's rule and in a row action's, the date rules read the
   browser's clock, as the rest of the rules' library does. A zone the browser cannot read passes
   neither date rule.

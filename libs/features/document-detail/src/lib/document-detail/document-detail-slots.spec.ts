@@ -1465,7 +1465,8 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       }
 
       const originalFetches = () =>
-        mockDetailService.fetchBlob.mock.calls.filter((call) => call[0] === 'doc-1').length;
+        mockDetailService.fetchBlob.mock.calls.filter((call) => (call as unknown[])[0] === 'doc-1')
+          .length;
 
       beforeEach(() => mockDetailService.fetchBlob.mockClear());
 

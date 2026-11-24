@@ -75,10 +75,11 @@ export interface ExtensionRuleContext {
    */
   readonly today?: Date;
   /**
-   * The zone the date rules read today's day and an instant's day in: an IANA zone, or an offset
-   * such as `+0530`; absent, the reader's own. The record page and its forms give theirs,
-   * `RECORD_PAGE_TIME_ZONE`, the zone their `date` fields show an instant in. A zone the browser
-   * cannot read passes neither date rule.
+   * The zone the date rules read today's day and an instant's day in: an offset such as `+0530`;
+   * absent, the reader's own. The record page and its forms give theirs, `RECORD_PAGE_TIME_ZONE`,
+   * which is the zone their `date` fields show an instant in only when it is an offset: Angular's
+   * date formatting reads no IANA zone, which the rules would read. A zone the browser cannot read
+   * passes neither date rule.
    */
   readonly timeZone?: string;
 }

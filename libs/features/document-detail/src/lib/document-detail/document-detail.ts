@@ -1786,6 +1786,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private fetchMainBlobWhenShown(doc: NuxeoDocument, generation: number): void {
     if (mayShowPictureRecordPage(doc)) {
       this.heldBackMainBlob.set({ doc, generation });
+      // A fetch that succeeds clears `?fresh=1`; one held back must too, or a reload or a shared
+      // link would read the record as just uploaded again. `freshBlobDocument` stays, for the
+      // retries of a later fetch.
+      this.clearFreshUploadQueryParam();
       return;
     }
     this.fetchMainBlob(doc, generation);

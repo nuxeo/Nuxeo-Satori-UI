@@ -39,7 +39,8 @@
  * server's order, its Rights buckets counted as seeded, and narrowed on the server by one; the
  * product's missing shots and its shots, exactly; the served layouts the kit's own, and the asset
  * page drawn as its file says. Negative ones: the other banner absent on each asset, no original
- * download, no code in the bundle.
+ * download, whose positive control is the Annotations tab downloading it once, and no code in the
+ * bundle.
  *
  * Not covered, and said in notes: the server's own install (the dev server reads the layouts from
  * `config:dev`, not from the package), the plan's demo steps 2 to 4, and the views being made for
@@ -147,10 +148,12 @@ function readRecordPage(page) {
         view: document.querySelector('.record-picture__figure')?.getAttribute('data-view') ?? null,
         src: document.querySelector('.record-picture__image')?.getAttribute('src') ?? null,
         first: Boolean(
+          views && card && views.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+        underBanners: Boolean(
+          banners &&
           views &&
-          card &&
-          views.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING &&
-          (!banners || banners.compareDocumentPosition(views) & Node.DOCUMENT_POSITION_FOLLOWING),
+          banners.compareDocumentPosition(views) & Node.DOCUMENT_POSITION_FOLLOWING,
         ),
       };
     })(),
@@ -256,6 +259,7 @@ export default async function run(page, h) {
         Accept: 'application/json',
         'Content-Type': 'application/json',
         Authorization: basic,
+        properties: 'dublincore',
       },
       body: JSON.stringify({ params: { query: nxql, pageSize: 1000 } }),
       redirect: 'manual',
@@ -264,21 +268,25 @@ export default async function run(page, h) {
       .then((r) => (r.ok ? r.json() : null))
       .then((answer) => (answer?.isNextPageAvailable === true ? null : (answer?.entries ?? null)))
       .catch(unread);
+  // Each seeded record at its own place, carrying the seed's marker: anything else, even in the
+  // kit's own folders, is someone else's.
+  const places = {
+    AcmeAsset: ASSETS.map((asset) => `${ROOT}/assets/${asset.id}`),
+    AcmeShot: SHOTS.map((shot) => `${ROOT}/shots/${shotName(shot)}`),
+    AcmeProduct: PRODUCTS.map((each) => `${ROOT}/products/${each.style.toLowerCase()}`),
+  };
   const live = 'ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0';
   const others = [];
   let judged = true;
-  for (const [type, folder] of [
-    ['AcmeAsset', 'assets'],
-    ['AcmeShot', 'shots'],
-    ['AcmeProduct', 'products'],
-  ]) {
+  for (const [type, expected] of Object.entries(places)) {
     const entries = await query(`SELECT * FROM ${type} WHERE ${live}`);
     if (entries === null) {
       judged = false;
       continue;
     }
     for (const entry of entries)
-      if (!entry.path.startsWith(`${ROOT}/${folder}/`)) others.push(`${entry.path} (${type})`);
+      if (!expected.includes(entry.path) || entry.properties?.['dc:source'] !== MARKER)
+        others.push(`${entry.path} (${type})`);
   }
   h.requirePrecondition(
     'no asset, shot or product the seed did not write is on the server',
@@ -335,11 +343,14 @@ export default async function run(page, h) {
   h.check(
     'the picture comes first, under the banner: its Medium view, from a blob URL',
     ending.picture.first &&
+      ending.picture.underBanners &&
       ending.picture.view === 'Medium' &&
       ending.picture.src?.startsWith('blob:'),
     JSON.stringify(ending.picture),
   );
-  const originals = asked.filter((request) => request.url.includes('/@blob/file:content'));
+  // The document page's original: `fetchBlob`, `@blob/file:content`, or its `blobholder:0` fallback.
+  const original = /\/@blob\/(file:content|blobholder:0)(\?|$)/;
+  const originals = asked.filter((request) => original.test(request.url));
   h.check(
     'the original file is not downloaded: the record page shows its views',
     originals.length === 0,
@@ -358,8 +369,30 @@ export default async function run(page, h) {
       rights?.fields.find((field) => field.key === 'acmeasset:regions')?.value === ENDING.regions,
     JSON.stringify(rights),
   );
-  page.off('request', listen);
   await h.screenshot('rights-ending');
+  // The positive control for the check above: the Annotations tab's viewer shows the original, so
+  // opening it downloads it, and the listener and the address above do see that request.
+  await page
+    .locator('[role="tab"]', { hasText: /^\s*Annotations\s*$/ })
+    .first()
+    .click()
+    .catch(deferred);
+  await page
+    .waitForRequest((request) => original.test(request.url()), { timeout: 15_000 })
+    .catch(deferred);
+  const annotated = asked.filter((request) => original.test(request.url));
+  h.check(
+    'opening the Annotations tab downloads the original, once: what the check above looks for',
+    annotated.length === 1,
+    JSON.stringify(annotated.map((request) => request.url)),
+  );
+  page.off('request', listen);
+  // Back to the View tab, which the next record opens on if the page keeps its tab.
+  await page
+    .locator('[role="tab"]', { hasText: /^\s*View\s*$/ })
+    .first()
+    .click()
+    .catch(deferred);
 
   // ── 2. Rights that have ended ──────────────────────────────────────────────────────────────
   await h.step('2. Rights that have ended, and none on cleared rights');
@@ -540,7 +573,7 @@ export default async function run(page, h) {
     `drawn ${JSON.stringify(ending.cards.map((each) => each.id))}`,
   );
   h.check(
-    "the asset page's banners are its file's, each shown by its own rule",
+    "the asset page's banners are its file's two, and every banner drawn is one of them",
     assetFile.banners.map((banner) => banner.id).join() === 'rights-ended,rights-ending' &&
       ending.banners.every((banner) =>
         assetFile.banners.some((declared) => declared.id === banner.id),

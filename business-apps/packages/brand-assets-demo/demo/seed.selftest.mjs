@@ -19,9 +19,12 @@
  * - **`--preview` (exit 0), with no kit type on the server:** the six pictures as `Picture`s under
  *   the workspace's `preview` folder, with Dublin Core's properties and its marker only;
  * - **seeded (exit 0):** twenty documents and six pictures on an empty server, all of them under
- *   the kit's workspace and marked, and the second run creating and uploading nothing;
- * - **a check that fails (exit 1):** a missing-shots page provider that also returns a filled shot,
- *   and pictures whose views are never made;
+ *   the kit's workspace and marked, nothing else new, and every write of every run to the
+ *   workspace or a document in it, beside a sibling workspace whose name begins as its; the second
+ *   run creating and uploading nothing; a record trashed at its place restored, not created again;
+ * - **a check that fails (exit 1):** each page provider answering wrong in its own way (a filled
+ *   shot listed as missing, the products out of order, another product's asset, a library bucket
+ *   counting short), and pictures whose views are never made;
  * - **the pictures and the data:** each PNG well formed, of its size, and the same bytes twice; the
  *   shot list consistent with the pictures; and one asset in each rights window the banners show.
  *
@@ -54,8 +57,14 @@ function control(name, condition, detail = '') {
   failures.push(`${name}${detail ? `: ${detail}` : ''}`);
 }
 
-/** A stand-in Nuxeo: its repository is `docs`, by path, and every call is recorded. */
-function standIn({ installed = true, viewsMade = true, missingShotsBug = false } = {}) {
+/**
+ * A stand-in Nuxeo: its repository is `docs`, by path, and every call is recorded. `fault` makes
+ * one page provider answer wrong, so that the check meant to see it is seen failing:
+ * `missing-shots` lists a filled shot as missing, `products-order` lists the products in the wrong
+ * order, `cross-product` lists another product's asset, and `short-bucket` counts a library bucket
+ * one short.
+ */
+function standIn({ installed = true, viewsMade = true, fault = null } = {}) {
   const docs = new Map();
   const batches = new Map();
   const calls = [];
@@ -100,7 +109,8 @@ function standIn({ installed = true, viewsMade = true, missingShotsBug = false }
     const body = Buffer.concat(chunks);
     const url = new URL(req.url, 'http://stand-in');
     const path = decodeURIComponent(url.pathname.replace(/^\/nuxeo\/api\/v1/, ''));
-    calls.push({ method: req.method, path });
+    const call = { method: req.method, path };
+    calls.push(call);
     const send = (status, json) => {
       res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(json === undefined ? '' : JSON.stringify(json));
@@ -122,6 +132,7 @@ function standIn({ installed = true, viewsMade = true, missingShotsBug = false }
       const parent = path.slice('/path'.length);
       if (!docs.has(parent)) return send(404);
       const { name, type, properties } = json();
+      call.created = name;
       const { 'file:content': file, ...rest } = properties;
       const doc = add(`${parent}/${name}`, type, rest);
       if (file) doc.blob = batches.get(file['upload-batch']);
@@ -155,7 +166,8 @@ function standIn({ installed = true, viewsMade = true, missingShotsBug = false }
       return send(201, { uploaded: 'true' });
     }
     if (req.method === 'POST' && path === '/automation/Document.Untrash') {
-      const doc = byUid(json().input.slice('doc:'.length));
+      call.input = json().input.slice('doc:'.length);
+      const doc = byUid(call.input);
       doc.isTrashed = false;
       return send(200, view(doc));
     }
@@ -165,16 +177,20 @@ function standIn({ installed = true, viewsMade = true, missingShotsBug = false }
       const page = (entries, aggregations) =>
         send(200, { entries: entries.map(view), isNextPageAvailable: false, aggregations });
       const prop = (doc, xpath) => doc.properties[xpath];
-      if (name === 'acme_products')
-        return page(
-          live('AcmeProduct').sort((a, b) =>
-            prop(a, 'acmeproduct:launch').localeCompare(prop(b, 'acmeproduct:launch')),
-          ),
+      if (name === 'acme_products') {
+        const products = live('AcmeProduct').sort((a, b) =>
+          prop(a, 'acmeproduct:launch').localeCompare(prop(b, 'acmeproduct:launch')),
         );
+        return page(fault === 'products-order' ? products.reverse() : products);
+      }
       if (name === 'acme_product_assets')
         return page(
           live('AcmeAsset')
-            .filter((doc) => prop(doc, 'acmeasset:product') === parameter)
+            .filter(
+              (doc) =>
+                prop(doc, 'acmeasset:product') === parameter ||
+                (fault === 'cross-product' && prop(doc, 'acmeasset:shot') === 'Campaign'),
+            )
             .sort((a, b) => prop(a, 'dc:title').localeCompare(prop(b, 'dc:title'))),
         );
       if (name === 'acme_product_missing_shots')
@@ -182,7 +198,7 @@ function standIn({ installed = true, viewsMade = true, missingShotsBug = false }
           live('AcmeShot').filter(
             (doc) =>
               prop(doc, 'acmeshot:product') === parameter &&
-              (missingShotsBug || prop(doc, 'acmeshot:asset') == null),
+              (fault === 'missing-shots' || prop(doc, 'acmeshot:asset') == null),
           ),
         );
       if (name === 'acme_asset_library') {
@@ -196,6 +212,8 @@ function standIn({ installed = true, viewsMade = true, missingShotsBug = false }
         const terms = (key) => {
           const counts = new Map();
           for (const doc of assets) counts.set(key(doc), (counts.get(key(doc)) ?? 0) + 1);
+          if (fault === 'short-bucket' && counts.has('Cleared'))
+            counts.set('Cleared', counts.get('Cleared') - 1);
           return { buckets: [...counts].map(([k, docCount]) => ({ key: k, docCount })) };
         };
         return page(assets, {
@@ -239,7 +257,32 @@ async function runSeed(stand, env = {}, args = []) {
 }
 
 const writes = (stand) => stand.calls.filter((call) => call.method !== 'GET');
-const ours = (stand) => [...stand.docs.values()].filter((doc) => doc.path.startsWith(ROOT));
+/** Inside the kit's workspace, the workspace included: not a sibling whose name begins as its. */
+const inside = (path) => path === ROOT || path.startsWith(`${ROOT}/`);
+const ours = (stand) => [...stand.docs.values()].filter((doc) => inside(doc.path));
+/**
+ * Every write a run made was to the kit's workspace or a document in it: a create under it, or the
+ * one create of the workspace itself, by its name; an update, an untrash and an upload's batch
+ * only. `before` is the set of uids the stand-in held before the run that are not the kit's.
+ */
+function wroteOnlyItsOwn(stand, before) {
+  const byUid = new Map([...stand.docs.values()].map((doc) => [doc.uid, doc]));
+  return writes(stand).every((call) => {
+    if (call.path === '/upload/' || /^\/upload\/[^/]+\/0$/.test(call.path)) return true;
+    if (call.method === 'POST' && call.path.startsWith('/path/')) {
+      const parent = call.path.slice('/path'.length);
+      return (
+        inside(parent) ||
+        (parent === '/default-domain/workspaces' && call.created === WORKSPACE.name)
+      );
+    }
+    const uid = call.method === 'PUT' ? call.path.slice('/id/'.length) : call.input;
+    const doc = byUid.get(uid);
+    return Boolean(doc) && inside(doc.path) && !before.has(uid);
+  });
+}
+const othersOf = (stand) =>
+  new Set([...stand.docs.values()].filter((doc) => !inside(doc.path)).map((doc) => doc.uid));
 
 // ── Refused before writing ────────────────────────────────────────────────────────────────────
 {
@@ -286,6 +329,9 @@ const ours = (stand) => [...stand.docs.values()].filter((doc) => doc.path.starts
 // ── Seeded, twice ─────────────────────────────────────────────────────────────────────────────
 {
   const stand = standIn();
+  // A sibling whose name begins as the workspace's: the seed must not count it, or write to it.
+  const sibling = stand.add(`${ROOT}-archive`, 'Workspace', { 'dc:title': 'Someone else’s' });
+  const before = othersOf(stand);
   const first = await runSeed(stand);
   control('an empty server: exit 0', first.code === 0, `${first.code}: ${first.output}`);
   if (first.code !== 0) {
@@ -301,15 +347,16 @@ const ours = (stand) => [...stand.docs.values()].filter((doc) => doc.path.starts
     first.output.split('\n').find((line) => line.startsWith('Done')),
   );
   control(
-    'every document it wrote is under its workspace and carries its marker',
+    'every document it wrote is in its workspace and carries its marker, and nothing else is new',
     ours(stand).length === expected &&
       ours(stand).every((doc) => doc.properties['dc:source'] === MARKER) &&
-      writes(stand)
-        .filter((call) => call.path.startsWith('/path/'))
-        .every(
-          (call) =>
-            call.path.startsWith(`/path${ROOT}`) || call.path === '/path/default-domain/workspaces',
-        ),
+      stand.docs.size === before.size + expected,
+    `${ours(stand).length} in the workspace, ${stand.docs.size} in all`,
+  );
+  control(
+    'every write of the first run was to its workspace or a document in it',
+    wroteOnlyItsOwn(stand, before) && sibling.properties['dc:source'] === undefined,
+    JSON.stringify(writes(stand).slice(0, 5)),
   );
   const shotAt = (shot) => stand.docs.get(`${ROOT}/shots/${shotName(shot)}`);
   const assetAt = (id) => stand.docs.get(`${ROOT}/assets/${id}`);
@@ -321,8 +368,14 @@ const ours = (stand) => [...stand.docs.values()].filter((doc) => doc.path.starts
         : shotAt(shot).properties['acmeshot:asset'] === assetAt(shot.asset).uid,
     ),
   );
+  stand.calls.length = 0;
   const second = await runSeed(stand);
   control('a second run: exit 0', second.code === 0, `${second.code}: ${second.output}`);
+  control(
+    'every write of the second run was to a document in its workspace',
+    writes(stand).length > 0 && wroteOnlyItsOwn(stand, before),
+    JSON.stringify(writes(stand).slice(0, 5)),
+  );
   control(
     'a second run: nothing created and no picture uploaded again',
     second.output.includes(
@@ -334,11 +387,23 @@ const ours = (stand) => [...stand.docs.values()].filter((doc) => doc.path.starts
 
   // Trashed at its place: restored, not created again.
   assetAt(ASSETS[0].id).isTrashed = true;
+  stand.calls.length = 0;
   const third = await runSeed(stand);
   control(
-    'a trashed record at its place: restored',
-    third.code === 0 && third.output.includes('1 restored from the trash'),
-    third.output,
+    'a trashed record at its place: restored, and nothing created',
+    third.code === 0 &&
+      third.output.includes(
+        `Done: 0 created, ${expected} updated, 1 restored from the trash, 0 picture(s) uploaded`,
+      ) &&
+      assetAt(ASSETS[0].id).isTrashed === false &&
+      ours(stand).length === expected,
+    third.output.split('\n').find((line) => line.startsWith('Done')),
+  );
+  control(
+    'every write of the third run was to a document in its workspace, its untrash included',
+    writes(stand).some((call) => call.path === '/automation/Document.Untrash') &&
+      wroteOnlyItsOwn(stand, before),
+    JSON.stringify(writes(stand).slice(0, 5)),
   );
 }
 
@@ -373,15 +438,24 @@ const ours = (stand) => [...stand.docs.values()].filter((doc) => doc.path.starts
 }
 
 // ── Checks that fail ──────────────────────────────────────────────────────────────────────────
-{
-  const stand = standIn({ missingShotsBug: true });
+for (const [fault, name, said] of [
+  ['missing-shots', 'a filled shot listed as missing', 'returns a shot an asset fills'],
+  ['products-order', 'the products out of their launch order', 'acme_products: ['],
+  [
+    'cross-product',
+    "another product's asset in a product's shots",
+    "returns another product's asset",
+  ],
+  [
+    'short-bucket',
+    'a library bucket counting fewer than seeded',
+    'acme_rights_agg: Cleared counts',
+  ],
+]) {
+  const stand = standIn({ fault });
   const run = await runSeed(stand);
-  control('a filled shot listed as missing: exit 1', run.code === 1, `${run.code}: ${run.output}`);
-  control(
-    'a filled shot listed as missing: said',
-    run.output.includes('returns a shot an asset fills'),
-    run.output,
-  );
+  control(`${name}: exit 1`, run.code === 1, `${run.code}: ${run.output}`);
+  control(`${name}: said`, run.output.includes(said), run.output);
 }
 {
   const stand = standIn({ viewsMade: false });

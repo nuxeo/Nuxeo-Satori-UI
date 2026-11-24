@@ -686,6 +686,35 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(mockDetailService.getFullDocument).toHaveBeenCalledTimes(1);
     });
 
+    /**
+     * A picture record's original is held back while its type's layout is read, here never
+     * answered. A fetch that succeeds clears `?fresh=1`, and one held back must too, or a reload
+     * would read the record as just uploaded again. Seen red without the clearing.
+     */
+    it("clears ?fresh=1 when it holds a picture record's original back", async () => {
+      const route = TestBed.inject(ActivatedRoute) as unknown as {
+        snapshot: { queryParamMap: ParamMap };
+      };
+      route.snapshot = { queryParamMap: convertToParamMap({ fresh: '1' }) };
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      await build(
+        doc({
+          type: 'AcmeAsset',
+          facets: ['Picture'],
+          properties: {
+            'file:content': fileContent('image/png', 'front.png'),
+            'picture:info': { width: 1600, height: 1200 },
+            'picture:views': [{ title: 'Medium', width: 1000, height: 750 }],
+          },
+        }),
+      );
+      expect(mockDetailService.fetchBlob).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({ queryParams: { fresh: null }, replaceUrl: true }),
+      );
+    });
+
     it('takes the video path when transcoded videos are present', async () => {
       await build(
         doc({
