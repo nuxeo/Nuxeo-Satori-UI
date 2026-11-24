@@ -144,7 +144,8 @@ class DeploymentFragmentTest {
         // from the server's jar, then the default chain's anonymous plugin, last. No form: that
         // would answer the application with a login page. Measured on the local server without
         // ANONYMOUS_AUTH: a request with no credentials was 401 where the server's own
-        // anonymous-config.xml lets /api/v1/me answer Anonymous, and a 401 signs the app out.
+        // anonymous-config.xml lets /api/v1/me answer Anonymous, and a client that ends a session
+        // on any 401 signed that anonymous session out.
         assertEquals(java.util.List.of("AUTOMATION_BASIC_AUTH", "TOKEN_AUTH", "OAUTH2_AUTH", "JWT_AUTH",
                 "ANONYMOUS_AUTH"), names);
         assertFalse(names.contains("FORM_AUTH"));

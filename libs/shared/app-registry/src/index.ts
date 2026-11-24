@@ -1,7 +1,7 @@
 /**
  * The client of the app registry in `nuxeo-agentic-core`: the apps the person signed in may see,
  * the one open, and where each file of its definition is read from
- * (docs/business-apps/app-definition-v2.md, section 13).
+ * (docs/business-apps/app-definition-v2.md, section 10).
  */
 export {
   APP_REGISTRY_FORMAT,

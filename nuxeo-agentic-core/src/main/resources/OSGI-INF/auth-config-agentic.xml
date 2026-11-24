@@ -26,9 +26,10 @@
 
     Then ANONYMOUS_AUTH, last, as the default chain has it. It does nothing on a server that defines
     no anonymous user, where a request with no credentials stays 401. On one that defines one, such
-    a request is Anonymous, who is in no app's group, and gets an empty list rather than a 401: the
-    application's interceptor signs a session out on a 401, so a deployment that lets anonymous
-    visitors use the application would otherwise see them signed out by the registry.
+    a request is Anonymous, who is in no app's group, and gets an empty list rather than a 401, as
+    a deployment that lets anonymous visitors use the REST API would expect. The application ends
+    no session on the registry's 401 either (APP_REGISTRY_REQUEST in libs/shared/app-registry);
+    a client from before that does, and would sign an anonymous session out at startup.
   -->
   <extension point="specificChains"
              target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">

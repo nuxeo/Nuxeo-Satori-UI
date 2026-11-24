@@ -2205,29 +2205,32 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   counts them in (`NuxeoPrincipal.getAllGroups()`, nested and virtual groups included, so `members`
   is everyone signed in). An administrator sees what their groups give them. A request that does
   not authenticate is 401, as on a stock REST API. On a server that defines an anonymous user, a
-  request with no credentials is `Anonymous` instead, in no app's group, and gets an empty list: the
-  app's interceptor signs a session out on a 401, so a deployment that lets anonymous visitors use
-  the app would otherwise see them signed out.
+  request with no credentials is `Anonymous` instead, in no app's group, and gets an empty list.
+  The app ends no session on the registry's 401 either (`APP_REGISTRY_REQUEST`): the two are
+  separate, and each holds without the other.
 - **Seeing an app is not a security control.** An app definition holds no record. The queues,
   homes and record pages read records through the REST API, as the person, and Nuxeo's permissions
   decide what they show.
 - **An app the person may not see is 404**, and so is a file its package does not name, a path the
   listing does not give, and any other address under `/nuxeo/agentic-ui-apps/`.
-- **Every answer of the registry's is `Cache-Control: private, no-cache`**, so the browser
-  revalidates and a shared cache keeps nothing; a 200 or a 304 has an ETag, and the servlet's own
-  401 is `no-store`. The listing differs from person to person and varies on `Cookie` and
-  `Authorization`. `X-Content-Type-Options: nosniff` and the configuration
-  servlet's `Content-Security-Policy` are on every answer. GET and HEAD only: anything else is 405.
+- **A 200, a 304 and a 404 are `Cache-Control: private, no-cache`** with
+  `X-Content-Type-Options: nosniff`, so the browser revalidates and a shared cache keeps nothing; a
+  200 and a 304 also carry an ETag, `Vary: Cookie, Authorization` and the configuration servlet's
+  `Content-Security-Policy`. The servlet's own 401 is `no-store`. GET and HEAD only: anything else
+  is 405, with an `Allow` header and no body.
 - **Diagnostics** are the configuration envelope's: `level`, `code`, `message`, the `app` it is
-  about, and the contribution's `component`, `bundle` and `source`. A person gets those about the
-  apps they see; an administrator gets all, those about a refused app included. None reaches the
-  configuration servlet's own answers, which everyone reads before sign-in.
+  about, and the contribution's `component`, `bundle` and `source`. A person gets those the
+  contribution in force made, from its own component and bundle, about the apps they see, not
+  those of a version another package has replaced; an administrator gets all, those about a
+  refused app included. None reaches the configuration servlet's own answers, which everyone reads
+  before sign-in.
 - **Where a file is read:** the development server's address first, past the interceptors, as
-  before the registry, and the registry's where that is 404 and the app open lists the file. On a
+  before the registry and without waiting for the listing, and the registry's where that is 404
+  and the app open lists the file. On a
   server the first address is the configuration servlet's, which answers 404 for every file of an
   app definition. A labels file is asked of the development server only in a language its
   `layouts.json` lists.
-- **The app open:** the one last chosen, kept in `localStorage` under
+- **The app open:** the one last chosen in this browser, by whoever chose it, kept in `localStorage` under
   `agentic-ui.app-registry.app`, when the person may still see it, and else the first listed.
   "Switch app" in the settings menu offers the others; choosing one reloads the page. A sign-in
   whose listing opens another app reloads the page once, so that the menu and the labels read at

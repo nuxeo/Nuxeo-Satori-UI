@@ -27,7 +27,7 @@ export const APP_REGISTRY_RELOADED_KEY = 'agentic-ui.app-registry.reloaded-for';
 export const APP_REGISTRY_RELOAD_WINDOW_MS = 30_000;
 
 /**
- * The app registry, for the shell (docs/business-apps/app-definition-v2.md, section 13): every file
+ * The app registry, for the shell (docs/business-apps/app-definition-v2.md, section 10): every file
  * of an app definition the engines read, the home, the menu, the queues, the labels and the task
  * forms, is read through `AppRegistryService`, which reads it where the development server serves
  * it and otherwise from the registry, for the app open. And the page follows the person signed in.
@@ -70,8 +70,9 @@ export async function followSignIn(injector: Injector): Promise<void> {
       previous = username;
       if (username === null) return;
       untracked(() => {
-        void registry.refresh().then((changed) => {
-          if (changed && auth.username() === username) reloadOnce(username, reload);
+        const stillCurrent = (): boolean => auth.username() === username;
+        void registry.refresh(stillCurrent).then((changed) => {
+          if (changed && stillCurrent()) reloadOnce(username, reload);
         });
       });
     },

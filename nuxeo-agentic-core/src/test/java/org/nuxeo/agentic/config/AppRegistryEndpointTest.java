@@ -220,4 +220,40 @@ class AppRegistryEndpointTest {
         assertEquals(0, diagnostics.size());
         assertTrue(endpoint.snapshot().diagnostics().stream().anyMatch(d -> d.code().equals("invalid-json")));
     }
+
+    /**
+     * A version another package has since replaced may have been for other groups, and its
+     * diagnostics name its files: only the version in force's are shown with the app, and an
+     * administrator still sees both.
+     */
+    @Test
+    void aReplacedVersionsDiagnosticsAreNotShownToTheNewVersionsGroups() throws Exception {
+        AppRegistryEndpoint endpoint = endpoint(
+                app("hr", "payroll", "agentic-ui-config/app.json", appJson("payroll", "hr"),
+                        List.of("queues/salaries-by-person.json"), Map.of()),
+                app("acme", "payroll", appJson("payroll", "members"), files("home.json", "{ broken")));
+
+        JsonNode clerk = body(endpoint.respond("/apps.json", CLERK, null)).get("diagnostics");
+        List<String> seen = new ArrayList<>();
+        clerk.forEach(diagnostic -> seen.add(diagnostic.get("component").asText() + ":" + diagnostic.get("code").asText()));
+        assertEquals(List.of("acme:invalid-json", "acme:replaced"), seen);
+        assertFalse(clerk.toString().contains("salaries-by-person"), clerk.toString());
+
+        JsonNode administrator = body(endpoint.respond("/apps.json", ADMINISTRATOR, null)).get("diagnostics");
+        assertTrue(administrator.toString().contains("salaries-by-person"));
+    }
+
+    @Test
+    void aRevalidatedFileIsAsPrivateAsTheFirstAnswer() {
+        AppRegistryEndpoint endpoint = twoApps();
+        String etag = endpoint.respond("/apps/payers-claims/home.json", ADJUSTER, null).headers().get("ETag");
+
+        AppRegistryEndpoint.Response again = endpoint.respond("/apps/payers-claims/home.json", ADJUSTER, etag);
+
+        assertEquals(304, again.status());
+        assertEquals("private, no-cache", again.headers().get("Cache-Control"));
+        assertEquals(ConfigEndpoint.CONTENT_SECURITY_POLICY, again.headers().get("Content-Security-Policy"));
+        // And someone who may not see the app is not told it is unchanged.
+        assertEquals(404, endpoint.respond("/apps/payers-claims/home.json", CLERK, etag).status());
+    }
 }

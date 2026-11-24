@@ -113,14 +113,15 @@ demo/                                starter kits only; not checked
 | `modules`           | No          | The domain modules it turns on ([architecture](architecture.md#6-the-modules), section 6)                                                |
 | `branding`          | No          | `applicationTitle`, `documentTitle`, `logo` and `favicon`, as version 1's bootstrap writes them, and `theme`: one of the server's themes |
 
-- **The platform range.** The shell refuses an app whose range leaves out its own version, and
-  says both. The pipeline checks the range against the version of the server it publishes for.
+- **The platform range.** The shell is to refuse an app whose range leaves out its own version,
+  and say both; it does not yet, since it does not know its version at run time (section 13).
+  The pipeline checks the range against the version of the server it publishes for.
   A range admits what npm's would: `^` and `~` stop short of the next version's prereleases, and
   a prerelease is in a range only when one of its comparators names a prerelease of the same
   version.
-- **Groups.** Decision E settles whether the registry serves an app definition only to its groups,
-  after sign-in. Until then the field is written and checked. Either way it is not a security
-  control: Nuxeo's permissions still decide which records a person reads.
+- **Groups.** The app registry serves an app definition only to its groups, after sign-in
+  (section 10), built against decision E's proposed answer, which is still open. Either way it is
+  not a security control: Nuxeo's permissions still decide which records a person reads.
 - **Modules.** A module the platform does not have is refused: an app that needs it cannot run. No
   domain module exists yet, so this document's examples are checked with one named `cases`
   registered.
@@ -650,8 +651,10 @@ file and a task form, as the package writes it, with no envelope:
 3. **Where neither serves it,** there is no home, and the home page says that none is configured.
 
 So a file `config:dev` writes wins, even when the server behind the development server has a
-registry, and dev mode works as it did before the registry. A registry that does not answer, on a
-server without one or before anyone signs in, is one with no app.
+registry, and is read without waiting for the registry. Two things differ from before the
+registry under `nx serve` against a server that has one: what `config:dev` does not serve comes
+from the registry, and a sign-in that opens an app reloads the page once. A registry that does
+not answer, on a server without one or before anyone signs in, is one with no app.
 
 **The app registry.** Built on 24 November 2026 against the decision log's proposed answers to B
 and E, which are still open ([decisions.md](decisions.md), notes):
@@ -693,11 +696,11 @@ and E, which are still open ([decisions.md](decisions.md), notes):
   be used, that names another app, or that names no groups refuses the app, and an app it would
   replace stays in force. Any other file is left out on its own. An app names at most 256 files,
   and its `src` is a relative path in its bundle. What was refused is in the listing's
-  `diagnostics`, in the configuration envelope's form: for those who see the app, and all of them
+  `diagnostics`, in the configuration envelope's form: for those who see the app, those its version in force made, and all of them
   for an administrator. None reaches the configuration's own responses.
 - **What the shell refuses:** an app whose `app.json` has any finding, as section 12 says. "Switch
   app" does not list it, and the console says why.
-- **The app open** is the one the person last chose, when they may still see it, and else the
+- **The app open** is the one last chosen in this browser, when the person may still see it, and else the
   first the registry lists, in the order packages are registered. When they may see more than
   one, the settings menu offers "Switch app" (the development plan, phase 0's demo, step 3).
   Choosing one remembers it in the browser and reloads the page with it. A sign-in that changes

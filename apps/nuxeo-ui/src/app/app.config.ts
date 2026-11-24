@@ -61,7 +61,7 @@ export const appConfig: ApplicationConfig = {
     },
     // The app registry: each file of an app definition is read from it, after sign-in, where the
     // development server does not serve it, and the page follows the person signed in
-    // (docs/business-apps/app-definition-v2.md, section 13).
+    // (docs/business-apps/app-definition-v2.md, section 10).
     ...provideAppRegistry(),
     // The app's menu, navigation.json, joined to the platform's before the shell first reads it
     // (docs/business-apps/app-definition-v2.md, section 9). Its code is loaded lazily, so neither

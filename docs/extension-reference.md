@@ -158,7 +158,7 @@ beside its layouts, and the app registry in `nuxeo-agentic-core` serves it at
 - **Seeing an app is not a security control**, as hiding an action is not (above): an app
   definition holds no record, and Nuxeo's permissions decide what its queues and pages show.
 - The app reads each file from the development server first, as `npm run config:dev` serves it,
-  and from the registry where that is 404, so dev mode is unchanged. The whole of it, with "Switch
+  and from the registry where that is 404, so a file `config:dev` serves still wins. The whole of it, with "Switch
   app", is in [app-definition-v2.md](business-apps/app-definition-v2.md), section 10, and the
   endpoint in [api-integrations.md](api-integrations.md), section 36.
 

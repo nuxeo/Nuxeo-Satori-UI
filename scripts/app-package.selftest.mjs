@@ -335,6 +335,35 @@ expectRefused(
   2,
   'contribute 2 apps; a package is one app',
 );
+expectRefused(
+  'an app contributed from a src the server would not read as it is written',
+  ({ edit }) =>
+    edit(COMPONENT, APP_ELEMENT, '<app id="payers-claims" src="./agentic-ui-config/app.json">'),
+  2,
+  'contributes the app payers-claims from ./agentic-ui-config/app.json',
+);
+expectRefused(
+  'an app contributed to a misspelt point, where nothing registers it',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      `point="configuration">\n    ${APP_ELEMENT}`,
+      `point="configurations">\n    ${APP_ELEMENT}`,
+    ),
+  2,
+  `contributes the app payers-claims outside an extension of org.nuxeo.agentic.ui.config's "configuration" point`,
+);
+expectRefused(
+  'an app naming more files than the registry serves',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      QUEUE_FILE,
+      Array.from({ length: 257 }, (_, i) => `<file path="queues/q${i}.json" />`).join('\n      '),
+    ),
+  2,
+  'files of the app payers-claims; the app registry serves at most 256',
+);
 expectBuilt('an app whose files the component names in another order', ({ directory }) => {
   const path = join(directory, COMPONENT);
   const text = readFileSync(path, 'utf8');

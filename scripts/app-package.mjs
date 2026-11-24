@@ -104,6 +104,9 @@ const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  * The files of an app definition the app registry serves besides `app.json`, each at its place:
  * `ConfigSnapshot.APP_FILES` in nuxeo-agentic-core, with the names the validator gives each one.
  */
+/** More files than this, and the server refuses the app: `ContributionRegistry.MAX_APP_FILES`. */
+const MAX_APP_FILES = 256;
+
 const REGISTRY_FILES = [
   /^home\.json$/,
   /^navigation\.json$/,
@@ -577,9 +580,24 @@ function appContributions(directory, root) {
     const file = componentFileOf(resolve(bundle), component);
     if (typeof file !== 'string' || file === '') continue;
     const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    // Where Nuxeo registers an <app>: in an extension to the configuration's point. One anywhere
+    // else, a misspelt point or another component's target, is registered by nothing.
+    const configuration = [
+      ...xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g')),
+    ].flatMap((extension) => {
+      const { target, point } = attributesOf(extension[1]);
+      return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration'
+        ? [[extension.index, extension.index + extension[0].length]]
+        : [];
+    });
     for (const match of xml.matchAll(new RegExp(`<app${TAG}`, 'g'))) {
       const attributes = attributesOf(match[1]);
       if (attributes.enabled !== undefined && attributes.enabled.toLowerCase() !== 'true') continue;
+      if (!configuration.some(([from, to]) => match.index > from && match.index < to))
+        return (
+          `${component} contributes the app ${attributes.id ?? ''} outside an extension of ` +
+          'org.nuxeo.agentic.ui.config\'s "configuration" point, where nothing registers it.'
+        );
       const start = match.index + match[0].length;
       const end = match[1].trimEnd().endsWith('/') ? start : xml.indexOf('</app', start);
       const body = xml.slice(start, end === -1 ? xml.length : end);
@@ -605,11 +623,14 @@ function appContributions(directory, root) {
   const [{ component, id, src, files }] = apps;
   if (id !== app.id)
     return `${component} contributes the app "${id ?? ''}", and app.json's id is "${app.id}". Contribute it as ${element}.`;
-  if (src === undefined || posix.normalize(src) !== 'agentic-ui-config/app.json')
+  // As the server reads it, unnormalised: `./agentic-ui-config/app.json` is a `src` it refuses.
+  if (src !== 'agentic-ui-config/app.json')
     return `${component} contributes the app ${id} from ${src ?? 'no src'}. Contribute it from agentic-ui-config/app.json, which the validator read.`;
   const held = new Set(
     filesUnder(root).filter((path) => REGISTRY_FILES.some((place) => place.test(path))),
   );
+  if (files.length > MAX_APP_FILES)
+    return `${component} names ${files.length} files of the app ${id}; the app registry serves at most ${MAX_APP_FILES} (ContributionRegistry.MAX_APP_FILES).`;
   const named = new Set();
   for (const path of files) {
     if (!REGISTRY_FILES.some((place) => place.test(path)))

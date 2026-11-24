@@ -149,8 +149,8 @@ override folder on every request, `${nuxeo.data.dir}/agentic-ui-config-dev`, onc
 a value"). That folder takes only `bootstrap*.json`, `manifest*.json`,
 `layouts/<Type>/<mode>.layout.json` and `assets/` (`DevOverrides.java`), and the configuration
 servlet answers only those addresses. So on a server it previews a package's **layouts** and
-nothing else: not the home, the menu, the queues, the labels or the task forms, which wait on the
-app registry. By hand, on the local Docker one, after setting the property and restarting once:
+nothing else: not the home, the menu, the queues, the labels or the task forms, which the app
+registry serves only from an installed package that contributes its app. By hand, on the local Docker one, after setting the property and restarting once:
 
 ```bash
 docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev

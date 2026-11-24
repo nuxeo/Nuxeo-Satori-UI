@@ -1,5 +1,5 @@
 /**
- * The app registry in the shell (docs/business-apps/app-definition-v2.md, section 13): the engines
+ * The app registry in the shell (docs/business-apps/app-definition-v2.md, section 10): the engines
  * read through it, and the page follows the person signed in, reloading when a sign-in changes the
  * app open, once.
  */

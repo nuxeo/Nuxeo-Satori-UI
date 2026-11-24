@@ -1,7 +1,6 @@
 package org.nuxeo.agentic.config;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -31,8 +30,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * through the REST API, every record they have the right to.
  *
  * The listing is rendered for each request, since it differs from person to person; each file's
- * body and ETag are fixed when this is built, as {@link ConfigEndpoint}'s are. Every response is
- * {@code private}: a shared cache must not hand one person's list to another.
+ * body and ETag are fixed when this is built, as {@link ConfigEndpoint}'s are. Every answer this
+ * gives, a 404 included, is {@code private}: a shared cache must not hand one person's list to
+ * another. The servlet's own 401 is {@code no-store}, and its 405 carries no body.
  */
 final class AppRegistryEndpoint {
 
@@ -137,11 +137,13 @@ final class AppRegistryEndpoint {
         ObjectNode listing = NODES.objectNode().put("format", ConfigEndpoint.FORMAT).put("layer", ConfigScope.APPS);
         ArrayNode apps = listing.putArray("apps");
         Set<String> visible = new HashSet<>();
+        Map<String, Provenance> inForce = new HashMap<>();
         for (ConfigSnapshot.App app : snapshot.apps()) {
             if (!mayView(app, viewer)) {
                 continue;
             }
             visible.add(app.id());
+            inForce.put(app.id(), app.provenance());
             ObjectNode entry = apps.addObject().put("id", app.id()).put("url", "apps/" + app.id() + "/");
             entry.put("component", app.provenance().component());
             entry.put("bundle", app.provenance().bundle());
@@ -150,16 +152,21 @@ final class AppRegistryEndpoint {
             files.get(app.id()).keySet().forEach(paths::add);
             entry.set("content", app.app());
         }
-        listing.set("diagnostics", diagnostics(snapshot.diagnostics(), visible, viewer.administrator()));
+        listing.set("diagnostics", diagnostics(snapshot.diagnostics(), inForce, viewer.administrator()));
         return listing;
     }
 
     /**
-     * The registry's diagnostics this person may read: those about an app they may see, and every
-     * one to an administrator, who is the person who can act on them. An app's diagnostics name its
-     * files and its groups, and a refused app's name an app nobody is shown.
+     * The registry's diagnostics this person may read: those about the version in force of an app
+     * they may see, and every one to an administrator, who is the person who can act on them. An
+     * app's diagnostics name its files and its groups, and a refused app's name an app nobody is
+     * shown. So does a version that another package's has since replaced, which may have been for
+     * other groups: only what the contribution in force said, from its own component and bundle,
+     * is shown with it.
+     *
+     * @param inForce the provenance of each app the person may see, by its id
      */
-    private static ArrayNode diagnostics(List<Diagnostic> diagnostics, Collection<String> visible,
+    private static ArrayNode diagnostics(List<Diagnostic> diagnostics, Map<String, Provenance> inForce,
             boolean administrator) {
         ArrayNode list = NODES.arrayNode();
         for (Diagnostic diagnostic : diagnostics) {
@@ -167,7 +174,7 @@ final class AppRegistryEndpoint {
                 continue;
             }
             String app = ConfigScope.appOf(diagnostic.scope());
-            if (!administrator && (app == null || !visible.contains(app))) {
+            if (!administrator && !aboutTheVersionInForce(diagnostic, inForce.get(app))) {
                 continue;
             }
             ObjectNode entry = list.addObject()
@@ -182,6 +189,12 @@ final class AppRegistryEndpoint {
             entry.put("source", diagnostic.provenance().source());
         }
         return list;
+    }
+
+    /** Whether a diagnostic is the contribution in force's, by the component and bundle it came from. */
+    private static boolean aboutTheVersionInForce(Diagnostic diagnostic, Provenance inForce) {
+        return inForce != null && inForce.component().equals(diagnostic.provenance().component())
+                && inForce.bundle().equals(diagnostic.provenance().bundle());
     }
 
     private static Response answer(Resource resource, String ifNoneMatch) {

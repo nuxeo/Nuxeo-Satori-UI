@@ -256,11 +256,22 @@ describe('AppRegistryService', () => {
       const registry = setUp();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const read = firstValueFrom(registry.file('home.json', `${DEV}home.json`));
-      await answer(null, 404);
 
       http.expectOne(`${DEV}home.json`).flush(null, { status: 404, statusText: 'Not Found' });
+      await answer(null, 404);
 
       await expect(read).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('does not wait for the listing to read what the development server serves', async () => {
+      const registry = setUp();
+      const read = firstValueFrom(registry.file('home.json', `${DEV}home.json`));
+
+      // The listing is not asked for at all: the development server answered first.
+      http.expectOne(`${DEV}home.json`).flush({ from: 'config:dev' });
+      expect(await read).toEqual({ from: 'config:dev' });
+      for (let i = 0; i < 5; i++) await turn();
+      http.expectNone(LISTING);
     });
   });
 
@@ -284,6 +295,32 @@ describe('AppRegistryService', () => {
       await answer(listed(['payers-claims', []]));
 
       expect(await refresh).toBe(true);
+    });
+
+    it('keeps the old list when the answer comes for someone who has since signed out', async () => {
+      const registry = setUp();
+      const load = registry.load();
+      await answer(listed(['payers-claims', []]));
+      await load;
+
+      const refresh = registry.refresh(() => false);
+      await answer(listed(['payers-claims', []], ['staff-directory', []]));
+
+      expect(await refresh).toBe(false);
+      expect(registry.apps().map((app) => app.id)).toEqual(['payers-claims']);
+    });
+
+    it('keeps the listing as it was when the app open would change, until the page reloads', async () => {
+      const registry = setUp();
+      const load = registry.load();
+      await answer(listed(['payers-claims', []]));
+      await load;
+
+      const refresh = registry.refresh();
+      await answer(listed(['staff-directory', []]));
+
+      expect(await refresh).toBe(true);
+      expect(registry.current()?.id).toBe('payers-claims');
     });
 
     it('keeps the app open, with the new list, when it would not change', async () => {

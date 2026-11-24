@@ -14,7 +14,6 @@ import {
   Observable,
   TimeoutError,
   catchError,
-  defer,
   firstValueFrom,
   from,
   map,
@@ -159,7 +158,7 @@ function warn(message: string): void {
 /**
  * The app registry, as the shell reads it: which apps the person signed in may see, which one is
  * open, and where each file of its definition comes from (docs/business-apps/app-definition-v2.md,
- * section 13; architecture.md, section 7).
+ * section 10; architecture.md, section 7).
  *
  * - **The listing** is read once per page, after the configuration, through the interceptors, so
  *   with the person's credentials: the registry serves an app only to its groups. A registry that
@@ -169,7 +168,8 @@ function warn(message: string): void {
  *   before the registry, and from the registry when nothing is served there (404) and the app open
  *   has the file. So a file `npm run config:dev` writes wins, whether or not the server behind the
  *   development server has a registry, and on a server, where those addresses are always 404, every
- *   file comes from the registry. A file the app open does not have is a 404, as before.
+ *   file comes from the registry. A file the app open does not have is a 404, as before. A file
+ *   the development server serves does not wait for the listing.
  * - **The app open** is fixed for the page: changing it, by "Switch app" or by signing in as someone
  *   whose apps differ, reloads the page, so that the menu and the labels, read once at startup, are
  *   the new app's too.
@@ -213,16 +213,20 @@ export class AppRegistryService implements AppDefinitionFiles {
 
   /**
    * Reads the listing again, as after a sign-in. Resolves `true` when the app open would change, for
-   * the caller to reload the page; the list "Switch app" offers is the new one either way.
+   * the caller to reload the page, and keeps the listing as it was: the page stays with the app it
+   * was started with, whole, until it reloads, rather than reading another app's files under the
+   * first app's menu. When it would not change, the new listing replaces the old, so "Switch app"
+   * offers what the person may now see, unless `stillCurrent` says the answer has come too late,
+   * for someone who has since signed out or been replaced.
    */
-  async refresh(): Promise<boolean> {
+  async refresh(stillCurrent: () => boolean = () => true): Promise<boolean> {
     await this.load();
     const before = this.current()?.id ?? null;
     const state = await this.read();
     const apps = state.kind === 'listed' ? state.apps : [];
     const after = chooseApp(apps, this.remembered())?.id ?? null;
     if (after === before) {
-      this.listing.set(state);
+      if (stillCurrent()) this.listing.set(state);
       return false;
     }
     return true;
@@ -244,32 +248,34 @@ export class AppRegistryService implements AppDefinitionFiles {
   }
 
   file(path: string, developmentUrl: string | null): Observable<unknown> {
-    return from(this.load()).pipe(
-      switchMap(() => {
-        const app = this.current();
-        const registry$ =
-          app && app.files.includes(path)
-            ? defer(() =>
-                this.http
-                  .get<unknown>(this.fileUrl(app, path), {
-                    headers: NO_PROMPT,
-                    context: REGISTRY_CONTEXT(),
-                  })
-                  .pipe(timeout(APP_REGISTRY_TIMEOUT_MS)),
-              )
-            : null;
-        if (developmentUrl === null) return registry$ ?? throwError(() => notFound(path));
-        return this.direct
-          .get<unknown>(developmentUrl)
-          .pipe(
-            catchError((error: unknown) =>
-              registry$ && error instanceof HttpErrorResponse && error.status === 404
-                ? registry$
-                : throwError(() => error),
-            ),
-          );
-      }),
-    );
+    // The registry's answer, for the app open, once the listing is read; a 404 when the app open
+    // does not have the file, as when there is no registry.
+    const fromRegistry = (missing: () => unknown): Observable<unknown> =>
+      from(this.load()).pipe(
+        switchMap(() => {
+          const app = this.current();
+          return app && app.files.includes(path)
+            ? this.http
+                .get<unknown>(this.fileUrl(app, path), {
+                  headers: NO_PROMPT,
+                  context: REGISTRY_CONTEXT(),
+                })
+                .pipe(timeout(APP_REGISTRY_TIMEOUT_MS))
+            : throwError(missing);
+        }),
+      );
+    if (developmentUrl === null) return fromRegistry(() => notFound(path));
+    // The development server first, and without waiting for the listing: a file it serves does
+    // not wait on the registry, however slow the registry is to answer.
+    return this.direct
+      .get<unknown>(developmentUrl)
+      .pipe(
+        catchError((error: unknown) =>
+          error instanceof HttpErrorResponse && error.status === 404
+            ? fromRegistry(() => error)
+            : throwError(() => error),
+        ),
+      );
   }
 
   labelLanguages(): Observable<readonly string[]> {
