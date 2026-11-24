@@ -13,6 +13,8 @@
  * the other direction — the local loop and `sync-derived.mjs` rely on a missing report passing
  * without the flag — so a fix that simply failed every missing report would break them. The
  * allowlist control is both: an unreported project's entries are not stale, a measured one's are.
+ * Two more guard the ratchet's own honesty: a `noStatements` file that gains code fails, and
+ * `--update-baseline` does not lower an entry the gate never reported as fallen.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -64,14 +66,15 @@ function addProject(root, name) {
   return source;
 }
 
-/** Writes the report a passing run leaves: one statement, covered. */
-function writeReport(root, name, source) {
-  const at = { start: { line: 1, column: 0 }, end: { line: 1, column: 20 } };
+/** Writes the report a passing run leaves: `covered` of `total` statements hit, one per line. */
+function writeReport(root, name, source, { total = 1, covered = total } = {}) {
+  const ids = [...Array(total).keys()];
+  const at = (i) => ({ start: { line: i + 1, column: 0 }, end: { line: i + 1, column: 20 } });
   const data = {
     [source]: {
       path: source,
-      statementMap: { 0: at },
-      s: { 0: 1 },
+      statementMap: Object.fromEntries(ids.map((i) => [i, at(i)])),
+      s: Object.fromEntries(ids.map((i) => [i, i < covered ? 1 : 0])),
       fnMap: {},
       f: {},
       branchMap: {},
@@ -203,6 +206,22 @@ test('an allowlist entry is called stale only if its project was measured, or it
   const partial = gate(unreportedRoot);
   assert.equal(partial.code, 0, partial.out);
 
+  // An entry under a project this gate never measures can never be unmeasured, so it stays stale.
+  const karma = join(unreportedRoot, 'libs', 'karma-app');
+  mkdirSync(join(karma, 'src'), { recursive: true });
+  writeFileSync(
+    join(karma, 'project.json'),
+    JSON.stringify({ name: 'karma-app', targets: { test: { executor: 'nx:run-commands' } } }),
+  );
+  writeFileSync(join(karma, 'src', 'main.ts'), 'export type T = 1;\n');
+  allow(unreportedRoot, { noStatements: { 'libs/karma-app/src/main.ts': 'fixture' } });
+  const underKarma = gate(unreportedRoot);
+  assert.equal(underKarma.code, 1, underKarma.out);
+  assert.match(
+    underKarma.out,
+    /Stale allowlist — 1 entr\(ies\)[^\n]*\n {4}libs\/karma-app\/src\/main\.ts/,
+  );
+
   // A deleted file is stale whether or not its project ran.
   allow(unreportedRoot, {
     files: { 'libs/shared-queues/src/deleted.ts': { until: '2099-01-01', why: 'fixture' } },
@@ -215,18 +234,143 @@ test('an allowlist entry is called stale only if its project was measured, or it
   );
 });
 
-test('--update-baseline keeps the entry of a project a full run did not measure, and fails', () => {
+test('a `noStatements` entry whose file gains code fails, read from the source', () => {
   const root = workspace();
+  const barrel = join(root, 'libs', 'shared-queues', 'src', 'index.ts');
+  const past = new Date(Date.now() - 3_600_000);
+  const write = (text) => {
+    writeFileSync(barrel, text);
+    utimesSync(barrel, past, past);
+  };
+  writeFileSync(
+    join(root, '.ai', 'state', 'coverage-uninstrumented-allowlist.json'),
+    JSON.stringify({ noStatements: { 'libs/shared-queues/src/index.ts': 'barrel' } }),
+  );
+  // No spec imports it, so the report never lists it, whatever it holds. A barrel and a
+  // constant table are what the exemption is for.
+  write("export * from './lib';\nexport const T = Object.freeze([{ a: 1 }]);\n");
+  const exempt = gate(root, '--expect-all');
+  assert.equal(exempt.code, 0, exempt.out);
+
+  write("export * from './lib';\nexport function f() {\n  return 1;\n}\n");
+  const code = gate(root, '--expect-all');
+  assert.equal(code.code, 1, code.out);
+  assert.match(
+    code.out,
+    /Not statement-free — 1 `noStatements` entr\(ies\)[^\n]*\n {4}libs\/shared-queues\/src\/index\.ts {2}\(top-level FunctionDeclaration, line 2\)/,
+  );
+  assert.match(code.out, /FAIL — 1 `noStatements` entr\(ies\) holding code\./);
+  assert.equal(JSON.parse(gate(root, '--expect-all', '--json').out).ok, false);
+
+  // From the source, so a run that did not measure the project still sees it.
+  rmSync(reportPath(root, 'shared-queues'));
+  const partial = gate(root);
+  assert.equal(partial.code, 1, partial.out);
+  assert.match(partial.out, /Not statement-free/);
+});
+
+test('--update-baseline keeps a fall within the tolerance, and records a rise or an expansion', () => {
+  const run = (was, now) => {
+    const root = workspace();
+    const projects = baselineOf(root);
+    projects['shared-queues'] = was;
+    writeFileSync(
+      join(root, '.ai', 'state', 'coverage-baseline.json'),
+      JSON.stringify({ projects }),
+    );
+    const source = join(root, 'libs', 'shared-queues', 'src', 'lib.ts');
+    writeReport(root, 'shared-queues', source, now);
+    const r = gate(root, '--update-baseline');
+    assert.equal(r.code, 0, r.out);
+    return { out: r.out, entry: baselineOf(root)['shared-queues'] };
+  };
+  const entry = (sCovered, sTotal) => ({
+    ...ENTRY,
+    lines: Math.round((sCovered / sTotal) * 10000) / 100,
+    statements: Math.round((sCovered / sTotal) * 10000) / 100,
+    sCovered,
+    sTotal,
+  });
+
+  // 99.9% -> 99.7%: noise the gate passes and does not mention. The mark stays where it was.
+  const fall = run(entry(999, 1000), { total: 1000, covered: 997 });
+  assert.deepEqual(fall.entry, entry(999, 1000));
+  assert.match(
+    fall.out,
+    /kept 1 whose fall is within the 0\.5pp tolerance: shared-queues \(-0\.2pp\)/,
+  );
+
+  // 99.5% -> 99.7%: a rise is recorded, however small.
+  const rise = run(entry(995, 1000), { total: 1000, covered: 997 });
+  assert.equal(rise.entry.lines, 99.7);
+
+  // 100% of 100 -> 99% of 1000: past the tolerance, but more is covered than before. The gate
+  // reports that as `expanded` and asks for this write, so it is recorded.
+  const expansion = run(entry(100, 100), { total: 1000, covered: 990 });
+  assert.equal(expansion.entry.lines, 99);
+  assert.equal(expansion.entry.sTotal, 1000);
+});
+
+test('--update-baseline refuses to write from a full run that left a project unmeasured', () => {
+  const root = workspace();
+  const file = join(root, '.ai', 'state', 'coverage-baseline.json');
+  const before = readFileSync(file, 'utf8');
   rmSync(reportPath(root, 'shared-queues'));
   const full = gate(root, '--update-baseline', '--expect-all');
   assert.equal(full.code, 1, full.out);
-  assert.match(full.out, /coverage-gate: FAIL — 1 project\(s\) with no coverage report\./);
-  assert.deepEqual(baselineOf(root)['shared-queues'], ENTRY);
+  assert.match(full.out, /FAIL — 1 project\(s\) with no coverage report; .* left as it was\./);
+  assert.equal(readFileSync(file, 'utf8'), before, 'the baseline must not be rewritten at all');
 
   // `sync-derived.mjs` measures only the projects a merge disagreed on, then records.
   const partial = gate(root, '--update-baseline');
   assert.equal(partial.code, 0, partial.out);
   assert.deepEqual(baselineOf(root)['shared-queues'], ENTRY);
+});
+
+test('a full run fails a project whose report this gate cannot look for', () => {
+  // An `@nx/vitest:test` target whose `reportsDirectory` lives only in vite.config.
+  const root = workspace();
+  addProject(root, 'shared-home');
+  const json = join(root, 'libs', 'shared-home', 'project.json');
+  writeFileSync(
+    json,
+    JSON.stringify({ name: 'shared-home', targets: { test: { executor: '@nx/vitest:test' } } }),
+  );
+  const unplaced = gate(root, '--expect-all');
+  assert.equal(unplaced.code, 1, unplaced.out);
+  assert.match(
+    unplaced.out,
+    /shared-home {2}its @nx\/vitest:test target names no reportsDirectory/,
+  );
+  assert.equal(gate(root).code, 0);
+
+  // A baselined project whose test target is not Vitest at all: no run can check its entry.
+  const karma = workspace();
+  addProject(karma, 'nuxeo-ui');
+  writeFileSync(
+    join(karma, 'libs', 'nuxeo-ui', 'project.json'),
+    JSON.stringify({ name: 'nuxeo-ui', targets: { test: { executor: 'nx:run-commands' } } }),
+  );
+  const baselined = gate(karma, '--expect-all');
+  assert.equal(baselined.code, 0, 'an unbaselined Karma project is expected to have no report');
+  const projects = baselineOf(karma);
+  projects['nuxeo-ui'] = ENTRY;
+  writeFileSync(
+    join(karma, '.ai', 'state', 'coverage-baseline.json'),
+    JSON.stringify({ projects }),
+  );
+  const r = gate(karma, '--expect-all');
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /nuxeo-ui {2}baselined, but its test target \(nx:run-commands\) is not one/);
+});
+
+test('an unknown argument is refused, not ignored', () => {
+  // A misspelt `--expect-all` would otherwise make a full run partial again, without a word.
+  for (const args of [['--expect-al'], ['--root=/nonexistent'], ['--today']]) {
+    const r = spawnSync(process.execPath, [GATE, ...args], { encoding: 'utf8' });
+    assert.equal(r.status, 1, args.join(' '));
+    assert.match(`${r.stdout}${r.stderr}`, /unknown argument|needs a value/);
+  }
 });
 
 test('--root cannot be combined with --run, which measures the current checkout', () => {
@@ -245,6 +389,13 @@ test('SonarCloud tests every project, and holds the gate to every project', () =
   // `--expect-all` fails every unaffected project, and `run-many` without it is the blind spot.
   assert.match(steps[tests].run, /\bnx run-many\b/);
   assert.doesNotMatch(steps[tests].run, /\baffected\b/);
-  assert.match(steps[coverage].run, /--expect-all\b/);
+  // After npm's `--`: `npm run beta:coverage --expect-all` hands the flag to npm, which drops it
+  // as unknown config, and the gate gets no arguments.
+  assert.match(
+    steps[coverage].run.trim(),
+    /^npm run beta:coverage -- (?:--[\w-]+ )*--expect-all(?: --[\w-]+)*$/,
+  );
+  for (const i of [tests, coverage])
+    assert.equal(steps[i].if, undefined, `${steps[i].name} is conditional`);
   assert.notEqual(steps[coverage]['continue-on-error'], true, 'the gate itself must block');
 });

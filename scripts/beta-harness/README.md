@@ -390,8 +390,25 @@ not. `--run` implies it. SonarCloud passes it, because Vitest writes no report f
 whose tests fail and its test step is `run-many` with `continue-on-error`: on PR #679
 `shared-queues` and `studio-migration` were red there and the gate passed without naming them.
 `coverage.reportOnFailure` stays off on purpose — it would turn a red suite into a number the
-ratchet compares and `--update-baseline` records. `npm run beta:coverage-selftest` holds the
-check and SonarCloud's flag in place; it runs in `ci.yml`.
+ratchet compares and `--update-baseline` records. A full run also fails an `@nx/vitest:test`
+target with no `reportsDirectory`, whose report the gate cannot look for, and a baselined project
+whose test target it does not read; `--update-baseline` refuses to write from a full run with any
+of these. An unknown argument is refused, so a misspelt `--expect-all` cannot quietly make a run
+partial.
+
+`--update-baseline` keeps an entry whose fall is within the 0.5pp tolerance, and records rises,
+new projects and the denominator expansions the gate reports. Rewriting every measured project
+moved the high-water mark down with the noise: PR #682's write lowered `satori-components`,
+`search` and `shared-app-config` by up to 0.39pp, though the gate had asked for none of it.
+
+A `noStatements` exemption is checked against the source as well as the report. It covers types,
+`export *` barrels and constant tables. A file no spec imports has an empty coverage map whatever
+it holds, so one that gained a function stayed exempt; now a function or class anywhere in it, or
+a top-level statement that declares neither data nor types, fails the gate. An allowlist entry is
+called stale only when the run can tell: not for a Vitest project that wrote no report.
+
+`npm run beta:coverage-selftest` holds all of this, and SonarCloud's flag, in place; it runs in
+`ci.yml`.
 
 ### Accessibility
 
