@@ -554,6 +554,87 @@ describe('BrowseComponent — row actions', () => {
       expect(sentTypes()).toEqual(['RentalContract']);
     });
 
+    describe('while files of an earlier drop are still pending', () => {
+      const report = new File(['d'], 'report.pdf', { type: 'application/pdf' });
+      const other = {
+        ...folder,
+        uid: 'ws-2',
+        title: 'Other',
+        path: '/default-domain/workspaces/ws-2',
+      } as NuxeoDocument;
+
+      /** `scan` dropped on ws-1, which allows only RentalContract, and refused there. */
+      function failInFirstFolder(): void {
+        browse.getFolderContext.mockReturnValue(of(allowing(['RentalContract', 'Folder'])));
+        importService.importFilesWithProperties.mockReturnValueOnce(
+          throwError(() => ({ status: 500 })),
+        );
+        component.uploadDropped([scan]);
+        expect(component.droppedUploads.items().map((item) => item.state)).toEqual(['failed']);
+        toast.show.mockClear();
+      }
+
+      it('turns away a drop on another folder, and retries the file into its own folder, as its type', () => {
+        failInFirstFolder();
+        component.currentDoc.set(other);
+        browse.getFolderContext.mockReturnValue(
+          of({ ...other, contextParameters: { subtypes: ['File'] } }),
+        );
+
+        component.uploadDropped([report]);
+
+        expect(toast.show).toHaveBeenCalledWith(
+          'Retry or remove the files that could not be uploaded before dropping files on another folder.',
+        );
+        expect(component.droppedUploads.items().map((item) => item.file)).toEqual([scan]);
+        expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(1);
+
+        importService.importFilesWithProperties.mockReturnValueOnce(of([doc({ uid: 'd1' })]));
+        component.runDroppedUploads();
+        expect(importService.importFilesWithProperties).toHaveBeenLastCalledWith(
+          '/default-domain/workspaces/ws-1',
+          [{ file: scan, docType: 'RentalContract', properties: { 'dc:title': 'scan' } }],
+          expect.anything(),
+        );
+      });
+
+      it('takes a drop on another folder once the pending file is removed', () => {
+        failInFirstFolder();
+        component.droppedUploads.remove(component.droppedUploads.items()[0].id);
+        component.currentDoc.set(other);
+        browse.getFolderContext.mockReturnValue(
+          of({ ...other, contextParameters: { subtypes: ['File'] } }),
+        );
+        importService.importFilesWithProperties.mockReturnValueOnce(of([doc({ uid: 'd2' })]));
+
+        component.uploadDropped([report]);
+
+        expect(importService.importFilesWithProperties).toHaveBeenLastCalledWith(
+          '/default-domain/workspaces/ws-2',
+          [{ file: report, docType: 'File', properties: { 'dc:title': 'report' } }],
+          expect.anything(),
+        );
+      });
+
+      it('takes the pending file along with a drop on the same folder', () => {
+        failInFirstFolder();
+        importService.importFilesWithProperties.mockReturnValueOnce(
+          of([doc({ uid: 'd1' }), doc({ uid: 'd2' })]),
+        );
+
+        component.uploadDropped([report]);
+
+        expect(importService.importFilesWithProperties).toHaveBeenLastCalledWith(
+          '/default-domain/workspaces/ws-1',
+          [
+            expect.objectContaining({ file: scan, docType: 'RentalContract' }),
+            expect.objectContaining({ file: report, docType: 'RentalContract' }),
+          ],
+          expect.anything(),
+        );
+      });
+    });
+
     it('uploads nothing where the user may not create content', () => {
       component.currentDoc.set({
         ...folder,

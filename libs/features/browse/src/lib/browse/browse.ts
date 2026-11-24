@@ -1419,6 +1419,20 @@ export class BrowseComponent {
       return;
     }
     const path = folder.path;
+    // Files of an earlier drop that are still pending — refused, or never started after a refusal —
+    // are retried into that drop's folder, as its types. A run sends every pending file to one
+    // folder, so a drop on another would carry them there and re-type them for it. It waits until
+    // they are retried or removed. A drop on the same folder takes them along, as it always has.
+    // Only one drop is read at a time, so this cannot change while the types are read.
+    const earlierPath = this.droppedUploadPath;
+    if (
+      earlierPath &&
+      this.droppedUploads.pending().length > 0 &&
+      !nuxeoPathsEqualFlexible(earlierPath, path)
+    ) {
+      this.toast.show(this.translate.instant('browse.message.drop-pending-elsewhere'));
+      return;
+    }
     const name = folder.title ?? '';
     this.resolvingDroppedTypes = true;
     this.droppedImportTypes(path)
