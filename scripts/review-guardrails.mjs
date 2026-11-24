@@ -5110,6 +5110,16 @@ function checkUpstreamCatalogueLanguages() {
                   'editing the asset rule.',
               );
             } else {
+              // The verdict below rests on the install being the locked one just as much as the
+              // language comparison does, so where that could not be confirmed it is announced
+              // here too. Warning on one path and not the other stated a guess as a finding.
+              if (drift.state === 'unknown') {
+                warn(
+                  `whether ${packageRoot} is the version package-lock.json pins could not be ` +
+                    `confirmed before calling its missing ${inputDir} a typo or a dropped ` +
+                    `folder: ${drift.why}.`,
+                );
+              }
               fail(
                 `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset ` +
                   `rule copies to "${served}". Either the path is a typo or this version of the ` +
@@ -6189,6 +6199,16 @@ function checkStorybookSatoriCatalogues() {
                   'folder. Run `npm ci` and re-run the guardrails before editing `staticDirs`.',
               );
             } else {
+              // Announced for the same reason as in `checkUpstreamCatalogueLanguages`: this
+              // verdict assumes the install is the locked one, so where that could not be
+              // confirmed, say so rather than stating a guess as a finding.
+              if (drift?.state === 'unknown') {
+                warn(
+                  `whether ${packageRoot} is the version package-lock.json pins could not be ` +
+                    `confirmed before calling the missing ${dir} a typo or a dropped folder: ` +
+                    `${drift.why}.`,
+                );
+              }
               fail(
                 `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which ` +
                   'does not exist. Either the path is a typo or the package no longer ships that ' +

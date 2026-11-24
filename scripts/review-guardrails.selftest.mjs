@@ -12509,6 +12509,23 @@ expectRed(
   /^(?![\s\S]*path is a typo)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
 );
 
+// The typo/dropped-folder verdict assumes the install is the locked one exactly as the language
+// comparison does, so where that cannot be confirmed it must say so here too. It warned on the
+// directory-PRESENT path and was silent on this one, which stated a guess as a finding.
+expectRed(
+  'a missing directory judged without confirming the installed version',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    // Installed, no `i18n`, and nothing to compare its version against.
+    [VENDOR_PACKAGE_JSON]: '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /could not be confirmed before calling its missing node_modules\/@hylandsoftware\/satori-ui\/i18n a typo or a dropped folder: node_modules\/@hylandsoftware\/satori-ui\/package\.json declares no version[\s\S]*is installed but has no/,
+);
+
 // The other half: with a faithful install a missing directory really is a typo or a dropped
 // folder, and must still say so. Deferring to the drift check must not swallow that verdict.
 expectRed(
@@ -13030,6 +13047,21 @@ expectRed(
   },
   null,
   /^(?![\s\S]*path is a typo)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The same announcement at this site: a missing mount called a typo on an install whose version
+// could not be confirmed is a guess, and must be labelled as one.
+expectRed(
+  'a missing Storybook mount judged without confirming the installed version',
+  'checkStorybookSatoriCatalogues',
+  {
+    [VENDOR_PACKAGE_JSON]: '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /could not be confirmed before calling the missing node_modules\/@hylandsoftware\/satori-ui\/i18n a typo or a dropped folder[\s\S]*which does not exist/,
 );
 
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
