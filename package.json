@@ -11,6 +11,7 @@
     "beta:backend": "node scripts/beta-harness/backend-preflight.mjs",
     "beta:bundle": "node scripts/beta-harness/no-test-libs-in-bundle.mjs",
     "beta:coverage": "node scripts/beta-harness/coverage-gate.mjs",
+    "beta:coverage-selftest": "node scripts/beta-harness/coverage-gate.selftest.mjs",
     "beta:sanitizers": "node scripts/beta-harness/sanitizer-audit.mjs",
     "beta:sanitizers-selftest": "node scripts/beta-harness/sanitizer-audit.selftest.mjs",
     "beta:sanitizers-recovery": "node scripts/beta-harness/sanitizer-selftest-recovery.selftest.mjs",

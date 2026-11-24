@@ -11,7 +11,7 @@ import {
   writeConversion,
   type Conversion,
 } from './convert';
-import { runHarness, type HarnessInput } from './harness';
+import { runCheck, runHarness, type HarnessInput } from './harness';
 import { inventory } from './inventory';
 import { MUTATIONS } from './mutations';
 import { readStudioPackage } from './studio-package';
@@ -40,8 +40,8 @@ function prepare(options?: SyntheticPackageOptions): HarnessInput {
   };
 }
 
-const check = (input: HarnessInput, number: number) =>
-  runHarness(input).checks.find((result) => result.number === number);
+/** What one check finds: that check alone, as the harness runs it, not the ten. */
+const check = (input: HarnessInput, number: number) => runCheck(input, number);
 
 describe('the harness on a sound conversion', () => {
   const input = prepare();
@@ -77,7 +77,7 @@ describe('the harness on a sound conversion', () => {
 
   it("runs check 10 only in part when it has the conversion's word for the allow-list alone", () => {
     const { allowList: _given, ...recorded } = input;
-    expect(runHarness(recorded).checks.find((c) => c.number === 10)).toMatchObject({
+    expect(runCheck(recorded, 10)).toMatchObject({
       status: 'partial',
       findings: [],
       reason: expect.stringMatching(/the allow-list the conversion recorded/),
@@ -157,7 +157,11 @@ describe('each deliberate breakage fails the check that guards it', () => {
       const result = check({ ...input, conversion: broken }, mutation.caughtBy);
       expect(result?.status).toBe('fail');
       expect(result?.findings.length).toBeGreaterThan(0);
-      expect(runHarness({ ...input, conversion: broken }).ready).toBe(false);
+      // Its failure stands in the way. Not `ready` alone: check 9 never runs, so no migration is
+      // ready yet, broken or not.
+      expect(runHarness({ ...input, conversion: broken }).blockers).toContain(
+        `check ${mutation.caughtBy} failed`,
+      );
     });
   }
 
@@ -177,62 +181,97 @@ describe('each deliberate breakage fails the check that guards it', () => {
     }
   });
 
-  it('names what broke', () => {
+  // One case a control: each runs the one check that catches it, not the ten.
+  describe('names what broke', () => {
     const input = prepare();
-    const findings = (name: string) => {
+    it.each<[string, readonly unknown[]]>([
+      ['drop-translation', ['app/labels/en.json: label.claim.number is missing']],
+      [
+        'drop-field',
+        [
+          "layouts/Claim/edit.layout.json: cl:number is missing, though Web UI's edit layout of Claim shows it",
+        ],
+      ],
+      [
+        'date-to-text',
+        ['layouts/Claim/view.layout.json: cl:incidentDate shows as text, not as date'],
+      ],
+      [
+        'drop-required',
+        ["layouts/Claim/edit.layout.json: cl:number is not required, but Web UI's is required"],
+      ],
+      [
+        'rename-field',
+        [
+          'layouts/Claim/edit.layout.json sections.0.fields.0: the schema claim has no field numberRenamed, so cl:numberRenamed does not exist',
+        ],
+      ],
+      [
+        'slip-free-javascript',
+        [
+          'layouts/Claim/edit.layout.json: sections.0.fields.0.visibleWhen holds a rule that no condition of the package gives',
+        ],
+      ],
+      [
+        'widen-to-everyone',
+        [
+          'layouts/Claim/metadata.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
+        ],
+      ],
+      [
+        'change-label',
+        [
+          'layouts/Claim/edit.layout.json: cl:number: the app shows "Claim number (changed)", where Web UI shows "Claim number"',
+        ],
+      ],
+      [
+        'wrong-page-provider',
+        ['queues/claims.json: it asks the page provider "claims_other", where Web UI asks claims'],
+      ],
+      [
+        'change-parameter',
+        [
+          'actions.json: acme-claims.approveClaim sends {"comment":"Approved in Web UIchanged"}, where Web UI sends {"comment":"Approved in Web UI"}',
+        ],
+      ],
+      [
+        'bind-other-operation',
+        [
+          'actions.json: acme-claims.approveClaim runs "Document.Delete", where Web UI\'s "approveClaim" runs Claim.Approve',
+        ],
+      ],
+      [
+        'unregistered-widget',
+        [
+          'app/layouts/Claim/view.layout.json cards[0].fields[0].widget: the widget "signature" is not registered',
+        ],
+      ],
+      [
+        'wrong-primary-token',
+        [
+          'acme: --mat-sys-primary is not set, though --nuxeo-primary-color sets it to #00796b',
+          'acme: --mat-sys-secondary is set, but no property of the theme sets it',
+        ],
+      ],
+      [
+        'drop-report-entry',
+        [
+          expect.stringMatching(
+            /^dropped: the view layout of Claim, in .*nuxeo-claim-view-layout\.html/,
+          ),
+          expect.stringMatching(/^coverage is 9\d\.\d%, not 100%$/),
+        ],
+      ],
+    ])('%s', (name, expected) => {
       const mutation = MUTATIONS.find((m) => m.name === name);
       if (!mutation) throw new Error(name);
-      return check(
-        { ...input, conversion: mutation.apply(input.conversion).conversion },
-        mutation.caughtBy,
-      )?.findings;
-    };
-    expect(findings('drop-translation')).toEqual([
-      'app/labels/en.json: label.claim.number is missing',
-    ]);
-    expect(findings('drop-field')).toEqual([
-      "layouts/Claim/edit.layout.json: cl:number is missing, though Web UI's edit layout of Claim shows it",
-    ]);
-    expect(findings('date-to-text')).toEqual([
-      'layouts/Claim/view.layout.json: cl:incidentDate shows as text, not as date',
-    ]);
-    expect(findings('drop-required')).toEqual([
-      "layouts/Claim/edit.layout.json: cl:number is not required, but Web UI's is required",
-    ]);
-    expect(findings('rename-field')).toEqual([
-      'layouts/Claim/edit.layout.json sections.0.fields.0: the schema claim has no field numberRenamed, so cl:numberRenamed does not exist',
-    ]);
-    expect(findings('slip-free-javascript')).toEqual([
-      'layouts/Claim/edit.layout.json: sections.0.fields.0.visibleWhen holds a rule that no condition of the package gives',
-    ]);
-    expect(findings('widen-to-everyone')).toEqual([
-      'layouts/Claim/metadata.layout.json: it shows cl:reserve to everyone, though Web UI shows it only while condition 1 passes',
-    ]);
-    expect(findings('change-label')).toEqual([
-      'layouts/Claim/edit.layout.json: cl:number: the app shows "Claim number (changed)", where Web UI shows "Claim number"',
-    ]);
-    expect(findings('wrong-page-provider')).toEqual([
-      'queues/claims.json: it asks the page provider "claims_other", where Web UI asks claims',
-    ]);
-    expect(findings('change-parameter')).toEqual([
-      'actions.json: acme-claims.approveClaim sends {"comment":"Approved in Web UIchanged"}, where Web UI sends {"comment":"Approved in Web UI"}',
-    ]);
-    expect(findings('bind-other-operation')).toEqual([
-      'actions.json: acme-claims.approveClaim runs "Document.Delete", where Web UI\'s "approveClaim" runs Claim.Approve',
-    ]);
-    expect(findings('unregistered-widget')).toEqual([
-      'app/layouts/Claim/view.layout.json cards[0].fields[0].widget: the widget "signature" is not registered',
-    ]);
-    expect(findings('wrong-primary-token')).toEqual([
-      'acme: --mat-sys-primary is not set, though --nuxeo-primary-color sets it to #00796b',
-      'acme: --mat-sys-secondary is set, but no property of the theme sets it',
-    ]);
-    expect(findings('drop-report-entry')).toEqual([
-      expect.stringMatching(
-        /^dropped: the view layout of Claim, in .*nuxeo-claim-view-layout\.html/,
-      ),
-      expect.stringMatching(/^coverage is 9\d\.\d%, not 100%$/),
-    ]);
+      expect(
+        check(
+          { ...input, conversion: mutation.apply(input.conversion).conversion },
+          mutation.caughtBy,
+        )?.findings,
+      ).toEqual(expected);
+    });
   });
 });
 

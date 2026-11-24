@@ -9,16 +9,18 @@
 }
 
 // Material 3 has no warning role, and here the tertiary colours are success's (`nxs-status-tag`'s
-// success tone), so a warning drawn with them read as a success. Satori's theme, loaded with the
-// app's, defines the warning family. Where a host lacks it, a warning falls back to the neutral
-// banner rather than to another tone's colours.
+// success tone), so a warning drawn with them read as a success. A theme gives a warning its own
+// colours through these properties: the app's maps them to Satori's warning family
+// (`apps/nuxeo-ui/src/styles.scss`). They are not read from Satori here, because this library's
+// default Storybook is published and must carry no Satori token (`storybook-publication-gate`).
+// Without them a warning falls back to the neutral banner, not to another tone's colours.
 :host([data-tone='warning']) {
-  background: var(--sat-sys-warning-container, var(--mat-sys-surface-container-high));
-  color: var(--sat-sys-on-warning-container, var(--mat-sys-on-surface));
+  background: var(--nxs-banner-warning-background, var(--mat-sys-surface-container-high));
+  color: var(--nxs-banner-warning-foreground, var(--mat-sys-on-surface));
 }
 
 :host([data-tone='warning']) .nxs-banner__icon {
-  color: var(--sat-sys-warning-icon, currentColor);
+  color: var(--nxs-banner-warning-icon, currentColor);
 }
 
 :host([data-tone='error']) {

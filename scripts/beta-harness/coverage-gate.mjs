@@ -35,14 +35,32 @@ import { spawnToolSync } from './package-command.mjs';
  * than enter at whatever it measures. That is for code written against the bar rather than
  * catching up to it — `satori-components`, the `nxs-` library NXSAT-308 builds new.
  *
+ * ## A full run, and a partial one
+ *
+ * By default the gate reads whatever reports are on disk, and a Vitest project without one is
+ * taken to be outside the affected set: `nx test x --coverage.enabled=true` then this gate is a
+ * normal local loop, and so is `sync-derived.mjs` measuring only the projects a merge disagreed on.
+ *
+ * That assumption is false after a run that covered every project, and it hid real failures.
+ * Vitest writes no report for a project whose tests fail (`coverage.reportOnFailure` defaults to
+ * false, and `coverage.clean` empties the directory first), and SonarCloud's test step is
+ * `run-many` with `continue-on-error`, so on PR #679 `shared-queues` and `studio-migration` were
+ * red and this gate passed without naming either. `--expect-all` says the run covered every
+ * Vitest project, and turns a project with no usable report into a blocking failure — baselined
+ * or not, because those two had no baseline entry yet and were not even listed. `--run` implies
+ * it: the gate ran every Vitest project itself.
+ *
  * Usage:
  *   node scripts/beta-harness/coverage-gate.mjs                    # check the ratchet
+ *   node scripts/beta-harness/coverage-gate.mjs --expect-all       # ...after a run of every project
  *   node scripts/beta-harness/coverage-gate.mjs --update-baseline  # re-record after a rise
  *   node scripts/beta-harness/coverage-gate.mjs --run              # run the tests first
  *   node scripts/beta-harness/coverage-gate.mjs --json
+ *   node scripts/beta-harness/coverage-gate.mjs --root <dir>       # another workspace (selftest)
  *
  * Exit 1 if any project's line coverage dropped by more than the tolerance, if a floor in
- * `FLOORS` is not met, or if --update-baseline is needed and has not been given.
+ * `FLOORS` is not met, if --expect-all is in force and a Vitest project has no usable report, or
+ * if --update-baseline is needed and has not been given.
  */
 
 import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
@@ -50,11 +68,47 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 import ts from 'typescript';
 
-const repoRoot = resolve(import.meta.dirname, '..', '..');
 const argv = process.argv.slice(2);
+/**
+ * Every argument the gate reads; anything else is refused rather than ignored. CI passes
+ * `--expect-all`, and a misspelling of it — or `--root=<dir>`, which read this checkout instead —
+ * used to be dropped without a word, turning a full run back into a partial one.
+ */
+const FLAGS = ['--json', '--update-baseline', '--run', '--expect-all'];
+const VALUED = ['--root', '--today'];
+for (let i = 0; i < argv.length; i += 1) {
+  if (FLAGS.includes(argv[i])) continue;
+  if (VALUED.includes(argv[i])) {
+    if (!argv[i + 1] || argv[i + 1].startsWith('--')) {
+      console.error(`coverage-gate: ${argv[i]} needs a value.`);
+      process.exit(1);
+    }
+    i += 1;
+    continue;
+  }
+  console.error(
+    `coverage-gate: unknown argument ${argv[i]}. It takes ${FLAGS.join(', ')}, ` +
+      `${VALUED.map((f) => `${f} <value>`).join(', ')}.`,
+  );
+  process.exit(1);
+}
+const rootArg = argv.includes('--root') ? argv[argv.indexOf('--root') + 1] : undefined;
+if (rootArg && argv.includes('--run')) {
+  // `--run` starts Nx in the current directory, so it would measure this checkout and then read
+  // another one's reports.
+  console.error('coverage-gate: --root reads reports another run wrote; it cannot take --run.');
+  process.exit(1);
+}
+const repoRoot = rootArg ? resolve(rootArg) : resolve(import.meta.dirname, '..', '..');
+if (!existsSync(repoRoot)) {
+  console.error(`coverage-gate: --root ${rootArg} does not exist.`);
+  process.exit(1);
+}
 const asJson = argv.includes('--json');
 const updateBaseline = argv.includes('--update-baseline');
 const runTests = argv.includes('--run');
+/** See "A full run, and a partial one" above. */
+const expectAll = argv.includes('--expect-all') || runTests;
 
 const baselinePath = resolve(repoRoot, '.ai/state/coverage-baseline.json');
 const coverageRoot = resolve(repoRoot, 'coverage');
@@ -165,7 +219,10 @@ if (runTests) {
     // Stated, not silently dropped: a gate that quietly skips a project reads as
     // "everything is covered" when it is not.
     console.log(
-      `  Excluded, no v8 coverage available: ${other.map((p) => p.name).join(', ')}\n` +
+      `  Excluded, no v8 coverage available: ${other
+        .filter((p) => p.executor !== null)
+        .map((p) => p.name)
+        .join(', ')}\n` +
         `  (Karma's builder takes --code-coverage, not --coverage.enabled, and fails on the latter.)`,
     );
   }
@@ -220,7 +277,27 @@ const vacuous = [];
  */
 const stale = [];
 
+/**
+ * Vitest projects with no usable report this run, and why: no `coverage-final.json`, one that
+ * does not parse, or one that lists no files. `collect()` used to `continue` past all three
+ * without a trace, which is what let the main flow call each of them "outside the affected set".
+ * Blocking only under `--expect-all`; see "A full run, and a partial one" in the header.
+ *
+ * @type {{ project: string, report: string, why: string }[]}
+ */
+const unreported = [];
+
 const measured = await collect();
+// A Vitest target with no `options.reportsDirectory` is one `discoverProjects()` cannot place, so
+// its report is never looked for: it was classed with Karma and dropped without a word.
+for (const p of other) {
+  if (p.executor !== '@nx/vitest:test') continue;
+  unreported.push({
+    project: p.name,
+    report: null,
+    why: 'its @nx/vitest:test target names no reportsDirectory, so no report is looked for',
+  });
+}
 
 if (measured.length === 0) {
   console.error(
@@ -280,6 +357,179 @@ function executableStatements(text) {
       !ts.isTypeAliasDeclaration(statement) &&
       !ts.getModifiers(statement)?.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword),
   ).length;
+}
+
+/**
+ * The first thing in a file that a `noStatements` exemption cannot cover, or `null`.
+ *
+ * The exemption is for types, `export *` barrels and constant tables, and its stale check read
+ * the coverage map alone — but a file no spec imports has an empty map whatever it holds, so a
+ * barrel that gained a function stayed exempt for good. `executableStatements` above re-reads
+ * the source for the two floor projects, where a constant table is not exempt either; this is
+ * the same idea at the ratchet's bar, for every entry.
+ *
+ * "Declares data" is read as syntax, so it is spelled out rather than taken to mean "is a `const`":
+ * a function or class anywhere; a top-level statement that is not an import, export, type, enum,
+ * `declare` form, type-only namespace or variable; and, inside the data, anything that runs
+ * logic — a call (bar `CALLS`), `new` (bar `CONSTRUCTS`), a tagged template, `await`, a
+ * conditional, `&&`/`||`/`??`, an assignment, a comma, `++`/`--`, `delete` or `?.`. A property
+ * read is not caught. On 2026-11-24 the 58 entries of the allowlist #682 left include eight
+ * eager `const` tables — six route arrays and two descriptor arrays — and all 58 pass; a lazy
+ * `loadComponent: () => import(...)` route would not.
+ *
+ * @param {string} text
+ * @returns {string | null}
+ */
+function codeIn(text) {
+  const CALLS = ['Object.freeze'];
+  const CONSTRUCTS = ['InjectionToken'];
+  const source = ts.createSourceFile('file.ts', text, ts.ScriptTarget.Latest, true);
+  const at = (node, what) =>
+    `${what}, line ${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
+  const declared = (node) =>
+    ts.canHaveModifiers(node) &&
+    (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.DeclareKeyword);
+  /** `namespace N { export type T = 1 }` emits nothing; one holding a value does. */
+  const typeOnly = (node) => {
+    if (!ts.isModuleDeclaration(node)) return false;
+    if (!node.body) return true;
+    if (ts.isModuleDeclaration(node.body)) return typeOnly(node.body);
+    return node.body.statements.every(
+      (st) =>
+        ts.isInterfaceDeclaration(st) ||
+        ts.isTypeAliasDeclaration(st) ||
+        declared(st) ||
+        typeOnly(st),
+    );
+  };
+  const types = (node) =>
+    ts.isInterfaceDeclaration(node) ||
+    ts.isTypeAliasDeclaration(node) ||
+    ts.isTypeNode(node) ||
+    declared(node) ||
+    typeOnly(node);
+  for (const statement of source.statements) {
+    if (
+      types(statement) ||
+      ts.isImportDeclaration(statement) ||
+      ts.isExportDeclaration(statement) ||
+      ts.isVariableStatement(statement) ||
+      ts.isEnumDeclaration(statement) ||
+      ts.isExportAssignment(statement) ||
+      ts.isEmptyStatement(statement)
+    ) {
+      continue;
+    }
+    return at(statement, `top-level ${ts.SyntaxKind[statement.kind]}`);
+  }
+  const K = ts.SyntaxKind;
+  const CODE = new Set([
+    K.FunctionDeclaration,
+    K.FunctionExpression,
+    K.ArrowFunction,
+    K.MethodDeclaration,
+    K.Constructor,
+    K.GetAccessor,
+    K.SetAccessor,
+    K.ClassDeclaration,
+    K.ClassExpression,
+    K.TaggedTemplateExpression,
+    K.AwaitExpression,
+    K.YieldExpression,
+    K.ConditionalExpression,
+    K.DeleteExpression,
+  ]);
+  const LOGIC = new Set([
+    K.AmpersandAmpersandToken,
+    K.BarBarToken,
+    K.QuestionQuestionToken,
+    K.CommaToken,
+  ]);
+  const logic = (node) => {
+    if (CODE.has(node.kind)) return ts.SyntaxKind[node.kind];
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression.getText(source);
+      if (!CALLS.includes(callee) || node.questionDotToken) return `call to ${callee}`;
+    }
+    if (ts.isNewExpression(node)) {
+      const callee = node.expression.getText(source);
+      if (!CONSTRUCTS.includes(callee)) return `new ${callee}`;
+    }
+    if (ts.isBinaryExpression(node)) {
+      const op = node.operatorToken.kind;
+      const assigns = op >= K.FirstAssignment && op <= K.LastAssignment;
+      if (assigns || LOGIC.has(op)) return `\`${node.operatorToken.getText(source)}\``;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === K.PlusPlusToken || node.operator === K.MinusMinusToken)
+    ) {
+      return node.operator === K.PlusPlusToken ? '`++`' : '`--`';
+    }
+    if (
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      node.questionDotToken
+    ) {
+      return '`?.`';
+    }
+    return null;
+  };
+  let found = null;
+  const visit = (node) => {
+    if (found || types(node)) return;
+    const what = logic(node);
+    if (what) {
+      found = at(node, what);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
+  return found;
+}
+
+// Regression cases for `codeIn`, run on every invocation like the ones above.
+for (const [text, want] of [
+  // What the exemption is for.
+  ["export * from './a';\nexport type { T } from './t';\n", null],
+  ["import type { D } from './d';\nexport const ROUTES: D[] = [{ path: '**' }];\n", null],
+  ['export const T = Object.freeze({ a: 1 });\nexport enum E {\n  A,\n  B = 1 << 2,\n}\n', null],
+  ["export const TOKEN = new InjectionToken<string>('t');\nexport const S = `a${1}`;\n", null],
+  ['export interface I {\n  f(): void;\n}\nexport type F = () => void;\n', null],
+  // Declarations that emit no code.
+  ['export declare function f(): void;\ndeclare class C {\n  m(): void;\n}\n', null],
+  [
+    "declare module 'x' {\n  function f(): void;\n}\nexport namespace N {\n  export type T = 1;\n}\n",
+    null,
+  ],
+  // Code.
+  [
+    "export * from './a';\nexport function f() {\n  return 1;\n}\n",
+    'top-level FunctionDeclaration, line 2',
+  ],
+  [
+    "export const R = [{ path: 'x', loadComponent: () => import('./x') }];\n",
+    'ArrowFunction, line 1',
+  ],
+  ["import './side-effect';\nregister();\n", 'top-level ExpressionStatement, line 2'],
+  ['export const _ = register();\n', 'call to register, line 1'],
+  ['export default bootstrap(config);\n', 'call to bootstrap, line 1'],
+  ['export = compute();\n', 'call to compute, line 1'],
+  ['export const m = new Map();\n', 'new Map, line 1'],
+  ['export const q = sql`select 1`;\n', 'TaggedTemplateExpression, line 1'],
+  ['export const d = await load();\n', 'AwaitExpression, line 1'],
+  ['export const c = flag ? 1 : 2;\n', 'ConditionalExpression, line 1'],
+  ['export const n = a ?? 1;\n', '`??`, line 1'],
+  ['export const o = a?.b;\n', '`?.`, line 1'],
+  ['export const s = (x = 1, 2);\n', '`,`, line 1'],
+  ['export const s = (x = 1);\n', '`=`, line 1'],
+  ['export enum E {\n  A = compute(),\n}\n', 'call to compute, line 2'],
+  ['export namespace N {\n  export const x = 1;\n}\n', 'top-level ModuleDeclaration, line 1'],
+]) {
+  const got = codeIn(text);
+  if (got !== want) {
+    throw new Error(`coverage-gate: codeIn found ${got}, not ${want}, in:\n${text}`);
+  }
 }
 
 /** A percentage truncated to two places, so a figure below a floor never prints as meeting it. */
@@ -373,6 +623,52 @@ for (const [project, floor] of Object.entries(FLOORS)) {
 
 const baseline = existsSync(baselinePath) ? JSON.parse(await readFile(baselinePath, 'utf8')) : null;
 
+/**
+ * Under `--expect-all`, every project the run should have measured and this gate could not read —
+ * the blind spot the flag exists for. Without the flag the list is empty and those projects fall
+ * through to `unmeasured` below, as they always did. Three ways in:
+ *
+ * - a Vitest project with no usable report (`unreported`, from `collect()`);
+ * - an `@nx/vitest:test` target with no `options.reportsDirectory` (also `unreported`).
+ *
+ * A baselined project the gate cannot read at all is `unreadableBaselined`, below, in every mode.
+ *
+ * A write is refused while it is non-empty: an incomplete run is not one to record from.
+ */
+/**
+ * Baselined projects no run of this gate can measure: no `test` target, a test target it does not
+ * read (Karma), or an `@nx/vitest:test` target with no `reportsDirectory`. Blocking in every mode
+ * and never pruned, because each was an exit. Renaming a baselined project's target to
+ * `unit-test` made it look orphaned, `--update-baseline --expect-all` pruned it with exit 0, and
+ * every later run passed; a Karma target would have printed "not measured" for ever.
+ */
+const unreadableBaselined = other
+  .filter((p) => baseline?.projects?.[p.name])
+  .map((p) => ({
+    project: p.name,
+    why:
+      p.executor === null
+        ? 'it has no `test` target'
+        : p.executor === '@nx/vitest:test'
+          ? 'its @nx/vitest:test target names no reportsDirectory'
+          : `its test target is ${p.executor}, which this gate does not read`,
+  }));
+const unreadableBaselinedNames = new Set(unreadableBaselined.map((u) => u.project));
+const missing = expectAll ? unreported.filter((u) => !unreadableBaselinedNames.has(u.project)) : [];
+if (updateBaseline && (missing.length || unreadableBaselined.length)) {
+  if (missing.length) reportMissing();
+  if (unreadableBaselined.length) reportUnreadableBaselined();
+  const parts = [];
+  if (missing.length) parts.push(`${missing.length} project(s) with no coverage report`);
+  if (unreadableBaselined.length) {
+    parts.push(`${unreadableBaselined.length} baselined project(s) no run can measure`);
+  }
+  console.log(
+    `\ncoverage-gate: FAIL — ${parts.join(', ')}; ${relative(repoRoot, baselinePath)} left as it was.`,
+  );
+  process.exit(1);
+}
+
 if (!baseline) {
   if (!updateBaseline) {
     console.error(
@@ -465,13 +761,18 @@ for (const m of measured) {
 const projectNames = new Set(projects.map((p) => p.name));
 const baselineNames = Object.keys(baseline.projects ?? {});
 const vacuousNames = new Set(vacuous.map((v) => v.project));
+const missingNames = new Set(missing.map((m) => m.project));
 const unmeasured = baselineNames.filter(
   (p) =>
     !measured.some((m) => m.project === p) &&
     projectNames.has(p) &&
     // Not "outside the affected set" — these DID run, and produced nothing to measure.
     // Reporting them as unmeasured-but-unchanged is how the false 100% stayed invisible.
-    !vacuousNames.has(p),
+    !vacuousNames.has(p) &&
+    // Nor these: under `--expect-all` nothing is outside the affected set, so a Vitest project
+    // with no report is `missing`, which blocks; and no run can measure the last group at all.
+    !missingNames.has(p) &&
+    !unreadableBaselinedNames.has(p),
 );
 const orphaned = baselineNames.filter((p) => !projectNames.has(p));
 
@@ -507,16 +808,83 @@ for (const item of unmeasuredAll) {
   }
 }
 const unmeasuredNow = new Set(unmeasuredAll.map((u) => u.file));
+/**
+ * Whether this run can say an allowlist entry is stale: not if it belongs to a Vitest project
+ * that wrote no usable report. Such a project lists no unmeasured files at all, so every entry of
+ * one that was not run — or whose tests failed — read as "now covered", and the gate told the
+ * reader to delete entries that were still true. The negative control for `--expect-all` found
+ * that: deleting `shared-queues`' report also called `libs/shared/queues/src/index.ts` stale.
+ */
+const unreadable = new Set([...unreported.map((u) => u.project), ...unreadableBaselinedNames]);
+const judgeable = (f) => {
+  if (!existsSync(resolve(repoRoot, f))) return true;
+  const owner = projects
+    .filter((p) => f.startsWith(`${p.root}/`))
+    .sort((a, b) => b.root.length - a.root.length)[0];
+  // Only a Vitest project that wrote no usable report, or a baselined one no run can measure, is
+  // beyond judging: restoring its target makes the entry true again. An entry under a Karma
+  // project, or under no project, can never be unmeasured here, so it stays stale as before; so
+  // does one under a project that did report, vacuous or not.
+  return !owner || !unreadable.has(owner.name);
+};
 const staleAllowlist = [
-  ...Object.keys(datedAllowlist).filter((f) => !unmeasuredNow.has(f)),
+  ...Object.keys(datedAllowlist).filter((f) => !unmeasuredNow.has(f) && judgeable(f)),
   // A `noStatements` entry is stale the moment the file starts producing statements: the
   // exemption said there was nothing to measure, and now there is.
-  ...[...noStatementsAllowlist].filter((f) => !unmeasuredNow.has(f)),
+  ...[...noStatementsAllowlist].filter((f) => !unmeasuredNow.has(f) && judgeable(f)),
 ];
+/**
+ * `noStatements` entries whose source now holds code, read from the source rather than the
+ * report — see `codeIn()`. Independent of which projects ran, so a partial run judges them too.
+ * An entry already stale is left to that message, which asks for the same edit.
+ */
+const falseExemptions = [...noStatementsAllowlist]
+  .filter((f) => !staleAllowlist.includes(f) && existsSync(resolve(repoRoot, f)))
+  .map((f) => ({ file: f, code: codeIn(readFileSync(resolve(repoRoot, f), 'utf8')) }))
+  .filter((e) => e.code !== null);
 
 if (updateBaseline) {
   const merged = { ...baseline.projects };
-  for (const m of measured) merged[m.project] = entryFor(m);
+  /**
+   * A fall inside the tolerance keeps the old entry. The tolerance is slack for noise, measured
+   * against the high-water mark; rewriting every measured project moved the mark down with the
+   * noise, so a write made for any other reason lowered entries nobody asked about. PR #682's
+   * baseline did that to `satori-components` (-0.39pp), `search` (-0.03pp) and
+   * `shared-app-config` (-0.29pp), and repeated writes could walk a project down 0.5pp at a time
+   * without the gate ever reporting a regression. Two of those three falls came with a grown
+   * denominator and are kept all the same: below the tolerance the gate reports nothing and asks
+   * for nothing. What it does report and ask to record is still recorded — a rise, a
+   * denominator expansion past the tolerance (`expanded`), a new project.
+   *
+   * On a grown denominator only the percentages are kept; the counts move forward. They are what
+   * tells an expansion from a deletion, and frozen ones let a later deletion through: an entry
+   * kept at 900/1000 after the code doubled to 1795/2000 (-0.25pp) then read tests deleted down
+   * to 1700/2000 (-5pp) as "covered 900 -> 1700, not a regression", where 1795 -> 1700 is one.
+   */
+  const kept = [];
+  for (const m of measured) {
+    const was = baseline.projects?.[m.project];
+    const delta = was ? round(m.lines - was.lines) : null;
+    if (delta !== null && delta < 0 && delta >= -TOLERANCE) {
+      if (typeof was.sTotal === 'number' && m.sTotal > was.sTotal) {
+        merged[m.project] = {
+          lines: was.lines,
+          statements: was.statements,
+          branches: was.branches,
+          functions: was.functions,
+          sTotal: m.sTotal,
+          sCovered: m.sCovered,
+        };
+        kept.push(
+          `${m.project} (${delta}pp; percentages kept, counts moved to ${m.sCovered}/${m.sTotal})`,
+        );
+      } else {
+        kept.push(`${m.project} (${delta}pp; entry kept, counts ${was.sCovered}/${was.sTotal})`);
+      }
+      continue;
+    }
+    merged[m.project] = entryFor(m);
+  }
   // Orphans are pruned here as well as reported. Without this, `--update-baseline`
   // preserved an entry for a deleted project indefinitely — the one command a
   // maintainer would reach for to fix the complaint could not fix it.
@@ -527,7 +895,10 @@ if (updateBaseline) {
   for (const v of vacuous) delete merged[v.project];
   await write(
     Object.entries(merged).map(([project, v]) => ({ project, ...v })),
-    `updated from ${measured.length} project(s)` +
+    `updated from ${measured.length - kept.length} project(s)` +
+      (kept.length
+        ? `, kept ${kept.length} whose fall is within the ${TOLERANCE}pp tolerance: ${kept.join(', ')}`
+        : '') +
       (orphaned.length
         ? `, pruned ${orphaned.length} orphaned entr(ies): ${orphaned.join(', ')}`
         : '') +
@@ -557,13 +928,16 @@ report();
 process.exit(
   stale.length ||
     floorFailures.length ||
+    missing.length ||
+    unreadableBaselined.length ||
     regressions.length ||
     orphaned.length ||
     unratcheted.length ||
     falseCredit.length ||
     unlisted.length ||
     expired.length ||
-    staleAllowlist.length
+    staleAllowlist.length ||
+    falseExemptions.length
     ? 1
     : 0,
 );
@@ -581,7 +955,21 @@ async function collect() {
     // Keyed off the target's own `reportsDirectory`, so the baseline uses real Nx
     // project names rather than a directory basename guessed from the path.
     const file = resolve(repoRoot, p.reportsDirectory, 'coverage-final.json');
-    if (!existsSync(file)) continue;
+    const absent = (why) =>
+      unreported.push({ project: p.name, report: relative(repoRoot, file), why });
+    if (!existsSync(file)) {
+      absent('no coverage-final.json');
+      continue;
+    }
+    // Parsed before the age check, so a report that is unreadable is reported as that alone, not
+    // also as stale: there are no numbers in it to be out of date.
+    let data;
+    try {
+      data = JSON.parse(await readFile(file, 'utf8'));
+    } catch {
+      absent('coverage-final.json does not parse');
+      continue;
+    }
     const reportAge = (await stat(file)).mtimeMs;
     const newestSource = await newestSourceMtime(p.root);
     if (newestSource > reportAge) {
@@ -590,12 +978,6 @@ async function collect() {
         report: new Date(reportAge).toISOString(),
         source: new Date(newestSource).toISOString(),
       });
-    }
-    let data;
-    try {
-      data = JSON.parse(await readFile(file, 'utf8'));
-    } catch {
-      continue;
     }
     // Deleting a source leaves no newer file behind, so the mtime test above cannot see it, and
     // the report goes on counting the deleted file's statements.
@@ -616,7 +998,10 @@ async function collect() {
         });
     }
     const s = summarise(data);
-    if (s.files === 0) continue;
+    if (s.files === 0) {
+      absent('coverage-final.json lists no files');
+      continue;
+    }
     const specs = await countSpecs(p.root);
     const unmeasured = await findUnmeasured(p.root, data);
     // Two ways to produce a number that is not coverage. Both are separated out here rather
@@ -709,13 +1094,18 @@ async function discoverProjects() {
       continue;
     }
     const t = j.targets?.test;
-    if (!t) continue;
     const root = relative(repoRoot, resolve(file, '..'));
     const name = j.name ?? root;
+    // Recorded, not skipped. A project without a `test` target used to be invisible here, so a
+    // baselined one whose target was renamed read as orphaned, and `--update-baseline` pruned it.
+    if (!t) {
+      found.push({ name, root, kind: 'other', executor: null });
+      continue;
+    }
     if (t.executor === '@nx/vitest:test' && t.options?.reportsDirectory) {
       found.push({ name, root, kind: 'vitest', reportsDirectory: t.options.reportsDirectory });
     } else {
-      found.push({ name, root, kind: 'other' });
+      found.push({ name, root, kind: 'other', executor: t.executor ?? '(none)' });
     }
   }
   return found.sort((a, b) => a.name.localeCompare(b.name));
@@ -921,14 +1311,22 @@ function report() {
           ok:
             stale.length === 0 &&
             floorFailures.length === 0 &&
+            missing.length === 0 &&
+            unreadableBaselined.length === 0 &&
             regressions.length === 0 &&
             orphaned.length === 0 &&
             unratcheted.length === 0 &&
             falseCredit.length === 0 &&
             unlisted.length === 0 &&
             expired.length === 0 &&
-            staleAllowlist.length === 0,
+            staleAllowlist.length === 0 &&
+            falseExemptions.length === 0,
           stale,
+          // Whether a project with no report counted against the run, so a reader of the
+          // evidence can tell a full run's verdict from a partial one's.
+          expectAll,
+          missing,
+          unreadableBaselined,
           target: TARGET,
           floors: { configured: FLOORS, failures: floorFailures },
           rows,
@@ -970,6 +1368,7 @@ function report() {
             unlisted,
             expired,
             staleAllowlist,
+            falseExemptions,
           },
         },
         null,
@@ -979,7 +1378,14 @@ function report() {
     return;
   }
 
-  console.log(`\nCoverage ratchet — ${rows.length} project(s) measured, Beta target ${TARGET}%\n`);
+  console.log(`\nCoverage ratchet — ${rows.length} project(s) measured, Beta target ${TARGET}%`);
+  // Which claim the verdict below makes. A partial run's pass says nothing about a project that
+  // wrote no report, and the reader of a CI log should not have to know the flags to see that.
+  console.log(
+    expectAll
+      ? `  Full run (${runTests ? '--run' : '--expect-all'}): all ${vitest.length} Vitest project(s) must report.\n`
+      : '  Partial run: a project with no report is taken to be outside the affected set.\n',
+  );
   // `stmts` and `specs` are shown because a percentage without its denominator is what made
   // this gate wrong in the first place. `core` reports a truthful 100% over **7** statements
   // from one generated "should create" spec; printed as a bare `100%` it reads identically to
@@ -1043,7 +1449,16 @@ function report() {
   if (unmeasured.length) {
     console.log(`\n  Not measured this run (outside the affected set): ${unmeasured.join(', ')}`);
     console.log('  Their baseline entries are unchanged; this run says nothing about them.');
+    if (!expectAll) {
+      console.log(
+        '  If this run covered every project, re-run with --expect-all: a project whose tests\n' +
+          '  fail writes no report, and would be listed here rather than failed.',
+      );
+    }
   }
+
+  if (missing.length) reportMissing();
+  if (unreadableBaselined.length) reportUnreadableBaselined();
 
   if (vacuous.length) {
     console.log('\n  Unmeasurable — a report was produced, but it measures nothing:');
@@ -1141,28 +1556,45 @@ function report() {
     for (const f of staleAllowlist) console.log(`    ${f}`);
   }
 
+  if (falseExemptions.length) {
+    console.log(
+      `\n  Not statement-free — ${falseExemptions.length} \`noStatements\` entr(ies) name a file that now holds code:`,
+    );
+    for (const e of falseExemptions) console.log(`    ${e.file}  (${e.code})`);
+  }
+
   reportFloors();
 
   console.log('');
   if (
     stale.length ||
     floorFailures.length ||
+    missing.length ||
+    unreadableBaselined.length ||
     orphaned.length ||
     unratcheted.length ||
     falseCredit.length ||
     unlisted.length ||
     expired.length ||
-    staleAllowlist.length
+    staleAllowlist.length ||
+    falseExemptions.length
   ) {
     const parts = [];
     if (stale.length) parts.push(`${stale.length} stale coverage report(s)`);
     if (floorFailures.length) parts.push(`${floorFailures.length} unmet coverage floor(s)`);
+    if (missing.length) parts.push(`${missing.length} project(s) with no coverage report`);
+    if (unreadableBaselined.length) {
+      parts.push(`${unreadableBaselined.length} baselined project(s) no run can measure`);
+    }
     if (orphaned.length) parts.push(`${orphaned.length} orphaned baseline entr(ies)`);
     if (unratcheted.length) parts.push(`${unratcheted.length} unratcheted project(s)`);
     if (falseCredit.length) parts.push(`${falseCredit.length} unmeasurable baseline entr(ies)`);
     if (unlisted.length) parts.push(`${unlisted.length} unlisted uninstrumented file(s)`);
     if (expired.length) parts.push(`${expired.length} expired uninstrumented entr(ies)`);
     if (staleAllowlist.length) parts.push(`${staleAllowlist.length} stale allowlist entr(ies)`);
+    if (falseExemptions.length) {
+      parts.push(`${falseExemptions.length} \`noStatements\` entr(ies) holding code`);
+    }
     console.log(`coverage-gate: FAIL — ${parts.join(', ')}.`);
     if (falseCredit.length) {
       const names = falseCredit.map((v) => v.project);
@@ -1227,6 +1659,15 @@ function report() {
           '  when they have not been.',
       );
     }
+    if (falseExemptions.length) {
+      console.log(
+        `\n  ${falseExemptions.length} file(s) under \`noStatements\` hold code, and nothing asks for a spec\n` +
+          '  for them: the exemption is for types, `export *` barrels and constant tables. Write\n' +
+          '  a spec that reaches the code, or move the entry to `files` with a date. A file no spec\n' +
+          '  imports has an empty coverage map whatever it holds, so the report cannot see this;\n' +
+          '  the check reads the source.',
+      );
+    }
     // Integrity failures do NOT hide a regression. This used to `return` here, so with any
     // of the checks above firing the console reported only them and said nothing about a
     // project that had lost coverage — a real 2.89pp drop in `adf-hx-bridge` was visible
@@ -1251,6 +1692,47 @@ function exitOnFloorFailures() {
   reportFloors();
   console.log(`\ncoverage-gate: FAIL — ${floorFailures.length} unmet coverage floor(s).`);
   process.exit(1);
+}
+
+/** Baselined projects whose test target no run of this gate can read; see `unreadableBaselined`. */
+function reportUnreadableBaselined() {
+  console.log(
+    `\n  CANNOT BE MEASURED — ${unreadableBaselined.length} baselined project(s) have no test target ` +
+      'this gate reads:',
+  );
+  const width = Math.max(...unreadableBaselined.map((u) => u.project.length));
+  for (const u of unreadableBaselined) console.log(`    ${u.project.padEnd(width)}  ${u.why}`);
+  console.log(
+    '\n  Their entries ratchet nothing while they stay, and pruning them is how a renamed target\n' +
+      '  escaped, so --update-baseline will not. Give the project an `@nx/vitest:test` target with\n' +
+      '  `options.reportsDirectory`. If its tests really are gone, delete the entry by hand in the\n' +
+      '  same commit and say why there.',
+  );
+}
+
+/** The `--expect-all` verdict: each Vitest project that should have reported and did not. */
+function reportMissing() {
+  console.log(
+    `\n  NO COVERAGE REPORT — ${missing.length} Vitest project(s) wrote none usable, in a run ` +
+      'that covered every project:',
+  );
+  const width = Math.max(...missing.map((m) => m.project.length));
+  for (const m of missing) {
+    const was = baseline?.projects?.[m.project];
+    const entry = was ? `baselined at ${was.lines}%` : 'no baseline entry';
+    const where = m.report ? ` (${m.report})` : '';
+    console.log(`    ${m.project.padEnd(width)}  ${m.why}${where}, ${entry}`);
+  }
+  console.log(
+    "\n  A project whose tests fail writes no report: Vitest's `coverage.reportOnFailure` is\n" +
+      '  false, and `coverage.clean` empties the directory before the run. So look for\n' +
+      '  `<project>:test` among the failed tasks of the test run, and fix the test, not this gate.\n' +
+      '  One that passed and still wrote nothing has a `reportsDirectory` in project.json that\n' +
+      '  is not where its vite config writes.' +
+      (runTests
+        ? ''
+        : ' If the run really did skip it, it was not a full\n  run: drop --expect-all.'),
+  );
 }
 
 /** The `FLOORS` verdict, printed on every run so a met floor is visible as well as a missed one. */
