@@ -339,7 +339,7 @@ export const SERVED = {
 function whyNotServed(file: string): string {
   if (file === 'app.json')
     return (
-      'The app registry reads it, and waits on decisions B and E; the dev server has none. The' +
+      'The app registry serves it on a server, after sign-in; the dev server has none. The' +
       " shell keeps the platform's name and branding."
     );
   if (file === 'actions.json')

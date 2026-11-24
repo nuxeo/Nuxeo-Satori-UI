@@ -27,6 +27,7 @@ class ContributionXmlTest {
         xmap.register(FragmentDescriptor.class);
         xmap.register(LayoutDescriptor.class);
         xmap.register(AssetDescriptor.class);
+        xmap.register(AppDescriptor.class);
         return xmap.loadAll(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
     }
 
@@ -100,5 +101,41 @@ class ContributionXmlTest {
             assertNotNull(getClass().getClassLoader().getResource(fragment.getSrc()), fragment.getSrc());
         }
         assertTrue(component.contains("<require>org.nuxeo.agentic.ui.config</require>"));
+    }
+
+    @Test
+    void readsAnAppWithTheFilesItNamesInOrder() throws Exception {
+        Object[] loaded = load("""
+                <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+                  <app id="payers-claims" src="agentic-ui-config/app.json">
+                    <file path="home.json" />
+                    <file path="queues/unassigned-claims.json"/>
+                    <file path="labels/en.json"></file>
+                  </app>
+                  <app id="cases" enabled="false"/>
+                </extension>
+                """);
+
+        assertEquals(2, loaded.length);
+        AppDescriptor app = (AppDescriptor) loaded[0];
+        assertEquals("payers-claims", app.getId());
+        assertEquals("agentic-ui-config/app.json", app.getSrc());
+        assertTrue(app.isEnabled());
+        assertEquals(List.of("home.json", "queues/unassigned-claims.json", "labels/en.json"), app.getFiles());
+
+        AppDescriptor disabled = (AppDescriptor) loaded[1];
+        assertFalse(disabled.isEnabled());
+        assertTrue(disabled.getFiles().isEmpty());
+    }
+
+    /** The extension point declares the app element, or Nuxeo would not read a package's apps at all. */
+    @Test
+    void theExtensionPointTakesApps() throws Exception {
+        String service;
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream("OSGI-INF/agentic-ui-config-service.xml")) {
+            assertNotNull(in);
+            service = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertTrue(service.contains("<object class=\"org.nuxeo.agentic.config.AppDescriptor\" />"));
     }
 }

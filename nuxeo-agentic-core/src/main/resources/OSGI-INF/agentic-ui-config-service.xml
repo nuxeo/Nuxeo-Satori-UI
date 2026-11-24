@@ -10,6 +10,11 @@
     /nuxeo/agentic-ui-config/ (bootstrap.json, manifest.json, layouts.json, layouts/, assets/),
     without authentication — nothing sensitive may be contributed. The browser merges the
     fragments in order, so a later package wins key by key.
+
+    Business apps are contributed here too, as app elements, and served by the app registry at
+    /nuxeo/agentic-ui-apps/ after sign-in: apps.json lists the apps whose app.json names a group
+    the person is in, and apps/{id}/{path} serves each one's files. Seeing an app is not a
+    security control: Nuxeo's permissions still decide which records anyone reads.
   </documentation>
 
   <implementation class="org.nuxeo.agentic.config.AgenticUiConfigComponent" />
@@ -30,16 +35,32 @@
         </fragment>
         <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />
         <asset name="acme-logo.svg" src="agentic-ui-config/assets/acme-logo.svg" />
+        <app id="payers-claims" src="agentic-ui-config/app.json">
+          <file path="home.json" />
+          <file path="navigation.json" />
+          <file path="queues/unassigned-claims.json" />
+          <file path="labels/en.json" />
+          <file path="tasks/claimReview.determine.layout.json" />
+          <file path="actions.json" />
+        </app>
       </code>
 
       src is read from the contributing bundle; the json child is the inline form. A later
       fragment with the same name and layer replaces an earlier one in place, a later layout with
       the same type and mode replaces it whole, and enabled="false" removes either. A replacement
       that cannot be read, is too large or does not parse is rejected and the earlier one stays.
+
+      An app's src is its app.json, whose id must be the app's and whose groups say who sees it.
+      Each file is a path below the directory that holds app.json, at one of an app definition's
+      places: home.json, navigation.json, actions.json, queues/{id}.json, labels/{language}.json
+      and tasks/{workflow}.{step}.layout.json. A later app with the same id replaces it whole, and
+      enabled="false" removes it. An app.json that cannot be used refuses the app; any other file
+      that cannot be read, is over 1 MiB or does not parse is left out on its own.
     </documentation>
     <object class="org.nuxeo.agentic.config.FragmentDescriptor" />
     <object class="org.nuxeo.agentic.config.LayoutDescriptor" />
     <object class="org.nuxeo.agentic.config.AssetDescriptor" />
+    <object class="org.nuxeo.agentic.config.AppDescriptor" />
   </extension-point>
 
 </component>

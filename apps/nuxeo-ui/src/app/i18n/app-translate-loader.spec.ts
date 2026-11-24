@@ -7,6 +7,8 @@ import {
 } from '@angular/common/http/testing';
 import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
+import { of } from 'rxjs';
 
 import {
   AppTranslateLoader,
@@ -520,5 +522,88 @@ describe('AppTranslateLoader', () => {
     expect(merged?.['settings.themes.search']).toBe('Search themes');
     expect(merged?.['document-detail.hide-details']).toBe('Hide details');
     expect(merged?.['document-detail.show-details']).toBe('Show details');
+  });
+});
+
+/**
+ * Where the app provides the app registry: a language the open app has labels in is read from it,
+ * and one the development server lists too is read there first (`APP_DEFINITION_FILES`).
+ */
+describe("AppTranslateLoader, with the app registry's labels", () => {
+  const INDEX = '/agentic-ui-config/layouts.json';
+  let asked: [string, string | null][];
+  let httpMock: HttpTestingController;
+
+  function configure(
+    registryLanguages: readonly string[],
+    fromService: boolean,
+  ): AppTranslateLoader {
+    asked = [];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        {
+          provide: AppConfigService,
+          useValue: {
+            manifest: signal({ labels: { 'payers.queue.mine': 'Mine, as the customer named it' } }),
+            diagnostics: signal({
+              bootstrapSource: fromService ? 'configuration-service' : 'packaged-default',
+            }),
+          },
+        },
+        {
+          provide: APP_DEFINITION_FILES,
+          useValue: {
+            file: (path: string, developmentUrl: string | null) => {
+              asked.push([path, developmentUrl]);
+              return of({
+                version: 2,
+                labels: { 'payers.app.claims': 'Claims', 'payers.queue.mine': 'My claims' },
+              });
+            },
+            labelLanguages: () => of(registryLanguages),
+          },
+        },
+      ],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    return TestBed.inject(AppTranslateLoader);
+  }
+
+  afterEach(() => httpMock.verify());
+
+  it('reads a language only the registry lists from the registry, below the manifest', () => {
+    const loader = configure(['en'], false);
+    let merged: Record<string, string> | undefined;
+    loader.getTranslation('en').subscribe((value) => (merged = value));
+    httpMock.match(() => true).forEach((request) => request.flush({}));
+
+    expect(asked).toEqual([['labels/en.json', null]]);
+    expect(merged?.['payers.app.claims']).toBe('Claims');
+    expect(merged?.['payers.queue.mine']).toBe('Mine, as the customer named it');
+  });
+
+  it('reads a language the development server lists there first', () => {
+    const loader = configure(['en'], true);
+    loader.getTranslation('en').subscribe();
+    const index = httpMock.expectOne(INDEX);
+    index.flush({
+      format: 'nuxeo-agentic-ui-config/1',
+      layer: 'layouts',
+      layouts: [],
+      labels: ['en'],
+    });
+    httpMock.match(() => true).forEach((request) => request.flush({}));
+
+    expect(asked).toEqual([['labels/en.json', '/agentic-ui-config/labels/en.json']]);
+  });
+
+  it('asks for nothing in a language neither lists', () => {
+    const loader = configure(['fr'], false);
+    loader.getTranslation('en').subscribe();
+    httpMock.match(() => true).forEach((request) => request.flush({}));
+
+    expect(asked).toEqual([]);
   });
 });

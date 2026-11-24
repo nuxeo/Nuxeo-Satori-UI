@@ -8,6 +8,7 @@ import {
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { NUXEO_API_ORIGIN, backgroundRequestContext } from '@nuxeo/satori-platform/nuxeo-client';
+import { APP_REGISTRY_REQUEST } from '@agentic-ui/shared/app-registry';
 
 import { AuthService } from './auth.service';
 import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
@@ -106,6 +107,36 @@ describe('nuxeoAuthInterceptor', () => {
         .subscribe({ error: () => undefined });
       httpMock
         .expectOne('/nuxeo/api/v1/task')
+        .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+      expect(sessionTimeout.expireDueToServer).toHaveBeenCalled();
+    });
+  });
+
+  describe('a request to the app registry (APP_REGISTRY_REQUEST)', () => {
+    const registry = () => new HttpContext().set(APP_REGISTRY_REQUEST, true);
+
+    it('carries the credentials, as every Nuxeo request does', () => {
+      auth.basicCredentials.and.returnValue('dXNlcjpwYXNz');
+      http.get('/nuxeo/agentic-ui-apps/apps.json', { context: registry() }).subscribe();
+      const req = httpMock.expectOne('/nuxeo/agentic-ui-apps/apps.json');
+      expect(req.request.headers.get('Authorization')).toBe('Basic dXNlcjpwYXNz');
+      req.flush({});
+    });
+
+    it('does not end the session on HTTP 401: the registry does not say whether it is alive', () => {
+      http
+        .get('/nuxeo/agentic-ui-apps/apps.json', { context: registry() })
+        .subscribe({ error: () => undefined });
+      httpMock
+        .expectOne('/nuxeo/agentic-ui-apps/apps.json')
+        .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+      expect(sessionTimeout.expireDueToServer).not.toHaveBeenCalled();
+    });
+
+    it('still ends it on a 401 from the registry’s address with no mark', () => {
+      http.get('/nuxeo/agentic-ui-apps/apps.json').subscribe({ error: () => undefined });
+      httpMock
+        .expectOne('/nuxeo/agentic-ui-apps/apps.json')
         .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
       expect(sessionTimeout.expireDueToServer).toHaveBeenCalled();
     });

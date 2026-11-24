@@ -51,6 +51,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { SelectionTopbarComponent } from '@nuxeo/satori-platform/ui';
 import { AiChatService, AiFeatureFlagService } from '@agentic-ui/shared/ai-client';
+import { AppRegistryService, type RegistryApp } from '@agentic-ui/shared/app-registry';
 import {
   NOTIFICATIONS_FEATURE_TOGGLE,
   NotificationBellComponent,
@@ -159,6 +160,27 @@ export class AppShellComponent implements OnDestroy {
    */
   private readonly navDescriptors = inject(APP_NAV_ITEMS);
   protected readonly navItems = computed(() => this.navDescriptors().map(toAppNavItem));
+
+  /**
+   * "Switch app": the apps the registry lets the person see, offered when there is more than one
+   * (docs/business-apps/development-plan.md, phase 0's demo, step 3). Choosing one remembers it and
+   * reloads the page with it, so that its menu, home and labels are read as at startup.
+   */
+  protected readonly appRegistry = inject(AppRegistryService);
+  protected readonly switchableApps = computed(() => {
+    const apps = this.appRegistry.apps();
+    return apps.length > 1 ? apps : [];
+  });
+
+  /** An app's name as "Switch app" lists it: its `label`, else its key's text, else its id. */
+  protected appName(app: RegistryApp): string {
+    if (app.label) return app.label;
+    if (app.labelKey) {
+      const text = this.translate.instant(app.labelKey);
+      if (typeof text === 'string' && text !== '' && text !== app.labelKey) return text;
+    }
+    return app.id;
+  }
 
   readonly displayName = computed(() => this.auth.username() ?? 'User');
   readonly drawerOpen = signal(false);

@@ -114,8 +114,8 @@ as dev mode would on a server:
    `--queue` for each queue, `--labels` for each language and `--task` for each task form. The
    script writes them into `apps/nuxeo-ui/public/agentic-ui-config/`, which git ignores, and
    **replaces what was served before**: one package is previewed at a time.
-3. **It says what it could not serve,** and why: `app.json`, which the app registry will read and
-   which waits on decisions B and E; `actions.json` and `modules/`, which nothing in the app reads
+3. **It says what it could not serve,** and why: `app.json`, which the app registry serves on a
+   server, not the development server; `actions.json` and `modules/`, which nothing in the app reads
    yet; `assets/`, which `config:dev` does not serve; version 1's fragments; and a file whose name
    the validator accepts and `config:dev` does not, such as labels for `es-419`, which would stop
    the script whole.
@@ -149,8 +149,8 @@ override folder on every request, `${nuxeo.data.dir}/agentic-ui-config-dev`, onc
 a value"). That folder takes only `bootstrap*.json`, `manifest*.json`,
 `layouts/<Type>/<mode>.layout.json` and `assets/` (`DevOverrides.java`), and the configuration
 servlet answers only those addresses. So on a server it previews a package's **layouts** and
-nothing else: not the home, the menu, the queues, the labels or the task forms, which wait on the
-app registry. By hand, on the local Docker one, after setting the property and restarting once:
+nothing else: not the home, the menu, the queues, the labels or the task forms, which the app
+registry serves only from an installed package that contributes its app. By hand, on the local Docker one, after setting the property and restarting once:
 
 ```bash
 docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev

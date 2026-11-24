@@ -1880,14 +1880,15 @@ list; `nxs-saved-search-actions` for the permission read.
 
 ## 32. Home — `home.json` and the KPIs' Page Providers
 
-| Field           | Value                                                                                                                                                                      |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service**     | `HomeService` (`libs/shared/home/src/lib/home.service.ts`)                                                                                                                 |
-| **Method**      | `load()`, once per visit of `/home`; `results(kpi)`, once per page provider and parameters that a card the person sees reads                                               |
-| **HTTP Method** | `GET`                                                                                                                                                                      |
-| **Endpoints**   | `/nuxeo/agentic-ui-config/home.json` (`/agentic-ui-config/home.json` under `nx serve`) — without interceptors, no `Authorization` header                                   |
-|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                   |
-| **Server side** | None for `home.json`: the configuration servlet does not answer there (404), and only `npm run config:dev -- --home <file>` serves it. Nuxeo's page providers for the KPIs |
+| Field           | Value                                                                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `HomeService` (`libs/shared/home/src/lib/home.service.ts`)                                                                                                                            |
+| **Method**      | `load()`, once per visit of `/home`; `results(kpi)`, once per page provider and parameters that a card the person sees reads                                                          |
+| **HTTP Method** | `GET`                                                                                                                                                                                 |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/home.json` (`/agentic-ui-config/home.json` under `nx serve`) — without interceptors, no `Authorization` header                                              |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                              |
+|                 | Where that is 404: `/nuxeo/agentic-ui-apps/apps/<id>/home.json`, the app registry's, for the app open (section 36) — authenticated, through the interceptors                          |
+| **Server side** | For `home.json`: `npm run config:dev -- --home <file>` under `nx serve`, and the app registry on a server; the configuration servlet answers 404. Nuxeo's page providers for the KPIs |
 
 **Query parameters of the page provider read:**
 
@@ -1918,12 +1919,13 @@ list; `nxs-saved-search-actions` for the permission read.
 
 **The menu, `navigation.json`:** `HomeService.loadNavigation()` reads
 `/nuxeo/agentic-ui-config/navigation.json` (`/agentic-ui-config/navigation.json` under `nx serve`)
-the same way, without interceptors, once, at startup: `startAppMenu`
+the same way, the development server's address first and the app registry's where that is 404
+(section 36), once, at startup: `startAppMenu`
 (`apps/nuxeo-ui/src/app/business-apps.menu-start.ts`), an `APP_INITIALIZER`, loads
 `registerAppMenu` (`business-apps.menu.ts`) lazily, which waits for the configuration to load before
-it reads anything, since `NuxeoApiBase` keeps the API origin it first reads. Only
-`npm run config:dev -- --navigation <file>` serves the file; on a server it is 404 and the
-platform's menu shows alone. For each entry that opens a queue and has no literal name of its own,
+it reads anything, since `NuxeoApiBase` keeps the API origin it first reads.
+`npm run config:dev -- --navigation <file>` serves the file under `nx serve`, and the app registry
+on a server; where neither does, the platform's menu shows alone. For each entry that opens a queue and has no literal name of its own,
 it then reads `queues/<id>.json` once (section 33), for the queue's name. **Startup waits for all
 of it**: the menu's chunk, the file, then the queues' files, each read with the home's 10-second
 timeout. It never rejects, not even when the chunk cannot be fetched: the platform's menu shows,
@@ -1943,7 +1945,8 @@ and the console says why.
 | **HTTP Method** | `GET`                                                                                                                                                                                  |
 | **Endpoints**   | `/nuxeo/agentic-ui-config/queues/<id>.json` (`/agentic-ui-config/queues/<id>.json` under `nx serve`) — without interceptors, no `Authorization` header                                 |
 |                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — authenticated, through `NuxeoApiBase`                                                                                               |
-| **Server side** | None for the file: the configuration servlet does not answer there (404), and only `npm run config:dev -- --queue <file>` serves it. Nuxeo's page provider for the list                |
+|                 | Where that is 404: `/nuxeo/agentic-ui-apps/apps/<id>/queues/<queue>.json`, the app registry's, for the app open (section 36) — authenticated, through the interceptors                 |
+| **Server side** | For the file: `npm run config:dev -- --queue <file>` under `nx serve`, and the app registry on a server; the configuration servlet answers 404. Nuxeo's page provider for the list     |
 
 **Query parameters of the page provider read:**
 
@@ -2160,6 +2163,88 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   twice more.
 
 **Used by:** `NotificationBellComponent` (`libs/shared/notifications`), in the shell's header.
+
+---
+
+## 36. App Registry — the Apps a Person May See, and Their Files
+
+| Field           | Value                                                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Service**     | `AppRegistryService` (`libs/shared/app-registry/src/lib/app-registry.service.ts`), provided by the app as `APP_DEFINITION_FILES` (`apps/nuxeo-ui/src/app/business-apps.registry.ts`)       |
+| **Method**      | `load()`, once per page, the first time a file of an app definition is read; `refresh()`, after a sign-in; `file(path, developmentUrl)`, for each file the engines read                    |
+| **HTTP Method** | `GET`                                                                                                                                                                                      |
+| **Endpoints**   | `/nuxeo/agentic-ui-apps/apps.json` — the apps the person may see                                                                                                                           |
+|                 | `/nuxeo/agentic-ui-apps/apps/<id>/<path>` — a file of one of them, such as `home.json` or `queues/open.json`, as its package wrote it, with no envelope                                    |
+| **Auth**        | Authenticated, through the interceptors (the person's `Authorization: Basic`, or the session cookie), with `X-No-Basic-Header: true` so that a 401 does not open the browser's own prompt  |
+| **Server side** | `AgenticUiAppsServlet` in `nuxeo-agentic-core`, behind Nuxeo's authentication filter, with the REST API's chain, from each package's `<app>` contribution to `org.nuxeo.agentic.ui.config` |
+
+**The listing:**
+
+```json
+{
+  "format": "nuxeo-agentic-ui-config/1",
+  "layer": "apps",
+  "apps": [
+    {
+      "id": "payers-claims",
+      "url": "apps/payers-claims/",
+      "component": "nuxeo.config.payers-claims-demo",
+      "bundle": "nuxeo.config.payers-claims-demo",
+      "source": "agentic-ui-config/app.json",
+      "files": ["app.json", "home.json", "navigation.json", "queues/unassigned-claims.json"],
+      "content": { "version": 2, "id": "payers-claims", "groups": ["claims-adjusters"] }
+    }
+  ],
+  "diagnostics": []
+}
+```
+
+**Notes:**
+
+- **Who sees an app:** the apps whose `app.json` names a group the person is in, every group Nuxeo
+  counts them in (`NuxeoPrincipal.getAllGroups()`, nested and virtual groups included, so `members`
+  is everyone signed in). An administrator sees what their groups give them. A request that does
+  not authenticate is 401, as on a stock REST API. On a server that defines an anonymous user, a
+  request with no credentials is `Anonymous` instead, in no app's group, and gets an empty list.
+  The app ends no session on the registry's 401 either (`APP_REGISTRY_REQUEST`): the two are
+  separate, and each holds without the other.
+- **Seeing an app is not a security control.** An app definition holds no record. The queues,
+  homes and record pages read records through the REST API, as the person, and Nuxeo's permissions
+  decide what they show.
+- **An app the person may not see is 404**, and so is a file its package does not name, a path the
+  listing does not give, and any other address under `/nuxeo/agentic-ui-apps/`.
+- **A 200, a 304 and a 404 are `Cache-Control: private, no-cache`** with
+  `X-Content-Type-Options: nosniff`, so the browser revalidates and a shared cache keeps nothing; a
+  200 and a 304 also carry an ETag, `Vary: Cookie, Authorization` and the configuration servlet's
+  `Content-Security-Policy`. The servlet's own 401 is `no-store`. GET and HEAD only: anything else
+  is 405, with an `Allow` header and no body.
+- **Diagnostics** are the configuration envelope's: `level`, `code`, `message`, the `app` it is
+  about, and the contribution's `component`, `bundle` and `source`. A person gets those the
+  contribution in force made, from its own component and bundle, about the apps they see, not
+  those of a version another package has replaced; an administrator gets all, those about a
+  refused app included. None reaches the configuration servlet's own answers, which everyone reads
+  before sign-in.
+- **Where a file is read:** the development server's address first, past the interceptors, as
+  before the registry and without waiting for the listing, and the registry's where that is 404
+  and the app open lists the file. On a
+  server the first address is the configuration servlet's, which answers 404 for every file of an
+  app definition. A labels file is asked of the development server only in a language its
+  `layouts.json` lists.
+- **The app open:** the one last chosen in this browser, by whoever chose it, kept in `localStorage` under
+  `agentic-ui.app-registry.app`, when the person may still see it, and else the first listed.
+  "Switch app" in the settings menu offers the others; choosing one reloads the page. A sign-in
+  whose listing opens another app reloads the page once, so that the menu and the labels read at
+  startup are the new app's.
+- **Measured on the local server** (Nuxeo 2025.10.18, 24 November 2026, with the Payers kit 0.3.0
+  and its `<app>`): a user in `claims-adjusters` was listed `payers-claims` with its eight files,
+  each served 200, and the listing again with its ETag was 304; a user in `members` alone, and
+  `Administrator`, were listed no app, and the first got 404 for `payers-claims/home.json`; no
+  credentials and a wrong password were 401 with no `WWW-Authenticate` under `X-No-Basic-Header`;
+  POST was 405. That server ran the registry before its chain ended with `ANONYMOUS_AUTH`, so a
+  request with no credentials there was 401, not `Anonymous`.
+
+**Used by:** `HomeService` (the home and the menu), `QueueService` (a queue), `DocumentLayoutService`
+(a task form), `AppTranslateLoader` (the labels), and the shell's "Switch app".
 
 ---
 

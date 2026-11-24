@@ -191,8 +191,10 @@ to. A server in dev mode could preview the layouts only, by hand (`tools/builder
   What the record page leaves out is in `layout-v2.md`, section 11, and said in the browser's
   console. The ones a scaffold meets:
   - **No card headings.** The generators name each card with a `labelKey`, and a key shows only
-    once the app registry serves the package's labels. For a demo that needs headings today, add
-    a literal `label`, which wins.
+    where a labels file the app reads has a text for it: the preview serves the package's labels,
+    and on a server the app registry does, once the package contributes its app, which the
+    generators do not write yet. For a demo that needs headings today, add a literal `label`,
+    which wins.
   - **`document-link` shows the stored id,** and `image` and `file-list` a file's name, until each
     has its lookup.
   - **A record with a file or a note** (a `File`, a `Note`, or any type given the `file` or `note`

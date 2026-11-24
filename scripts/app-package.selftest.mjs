@@ -145,8 +145,8 @@ function expectRefused(
   }
 }
 
-/** Built, with exit 0, and a checksum file that holds for the zip beside it. */
-function expectBuilt(what, change, args = []) {
+/** Built, with exit 0, and a checksum file that holds for the zip beside it; saying `says`, when given. */
+function expectBuilt(what, change, args = [], says) {
   positive++;
   const { scratch, directory, out } = packageWith(change);
   try {
@@ -154,6 +154,7 @@ function expectBuilt(what, change, args = []) {
     const zip = join(out, ZIP);
     const problems = [];
     if (status !== 0) problems.push(`exit ${status}, not 0`);
+    if (says !== undefined && !output.includes(says)) problems.push(`no "${says}"`);
     if (!existsSync(zip)) problems.push('no zip');
     else {
       const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
@@ -270,6 +271,106 @@ expectRefused(
   2,
   'contributes the Claim/edit layout from agentic-ui-config/layouts/Claim/view.layout.json',
 );
+
+// The app registry serves the app as the component names it, so the component names it once, from
+// the app.json the validator read, with exactly the package's files.
+const APP_ELEMENT = '<app id="payers-claims" src="agentic-ui-config/app.json">';
+const QUEUE_FILE = '<file path="queues/unassigned-claims.json" />';
+expectBuilt(
+  'an app the component does not contribute: built, and told the registry will not serve it',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      APP_ELEMENT,
+      '<app id="payers-claims" src="agentic-ui-config/app.json" enabled="false">',
+    ),
+  [],
+  'note: no component contributes the app, so the app registry will not serve it on a server',
+);
+expectRefused(
+  "an app contributed under an id that is not app.json's",
+  ({ edit }) =>
+    edit(COMPONENT, APP_ELEMENT, '<app id="payers-claim" src="agentic-ui-config/app.json">'),
+  2,
+  `contributes the app "payers-claim", and app.json's id is "payers-claims"`,
+);
+expectRefused(
+  'an app contributed from an app.json the validator did not read',
+  ({ edit }) => edit(COMPONENT, APP_ELEMENT, '<app id="payers-claims" src="other/app.json">'),
+  2,
+  'contributes the app payers-claims from other/app.json',
+);
+expectRefused(
+  'a file of the app the component does not name, which the registry would not serve',
+  ({ edit }) => edit(COMPONENT, QUEUE_FILE, ''),
+  2,
+  'does not name queues/unassigned-claims.json in the app payers-claims',
+);
+expectRefused(
+  'a file the component names and the package does not hold',
+  ({ edit }) =>
+    edit(COMPONENT, QUEUE_FILE, `${QUEUE_FILE}\n      <file path="queues/gone.json" />`),
+  2,
+  'names the file queues/gone.json of the app payers-claims, and bundle/agentic-ui-config/ has no such file',
+);
+expectRefused(
+  'a file the component names at no place the registry serves',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      QUEUE_FILE,
+      `${QUEUE_FILE}\n      <file path="layouts/Claim/view.layout.json" />`,
+    ),
+  2,
+  'names the file "layouts/Claim/view.layout.json" of the app payers-claims, which is not a file the app registry serves',
+);
+expectRefused(
+  'a second app in the same package',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      APP_ELEMENT,
+      `<app id="other" src="agentic-ui-config/app.json" />\n    ${APP_ELEMENT}`,
+    ),
+  2,
+  'contribute 2 apps; a package is one app',
+);
+expectRefused(
+  'an app contributed from a src the server would not read as it is written',
+  ({ edit }) =>
+    edit(COMPONENT, APP_ELEMENT, '<app id="payers-claims" src="./agentic-ui-config/app.json">'),
+  2,
+  'contributes the app payers-claims from ./agentic-ui-config/app.json',
+);
+expectRefused(
+  'an app contributed to a misspelt point, where nothing registers it',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      `point="configuration">\n    ${APP_ELEMENT}`,
+      `point="configurations">\n    ${APP_ELEMENT}`,
+    ),
+  2,
+  `contributes the app payers-claims outside an extension of org.nuxeo.agentic.ui.config's "configuration" point`,
+);
+expectRefused(
+  'an app naming more files than the registry serves',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      QUEUE_FILE,
+      Array.from({ length: 257 }, (_, i) => `<file path="queues/q${i}.json" />`).join('\n      '),
+    ),
+  2,
+  'files of the app payers-claims; the app registry serves at most 256',
+);
+expectBuilt('an app whose files the component names in another order', ({ directory }) => {
+  const path = join(directory, COMPONENT);
+  const text = readFileSync(path, 'utf8');
+  const files = [...text.matchAll(/^ *<file path="[^"]+" \/>\n/gm)].map(([line]) => line);
+  if (files.length < 2) throw new Error('the demo names fewer than two files');
+  writeFileSync(path, text.replace(files.join(''), [...files].reverse().join('')));
+});
 
 // Every layout the package holds is checked, whatever its directory is called.
 expectRefused(
@@ -682,6 +783,28 @@ function firstQueue(directory) {
   return `bundle/agentic-ui-config/queues/${name}`;
 }
 
+/**
+ * The demo's component, changed by `change`: a control that adds or removes a file of the app
+ * definition names it, or stops naming it, in the app's contribution too, as a package would.
+ */
+function contribution(directory, change) {
+  const path = join(directory, 'bundle/OSGI-INF/payers-claims-demo-config.xml');
+  const before = readFileSync(path, 'utf8');
+  const after = change(before);
+  if (after === before)
+    throw new Error("the control's change to the app's contribution does not apply");
+  writeFileSync(path, after);
+}
+
+/** `queues/added-queue.json` named in the app's contribution. */
+const contributeAddedQueue = (directory) =>
+  contribution(directory, (xml) =>
+    xml.replace(
+      '<app id="payers-claims" src="agentic-ui-config/app.json">',
+      (app) => `${app}\n      <file path="queues/added-queue.json" />`,
+    ),
+  );
+
 /** The first schema file of `directory`'s bundle, relative to it: outside the app definition. */
 function firstSchema(directory) {
   const schemas = join(directory, 'bundle/schemas');
@@ -699,6 +822,8 @@ const removeQueue = (directory) => {
   const queue = firstQueue(directory);
   const id = basename(queue, '.json');
   rmSync(join(directory, queue));
+  // And its contribution to the app registry, which step 2 holds to the files the package has.
+  contribution(directory, (xml) => xml.replace(`<file path="queues/${id}.json" />`, ''));
   for (const [file, list] of [
     [HOME, 'cards'],
     [NAVIGATION, 'entries'],
@@ -786,11 +911,16 @@ expectVersion(
   {
     from: '1.0.0',
     to: '1.0.1',
-    after: (directory) =>
+    // Named in both versions' contribution, so that the queue's file is the one change: the
+    // component's own change would need a minor of itself.
+    before: (directory) => contributeAddedQueue(directory),
+    after: (directory) => {
       cpSync(
         join(directory, firstQueue(directory)),
         join(directory, 'bundle/agentic-ui-config/queues/added-queue.json'),
-      ),
+      );
+      contributeAddedQueue(directory);
+    },
   },
   {
     refused:
@@ -876,7 +1006,13 @@ expectVersion(
   {
     from: VERSION,
     to: NEXT_MINOR,
-    after: (directory) => jsonEdit(directory, APP, (app) => (app.id = 'payers-claims-two')),
+    after: (directory) => {
+      jsonEdit(directory, APP, (app) => (app.id = 'payers-claims-two'));
+      // As a package that renames its app contributes it: step 2 holds the two to each other.
+      contribution(directory, (xml) =>
+        xml.replace('<app id="payers-claims" ', '<app id="payers-claims-two" '),
+      );
+    },
   },
   { refused: "app.json's id is payers-claims-two, and was payers-claims. An app keeps its id" },
 );

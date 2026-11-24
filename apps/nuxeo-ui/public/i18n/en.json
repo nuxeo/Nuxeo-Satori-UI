@@ -3230,6 +3230,7 @@
       "help": "Help",
       "state-off": "Off",
       "state-on": "On",
+      "switch-app": "Switch app",
       "themes": "Themes"
     },
     "off": "Off",

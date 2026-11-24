@@ -7,7 +7,10 @@
        "configuration" extension: the server serves a layout only when this component names it,
        and the package pipeline refuses one named from anywhere but its layouts/ file.
 
-       app.json, actions.json, queues/ and labels/ travel in this package, and nothing contributes
-       them yet: the app registry in nuxeo-agentic-core will (docs/business-apps/package-pipeline.md).
+       app.json, actions.json, queues/ and labels/ travel in this package. The app registry in
+       nuxeo-agentic-core serves them, after sign-in, once this component contributes the app as an
+       <app> element naming each file (docs/business-apps/app-definition-v2.md, section 10). This
+       generator does not write that element yet; the package pipeline builds the package without
+       it, and says the registry will not serve the app.
        There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
 </component>

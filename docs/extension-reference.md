@@ -129,6 +129,39 @@ Nothing about configuration changes when a user signs in or out.
 `packaged-default`), the package component behind every fragment, and the server's own
 diagnostics — a replacement it rejected, a contribution it removed.
 
+### Business apps: contributed beside the configuration, served after sign-in
+
+A business app's package contributes its app to the same extension point, with an `<app>` element
+beside its layouts, and the app registry in `nuxeo-agentic-core` serves it at
+`/nuxeo/agentic-ui-apps/` — **after sign-in**, unlike everything above, and only to the groups its
+`app.json` names (built on the decision log's proposed answers to B and E,
+[decisions.md](business-apps/decisions.md)):
+
+```xml
+<extension target="org.nuxeo.agentic.ui.config" point="configuration">
+  <app id="payers-claims" src="agentic-ui-config/app.json">
+    <file path="home.json" />
+    <file path="navigation.json" />
+    <file path="queues/unassigned-claims.json" />
+    <file path="labels/en.json" />
+  </app>
+</extension>
+```
+
+- `id` is `app.json`'s id, which must match; `src` is the app's `app.json` in the bundle, and
+  each `file` a path below the directory that holds it: `home.json`, `navigation.json`,
+  `actions.json`, `queues/<id>.json`, `labels/<lang>.json` or `tasks/<workflow>.<step>.layout.json`.
+- A later `<app>` with the same `id` replaces it whole; `enabled="false"` removes it. A refused
+  `app.json`, one that names another app or no groups, refuses the app and keeps the one it would
+  have replaced; any other file is left out alone. The limits are a fragment's: 1 MiB a file, no
+  repeated key, and 256 files an app.
+- **Seeing an app is not a security control**, as hiding an action is not (above): an app
+  definition holds no record, and Nuxeo's permissions decide what its queues and pages show.
+- The app reads each file from the development server first, as `npm run config:dev` serves it,
+  and from the registry where that is 404, so a file `config:dev` serves still wins. The whole of it, with "Switch
+  app", is in [app-definition-v2.md](business-apps/app-definition-v2.md), section 10, and the
+  endpoint in [api-integrations.md](api-integrations.md), section 36.
+
 #### Displacing one of our packaged defaults
 
 A later fragment on the same key replaces the earlier one, and that is how you override our

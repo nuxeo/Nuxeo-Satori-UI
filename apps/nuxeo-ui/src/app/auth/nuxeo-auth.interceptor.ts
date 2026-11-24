@@ -7,6 +7,7 @@ import {
 import { inject } from '@angular/core';
 import { catchError, tap, throwError } from 'rxjs';
 import { NUXEO_API_ORIGIN, NUXEO_BACKGROUND_REQUEST } from '@nuxeo/satori-platform/nuxeo-client';
+import { APP_REGISTRY_REQUEST } from '@agentic-ui/shared/app-registry';
 
 import { AuthService } from './auth.service';
 import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
@@ -81,6 +82,13 @@ function hasBasicAuthorizationHeader(headers: HttpHeaders): boolean {
  * the notification centre's checks — gets the same credentials and the same 401 handling, but its
  * response does not reset the idle timeout: a check every minute would otherwise keep a session
  * open for as long as the tab stays open, with nobody at it.
+ *
+ * A request marked {@link APP_REGISTRY_REQUEST}, to the app registry, gets the same credentials,
+ * and its 401 does not end the session. The registry adds to what the app shows, it does not say
+ * whether a session is alive, and a server whose REST API lets `Anonymous` in while its registry
+ * does not would otherwise sign every anonymous session out at startup: measured on the local
+ * server, before the registry's chain let `Anonymous` in. The next REST call says it, when the
+ * session has really expired.
  */
 export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -111,7 +119,12 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
       }
     }),
     catchError((err: unknown) => {
-      if (err instanceof HttpErrorResponse && err.status === 401 && auth.isAuthenticated()) {
+      if (
+        err instanceof HttpErrorResponse &&
+        err.status === 401 &&
+        auth.isAuthenticated() &&
+        !req.context.get(APP_REGISTRY_REQUEST)
+      ) {
         sessionTimeout.expireDueToServer();
       }
       return throwError(() => err);

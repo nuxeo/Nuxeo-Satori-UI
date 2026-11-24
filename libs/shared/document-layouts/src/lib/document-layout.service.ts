@@ -1,5 +1,6 @@
 import { HttpBackend, HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import {
   EXTENSION_SLOTS,
@@ -234,6 +235,8 @@ export class DocumentLayoutService {
    */
   private readonly http = new HttpClient(inject(HttpBackend));
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
+  /** Where a task form is read: the development server's address, then the app registry's. */
+  private readonly definitionFiles = inject(APP_DEFINITION_FILES);
   private readonly rules = inject(ExtensionRuleRegistry);
   private readonly slots = inject(ExtensionSlotRegistry);
 
@@ -571,7 +574,8 @@ export class DocumentLayoutService {
 
   /**
    * A step's task form, as the package writes it, with no envelope, as `home.json` is served:
-   * read once per session. Nothing served there, HTTP 404, is no form, and says nothing: most
+   * read once per session, where the development server serves it and otherwise from the app
+   * registry, for the app open (`APP_DEFINITION_FILES`). Nothing served, HTTP 404, is no form, and says nothing: most
    * steps have none. Any other failure, or a file refused, is said in the console, and a failed
    * read is asked again for the next task.
    */
@@ -580,7 +584,7 @@ export class DocumentLayoutService {
     let cached = this.taskFiles.get(key);
     if (!cached) {
       const url = taskFormUrl(this.bootstrapUrl, workflow, step);
-      cached = this.http.get<unknown>(url).pipe(
+      cached = this.definitionFiles.file(`tasks/${workflow}.${step}.layout.json`, url).pipe(
         timeout(LAYOUT_LOAD_TIMEOUT_MS),
         map((content) => {
           const isObject =

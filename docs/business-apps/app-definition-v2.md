@@ -17,9 +17,11 @@ validator in [`libs/shared/app-definition`](../../libs/shared/app-definition/REA
 every file, and every JSON example here is one of its tests: together they are one small package,
 the Payers Claims app, checked as a whole.
 
-Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1.
-The app draws the home (section 10) and the queues (section 4). Nothing reads the other files yet.
-Phase 2 renders the actions and task forms.
+Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1;
+the app registry, which serves an app's files on a server after sign-in, on 24 November 2026
+(section 10). The app draws the home (section 10), the queues (section 4), the menu (section 9),
+the labels (section 7) and the task forms (section 6). Nothing in the app reads `actions.json` or
+module settings yet.
 
 ## The short version
 
@@ -111,14 +113,15 @@ demo/                                starter kits only; not checked
 | `modules`           | No          | The domain modules it turns on ([architecture](architecture.md#6-the-modules), section 6)                                                |
 | `branding`          | No          | `applicationTitle`, `documentTitle`, `logo` and `favicon`, as version 1's bootstrap writes them, and `theme`: one of the server's themes |
 
-- **The platform range.** The shell refuses an app whose range leaves out its own version, and
-  says both. The pipeline checks the range against the version of the server it publishes for.
+- **The platform range.** The shell is to refuse an app whose range leaves out its own version,
+  and say both; it does not yet, since it does not know its version at run time (section 13).
+  The pipeline checks the range against the version of the server it publishes for.
   A range admits what npm's would: `^` and `~` stop short of the next version's prereleases, and
   a prerelease is in a range only when one of its comparators names a prerelease of the same
   version.
-- **Groups.** Decision E settles whether the registry serves an app definition only to its groups,
-  after sign-in. Until then the field is written and checked. Either way it is not a security
-  control: Nuxeo's permissions still decide which records a person reads.
+- **Groups.** The app registry serves an app definition only to its groups, after sign-in
+  (section 10), built against decision E's proposed answer, which is still open. Either way it is
+  not a security control: Nuxeo's permissions still decide which records a person reads.
 - **Modules.** A module the platform does not have is refused: an app that needs it cannot run. No
   domain module exists yet, so this document's examples are checked with one named `cases`
   registered.
@@ -170,16 +173,16 @@ demo/                                starter kits only; not checked
 
 ### Where the app reads it
 
-As the home (section 10): at `agentic-ui-config/queues/<id>.json`, beside the layouts, as the
-package writes it, with no envelope, until the app registry serves the app. Only the development
-server answers there:
+As the home (section 10): at `agentic-ui-config/queues/<id>.json`, beside the layouts, where the
+development server serves it, and otherwise from the app registry, for the app open, at
+`queues/<id>.json` below the app's root:
 
 ```bash
 npm run config:dev -- --queue path/to/queues/unassigned-claims.json
 ```
 
-`--queue` may be given once for each queue. On a server the address is 404, and the queue's page
-says that no queue of that name is configured.
+`--queue` may be given once for each queue. Where neither serves it, the queue's page says that
+no queue of that name is configured.
 
 ### What the app does with it
 
@@ -400,10 +403,9 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   the task's `workflowModelName` and `<step>` its `nodeName`, the step's node id.
 - **What happens when there is none.** Nothing served there (HTTP 404) leaves the task panel's own
   form, and so does a file refused for a structural error.
-- **Only the development server serves it for now.** It does so from
-  `npm run config:dev -- --task <workflow>.<step>=<file>`. The configuration servlet does not, so a
-  production install without dev mode shows the task panel's own form until the app registry
-  serves an app's files (section 13).
+- **Who serves it.** As the home (section 10): the development server, from
+  `npm run config:dev -- --task <workflow>.<step>=<file>`, and otherwise the app registry, for the
+  app open, when its package contributes the file. The configuration servlet does not.
 - **Where the form is drawn.** It is in the task panel, in place of the panel's participants
   fields; the panel keeps its comment and the step's buttons. The component is `lib-task-form` in
   `libs/shared/document-layouts`, registered as `nxs.components.taskForm`, so a customer library
@@ -448,16 +450,19 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **A text** is not empty.
 - **Looking a key up:** in the person's language, in the package first and then in the
   platform's catalogue. A customer's manifest `labels` still win over both.
-- **How the app reads them:** at `labels/<lang>.json`, beside `bootstrap.json`, for the person's
-  language, and for the fallback language through the platform's own fallback, and only in a
-  language the layouts index (`layouts.json`) lists in its `labels`, so that nothing is asked for
-  that is not there. A listed file that cannot be read, a file that is not a version 2 labels
-  file, and a key or a text the validator refuses are each said in the console; the rest still
-  loads.
-- **Where they are served:** nothing on a server serves or lists them yet. The app registry that
-  will waits on decisions B and E, as the home does. Until then,
-  `npm run config:dev -- --labels <lang>=<file>` serves and lists them for the dev server. A card that names
-  its heading by a key with no text still shows its `id`, made readable (layout-v2.md, section 2).
+- **How the app reads them:** for the person's language, and for the fallback language through
+  the platform's own fallback, and only in a language something lists, so that nothing is asked
+  for that is not there. The development server's layouts index (`layouts.json`) lists the
+  languages `npm run config:dev -- --labels <lang>=<file>` serves at `labels/<lang>.json`, beside
+  `bootstrap.json`. The app registry lists the app open's files, `labels/<lang>.json` among them,
+  so on a server the registry's listing takes the place of the index's `labels`. A language both
+  list is read from the development server first, as every file is (section 10). A listed file
+  that cannot be read, a file that is not a version 2 labels file, and a key or a text the
+  validator refuses are each said in the console; the rest still loads.
+- **The labels are read once, at startup.** A person who switches app, or signs in as someone
+  whose app differs, gets a reloaded page, and the new app's labels with it (section 10). A card
+  that names its heading by a key with no text still shows its `id`, made readable (layout-v2.md,
+  section 2).
 
 ## 8. Module settings
 
@@ -519,10 +524,11 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   `parameter` finding.
 - **Hiding an entry is not a security control.** The route still answers, and the page provider
   behind a queue still returns only what the person may read.
-- **Joined to the platform's menu, for now.** The app reads `navigation.json` once, at startup, at
-  `agentic-ui-config/navigation.json` beside the home, served by the development server alone
-  (`npm run config:dev -- --navigation <file>`), and adds its entries to the shell's menu, the
-  `navbar` slot, after the platform's own unless an entry's `order` places it among them:
+- **Joined to the platform's menu, for now.** The app reads `navigation.json` once, at startup, as
+  the home is read (section 10): at `agentic-ui-config/navigation.json` beside the home, where the
+  development server serves it (`npm run config:dev -- --navigation <file>`), and otherwise from
+  the app registry, for the app open. It adds its entries to the shell's menu, the `navbar` slot,
+  after the platform's own unless an entry's `order` places it among them:
   - an entry for a queue opens the queue's page, `/queues/<id>` (section 4), and with no name of its
     own shows the queue's, read from its file, or its id;
   - the entry for `home` opens `/home`;
@@ -625,22 +631,83 @@ A KPI:
 - **A figure is not a security control,** and not an audit either. It counts what the page provider
   returns to the person signed in, and hiding a card hides the figure, not the records.
 
-### Where the app reads it
+### Where the app reads it: the development server, then the app registry
 
-The app registry, which would serve `home.json` with the rest of the app, waits on decisions B
-and E. The existing configuration service cannot serve it in the meantime. `nuxeo-agentic-core`
-answers a fixed set of addresses under `agentic-ui-config/`: `bootstrap.json`, `manifest.json`,
-`layouts.json`, the layout files it lists, and `assets/<name>` for images. Every other address is 404. Its extension point, `org.nuxeo.agentic.ui.config`, takes manifest and bootstrap fragments,
-layouts and image assets, and nothing else: an asset must be an image.
+On a server, the app registry in `nuxeo-agentic-core` serves `home.json` with the rest of the
+app, after sign-in. Under `nx serve`, the development server serves it, from `npm run config:dev`.
+The app reads every file of an app definition the same way, the home, the menu, a queue, a labels
+file and a task form, as the package writes it, with no envelope:
 
-So, until the registry, the app reads the home at `agentic-ui-config/home.json`, beside the
-layouts, as the package writes it, with no envelope. Only the development server answers there:
+1. **Where the development server serves it,** beside the layouts: `agentic-ui-config/home.json`.
 
-```bash
-npm run config:dev -- --home path/to/home.json
-```
+   ```bash
+   npm run config:dev -- --home path/to/home.json
+   ```
 
-On a server the address is 404, and the home page says that no home is configured.
+2. **Where that is 404, from the app registry,** for the app open, when it has the file:
+   `/nuxeo/agentic-ui-apps/apps/<id>/home.json`, read with the person's credentials. On a server
+   the first address is always 404: the configuration servlet answers only `bootstrap.json`,
+   `manifest.json`, `layouts.json`, its layout files and `assets/`, to everyone, before sign-in.
+3. **Where neither serves it,** there is no home, and the home page says that none is configured.
+
+So a file `config:dev` writes wins, even when the server behind the development server has a
+registry, and is read without waiting for the registry. Two things differ from before the
+registry under `nx serve` against a server that has one: what `config:dev` does not serve comes
+from the registry, and a sign-in that opens an app reloads the page once. A registry that does
+not answer, on a server without one or before anyone signs in, is one with no app.
+
+**The app registry.** Built on 24 November 2026 against the decision log's proposed answers to B
+and E, which are still open ([decisions.md](decisions.md), notes):
+
+- **What a package contributes:** its app, to the configuration's extension point,
+  `org.nuxeo.agentic.ui.config`, beside its layouts:
+
+  ```xml
+  <app id="payers-claims" src="agentic-ui-config/app.json">
+    <file path="home.json" />
+    <file path="navigation.json" />
+    <file path="queues/unassigned-claims.json" />
+    <file path="labels/en.json" />
+    <file path="tasks/claimReview.determine.layout.json" />
+    <file path="actions.json" />
+  </app>
+  ```
+
+  `src` is the app's `app.json` in the bundle. Each `file` is a path below the directory that
+  holds it, at one of section 1's places: `home.json`, `navigation.json`, `actions.json`,
+  `queues/<id>.json`, `labels/<lang>.json` and `tasks/<workflow>.<step>.layout.json`. Each file
+  is named, as a layout is, and the pipeline's step 2 holds the list to the package's files
+  ([package-pipeline.md](package-pipeline.md)). A later app with the same id replaces it whole, and
+  `enabled="false"` removes it. Layouts are still contributed as `<layout>`, and served to
+  everyone (section 13).
+
+- **Who sees an app:** `GET /nuxeo/agentic-ui-apps/apps.json` lists the apps whose `app.json`
+  names a group the person is in. Every group Nuxeo counts them in counts, nested and virtual ones
+  included, so `members` is everyone signed in. An administrator sees what their groups give them,
+  like anyone. A request with no credentials is 401, or, on a server that defines an anonymous
+  user, `Anonymous`, who is in no app's group unless an app names one of theirs. Groups only:
+  tenants are phase 9's (decision G).
+- **Seeing an app is not a security control.** The groups decide which apps the shell offers. An
+  app definition holds no record, and Nuxeo's permissions still decide which records its queues,
+  homes and pages show. An app the person may not see is 404, as a file a package does not have
+  is, and the person can still read, through the REST API, every record they have the right to.
+- **What the server refuses,** as the configuration servlet refuses a fragment: a file over 1 MiB,
+  one that does not parse as a JSON object, or one with a repeated key. An `app.json` that cannot
+  be used, that names another app, or that names no groups refuses the app, and an app it would
+  replace stays in force. Any other file is left out on its own. An app names at most 256 files,
+  and its `src` is a relative path in its bundle. What was refused is in the listing's
+  `diagnostics`, in the configuration envelope's form: for those who see the app, those its version in force made, and all of them
+  for an administrator. None reaches the configuration's own responses.
+- **What the shell refuses:** an app whose `app.json` has any finding, as section 12 says. "Switch
+  app" does not list it, and the console says why.
+- **The app open** is the one last chosen in this browser, when the person may still see it, and else the
+  first the registry lists, in the order packages are registered. When they may see more than
+  one, the settings menu offers "Switch app" (the development plan, phase 0's demo, step 3).
+  Choosing one remembers it in the browser and reloads the page with it. A sign-in that changes
+  the app open reloads the page too, once, so that the menu and the labels, read at startup, are
+  the new app's.
+- **The endpoint,** its responses and headers, is in
+  [api-integrations.md](../api-integrations.md).
 
 ### What the app does with it
 
@@ -710,8 +777,8 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 
 ## 13. Not settled here
 
-- **Decision E:** whether the registry serves each app definition only to its groups, after
-  sign-in. `groups` is written and checked now.
+- **Decisions B and E** are open. The app registry is built against their proposed answers, and
+  [decisions.md](decisions.md)'s notes say what changes if either is taken another way.
 - **Decision 3 and the security review of operation buttons**, in phase 2: the allow-list's home,
   format and owner. The file above is the validator's input until then.
 - **Addresses by host name**, for tenants (decision G). `address` is a path only.
@@ -719,12 +786,20 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   start form.
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
-- **Serving the menu, the home and the queues.** The app registry serves them, once decisions B and
-  E are taken. Until then only the development server answers `navigation.json`, `home.json` and
-  `queues/<id>.json` (sections 4, 9 and 10).
-- **Serving task forms.** The app registry is to serve them too. Until then only the development
-  server answers `tasks/<workflow>.<step>.layout.json` (section 6), so a production install
-  without dev mode shows the task panel's own form for every step.
+- **Layouts per app.** The registry serves an app's other files; its layouts are still the
+  configuration servlet's, one per type and mode for the whole server, to everyone. Two apps with
+  a layout for the same type and mode replace each other's.
+- **Actions and module settings in the app.** The registry serves `actions.json`, and nothing in
+  the app reads it yet (phase 2). It does not serve `modules/<module>.json`: no domain module
+  exists yet.
+- **An app's branding and address.** The shell does not yet apply `branding` from the app open's
+  `app.json`, nor open it at its `address`.
+- **The platform range in the shell.** The shell holds each listed `app.json` to the validator
+  without its own platform version, which it does not know at run time; the pipeline holds the
+  range to the server's.
+- **A sign-in that changes the app open reloads the page.** The menu and the labels are read once,
+  at startup, so that is how they become the new app's. A second change for the same person within
+  30 seconds does not reload again.
 - **Replacing the platform's menu.** The app joins its entries to the manifest's `navbar` slot
   (section 9). Whether an app's entries replace the platform's or join them is for the shell that
   switches apps, with the registry.

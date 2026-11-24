@@ -8,7 +8,7 @@
  * browser needs it.
  */
 export { ACTIONS_V2_KEYS, PLACEMENTS, validateActions, type ActionsOptions } from './lib/actions';
-export { APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
+export { APP_ID, APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
 export { MAX_NESTING, type Finding } from './lib/checker';
 export {
   propertiesOf,

@@ -20,10 +20,11 @@ controls (`scripts/app-package.selftest.mjs`) break copies of it.
   time.
 - **The demo script,** phase 1's five steps, as a steps file of the beta harness:
   [`scripts/beta-harness/steps/payers-claims-demo.mjs`](../../../scripts/beta-harness/steps/payers-claims-demo.mjs).
-- **What a production install cannot show yet:** the home, the menu, the queues and the labels
-  wait on the app registry. Installed on a server, the package serves its record pages and model,
-  and nothing serves the rest: only the development server does, through `npm run config:dev`
-  ([below](#what-a-server-shows-and-what-only-the-dev-server-does)).
+- **What a production install shows:** the record pages and the model, to everyone, and the home,
+  the menu, the queues and the labels from the app registry, after sign-in, to the three demo
+  groups `app.json` names. The development server serves the same files through
+  `npm run config:dev`, and a file it serves wins there
+  ([below](#what-a-server-shows-and-what-the-dev-server-does)).
 
 ## What is in it
 
@@ -353,26 +354,31 @@ and, with its test widened on purpose, a claim another session had left on the s
 demo's figures do not count; and, with the seeded statuses it expects changed, the one that proves
 the properties it judges arrived.
 
-## What a server shows, and what only the dev server does
+## What a server shows, and what the dev server does
 
-The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses: the bootstrap,
-the manifest, `layouts.json` and the layouts it lists, and images. The app registry that would
-serve the rest of an app waits on decisions B and E
-([decisions.md](../../../docs/business-apps/decisions.md)). So, installed on a server:
+The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses, to everyone:
+the bootstrap, the manifest, `layouts.json` and the layouts it lists, and images. The app
+registry, beside it, serves the rest of the app after sign-in, to the groups `app.json` names,
+from the `<app>` the kit's component contributes
+([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), section 10). It is
+built on the decision log's proposed answers to B and E, which are open
+([decisions.md](../../../docs/business-apps/decisions.md)). So, installed on a server, with a
+`nuxeo-agentic-core` that has the registry:
 
-| Part                         | Served by the package on a server                   | Under `config:dev`                                                               |
-| ---------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| The model and page providers | Yes                                                 | From the server                                                                  |
-| The five layouts             | Yes                                                 | Yes                                                                              |
-| `home.json`                  | No: `/home` says no home is configured              | Yes                                                                              |
-| `navigation.json`            | No: the platform's menu alone                       | Yes                                                                              |
-| The three queues             | No: `/queues/<id>` says no such queue is configured | Yes                                                                              |
-| `labels/en.json`             | No: a heading named by a key shows its card's `id`  | Yes                                                                              |
-| `actions.json`               | No                                                  | No: nothing serves it yet, so the approve button is left out of the queues' rows |
-| `app.json`                   | No                                                  | No: carried for the registry                                                     |
+| Part                         | Served by the package on a server                  | Under `config:dev`                                        |
+| ---------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
+| The model and page providers | Yes                                                | From the server                                           |
+| The five layouts             | Yes                                                | Yes                                                       |
+| `home.json`                  | From the registry, to the demo groups              | Yes, and it wins over the registry's                      |
+| `navigation.json`            | From the registry, to the demo groups              | Yes, and it wins over the registry's                      |
+| The three queues             | From the registry, to the demo groups              | Yes, and they win over the registry's                     |
+| `labels/en.json`             | From the registry, to the demo groups              | Yes, and it wins over the registry's                      |
+| `actions.json`               | From the registry; nothing in the app reads it yet | No, so the approve button is left out of the queues' rows |
+| `app.json`                   | From the registry: it lists the app                | No                                                        |
 
-**So a production install shows the record pages, and not the home, the menu or the queues.**
-Until the registry, the demo runs on a development server, as it does here.
+**So a production install shows the record pages to everyone, and the home, the menu and the
+queues to the demo groups once they sign in.** A person in none of them, an administrator
+included, is shown no app. The demo itself still runs on a development server, as it does here.
 
 ## Not done yet
 

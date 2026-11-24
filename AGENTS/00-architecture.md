@@ -42,7 +42,9 @@ The business apps work on `integration/enterprise-grade-app` adds three tags to 
 They are the tiers of [docs/business-apps/architecture.md](../docs/business-apps/architecture.md),
 section 4. Four projects carry them so far, all engines: `libs/shared/computations`,
 `libs/shared/document-layouts`, the record page, `libs/shared/home`, the home, and
-`libs/shared/queues`, the queues. The first module arrives in phase 1.
+`libs/shared/queues`, the queues. The first module arrives in phase 1. They read an app's files
+through `APP_DEFINITION_FILES`, from `libs/shared/app-registry`, shared data access rather than an
+engine: the development server's addresses, and the app registry's on a server.
 
 | Tag                | Tier               | Carried by                                               | May depend on                                                             |
 | ------------------ | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------- |

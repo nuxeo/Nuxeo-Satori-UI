@@ -610,9 +610,30 @@ id that is not a UUID.
 
 ---
 
+## AppRegistryService (`libs/shared/app-registry/src/lib/app-registry.service.ts`)
+
+The app registry in `nuxeo-agentic-core`, `/nuxeo/agentic-ui-apps/`: the apps the person signed in
+may see, the one open, and each file of its definition. The app provides it as
+`APP_DEFINITION_FILES`, which the home, the menu, the queues, the labels and the task forms read
+through; that token's default reads the development server's addresses alone.
+
+```typescript
+load(): Promise<void>                      // the listing, once per page, after the configuration
+refresh(): Promise<boolean>                // read again after a sign-in; true when the app open changes
+choose(id: string): void                   // remember it, and reload the page with it
+file(path: string, developmentUrl: string | null): Observable<unknown>
+                                           // the development server's address first, then the
+                                           // registry's where that is 404 and the app has the file
+labelLanguages(): Observable<readonly string[]>
+apps: Signal<readonly RegistryApp[]>; current: Signal<RegistryApp | null>; state: Signal<AppRegistryState>
+```
+
+---
+
 ## QueueService (`libs/shared/queues/src/lib/queue.service.ts`)
 
-Reads an app's `queues/<id>.json` beside the layouts and the home, past the interceptors.
+Reads an app's `queues/<id>.json` through `APP_DEFINITION_FILES`: beside the layouts and the home,
+past the interceptors, where the development server serves it, and otherwise from the app registry.
 
 ```typescript
 load(id: string): Observable<QueueLoad>   // file | none (404, or an id that is not one) | unreadable

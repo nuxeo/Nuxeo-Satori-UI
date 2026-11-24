@@ -23,10 +23,11 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
 
 ## What the page does
 
-- **Reads `agentic-ui-config/queues/<id>.json`,** beside the layouts and the home, past the
-  interceptors. Nothing is served there on a server today, so the page says no queue of that name
-  is configured (app-definition-v2.md, section 4, "Where the app reads it"). An id that is not one
-  of layout version 2's is not asked for.
+- **Reads `queues/<id>.json` through `APP_DEFINITION_FILES`** (`libs/shared/app-registry`): at
+  `agentic-ui-config/queues/<id>.json`, beside the layouts and the home, past the interceptors,
+  where the development server serves it, and otherwise from the app registry, for the app open.
+  Where neither serves it, the page says no queue of that name is configured (app-definition-v2.md,
+  section 4, "Where the app reads it"). An id that is not one of layout version 2's is not asked for.
 - **Checks it** with the validator and what this build registers:
   - a `structure` finding draws no queue, and the console names it;
   - an `unknown` or `parameter` finding leaves out the column, facet, row action or bulk action it
@@ -111,8 +112,6 @@ npx ngc -p libs/shared/queues/tsconfig.lib.json
 - **Following a command after the page goes.** Leaving the page stops following it; it goes on on
   the server, and nothing tells the person how it ended.
 - **The package's own actions**, from `actions.json`: phase 2 runs them, so a queue leaves them out.
-- **Serving the queues on a server.** The app registry serves them, once decisions B and E are
-  taken.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
 - **The facets in the address.** A choice is the page's state: a reload, or going back to the
   queue from a record, starts with none.

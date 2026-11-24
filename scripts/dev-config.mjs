@@ -23,32 +23,34 @@
  *
  * `--home <file>` serves an app's `home.json` at `home.json`, as the package writes it, with no
  * envelope (docs/business-apps/app-definition-v2.md, section 10). The servlet does not answer
- * there: it serves a fixed set of addresses, and the app registry that would serve the home waits
- * on decisions B and E. So this is the only place the home is served for now. Without `--home`,
- * any `home.json` written before is removed, so the app finds no home, as on a server. A later
- * `--home` replaces an earlier one.
+ * there: on a server the app registry, `/nuxeo/agentic-ui-apps/`, serves an app's files after
+ * sign-in. The app reads this address first and the registry's only where this one is 404, so a
+ * file written here wins, even over a registry on the server the development server proxies.
+ * Without `--home`, any `home.json` written before is removed, so the app finds none here, and
+ * reads the registry's, if the app open has one. A later `--home` replaces an earlier one.
  *
  * `--labels <lang>=<file>` serves a package's labels for one language at `labels/<lang>.json`, as
- * the package writes them (app-definition-v2.md, section 7). Like the home, nothing on a server
- * answers there until the app registry. The app reads the file for the person's language, above the
+ * the package writes them (app-definition-v2.md, section 7). Like the home, the servlet does not
+ * answer there, and the registry serves a server's. The app reads the file for the person's language, above the
  * platform's catalogue and below the manifest's `labels`. Without `--labels`, any written before
  * are removed. A later file for the same language replaces an earlier one.
  *
  * `--queue <file>` serves an app's queue at `queues/<id>.json`, the id being the file's name, as
  * the package writes it, with no envelope (app-definition-v2.md, section 4). The servlet does not
- * answer there either, for the same reason as the home. Without `--queue`, no queue is served, and
- * any written before are removed. A later `--queue` for the same id replaces an earlier one.
+ * answer there either, and wins over the registry as the home does. Without `--queue`, no queue is
+ * served here, and any written before are removed. A later `--queue` for the same id replaces an
+ * earlier one.
  *
  * `--navigation <file>` serves an app's menu at `navigation.json`, as `--home` serves its home
  * (app-definition-v2.md, section 9). Without it, any `navigation.json` written before is removed, so
- * the platform's menu shows alone, as on a server. A later `--navigation` replaces an earlier one.
+ * the app reads the registry's, if the app open has one, and else shows the platform's menu alone. A
+ * later `--navigation` replaces an earlier one.
  *
  * `--task <workflow>.<step>=<file>` serves a workflow step's task form at
  * `tasks/<workflow>.<step>.layout.json`, as the package writes it, with no envelope
- * (app-definition-v2.md, section 6). The servlet does not answer there either, for the same
- * reason as the home, so a server without dev mode shows the task panel's own form. Every run
- * writes the tasks it is given and removes any written before; a later `--task` for the same step
- * replaces an earlier one.
+ * (app-definition-v2.md, section 6). The servlet does not answer there either: on a server, the
+ * registry serves the task forms an app's package contributes. Every run writes the tasks it is
+ * given and removes any written before; a later `--task` for the same step replaces an earlier one.
  *
  * Run this once before `nx serve`: a dev server started while `agentic-ui-config/` did not exist
  * serves nothing under it until it is restarted. Once the folder exists, a file written there, or

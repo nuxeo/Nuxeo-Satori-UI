@@ -1,5 +1,6 @@
-import { HttpBackend, HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import { Observable, TimeoutError, catchError, map, of, timeout } from 'rxjs';
 
@@ -29,10 +30,11 @@ export type QueueLoad =
   | { readonly kind: 'file'; readonly content: unknown };
 
 /**
- * `queues/<id>.json`, beside the layouts and the home in the directory the configuration service
- * answers from (app-definition-v2.md, sections 1 and 10): `agentic-ui-config/queues/<id>.json`.
- * The configuration servlet of `nuxeo-agentic-core` does not answer there; only the development
- * server does, from `npm run config:dev -- --queue <file>`.
+ * Where the development server serves `queues/<id>.json`, beside the layouts and the home in the
+ * directory the configuration service answers from (app-definition-v2.md, sections 1 and 10):
+ * `agentic-ui-config/queues/<id>.json`, from `npm run config:dev -- --queue <file>`. The
+ * configuration servlet of `nuxeo-agentic-core` does not answer there; on a server, the app
+ * registry serves the queues of the app open (`APP_DEFINITION_FILES`).
  */
 export function queueFileUrl(bootstrapUrl: string, id: string): string {
   const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
@@ -50,13 +52,14 @@ function describe(error: unknown): string {
 }
 
 /**
- * A queue's file, read as the layouts and the home are, past the interceptors: no `Authorization`
- * header and no reset of the idle timer, though same-origin, so the browser still attaches its
- * cookies. The queue's records are read through `PageProviderService`, as the signed-in person.
+ * A queue's file, read as the home is, through `APP_DEFINITION_FILES`: where the development server
+ * serves it, past the interceptors, and otherwise, where the app provides the registry, from the
+ * app registry, after sign-in. The queue's records are read through `PageProviderService`, as the
+ * signed-in person.
  */
 @Injectable({ providedIn: 'root' })
 export class QueueService {
-  private readonly config = new HttpClient(inject(HttpBackend));
+  private readonly files = inject(APP_DEFINITION_FILES);
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
 
   /**
@@ -65,7 +68,7 @@ export class QueueService {
    */
   load(id: string): Observable<QueueLoad> {
     if (!isQueueId(id)) return of<QueueLoad>({ kind: 'none' });
-    return this.config.get<unknown>(queueFileUrl(this.bootstrapUrl, id)).pipe(
+    return this.files.file(`queues/${id}.json`, queueFileUrl(this.bootstrapUrl, id)).pipe(
       timeout(QUEUE_LOAD_TIMEOUT_MS),
       map((content): QueueLoad => ({ kind: 'file', content })),
       catchError((error: unknown) =>
