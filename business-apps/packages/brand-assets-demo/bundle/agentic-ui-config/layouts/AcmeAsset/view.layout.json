@@ -1,0 +1,52 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "rights-ended",
+      "tone": "negative",
+      "labelKey": "brand.asset.rightsEnded",
+      "visibleWhen": { "type": "app.rules.datePassed", "parameters": [{ "field": "dc:expired" }] }
+    },
+    {
+      "id": "rights-ending",
+      "tone": "warning",
+      "labelKey": "brand.asset.rightsEnding",
+      "visibleWhen": {
+        "type": "app.rules.dateWithin",
+        "parameters": [{ "field": "dc:expired" }, 30]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "asset",
+      "labelKey": "brand.asset.card",
+      "fields": [
+        "dc:title",
+        "acmeasset:product",
+        "acmeasset:colorway",
+        "acmeasset:shot",
+        "acmeasset:campaign",
+        "acmeasset:credit"
+      ]
+    },
+    {
+      "id": "rights",
+      "labelKey": "brand.asset.rights",
+      "fields": [
+        {
+          "field": "dc:expired",
+          "labelKey": "brand.asset.rightsEnd",
+          "widget": "date",
+          "parameters": { "format": "long" }
+        },
+        { "field": "acmeasset:channels", "widget": "chips" },
+        "acmeasset:regions",
+        { "field": "dc:rights", "labelKey": "brand.asset.rightsHolder", "widget": "long-text" }
+      ]
+    },
+    { "id": "history", "labelKey": "brand.asset.history", "span": 2, "timeline": {} }
+  ]
+}
