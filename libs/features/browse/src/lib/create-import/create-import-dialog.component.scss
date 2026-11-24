@@ -471,6 +471,15 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   .location-bar--form {
     margin-bottom: 0;
   }
+
+  // Why Create is disabled, under the Location field: the form's gap already spaces it.
+  .import-location-restricted,
+  .import-no-file-types,
+  .types-error {
+    margin: 0;
+    padding-top: 0;
+    text-align: start;
+  }
 }
 
 .import-detail-fields {

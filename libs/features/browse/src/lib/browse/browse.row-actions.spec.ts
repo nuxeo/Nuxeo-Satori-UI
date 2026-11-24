@@ -4,7 +4,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { EMPTY, of, throwError } from 'rxjs';
+import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
@@ -19,10 +19,12 @@ import {
 import {
   BrowseContextService,
   BrowseService,
+  ContentModelService,
   DirectoryService,
   DocumentDetailService,
   DocumentImportService,
   TagService,
+  type NuxeoContentModel,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
@@ -116,7 +118,15 @@ describe('BrowseComponent — row actions', () => {
     trashDocument: vi.fn(() => of(undefined)),
   };
   const toast = { show: vi.fn(), error: vi.fn() };
-  const importService = { importFiles: vi.fn() };
+  const importService = {
+    importFiles: vi.fn<DocumentImportService['importFiles']>(),
+    importFilesWithProperties: vi.fn<DocumentImportService['importFilesWithProperties']>(),
+  };
+  const contentModel = {
+    getContentModel: vi.fn<ContentModelService['getContentModel']>(() =>
+      of({ doctypes: {}, facets: [], schemas: [] }),
+    ),
+  };
 
   async function settle(): Promise<void> {
     fixture.detectChanges();
@@ -152,6 +162,7 @@ describe('BrowseComponent — row actions', () => {
         },
         { provide: TagService, useValue: { searchTags: () => of([]) } },
         { provide: DocumentImportService, useValue: importService },
+        { provide: ContentModelService, useValue: contentModel },
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         provideSatoriExtensions({ slots: { [EXTENSION_SLOTS.rowActions]: PACKAGED_ROW_ACTIONS } }),
       ],
@@ -328,8 +339,44 @@ describe('BrowseComponent — row actions', () => {
   });
 
   describe('files dropped on the list', () => {
-    const scan = new File(['a'], 'scan.pdf');
-    const memo = new File(['b'], 'memo.pdf');
+    const scan = new File(['a'], 'scan.pdf', { type: 'application/pdf' });
+    const memo = new File(['b'], 'memo.pdf', { type: 'application/pdf' });
+    const photo = new File(['c'], 'photo.jpg', { type: 'image/jpeg' });
+
+    /** The folder on screen, read with its allowed subtypes as `getFolderContext` returns it. */
+    const allowing = (subtypes: string[]): NuxeoDocument => ({
+      ...folder,
+      contextParameters: { ...folder.contextParameters, subtypes },
+    });
+    /** Workspace, Section, Folder and a customer type extending File, as `/config/types` has them. */
+    const MODEL: NuxeoContentModel = {
+      doctypes: {
+        File: { parent: 'Document', schemas: ['common', 'dublincore', 'file', 'files'] },
+        RentalContract: { parent: 'File' },
+        Folder: { parent: 'Document', facets: ['Folderish'], schemas: ['common', 'dublincore'] },
+        Section: {
+          parent: 'Folder',
+          facets: ['Folderish', 'PublishSpace'],
+          schemas: ['file', 'common', 'dublincore'],
+        },
+      },
+      facets: [],
+      schemas: [],
+    };
+    const sentTypes = (): string[] =>
+      (importService.importFilesWithProperties.mock.lastCall?.[1] ?? []).map(
+        (entry) => entry.docType,
+      );
+
+    beforeEach(() => {
+      browse.getFolderContext.mockReturnValue(of(allowing(['File', 'Folder', 'Note', 'Picture'])));
+      contentModel.getContentModel.mockReturnValue(of(MODEL));
+    });
+
+    afterEach(() => {
+      browse.getFolderContext.mockReturnValue(of(folder));
+      contentModel.getContentModel.mockReturnValue(of({ doctypes: {}, facets: [], schemas: [] }));
+    });
 
     it('accepts a drop where the user may create content, named for the folder', () => {
       const list = fixture.nativeElement.querySelector('nxs-document-list');
@@ -337,27 +384,92 @@ describe('BrowseComponent — row actions', () => {
       expect(list).not.toBeNull();
     });
 
-    it('uploads the dropped files into the folder on screen, one queue entry each', () => {
-      importService.importFiles.mockImplementation((_path, _files, options) => {
+    it('uploads the dropped files into the folder on screen, each as a type it allows', () => {
+      importService.importFilesWithProperties.mockImplementation((_path, _entries, options) => {
         options?.onProgress?.({ phase: 'uploading', percent: 75, fileIndex: 1, fileCount: 2 });
         return of([doc({ uid: 'd1' }), doc({ uid: 'd2' })]);
       });
       browse.getBrowseFolderContents.mockClear();
 
-      component.uploadDropped([scan, memo]);
+      component.uploadDropped([scan, photo]);
 
-      expect(importService.importFiles).toHaveBeenCalledWith(
+      expect(browse.getFolderContext).toHaveBeenLastCalledWith('/default-domain/workspaces/ws-1');
+      expect(importService.importFilesWithProperties).toHaveBeenCalledWith(
         '/default-domain/workspaces/ws-1',
-        [scan, memo],
+        [
+          { file: scan, docType: 'File', properties: { 'dc:title': 'scan' } },
+          { file: photo, docType: 'Picture', properties: { 'dc:title': 'photo' } },
+        ],
         expect.objectContaining({ onProgress: expect.any(Function) }),
       );
+      // `importFiles` sends File whatever the folder allows.
+      expect(importService.importFiles).not.toHaveBeenCalled();
       expect(component.droppedUploads.items().map((item) => item.state)).toEqual(['done', 'done']);
       expect(toast.show).toHaveBeenCalledWith('Created 2 files.');
       expect(browse.getBrowseFolderContents).toHaveBeenCalled();
     });
 
-    it('says a refused upload is refused, and retries only what was not created', () => {
-      importService.importFiles.mockImplementationOnce((_path, _files, options) => {
+    it('uploads each file as the File subtype a folder allows, where it allows no File', () => {
+      browse.getFolderContext.mockReturnValue(of(allowing(['RentalContract', 'Folder'])));
+      importService.importFilesWithProperties.mockReturnValue(of([doc({ uid: 'd1' })]));
+
+      component.uploadDropped([scan, photo]);
+
+      expect(sentTypes()).toEqual(['RentalContract', 'RentalContract']);
+    });
+
+    it('refuses a drop on a Section, saying why, and queues nothing', () => {
+      browse.getFolderContext.mockReturnValue(of(allowing(['Section'])));
+
+      component.uploadDropped([scan, memo]);
+
+      expect(importService.importFilesWithProperties).not.toHaveBeenCalled();
+      expect(importService.importFiles).not.toHaveBeenCalled();
+      expect(component.droppedUploads.items()).toEqual([]);
+      expect(toast.error).toHaveBeenCalledWith(
+        'Files cannot be uploaded to Workspace, because it allows no document type that holds a file.',
+      );
+
+      // The retry has nothing to send either.
+      component.runDroppedUploads();
+      expect(importService.importFilesWithProperties).not.toHaveBeenCalled();
+    });
+
+    it('says the types could not be read, not that the folder takes no file, when the content model is refused', () => {
+      browse.getFolderContext.mockReturnValue(of(allowing(['RentalContract', 'Folder'])));
+      contentModel.getContentModel.mockReturnValue(throwError(() => new Error('500')));
+
+      component.uploadDropped([scan]);
+
+      expect(importService.importFilesWithProperties).not.toHaveBeenCalled();
+      expect(component.droppedUploads.items()).toEqual([]);
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining('Could not load the document types'),
+      );
+    });
+
+    it('still uploads a stock type the folder allows when the content model is refused', () => {
+      contentModel.getContentModel.mockReturnValue(throwError(() => new Error('500')));
+      importService.importFilesWithProperties.mockReturnValue(of([doc({ uid: 'd1' })]));
+
+      component.uploadDropped([scan]);
+
+      expect(sentTypes()).toEqual(['File']);
+    });
+
+    it("uploads nothing when the folder's types cannot be read, and says so", () => {
+      browse.getFolderContext.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      component.uploadDropped([scan]);
+
+      expect(importService.importFilesWithProperties).not.toHaveBeenCalled();
+      expect(component.droppedUploads.items()).toEqual([]);
+      expect(toast.error).toHaveBeenCalledWith('You do not have permission to perform this action');
+    });
+
+    it('says a refused upload is refused, and retries only what was not created, as the same type', () => {
+      browse.getFolderContext.mockReturnValue(of(allowing(['RentalContract', 'Folder'])));
+      importService.importFilesWithProperties.mockImplementationOnce((_path, _entries, options) => {
         options?.onProgress?.({ phase: 'creating', percent: 50, fileIndex: 0, fileCount: 2 });
         options?.onProgress?.({ phase: 'uploading', percent: 60, fileIndex: 1, fileCount: 2 });
         return throwError(() => ({ status: 403 }));
@@ -369,23 +481,47 @@ describe('BrowseComponent — row actions', () => {
         'failed',
       ]);
 
-      importService.importFiles.mockReturnValueOnce(of([doc({ uid: 'd2' })]));
+      importService.importFilesWithProperties.mockReturnValueOnce(of([doc({ uid: 'd2' })]));
       component.runDroppedUploads();
-      expect(importService.importFiles).toHaveBeenLastCalledWith(
+      expect(importService.importFilesWithProperties).toHaveBeenLastCalledWith(
         '/default-domain/workspaces/ws-1',
-        [memo],
+        [{ file: memo, docType: 'RentalContract', properties: { 'dc:title': 'memo' } }],
         expect.anything(),
       );
     });
 
     it('turns away a second drop while the first still uploads', () => {
-      importService.importFiles.mockReturnValue(EMPTY);
+      importService.importFilesWithProperties.mockReturnValue(EMPTY);
       component.uploadDropped([scan]);
       component.uploadDropped([memo]);
-      expect(importService.importFiles).toHaveBeenCalledTimes(1);
+      expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(1);
       expect(toast.show).toHaveBeenCalledWith(
         'Wait for the files being uploaded to finish before dropping more.',
       );
+    });
+
+    it("turns away a second drop while the first's folder types are read", () => {
+      const context = new Subject<NuxeoDocument>();
+      browse.getFolderContext.mockReturnValue(context.asObservable());
+      importService.importFilesWithProperties.mockReturnValue(of([doc({ uid: 'd1' })]));
+
+      component.uploadDropped([scan]);
+      component.uploadDropped([memo]);
+      expect(toast.show).toHaveBeenCalledWith(
+        'Wait for the files being uploaded to finish before dropping more.',
+      );
+
+      context.next(allowing(['File']));
+      context.complete();
+      expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(1);
+      expect(importService.importFilesWithProperties.mock.lastCall?.[1].map((e) => e.file)).toEqual(
+        [scan],
+      );
+
+      // Done reading, so the next drop goes ahead.
+      browse.getFolderContext.mockReturnValue(of(allowing(['File'])));
+      component.uploadDropped([memo]);
+      expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(2);
     });
 
     it('uploads nothing where the user may not create content', () => {
@@ -394,6 +530,7 @@ describe('BrowseComponent — row actions', () => {
         contextParameters: { permissions: ['Read'] },
       } as NuxeoDocument);
       component.uploadDropped([scan]);
+      expect(importService.importFilesWithProperties).not.toHaveBeenCalled();
       expect(importService.importFiles).not.toHaveBeenCalled();
     });
   });
