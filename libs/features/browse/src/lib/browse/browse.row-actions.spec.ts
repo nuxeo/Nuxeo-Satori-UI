@@ -598,6 +598,24 @@ describe('BrowseComponent — row actions', () => {
         );
       });
 
+      it('tells apart two folders whose names differ only in case', () => {
+        failInFirstFolder();
+        const sibling = {
+          ...folder,
+          uid: 'ws-1-upper',
+          title: 'WS-1',
+          path: '/default-domain/workspaces/WS-1',
+        } as NuxeoDocument;
+        component.currentDoc.set(sibling);
+
+        component.uploadDropped([report]);
+
+        expect(toast.show).toHaveBeenCalledWith(
+          'Retry or remove the files that could not be uploaded before dropping files on another folder.',
+        );
+        expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(1);
+      });
+
       it('takes a drop on another folder once the pending file is removed', () => {
         failInFirstFolder();
         component.droppedUploads.remove(component.droppedUploads.items()[0].id);

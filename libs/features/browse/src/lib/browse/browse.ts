@@ -103,6 +103,7 @@ import {
   parseBrowseNuxeoPathFromRouterUrl,
   isBrowseRouterUrl,
   nuxeoPathsEqualFlexible,
+  normalizeNuxeoPath,
   DocumentDetailService,
   DirectoryService,
   DocumentImportService,
@@ -1423,12 +1424,14 @@ export class BrowseComponent {
     // are retried into that drop's folder, as its types. A run sends every pending file to one
     // folder, so a drop on another would carry them there and re-type them for it. It waits until
     // they are retried or removed. A drop on the same folder takes them along, as it always has.
-    // Only one drop is read at a time, so this cannot change while the types are read.
+    // Only one drop is read at a time, so this cannot change while the types are read. Both paths
+    // are the server's own, so they are compared exactly: Nuxeo names are case-sensitive, and the
+    // flexible match would take `Reports` and `reports`, or `a b` and `a-b`, for one folder.
     const earlierPath = this.droppedUploadPath;
     if (
       earlierPath &&
       this.droppedUploads.pending().length > 0 &&
-      !nuxeoPathsEqualFlexible(earlierPath, path)
+      normalizeNuxeoPath(earlierPath) !== normalizeNuxeoPath(path)
     ) {
       this.toast.show(this.translate.instant('browse.message.drop-pending-elsewhere'));
       return;
