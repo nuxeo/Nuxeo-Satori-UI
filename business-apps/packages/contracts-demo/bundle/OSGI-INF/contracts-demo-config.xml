@@ -3,10 +3,12 @@
   <!-- Registers after Satori's defaults, so what it contributes applies on top of them. -->
   <require>org.nuxeo.agentic.ui.config.defaults</require>
 
-  <!-- The app-layout generator added the view layout here, inside an org.nuxeo.agentic.ui.config
-       "configuration" extension: the server serves a layout only when this component names it,
-       and the package pipeline refuses one named from anywhere but its layouts/ file. The edit
-       layout, which carries the field rule, was added by hand: no generator writes an edit mode.
+  <!-- The app-layout and app-form generators add each layout here, inside an
+       org.nuxeo.agentic.ui.config "configuration" extension: the server serves a layout only when
+       this component names it, and the package pipeline refuses one named from anywhere but its
+       layouts/ file, and a layouts/ file this component does not name. The view layout was added
+       by app-layout; the edit layout, which carries the field rule, by hand, before app-form
+       could write an edit mode.
        There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
 
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
@@ -20,8 +22,9 @@
   <!-- The app itself, for the app registry in nuxeo-agentic-core, which serves it after sign-in to
        the groups its app.json names (docs/business-apps/app-definition-v2.md, section 10). Every file
        of the app definition the registry serves is named, at its place below the directory that
-       holds app.json; the pipeline holds this list to the files the package has. Written by hand:
-       the app-package generator does not write this element yet. -->
+       holds app.json; the pipeline holds this list to the files the package has. Written by hand,
+       before the generators wrote it: the app-registry generator keeps it in step now, and the
+       generators that add a file do; run app-registry again after writing a file by hand. -->
   <extension target="org.nuxeo.agentic.ui.config" point="configuration">
     <app id="contracts" src="agentic-ui-config/app.json">
       <file path="home.json" />
