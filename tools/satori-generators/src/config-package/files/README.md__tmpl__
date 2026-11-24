@@ -32,6 +32,12 @@ Run it in this directory. `build.mjs` needs only Node 20 — nothing to install,
 so the package can live in your own repository. In an Nx workspace, `npx nx build <%= name %>` runs
 the same script and writes the zip to `dist/<%= projectRoot %>/` at the workspace root instead.
 
+One limit of the build rather than of the server: a body nested close to the 1000 levels the server
+allows can use up the stack of the Node running the build, which on Windows with Node 20 happens
+from about 993. The build refuses it naming the file and the depth, and says that the depth itself
+was fine — it does not write a package. Node 22 and newer reach 1000 on every platform we test, so
+that is the fix if you ever see it; nothing nested less than about 900 deep is affected anywhere.
+
 `build.mjs` refuses — with the file and the reason — what the server would
 leave out: a fragment or layout body, in a file or inline, that does not parse, is not an object,
 repeats a key, or exceeds 1 MiB; an asset over 2 MiB or not named as a plain image file; an entry
@@ -39,6 +45,26 @@ whose name or layer the server rejects, or that has no body. It also refuses XML
 well-formed UTF-8, a `src` or `Nuxeo-Component` that names no packaged file, a symbolic link in `bundle/`
 or `package/`, a package name or version that is not a plain file name, and a component that does
 not `<require>` Satori's defaults.
+
+List every component in the one `Nuxeo-Component` header, spelt that way, above any blank line. The
+server reads the name in any letter case, loads only the last of a repeated header, and looks only
+above the manifest's first blank line, so `build.mjs` refuses a manifest with a second one there,
+another spelling, or none there at all, rather than check components the server would not load.
+
+Keep every line of the manifest a header — a name of 1 to 70 letters, digits, `-` and `_`, then
+`: ` and the value — or a continuation of the one above it, which starts with a space. The server
+reads the manifest with Java's `java.util.jar.Manifest`, which refuses the whole file at any other
+line and takes a blank line as the end of a section, so it expects `Name: ` after a blank line.
+`build.mjs` refuses a manifest Java would refuse, quoting the line, because the server would read
+none of its headers.
+
+The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
+wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
+Asset size limits apply to both source and packaged bytes, including manifest normalization.
+A `<require>` must be a direct child of `<component>`; inline `<json>` must be a direct child
+of its `<fragment>` or `<layout>` under `<component>/<extension>`. Nested live configuration
+elements are refused. Examples in component or extension-point `<documentation>` are ignored
+when checking contributions.
 
 **Raise the version for every change you install.** Nuxeo installs a higher version as an upgrade;
 the same version is the package it already has.

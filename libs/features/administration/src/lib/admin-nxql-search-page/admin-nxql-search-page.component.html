@@ -9,18 +9,14 @@
     class="nxql-panel"
     [attr.aria-label]="'admin.admin-nxql-search-page.nxql-query' | translate"
   >
-    <mat-accordion class="nxql-filters" displayMode="flat">
-      <mat-expansion-panel>
-        <mat-expansion-panel-header>
-          <mat-panel-title>{{
-            'admin.admin-nxql-search-page.filters' | translate
-          }}</mat-panel-title>
-        </mat-expansion-panel-header>
+    <sat-accordion class="nxql-filters">
+      <sat-accordion-item>
+        <span satAccordionItemTitle>{{ 'admin.admin-nxql-search-page.filters' | translate }}</span>
         <p class="muted">
           {{ 'admin.admin-nxql-search-page.additional-filter-ui-can-be-wired' | translate }}
         </p>
-      </mat-expansion-panel>
-    </mat-accordion>
+      </sat-accordion-item>
+    </sat-accordion>
 
     @if (featureFlags.aiEnabled()) {
       <div class="ai-generate-row">

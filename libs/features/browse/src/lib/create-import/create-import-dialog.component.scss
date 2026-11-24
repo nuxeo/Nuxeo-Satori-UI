@@ -291,6 +291,12 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   .import-error--staged {
     margin: -8px 24px 16px;
   }
+
+  // Why Create is disabled, above the dropzone: the panel already pads its top.
+  .import-no-file-types,
+  .types-error {
+    margin: 0 24px 16px;
+  }
 }
 
 /* ─── Import dropzone ─── */
@@ -464,6 +470,15 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 
   .location-bar--form {
     margin-bottom: 0;
+  }
+
+  // Why Create is disabled, under the Location field: the form's gap already spaces it.
+  .import-location-restricted,
+  .import-no-file-types,
+  .types-error {
+    margin: 0;
+    padding-top: 0;
+    text-align: start;
   }
 }
 

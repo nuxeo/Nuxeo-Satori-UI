@@ -176,3 +176,9 @@ scripts/Untitled*
 # (scripts/beta-harness/sanitizer-selftest-state.mjs) leaves one of these beside a tracked file.
 # The rename normally consumes it, so one on disk means a run died mid-replacement (NXSAT-751).
 *.selftest-tmp
+
+# The business-apps prototype's built page. It inlines Satori's compiled theme and icons, so it is
+# built by storybook-pages.yml, which holds the Satori token, and published there; committing it
+# would put Satori output in this public repository. Build it locally with
+# `node docs/prototype/business-apps/src/build.cjs`.
+/docs/prototype/business-apps/index.html

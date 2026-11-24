@@ -10,7 +10,6 @@ audience: product
 # Product Overview
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > The rest of the page as of 2026-08-24 · `77265f9`.
 > Grounded in the repository and in
 > [RFC: Nuxeo Satori Beta](https://hyland.atlassian.net/wiki/spaces/~71202090f2a61ef96d4f57a5104efe296c1f5b/pages/4256993484)
@@ -32,7 +31,7 @@ Enterprise Nuxeo customers have no modern, first-party way to build a custom, on
 content UI. They either fight the ageing Polymer stack of the existing Nuxeo Web UI, which
 the RFC calls "a customisation dead end", or go fully headless and rebuild everything from
 scratch. Satori is a deep core ECM slice — browse, folder tree, search, document detail,
-metadata, permissions, versions, upload and CRUD — built on real `adf-hx` components and
+metadata, permissions, versions, upload and CRUD — built on `nxs-` Satori components and
 delivered as a Nuxeo marketplace package. Its distinguishing feature is not the screens: it
 is a **four-layer customisation contract** in which the first two layers need no code and no
 rebuild, the third is the customer's own npm library against our published API, and the
@@ -40,15 +39,15 @@ fourth ships AI generators and guardrails so that writing the third is cheap.
 
 ## Executive summary
 
-|                     |                                                                                                                                                                                                   |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **What it is**      | A customer-brandable, extensible Angular content UI for Nuxeo, shipped as a marketplace package                                                                                                   |
-| **Who it is for**   | Enterprise Nuxeo customers needing a custom content UI; Nuxeo Professional Services; partners                                                                                                     |
-| **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                     |
-| **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                      |
-| **Maturity**        | Phases 0–5 complete with evidence; Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
-| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
-| **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                            |
+|                     |                                                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What it is**      | A customer-brandable, extensible Angular content UI for Nuxeo, shipped as a marketplace package                                                                                                                                                                                      |
+| **Who it is for**   | Enterprise Nuxeo customers needing a custom content UI; Nuxeo Professional Services; partners                                                                                                                                                                                        |
+| **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                                                                                                        |
+| **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                                                                                                         |
+| **Maturity**        | Phases 0, 4 and 5 complete with evidence, 4 with deviations; 1 and 2 back in progress since 2026-11-02; 3 superseded. Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
+| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                                                                                                       |
+| **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                                                                                                               |
 
 ---
 
@@ -132,7 +131,7 @@ the API-surface gate and the upgrade rehearsal exist.**
 | A deep ECM slice works against real Nuxeo                                           | 9 feature libraries, ~53.6k lines; 12 E2E specs on browse, search, document detail and auth                                                                                                                |
 | Configuration alone changes the app, with no rebuild of the application             | `phase-1-config` evidence, 39 checks: a swapped configuration response changes the app while the bundle stays byte-identical. Installing it as a package: NXSAT-312 rehearsal (`docs/demo-deck-claims.md`) |
 | A manifest edit changes the addressable surface, with no rebuild of the application | `phase-2-registry` evidence, 46 checks, by the same swapped-response method                                                                                                                                |
-| Real adf-hx components render against Nuxeo                                         | `phase-3-adf-hx` evidence, 55 checks; 12 API ports bound                                                                                                                                                   |
+| Nuxeo-owned `nxs-` components render against Nuxeo                                  | Phase 3 browse-page capture, 29 checks. The earlier 55-check adoption capture is superseded                                                                                                                |
 | The platform is an installable, publishable package                                 | `phase-4-platform`, 25 checks; `npm publish --dry-run` passes                                                                                                                                              |
 | Generators produce **live** registrations                                           | `phase-5-harness`, 27 checks                                                                                                                                                                               |
 | A Layer 0/1/2 customisation **survives an upgrade**                                 | `npm run beta:upgrade`, 8 assertions                                                                                                                                                                       |
@@ -140,17 +139,17 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 ### Not demonstrated
 
-| Gap                                    | Status                                                                                                     |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **A real customer has used it**        | Zero. No customer has installed, configured or extended it                                                 |
-| **The Layers 0/1 coverage assumption** | RFC and plan both flag it as needing validation against real customer requests. **Not verified**           |
-| **Published to a registry**            | `private: true`. Scope decided (`@nuxeo/satori-platform` on Nuxeo Nexus); publishing deliberately deferred |
-| **WCAG 2.1 AA**                        | **Met** on 15 scanned cases (2026-08-24). Not covered: dialogs, upload, dark mode, pre-auth login          |
-| **Coverage bar (>90%)**                | 10 of 11 in-scope projects meet it as of 2026-09-22; `shared-ai-client` short at 15.98% (was "3 of 15")    |
-| **4 of 8 extension slots**             | Reserved — `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing                                  |
-| **`selection` rule context**           | Still empty, so `canWriteSelection` / `canRemoveSelection` answer `false`                                  |
-| **SAST**                               | None. SCA is `npm audit` only                                                                              |
-| **Production observability**           | None wired in                                                                                              |
+| Gap                                    | Status                                                                                                                                                                                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A real customer has used it**        | Zero. No customer has installed, configured or extended it                                                                                                                                                                                          |
+| **The Layers 0/1 coverage assumption** | RFC and plan both flag it as needing validation against real customer requests. **Not verified**                                                                                                                                                    |
+| **Published to a registry**            | `private: true`. Scope decided (`@nuxeo/satori-platform` on Nuxeo Nexus); publishing deliberately deferred                                                                                                                                          |
+| **WCAG 2.1 AA**                        | **Not met** as of 2026-11-23. The one 2.5.3 defect that day's capture found on every screen was fixed the same day, and the re-run passes every axe check. Met on 15 cases on 2026-08-24. Never covered: dialogs, upload, dark mode, pre-auth login |
+| **Coverage bar (>90%)**                | 10 of 11 in-scope projects meet it as of 2026-09-22; `shared-ai-client` short at 15.98% (was "3 of 15")                                                                                                                                             |
+| **4 of 8 extension slots**             | Reserved — `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing                                                                                                                                                                           |
+| **`selection` rule context**           | Still empty, so `canWriteSelection` / `canRemoveSelection` answer `false`                                                                                                                                                                           |
+| **SAST**                               | None. SCA is `npm audit` only                                                                                                                                                                                                                       |
+| **Production observability**           | None wired in                                                                                                                                                                                                                                       |
 
 ---
 
@@ -169,8 +168,8 @@ the API-surface gate and the upgrade rehearsal exist.**
    survives.
 4. **The AI harness ships to the customer.** Generators and a runnable guardrail are inside
    the package, so a customer's own agent can produce and verify conforming extensions.
-5. **Built on real `adf-hx`**, so component-level investment is shared with Alfresco rather
-   than duplicated.
+5. **Built on `nxs-` components** owned in one library, so UI building blocks are restyled,
+   tested and versioned in one place.
 
 ---
 
@@ -178,10 +177,10 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 Worth knowing if you are reading the RFC alongside the code.
 
-| RFC planned                                                                                                                   | What shipped                                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo/satori-platform`, with 4 secondary entry points. Simpler to version and to support; the bridge was deliberately never published, keeping adf-hx types out of the public API, and was removed on 2026-10-14 (NXSAT-635) |
-| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                                                                |
+| RFC planned                                                                                                     | What shipped                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2)     | **One** package, `@nuxeo/satori-platform`, with 4 secondary entry points. Simpler to version and to support      |
+| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1) | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions` |
 
 Neither is a defect — both are simplifications — but the RFC has not been revised, so the
 two documents disagree. Flagged in

@@ -882,7 +882,11 @@ describe('NxsTrashListComponent', () => {
       expect(click).toHaveBeenCalledTimes(1);
       expect(revoke).toHaveBeenCalledWith('blob:trash');
       const text = await blobs[0].text();
-      expect(text.split('\n')).toEqual([
+      // The file starts with the UTF-8 byte order mark, which `Blob.text()` drops.
+      expect([...new Uint8Array(await blobs[0].arrayBuffer()).slice(0, 3)]).toEqual([
+        0xef, 0xbb, 0xbf,
+      ]);
+      expect(text.split('\r\n')).toEqual([
         '"Title","Type","Modified","Last contributor"',
         '"Say ""hi""","Note","2026-11-01T10:00:00.000Z","jdoe"',
       ]);

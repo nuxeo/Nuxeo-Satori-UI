@@ -137,7 +137,25 @@ would install and then silently ignore.** It names the file and the reason. It c
 does not parse, is not an object, repeats a key or nests too deeply; a fragment over 1 MiB or an
 asset over 2 MiB; a fragment name, layer, layout type or mode the server would reject; a `src` that
 names no packaged file; XML that is not well-formed; a symbolic link, which would package bytes you
-did not review; and a component missing the `<require>` that orders your fragments after ours.
+did not review; a component missing the `<require>` that orders your fragments after ours; and a
+manifest whose `Nuxeo-Component` the server would read differently. The server reads that header
+only above the manifest's first blank line, in any letter case, keeping the last, so the build
+refuses a second one there, another spelling of it, or components named only below that line. A
+`Nuxeo-Component` in a later `Name:` section belongs to that entry; the server ignores it, and so
+does the build. It also refuses a manifest the server cannot read at all, which leaves the bundle
+no headers. The server reads it with Java's `java.util.jar.Manifest`, which takes every line as a
+header — a name of 1 to 70 letters, digits, `-` and `_`, then `: ` and the value — or as a
+continuation of one, which starts with a space, and takes a blank line as the end of a section, so
+whatever follows a blank line must begin a new section with `Name: `. A blank line among the
+headers is the usual way to break that.
+
+The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
+wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
+Asset size limits apply to both source and packaged bytes, including manifest normalization.
+A `<require>` must be a direct child of `<component>`; inline `<json>` must be a direct child
+of its `<fragment>` or `<layout>` under `<component>/<extension>`. Nested live configuration
+elements are refused. Examples in component or extension-point `<documentation>` are ignored
+when checking contributions.
 
 ## 5. Install it on the server
 
@@ -185,9 +203,9 @@ decision is in
 
 ## Read next
 
-| To…                                                | Read                                                                                              |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Know every name a fragment can address             | [Extension reference](docs/extension-reference.md)                                                |
-| Understand the product and what it does not do yet | [The short version](documentation/20-product/00-the-short-version.md)                             |
-| See a finished example                             | [`config-packages/presales-demo`](config-packages/presales-demo)                                  |
-| Troubleshoot an install                            | [Deployment & troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md) |
+| To…                                                | Read                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Know every name a fragment can address             | [Extension reference](docs/extension-reference.md)                                                                             |
+| Understand the product and what it does not do yet | [The short version](documentation/20-product/00-the-short-version.md)                                                          |
+| See a finished example                             | [`presales-demo` in Nuxeo-Satori-Config](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo) |
+| Troubleshoot an install                            | [Deployment & troubleshooting](documentation/30-engineering/13-deployment-and-troubleshooting.md)                              |

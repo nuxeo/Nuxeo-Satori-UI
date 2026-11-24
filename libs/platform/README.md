@@ -136,7 +136,7 @@ Automated: `npm run beta:gate` includes it after `build`.
 ## Packaging decision
 
 **One versioned package** with sub-entry points, not four independent packages. The
-distribution model in [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md) promises
+distribution model in [`docs/beta-plan.md`](../../docs/beta-plan.md) promises
 "an npm version bump for the platform" — singular. Four packages make that four bumps and
 a cross-compatibility matrix.
 

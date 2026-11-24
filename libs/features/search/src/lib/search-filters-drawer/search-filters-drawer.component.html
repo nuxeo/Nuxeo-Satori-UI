@@ -6,6 +6,7 @@
     [pageProvider]="pageProvider"
     [refresh]="savedSearchesVersion()"
     (selectedChange)="onSavedSearchChosen($event)"
+    (cleared)="onSavedSearchCleared()"
   />
   <button
     mat-icon-button

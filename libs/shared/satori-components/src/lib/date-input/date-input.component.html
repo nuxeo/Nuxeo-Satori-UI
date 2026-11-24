@@ -14,7 +14,22 @@
     (dateInput)="changed($event)"
     (blur)="blurred()"
   />
-  <mat-datepicker-toggle matIconSuffix [for]="picker" />
+  <!-- One suffix holding both buttons, so a narrow field keeps them in a row instead of wrapping
+       the calendar button under the clear button. -->
+  <span matIconSuffix class="nxs-date-input__actions">
+    @if (hasText() && !isDisabled()) {
+      <button
+        mat-icon-button
+        type="button"
+        class="nxs-picker__clear"
+        [attr.aria-label]="'satori-components.pickers.clear' | translate"
+        (click)="clear()"
+      >
+        <mat-icon aria-hidden="true" svgIcon="x_large" />
+      </button>
+    }
+    <mat-datepicker-toggle [for]="picker" />
+  </span>
   <mat-datepicker #picker />
   <!-- One flat chain, each branch a lone mat-error: a branch whose root is another block is not
        projected into the error slot, so it would show in the field and describe nothing. -->

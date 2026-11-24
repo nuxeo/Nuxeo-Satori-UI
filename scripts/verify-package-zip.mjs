@@ -14,7 +14,9 @@
  * installer looks for them, that the package name and version the zip is named after are the ones
  * `package.xml` declares, that every path `install.xml` copies exists in the zip and that one of
  * them deploys the bundle into `${env.bundles}`, and that the bundle is a readable jar whose
- * `Nuxeo-Component`, `<require>` and contribution `src` targets resolve to entries in it.
+ * manifest Java's `java.util.jar.Manifest` reads whole, which names its components in a single
+ * header spelt `Nuxeo-Component` in its main section, and whose `Nuxeo-Component`, `<require>`
+ * and contribution `src` targets resolve to entries in it.
  *
  * **Where it stops, on purpose.** It does not check that a contribution with no `src` carries a
  * body: reading inline `<json>` means parsing element content, which `build.mjs` already does
@@ -144,6 +146,48 @@ function withoutCommentsOrInstructions(xml) {
 const withoutCdata = (xml) =>
   xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
 
+/**
+ * Component and extension-point documentation may contain real XML examples. Nuxeo does not
+ * register those examples, so match the builder's supported documentation masking before
+ * extracting requirements, counting contributions or resolving src paths. Keep offsets and line
+ * breaks unchanged. Documentation inside an actual descriptor is not a supported path.
+ */
+function withoutDocumentation(xml) {
+  const parents = [];
+  let start;
+  let depth;
+  let at = 0;
+  let out = '';
+  for (const match of withoutCdata(xml).matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    const [tag, close, name, tail] = match;
+    const empty = tail.trimEnd().endsWith('/');
+    if (
+      !close &&
+      name === 'documentation' &&
+      start === undefined &&
+      parents[0] === 'component' &&
+      (parents.length === 1 || (parents.length === 2 && parents[1] === 'extension-point'))
+    ) {
+      start = match.index;
+      depth = parents.length;
+    }
+    if (
+      start !== undefined &&
+      ((close && parents.length === depth + 1) || (empty && match.index === start))
+    ) {
+      const end = match.index + tag.length;
+      out += xml.slice(at, start) + xml.slice(start, end).replace(/[^\n]/g, ' ');
+      at = end;
+      start = undefined;
+    }
+    if (close) parents.pop();
+    else if (!empty) parents.push(name);
+  }
+  return out + xml.slice(at);
+}
+
 const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 
 /** XML character data with its character and predefined entity references resolved. */
@@ -190,6 +234,161 @@ function attributesOf(tag) {
 function attribute(xml, name, attributeName) {
   const tag = new RegExp(`<${name}${TAG}`).exec(xml);
   return tag ? (attributesOf(tag[1])[attributeName] ?? null) : null;
+}
+
+const isComponentHeader = (line) => /^nuxeo-component:/i.test(line);
+
+/** The longest line `java.util.jar.Manifest` reads, in bytes, its line break included. */
+const MAX_MANIFEST_LINE = 512;
+
+/** A header as `java.util.jar.Attributes` reads one: its name, a colon and one space. */
+const MANIFEST_HEADER = /^[A-Za-z0-9_-]{1,70}: /;
+
+/** The line that begins a section after the main one, `Name` in any letter case. */
+const MANIFEST_SECTION_NAME = /^[Nn][Aa][Mm][Ee]: /;
+
+/**
+ * A manifest line quoted for a message, cut short, with control and invisible characters escaped
+ * so that a tab or a byte-order mark reads as what it is. `build.mjs` has the same function.
+ */
+function quoteLine(text) {
+  const characters = [...text];
+  return JSON.stringify(
+    characters.length > 60 ? `${characters.slice(0, 59).join('')}…` : text,
+  ).replace(
+    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,
+    (character) => `\\u${character.codePointAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/**
+ * Why `java.util.jar.Manifest` cannot read these manifest bytes as they stand, or `null` when it
+ * can. The Nuxeo runtime reads a bundle's headers with it, and at the first line it cannot read it
+ * refuses the whole manifest, so the bundle has no headers and the package configures nothing.
+ * The rules are JDK 21's `Manifest.read` and `Attributes.read`, each confirmed against JDK 21 with
+ * a jar:
+ *
+ * - A line ends at LF, CR or CRLF, and Java reads at most 512 bytes of one, its line break
+ *   included. It refuses a longer line, except that a CRLF falling on bytes 512 and 513 is split:
+ *   the CR ends the line and the LF is read as an empty one, which ends the section. Both are
+ *   refused here.
+ * - Java ignores whatever follows the last line break, so a header written there is never read.
+ *   It is refused here rather than ignored, since what someone wrote there was meant to be read.
+ * - Every other line that is not empty is a header — a name of 1 to 70 letters, digits, `-` and
+ *   `_`, then a colon, one space and the value, the colon and space on that line rather than on a
+ *   continuation of it — or a continuation, which starts with a space and extends the line above
+ *   it, so it can be neither the first line nor the one after an empty line.
+ * - An empty line ends a section, the main one first, and the next section begins with `Name: `,
+ *   `Name` in any letter case.
+ *
+ * `build.mjs` applies the three rules of the last two points to the manifest it packages, which
+ * cannot break the first two. And anything this accepts, `manifestSectionsOf` reads as Java does:
+ * it has no split line break, no text after the last one, and no continuation without a header
+ * above it for unfolding to join it to something else.
+ */
+function unreadableManifest(bytes) {
+  // Lines as Java's `Manifest.FastInputStream.readLine` returns them, each with its size in bytes.
+  const lines = [];
+  let start = 0;
+  for (let at = 0; at < bytes.length; at++) {
+    if (bytes[at] !== 0x0a && bytes[at] !== 0x0d) continue;
+    const end = bytes[at] === 0x0d && bytes[at + 1] === 0x0a ? at + 2 : at + 1;
+    lines.push({ text: bytes.toString('utf8', start, at), size: end - start });
+    start = end;
+    at = end - 1;
+  }
+  const refused =
+    "so Java refuses the whole manifest, and Nuxeo reads none of the bundle's headers.";
+  for (const [index, { text, size }] of lines.entries()) {
+    // Quoted as the jar holds it, one physical line: Java reads the rules below on that line.
+    const at = `${quoteLine(text)} on line ${index + 1}`;
+    if (size > MAX_MANIFEST_LINE) {
+      return (
+        `has ${at}, ${size} bytes with its line break. Java reads at most ` +
+        `${MAX_MANIFEST_LINE} bytes of a line, and refuses or misreads a longer one.`
+      );
+    }
+    if (text === '') continue;
+    const afterEmpty = index > 0 && lines[index - 1].text === '';
+    if (text.startsWith(' ')) {
+      if (index > 0 && !afterEmpty) continue;
+      return (
+        `has ${at}, where a section begins. A line that starts with a space continues the ` +
+        `header on the line above it, and there is none, ${refused}`
+      );
+    }
+    if (afterEmpty) {
+      if (!MANIFEST_SECTION_NAME.test(text)) {
+        return (
+          `has ${at}, after a blank line. A blank line ends a section, and the next section ` +
+          `must begin with "Name: ", ${refused}`
+        );
+      }
+    } else if (!MANIFEST_HEADER.test(text)) {
+      return (
+        `has ${at}, which is not a header — a name of 1 to 70 letters, digits, "-" and "_", ` +
+        `then ": " and the value — ${refused}`
+      );
+    }
+  }
+  if (start < bytes.length) {
+    return (
+      `ends with ${quoteLine(bytes.toString('utf8', start))} and no line break after it. Java ` +
+      'ignores whatever follows the last line break, so Nuxeo never reads it.'
+    );
+  }
+  return null;
+}
+
+/**
+ * A jar manifest's logical lines, divided where Java ends its main section. Continuations are
+ * unfolded — headers wrap at 72 bytes with a leading space on the continuation, and a long
+ * component path is exactly where that happens — and a line ends at CR, LF or CRLF and nowhere
+ * else. The main section is the lines before the first empty one; the rest are entry sections.
+ * Read only once `unreadableManifest` has accepted the manifest, which is what makes this Java's
+ * reading too.
+ */
+function manifestSectionsOf(manifest) {
+  const lines = manifest.replace(/(?:\r\n|\r|\n) /g, '').split(/\r\n|\r|\n/);
+  const end = lines.indexOf('');
+  return end < 0
+    ? { main: lines, rest: [] }
+    : { main: lines.slice(0, end), rest: lines.slice(end) };
+}
+
+/**
+ * Every header of a jar manifest named `Nuxeo-Component` in any letter case, found as the server
+ * finds it. The Nuxeo runtime reads it through `java.util.jar.Manifest`, which matches a header's
+ * name in any letter case, keeps the last of a repeated one, and looks in the main section alone:
+ * a header in a later `Name:` section is that entry's attribute and names nothing the server loads.
+ *
+ * The multiline pattern this used to be read with took the first header spelt exactly
+ * `Nuxeo-Component`, in any section, and its `^` also matched after a U+2028 inside another
+ * header's value, which Java reads as part of that value. Each was a way for the jar to load a
+ * component this script never resolved, or for this script to resolve one the server never loads.
+ */
+function componentHeadersOf(manifest) {
+  return manifestSectionsOf(manifest).main.filter(isComponentHeader);
+}
+
+/**
+ * The component paths those headers name, split where the runtime splits them. `Nuxeo-Component`
+ * is a list, and `OSGiRuntimeService` tokenises it at commas, spaces, tabs, line breaks and form
+ * feeds, so `OSGI-INF/a b.xml` names two paths there rather than one file. Treating the whole
+ * header as a single file name would reject a bundle that carries a configuration component
+ * beside an unrelated one, which is a legitimate shape for a customer whose package grew past JSON.
+ */
+function componentPathsOf(manifest) {
+  return [
+    ...new Set(
+      componentHeadersOf(manifest).flatMap((header) =>
+        header
+          .slice(header.indexOf(':') + 1)
+          .split(/[, \t\n\r\f]+/)
+          .filter(Boolean),
+      ),
+    ),
+  ];
 }
 
 /**
@@ -349,19 +548,42 @@ export function verifyPackageZip(archive) {
       problem(`${manifest} could not be read out of ${jars[0]}.`);
       return problems;
     }
-    // Manifest headers wrap at 72 bytes with a leading space on the continuation; unwrapped here
-    // because a long component path is exactly where that happens.
-    const headers = manifestRead.stdout.toString('utf8').replace(/\r?\n /g, '');
-    // `Nuxeo-Component` is a comma-separated list, and `build.mjs` reads it as one —
-    // `.split(',').map(trim).filter(Boolean)`, then a loop. Treating the whole header as a single
-    // file name rejects a bundle that carries a configuration component beside an unrelated one,
-    // which is a legitimate shape for a customer whose package grew past JSON.
-    const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(headers)?.[1] ?? '')
-      .split(',')
-      .map((path) => path.trim())
-      .filter(Boolean);
+    // First, whether Java can read the manifest at all. When it cannot, Nuxeo reads no header of
+    // the bundle, so there are no components to resolve — and the reading below is not Java's.
+    const unreadable = unreadableManifest(manifestRead.stdout);
+    if (unreadable) {
+      problem(`${manifest} ${unreadable}`);
+      return problems;
+    }
+    const manifestText = manifestRead.stdout.toString('utf8');
+    // More than one header, or another spelling, is a manifest two readers take differently: the
+    // server loads the last header's components, a check that reads the first passes the others.
+    // The components of every header are still resolved below, so each problem is reported.
+    const componentHeaders = componentHeadersOf(manifestText);
+    if (componentHeaders.length > 1) {
+      problem(
+        `${manifest} has ${componentHeaders.length} Nuxeo-Component headers, counting any letter ` +
+          "case. The server loads only the last one's components; a manifest lists every " +
+          'component in a single header.',
+      );
+    } else if (
+      componentHeaders.length === 1 &&
+      !componentHeaders[0].startsWith('Nuxeo-Component:')
+    ) {
+      const spelt = componentHeaders[0].slice(0, componentHeaders[0].indexOf(':'));
+      problem(
+        `${manifest} spells its Nuxeo-Component header "${spelt}". The server accepts any letter ` +
+          'case, but tools that read a manifest look for Nuxeo-Component exactly.',
+      );
+    }
+    const componentPaths = componentPathsOf(manifestText);
     if (componentPaths.length === 0) {
-      problem(`${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`);
+      problem(
+        manifestSectionsOf(manifestText).rest.some(isComponentHeader)
+          ? `${manifest} names components only after its first blank line, where the server ` +
+              'does not read them, so the bundle contributes nothing.'
+          : `${manifest} has no Nuxeo-Component header, so the bundle contributes nothing.`,
+      );
       return problems;
     }
 
@@ -390,8 +612,9 @@ export function verifyPackageZip(archive) {
         problem(`${componentPath} could not be read out of ${jars[0]}.`);
         continue;
       }
+      // Use the builder's supported documentation scope before requirements, counts or srcs.
       const componentXml = withoutCdata(
-        withoutCommentsOrInstructions(componentRead.stdout.toString('utf8')),
+        withoutDocumentation(withoutCommentsOrInstructions(componentRead.stdout.toString('utf8'))),
       );
 
       // Only an extension on Satori's configuration point registers anything. `point` is checked
@@ -498,7 +721,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log(
     `${basename(archive)}: a well-formed Nuxeo Package — entries verified by unzip, package.xml ` +
       `and install.xml present and consistent, the bundle deployed into ${BUNDLES_DIR}, the jar ` +
-      'readable and its component resolved.\n' +
+      'readable, its manifest one Java reads, and its component resolved.\n' +
       'Not asserted: that a Nuxeo server installed it. No server runs here.',
   );
 }

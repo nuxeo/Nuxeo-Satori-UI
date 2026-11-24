@@ -42,9 +42,9 @@ import { tasksRoutes } from '../lib.routes';
  *
  * ## The regression
  *
- * `loadPreviewBlob` fetches the real blob only for image/audio/video; everything else gets
+ * `loadPreviewBlob` fetches the real blob only for image/audio/video/PDF; everything else gets
  * `@rendition/thumbnail`, which is an image. Binding the document's metadata type therefore told the
- * viewer `application/pdf` while the blob was a PNG — and once the viewer began checking the served
+ * viewer a Word MIME type while the blob was a PNG — and once the viewer began checking the served
  * type against the claim it refused to render, blanking the preview.
  */
 /**
@@ -99,6 +99,9 @@ function restoreObjectUrlMethod<K extends 'createObjectURL' | 'revokeObjectURL'>
   }
   URL[name] = prior;
 }
+
+/** A non-media document: its preview is a thumbnail image, so its MIME type can disagree with the blob. */
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 describe('TasksPageComponent — the MIME type bound to the viewer', () => {
   let fixture: ComponentFixture<TasksPageComponent>;
@@ -181,8 +184,8 @@ describe('TasksPageComponent — the MIME type bound to the viewer', () => {
     } as unknown as NuxeoTask);
     component.targetDoc.set({
       uid: 'doc-1',
-      title: 'report.pdf',
-      properties: { 'file:content': { 'mime-type': metadataMime, name: 'report.pdf' } },
+      title: 'report.docx',
+      properties: { 'file:content': { 'mime-type': metadataMime, name: 'report.docx' } },
     } as unknown as NuxeoDocument);
     if (servedType !== null) component.previewBlobType.set(servedType);
     fixture.detectChanges();
@@ -208,18 +211,18 @@ describe('TasksPageComponent — the MIME type bound to the viewer', () => {
   }
 
   it('binds the served type, not the document type, once a blob has arrived', () => {
-    renderWith('application/pdf', 'image/png');
+    renderWith(DOCX_MIME, 'image/png');
 
     // The load-bearing assertion. Reverting the template to `[mimeType]="mimeType()"` fails here,
     // which the previous version of this file did not.
     expect(boundMimeType()).toBe('image/png');
-    expect(boundMimeType()).not.toBe('application/pdf');
+    expect(boundMimeType()).not.toBe(DOCX_MIME);
   });
 
   it('binds the document type before any blob has arrived', () => {
-    renderWith('application/pdf', '');
+    renderWith(DOCX_MIME, '');
 
-    expect(boundMimeType()).toBe('application/pdf');
+    expect(boundMimeType()).toBe(DOCX_MIME);
   });
 
   describe('a superseded task request does not override a newer selection', () => {

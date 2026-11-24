@@ -4642,6 +4642,9 @@ function stringsOfArrayLiteral(node) {
 
 const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 
+/** The locale manifest an upstream catalogue folder may ship beside its catalogues (DS-2803). */
+const VENDOR_LOCALES_MANIFEST = 'languages.json';
+
 /**
  * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
  *
@@ -5001,7 +5004,13 @@ function checkUpstreamCatalogueLanguages() {
 
         // What this rule actually copies: the directory filtered by the glob, not every file
         // that happens to sit in it.
-        const files = readdirSync(absolute).filter((entry) => entry.endsWith('.json'));
+        // `languages.json` is not a catalogue: from `@hylandsoftware/satori-ui@1.0.0` (DS-2803) it
+        // is the vendor's manifest of the locales the folder ships, so counting it would demand
+        // that the loader request a language called "languages". Excluded by exact name only, so
+        // a real catalogue can never be skipped by it.
+        const files = readdirSync(absolute).filter(
+          (entry) => entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST,
+        );
         for (const file of files) {
           if (globs.some((glob) => globCopies(glob, file))) {
             servedLangs.add(file.slice(0, -'.json'.length));
@@ -5062,6 +5071,998 @@ function checkUpstreamCatalogueLanguages() {
       `${LOADER} declares no upstream catalogue folder, so \`checkUpstreamCatalogueLanguages\` ` +
         'asserted nothing. That is legitimate if the application layers none; if it should, the ' +
         'list has been emptied.',
+    );
+  }
+}
+
+/** Where Satori's own loader looks for its `sat.*` catalogues: `./i18n/<path>/<lang>.json`. */
+const SATORI_STORYBOOK_CATALOGUE_DIR = 'i18n/@hylandsoftware/satori-ui';
+
+/**
+ * A Storybook that uses Satori's own translation loader asks it only for languages it serves.
+ *
+ * ## The defect this exists to make unrepeatable
+ *
+ * `checkUpstreamCatalogueLanguages` guards the application, whose `AppTranslateLoader` maps its
+ * bare codes to the regional files satori-ui ships. The Satori-backed Storybook does not use that
+ * loader: it calls upstream's `provideAndConfigureSatoriTranslations`, whose
+ * `MultiTranslateHttpLoader` requests `./i18n/@hylandsoftware/satori-ui/<lang>.json` for the
+ * active language and the fallback language. It was configured with `en`, and satori-ui 1.0.0
+ * stopped shipping `en.json`, so every story rendered raw `sat.*` keys
+ * (`sat.rich-tooltip.press-escape-to-close`). Every gate passed: Storybook builds succeed with
+ * raw keys on screen, and nothing compared the configured language to the served folder.
+ *
+ * ## What it reads
+ *
+ * - Every Storybook config directory under `apps/` and `libs/`: each `.storybook/` with a main
+ *   file, and each `configDir` a Storybook-executor target in a `project.json` names. What is
+ *   served at `i18n/@hylandsoftware/satori-ui` comes from that main file's `staticDirs` (any entry
+ *   whose mount covers the path) and from the targets' object-form `assets`.
+ * - Every script in that config directory and every `*.stories.*` under the project's `src/`.
+ *   A project is checked when one of them calls `provideAndConfigureSatoriTranslations`. Each
+ *   such call's `fallbackLang`, and each `….use(<lang>)` on a `TranslateService`, is a language
+ *   the loader will request.
+ *
+ * A language passes when the folder has `<lang>.json` or, for a regional code, the base
+ * language's file: upstream's loader asks for `en-US.json` and falls back to `en.json` on a
+ * failure. `languages.json` is the vendor's locale manifest, not a catalogue.
+ *
+ * Scope: the satori-ui path only. Other paths added with `provideSatoriTranslationPaths` (the
+ * app's own catalogue, served at `i18n/`) are this product's catalogues, and a missing one shows
+ * English rather than raw keys.
+ *
+ * ## This is the fast approximation; `storybook-satori` is the authority
+ *
+ * This reads configuration files and predicts what Storybook will serve, and code can always build
+ * or mutate a configuration in a way a static reader cannot follow: review on #602 found twelve
+ * such ways in turn. It refuses what it cannot read, which keeps it on the safe side, but it cannot
+ * be complete. The `storybook-satori` gate builds the Storybook and checks in a browser what is
+ * actually served, so prefer extending that over teaching this one another syntactic form. This
+ * stays because it is fast, needs no token and runs on every `guardrails` pass.
+ */
+function checkStorybookSatoriCatalogues() {
+  /**
+   * The local names a file gives Satori's loader and ngx-translate's service.
+   *
+   * Read from its imports, because an alias (`import { provideAndConfigureSatoriTranslations as
+   * satoriI18n }`) or a namespace import (`import * as satori from …`) otherwise hid a Storybook
+   * from this gate entirely (review on #602). The canonical names are always included, so a file
+   * that uses them without importing — a fixture, or a re-export — is still read.
+   */
+  const LOADER = 'provideAndConfigureSatoriTranslations';
+  const SERVICE = 'TranslateService';
+  const importedNames = (source) => {
+    const names = {
+      loader: new Set([LOADER]),
+      loaderNamespaces: new Set(),
+      service: new Set([SERVICE]),
+      serviceNamespaces: new Set(),
+    };
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+        continue;
+      }
+      const from = statement.moduleSpecifier.text;
+      const kind =
+        from === '@hylandsoftware/satori-ui' || from.startsWith('@hylandsoftware/satori-ui/')
+          ? 'loader'
+          : from === '@ngx-translate/core'
+            ? 'service'
+            : null;
+      const bindings = statement.importClause?.namedBindings;
+      if (!kind || !bindings) continue;
+      if (ts.isNamespaceImport(bindings)) {
+        names[`${kind}Namespaces`].add(bindings.name.text);
+      } else {
+        for (const element of bindings.elements) {
+          const imported = (element.propertyName ?? element.name).text;
+          if (imported === (kind === 'loader' ? LOADER : SERVICE))
+            names[kind].add(element.name.text);
+        }
+      }
+    }
+    return names;
+  };
+
+  /** Whether `node` names `kind`'s symbol: a local alias, or `namespace.<canonical name>`. */
+  const refersTo = (node, kind, names) => {
+    if (!node) return false;
+    const canonical = kind === 'loader' ? LOADER : SERVICE;
+    if (ts.isIdentifier(node)) return names[kind].has(node.text);
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      return node.name.text === canonical && names[`${kind}Namespaces`].has(node.expression.text);
+    }
+    if (ts.isQualifiedName(node) && ts.isIdentifier(node.left)) {
+      return node.right.text === canonical && names[`${kind}Namespaces`].has(node.left.text);
+    }
+    return false;
+  };
+
+  /** Whether `node` is `inject(TranslateService)`, or a type annotation naming `TranslateService`. */
+  const namesTranslateService = (node, names) =>
+    !!node &&
+    ((ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'inject' &&
+      node.arguments.length > 0 &&
+      refersTo(node.arguments[0], 'service', names)) ||
+      (ts.isTypeReferenceNode(node) && refersTo(node.typeName, 'service', names)));
+
+  /**
+   * Every name in `source` bound to a `TranslateService`: a variable, a class field or a
+   * parameter (constructor parameter properties included), typed `TranslateService` or initialised
+   * with `inject(TranslateService)`. By name within the file, not by scope — a same-named
+   * unrelated binding would be checked too, which errs toward checking, never toward skipping.
+   */
+  const translateServiceNames = (source, imported) => {
+    const names = new Set();
+    const visit = (node) => {
+      if (
+        (ts.isVariableDeclaration(node) ||
+          ts.isPropertyDeclaration(node) ||
+          ts.isParameter(node)) &&
+        ts.isIdentifier(node.name) &&
+        (namesTranslateService(node.type, imported) ||
+          namesTranslateService(node.initializer, imported))
+      ) {
+        names.add(node.name.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return names;
+  };
+
+  /** Whether `expression` — the receiver of a `.use()` call — is a `TranslateService`. */
+  const isTranslateService = (expression, names, imported) => {
+    let node = expression;
+    while (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)) {
+      node = node.expression;
+    }
+    if (namesTranslateService(node, imported)) return true;
+    if (ts.isIdentifier(node)) return names.has(node.text);
+    if (ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword) {
+      return names.has(node.name.text);
+    }
+    // `TestBed.inject(TranslateService)` and other spellings that name the class directly.
+    if (
+      ts.isCallExpression(node) &&
+      node.arguments.some((arg) => refersTo(arg, 'service', imported))
+    ) {
+      return true;
+    }
+    return node.getText().includes(SERVICE);
+  };
+
+  /**
+   * Every Storybook config directory, and the `assets` its targets serve.
+   *
+   * Found two ways, because each alone misses one. By name (`.storybook/main.*`), which finds a
+   * Storybook nothing builds yet; and from every `project.json` target run by a Storybook
+   * executor, whose `configDir` — in `options` or any configuration — may name a directory that
+   * is not called `.storybook`. Reading only the first let a Storybook configured through a
+   * target pass unchecked while its catalogue requests 404 (review on #602).
+   *
+   * The builder's `assets` option serves `{ glob, input, output }` patterns as well, so those
+   * count as mounts too. A plain-string asset is a single file copied by Angular's rules and is
+   * not read here; it can only add files, never hide one.
+   */
+  const MAIN_NAMES = ['main.ts', 'main.mts', 'main.js', 'main.mjs', 'main.cjs'];
+  const trimSlashes = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+  /**
+   * Config directory → the project that owns it, and each build that uses it.
+   *
+   * A build is a Storybook target, or one configuration of it, with its *effective* `assets`: a
+   * configuration's own array **replaces** the target's, as Angular does, and only one that sets
+   * none inherits it. Pooling them per config directory let one build's assets hide another's
+   * missing catalogues (review on #602), so each is judged on its own.
+   *
+   * @type {Map<string, { projectRoot: string, builds: Map<string, { input: string, output: string, glob: string }[]> }>}
+   */
+  const configDirs = new Map();
+  const entryFor = (dir, projectRoot) => {
+    const key = trimSlashes(toPosixRel(dir));
+    if (!configDirs.has(key)) {
+      configDirs.set(key, { projectRoot: projectRoot ?? dirname(key), builds: new Map() });
+    }
+    const entry = configDirs.get(key);
+    // A `project.json` knows its root; the parent of a config directory is only a guess at it.
+    if (projectRoot) entry.projectRoot = projectRoot;
+    return entry;
+  };
+  for (const main of [
+    ...walk('apps', (path) => MAIN_NAMES.some((name) => path.endsWith(`/.storybook/${name}`))),
+    ...walk('libs', (path) => MAIN_NAMES.some((name) => path.endsWith(`/.storybook/${name}`))),
+  ]) {
+    entryFor(dirname(main));
+  }
+  for (const projectFile of [
+    ...walk('apps', (path) => path.endsWith('/project.json')),
+    ...walk('libs', (path) => path.endsWith('/project.json')),
+  ]) {
+    let project;
+    try {
+      project = JSON.parse(read(projectFile));
+    } catch {
+      continue; // Malformed project files are another gate's concern; nothing here to read.
+    }
+    const projectRoot = trimSlashes(
+      typeof project?.root === 'string' ? project.root : dirname(projectFile),
+    );
+    for (const [name, target] of Object.entries(project?.targets ?? {})) {
+      if (typeof target?.executor !== 'string' || !/storybook/i.test(target.executor)) continue;
+      const base = target.options && typeof target.options === 'object' ? target.options : {};
+      const builds = [
+        [`${projectFile}#${name}`, base],
+        ...Object.entries(target.configurations ?? {}).map(([configuration, options]) => [
+          `${projectFile}#${name}:${configuration}`,
+          options,
+        ]),
+      ];
+      for (const [label, options] of builds) {
+        if (!options || typeof options !== 'object') continue;
+        // A configuration without `configDir` inherits the target's, as the builder does.
+        const configDir = options.configDir ?? base.configDir;
+        if (typeof configDir !== 'string') continue;
+        const assets = Array.isArray(options.assets)
+          ? options.assets
+          : Array.isArray(base.assets)
+            ? base.assets
+            : [];
+        entryFor(configDir, projectRoot).builds.set(
+          label,
+          assets
+            .filter(
+              (asset) => asset && typeof asset === 'object' && typeof asset.input === 'string',
+            )
+            .map((asset) => ({
+              input: asset.input,
+              output: typeof asset.output === 'string' ? asset.output : '',
+              glob: typeof asset.glob === 'string' ? asset.glob : '**/*',
+              // Kept so it can be refused below: an exclusion removes files the directory listing
+              // would otherwise count as served (review on #602).
+              ignore: Array.isArray(asset.ignore) ? asset.ignore : [],
+            })),
+        );
+      }
+    }
+  }
+  let checked = 0;
+
+  for (const [storybookDir, { projectRoot, builds }] of configDirs) {
+    const mainName = MAIN_NAMES.find((name) => fileExists(`${storybookDir}/${name}`));
+    if (!mainName) {
+      warn(
+        `A Storybook target names ${storybookDir} as its \`configDir\`, but it holds no main ` +
+          'file, so `checkStorybookSatoriCatalogues` could not read what it serves.',
+      );
+      continue;
+    }
+    const main = `${storybookDir}/${mainName}`;
+    // Stories anywhere in the owning project, not under the config directory's parent: a nested
+    // `configDir` such as `config/storybook` has no `src` beside it (review on #602).
+    const sources = [
+      ...new Set([
+        ...walk(storybookDir, (path) => /\.(m?[jt]s|cjs)$/.test(path)),
+        ...walk(projectRoot, (path) => /\.stories\.(m?[jt]s|cjs)$/.test(path)),
+      ]),
+    ];
+
+    /** @type {{ file: string, lang: string, via: string }[]} */
+    const requested = [];
+    /**
+     * Problems with `.use()` calls, held until the project is known to use Satori's loader. A
+     * Storybook on any other loader may switch language however it likes — it never asks Satori
+     * for a catalogue — so reporting them before that is known rejected a correct setup.
+     */
+    const usageProblems = [];
+    let usesSatoriLoader = false;
+    let legible = true;
+
+    for (const file of sources) {
+      const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+      const imported = importedNames(source);
+      const serviceNames = translateServiceNames(source, imported);
+      const visit = (node) => {
+        if (ts.isCallExpression(node)) {
+          const callee = node.expression;
+          if (refersTo(callee, 'loader', imported)) {
+            usesSatoriLoader = true;
+            const [config] = node.arguments;
+            if (!config || !ts.isObjectLiteralExpression(config)) {
+              fail(
+                `${file} calls \`provideAndConfigureSatoriTranslations\` with an argument ` +
+                  '`checkStorybookSatoriCatalogues` cannot read as an object literal, so it ' +
+                  'cannot tell which fallback language Satori will request.',
+              );
+              legible = false;
+            } else {
+              for (const property of config.properties) {
+                const name =
+                  ts.isPropertyAssignment(property) &&
+                  (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+                    ? property.name.text
+                    : null;
+                if (name === null) {
+                  fail(
+                    `${file} passes \`provideAndConfigureSatoriTranslations\` a member this gate ` +
+                      `cannot read statically (\`${property.getText().slice(0, 60)}\`). Write ` +
+                      'every member as a literal key and value.',
+                  );
+                  legible = false;
+                } else if (name === 'settings') {
+                  fail(
+                    `${file} passes \`settings\` to \`provideAndConfigureSatoriTranslations\`, ` +
+                      "which changes the loader's prefix or suffix. " +
+                      '`checkStorybookSatoriCatalogues` assumes the default `./i18n/<path>/<lang>.json`; ' +
+                      'teach it the new shape rather than leaving it checking the wrong URL.',
+                  );
+                  legible = false;
+                } else if (name === 'fallbackLang') {
+                  if (ts.isStringLiteral(property.initializer)) {
+                    requested.push({
+                      file,
+                      lang: property.initializer.text,
+                      via: '`fallbackLang`',
+                    });
+                  } else {
+                    fail(
+                      `${file} sets Satori's \`fallbackLang\` to ` +
+                        `\`${property.initializer.getText().slice(0, 60)}\`, which is not a ` +
+                        'string literal, so this gate cannot tell which catalogue it requests.',
+                    );
+                    legible = false;
+                  }
+                }
+              }
+            }
+          }
+          if (
+            ts.isPropertyAccessExpression(callee) &&
+            callee.name.text === 'use' &&
+            isTranslateService(callee.expression, serviceNames, imported)
+          ) {
+            const [lang] = node.arguments;
+            if (lang && ts.isStringLiteral(lang)) {
+              requested.push({ file, lang: lang.text, via: '`TranslateService.use()`' });
+            } else {
+              usageProblems.push(
+                `${file} calls \`TranslateService.use()\` with ` +
+                  `\`${lang ? lang.getText().slice(0, 60) : 'no argument'}\`, which is not a ` +
+                  'string literal, so this gate cannot tell which catalogue Satori is asked for.',
+              );
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+
+    // Not Satori's loader: nothing below applies, and nothing above about `.use()` is a defect.
+    if (!usesSatoriLoader) continue;
+    for (const problem of usageProblems) fail(problem);
+    if (usageProblems.length > 0) legible = false;
+    if (!legible) continue;
+    checked += 1;
+
+    // Where `main.ts` serves the satori-ui catalogues from.
+    const mainSource = ts.createSourceFile(main, read(main), ts.ScriptTarget.Latest, true);
+    /**
+     * Every place `main` sets `staticDirs`: a property, a shorthand or method, or a later
+     * `config.staticDirs = …`. Reading only the last property let a second definition, or a spread
+     * after it, decide what Storybook serves while this gate judged another value (review on #602).
+     */
+    const definitions = [];
+    const isStaticDirsName = (name) =>
+      !!name && (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === 'staticDirs';
+    const findStaticDirs = (node) => {
+      if (
+        (ts.isPropertyAssignment(node) ||
+          ts.isShorthandPropertyAssignment(node) ||
+          ts.isMethodDeclaration(node) ||
+          ts.isGetAccessorDeclaration(node)) &&
+        isStaticDirsName(node.name)
+      ) {
+        definitions.push(node);
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ((ts.isPropertyAccessExpression(node.left) && node.left.name.text === 'staticDirs') ||
+          (ts.isElementAccessExpression(node.left) &&
+            isStaticDirsName(node.left.argumentExpression)))
+      ) {
+        definitions.push(node);
+      }
+      ts.forEachChild(node, findStaticDirs);
+    };
+    findStaticDirs(mainSource);
+
+    /**
+     * Writes that can set `staticDirs` without naming it: an assignment through a computed key that
+     * is not a string literal (`config[key] = []`, where `key` may be `'staticDirs'`), and the
+     * reflective writers. None is counted as a definition above, so any one of them could empty the
+     * exported value while this gate judged the literal (review on #602). Refused, not traced.
+     */
+    const REFLECTIVE_WRITERS = new Set([
+      'Object.assign',
+      'Object.defineProperty',
+      'Object.defineProperties',
+      'Reflect.set',
+      'Reflect.defineProperty',
+    ]);
+    let hiddenWrite = null;
+    const findHiddenWrites = (node) => {
+      if (hiddenWrite) return;
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+        ts.isElementAccessExpression(node.left) &&
+        !ts.isStringLiteralLike(node.left.argumentExpression) &&
+        reachesConfiguration(node.left.expression)
+      ) {
+        hiddenWrite = node;
+      } else if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        REFLECTIVE_WRITERS.has(node.expression.getText()) &&
+        reachesConfiguration(node.arguments[0])
+      ) {
+        hiddenWrite = node;
+      } else if (
+        // Mutating the mounts in place: `config.staticDirs.length = 0`, `….staticDirs[0].to = …`.
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+        insideStaticDirs(node.left)
+      ) {
+        hiddenWrite = node;
+      } else if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ARRAY_MUTATORS.has(node.expression.name.text) &&
+        insideStaticDirs(node.expression)
+      ) {
+        hiddenWrite = node;
+      } else if (ts.isDeleteExpression(node)) {
+        const target = unwrap(node.expression);
+        const deletesStaticDirs =
+          (ts.isPropertyAccessExpression(target) && target.name.text === 'staticDirs') ||
+          (ts.isElementAccessExpression(target) &&
+            ts.isStringLiteralLike(target.argumentExpression) &&
+            target.argumentExpression.text === 'staticDirs');
+        if (
+          insideStaticDirs(target) ||
+          (deletesStaticDirs && reachesConfiguration(target.expression))
+        ) {
+          hiddenWrite = node;
+        }
+      }
+      ts.forEachChild(node, findHiddenWrites);
+    };
+
+    /**
+     * The object literal `main` exports as its configuration: `export default <object>`, or a
+     * `const` it names, through `as` / `satisfies` / parentheses and a single-argument call such
+     * as `defineMain({ … })`; `module.exports = …` likewise. `null` when it cannot be resolved.
+     *
+     * Judging the object that happens to contain `staticDirs` let
+     * `const base = { staticDirs: [mount] }; export default { ...base, ...overrides }` pass on
+     * `base`'s mount while the exported configuration served none (review on #602).
+     */
+    const unwrap = (node) => {
+      while (
+        node &&
+        (ts.isParenthesizedExpression(node) ||
+          ts.isAsExpression(node) ||
+          ts.isSatisfiesExpression(node) ||
+          ts.isTypeAssertionExpression(node) ||
+          ts.isNonNullExpression(node))
+      ) {
+        node = node.expression;
+      }
+      return node;
+    };
+    /**
+     * Calls known to return their argument unchanged: Storybook's `defineMain` (`return config`
+     * in @storybook/angular 10.6.3), imported under that name from an `@storybook/…` package.
+     * Any other call may transform the configuration — `customize({ staticDirs: [mount] })` can
+     * return `{ ...config, staticDirs: [] }` — so it is not unwrapped, and the export is then not
+     * an object literal this gate can read (review on #602).
+     */
+    const identityHelpers = new Set();
+    for (const statement of mainSource.statements) {
+      if (
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text.startsWith('@storybook/') &&
+        statement.importClause?.namedBindings &&
+        ts.isNamedImports(statement.importClause.namedBindings)
+      ) {
+        for (const element of statement.importClause.namedBindings.elements) {
+          if ((element.propertyName ?? element.name).text === 'defineMain') {
+            identityHelpers.add(element.name.text);
+          }
+        }
+      }
+    }
+    /** The call that stopped resolution, named in the failure so the author knows what to change. */
+    let unresolvedCall = null;
+    const objectOf = (node) => {
+      let expression = unwrap(node);
+      if (expression && ts.isCallExpression(expression)) {
+        if (
+          expression.arguments.length === 1 &&
+          ts.isIdentifier(expression.expression) &&
+          identityHelpers.has(expression.expression.text)
+        ) {
+          expression = unwrap(expression.arguments[0]);
+        } else {
+          unresolvedCall = expression;
+        }
+      }
+      return expression;
+    };
+    const exportedConfiguration = (() => {
+      let expression;
+      for (const statement of mainSource.statements) {
+        if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+          expression = statement.expression;
+        } else if (
+          ts.isExpressionStatement(statement) &&
+          ts.isBinaryExpression(statement.expression) &&
+          statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          statement.expression.left.getText() === 'module.exports'
+        ) {
+          expression = statement.expression.right;
+        }
+      }
+      expression = objectOf(expression);
+      if (expression && ts.isIdentifier(expression)) {
+        const name = expression.text;
+        expression = undefined;
+        for (const statement of mainSource.statements) {
+          if (!ts.isVariableStatement(statement)) continue;
+          for (const declaration of statement.declarationList.declarations) {
+            if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+              expression = objectOf(declaration.initializer);
+            }
+          }
+        }
+      }
+      return expression && ts.isObjectLiteralExpression(expression) ? expression : null;
+    })();
+
+    /**
+     * The names that refer to the exported configuration: the `const` the export resolves to, any
+     * variable initialised from one of those names (`const c = config`), and `module.exports`. A
+     * hidden write counts only when its target is rooted at one of them, or at something this gate
+     * cannot name (a call result may return the configuration). A hook writing to its own
+     * parameter — `Object.assign(webpackConfig.resolve.alias, …)` in `webpackFinal` — cannot reach
+     * the exported `staticDirs`, and was refused before this was scoped (review on #602).
+     */
+    const configurationNames = new Set(['module.exports']);
+    const visitDeclarations = (visit) => {
+      const walk = (node) => {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) visit(node);
+        ts.forEachChild(node, walk);
+      };
+      walk(mainSource);
+    };
+    if (exportedConfiguration) {
+      visitDeclarations((declaration) => {
+        if (objectOf(declaration.initializer) === exportedConfiguration) {
+          configurationNames.add(declaration.name.text);
+        }
+      });
+      for (let grew = true; grew;) {
+        grew = false;
+        visitDeclarations((declaration) => {
+          const init = unwrap(declaration.initializer);
+          if (
+            init &&
+            ts.isIdentifier(init) &&
+            configurationNames.has(init.text) &&
+            !configurationNames.has(declaration.name.text)
+          ) {
+            configurationNames.add(declaration.name.text);
+            grew = true;
+          }
+        });
+      }
+    }
+    /** Whether a write to `target` (or to something inside it) can reach the exported configuration. */
+    /** Every identifier a binding name declares, through object and array destructuring. */
+    const boundNames = (name, out = []) => {
+      if (ts.isIdentifier(name)) out.push(name.text);
+      else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+        for (const element of name.elements) {
+          if (ts.isBindingElement(element)) boundNames(element.name, out);
+        }
+      }
+      return out;
+    };
+    /**
+     * Whether `identifier` names something other than the exported configuration because an
+     * enclosing scope rebinds it. Storybook's own docs write `webpackFinal: async (config) => …`,
+     * where `config` is webpack's, and matching by name alone refused writes to it (review on
+     * #602). A parameter always shadows; a local declaration shadows unless it is itself an alias
+     * of the configuration (`const same = config`), which must stay visible.
+     */
+    const shadowed = (identifier) => {
+      const name = identifier.text;
+      for (let scope = identifier.parent; scope && !ts.isSourceFile(scope); scope = scope.parent) {
+        if (ts.isFunctionLike(scope)) {
+          for (const parameter of scope.parameters ?? []) {
+            if (boundNames(parameter.name).includes(name)) return true;
+          }
+        }
+        const statements = ts.isBlock(scope) ? scope.statements : null;
+        for (const statement of statements ?? []) {
+          if (!ts.isVariableStatement(statement)) continue;
+          for (const declaration of statement.declarationList.declarations) {
+            if (!boundNames(declaration.name).includes(name)) continue;
+            const init = unwrap(declaration.initializer);
+            const aliases =
+              init &&
+              ((ts.isIdentifier(init) && configurationNames.has(init.text)) ||
+                objectOf(declaration.initializer) === exportedConfiguration);
+            if (!aliases) return true;
+          }
+        }
+      }
+      return false;
+    };
+    const reachesConfiguration = (target) => {
+      let node = unwrap(target);
+      while (node && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
+        if (node.getText() === 'module.exports') return true;
+        node = unwrap(node.expression);
+      }
+      if (!node) return false;
+      if (ts.isIdentifier(node)) return configurationNames.has(node.text) && !shadowed(node);
+      if (node.kind === ts.SyntaxKind.ThisKeyword) return false;
+      return true; // a call result or other expression this gate cannot name
+    };
+    /**
+     * Whether `target` reaches *into* the exported `staticDirs` — `config.staticDirs.length`,
+     * `config.staticDirs[0].to`, `config.staticDirs.splice` — so a write or call there changes what
+     * is served without reassigning `staticDirs` itself, which is counted as a definition above.
+     */
+    const ARRAY_MUTATORS = new Set([
+      'push',
+      'pop',
+      'shift',
+      'unshift',
+      'splice',
+      'sort',
+      'reverse',
+      'fill',
+      'copyWithin',
+    ]);
+    const insideStaticDirs = (target) => {
+      let node = unwrap(target);
+      let below = false;
+      while (node && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
+        const segment = ts.isPropertyAccessExpression(node)
+          ? node.name.text
+          : ts.isStringLiteralLike(node.argumentExpression)
+            ? node.argumentExpression.text
+            : null;
+        if (segment === 'staticDirs') return below && reachesConfiguration(node.expression);
+        below = true;
+        node = unwrap(node.expression);
+      }
+      return false;
+    };
+    findHiddenWrites(mainSource);
+    if (hiddenWrite) {
+      fail(
+        `${main} writes a property this gate cannot name ` +
+          `(\`${hiddenWrite.getText().slice(0, 60)}\`), which may set \`staticDirs\`, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Set ' +
+          '`staticDirs` once, as a literal property of the exported configuration.',
+      );
+      legible = false;
+    }
+
+    let staticDirs;
+    if (definitions.length > 0 && exportedConfiguration === null) {
+      fail(
+        `${main} sets \`staticDirs\`, but \`checkStorybookSatoriCatalogues\` cannot find the ` +
+          'configuration it exports, so it cannot tell whether that value is the one Storybook ' +
+          'uses. ' +
+          (unresolvedCall
+            ? `It exports the result of \`${unresolvedCall.getText().slice(0, 60)}\`, which may ` +
+              'transform it; only `defineMain` imported from an `@storybook/` package is known to ' +
+              'return its argument unchanged.'
+            : 'Export an object literal, or a `const` holding one.'),
+      );
+      legible = false;
+    } else if (definitions.length > 1) {
+      fail(
+        `${main} sets \`staticDirs\` ${definitions.length} times, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell which value Storybook uses. Define it once.',
+      );
+      legible = false;
+    } else if (definitions.length === 1) {
+      const [definition] = definitions;
+      if (!ts.isPropertyAssignment(definition)) {
+        fail(
+          `${main} sets \`staticDirs\` in a form this gate cannot read ` +
+            `(\`${definition.getText().slice(0, 60)}\`). Write it as \`staticDirs: [ … ]\` in the ` +
+            'exported configuration.',
+        );
+        legible = false;
+      } else {
+        // A member after it can replace it when it is a spread, or has a computed key that is not a
+        // literal naming something else (`[key]: []` may be `staticDirs`). A shorthand or ordinary
+        // named member cannot — a shorthand `staticDirs` is already counted as a definition — and
+        // nothing before it can, because the explicit value wins (review on #602).
+        const canReplace = (member) => {
+          if (ts.isSpreadAssignment(member)) return true;
+          const name = member.name;
+          if (!name || !ts.isComputedPropertyName(name)) return false;
+          const key = name.expression;
+          return !(ts.isStringLiteralLike(key) && key.text !== 'staticDirs');
+        };
+        const members = definition.parent.properties;
+        const overriding = members.slice(members.indexOf(definition) + 1).find(canReplace);
+        if (definition.parent !== exportedConfiguration) {
+          fail(
+            `${main} sets \`staticDirs\` on an object other than the configuration it exports ` +
+              `(\`${definition.parent.getText().slice(0, 60)}\`), so this gate cannot tell whether ` +
+              'that value reaches Storybook. Set `staticDirs` directly on the exported object.',
+          );
+          legible = false;
+        } else if (overriding) {
+          fail(
+            `${main} sets \`staticDirs\` and then \`${overriding.getText().slice(0, 60)}\` in the ` +
+              'same object, which can replace it, so this gate cannot tell which value Storybook ' +
+              'uses. Put the spread before `staticDirs`, or define `staticDirs` once, last.',
+          );
+          legible = false;
+        } else {
+          staticDirs = definition.initializer;
+        }
+      }
+    }
+    if (!legible) continue;
+
+    const trim = (path) => path.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+    /**
+     * The folders whose `.json` files are served at the catalogue path.
+     *
+     * A `staticDirs` entry serves `from` at `to` (an object), or at the root (a plain string), or
+     * at the part after the last `:` (the `'from:to'` string form). The catalogue path is served by
+     * an entry mounted exactly there, and also by one mounted above it whose folder contains the
+     * rest of the path: `{ from: '../public', to: 'i18n' }` serves
+     * `../public/@hylandsoftware/satori-ui` there. Only an exact mount is required to exist — one
+     * mounted above may hold no catalogue folder at all, and then serves nothing at that path.
+     */
+    /** Whether a mount at `to` can serve the catalogue path at all. */
+    const covers = (to) =>
+      to === SATORI_STORYBOOK_CATALOGUE_DIR ||
+      to === '' ||
+      SATORI_STORYBOOK_CATALOGUE_DIR.startsWith(`${to}/`);
+    // `staticDirs` paths are relative to the config directory; builder `assets` to the workspace.
+    const mountFor = (fromText, toText, base = storybookDir) => {
+      const to = trim(toText);
+      const from = toPosixRel(join(base, fromText));
+      if (to === SATORI_STORYBOOK_CATALOGUE_DIR) return { dir: from, exact: true };
+      if (!covers(to)) return null;
+      const rest =
+        to === ''
+          ? SATORI_STORYBOOK_CATALOGUE_DIR
+          : SATORI_STORYBOOK_CATALOGUE_DIR.slice(to.length + 1);
+      return { dir: toPosixRel(join(from, rest)), exact: false };
+    };
+
+    // `staticDirs` is shared by every build of this config directory.
+    const staticMounts = [];
+    const addStatic = (fromText, toText) => {
+      const mount = mountFor(fromText, toText);
+      if (mount) staticMounts.push(mount);
+    };
+    if (staticDirs && ts.isArrayLiteralExpression(staticDirs)) {
+      for (const element of staticDirs.elements) {
+        if (ts.isStringLiteral(element) || ts.isNoSubstitutionTemplateLiteral(element)) {
+          const separator = element.text.lastIndexOf(':');
+          if (separator === -1) addStatic(element.text, '');
+          else addStatic(element.text.slice(0, separator), element.text.slice(separator + 1));
+          continue;
+        }
+        if (!ts.isObjectLiteralExpression(element)) {
+          fail(
+            `${main} has a \`staticDirs\` entry \`checkStorybookSatoriCatalogues\` cannot read ` +
+              `(\`${element.getText().slice(0, 60)}\`), so it cannot tell what is served at ` +
+              `${SATORI_STORYBOOK_CATALOGUE_DIR}.`,
+          );
+          legible = false;
+          continue;
+        }
+        // The whole entry must be statically legible: a spread, shorthand, method or computed key
+        // can supply or override `from`/`to` at run time, so the mount read here would not be the
+        // one Storybook uses (review on #602) — the rule `checkUpstreamCatalogueLanguages` applies.
+        const illegible = element.properties.find(
+          (property) =>
+            !ts.isPropertyAssignment(property) ||
+            (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)),
+        );
+        if (illegible) {
+          fail(
+            `${main} has a \`staticDirs\` entry with a member this gate cannot read statically ` +
+              `(\`${illegible.getText().slice(0, 60)}\`), which can override \`from\` or \`to\`. ` +
+              'Write every member as a literal key and value.',
+          );
+          legible = false;
+          continue;
+        }
+        // JavaScript keeps the last of repeated keys, so a repeated `from` or `to` means the value
+        // read here may not be the one Storybook mounts (review on #602). Refused, not guessed.
+        const repeated = ['from', 'to'].find(
+          (key) =>
+            element.properties.filter(
+              (property) =>
+                (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+                property.name.text === key,
+            ).length > 1,
+        );
+        if (repeated) {
+          fail(
+            `${main} has a \`staticDirs\` entry that sets \`${repeated}\` more than once ` +
+              `(\`${element.getText().slice(0, 60)}\`). Set each key once.`,
+          );
+          legible = false;
+          continue;
+        }
+        const member = (name) =>
+          element.properties.find(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+              property.name.text === name,
+          )?.initializer;
+        const to = member('to');
+        const from = member('from');
+        if ((to && !ts.isStringLiteral(to)) || !from || !ts.isStringLiteral(from)) {
+          fail(
+            `${main} has a \`staticDirs\` entry whose \`from\` or \`to\` is not a string literal ` +
+              `(\`${element.getText().slice(0, 60)}\`), so this gate cannot tell whether it ` +
+              `serves ${SATORI_STORYBOOK_CATALOGUE_DIR}.`,
+          );
+          legible = false;
+          continue;
+        }
+        addStatic(from.text, to ? to.text : '');
+      }
+    } else if (staticDirs) {
+      fail(
+        `${main} declares \`staticDirs\` as something other than an array literal, so ` +
+          '`checkStorybookSatoriCatalogues` cannot tell what is served.',
+      );
+      legible = false;
+    }
+    if (!legible) continue;
+
+    // Globs that copy every catalogue, at any depth, and globs that copy only the folder's own
+    // top-level files. A flat glob mounted above the catalogue path copies no subfolder, so it
+    // serves nothing there (review on #602) — it counts only when mounted exactly at the path.
+    const RECURSIVE_GLOBS = new Set(['**/*', '**', '**/*.json']);
+    const FLAT_GLOBS = new Set(['*', '*.json']);
+
+    // A config directory found only by name has no target, and is judged on `staticDirs` alone.
+    const judged = builds.size > 0 ? [...builds] : [[null, []]];
+    for (const [label, assets] of judged) {
+      const where = label ? ` (as built by ${label})` : '';
+      const mounts = [...staticMounts];
+      let buildLegible = true;
+      for (const asset of assets) {
+        const output = trim(asset.output);
+        if (!covers(output)) continue;
+        if (FLAT_GLOBS.has(asset.glob) && output !== SATORI_STORYBOOK_CATALOGUE_DIR) continue;
+        // Refused rather than approximated: honouring `ignore` means reimplementing Angular's
+        // glob matching here, and every approximation of that has let a broken build pass.
+        if (asset.ignore.length > 0) {
+          fail(
+            `${label} serves \`${asset.input}\` at "${asset.output}" with \`ignore\` ` +
+              `${JSON.stringify(asset.ignore)}, which \`checkStorybookSatoriCatalogues\` does not ` +
+              `apply — so it cannot tell which catalogues reach ${SATORI_STORYBOOK_CATALOGUE_DIR}. ` +
+              'Serve the catalogues through an entry without `ignore`, or teach the gate to apply it.',
+          );
+          buildLegible = false;
+          continue;
+        }
+        if (!RECURSIVE_GLOBS.has(asset.glob) && !FLAT_GLOBS.has(asset.glob)) {
+          fail(
+            `${label} serves \`${asset.input}\` at "${asset.output}" with glob ` +
+              `\`${asset.glob}\`, which \`checkStorybookSatoriCatalogues\` cannot interpret — so ` +
+              `it cannot tell which catalogues reach ${SATORI_STORYBOOK_CATALOGUE_DIR}. Teach the ` +
+              'gate that glob rather than leaving it asserting nothing.',
+          );
+          buildLegible = false;
+          continue;
+        }
+        const mount = mountFor(asset.input, asset.output, '');
+        if (mount) mounts.push(mount);
+      }
+      if (!buildLegible) continue;
+
+      const served = new Set();
+      const servedFrom = [];
+      let judgeable = true;
+      for (const { dir, exact } of mounts) {
+        if (dir.startsWith('..')) {
+          if (exact) {
+            fail(
+              `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, outside the ` +
+                'repository.',
+            );
+            judgeable = false;
+          }
+          continue;
+        }
+        if (!fileExists(dir)) {
+          // A mount above the catalogue path with no catalogue folder serves nothing there.
+          if (!exact) continue;
+          const segments = dir.split('/');
+          const index = segments.indexOf('node_modules');
+          const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+          const packageRoot = index === -1 ? null : segments.slice(0, index + span).join('/');
+          if (packageRoot && !fileExists(packageRoot)) {
+            warn(
+              `${packageRoot} is not installed, so the languages ${main} asks Satori for were ` +
+                `not checked against it${where}.`,
+            );
+          } else {
+            fail(
+              `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does ` +
+                'not exist. Either the path is a typo or the package no longer ships that folder.',
+            );
+          }
+          judgeable = false;
+          continue;
+        }
+        servedFrom.push(dir);
+        for (const entry of readdirSync(join(repoRoot, dir))) {
+          if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
+            served.add(entry.slice(0, -'.json'.length));
+          }
+        }
+      }
+      if (!judgeable) continue;
+
+      if (servedFrom.length === 0) {
+        fail(
+          `${projectRoot}'s Storybook configures Satori's translation loader, but ${main}${where} ` +
+            `serves nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request ` +
+            '404s and the stories render raw keys. Add a `staticDirs` entry copying ' +
+            'node_modules/@hylandsoftware/satori-ui/i18n there.',
+        );
+        continue;
+      }
+
+      for (const { file, lang, via } of requested) {
+        const parts = lang.split(/[-_]/);
+        const baseLang = parts.length > 1 ? parts[0] : null;
+        if (served.has(lang) || (baseLang !== null && served.has(baseLang))) continue;
+        fail(
+          `${file} asks Satori's translation loader for "${lang}" (${via}), but the Storybook` +
+            `${where} serves no ${lang}.json${baseLang ? ` or ${baseLang}.json` : ''} at ` +
+            `${SATORI_STORYBOOK_CATALOGUE_DIR} (from ${servedFrom.join(' + ')}; it has ` +
+            `${[...served].sort().join(', ') || 'no catalogue'}). Every \`sat.*\` key in the ` +
+            'stories renders raw. Use a language that folder ships — satori-ui 1.0.0 ships ' +
+            'regional codes only, such as en-US.',
+        );
+      }
+    }
+  }
+
+  if (checked === 0) {
+    warn(
+      'No Storybook under apps/ or libs/ uses `provideAndConfigureSatoriTranslations`, so ' +
+        '`checkStorybookSatoriCatalogues` asserted nothing. That is legitimate if none does.',
     );
   }
 }
@@ -10721,6 +11722,61 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+/**
+ * The generator sources must not name a CommonJS-only global.
+ *
+ * `scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+ * where `__dirname`, `__filename` and `require` all exist — the copy every customer runs. Nx
+ * loads the same sources a different way: since Nx 23, `loadTsFile` prefers Node's native type
+ * stripping, which gives the module ESM semantics and none of the three. So one of them here
+ * works for every customer and throws `ReferenceError` for everyone who runs the command the
+ * documentation gives, `npx nx g ./tools/satori-generators:<generator>`. That asymmetry is how
+ * NXSAT-795 survived a green suite, a green gate and a QA pass of NXSAT-729: nothing in CI runs
+ * a generator through the Nx command line.
+ *
+ * `typeof __dirname` is allowed — the guarded form `util/generator-files-dir.ts` uses to serve
+ * both module systems. Specs are exempt: vitest defines all three.
+ */
+function checkGeneratorsEsmSafe() {
+  // The one file that may name them unguarded. It exists to resolve this difference, and
+  // `generator-files-dir.spec.ts` asserts both of its branches resolve to the same directory.
+  const resolver = 'tools/satori-generators/src/util/generator-files-dir.ts';
+  const cjsOnly = new Set(['__dirname', '__filename', 'require']);
+  const files = walk(
+    'tools/satori-generators/src',
+    (file) => /\.ts$/.test(file) && !/\.spec\.ts$/.test(file) && file !== resolver,
+  );
+  for (const file of files) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    const visit = (node) => {
+      if (ts.isIdentifier(node) && cjsOnly.has(node.text)) {
+        const parent = node.parent;
+        // A member or property *name* is not a reference to the global: `options.require`,
+        // `{ __dirname: x }`, `{ require: r }` in a destructure, `interface { require: T }`.
+        const isName =
+          parent &&
+          ((ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+            (ts.isPropertyAssignment(parent) && parent.name === node) ||
+            (ts.isPropertySignature(parent) && parent.name === node) ||
+            (ts.isBindingElement(parent) && parent.propertyName === node));
+        if (!isName && !(parent && ts.isTypeOfExpression(parent))) {
+          const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+          fail(
+            `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
+              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
+              'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
+              'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
+              'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +
+              'guard with `typeof`.',
+          );
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
 /** Package-tool shims cannot be executed directly on Windows. Inspect syntax, not comments. */
 function checkPackageToolLaunches() {
   const files = ['scripts', 'tools'].flatMap((dir) =>
@@ -11353,8 +12409,8 @@ function checkAdoptedPatternsNotBypassed() {
  * parser below reads specific lines and has to be stricter, because `.github/workflows` is
  * commented heavily and the comments discuss the very syntax being parsed. `storybook-pages.yml`
  * carried `# TODO(NXSAT-649): move this and the deploy job's \`if:\` to \`main\``, which a naive
- * `if:` scan reads as a gate, and `ci.yml`, `build-marketplace.yml` and `publish-config-package.yml`
- * all explain `github.ref` in prose. A parser that reads comments reports the documentation instead
+ * `if:` scan reads as a gate, and `ci.yml` and `build-marketplace.yml` both explain `github.ref`
+ * in prose. A parser that reads comments reports the documentation instead
  * of the configuration — and would have reported this workflow as gated on `main` while it was
  * gated on a deleted branch.
  *
@@ -12197,8 +13253,8 @@ function checkWorkflowRefGates() {
    *
    * A clone that is not shallow AND can resolve its own default branch has the refs to answer the
    * question, so there a missing branch is evidence rather than a guess. `ci.yml` checks out with
-   * `fetch-depth: 0`, so this is the case in this repository's own CI; `build-marketplace.yml` and
-   * `publish-config-package.yml` use `fetch-depth: 1`, and there it stays a warning. Severity
+   * `fetch-depth: 0`, so this is the case in this repository's own CI; `build-marketplace.yml`
+   * uses `fetch-depth: 1`, and there it stays a warning. Severity
    * follows what the clone can prove, instead of assuming the worst everywhere. */
   const cloneIsShallow = (() => {
     try {
@@ -12895,6 +13951,7 @@ function reEscapeForGuardrail(value) {
 }
 
 const GUARDRAILS = [
+  checkGeneratorsEsmSafe,
   checkPackageToolLaunches,
   checkThemeTokens,
   checkDocsNumbering,
@@ -12922,6 +13979,7 @@ const GUARDRAILS = [
   checkAdvertisedLocalesShip,
   checkShippedCatalogueLanguages,
   checkUpstreamCatalogueLanguages,
+  checkStorybookSatoriCatalogues,
   checkCrowdinConfig,
   checkPackagedConfigIsNotADemo,
   checkInstallerOwnsNoCustomerFile,

@@ -5,7 +5,7 @@
 Everything a manifest can address, by ID. An extension point nobody can discover is not an
 extension point, so this file is the contract: if an ID is not listed here, do not depend on it.
 
-Related: [`docs/adf-hx-beta-plan.md`](adf-hx-beta-plan.md) ·
+Related: [`docs/beta-plan.md`](beta-plan.md) ·
 [`AGENTS/11-beta-program.md`](../AGENTS/11-beta-program.md)
 
 ---
@@ -93,7 +93,13 @@ nested more than 1000 deep, a missing asset — and writes the installable zip:
 `node config-packages/acme-config/build.mjs`. Nesting is the one of those limits the server does
 not set itself: `ConfigSnapshot` parses with a plain Jackson `ObjectMapper`, so the depth it
 accepts is jackson-core's `StreamReadConstraints` default, and a fragment past it is dropped at
-`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). The
+`error invalid-json` while the package installs and Nuxeo starts normally (NXSAT-730). Inside that
+band the build has a limit of its own, and now says so when it meets one: the duplicate-key walk
+and the packaging step both recurse through the body, so a body nested close to 1000 can exhaust
+the stack of the Node running the build — on Windows with Node 20 from about depth 993, where it is
+packaging that gives out first and used to end the build with a raw `RangeError` trace. The refusal
+names the file and the depth and says the server would have accepted that depth, so it cannot be
+read as the limit above; Node 22 and newer carry the whole band on every platform we test. The
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
 of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
@@ -103,8 +109,8 @@ our own packaged fragments, and `nuxeo-agentic-ui`, the package yours depends on
 name Windows reserves, such as `con` or `nul`, which cannot be a directory there. A package named
 `defaults` would otherwise contribute a fragment on the same key as ours and take its place, which
 the server reports as a warning — see "Displacing one of our packaged defaults" below.
-`config-packages/presales-demo` in this repository is one, with two
-demo presets. The `bootstrap.json` that used to be copied and edited beside
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo)
+in nuxeo/Nuxeo-Satori-Config is one, with two demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
 is not served.
 
@@ -205,8 +211,9 @@ later fragment's `presetSwitching` wins, so a customer package can switch it off
 is up to 64 letters, digits, `.`, `_` and `-`, starting with a letter or digit; a preset whose
 name breaks that rule is skipped, and an unknown name is reported and forgotten.
 
-Two worked prospects already ship, in `config-packages/presales-demo`, so this needs no new
-package to try:
+Two worked prospects — both fictional — already ship, in
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo)
+in nuxeo/Nuxeo-Satori-Config, so this needs no new package to try:
 
 ```
 https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
@@ -229,7 +236,94 @@ Switching chooses among them for one browser; it grants nothing and changes noth
 prospect you met this morning means editing `bootstrap.json`, raising the version, rebuilding,
 reinstalling and restarting — two to four minutes. The development override directory removes
 that: with `nuxeo.agentic.ui.config.dev=true` a new preset is one file copy and a reload. See
-"The fast loop while you are tuning a value" in `config-packages/presales-demo/README.md`.
+[The fast loop while you are tuning a value](#the-fast-loop-while-you-are-tuning-a-value), below.
+
+### The fast loop while you are tuning a value
+
+A package is the way a change reaches a customer: reviewed, versioned, built from source,
+installed. It is also two to four minutes per iteration and a restart that drops every open
+session, which is the wrong price for finding out whether a title fits in the header.
+
+A development server can read a directory on its own disk on every request instead
+(NXSAT-312). Switch it on in `nuxeo.conf`:
+
+```
+nuxeo.agentic.ui.config.dev=true
+# optional; defaults to ${nuxeo.data.dir}/agentic-ui-config-dev
+# nuxeo.agentic.ui.config.dev.dir=/var/lib/nuxeo/agentic-ui-config-dev
+```
+
+Restart once, for that line only. From then on the loop is **edit the file, reload the tab** —
+no rebuild, no version bump, no reinstall, no restart. Measured on a local Docker Nuxeo: 0.1 s
+against 8.5 s for the restart alone on that same container, and the plan's figure for a real
+demo server is 60–120 s.
+
+The directory has the same shape as `bundle/agentic-ui-config/`, so you copy a file across rather
+than learn a second layout:
+
+| File                                     | What it contributes                                             |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `bootstrap.json`                         | a bootstrap fragment named `dev`, applied after every package's |
+| `bootstrap.<name>.json`                  | a bootstrap fragment named `<name>`                             |
+| `manifest.json` / `manifest.<name>.json` | the same, in the manifest layer                                 |
+| `layouts/<Type>/<mode>.layout.json`      | a per-type layout                                               |
+| `assets/<file>`                          | an image a fragment names                                       |
+
+`bootstrap.json` is named `dev`, which no package uses, so it is appended and wins on the keys it
+sets. Name the file after a packaged fragment instead — `bootstrap.defaults.json` — and it
+**replaces** that fragment in place, losing every key it does not restate. Both are useful; pick
+deliberately. Any other file name is reported in the response's `diagnostics` rather than passed
+over, so a mistyped `bootsrap.json` tells you what happened.
+
+An override is an ordinary contribution and nothing about the contract is relaxed for it: it is
+validated the same way, a malformed one is rejected and reported and the packaged fragment stays
+in force, replacements keep their position, each fragment carries the file it came from in its
+provenance, and a contributed image is served with the same `default-src 'none'; sandbox` policy
+and the same name allow-list. That is deliberate — an override that skipped validation would be
+worse than the restart it saves.
+
+#### Getting the file onto the server
+
+Docker, which is what a local Nuxeo usually is:
+
+```bash
+# Once, before the first copy. The server reports the directory as absent rather than creating
+# it, and `docker cp` of a single file into a parent that does not exist fails.
+docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev
+
+docker cp bundle/agentic-ui-config/bootstrap.json \
+  nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/bootstrap.json
+```
+
+To watch and copy on every save, with `fswatch` (macOS) or `inotifywait` (Linux):
+
+```bash
+fswatch -o bundle/agentic-ui-config | while read -r _; do
+  docker cp bundle/agentic-ui-config/. nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/
+done
+```
+
+**`nuxeo sync` does not help in Docker mode, and this is worth knowing before you try.** The
+Nuxeo CLI watcher is real and does exactly this job, but `generator-nuxeo`'s configure step skips
+the destination prompt when the deployment is Docker and hardcodes
+`/opt/nuxeo/server/nxserver/nuxeo.war/ui/`, which is Web UI's directory, not ours
+(`generators/synchronize/configure-delegate.js`, verified against `generator-nuxeo@4.0.7`). In
+**local** deployment mode `dest` is prompted and free, so on a non-containerised server
+`nuxeo sync` can target the override directory and works.
+
+#### Before you put it on anything shared
+
+- **It is off unless that property is set.** With the property unset the directory is not read,
+  not stat-ed and not reached, whatever is in it — asserted on the response bytes by
+  `AgenticUiConfigDevOverrideTest`, and by the `checkDevConfigOverrideIsNotProductionReachable`
+  guardrail on anything this repository ships — and, for the configuration packages in
+  nuxeo/Nuxeo-Satori-Config, by that repository's
+  [deployability check](https://github.com/nuxeo/Nuxeo-Satori-Config/blob/main/scripts/check-deployable.mjs).
+- **Never set it in production.** It makes configuration editable by anyone who can write to the
+  server's filesystem, which is exactly the privilege separation a regulated customer is relying
+  on. It belongs on a development box or a demo box, nowhere else.
+- **A value you keep is not finished until it is in the package.** The override directory is for
+  deciding; `bundle/agentic-ui-config/` plus a version bump is how the decision ships.
 
 ### Feature toggles
 
@@ -311,6 +405,45 @@ populated) honour four more:
 | `tooltip`     | Hover text. Falls back to `label`.                                            |
 | `enabledRule` | A rule ID. When it denies, the control renders **disabled** rather than gone. |
 | `action`      | Registered handler ID. Defaults to the descriptor `id`.                       |
+
+#### `icon` names removed in Satori 1.0.0
+
+`icon` is a name in Satori's icon sprite: the action bar, the action menu and the selection top
+bar render it as `<mat-icon [svgIcon]="action.icon">`. Satori 1.0.0 (DS-1505) removed the
+deprecated names below. A manifest that still uses one gets **a blank icon and no error** — no
+warning is logged and nothing in §2a reports it. Satori's `migrate-deprecated-satori-icons`
+migrator cannot help here either: it rewrites names written in templates, and a manifest value
+reaches the template only at run time. Rename them in the manifest:
+
+| Removed         | Use instead    |
+| --------------- | -------------- |
+| `AI`            | `ai`           |
+| `UI`            | `ui`           |
+| `Acs`           | `acs`          |
+| `Comprehend`    | `comprehend`   |
+| `DocuSign`      | `docusign`     |
+| `Lambda`        | `lambda`       |
+| `Mariadb`       | `mariadb`      |
+| `MS_Teams`      | `ms_teams`     |
+| `Nuxeo`         | `nuxeo`        |
+| `OnBase`        | `onbase`       |
+| `OpenAI`        | `openai`       |
+| `Outlook`       | `outlook`      |
+| `PostgreSQL`    | `postgresql`   |
+| `Perceptive`    | `perceptive`   |
+| `Rekognition`   | `rekognition`  |
+| `Rest`          | `rest`         |
+| `Salesforce`    | `salesforce`   |
+| `SFTP`          | `sftp`         |
+| `Stack`         | `slack`        |
+| `SQL_database`  | `sql_database` |
+| `Textract`      | `textract`     |
+| `Trello`        | `trello`       |
+| `regenerate_ai` | `autorenew`    |
+| `record_audio`  | `audio`        |
+
+Source: the `migrate-deprecated-satori-icons` README in `@hylandsoftware/satori-migrations@1.0.0`.
+None of these names is used by the descriptors this product registers.
 
 ### Per-ID overrides
 
@@ -532,32 +665,32 @@ Entries dropped for an unreachable `path` are reported the same way, on
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
-| ID                              | Label               | Path                   | Order | Rule                                | Notes    |
-| ------------------------------- | ------------------- | ---------------------- | ----- | ----------------------------------- | -------- |
-| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                   | Disabled |
-| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                   | —        |
-| `app.navbar.browse`             | Browse              | `/browse`              | 30    | —                                   | —        |
-| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                   | —        |
-| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                   | —        |
-| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                   | —        |
-| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                   | —        |
-| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                   | —        |
-| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | —                                   | —        |
-| `app.navbar.collections`        | Collections         | `/collections`         | 110   | —                                   | —        |
-| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                   | —        |
-| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                   | —        |
-| `app.navbar.trash`              | Trash               | `/trash`               | 140   | —                                   | —        |
-| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess` | —        |
+| ID                              | Label               | Path                   | Order | Rule                                 | Notes    |
+| ------------------------------- | ------------------- | ---------------------- | ----- | ------------------------------------ | -------- |
+| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                    | Disabled |
+| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                    | —        |
+| `app.navbar.browse`             | Browse              | `/browse`              | 30    | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                    | —        |
+| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                    | —        |
+| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                    | —        |
+| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                    | —        |
+| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                    | —        |
+| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.collections`        | Collections         | `/collections`         | 110   | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                    | —        |
+| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                    | —        |
+| `app.navbar.trash`              | Trash               | `/trash`               | 140   | `core.not(app.rules.isExternalUser)` | —        |
+| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess`  | —        |
 
-`app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
-app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
-backticks because it is no longer an ID you can address. An `overrides` key naming it changes
-nothing. A `navbar` slot entry naming it no longer patches anything, so it is added as an entry of
-its own, blank unless it gives a path and a label: delete it. A `labels` entry for its key,
-nav.item.browse-adf-hx, no longer reaches any entry: set `nav.item.browse` instead. Old `/#/browse-adf-hx` and `/#/search-adf-hx` links redirect to
-`/browse` and `/search` with their query string intact, and a `?path=` folder opens in `/browse`.
-Until then `app.navbar.browse` shipped `disabled: true`; a manifest restating it with
-`"disabled": false` is now redundant but harmless.
+A share recipient, a `transient/` user, gets Browse, Favorites, Collections and Trash hidden by
+default through `app.rules.isExternalUser`. This is presentation only: the server still refuses those
+paths. A manifest that wants one of them shown to recipients too clears its rule:
+
+```json
+{ "overrides": { "app.navbar.favorites": { "rule": null } } }
+```
+
+`app.navbar.browse` is the one browse entry, at `/browse`.
 
 **Hiding an entry hides the navigation, not the route.** `{"visible": false}` and a
 denying `rule` both remove the entry from the sidebar; neither removes the route,
@@ -606,19 +739,20 @@ breaking the slot it sits in.
 Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicates in
 `libs/shared/nuxeo-client/src/lib/utils/document-permissions.ts` — the permission logic is unchanged.
 
-| ID                               | True when                                                         |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `app.rules.canWrite`             | The user has `Write` or `WriteProperties` on the focused document |
-| `app.rules.canRemove`            | The user has `Remove`                                             |
-| `app.rules.canAddChildren`       | The user has `AddChildren`                                        |
-| `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                      |
-| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                               |
-| `app.rules.hasDocument`          | A document is in focus                                            |
-| `app.rules.isType`               | The focused document's type is one of the `parameters`            |
-| `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`   |
-| `app.rules.hasFile`              | The focused document holds a main file (`file:content`)           |
-| `app.rules.isTrashed`            | The focused document is in the trash                              |
-| `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                    |
+| ID                               | True when                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| `app.rules.canWrite`             | The user has `Write` or `WriteProperties` on the focused document                    |
+| `app.rules.canRemove`            | The user has `Remove`                                                                |
+| `app.rules.canAddChildren`       | The user has `AddChildren`                                                           |
+| `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                                         |
+| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                                                  |
+| `app.rules.hasDocument`          | A document is in focus                                                               |
+| `app.rules.isType`               | The focused document's type is one of the `parameters`                               |
+| `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`                      |
+| `app.rules.hasMimeType`          | The main file MIME type matches any exact type or family (`image/*`) in `parameters` |
+| `app.rules.hasFile`              | The focused document holds a main file (`file:content`)                              |
+| `app.rules.isTrashed`            | The focused document is in the trash                                                 |
+| `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                                       |
 
 `app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
 record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
@@ -678,11 +812,12 @@ Do not reference those two yet.
 These three **fail closed**: if one is referenced before it is registered, it
 denies rather than permits.
 
-| ID                                  | True when                       |
-| ----------------------------------- | ------------------------------- |
-| `app.rules.isAdministrator`         | The user is in `administrators` |
-| `app.rules.isPowerUser`             | The user is in `powerusers`     |
-| `app.rules.hasAdministrationAccess` | Either of the above             |
+| ID                                  | True when                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `app.rules.isAdministrator`         | The user is in `administrators`                                                                                      |
+| `app.rules.isPowerUser`             | The user is in `powerusers`                                                                                          |
+| `app.rules.hasAdministrationAccess` | Either of the above                                                                                                  |
+| `app.rules.isExternalUser`          | The user is an external share recipient (`transient/`), who can open none of Browse, Favorites, Collections or Trash |
 
 `rule: null` in an override still clears the gate, so a customer who genuinely
 wants an entry ungated has a Layer 1 route to it. Fail-closed is about the
@@ -807,8 +942,8 @@ inject(ExtensionActionRegistry).register({
 });
 ```
 
-Handlers are objects with an `execute(context)` method — the shape adf-hx uses
-for its own `*-action.service` classes. Re-registering one of our IDs replaces
+Handlers are objects with an `execute(context)` method — the usual
+service shape. Re-registering one of our IDs replaces
 the behaviour without forking, and it stays replaced: the packaged surfaces
 register their own handlers in a lower-precedence tier, so yours answers whether
 it was registered before or after the page that ships the ID, and navigating away
@@ -1268,6 +1403,57 @@ library.
 
 ---
 
+### Select NEV for the packaged View tab (NXSAT-698)
+
+The built-in viewer remains the default. To prefer NEV 2026 without rebuilding, configure
+`integrations.arender.viewerOrigin` in the Layer 0 bootstrap and contribute this Layer 1
+manifest fragment:
+
+```json
+{
+  "extensions": {
+    "slots": {
+      "tabs": [
+        {
+          "id": "app.tabs.view",
+          "preferARender": {
+            "type": "app.rules.hasMimeType",
+            "parameters": ["application/pdf", "message/rfc822", "image/vnd.adobe.photoshop"]
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Use `"preferARender": { "type": "core.true" }` for all documents, or
+`"preferARender": { "type": "core.false" }` to disable it. These object forms also override
+an earlier layer's MIME rule. A bare string does not replace an existing object-valued rule
+during layer merging; use the object form when changing an earlier selection.
+Contribute the field through `slots.tabs` using the packaged ID, **not** `overrides`, whose
+accepted fields are limited to visibility, order, label and rule. Omitting the field keeps the
+built-in viewer. A malformed field is ignored; valid references use the ordinary rule resolver,
+including its documented unknown-ID behavior. Nested `core.every`, `core.some` and `core.not`
+can combine MIME, type and facet rules. Later manifest layers may change the selection.
+
+`app.rules.hasMimeType` reads only `file:content['mime-type']`. Matching ignores case,
+surrounding whitespace and semicolon parameters. It accepts exact types and family patterns
+such as `image/*`; arbitrary globs and `*/*` are not supported. Missing content, missing MIME,
+empty parameters and non-string parameters do not match. There is no `picture:views` fallback:
+a JPEG rendition must not determine whether an original PSD uses NEV. Note MIME metadata is
+not used by this rule.
+
+NEV renders only when the existing URL service supplies a usable URL. Unconfigured NEV,
+missing addon, denied Read permission, rejected URL or missing blob leaves the existing built-in
+content (or its existing no-preview state) in place. Its image/video controls and main-file
+actions return on fallback. Notes retain their editor; Annotations retains its existing behavior.
+A ready NEV URL renders without waiting for the fallback blob download. Document loading still
+blocks the View; if the URL becomes unavailable, the built-in viewer resumes its normal loading state.
+A successfully loaded custom `documentView` component still takes precedence. This preference
+is part of the packaged viewer, not a registered NEV component or a new `documentView` entry.
+A valid frame URL whose remote viewer later fails is not detectable by this null-URL fallback.
+
 ## 9a. `documentView` — a different View per document type
 
 Resolves, with no packaged entries. The host asks this slot for the body of the
@@ -1402,8 +1588,13 @@ modes:
   default (`@emptyWithDefault`) when the document is created. A complex field is sent whole once
   any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
   checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
-  the location, the main file of a File, Picture, Audio or Video, and a Note's format. The import
-  wizard's properties step is not this form.
+  the location, the main file of a File, Picture, Audio or Video, and a Note's format. A type that
+  extends File, Picture, Audio or Video, or carries the `file` schema itself or through a facet it
+  or an ancestor declares, gets the same main-file field, and Import offers it for files — unless
+  it is folderish (`Folderish`, its own or an ancestor's) and extends none of the four: Workspace
+  and Section carry `file` for their own use, and get no main-file field. The dialog reads the
+  type's ancestry and facets from Nuxeo's content model (`/config/types`), and what each facet
+  contributes from `/config/facets`. The import wizard's properties step is not this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
@@ -1495,11 +1686,21 @@ How each value is shown is decided by its schema type — there is no widget nam
 | `string`                       | text                                                                                                                                                                                                      |
 | `string` bound to a vocabulary | the entry's label, read for the entries the document holds only, so a vocabulary of any size costs a read per value; `Parent/Child` for an `l10n…` vocabulary, in English as the panel's own Subjects row |
 | `string[]` and other lists     | one chip per item (vocabulary items labelled)                                                                                                                                                             |
-| `date`                         | a long date, in UTC, so a calendar date is the same day everywhere                                                                                                                                        |
+| `date`                         | a long date: a stored day in UTC, so it is the same day everywhere; any other instant, such as `dc:created`, on the reader's own day                                                                      |
 | `long`, `double`               | a number in the user's locale                                                                                                                                                                             |
 | `boolean`                      | Yes or No, translated                                                                                                                                                                                     |
 | `blob`                         | the file name                                                                                                                                                                                             |
 | `complex`, `complex[]`         | its sub-fields, one group per item                                                                                                                                                                        |
+
+**A `date` value is shown by what it holds.** A stored day — `2024-03-06`, or an instant at exactly
+midnight UTC written with `Z` or `+00:00` and a fraction of zeros or none, which is what Nuxeo
+stores for a day-only write — is formatted in UTC, the zone it is anchored in, so 6 March is 6 March
+to every reader. Any other instant is a moment, not a day, and is formatted in the reader's own
+zone: a `dc:created` of `2026-11-23T20:00:00Z` is 23 November in New York and 24 November in
+Kolkata. One kind of value is misread, and nothing in it can say so: an instant that falls at exactly
+midnight UTC, such as a `dc:created` stamped at `00:00:00.000Z`, is taken for a stored day, so west
+of UTC it shows a day later than the reader's own. Until 2026-11-23 every `date` value was formatted
+in UTC, which put an instant on the reader's wrong day wherever their day and UTC's differed.
 
 In an `edit` or `create` form, the schema type picks the control:
 
@@ -1517,22 +1718,47 @@ In an `edit` or `create` form, the schema type picks the control:
 | `complex[]`                        | one group per item, with Add and Remove                                                     |
 | `blob`, or `complex` nested deeper | shown, not editable                                                                         |
 
-**A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
-sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
-the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
-the day that was saved everywhere. This is the same anchoring the view uses (`date` renders in UTC,
-above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
-value and every surface showing it agrees.
+**A `date` field edits a calendar day, and opens on the day the view shows.** A day picked or typed
+is sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever
+zone the user is in — which is the same anchoring Nuxeo itself applies to a day-only write, so one
+picked day is one stored value. A value is opened by the rule the view formats it by (above): a
+stored day on the day it names in UTC, so the form opens on the day that was saved everywhere, and
+any other instant on the reader's own day. The form and the view therefore name the same day for
+every value, including the one the view misreads: an instant at exactly midnight UTC opens, as it
+is shown, on its UTC day. Until 2026-11-23 the form opened every value on its UTC day, so at +05:30
+`2026-11-23T20:00:00Z` was shown as 24 November and opened in the form as 23 November.
 
-Two consequences worth designing around:
+Three consequences worth designing around:
 
 - A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
-  does not treat it as one beyond its day: it is shown and edited by day, and written back
-  unchanged — time of day included — as long as the day is not altered. Alter the day and the time
-  is replaced by UTC midnight.
-- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) names the
-  previous UTC day when that zone is ahead of UTC, and will be shown and edited as that previous
-  day. Nothing records the zone it was written in, so it cannot be recovered.
+  does not treat it as one beyond its day: it opens on the reader's day, and is written back
+  unchanged — time of day included — as long as that day is not altered. Alter the day and the
+  time is replaced by UTC midnight, so the value is a stored day from then on.
+- A value written by another client at midnight in a local zone (Nuxeo Web UI does this) is not at
+  midnight UTC, so it is shown and opened as an instant: on the day that was picked by a reader in
+  the writer's zone, and, when that zone is ahead of UTC, on the previous day by a reader in UTC or
+  west of it. Nothing records the zone it was written in, so it cannot be recovered.
+- **`dc:expired` is read two ways, and they can name different days.** The Edit dialog's Expires
+  field follows the rule above, as does the row of a `metadata` layout that lists `dc:expired`.
+  Every other reader of `dc:expired` opens or formats it on its UTC
+  day, whatever it holds:
+  - the Properties panel's packaged Expires row (`properties-panel.component.html`);
+  - the edit dialogs of a collection and of Browse (`calendarDayOf` in `shared/ui/…/calendar-day.ts`
+    and `browse/…/calendar-day.ts`);
+  - the navigation drawer's Expired queue label (`drawerExpiredLabel`, `apps/nuxeo-ui`);
+  - the version comparison (`formatCompareDate`, `nuxeo-client`).
+
+  The Expired queue's NXQL compares the stored instant with the current time, so it names no day.
+  For a stored day every reader agrees: `2024-03-06T00:00:00.000Z` is 6 March on all of them, in
+  every zone. For a `dc:expired` that is not one, they disagree. 6 March picked in Web UI at +05:30
+  is stored as its local midnight, `2024-03-05T18:30:00.000Z`. To a reader at +05:30, the Edit
+  dialog opens it as 6 March, while the Expires row, both edit dialogs, the Expired queue and the
+  comparison show 5 March. Every day picked in this application is written as a stored day, so the
+  difference is confined to values another client wrote and to values this application anchored
+  locally before NXSAT-727. Closing it means one rule for every reader: a single
+  `isStoredCalendarDay` exported from `@nuxeo/satori-platform/components` for all of them to use.
+  That is a published-API decision, deferred rather than rejected, and until it is taken these
+  readers stay as they are.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
@@ -1816,9 +2042,8 @@ not protect anything the API would otherwise return.
 
 ## 12. `$references` — layering your JSON over ours
 
-Semantics are ACA's. The merge is our own copy of `mergeObjects` from `@alfresco/adf-extensions`
-9.0.0, pinned case by case to its output, so behaviour matches the upstream documentation, apart
-from the `null` and `__proto__` items below, where ACA's merge threw or rewrote a prototype.
+The merge is our own copy of `mergeObjects`, pinned case by case to its output, apart
+from the `null` and `__proto__` items below, where the original threw or rewrote a prototype.
 
 - Layers apply in the order `$references` lists them. **Later wins.**
 - `$`-prefixed keys are **metadata and do not merge** — `$references` from a referenced layer never

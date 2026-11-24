@@ -9,3 +9,9 @@
  */
 
 export { nuxeoDocument, nuxeoAce } from './lib/nuxeo-fixtures';
+export { NOT_STORED_CALENDAR_DAYS, STORED_CALENDAR_DAYS } from './lib/stored-calendar-day-cases';
+export {
+  iconCentringProblems,
+  ruleDeclarations,
+  withoutScssComments,
+} from './lib/stylesheet-rules';

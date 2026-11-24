@@ -703,6 +703,7 @@
       "the-document-is-not-shared-with": "The document is not shared with any external user.",
       "there-are-no-local-permissions": "There are no local permissions.",
       "this-folder-is-empty": "This folder is empty",
+      "back-to-shared-document": "Back to shared document",
       "time-frame": "Time Frame",
       "title": "Title",
       "to": "To",
@@ -764,6 +765,7 @@
       "expires": "Expires",
       "file-import-is-not-available-at": "File import is not available at the repository root. Create a domain first, or",
       "files-to-import": "Files to import",
+      "folder-allows-no-file-types": "Files cannot be imported here, because this location allows no document type that holds a file. Choose another location.",
       "format": "Format",
       "import": "Import",
       "loading": "Loading",
@@ -853,6 +855,8 @@
       "document-updated": "Document updated",
       "domain-container-guidance": "Open Sections, Templates, or Workspaces, then create content inside those folders.",
       "download-failed": "Download failed.",
+      "drop-allows-no-file-types": "Files cannot be uploaded to {{ name }}, because it allows no document type that holds a file.",
+      "drop-pending-elsewhere": "Retry or remove the files that could not be uploaded before dropping files on another folder.",
       "failed-to-add-tag": "Failed to add tag",
       "failed-to-copy": "The document could not be copied.",
       "failed-to-delete": "Failed to delete",
@@ -1270,6 +1274,7 @@
       "running": "Running",
       "save": "Save",
       "scanning-archive": "Scanning Archive...",
+      "select-a-process": "Select a process...",
       "select-a-section-below-to-publish": "Select a section below to publish this document. Published documents will appear in the selected section and will be accessible to users with read access.",
       "select-event-actions": "Select event actions",
       "select-event-category": "Select event category",
@@ -2533,7 +2538,8 @@
       "placeholder": "Search Filters",
       "loading": "Loading saved searches...",
       "none": "No saved searches",
-      "no-match": "No matching saved searches"
+      "no-match": "No matching saved searches",
+      "clear": "Clear saved search"
     },
     "saved-search-actions": {
       "save-as": "Save As",
@@ -2684,7 +2690,8 @@
     },
     "asset-grid": {
       "label": "Assets",
-      "select": "Select {{name}}"
+      "select": "Select {{name}}",
+      "name-and-type": "{{name}} \u2014 {{type}}"
     },
     "asset-facets-drawer": {
       "label": "Asset filters",
@@ -2929,6 +2936,7 @@
       "open-with-nuxeo-drive": "Open with Nuxeo Drive",
       "pdf-frame": "PDF preview of {{ name }}",
       "picture-info": "Picture Info",
+      "picture-metadata-region": "Picture metadata",
       "preview": "Preview",
       "preview-frame": "Preview of {{ name }}",
       "preview-not-available": "Preview not available",
@@ -2942,6 +2950,7 @@
       "use-the-view-tab-for-the": "Use the View tab for the standard preview.",
       "video-codec": "Video Codec",
       "video-info": "Video Info",
+      "video-metadata-region": "Video metadata",
       "weight": "Weight",
       "zoom-in": "Zoom in",
       "zoom-out": "Zoom out"

@@ -147,6 +147,16 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
     this.loadRecent();
   }
 
+  /**
+   * Records what the admin types. Emptying the field after a search is the way back to the full
+   * listing, and it sends no submit, so it must run the search itself: otherwise the last result,
+   * such as "No users match this search.", stays on screen for an empty field.
+   */
+  protected onQueryChange(value: string): void {
+    this.query.set(value);
+    if (!value.trim() && this.committedQuery.trim()) this.runSearch();
+  }
+
   /** Searches users and groups together, from the first page of each. */
   protected runSearch(): void {
     this.cancelRequests();
@@ -433,7 +443,22 @@ export class NxsAdminUsersGroupsPageComponent implements OnInit {
     else if (usersTotal > 0) this.selectedTab.set(0);
   }
 
+  /**
+   * The provider is audit-backed, so an account that was deleted and created again has one entry
+   * per creation (NXSAT-285). Only the newest creation of each user or group is shown: the provider
+   * lists newest first, so the first entry for an identifier is the one that stands.
+   */
   private recentRowsFrom(docs: NuxeoDocument[]): NxsRecentPrincipalRow[] {
+    const seen = new Set<string>();
+    return this.principalRowsFrom(docs).filter((row) => {
+      const key = `${row.kind}:${row.identifier}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  private principalRowsFrom(docs: NuxeoDocument[]): NxsRecentPrincipalRow[] {
     return docs.flatMap((doc): NxsRecentPrincipalRow[] => {
       if (doc.type === 'user') {
         const firstName = String(doc.properties['user:firstName'] ?? '').trim();

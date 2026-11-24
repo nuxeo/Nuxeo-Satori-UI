@@ -3,3 +3,12 @@
 :host {
   @include picker.field;
 }
+
+// The clear and calendar buttons sit side by side, centred on the input, and never wrap: wrapped,
+// the calendar button dropped under the clear button and stretched the field.
+.nxs-date-input__actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+}

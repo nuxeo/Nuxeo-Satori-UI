@@ -100,8 +100,8 @@ jobs:
           if-no-files-found: error
 
   # Split from `build` so the registry token never shares a runner with repository code,
-  # the same split `publish-config-package.yml` makes. This job checks nothing out and runs
-  # only the downloaded tarball through npm.
+  # the same split the configuration packages' publish workflow makes in nuxeo/Nuxeo-Satori-Config.
+  # This job checks nothing out and runs only the downloaded tarball through npm.
   publish:
     needs: build
     if: ${{ !inputs.dryRun }}

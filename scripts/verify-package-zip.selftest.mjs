@@ -192,6 +192,59 @@ expectGreen('a Nuxeo-Component header wrapped across two lines, as the jar tool 
   jar: jarFiles({ 'META-INF/MANIFEST.MF': manifest(COMPONENT, true) }),
 });
 
+// Documentation uses real XML examples, but those examples are not registered contributions.
+const documentedExamples =
+  '<documentation><code title=">">' +
+  '<![CDATA[</documentation>]]>' +
+  '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+  '<fragment name="example" layer="manifest"><json>{}</json></fragment>' +
+  '<fragment name="example-src" layer="bootstrap" src="examples/missing.json" />' +
+  '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+  '<asset name="example.svg" src="examples/missing.svg" />' +
+  '</extension></code></documentation>';
+
+for (const location of ['component', 'extension-point']) {
+  const documentation =
+    location === 'component'
+      ? documentedExamples
+      : '<extension-point name="configuration">' + documentedExamples + '</extension-point>';
+  expectGreen('real XML examples in ' + location + ' documentation', {
+    jar: jarFiles({
+      [COMPONENT]: componentXml().replace(
+        '  <extension target=',
+        documentation + '  <extension target=',
+      ),
+    }),
+  });
+}
+
+expectRed(
+  'documented contributions cannot make an otherwise empty configuration package active',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({ srcs: [] }).replace(
+        '  <extension target=',
+        '<documentation><extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+          '<fragment name="example" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />' +
+          '</extension></documentation>  <extension target=',
+      ),
+    }),
+  },
+  /has no <fragment>, <layout> or <asset>/,
+);
+
+expectRed(
+  'a documented requirement cannot satisfy the live configuration dependency',
+  {
+    jar: jarFiles({
+      [COMPONENT]: componentXml({
+        requireText: '<documentation><code>' + DEFAULTS_REQUIRE + '</code></documentation>',
+      }),
+    }),
+  },
+  /does not <require> org\.nuxeo\.agentic\.ui\.config\.defaults/,
+);
+
 expectGreen('a component naming an asset as well as a fragment', {
   jar: jarFiles({
     [COMPONENT]: componentXml({
@@ -386,6 +439,254 @@ expectRed(
     }),
   },
   /has no <fragment>, <layout> or <asset>/,
+);
+
+// ---- a manifest whose components two readers take differently. The server reads
+// `Nuxeo-Component` through `java.util.jar.Manifest`: the name in any letter case, the last of a
+// repeated header, lines ended at CR or LF alone; the runtime then splits the value at commas and
+// whitespace. This read the first header spelt exactly so, split at commas, and passed each of
+// these jars while the server loaded a component it never resolved. ----
+
+expectRed(
+  'two Nuxeo-Component headers, even when every component they name is in the jar',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': `${manifest()}Nuxeo-Component: ${SECOND}\n`,
+      [SECOND]: unrelatedComponent,
+    }),
+  },
+  /has 2 Nuxeo-Component headers, counting any letter case/,
+);
+
+expectRed(
+  'a second header spelt nuxeo-component, which the server reads as the same one',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': `${manifest()}nuxeo-component: ${SECOND}\n`,
+      [SECOND]: unrelatedComponent,
+    }),
+  },
+  /has 2 Nuxeo-Component headers, counting any letter case/,
+);
+
+expectRed(
+  'its one header spelt nuxeo-component',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest().replace('Nuxeo-Component:', 'nuxeo-component:'),
+    }),
+  },
+  /spells its Nuxeo-Component header "nuxeo-component"/,
+);
+
+// A multiline `^` also matches after U+2028, which Java reads as part of the header's value.
+expectRed(
+  'a lookalike after a U+2028 inside another header, before the real one',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest().replace(
+        `Nuxeo-Component: ${COMPONENT}`,
+        `X-Note: see\u2028Nuxeo-Component: ${COMPONENT}\nNuxeo-Component: OSGI-INF/missing.xml`,
+      ),
+    }),
+  },
+  /names Nuxeo-Component OSGI-INF\/missing\.xml, which is not in the jar/,
+);
+
+// And the other way round: text in a header's value is not a header, however it reads.
+expectGreen("a lookalike after a U+2028, which is part of another header's value", {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': manifest().replace(
+      `Nuxeo-Component: ${COMPONENT}`,
+      `X-Note: see\u2028Nuxeo-Component: OSGI-INF/missing.xml\nNuxeo-Component: ${COMPONENT}`,
+    ),
+  }),
+});
+
+// Refused or not, the header the server loads is the one resolved — so a jar is never reported
+// on less than the server would read.
+expectRed(
+  'of two headers, the last names a component the jar does not hold',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': `${manifest()}Nuxeo-Component: OSGI-INF/missing.xml\n`,
+    }),
+  },
+  /names Nuxeo-Component OSGI-INF\/missing\.xml, which is not in the jar/,
+);
+
+// Java reads the header from the main section alone, the lines before the first empty one. In a
+// later `Name:` section it is that entry's attribute, and names nothing the server loads.
+expectGreen('a second header in a later Name: section, which the server does not read', {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': `${manifest()}\nName: OSGI-INF/missing.xml\nNuxeo-Component: OSGI-INF/missing.xml\n`,
+  }),
+});
+
+expectRed(
+  'components named only in a later Name: section',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest().replace(
+        `Nuxeo-Component: ${COMPONENT}`,
+        `\nName: ${COMPONENT}\nNuxeo-Component: ${COMPONENT}`,
+      ),
+    }),
+  },
+  /names components only after its first blank line, where the server does not read them/,
+);
+
+// One entry to a split at commas; two paths to the server, and the jar holds neither.
+expectRed(
+  'a component path with a space in it, which the server splits in two',
+  {
+    jar: jarFiles({
+      'META-INF/MANIFEST.MF': manifest('OSGI-INF/acme config.xml'),
+      'OSGI-INF/acme config.xml': componentXml(),
+    }),
+  },
+  /names Nuxeo-Component OSGI-INF\/acme, which is not in the jar/,
+);
+
+expectGreen('two components separated by whitespace alone, which the server reads as two', {
+  jar: jarFiles({
+    'META-INF/MANIFEST.MF': manifest(`${COMPONENT}\t${SECOND}`),
+    [SECOND]: unrelatedComponent,
+  }),
+});
+
+// ---- a manifest `java.util.jar.Manifest` cannot read. It refuses the whole manifest at the first
+// line it cannot read, so the bundle has no headers and the package configures nothing. Each
+// negative here passed while its Nuxeo-Component header resolved. Each fixture was read with JDK
+// 21's `new JarFile(jar).getManifest()`: it refused every negative but the last, whose final
+// header it ignored, and read every positive with its Nuxeo-Component. ----
+
+const withManifest = (text) => ({ jar: jarFiles({ 'META-INF/MANIFEST.MF': text }) });
+const CLAUSE = String.raw`so Java refuses the whole manifest, and Nuxeo reads none of the bundle's headers\.`;
+
+expectRed(
+  'a blank line inside the main section, then a header with no Name: before it',
+  withManifest(`${manifest()}\nBundle-Description: x\n`),
+  new RegExp(String.raw`has "Bundle-Description: x" on line 6, after a blank line.*${CLAUSE}`),
+);
+
+expectRed(
+  'a section past a Name: section with no Name: of its own',
+  withManifest(`${manifest()}\nName: ${COMPONENT}\nX-Note: a\n\nX-Other: b\n`),
+  /has "X-Other: b" on line 9, after a blank line/,
+);
+
+expectRed(
+  'a Name: line without the space Java requires',
+  withManifest(`${manifest()}\nName:${COMPONENT}\n`),
+  /has "Name:OSGI-INF\/acme-config-config\.xml" on line 6, after a blank line/,
+);
+
+for (const [label, line] of [
+  ['a header name with a space in it', 'Bundle Name: acme-config'],
+  ['a header name with a character Java does not allow', 'Bundle.Name: acme-config'],
+  ["a header name of 71 characters, one over Java's limit", `${'N'.repeat(71)}: acme-config`],
+  ['a header with no space after its colon', 'Bundle-Name:acme-config'],
+  ['a header with no colon', 'Bundle-Name acme-config'],
+  ['a header with no name before its colon', ': acme-config'],
+  // Java reads the colon and its space on the header's own line, not on a continuation.
+  ['a header whose space after the colon is on a continuation', 'Bundle-Name:\n  acme-config'],
+]) {
+  expectRed(
+    label,
+    withManifest(manifest().replace('Bundle-Name: acme-config', line)),
+    new RegExp(String.raw`on line 3, which is not a header.*${CLAUSE}`),
+  );
+}
+
+// Java does not skip one: it is part of the first header's name. `build.mjs` drops it from the
+// source; a jar written another way can still carry it.
+expectRed(
+  'a byte-order mark before the first header',
+  withManifest(`\uFEFF${manifest()}`),
+  /has "\\ufeffManifest-Version: 1\.0" on line 1, which is not a header/,
+);
+
+expectRed(
+  'a first line that starts with a space, continuing no header',
+  withManifest(` ${manifest()}`),
+  new RegExp(
+    String.raw`has " Manifest-Version: 1\.0" on line 1, where a section begins.*${CLAUSE}`,
+  ),
+);
+
+// Unfolding first joined this to the blank line above it, which hid the blank line: one main
+// section, every header resolved. Java ends the section at the blank line and refuses the next.
+expectRed(
+  'a continuation after a blank line',
+  withManifest(`${manifest()}\n X-Note: a\n`),
+  /has " X-Note: a" on line 6, where a section begins/,
+);
+
+expectRed(
+  'a line over 512 bytes with its line break',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(504)}\n`),
+  /on line 5, 513 bytes with its line break\. Java reads at most 512 bytes of a line/,
+);
+
+// Bytes, not characters: 260 characters here, 513 bytes with the line break.
+expectRed(
+  'a line over 512 bytes in fewer than 512 characters',
+  withManifest(`${manifest()}X-Long: ${'é'.repeat(252)}\n`),
+  /on line 5, 513 bytes with its line break/,
+);
+
+// Java does not refuse this line itself. It takes the CR as the end of a 512-byte line and the LF
+// as an empty line, which ends the main section, and then refuses the header after it for
+// beginning a section without Name:. Last in the file, the same line would be read whole, so the
+// line break is refused here, wherever it falls.
+expectRed(
+  'a CRLF falling on bytes 512 and 513, which Java splits into a line break and an empty line',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(503)}\nX-After: a\n`.replaceAll('\n', '\r\n')),
+  /on line 5, 513 bytes with its line break/,
+);
+
+// Read, but not as written: Java ignores what follows the last line break. That is the
+// Nuxeo-Component header here, so the server loaded no component while this resolved it.
+expectRed(
+  'a Nuxeo-Component header with no line break after it, which Java ignores',
+  withManifest(manifest().replace(/\n$/, '')),
+  /ends with "Nuxeo-Component: OSGI-INF\/acme-config-config\.xml" and no line break after it/,
+);
+
+expectGreen(
+  'a line of 512 bytes with its line break, the most Java reads',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(503)}\n`),
+);
+
+expectGreen(
+  'a line of 512 bytes with its CRLF',
+  withManifest(`${manifest()}X-Long: ${'v'.repeat(502)}\n`.replaceAll('\n', '\r\n')),
+);
+
+expectGreen(
+  'a header name of 70 characters, the most Java reads',
+  withManifest(`${manifest()}${'N'.repeat(70)}: x\n`),
+);
+
+expectGreen(
+  'lines ended by CR alone, which Java reads as line breaks',
+  withManifest(manifest().replaceAll('\n', '\r')),
+);
+
+expectGreen(
+  'values Java reads as they are: empty, holding a colon, or starting with a space',
+  withManifest(`${manifest()}X-Empty: \nX-Url: http://a:b\nX-Spaced:  x\nX-Tab: \tx\n`),
+);
+
+expectGreen(
+  'sections after blank lines that begin with Name:, in any letter case',
+  withManifest(`${manifest()}\n\nName: a\nX-Note: a\n\nname: b\n\nNAME: \n`),
+);
+
+expectGreen(
+  'a Name: line continued, as Java continues one',
+  withManifest(`${manifest()}\nName: OSGI-INF/acme-config-\n config.xml\nX-Note: a\n`),
 );
 
 // ---- third review round (PR #542): attributes read whole, and contributions counted where the

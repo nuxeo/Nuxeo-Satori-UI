@@ -262,6 +262,39 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     expect(text()).toContain('Could not load users.');
   });
 
+  it('restores the full listing when the search field is cleared after a search that found nothing', async () => {
+    userService['searchUsersPaged'].mockImplementation((query: string) =>
+      of(
+        query === 'ssomise'
+          ? { 'entity-type': 'users', entries: [], totalSize: 0 }
+          : { 'entity-type': 'users', entries: [USER], totalSize: 1 },
+      ),
+    );
+    userService['searchGroupsPaged'].mockImplementation((query: string) =>
+      of(
+        query === 'ssomise'
+          ? { 'entity-type': 'groups', entries: [], totalSize: 0 }
+          : { 'entity-type': 'groups', entries: [GROUP], totalSize: 1 },
+      ),
+    );
+    // Type through the input, as the admin does, then submit the form.
+    const input = el().querySelector('input[name="query"]') as HTMLInputElement;
+    input.value = 'ssomise';
+    input.dispatchEvent(new Event('input'));
+    el().querySelector('form')!.dispatchEvent(new Event('submit'));
+    await render();
+    expect(text()).toContain('No users match this search.');
+
+    // Clearing the field is the only input: no submit, no reload.
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    await render();
+
+    expect(userService['searchUsersPaged']).toHaveBeenLastCalledWith('', 20, 0);
+    expect(text()).toContain('jdoe');
+    expect(text()).not.toContain('No users match this search.');
+  });
+
   it('moves a search that found only groups to the Groups tab', async () => {
     userService['searchUsersPaged'].mockReturnValue(
       of({ 'entity-type': 'users', entries: [], totalSize: 0 }),
@@ -312,6 +345,63 @@ describe('NxsAdminUsersGroupsPageComponent', () => {
     await render();
     expect(page()['recent']()).toEqual([]);
     expect(page()['recentLoading']()).toBe(false);
+  });
+
+  it('keeps the newest creation of a re-created account, with a group and an unrelated account (NXSAT-285)', async () => {
+    // The provider lists newest first. The older creation of 'ssomise' has different metadata, so
+    // the assertion shows which entry survived. A group sharing the identifier must not be merged.
+    const newestUser = {
+      uid: 'ssomise',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Sai Charan',
+        'user:lastName': 'Somisetty',
+        'user:email': 'new@example.invalid',
+      },
+    };
+    const sameIdGroup = {
+      uid: 'ssomise',
+      type: 'group',
+      properties: { 'group:grouplabel': 'Editors' },
+    };
+    const olderUser = {
+      uid: 'ssomise',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Old',
+        'user:lastName': 'Name',
+        'user:email': 'old@example.invalid',
+      },
+    };
+    const unrelated = {
+      uid: 'jdoe',
+      type: 'user',
+      properties: {
+        'user:firstName': 'Jane',
+        'user:lastName': 'Doe',
+        'user:email': 'jdoe@example.invalid',
+      },
+    };
+    userService['getRecentlyCreatedUsersAndGroups'].mockReturnValueOnce(
+      of({ entries: [newestUser, sameIdGroup, olderUser, unrelated] }),
+    );
+    page()['loadRecent']();
+    await render();
+    expect(page()['recent']()).toEqual([
+      {
+        kind: 'user',
+        name: 'Sai Charan Somisetty',
+        identifier: 'ssomise',
+        email: 'new@example.invalid',
+      },
+      { kind: 'group', name: 'Editors', identifier: 'ssomise', email: '' },
+      {
+        kind: 'user',
+        name: 'Jane Doe',
+        identifier: 'jdoe',
+        email: 'jdoe@example.invalid',
+      },
+    ]);
   });
 
   it('routes a recent user or group to its callback', () => {

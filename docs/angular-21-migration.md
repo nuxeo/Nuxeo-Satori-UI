@@ -33,7 +33,7 @@ Vitest is pinned to **4.1.10 exactly**, not a range: Storybook 10's optional `vi
 reaches `@vitest/browser-playwright@4.1.10`, which wants that exact Vitest.
 
 `@mat-datetimepicker/core` was removed with its allowlist entry — nothing imported it and it has no
-Angular 21 release. The other ADF-era pins are NXSAT-672's.
+Angular 21 release. The other pins are NXSAT-672's.
 
 ## Behaviour changes, and what was done
 

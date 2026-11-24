@@ -87,7 +87,7 @@ total; notes render as `_not covered:_` and stay out of the count.
 
 1. **Every step records at least one check.** The runner fails a run with zero
    checks on purpose.
-2. **Assert the claim, not the pulse.** "`hxp-document-list` is visible" proves
+2. **Assert the claim, not the pulse.** "`nxs-document-list` is visible" proves
    the app booted. "The first row is a folder and the Version column reads 1.0"
    proves the phase delivered something.
 3. **Capture the failure paths too.** If the phase adds an error state, drive it
