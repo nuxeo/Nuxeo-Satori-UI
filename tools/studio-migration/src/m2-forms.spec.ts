@@ -2,7 +2,7 @@ import { validateTaskForm } from '@agentic-ui/shared/app-definition';
 import { loadCatalogue } from './catalogue';
 import { constructsOf, countsOf } from './constructs';
 import { convert, type Conversion, type ReportEntry } from './convert';
-import { runHarness, type HarnessInput } from './harness';
+import { runCheck, runHarness, type HarnessInput } from './harness';
 import { inventory } from './inventory';
 import { MUTATIONS, ruleHolders } from './mutations';
 import { secondCount } from './second-count';
@@ -32,8 +32,8 @@ function prepare(bundle: Record<string, string> = {}, without: string[] = []): H
   };
 }
 
-const run = (input: HarnessInput, number: number) =>
-  runHarness(input).checks.find((check) => check.number === number);
+/** What one check finds: that check alone, as the harness runs it, not the ten. */
+const run = (input: HarnessInput, number: number) => runCheck(input, number);
 
 const entry = (conversion: Conversion, id: string): ReportEntry | undefined =>
   conversion.report.constructs.find((candidate) => candidate.id === id);
@@ -504,64 +504,124 @@ describe('the checks on task forms, tabs and layout blocks', () => {
     ]);
   });
 
-  it("name what each of M2's controls broke", () => {
-    const findings = (name: string, number?: number) => {
-      const mutation = MUTATIONS.find((candidate) => candidate.name === name);
-      if (!mutation) throw new Error(name);
-      return run(
-        { ...input, conversion: mutation.apply(input.conversion).conversion },
-        number ?? mutation.caughtBy,
-      )?.findings;
-    };
-    expect(findings('drop-task-field')).toEqual([
-      "tasks/ClaimReview.AssessClaim.layout.json: var:decision is missing, though Web UI's task layout of ClaimReview.AssessClaim shows it",
-    ]);
-    expect(findings('rename-task-variable')).toEqual([
-      'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.0: neither var_AssessClaim nor var_ClaimReview has a variable decisionRenamed, so var:decisionRenamed does not exist',
-    ]);
-    expect(findings('var-in-layout')).toEqual([
-      'app/layouts/Claim/view.layout.json cards[0].fields[0].field: "var:" names a task variable, which only a task form has',
-    ]);
-    expect(findings('drop-block-card')).toEqual([
-      "layouts/Policy/view.layout.json: po:holder is missing, though Web UI's view layout of Policy shows it",
-      "layouts/Policy/view.layout.json: po:startDate is missing, though Web UI's view layout of Policy shows it",
-    ]);
-    expect(findings('drop-tab')).toEqual([
-      "layouts/Policy/view.layout.json tab terms: po:terms is missing, though Web UI's tab terms of Policy shows it",
-    ]);
-    expect(findings('drop-tab-rule')).toEqual([
-      'layouts/Policy/view.layout.json: its tab terms shows to everyone, though Web UI shows the tab terms only while a condition passes',
-    ]);
-    expect(findings('change-tab-label')).toEqual([
-      'layouts/Policy/view.layout.json: the tab cover: the app shows "Something else", where Web UI shows "Cover"',
-    ]);
-    expect(findings('make-display-editable')).toEqual([
-      "tasks/ClaimReview.AssessClaim.layout.json: var:claimNumber is editable, but Web UI's div only shows it",
-    ]);
-    expect(findings('drop-block-use-entry')).toEqual([
-      `dropped: the layout block acme-policy-summary, in ${VIEW} (block-use:${VIEW}#1)`,
-      expect.stringMatching(/^coverage is [\d.]+%, not 100%$/),
-    ]);
+  /** The input with one of the harness's mutations applied to its conversion. */
+  const mutated = (name: string): HarnessInput => {
+    const mutation = MUTATIONS.find((candidate) => candidate.name === name);
+    if (!mutation) throw new Error(name);
+    return { ...input, conversion: mutation.apply(input.conversion).conversion };
+  };
+
+  // Every other test here asks one check what it finds, and runs that check alone: it must be the
+  // check the ten give. Each check runs alone first, so one that changed its input would show.
+  it.each([
+    ['the conversion', () => input],
+    ['a conversion check 5 fails', () => mutated('drop-tab-rule')],
+  ])('give each check alone as the ten give it, on %s', (_, given) => {
+    const subject = given();
+    const alone = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((number) => runCheck(subject, number));
+    expect(alone).toEqual(runHarness(subject).checks);
+    expect(runCheck(subject, 11)).toBeUndefined();
   });
 
-  it('fail on every rule of a tab, a card or a task form dropped or inverted, one by one', () => {
-    const holders = ruleHolders(input.conversion).filter(
+  // One case a control: each runs the one check that catches it, which on a loaded runner is what
+  // keeps a case well inside the time a test is given.
+  describe("name what each of M2's controls broke", () => {
+    it.each<[string, readonly unknown[]]>([
+      [
+        'drop-task-field',
+        [
+          "tasks/ClaimReview.AssessClaim.layout.json: var:decision is missing, though Web UI's task layout of ClaimReview.AssessClaim shows it",
+        ],
+      ],
+      [
+        'rename-task-variable',
+        [
+          'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.0: neither var_AssessClaim nor var_ClaimReview has a variable decisionRenamed, so var:decisionRenamed does not exist',
+        ],
+      ],
+      [
+        'var-in-layout',
+        [
+          'app/layouts/Claim/view.layout.json cards[0].fields[0].field: "var:" names a task variable, which only a task form has',
+        ],
+      ],
+      [
+        'drop-block-card',
+        [
+          "layouts/Policy/view.layout.json: po:holder is missing, though Web UI's view layout of Policy shows it",
+          "layouts/Policy/view.layout.json: po:startDate is missing, though Web UI's view layout of Policy shows it",
+        ],
+      ],
+      [
+        'drop-tab',
+        [
+          "layouts/Policy/view.layout.json tab terms: po:terms is missing, though Web UI's tab terms of Policy shows it",
+        ],
+      ],
+      [
+        'drop-tab-rule',
+        [
+          'layouts/Policy/view.layout.json: its tab terms shows to everyone, though Web UI shows the tab terms only while a condition passes',
+        ],
+      ],
+      [
+        'change-tab-label',
+        [
+          'layouts/Policy/view.layout.json: the tab cover: the app shows "Something else", where Web UI shows "Cover"',
+        ],
+      ],
+      [
+        'make-display-editable',
+        [
+          "tasks/ClaimReview.AssessClaim.layout.json: var:claimNumber is editable, but Web UI's div only shows it",
+        ],
+      ],
+      [
+        'drop-block-use-entry',
+        [
+          `dropped: the layout block acme-policy-summary, in ${VIEW} (block-use:${VIEW}#1)`,
+          expect.stringMatching(/^coverage is [\d.]+%, not 100%$/),
+        ],
+      ],
+    ])('%s', (name, expected) => {
+      const mutation = MUTATIONS.find((candidate) => candidate.name === name);
+      expect(run(mutated(name), mutation?.caughtBy ?? 0)?.findings).toEqual(expected);
+    });
+  });
+
+  /** The rules M2 writes on a tab, a card or a field of a task form. */
+  const formRules = (conversion: Conversion) =>
+    ruleHolders(conversion).filter(
       (found) =>
         found.path.startsWith('tasks/') || found.path === 'layouts/Policy/view.layout.json',
     );
-    expect(holders.map((found) => `${found.path} ${found.at}`)).toEqual([
-      'layouts/Policy/view.layout.json tabs.0.cards.2.visibleWhen',
-      'layouts/Policy/view.layout.json tabs.1.visibleWhen',
-      'layouts/Policy/view.layout.json tabs.2.visibleWhen',
-      'layouts/Policy/view.layout.json tabs.0.cards.1.fields.2.visibleWhen',
-      'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.4.visibleWhen',
-      'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.5.visibleWhen',
-    ]);
-    for (const change of ['drop', 'invert'] as const)
-      for (const found of ruleHolders(input.conversion).filter((holder) =>
-        holders.some((other) => other.path === holder.path && other.at === holder.at),
-      )) {
-        if (change === 'drop') delete found.holder['visibleWhen'];
+  const FORM_RULES = [
+    'layouts/Policy/view.layout.json tabs.0.cards.2.visibleWhen',
+    'layouts/Policy/view.layout.json tabs.1.visibleWhen',
+    'layouts/Policy/view.layout.json tabs.2.visibleWhen',
+    'layouts/Policy/view.layout.json tabs.0.cards.1.fields.2.visibleWhen',
+    'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.4.visibleWhen',
+    'tasks/ClaimReview.AssessClaim.layout.json cards.0.fields.5.visibleWhen',
+  ];
+
+  // The cases below break these rules one by one: a rule the conversion gains is not left out.
+  it('find every rule of a tab, a card or a task form the cases below break', () => {
+    expect(formRules(input.conversion).map((found) => `${found.path} ${found.at}`)).toEqual(
+      FORM_RULES,
+    );
+  });
+
+  // One case a rule and a change: each runs check 5 once. Twelve in one test ran the whole harness
+  // twelve times, more than the time a test is given on a loaded runner.
+  describe.each(['dropped', 'inverted'] as const)(
+    'fail on every rule of a tab, a card or a task form %s, one by one',
+    (change) => {
+      it.each(FORM_RULES)('%s', (where) => {
+        const found = formRules(input.conversion).find(
+          (holder) => `${holder.path} ${holder.at}` === where,
+        );
+        if (!found) throw new Error(`no rule at ${where}`);
+        if (change === 'dropped') delete found.holder['visibleWhen'];
         else
           found.holder['visibleWhen'] = {
             type: 'core.not',
@@ -574,9 +634,10 @@ describe('the checks on task forms, tabs and layout blocks', () => {
             app: { ...input.conversion.app, [found.path]: found.file },
           },
         };
-        expect([change, found.at, run(broken, 5)?.status]).toEqual([change, found.at, 'fail']);
-      }
-  });
+        expect(run(broken, 5)?.status).toBe('fail');
+      });
+    },
+  );
 
   it('fails on a block card moved out from under its rule, and on a tab no tab gives', () => {
     const moved = edit(input, 'layouts/Policy/view.layout.json', (file) => {
