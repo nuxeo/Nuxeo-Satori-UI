@@ -1,0 +1,1279 @@
+{
+  "doctypes": {
+    "AcmeAsset": {
+      "parent": "Picture",
+      "facets": ["Versionable", "NXTag", "Publishable", "Picture", "Commentable", "HasRelatedText"],
+      "schemas": [
+        "common",
+        "uid",
+        "dublincore",
+        "facetedTag",
+        "file",
+        "picture",
+        "image_metadata",
+        "relatedtext",
+        "acmeasset"
+      ]
+    },
+    "AcmeProduct": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "acmeproduct"]
+    },
+    "AcmeShot": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "acmeshot"]
+    }
+  },
+  "facets": [
+    {
+      "name": "NXTag",
+      "schemas": [
+        {
+          "name": "facetedTag",
+          "@prefix": "nxtag",
+          "fields": {
+            "tags": {
+              "fields": {
+                "label": "string",
+                "username": "string"
+              },
+              "type": "complex[]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Publishable"
+    },
+    {
+      "name": "HasRelatedText",
+      "schemas": [
+        {
+          "name": "relatedtext",
+          "@prefix": "",
+          "fields": {
+            "relatedtextresources": {
+              "fields": {
+                "relatedtextid": "string",
+                "relatedtext": "string"
+              },
+              "type": "complex[]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Versionable"
+    },
+    {
+      "name": "Picture",
+      "schemas": [
+        {
+          "name": "file",
+          "@prefix": "",
+          "fields": {
+            "content": "blob"
+          }
+        },
+        {
+          "name": "picture",
+          "@prefix": "",
+          "fields": {
+            "dateline": "string",
+            "origin": "string",
+            "caption": "string",
+            "language": "string",
+            "source": "string",
+            "cropCoords": "string",
+            "slugline": "string",
+            "genre": "string",
+            "typage": "string",
+            "credit": "string",
+            "headline": "string",
+            "subheadline": "string",
+            "byline": "string",
+            "views": {
+              "fields": {
+                "filename": "string",
+                "width": "long",
+                "description": "string",
+                "tag": "string",
+                "title": "string",
+                "content": "blob",
+                "height": "long",
+                "info": {
+                  "fields": {
+                    "colorSpace": "string",
+                    "depth": "long",
+                    "width": "long",
+                    "format": "string",
+                    "height": "long"
+                  },
+                  "type": "complex"
+                }
+              },
+              "type": "complex[]"
+            },
+            "info": {
+              "fields": {
+                "colorSpace": "string",
+                "depth": "long",
+                "width": "long",
+                "format": "string",
+                "height": "long"
+              },
+              "type": "complex"
+            }
+          }
+        },
+        {
+          "name": "image_metadata",
+          "@prefix": "imd",
+          "fields": {
+            "color_space": "string",
+            "user_comment": "string",
+            "image_description": "string",
+            "date_time_original": "date",
+            "focal_length": "double",
+            "white_balance": "string",
+            "copyright": "string",
+            "fnumber": "double",
+            "pixel_xdimension": "long",
+            "equipment": "string",
+            "orientation": "string",
+            "exposure_time": "string",
+            "xresolution": "long",
+            "iso_speed_ratings": "string",
+            "icc_profile": "string",
+            "yresolution": "long",
+            "pixel_ydimension": "long",
+            "focalLength": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Commentable"
+    }
+  ],
+  "schemas": [
+    {
+      "entity-type": "schema",
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "description": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "LengthConstraint",
+              "parameters": {
+                "Maximum": "2000"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "language": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "coverage": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "l10ncoverage",
+                "validation": "true"
+              }
+            }
+          ]
+        },
+        "valid": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "creator": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "validation": "false",
+                "includeGroups": "false"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "modified": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "lastContributor": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "validation": "false",
+                "includeGroups": "false"
+              }
+            }
+          ]
+        },
+        "rights": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "expired": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "format": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "created": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "issued": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "nature": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "nature",
+                "validation": "true"
+              }
+            }
+          ]
+        },
+        "subjects": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "l10nsubjects",
+                "validation": "true"
+              }
+            }
+          ]
+        },
+        "contributors": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "validation": "false",
+                "includeGroups": "false"
+              }
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "publisher": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "image_metadata",
+      "prefix": "imd",
+      "@prefix": "imd",
+      "fields": {
+        "color_space": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "user_comment": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "image_description": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "date_time_original": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "focal_length": {
+          "type": "double",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "double",
+              "parameters": {}
+            }
+          ]
+        },
+        "white_balance": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "copyright": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "fnumber": {
+          "type": "double",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "double",
+              "parameters": {}
+            }
+          ]
+        },
+        "pixel_xdimension": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "equipment": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "orientation": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "exposure_time": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "xresolution": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "iso_speed_ratings": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "icc_profile": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "yresolution": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "pixel_ydimension": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "focalLength": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "uid",
+      "fields": {
+        "uid": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "major_version": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "minor_version": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "file",
+      "fields": {
+        "content": "blob"
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "picture",
+      "fields": {
+        "dateline": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "caption": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "LengthConstraint",
+              "parameters": {
+                "Maximum": "999999999"
+              }
+            }
+          ]
+        },
+        "language": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "cropCoords": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "slugline": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "genre": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "typage": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "credit": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "headline": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "LengthConstraint",
+              "parameters": {
+                "Maximum": "2000"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "subheadline": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "LengthConstraint",
+              "parameters": {
+                "Maximum": "2000"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "byline": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "views": {
+          "type": "complex[]",
+          "fields": {
+            "filename": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "width": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            },
+            "description": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "tag": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "title": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "content": "blob",
+            "height": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            },
+            "info": {
+              "fields": {
+                "colorSpace": {
+                  "type": "string",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "string",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "depth": {
+                  "type": "long",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "long",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "width": {
+                  "type": "long",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "long",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "string",
+                      "parameters": {}
+                    }
+                  ]
+                },
+                "height": {
+                  "type": "long",
+                  "constraints": [
+                    {
+                      "entity-type": "validation_constraint",
+                      "name": "long",
+                      "parameters": {}
+                    }
+                  ]
+                }
+              },
+              "type": "complex"
+            }
+          }
+        },
+        "info": {
+          "fields": {
+            "colorSpace": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "depth": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            },
+            "width": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            },
+            "format": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "height": {
+              "type": "long",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "long",
+                  "parameters": {}
+                }
+              ]
+            }
+          },
+          "type": "complex"
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "relatedtext",
+      "fields": {
+        "relatedtextresources": {
+          "type": "complex[]",
+          "fields": {
+            "relatedtextid": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "relatedtext": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                },
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "LengthConstraint",
+                  "parameters": {
+                    "Maximum": "999999999"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "common",
+      "fields": {
+        "icon-expanded": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "facetedTag",
+      "prefix": "nxtag",
+      "@prefix": "nxtag",
+      "fields": {
+        "tags": {
+          "type": "complex[]",
+          "fields": {
+            "label": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "username": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "acmeasset",
+      "prefix": "acmeasset",
+      "@prefix": "acmeasset",
+      "fields": {
+        "product": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "colorway": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "shot": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "campaign": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "credit": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "channels": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "regions": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "acmeproduct",
+      "prefix": "acmeproduct",
+      "@prefix": "acmeproduct",
+      "fields": {
+        "style": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "season": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "colorways": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "channels": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "launch": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "acmeshot",
+      "prefix": "acmeshot",
+      "@prefix": "acmeshot",
+      "fields": {
+        "product": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "colorway": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "shot": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "due": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "asset": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "documentResolver",
+              "parameters": {
+                "store": "id",
+                "validation": "true"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
