@@ -29,6 +29,7 @@ import {
   OUTCOMES,
   labelsOf,
   platformVersion,
+  packageBuildOf,
   readCatalogue,
   studioBuildOf,
   type Conversion,
@@ -119,13 +120,21 @@ export function runHarness(given: HarnessInput): HarnessResult {
   const input = completed(given);
   const checks: CheckResult[] = CHECKS.map((check) => runOne(check, input));
 
-  const entries = input.conversion.report.constructs ?? [];
+  // An id listed twice is read by its first entry, as the decisions and the report read it.
+  const entries = firstEntries(input.conversion.report.constructs ?? []);
   const pending = entries.filter((entry) => entry.outcome === 'pending').length;
   const proposed = entries.filter((entry) => entry.outcome === 'proposed').length;
   const { unowned, undecided, findings } = holdDecisions(
     input.conversion.report,
     input.conversion.decisions,
+    packageBuildOf(input.pkg),
   );
+  // A reason that names the allow-list is the conversion's, so a decision made on it rests on the
+  // list the conversion was made with.
+  const recorded = [...(input.conversion.report.allowList ?? [])].sort();
+  const deployment = [...(input.allowList ?? [])].sort();
+  const otherList =
+    !input.allowListFromReport && JSON.stringify(recorded) !== JSON.stringify(deployment);
   const blockers = [
     ...checks
       .filter((check) => check.status === 'fail')
@@ -148,8 +157,23 @@ export function runHarness(given: HarnessInput): HarnessResult {
       : []),
     // What is wrong with decisions.json: a decision it holds that the harness does not take.
     ...findings,
+    ...(otherList
+      ? [
+          `the conversion was made with the allow-list ${recorded.join(', ') || 'none'}, not the deployment's, ${deployment.join(', ') || 'none'}: convert it again with the deployment's`,
+        ]
+      : []),
   ];
   return { checks, ready: blockers.length === 0, blockers };
+}
+
+/** The first entry of each id, in the report's order. */
+function firstEntries(entries: readonly ReportEntry[]): ReportEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
 }
 
 /**
@@ -208,8 +232,10 @@ export function nothingDropped({ pkg, inventory, conversion }: HarnessInput): st
   const studio = studioBuildOf(pkg);
   const recorded = conversion.report.studio as Partial<MigrationReport['studio']> | undefined;
   if (recorded?.commit !== studio.commit || recorded?.buildTime !== studio.buildTime) {
+    const build = (of: Partial<MigrationReport['studio']> | undefined): string =>
+      `${of?.commit ? `commit ${of.commit}` : 'no commit'} and ${of?.buildTime ? `build time ${of.buildTime}` : 'no build time'}`;
     findings.push(
-      `the report is of Studio's commit ${String(recorded?.commit)}, built ${String(recorded?.buildTime)}, not of the package's, commit ${String(studio.commit)}, built ${String(studio.buildTime)}`,
+      `the report records Studio's ${build(recorded)}, and the package's manifest ${build(studio)}`,
     );
   }
 

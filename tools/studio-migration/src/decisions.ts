@@ -8,10 +8,11 @@
  * `decisions` command writes the file with an entry for every reported item, and a person fills
  * in each `owner` and `decision`.
  *
- * A file of decisions is for one build of the package: its name, its version, and Studio's commit
- * and build time, as the report records them. A construct's id is its place in its file, so
- * another build can give the same id to another construct; decisions are never taken across
- * builds.
+ * A file of decisions is for one build of the package: its name and version, Studio's commit and
+ * build time from the bundle's manifest, and the SHA-256 of its bundle, which tells two builds
+ * apart where the manifest records neither (`packageBuildOf`). A construct's id is its place in
+ * its file, so another build can give the same id to another construct: decisions are held to the
+ * package given, and never taken for another build of it.
  *
  * Each decision also copies what it was made on from the report: the item's label, property,
  * outcome, where it was written, its reason and its rule. A decision whose copy no longer matches
@@ -54,13 +55,18 @@ export interface OwnerDecision extends Pick<ReportEntry, PinnedKey> {
   readonly decision: string;
 }
 
-/** The build of the package a file of decisions is for, as its report records it. */
+/** The build of the package a file of decisions is for (`packageBuildOf`). */
 export interface DecisionsBuild {
   readonly name: string;
   readonly version: string;
   readonly commit: string | null;
   readonly buildTime: string | null;
+  /** The SHA-256 of the package's bundle, in hexadecimal. */
+  readonly bundle: string;
 }
+
+const BUILD_KEYS = ['name', 'version', 'commit', 'buildTime', 'bundle'] as const;
+const FILE_KEYS: ReadonlySet<string> = new Set(['format', 'package', 'decisions']);
 
 export interface DecisionsFile {
   readonly format: typeof DECISIONS_FORMAT;
@@ -88,14 +94,19 @@ interface Reading {
 }
 
 /**
- * The decisions, as `raw` gives them, held to the report: `raw` is `decisions.json` as read, or
- * `undefined` when the conversion has none, which leaves every reported item without an owner.
+ * The decisions, as `raw` gives them, held to the report and to the build of the package given:
+ * `raw` is `decisions.json` as read, or `undefined` when the conversion has none, which leaves
+ * every reported item without an owner.
  */
-export function holdDecisions(report: MigrationReport, raw: unknown): HeldDecisions {
+export function holdDecisions(
+  report: MigrationReport,
+  raw: unknown,
+  build: DecisionsBuild,
+): HeldDecisions {
   const reading: Reading =
     raw === undefined
       ? { findings: [], taken: new Map() }
-      : readDecisions(report, raw, DECISIONS_FILE);
+      : readDecisions(report, raw, DECISIONS_FILE, build);
   let unowned = 0;
   let undecided = 0;
   for (const entry of reportedEntries(report)) {
@@ -112,14 +123,15 @@ export function holdDecisions(report: MigrationReport, raw: unknown): HeldDecisi
 }
 
 /**
- * The file the `decisions` command writes for a report: an entry for every reported item, in the
- * report's order, with what it was made on. Each takes its owner and decision from `earlier`, a
- * file written for an earlier conversion of the same build of the package, where that one still
- * holds for this report, and is left blank otherwise. `notCarried` says which of the earlier ones
+ * The file the `decisions` command writes for a report of the package `build` names: an entry for
+ * every reported item, in the report's order, with what it was made on. Each takes its owner and
+ * decision from `earlier`, a file written for an earlier conversion of the same build, where that
+ * one still holds for this report, and is left blank otherwise. `notCarried` says which of the earlier ones
  * that said something did not carry, and why; `blank` counts the entries left to fill in.
  */
 export function decisionsFor(
   report: MigrationReport,
+  build: DecisionsBuild,
   earlier?: { readonly raw: unknown; readonly file: string },
 ): {
   readonly file: DecisionsFile;
@@ -130,7 +142,9 @@ export function decisionsFor(
   // An entry that says nothing has nothing to carry, and nothing to lose: it is passed over.
   const silent = (item: unknown): boolean =>
     isRecord(item) && ![item['owner'], item['decision']].some(saysSomething);
-  const reading = earlier ? readDecisions(report, earlier.raw, earlier.file, silent) : undefined;
+  const reading = earlier
+    ? readDecisions(report, earlier.raw, earlier.file, build, silent)
+    : undefined;
   if (reading?.refused) throw new DecisionsError(reading.refused);
   let carried = 0;
   let blank = 0;
@@ -147,7 +161,7 @@ export function decisionsFor(
     return decision;
   });
   return {
-    file: { format: DECISIONS_FORMAT, package: buildOf(report), decisions },
+    file: { format: DECISIONS_FORMAT, package: { ...build }, decisions },
     carried,
     notCarried: reading?.findings ?? [],
     blank,
@@ -182,31 +196,25 @@ function pinnedOf(entry: ReportEntry): Pick<ReportEntry, PinnedKey> {
   return pinned as Pick<ReportEntry, PinnedKey>;
 }
 
-function buildOf(report: MigrationReport): DecisionsBuild {
-  return {
-    name: report.package?.name,
-    version: report.package?.version,
-    commit: report.studio?.commit ?? null,
-    buildTime: report.studio?.buildTime ?? null,
-  };
-}
-
-function describeBuild(build: Record<string, unknown>): string {
+function describeBuild(build: Readonly<Record<string, unknown>>): string {
+  const bundle = typeof build['bundle'] === 'string' ? build['bundle'].slice(0, 12) : 'none';
   return (
     `${String(build['name'])} ${String(build['version'])}` +
     (build['commit'] ? `, commit ${String(build['commit'])}` : '') +
-    (build['buildTime'] ? `, built ${String(build['buildTime'])}` : '')
+    (build['buildTime'] ? `, built ${String(build['buildTime'])}` : '') +
+    `, bundle ${bundle}`
   );
 }
 
 /**
- * Reads a file of decisions against a report. Its findings name `file`. An entry `passOver` picks
- * is left out, as if the file did not hold it.
+ * Reads a file of decisions against a report of the package `build` names. Its findings name
+ * `file`. An entry `passOver` picks is left out, as if the file did not hold it.
  */
 function readDecisions(
   report: MigrationReport,
   raw: unknown,
   file: string,
+  build: DecisionsBuild,
   passOver: (item: unknown) => boolean = () => false,
 ): Reading {
   const none: Reading = { findings: [], taken: new Map() };
@@ -217,14 +225,11 @@ function readDecisions(
     };
   }
   const given = isRecord(raw['package']) ? raw['package'] : {};
-  const build = buildOf(report);
-  const differs = (['name', 'version', 'commit', 'buildTime'] as const).some(
-    (key) => (given[key] ?? null) !== build[key],
-  );
+  const differs = BUILD_KEYS.some((key) => (given[key] ?? null) !== build[key]);
   if (differs) {
     return {
       ...none,
-      refused: `${file} is for ${describeBuild(given)}, and the report for ${describeBuild({ ...build })}, so none of it is taken`,
+      refused: `${file} is for ${describeBuild(given)}, and the package given is ${describeBuild({ ...build })}, so none of it is taken`,
     };
   }
   if (!Array.isArray(raw['decisions'])) {
@@ -242,6 +247,10 @@ function readDecisions(
   }
 
   const findings: string[] = [];
+  const extraKeys = Object.keys(raw).filter((key) => !FILE_KEYS.has(key));
+  if (extraKeys.length > 0) {
+    findings.push(`${file} holds ${extraKeys.join(', ')}, which the file does not take`);
+  }
   const taken = new Map<string, OwnerDecision>();
   const named = new Set<string>();
   items.forEach((item, index) => {

@@ -344,7 +344,7 @@ describe('studio-migration decisions and report', () => {
 
   it('writes decisions.json beside the report, for a person to fill in, and never over one', () => {
     const out = converted();
-    const written = run(['decisions', out], files);
+    const written = run(['decisions', 'acme.zip', out], files);
     expect(written).toMatchObject({ code: 0, err: '' });
     expect(written.out).toBe(
       `Wrote ${join(out, 'decisions.json')}: 14 reported items, 14 of them with an owner or a decision to fill in\n`,
@@ -356,7 +356,7 @@ describe('studio-migration decisions and report', () => {
     );
 
     fill(out);
-    const again = run(['decisions', out], files);
+    const again = run(['decisions', 'acme.zip', out], files);
     expect(again.code).toBe(1);
     expect(again.err).toBe(`${join(out, 'decisions.json')} exists, and is never written over\n`);
     expect(JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8')).decisions[0].owner).toBe(
@@ -370,12 +370,12 @@ describe('studio-migration decisions and report', () => {
 
   it('carries the decisions of an earlier conversion that still hold, and says which do not', () => {
     const earlier = converted();
-    run(['decisions', earlier], files);
+    run(['decisions', 'acme.zip', earlier], files);
     fill(earlier);
     const old = JSON.parse(readFileSync(join(earlier, 'decisions.json'), 'utf8'));
     old.decisions[0].note = 'An earlier reason';
     const out = converted();
-    const carried = run(['decisions', out, '--from', 'old.json'], {
+    const carried = run(['decisions', 'acme.zip', out, '--from', 'old.json'], {
       ...files,
       'old.json': Buffer.from(JSON.stringify(old)),
     });
@@ -391,24 +391,26 @@ describe('studio-migration decisions and report', () => {
       '  - 1 reported item has no owner',
     );
 
-    const missing = run(['decisions', converted(), '--from', 'missing.json'], files);
+    const missing = run(['decisions', 'acme.zip', converted(), '--from', 'missing.json'], files);
     expect(missing.code).toBe(1);
     expect(missing.err).toMatch(/^missing\.json: ENOENT/);
-    const other = run(['decisions', converted(), '--from', 'other.json'], {
+    const other = run(['decisions', 'acme.zip', converted(), '--from', 'other.json'], {
       ...files,
       'other.json': Buffer.from(
         JSON.stringify({ ...old, package: { name: 'Other', version: '1' } }),
       ),
     });
     expect(other.code).toBe(1);
-    expect(other.err).toContain('other.json is for Other 1, and the report for Acme-Claims 1.0.0');
-    expect(run(['decisions'], files).code).toBe(2);
-    expect(run(['decisions', out, '--from'], files).code).toBe(2);
+    expect(other.err).toMatch(
+      /^other\.json is for Other 1, bundle none, and the package given is Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}/,
+    );
+    expect(run(['decisions', 'acme.zip'], files).code).toBe(2);
+    expect(run(['decisions', 'acme.zip', out, '--from'], files).code).toBe(2);
   });
 
   it('prints the report, and exits 0 whatever it says', () => {
     const out = converted();
-    run(['decisions', out], files);
+    run(['decisions', 'acme.zip', out], files);
     const printed = run(['report', 'acme.zip', out, '--allow-list', 'allow.json'], files);
     expect(printed.code).toBe(0);
     expect(printed.out).toMatch(/^Migration report: Acme-Claims 1\.0\.0\n/);
@@ -438,12 +440,12 @@ describe('studio-migration decisions and report', () => {
     expect(nothing.code).toBe(1);
     expect(nothing.err).toMatch(/^the conversion has no decisions\.json to break/);
 
-    run(['decisions', out], files);
+    run(['decisions', 'acme.zip', out], files);
     fill(out);
     const mutated = run(['mutate', out, 'drop-owner', broken], files);
     expect(mutated.code).toBe(0);
     expect(mutated.out).toMatch(
-      /^drop-owner: took the owner off layout-field:.*#3\. Written to .*; the verdict must now name it among what stands in the way\.\n$/,
+      /^drop-owner: took the owner off layout-field:.*#3\. Written to .*; what stands in the way of readiness must now show it\.\n$/,
     );
     expect(run(['check', 'acme.zip', broken], files).out).toContain(
       '  - 1 reported item has no owner',

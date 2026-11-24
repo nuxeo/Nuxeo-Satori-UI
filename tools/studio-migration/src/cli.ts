@@ -8,7 +8,7 @@
  *                                                             the harness
  *   mutate    <conversion-directory> <mutation> <new-directory> [--package <zip>]   a deliberately broken copy
  *   mutate    --list                                          the mutations, and what must refuse each
- *   decisions <conversion-directory> [--from <decisions.json>]
+ *   decisions <package.zip> <conversion-directory> [--from <decisions.json>]
  *                                                             the decisions file, for people to fill in
  *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
  *                                                             the report, for the person who approves it
@@ -17,10 +17,10 @@
  * becomes an action only when its operation is on it. `check` and `report` read the list the
  * conversion was made with unless they are given one.
  *
- * `decisions` writes the conversion's `decisions.json`, an entry for each reported item, for people
- * to say who owns it and what they decided; `--from` carries each decision of an earlier file, for
- * the same build of the package, that
- * still holds. `check` and `report` read it from the conversion.
+ * `decisions` writes the conversion's `decisions.json` for the package given, an entry for each
+ * reported item, for people to say who owns it and what they decided; `--from` carries each
+ * decision of an earlier file, for the same build of the package, that still holds. `check` and
+ * `report` read it from the conversion, and take it only for the package they are given.
  *
  * Exit codes: 0 done, and for `check`, no check failed; 1 a check failed, or something could not be
  * read or written, with the reason; 2 the command was wrong. `report` exits 0 once it has printed the
@@ -37,6 +37,7 @@ import {
   ConversionError,
   labelsOf,
   OUTCOMES,
+  packageBuildOf,
   readConversion,
   writeConversion,
   type Conversion,
@@ -69,7 +70,7 @@ const USAGE = `usage:
   studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration mutate <conversion-directory> <mutation> <new-directory> [--package <package.zip>]
   studio-migration mutate --list
-  studio-migration decisions <conversion-directory> [--from <decisions.json>]
+  studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 `;
 
@@ -88,7 +89,7 @@ const COMMANDS: Readonly<
   convert: { args: 2, flags: [], valued: ['--allow-list'] },
   check: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
   mutate: { args: 3, flags: [], valued: ['--package'] },
-  decisions: { args: 1, flags: [], valued: ['--from'] },
+  decisions: { args: 2, flags: [], valued: ['--from'] },
   report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
 };
 
@@ -179,18 +180,23 @@ export function main(argv: readonly string[], io: CliIo): number {
         io.out(
           `${chosen.name}: ${changed}. Written to ${args[2]}; ${
             chosen.caughtBy === 'decisions'
-              ? 'the verdict must now name it among what stands in the way'
+              ? 'what stands in the way of readiness must now show it'
               : `check ${chosen.caughtBy} must now fail`
           }.\n`,
         );
         return 0;
       }
       case 'decisions': {
-        const conversion = readConversion(args[0]);
+        const pkg = readPackage(io, args[0]);
+        const conversion = readConversion(args[1]);
         const from = values.get('--from');
         const earlier = from === undefined ? undefined : { raw: readJson(io, from), file: from };
-        const { file, carried, notCarried, blank } = decisionsFor(conversion.report, earlier);
-        const path = join(args[0], DECISIONS_FILE);
+        const { file, carried, notCarried, blank } = decisionsFor(
+          conversion.report,
+          packageBuildOf(pkg),
+          earlier,
+        );
+        const path = join(args[1], DECISIONS_FILE);
         try {
           // `wx`: written only where no file is, so a person's decisions are never written over.
           writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`, { flag: 'wx' });
@@ -366,7 +372,7 @@ export function reportSummary(summary: MigrationSummary): string {
     `Allow-list: ${header.allowList.operations.join(', ') || 'none'}, ${
       header.allowList.from === 'deployment'
         ? "the deployment's, as given"
-        : 'as the conversion recorded it, not the deployment’s word for it'
+        : "as the conversion recorded it, not the deployment's word for it"
     }`,
     '',
     `Summary: ${plural(all.total, 'construct')}, by kind and outcome`,
@@ -406,18 +412,22 @@ export function reportSummary(summary: MigrationSummary): string {
   lines.push(
     `Decisions needed: ${plural(summary.reported.length, 'reported item')}, ${decided} of them decided`,
   );
+  // Each on one line: an owner's words, or a package's, cannot make a line of their own, such as
+  // an item that looks decided.
   for (const item of summary.reported) {
     lines.push(
-      `  - ${item.label}, in ${item.file}`,
-      `      id: ${item.id}`,
-      `      why: ${item.note}`,
+      `  - ${oneLine(item.label)}, in ${oneLine(item.file)}`,
+      `      id: ${oneLine(item.id)}`,
+      `      why: ${oneLine(item.note)}`,
     );
-    if (item.to !== undefined) lines.push(`      written to: ${item.to}`);
-    lines.push(`      owner: ${item.owner ?? 'none'}; decided: ${item.decision ?? 'nothing yet'}`);
+    if (item.to !== undefined) lines.push(`      written to: ${oneLine(item.to)}`);
+    lines.push(
+      `      owner: ${item.owner === null ? 'none' : oneLine(item.owner)}; decided: ${item.decision === null ? 'nothing yet' : oneLine(item.decision)}`,
+    );
   }
   if (summary.decisionFindings.length > 0) {
     lines.push('  Not taken from decisions.json:');
-    for (const finding of summary.decisionFindings) lines.push(`    - ${finding}`);
+    for (const finding of summary.decisionFindings) lines.push(`    - ${oneLine(finding)}`);
   }
   lines.push(
     '',
@@ -427,9 +437,9 @@ export function reportSummary(summary: MigrationSummary): string {
   );
   for (const item of summary.proposed)
     lines.push(
-      `  - ${item.label}, in ${item.file}`,
-      `      id: ${item.id}`,
-      `      why: ${item.note}`,
+      `  - ${oneLine(item.label)}, in ${oneLine(item.file)}`,
+      `      id: ${oneLine(item.id)}`,
+      `      why: ${oneLine(item.note)}`,
     );
 
   lines.push('', `Files: ${summary.files.length}`);
@@ -437,10 +447,21 @@ export function reportSummary(summary: MigrationSummary): string {
     const counted = TALLIES.filter((tally) => file.tallies[tally])
       .map((tally) => `${tally} ${file.tallies[tally]}`)
       .join(', ');
-    lines.push(`  ${file.path} (${file.kind}): ${counted}`);
-    for (const place of file.became) lines.push(`      became: ${place}`);
+    lines.push(`  ${oneLine(file.path)} (${file.kind}): ${counted}`);
+    for (const place of file.became) lines.push(`      became: ${oneLine(place)}`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+/** Text on one line: each control character, a line break among them, written as an escape. */
+function oneLine(text: string): string {
+  const named: Readonly<Record<string, string>> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\u0000-\u001f\u007f]/g, (character) =>
+    Object.hasOwn(named, character)
+      ? named[character]
+      : `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 export function summary(result: Inventory, accounting: Accounting): string {

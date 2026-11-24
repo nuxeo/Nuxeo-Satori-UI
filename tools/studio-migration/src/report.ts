@@ -19,7 +19,7 @@
  * rather than not at all. The coverage is check 1's. Screenshots wait for the migration server.
  */
 import { constructsOf, type ConstructKind } from './constructs';
-import { OUTCOMES, studioBuildOf, type Outcome, type ReportEntry } from './convert';
+import { OUTCOMES, packageBuildOf, studioBuildOf, type Outcome, type ReportEntry } from './convert';
 import { holdDecisions } from './decisions';
 import { coverage, runHarness, type CheckResult, type HarnessInput } from './harness';
 import type { FileKind } from './inventory';
@@ -116,7 +116,7 @@ export function summarise(input: HarnessInput): MigrationSummary {
       ? entry.outcome
       : 'not an outcome';
   };
-  const held = holdDecisions(report, conversion.decisions);
+  const held = holdDecisions(report, conversion.decisions, packageBuildOf(pkg));
   const isDecided = (id: string): boolean => {
     const taken = held.taken.get(id);
     return Boolean(taken?.owner.trim() && taken.decision.trim());

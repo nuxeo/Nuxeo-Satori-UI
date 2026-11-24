@@ -28,6 +28,7 @@
  * Check 1 counts every outcome as accounted for. A migration with anything pending is not ready.
  * The format is provisional, `studio-migration-report/m1`.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
@@ -422,7 +423,6 @@ export function labelsOf(
   return labels;
 }
 
-/** A JAR manifest's main attributes. A line that starts with a space carries on the one before. */
 /** The Studio project's branch, commit and build time, from the bundle's manifest. */
 export function studioBuildOf(pkg: StudioPackage): MigrationReport['studio'] {
   const manifest = readManifest(
@@ -435,6 +435,31 @@ export function studioBuildOf(pkg: StudioPackage): MigrationReport['studio'] {
   };
 }
 
+/**
+ * One build of a package, as decisions are held to it: its name and version, Studio's commit and
+ * build time, and the SHA-256 of its bundle, which tells two builds apart where the manifest
+ * records neither, as when a project keeps its version from one build to the next.
+ */
+export function packageBuildOf(pkg: StudioPackage): {
+  readonly name: string;
+  readonly version: string;
+  readonly commit: string | null;
+  readonly buildTime: string | null;
+  readonly bundle: string;
+} {
+  const { commit, buildTime } = studioBuildOf(pkg);
+  return {
+    name: pkg.descriptor.name,
+    version: pkg.descriptor.version,
+    commit,
+    buildTime,
+    bundle: createHash('sha256')
+      .update(pkg.packageFiles.get(pkg.bundlePath) ?? Buffer.alloc(0))
+      .digest('hex'),
+  };
+}
+
+/** A JAR manifest's main attributes. A line that starts with a space carries on the one before. */
 function readManifest(text: string): Map<string, string> {
   const attributes = new Map<string, string>();
   let last: string | null = null;

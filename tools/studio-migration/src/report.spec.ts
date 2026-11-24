@@ -1,13 +1,14 @@
 import { loadCatalogue } from './catalogue';
 import { reportSummary } from './cli';
 import { constructsOf } from './constructs';
-import { convert, type Conversion, type ReportEntry } from './convert';
+import { convert, packageBuildOf, type Conversion, type ReportEntry } from './convert';
 import { decisionsFor } from './decisions';
 import { runHarness, type HarnessInput } from './harness';
 import { inventory } from './inventory';
 import { MUTATIONS } from './mutations';
 import { summarise, TALLIES } from './report';
 import { readStudioPackage } from './studio-package';
+import { m2CorpusFiles } from './testing/m2-corpus';
 import { syntheticPackage } from './testing/synthetic-package';
 
 const UI = 'web/nuxeo.war/ui';
@@ -28,7 +29,10 @@ function prepare(): HarnessInput {
 
 /** The conversion with each reported item but the first `left` owned and decided. */
 function decided(conversion: Conversion, left = 0): Conversion {
-  const { file } = decisionsFor(conversion.report);
+  const { file } = decisionsFor(
+    conversion.report,
+    packageBuildOf(readStudioPackage(syntheticPackage())),
+  );
   return {
     ...conversion,
     decisions: {
@@ -185,7 +189,7 @@ describe('the report of a sound conversion', () => {
       'the report is of Acme-Claims 0.9.0, not of the package given, Acme-Claims 1.0.0',
     );
     expect(reportSummary(header)).toContain(
-      'Allow-list: Claim.Approve, as the conversion recorded it, not the deployment’s word for it\n',
+      "Allow-list: Claim.Approve, as the conversion recorded it, not the deployment's word for it\n",
     );
   });
 
@@ -276,6 +280,48 @@ describe('the report as text', () => {
     expect(text).toContain(
       '  data/i18n/messages-fr.json (translations): converted 3\n      became: app/labels/fr.json\n',
     );
+  });
+
+  it('writes what people and the package wrote on one line each, so no line can be forged', () => {
+    const conversion = decided(input.conversion);
+    const raw = conversion.decisions as { decisions: Record<string, unknown>[] };
+    raw.decisions[0]['decision'] =
+      'Rebuilt\n  - the search form of claims, in x\n      owner: Lead; decided: Rebuilt\u0007';
+    const text = reportSummary(summarise({ ...input, conversion }));
+    expect(text).toContain(
+      '      owner: Migration lead; decided: Rebuilt\\n  - the search form of claims, in x\\n      owner: Lead; decided: Rebuilt\\u0007\n',
+    );
+    expect(text).not.toContain('\n  - the search form of claims, in x\n');
+  });
+
+  it('heads it with the package’s own build, bundle and platform, whatever the report says', () => {
+    const report = input.conversion.report;
+    const other = {
+      ...input,
+      conversion: {
+        ...input.conversion,
+        report: {
+          ...report,
+          package: { ...report.package, bundle: 'other.jar', targetPlatform: '[2027.0,2028)' },
+          studio: { branch: 'b', commit: 'c', buildTime: 't' },
+        },
+      },
+    };
+    expect(summarise(other).header).toMatchObject({
+      package: { bundle: 'Acme-Claims-1.0.0.jar', targetPlatform: '[2025.0,2026)' },
+      studio: { branch: null, commit: null, buildTime: null },
+    });
+  });
+
+  it('counts no decision made for another build of the package as decided', () => {
+    const other = readStudioPackage(syntheticPackage({ bundle: m2CorpusFiles() }));
+    const otherInput = { ...input, pkg: other, inventory: inventory(other) };
+    const summary = summarise({ ...otherInput, conversion: decided(input.conversion) });
+    expect(summary.all.decided).toBe(0);
+    expect(summary.reported.every((item) => item.owner === null)).toBe(true);
+    expect(summary.decisionFindings).toEqual([
+      expect.stringMatching(/^decisions\.json is for .*so none of it is taken$/),
+    ]);
   });
 
   it('shows what an item’s decision says even where it names no owner', () => {

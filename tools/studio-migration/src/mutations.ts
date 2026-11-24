@@ -21,7 +21,7 @@ import { labelsOf, type Conversion, type ConvertedTheme, type ReportEntry } from
 import { slotEntry, type Catalogue } from './catalogue';
 import { menuEntryId } from './convert-home';
 import { buttonAction } from './convert-slots';
-import { holdDecisions } from './decisions';
+import { holdDecisions, type DecisionsBuild } from './decisions';
 import type { Inventory, SlotContribution } from './inventory';
 import { slotRegistry } from './slot-registry';
 import type { StudioPackage } from './studio-package';
@@ -1155,7 +1155,12 @@ function decided(conversion: Conversion): { file: Json; items: Json[]; item: Jso
       'the conversion has no decisions.json to break: `decisions` writes one, for a person to fill in',
     );
   const items = file['decisions'] as Json[];
-  const { taken } = holdDecisions(conversion.report, conversion.decisions);
+  // Held to the build the file itself names: a control breaks a decision, not the file's build.
+  const { taken } = holdDecisions(
+    conversion.report,
+    conversion.decisions,
+    file['package'] as DecisionsBuild,
+  );
   const item = items.find((candidate) => {
     const decision = isRecord(candidate) ? taken.get(String(candidate['id'])) : undefined;
     return Boolean(decision?.owner.trim() && decision.decision.trim());
@@ -1200,7 +1205,7 @@ export const DECISION_MUTATIONS: readonly DecisionMutation[] = [
   {
     name: 'stale-decision',
     description:
-      'Change the reason the report gives for a decided item, as converting again after a change would',
+      'Change the reason the report gives for a decided item, as a conversion made again would, with its decisions copied beside it',
     caughtBy: 'decisions',
     apply: (conversion) => {
       const { item } = decided(conversion);

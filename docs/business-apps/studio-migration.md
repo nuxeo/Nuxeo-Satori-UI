@@ -199,7 +199,7 @@ has been seen failing on purpose (section 7) before it is trusted.
 
 | #   | Check                    | Proves                                                                                                                | How                                                                                                                                                                                                                                                         |
 | --- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Nothing dropped          | Every file and construct in the package is converted, proposed, reported, or recognised as Studio's generated code    | Two independent counts of the package's constructs must agree with the report: 100%, or the run fails                                                                                                                                                       |
+| 1   | Nothing dropped          | Every file and construct in the package is converted, proposed, reported, or recognised as Studio's generated code    | The report must be of the package given, and two independent counts of the package's constructs must agree with it: 100%, or the run fails                                                                                                                  |
 | 2   | Fields                   | Each converted layout shows the same fields, in the same modes, with the same required flags and the expected widgets | Compares the fields bound in each Polymer layout with those of the converted layout, less the reported duplicates                                                                                                                                           |
 | 3   | Model                    | Every converted field, vocabulary and page provider exists on the server                                              | Checks the package against `/config/types`, `/config/schemas`, the directories and the page provider definitions                                                                                                                                            |
 | 4   | Labels                   | Every label survives, in every language the package had                                                               | Compares the translation keys and texts, language by language                                                                                                                                                                                               |
@@ -305,7 +305,8 @@ layout block.
 
 **For the report's decisions** (section 8), six more, which break a `decisions.json` filled in
 against its report: take a decided item's owner off, or its decision; change the reason the report
-gives for it, as converting again would; decide an item the report does not list, one it
+gives for it, as a conversion made again would, with its decisions copied beside it; decide an
+item the report does not list, one it
 converts, or one item twice. No check fails then: readiness must name each among what stands in
 its way, and does, on the made-up package with and without M2's corpus. One more, for check 1,
 makes the report one of another version of the package, which check 1 fails.
@@ -367,9 +368,10 @@ it, the same for the same package every time.
 converting the same package again, once the catalogue has learnt something, loses none of them.
 The `decisions` command writes the file, an entry for each reported item for a person to fill in
 with its owner and what they decided, and carries those of an earlier file of the same build that
-still hold. A file is for one build of the package, its version and Studio's commit and build
-time, because a construct's id is its place in its file and another build can give it to another
-construct; check 1 holds the report to the package given the same way. Each decision copies what
+still hold. A file is for one build of the package, its version, Studio's commit and build time,
+and its bundle's SHA-256, and is taken only for that package, because a construct's id is its
+place in its file and another build can give it to another construct; check 1 holds the report
+to the package given too. Each decision copies what
 it was made on from the report, the item's label, property, outcome, where it was written, its
 reason and its rule; where the report no longer says the same, the decision is not taken, and is
 made again. Readiness needs a decision taken for every reported item, and nothing wrong in the

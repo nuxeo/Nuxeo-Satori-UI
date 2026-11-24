@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { loadCatalogue } from './catalogue';
 import {
   convert,
+  packageBuildOf,
   readConversion,
   writeConversion,
   type Conversion,
@@ -15,6 +16,7 @@ import {
   DecisionsError,
   decisionsFor,
   holdDecisions,
+  type DecisionsBuild,
   type DecisionsFile,
 } from './decisions';
 import { runHarness, type HarnessInput } from './harness';
@@ -43,9 +45,12 @@ function prepare(options?: SyntheticPackageOptions): HarnessInput {
 type Json = Record<string, unknown>;
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+/** The build of the made-up package, which decisions are held to. */
+const BUILD: DecisionsBuild = packageBuildOf(readStudioPackage(syntheticPackage()));
+
 /** The conversion's decisions file, with every reported item owned and decided. */
-function decidedFile(conversion: Conversion): DecisionsFile {
-  const { file } = decisionsFor(conversion.report);
+function decidedFile(conversion: Conversion, build: DecisionsBuild = BUILD): DecisionsFile {
+  const { file } = decisionsFor(conversion.report, build);
   return {
     ...file,
     decisions: file.decisions.map((item) => ({
@@ -57,8 +62,12 @@ function decidedFile(conversion: Conversion): DecisionsFile {
 }
 
 /** The decisions file as data, with one change made to it. */
-function changed(conversion: Conversion, change: (file: Json, items: Json[]) => void): unknown {
-  const file = clone(decidedFile(conversion)) as unknown as Json;
+function changed(
+  conversion: Conversion,
+  change: (file: Json, items: Json[]) => void,
+  build: DecisionsBuild = BUILD,
+): unknown {
+  const file = clone(decidedFile(conversion, build)) as unknown as Json;
   change(file, file['decisions'] as Json[]);
   return file;
 }
@@ -83,7 +92,7 @@ const withEntry = (
 describe('the decisions file the `decisions` command writes', () => {
   const { conversion } = prepare();
   const reported = reportedIn(conversion);
-  const { file, carried, notCarried } = decisionsFor(conversion.report);
+  const { file, carried, notCarried } = decisionsFor(conversion.report, BUILD);
 
   it('names the package, at its version, in the format the harness reads', () => {
     expect(file.format).toBe(DECISIONS_FORMAT);
@@ -92,7 +101,9 @@ describe('the decisions file the `decisions` command writes', () => {
       version: '1.0.0',
       commit: null,
       buildTime: null,
+      bundle: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
+    expect(file.package).toEqual(BUILD);
     expect([carried, notCarried]).toEqual([0, []]);
   });
 
@@ -134,9 +145,9 @@ describe('the decisions file the `decisions` command writes', () => {
       ...conversion.report,
       constructs: [...conversion.report.constructs, first],
     };
-    expect(decisionsFor(twice).file.decisions.filter((item) => item.id === first.id)).toHaveLength(
-      1,
-    );
+    expect(
+      decisionsFor(twice, BUILD).file.decisions.filter((item) => item.id === first.id),
+    ).toHaveLength(1);
   });
 
   it('reads an item the report lists twice by its first entry, as readiness and the report do', () => {
@@ -144,12 +155,14 @@ describe('the decisions file the `decisions` command writes', () => {
     if (!converted) throw new Error('the made-up package converts');
     const later = { ...converted, outcome: 'reported' as const, note: 'A later entry' };
     const twice = { ...conversion.report, constructs: [...conversion.report.constructs, later] };
-    expect(decisionsFor(twice).file.decisions.map((item) => item.id)).not.toContain(converted.id);
-    expect(holdDecisions(twice, undefined).unowned).toBe(reported.length);
+    expect(decisionsFor(twice, BUILD).file.decisions.map((item) => item.id)).not.toContain(
+      converted.id,
+    );
+    expect(holdDecisions(twice, undefined, BUILD).unowned).toBe(reported.length);
   });
 
   it('is taken as it is, and leaves every reported item without an owner', () => {
-    expect(holdDecisions(conversion.report, clone(file))).toMatchObject({
+    expect(holdDecisions(conversion.report, clone(file), BUILD)).toMatchObject({
       findings: [],
       unowned: reported.length,
       undecided: 0,
@@ -166,7 +179,7 @@ describe('carrying the decisions of an earlier conversion', () => {
       for (const item of items) if (item['id'] === second.id) item['note'] = 'An earlier reason';
       items.push({ id: 'file:gone.html#file', outcome: 'reported', owner: 'x', decision: 'y' });
     });
-    const { file, carried, notCarried } = decisionsFor(conversion.report, {
+    const { file, carried, notCarried } = decisionsFor(conversion.report, BUILD, {
       raw: earlier,
       file: 'old.json',
     });
@@ -193,64 +206,72 @@ describe('carrying the decisions of an earlier conversion', () => {
       items.push({ ...items[1], owner: '', decision: '' });
       items[2]['decision'] = '';
     });
-    const result = decisionsFor(conversion.report, { raw: earlier, file: 'old.json' });
+    const result = decisionsFor(conversion.report, BUILD, { raw: earlier, file: 'old.json' });
     expect(result.notCarried).toEqual([]);
     expect(result.carried).toBe(reportedIn(conversion).length - 1);
     expect(result.blank).toBe(2);
-    expect(decisionsFor(conversion.report).blank).toBe(reportedIn(conversion).length);
+    expect(decisionsFor(conversion.report, BUILD).blank).toBe(reportedIn(conversion).length);
   });
 
-  it('refuses the decisions of another version or another Studio build, whose ids may name other constructs', () => {
+  it('refuses the decisions of another version, Studio build or bundle, whose ids may name other constructs', () => {
+    const given = `the package given is Acme-Claims 1.0.0, bundle ${BUILD.bundle.slice(0, 12)}`;
     const cases: [Record<string, unknown>, string][] = [
       [
         { version: '0.9.0' },
-        'old.json is for Acme-Claims 0.9.0, and the report for Acme-Claims 1.0.0, so none of it is taken',
+        `old.json is for Acme-Claims 0.9.0, bundle ${BUILD.bundle.slice(0, 12)}, and ${given}, so none of it is taken`,
       ],
       [
         { commit: 'abc123' },
-        'old.json is for Acme-Claims 1.0.0, commit abc123, and the report for Acme-Claims 1.0.0, so none of it is taken',
+        `old.json is for Acme-Claims 1.0.0, commit abc123, bundle ${BUILD.bundle.slice(0, 12)}, and ${given}, so none of it is taken`,
       ],
       [
         { buildTime: '2026-11-20T10:00:00Z' },
-        'old.json is for Acme-Claims 1.0.0, built 2026-11-20T10:00:00Z, and the report for Acme-Claims 1.0.0, so none of it is taken',
+        `old.json is for Acme-Claims 1.0.0, built 2026-11-20T10:00:00Z, bundle ${BUILD.bundle.slice(0, 12)}, and ${given}, so none of it is taken`,
       ],
     ];
     for (const [change, refusal] of cases) {
       const earlier = changed(conversion, (file) => {
         file['package'] = { ...(file['package'] as Json), ...change };
       });
-      expect(() => decisionsFor(conversion.report, { raw: earlier, file: 'old.json' })).toThrow(
-        new DecisionsError(refusal),
-      );
+      expect(() =>
+        decisionsFor(conversion.report, BUILD, { raw: earlier, file: 'old.json' }),
+      ).toThrow(new DecisionsError(refusal));
     }
-    // The report's own build, read from the bundle's manifest, is held the same way.
-    const built = {
-      ...conversion.report,
-      studio: { branch: 'master', commit: 'def456', buildTime: '2026-11-21T09:00:00Z' },
-    };
+  });
+
+  it('refuses the decisions of another build of the same name and version, whose manifest records neither commit nor build time', () => {
+    // The made-up package with M2's corpus is another build of Acme-Claims 1.0.0, and neither
+    // manifest records a commit or a build time: only the bundle tells them apart.
+    const other = prepare({ bundle: m2CorpusFiles() });
+    const theirs = packageBuildOf(other.pkg);
+    expect([theirs.name, theirs.version, theirs.commit, theirs.buildTime]).toEqual([
+      BUILD.name,
+      BUILD.version,
+      null,
+      null,
+    ]);
+    expect(theirs.bundle).not.toBe(BUILD.bundle);
+    const earlier = clone(decidedFile(conversion));
     expect(() =>
-      decisionsFor(built, { raw: clone(decidedFile(conversion)), file: 'old.json' }),
+      decisionsFor(other.conversion.report, theirs, { raw: earlier, file: 'old.json' }),
     ).toThrow(
-      'old.json is for Acme-Claims 1.0.0, and the report for Acme-Claims 1.0.0, commit def456, built 2026-11-21T09:00:00Z, so none of it is taken',
+      /^old\.json is for Acme-Claims 1\.0\.0, bundle [0-9a-f]{12}, and the package given is/,
     );
-    expect(decisionsFor(built).file.package).toEqual({
-      name: 'Acme-Claims',
-      version: '1.0.0',
-      commit: 'def456',
-      buildTime: '2026-11-21T09:00:00Z',
-    });
+    expect(holdDecisions(other.conversion.report, earlier, theirs).findings[0]).toMatch(
+      /^decisions\.json is for .*so none of it is taken$/,
+    );
   });
 
   it('refuses the decisions of another package, or a file that is not one', () => {
     const other = changed(conversion, (file) => {
       file['package'] = { name: 'Other-Project', version: '1.0.0' };
     });
-    expect(() => decisionsFor(conversion.report, { raw: other, file: 'old.json' })).toThrow(
+    expect(() => decisionsFor(conversion.report, BUILD, { raw: other, file: 'old.json' })).toThrow(
       new DecisionsError(
-        'old.json is for Other-Project 1.0.0, and the report for Acme-Claims 1.0.0, so none of it is taken',
+        `old.json is for Other-Project 1.0.0, bundle none, and the package given is Acme-Claims 1.0.0, bundle ${BUILD.bundle.slice(0, 12)}, so none of it is taken`,
       ),
     );
-    expect(() => decisionsFor(conversion.report, { raw: [], file: 'old.json' })).toThrow(
+    expect(() => decisionsFor(conversion.report, BUILD, { raw: [], file: 'old.json' })).toThrow(
       /^old\.json is not a studio-migration-decisions\/1 file/,
     );
   });
@@ -261,10 +282,10 @@ describe('holding the decisions to the report', () => {
   const reported = reportedIn(conversion);
   const [first, second] = reported;
   const findings = (raw: unknown, report = conversion.report) =>
-    holdDecisions(report, raw).findings;
+    holdDecisions(report, raw, BUILD).findings;
 
   it('takes every decision of a file filled in, and leaves nothing unowned or undecided', () => {
-    const held = holdDecisions(conversion.report, clone(decidedFile(conversion)));
+    const held = holdDecisions(conversion.report, clone(decidedFile(conversion)), BUILD);
     expect(held).toMatchObject({ findings: [], unowned: 0, undecided: 0 });
     expect([...held.taken.keys()]).toEqual(reported.map((entry) => entry.id));
   });
@@ -278,7 +299,7 @@ describe('holding the decisions to the report', () => {
       delete items[4]['decision'];
       items[5]['decision'] = ' \n ';
     });
-    expect(holdDecisions(conversion.report, raw)).toMatchObject({
+    expect(holdDecisions(conversion.report, raw, BUILD)).toMatchObject({
       findings: [],
       unowned: 3,
       undecided: 3,
@@ -286,7 +307,7 @@ describe('holding the decisions to the report', () => {
   });
 
   it('leaves every reported item unowned when the conversion has no decisions', () => {
-    expect(holdDecisions(conversion.report, undefined)).toMatchObject({
+    expect(holdDecisions(conversion.report, undefined, BUILD)).toMatchObject({
       findings: [],
       unowned: reported.length,
       undecided: 0,
@@ -304,13 +325,13 @@ describe('holding the decisions to the report', () => {
         changed(conversion, (file) => {
           file['package'] = { name: 'Acme-Claims', version: '0.9.0' };
         }),
-        'decisions.json is for Acme-Claims 0.9.0, and the report for Acme-Claims 1.0.0, so none of it is taken',
+        `decisions.json is for Acme-Claims 0.9.0, bundle none, and the package given is Acme-Claims 1.0.0, bundle ${BUILD.bundle.slice(0, 12)}, so none of it is taken`,
       ],
       [
         changed(conversion, (file) => {
           delete file['package'];
         }),
-        'decisions.json is for undefined undefined, and the report for Acme-Claims 1.0.0, so none of it is taken',
+        `decisions.json is for undefined undefined, bundle none, and the package given is Acme-Claims 1.0.0, bundle ${BUILD.bundle.slice(0, 12)}, so none of it is taken`,
       ],
       [
         changed(conversion, (file) => {
@@ -320,18 +341,28 @@ describe('holding the decisions to the report', () => {
       ],
     ];
     for (const [raw, finding] of cases) {
-      expect(holdDecisions(conversion.report, raw)).toMatchObject({
+      expect(holdDecisions(conversion.report, raw, BUILD)).toMatchObject({
         findings: [finding],
         unowned: reported.length,
       });
     }
   });
 
+  it('names a key the file does not take, and takes its decisions', () => {
+    const raw = changed(conversion, (file) => {
+      file['approvedBy'] = 'Migration lead';
+    });
+    expect(holdDecisions(conversion.report, raw, BUILD)).toMatchObject({
+      findings: ['decisions.json holds approvedBy, which the file does not take'],
+      unowned: 0,
+    });
+  });
+
   it('names a decision of no item, and takes the others', () => {
     const raw = changed(conversion, (_file, items) => {
       items.push('a note to self' as unknown as Json, { owner: 'x' }, { id: '' });
     });
-    const held = holdDecisions(conversion.report, raw);
+    const held = holdDecisions(conversion.report, raw, BUILD);
     const at = reported.length;
     expect(held.findings).toEqual([
       `decisions.json: decision ${at + 1} names no item`,
@@ -345,7 +376,7 @@ describe('holding the decisions to the report', () => {
     const raw = changed(conversion, (_file, items) => {
       items.push({ ...items[0], owner: 'Someone else' }, { ...items[0] });
     });
-    const held = holdDecisions(conversion.report, raw);
+    const held = holdDecisions(conversion.report, raw, BUILD);
     expect(held.findings).toEqual([`decisions.json: ${first.id} is decided 3 times`]);
     expect(held.taken.has(first.id)).toBe(false);
     expect(held.unowned).toBe(1);
@@ -404,7 +435,7 @@ describe('holding the decisions to the report', () => {
     ];
     for (const [change, words] of cases) {
       const now = withEntry(conversion, edit, change).report;
-      const held = holdDecisions(now, clone(decidedFile(conversion)));
+      const held = holdDecisions(now, clone(decidedFile(conversion)), BUILD);
       expect(held.findings).toEqual([
         `decisions.json: ${edit} was made on another ${words} than the report gives now, so it is not taken: decide it again`,
       ]);
@@ -419,12 +450,16 @@ describe('holding the decisions to the report', () => {
     };
     const now = withEntry(conversion, first.id, { rule }).report;
     // As the file is read: parsed from its text, so its rule is another object of the same JSON.
-    const raw = JSON.parse(JSON.stringify(decisionsFor(now).file)) as Json;
+    const raw = JSON.parse(JSON.stringify(decisionsFor(now, BUILD).file)) as Json;
     for (const item of raw['decisions'] as Json[]) {
       item['owner'] = 'Migration lead';
       item['decision'] = 'Kept';
     }
-    expect(holdDecisions(now, raw)).toMatchObject({ findings: [], unowned: 0, undecided: 0 });
+    expect(holdDecisions(now, raw, BUILD)).toMatchObject({
+      findings: [],
+      unowned: 0,
+      undecided: 0,
+    });
   });
 
   it('takes no decision missing what it was made on', () => {
@@ -458,7 +493,7 @@ describe('readiness and the decisions', () => {
 
   it('stands in the way while a reported item has no owner, as with no decisions at all', () => {
     expect(ownerLines(blockers(undefined))).toEqual([`${reported} reported items have no owner`]);
-    expect(ownerLines(blockers(decisionsFor(input.conversion.report).file))).toEqual([
+    expect(ownerLines(blockers(decisionsFor(input.conversion.report, BUILD).file))).toEqual([
       `${reported} reported items have no owner`,
     ]);
   });
@@ -502,17 +537,33 @@ describe('readiness and the decisions', () => {
     ]);
   });
 
+  it('takes none of the decisions of another build of the package, by the package given', () => {
+    // Another build of Acme-Claims 1.0.0, its conversion with this build's decisions copied in.
+    const other = prepare({ bundle: m2CorpusFiles() });
+    const decisions = decidedFile(other.conversion);
+    expect(decisions.package).toEqual(BUILD);
+    const lines = ownerLines(
+      runHarness({ ...other, conversion: { ...other.conversion, decisions } }).blockers,
+    );
+    expect(lines).toEqual([
+      `${reportedIn(other.conversion).length} reported items have no owner`,
+      expect.stringMatching(
+        /^decisions\.json is for .*, and the package given is .*, so none of it is taken$/,
+      ),
+    ]);
+  });
+
   it('takes a copied rule whatever the order of its keys, as an editor that sorts them leaves it', () => {
     const rule = { type: 'core.every', parameters: ['x'] };
     const id = reportedIn(input.conversion)[0].id;
     const now = withEntry(input.conversion, id, { rule }).report;
-    const raw = JSON.parse(JSON.stringify(decisionsFor(now).file)) as Json;
+    const raw = JSON.parse(JSON.stringify(decisionsFor(now, BUILD).file)) as Json;
     const items = raw['decisions'] as Json[];
     items[0]['rule'] = { parameters: ['x'], type: 'core.every' };
     for (const item of items) Object.assign(item, { owner: 'Migration lead', decision: 'Kept' });
-    expect(holdDecisions(now, raw)).toMatchObject({ findings: [], unowned: 0 });
+    expect(holdDecisions(now, raw, BUILD)).toMatchObject({ findings: [], unowned: 0 });
     items[0]['rule'] = { parameters: ['y'], type: 'core.every' };
-    expect(holdDecisions(now, raw).unowned).toBe(1);
+    expect(holdDecisions(now, raw, BUILD).unowned).toBe(1);
   });
 });
 
@@ -540,9 +591,10 @@ describe('decisions.json in a conversion directory', () => {
 // verdict must then name it among what stands in the way.
 describe('each deliberate breakage of the decisions stands in the way of readiness', () => {
   const corpus = prepare({ bundle: m2CorpusFiles() });
+  const CORPUS = packageBuildOf(corpus.pkg);
   const input: HarnessInput = {
     ...corpus,
-    conversion: { ...corpus.conversion, decisions: decidedFile(corpus.conversion) },
+    conversion: { ...corpus.conversion, decisions: decidedFile(corpus.conversion, CORPUS) },
   };
   const pristine = JSON.stringify(input.conversion);
   const sound = runHarness(input).blockers;
@@ -566,7 +618,7 @@ describe('each deliberate breakage of the decisions stands in the way of readine
   it('says so when the conversion has no decisions, or none filled in, to break', () => {
     const blank = {
       ...corpus.conversion,
-      decisions: decisionsFor(corpus.conversion.report).file,
+      decisions: decisionsFor(corpus.conversion.report, CORPUS).file,
     };
     for (const mutation of DECISION_MUTATIONS) {
       expect(() => mutation.apply(corpus.conversion)).toThrow(MutationError);
@@ -579,9 +631,13 @@ describe('each deliberate breakage of the decisions stands in the way of readine
   it('breaks a decision readiness takes, never one it already leaves aside', () => {
     // The first decision filled in is of an item the report does not list: breaking it would
     // change nothing readiness reads.
-    const decisions = changed(corpus.conversion, (_file, items) => {
-      items.unshift({ ...items[0], id: 'file:elsewhere.html#file' });
-    });
+    const decisions = changed(
+      corpus.conversion,
+      (_file, items) => {
+        items.unshift({ ...items[0], id: 'file:elsewhere.html#file' });
+      },
+      CORPUS,
+    );
     const conversion = { ...corpus.conversion, decisions };
     const before = runHarness({ ...corpus, conversion }).blockers;
     const broken = DECISION_MUTATIONS.find((candidate) => candidate.name === 'drop-owner')?.apply(
