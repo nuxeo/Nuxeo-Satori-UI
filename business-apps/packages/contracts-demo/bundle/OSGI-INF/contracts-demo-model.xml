@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, until a real contracts model arrives.
+
+  Everything here is fictional: the document type, schema and page providers the kit's layouts,
+  queue and home name, and nothing more. When a real model arrives, this file and schemas/ are
+  replaced by it, and the layouts follow its property names. Records of this type must be deleted
+  from a server before its model goes: a document whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.contracts-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="contract" prefix="contract" src="schemas/contract.xsd" />
+  </extension>
+
+  <!-- Not a folder and holds no file, so it opens as a record page. No folder lists it among its
+       subtypes, so the Create menu does not offer it: the seed writes the records. -->
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <doctype name="Contract" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="contract" />
+    </doctype>
+  </extension>
+
+  <!-- The platform's default lifecycle, so that a record has a lifecycle state. The status the
+       pages, the queue and the field rule read is contract:status, a property. -->
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="Contract">default</type>
+    </types>
+  </extension>
+
+  <!-- Each reads the repository, so it lists a write at once, and none takes a parameter: a queue
+       and the home have no open record. Each leaves out versions, proxies and trashed records. -->
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <!-- The up-for-renewal queue, and the home's figure for it: active contracts that end within
+         90 days, or have ended and are still active, soonest first. NOW('P90D') is 90 days from
+         when the query runs (NXQL, measured on Nuxeo 2025.10.18 on 24 November 2026). The record
+         page's renewal banner says the same 90 days with app.rules.dateWithin. -->
+    <coreQueryPageProvider name="contracts_up_for_renewal">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Contract' AND contract:status = 'Active'
+        AND contract:end &lt;= NOW('P90D')
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="contract:end" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The home's figure for contract managers: every active contract. -->
+    <coreQueryPageProvider name="contracts_active">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Contract' AND contract:status = 'Active'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="contract:end" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The home's figure for legal reviewers: the contracts ended early. -->
+    <coreQueryPageProvider name="contracts_terminated">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'Contract'
+        AND contract:status = 'Terminated'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:modified" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>
