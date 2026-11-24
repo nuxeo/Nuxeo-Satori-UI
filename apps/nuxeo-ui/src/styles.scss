@@ -2,6 +2,15 @@
 @use '@hylandsoftware/satori-ui/theme' as sat;
 @use './app/document-detail/document-detail-header-toolbar-focus';
 
+// `nxs-banner`'s warning tone, in Satori's warning colours. The banner reads these properties, not
+// Satori's tokens, so that its library's published Storybook stays free of Satori. Every theme below
+// includes Satori's theme, which defines the three tokens in its light and dark schemes.
+html {
+  --nxs-banner-warning-background: var(--sat-sys-warning-container);
+  --nxs-banner-warning-foreground: var(--sat-sys-on-warning-container);
+  --nxs-banner-warning-icon: var(--sat-sys-warning-icon);
+}
+
 /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html[data-app-theme='nuxeo'],
 html:not([data-app-theme]) {

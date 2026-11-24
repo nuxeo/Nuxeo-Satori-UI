@@ -10,6 +10,10 @@
 html {
   color-scheme: light;
   @include sat.theme;
+  // As the app's theme does: `nxs-banner`'s warning tone in Satori's warning colours.
+  --nxs-banner-warning-background: var(--sat-sys-warning-container);
+  --nxs-banner-warning-foreground: var(--sat-sys-on-warning-container);
+  --nxs-banner-warning-icon: var(--sat-sys-warning-icon);
 }
 
 body {
