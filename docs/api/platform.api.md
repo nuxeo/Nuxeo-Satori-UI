@@ -3796,6 +3796,8 @@ interface ExtensionRuleContext {
     };
     readonly url: string;
     readonly flags: Readonly<Record<string, boolean>>;
+    readonly today?: Date;
+    readonly timeZone?: string;
     }
 }
 class ExtensionRuleContextService {
