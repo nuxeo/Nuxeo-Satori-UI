@@ -2,7 +2,7 @@ import { loadCatalogue } from './catalogue';
 import { versionOne } from './check-package';
 import { readable } from './check-seen';
 import { convert, type Conversion } from './convert';
-import { runHarness, type HarnessInput } from './harness';
+import { runCheck, runHarness, type HarnessInput } from './harness';
 import { MUTATIONS, ruleHolders } from './mutations';
 import { inventory } from './inventory';
 import { readStudioPackage } from './studio-package';
@@ -29,8 +29,8 @@ function prepare(options?: SyntheticPackageOptions): HarnessInput {
   };
 }
 
-const run = (input: HarnessInput, number: number) =>
-  runHarness(input).checks.find((check) => check.number === number);
+/** What one check finds: that check alone, as the harness runs it, not the ten. */
+const run = (input: HarnessInput, number: number) => runCheck(input, number);
 
 /** The input with one file of the converted app definition replaced, or removed. */
 // The tests reach into a file as the JSON it is; typing each shape would only restate it.
@@ -1326,7 +1326,7 @@ describe('M2: conditions become rules, held by truth tables', () => {
     ]);
   });
 
-  it('carries a group condition to the home and the menu, and reports one that reads a document there', () => {
+  describe('carries a group condition to the home and the menu, and reports one that reads a document there', () => {
     const groups = prepare({
       bundle: {
         // A home of the customer's own, which sets the user its filter reads.
@@ -1340,68 +1340,88 @@ describe('M2: conditions become rules, held by truth tables', () => {
         ),
       },
     });
-    const rule = (group: string) => ({ type: 'app.rules.inGroup', parameters: [group] });
-    expect(groups.conversion.app['home.json']).toMatchObject({
-      cards: [
-        { id: 'card-1' },
-        { id: 'card-3', queue: 'home-3-claims', visibleWhen: rule('supervisors') },
-      ],
+
+    it('writes it on the card, its queue and the menu entry, and passes checks 2, 5, 6, 7 and 10', () => {
+      const rule = (group: string) => ({ type: 'app.rules.inGroup', parameters: [group] });
+      expect(groups.conversion.app['home.json']).toMatchObject({
+        cards: [
+          { id: 'card-1' },
+          { id: 'card-3', queue: 'home-3-claims', visibleWhen: rule('supervisors') },
+        ],
+      });
+      expect(groups.conversion.app['queues/home-3-claims.json']).toMatchObject({
+        visibleWhen: rule('supervisors'),
+      });
+      expect(groups.conversion.app['navigation.json']).toMatchObject({
+        entries: [{ id: 'claimssearch', visibleWhen: rule('adjusters') }],
+      });
+      for (const number of [2, 5, 6, 7, 10]) expect(run(groups, number)?.findings).toEqual([]);
     });
-    expect(groups.conversion.app['queues/home-3-claims.json']).toMatchObject({
-      visibleWhen: rule('supervisors'),
+
+    /** Every rule the package carries, the home's and the menu's among them. */
+    const GROUP_RULES = [
+      'home.json cards.1.visibleWhen',
+      'layouts/Claim/view.layout.json cards.0.fields.3.visibleWhen',
+      'navigation.json entries.0.visibleWhen',
+      'queues/home-3-claims.json visibleWhen',
+    ];
+
+    // The cases below break these rules one by one: a rule the conversion gains is not left out.
+    it('finds every rule the package carries, which the cases below break', () => {
+      expect(ruleHolders(groups.conversion).map((found) => `${found.path} ${found.at}`)).toEqual(
+        GROUP_RULES,
+      );
     });
-    expect(groups.conversion.app['navigation.json']).toMatchObject({
-      entries: [{ id: 'claimssearch', visibleWhen: rule('adjusters') }],
-    });
-    for (const number of [2, 5, 6, 7, 10]) expect(run(groups, number)?.findings).toEqual([]);
-    // Every rule the package carries, dropped or inverted on its own, fails check 5 in its file.
-    expect(ruleHolders(groups.conversion).map((found) => `${found.path} ${found.at}`)).toEqual(
-      expect.arrayContaining([
-        'home.json cards.1.visibleWhen',
-        'navigation.json entries.0.visibleWhen',
-        'queues/home-3-claims.json visibleWhen',
-      ]),
-    );
-    for (const change of ['drop', 'invert'] as const)
-      for (const found of ruleHolders(groups.conversion)) {
-        if (change === 'drop') delete found.holder['visibleWhen'];
-        else
-          found.holder['visibleWhen'] = {
-            type: 'core.not',
-            parameters: [found.holder['visibleWhen']],
-          };
-        const findings = run(
-          {
-            ...groups,
-            conversion: {
-              ...groups.conversion,
-              app: { ...groups.conversion.app, [found.path]: found.file },
+
+    // One case a rule and a change: each runs check 5 once. All of them in one test ran the whole
+    // harness once a rule and a change, close to the time a test is given on a loaded runner.
+    describe.each(['dropped', 'inverted'] as const)(
+      'fails check 5 in its file on every rule %s, one by one',
+      (change) => {
+        it.each(GROUP_RULES)('%s', (where) => {
+          const found = ruleHolders(groups.conversion).find(
+            (holder) => `${holder.path} ${holder.at}` === where,
+          );
+          if (!found) throw new Error(`no rule at ${where}`);
+          if (change === 'dropped') delete found.holder['visibleWhen'];
+          else
+            found.holder['visibleWhen'] = {
+              type: 'core.not',
+              parameters: [found.holder['visibleWhen']],
+            };
+          const findings = run(
+            {
+              ...groups,
+              conversion: {
+                ...groups.conversion,
+                app: { ...groups.conversion.app, [found.path]: found.file },
+              },
             },
-          },
-          5,
-        )?.findings;
-        expect([
-          change,
-          found.path,
-          findings?.some((f) => f.startsWith(`${found.path}: `)),
-        ]).toEqual([change, found.path, true]);
-      }
-    const typed = prepare({
-      bundle: {
-        [bundle]: files[bundle].replace(
-          '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
-          '<template><nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
-        ),
+            5,
+          )?.findings;
+          expect(findings?.some((f) => f.startsWith(`${found.path}: `))).toBe(true);
+        });
       },
-    });
-    expect(typed.conversion.app['navigation.json']).toBeUndefined();
-    expect(
-      typed.conversion.report.constructs.find(
-        (entry) => entry.id === `slot-contribution:${bundle}#3`,
-      ),
-    ).toMatchObject({
-      outcome: 'reported',
-      note: 'Its condition reads a document, and no record is open in the menu',
+    );
+
+    it('reports a menu entry whose condition reads a document, which the menu has not', () => {
+      const typed = prepare({
+        bundle: {
+          [bundle]: files[bundle].replace(
+            '<template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template>',
+            '<template><nuxeo-filter document="[[document]]" type="Claim"><template><nuxeo-menu-icon name="claimssearch" label="Claims" icon="icons:search"></nuxeo-menu-icon></template></nuxeo-filter></template>',
+          ),
+        },
+      });
+      expect(typed.conversion.app['navigation.json']).toBeUndefined();
+      expect(
+        typed.conversion.report.constructs.find(
+          (entry) => entry.id === `slot-contribution:${bundle}#3`,
+        ),
+      ).toMatchObject({
+        outcome: 'reported',
+        note: 'Its condition reads a document, and no record is open in the menu',
+      });
     });
   });
 });

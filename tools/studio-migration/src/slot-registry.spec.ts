@@ -1,6 +1,6 @@
 import { loadCatalogue } from './catalogue';
 import { convert, type Conversion } from './convert';
-import { runHarness, type HarnessInput } from './harness';
+import { runCheck, runHarness, type HarnessInput } from './harness';
 import { inventory, type SlotContribution } from './inventory';
 import { MUTATIONS, MutationError } from './mutations';
 import { slotRegistry } from './slot-registry';
@@ -26,8 +26,8 @@ function prepare(bundle: Record<string, string> = {}): HarnessInput {
   };
 }
 
-const run = (input: HarnessInput, number: number) =>
-  runHarness(input).checks.find((check) => check.number === number);
+/** What one check finds: that check alone, as the harness runs it, not the ten. */
+const run = (input: HarnessInput, number: number) => runCheck(input, number);
 
 const entry = (conversion: Conversion, index: number) =>
   conversion.report.constructs.find(
@@ -138,42 +138,60 @@ describe("actions and menu entries, as Web UI's slots register them", () => {
     ).toBe(0);
   });
 
-  it("holds each action and menu entry to Web UI's slot in checks 6 and 7", () => {
-    expect(runHarness(input).checks.map((check) => [check.number, check.status])).toEqual([
-      [1, 'pass'],
-      [2, 'pass'],
-      [3, 'partial'],
-      [4, 'pass'],
-      [5, 'partial'],
-      [6, 'partial'],
-      [7, 'partial'],
-      [8, 'pass'],
-      [9, 'not run'],
-      [10, 'pass'],
-    ]);
-    const findings = (name: string) => {
+  describe("holds each action and menu entry to Web UI's slot in checks 6 and 7", () => {
+    it('passes the conversion, as the ten checks run it', () => {
+      expect(runHarness(input).checks.map((check) => [check.number, check.status])).toEqual([
+        [1, 'pass'],
+        [2, 'pass'],
+        [3, 'partial'],
+        [4, 'pass'],
+        [5, 'partial'],
+        [6, 'partial'],
+        [7, 'partial'],
+        [8, 'pass'],
+        [9, 'not run'],
+        [10, 'pass'],
+      ]);
+    });
+
+    // One case a control: each runs the one check that catches it, not the ten.
+    it.each<[string, readonly string[]]>([
+      [
+        'revive-disabled-action',
+        ['actions.json: "acme-claims.archiveClaim" runs something no button of the package runs'],
+      ],
+      [
+        'keep-replaced-action',
+        [
+          'actions.json: acme-claims.reopenClaim sends {"comment":"Reopened first"}, where Web UI sends {"comment":"Reopened"}',
+        ],
+      ],
+      [
+        'keep-outranked-action',
+        [
+          'actions.json: acme-claims.escalateClaim sends {"comment":"Escalated later"}, where Web UI sends {"comment":"Escalated"}',
+        ],
+      ],
+      [
+        'revive-disabled-menu-entry',
+        ['navigation.json: "oldsearch" opens a list no menu entry of the package opens'],
+      ],
+      [
+        'change-action-order',
+        [
+          `actions.json: acme-claims.settleClaim is at order 1005, where Web UI's slot places "settleClaim" at 5`,
+        ],
+      ],
+    ])('names what %s broke', (name, expected) => {
       const mutation = MUTATIONS.find((candidate) => candidate.name === name);
       if (!mutation) throw new Error(name);
-      return run(
-        { ...input, conversion: mutation.apply(input.conversion, input).conversion },
-        mutation.caughtBy,
-      )?.findings;
-    };
-    expect(findings('revive-disabled-action')).toEqual([
-      'actions.json: "acme-claims.archiveClaim" runs something no button of the package runs',
-    ]);
-    expect(findings('keep-replaced-action')).toEqual([
-      'actions.json: acme-claims.reopenClaim sends {"comment":"Reopened first"}, where Web UI sends {"comment":"Reopened"}',
-    ]);
-    expect(findings('keep-outranked-action')).toEqual([
-      'actions.json: acme-claims.escalateClaim sends {"comment":"Escalated later"}, where Web UI sends {"comment":"Escalated"}',
-    ]);
-    expect(findings('revive-disabled-menu-entry')).toEqual([
-      'navigation.json: "oldsearch" opens a list no menu entry of the package opens',
-    ]);
-    expect(findings('change-action-order')).toEqual([
-      `actions.json: acme-claims.settleClaim is at order 1005, where Web UI's slot places "settleClaim" at 5`,
-    ]);
+      expect(
+        run(
+          { ...input, conversion: mutation.apply(input.conversion, input).conversion },
+          mutation.caughtBy,
+        )?.findings,
+      ).toEqual(expected);
+    });
   });
 
   it("fails check 6 on a menu entry's order, and a control that reads the package refuses without it", () => {
