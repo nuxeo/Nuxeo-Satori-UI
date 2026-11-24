@@ -32,7 +32,7 @@ install and the demo below are for the reviewer.
 | `src/main/java/org/nuxeo/agentic/connectors/`                   | The bundle: the descriptor, its checks (`Connector.of`), the component and service, the HTTP call, the operation |
 | `src/main/resources/OSGI-INF/connectors-service.xml`            | The component `org.nuxeo.agentic.connectors`, its service and its `connectors` extension point                   |
 | `src/main/resources/OSGI-INF/connectors-operations-contrib.xml` | Registers `Connector.Read`                                                                                       |
-| `src/test/java/`                                                | 45 tests, with an embedded HTTP stub (`SystemOfRecordStub`); no Nuxeo runtime                                    |
+| `src/test/java/`                                                | 54 tests, with an embedded HTTP stub (`SystemOfRecordStub`); no Nuxeo runtime                                    |
 | `demo/core-system.mjs`                                          | The stand-in core claims system: fictional payment and policy records for the Payers seed's claims               |
 | `demo/core-system.selftest.mjs`                                 | Its controls, 10 of them                                                                                         |
 | `demo/payers-claim-payments-config.xml`                         | The demo's connector, `payers.claimPayments`, keyed on `claim:number`                                            |
