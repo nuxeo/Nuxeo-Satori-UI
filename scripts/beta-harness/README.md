@@ -50,7 +50,7 @@ Playwright and axe are deliberately **not** tracked dependencies, so they never
 affect the CI install. Install them locally once:
 
 ```bash
-npm install --no-save @playwright/test @axe-core/playwright
+npm install --no-save @playwright/test @axe-core/playwright@4.14.0 axe-core@4.14.1
 npx playwright install chromium
 ```
 
@@ -58,6 +58,15 @@ npx playwright install chromium
 `node_modules` against the lockfile plus `<x>`, which silently removes any _other_
 unsaved package. Installing axe on its own deleted Playwright and the next capture
 died with "Playwright is required to capture evidence but is not installed".
+
+**The axe engine is pinned**, in `axe-engine.mjs`, because `phase-6-a11y` publishes the WCAG
+verdict and an unpinned install changed that verdict without a commit: the 2026-10-22 capture
+ran axe-core 4.13.0 and the 2026-11-23 one ran 4.14.1 (gap 8 in `docs/accessibility.md`).
+`axe-core` is named as well as the wrapper because `@axe-core/playwright@4.14.0` accepts any
+`~4.14.0` engine. `phase-6-a11y` refuses any other pair with exit 2 before it scans, and each of
+its scans fails unless axe reports that it ran the pinned engine. a11y-scout pins 4.13.0
+(`a11y/versions.mjs`), and one `node_modules` holds one version of each, so install for the layer
+you are about to run: each refuses the other's install.
 
 Bring the Nuxeo stack up, then start the app in another terminal:
 
@@ -110,7 +119,10 @@ Loads `scripts/beta-harness/steps/phase-0-baseline.mjs` and writes to
 
 - `NN-*.png` — screenshots numbered by step
 - `*.webm` — video of the whole run
-- `manifest.json` — steps, checks, environment, screenshot audit, verdict
+- `manifest.json` — steps, checks, environment, screenshot audit, verdict. `environment`
+  records the untracked packages the run loaded (`playwright`, `axeCorePlaywright` and
+  `axeCore`, each `null` when not installed), because nothing else in the checkout says which
+  versions a `--no-save` install left behind
 - `INDEX.md` — narrative report with the images inlined, ready to paste into a
   PR description or attach to the RFC
 
@@ -290,9 +302,8 @@ has the table. That ordering is deliberate — a lint error usually explains the
 failure that would follow, and running the full set on a known-broken tree wastes
 minutes per iteration.
 
-`dependency-tree` is **blocking** since the ADF removal (NXSAT-638) set `BLOCKING = true`
-in `dependency-tree.mjs`: any adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client
-finding fails it. Until then it was report-only and passed while listing them.
+`dependency-tree` is **blocking** (`BLOCKING = true` in `dependency-tree.mjs`): any finding for a
+retired dependency (the legacy UI libraries, `js-api` or `hxcs-js-client`) fails it.
 
 Reports land in `$EVIDENCE_ROOT/beta/gates/<timestamp>-<phase>.json`.
 
@@ -327,10 +338,9 @@ is `AGENTS/12-review-agents.md`.
 ### The `parity-surface` gate
 
 `npm run beta:parity-surface` audits the one steps file that captures the same claims
-twice — `steps/nxsat-308-parity.mjs`, on the upstream adf-hx components and on their
-nxs- replacements. The upstream half cannot be captured again, so that file's rule is
-that the steps and the expected values are written once and only the **surface adapter**
-changes between the halves.
+twice — `steps/nxsat-308-parity.mjs`, on a reference surface and on the `nxs-` components.
+The reference half cannot be captured again, so that file's rule is that the steps and the
+expected values are written once and only the **surface adapter** changes between the halves.
 
 Nothing enforced the rule, and the `nxs` run was unable to finish for two months. A
 breadcrumb crumb was selected by its label; the label was itself under test, so the one
@@ -344,7 +354,7 @@ by its translated label staged nothing, so the save under test never ran — and
 that `AddChildren` survived it passed against an untouched ACL.
 
 Three rules, one per failure: `unguarded-click` (a `.click()` with no `.catch()`),
-`surface-selector-in-step` (a selector naming `nxs-`, `hxp-`, `adf-`, `sat-` or `lib-`
+`surface-selector-in-step` (a selector naming a component-library prefix such as `nxs-`, `sat-` or `lib-`
 from outside an adapter, in the runner or inside a `page.evaluate`), and `adapter-gap`
 (a surface missing an adapter key the steps read). A helper that only the adapters call
 counts as adapter code; one the steps also call does not.
@@ -445,6 +455,66 @@ verdict  PASS (INCOMPLETE) — 28 green, 1 NOT RUN (code-scanning)
 ```
 
 `npm run beta:gate-selftest` holds the runner to this, against the real runner and gate.
+
+### Do not force-kill a run: one selftest perturbs tracked source
+
+**Exactly one** — `sanitizer-audit.selftest.mjs`. It proves its check by editing real files,
+asserting the audit goes red for the stated reason, and restoring them. Every other selftest that
+writes at all writes to a temporary directory and says so in its own docstring:
+`parity-surface-audit.selftest.mjs` with "Nothing tracked is touched",
+`review-guardrails.selftest.mjs` with "nothing outside that directory is ever written".
+
+So do not scope this by searching for writers. `grep -lE "writeFileSync" scripts/**/*.selftest.mjs`
+returns eighteen files and seventeen of them are harmless — an earlier revision of this section
+said "eighteen selftests break real source" on exactly that basis, which overstated the hazard by
+a factor of eighteen. The honest test is `mkdtemp`: everything except the sanitizer selftest uses
+one.
+
+The restore is well defended — a `finally`, plus `SIGINT`/`SIGTERM`/`SIGHUP` and
+`uncaughtException` handlers for the paths `finally` misses. Its own docstring says where that
+ends: **"SIGKILL and power loss remain uncatchable"**. A forced stop — `kill -9`, an agent harness
+cancelling a background task, a crashed terminal — is the case no handler covers, and it leaves
+the perturbation in tracked source.
+
+#### What the next run does with a leftover, which is the dangerous part
+
+`edit()` captures `original = backups.get(relPath)?.original ?? current` — the first time a run
+touches a file, "original" is **whatever is on disk at that moment**. So a run starting on a dirty
+tree can adopt the leftover as the pristine state and faithfully restore to it, leaving the
+perturbation in place and no longer flagged by anything. That is the quiet outcome and the worst
+one.
+
+The louder outcomes:
+
+- It throws on an anchor that the leftover already changed —
+  `document-viewer posterUrl changed — update these controls` — which reads as a stale control
+  rather than a dirty tree, so the obvious next move is to "fix" a control that was never wrong.
+- `git add -A` commits it. The perturbations are plausible code, and one swaps `templateUrl` for
+  an inline `template`, so in review it reads as deliberate rather than as scaffolding.
+
+**Do not rely on the `NOT restoring … changed by something else mid-run` warning to tell you.**
+That is a _concurrent-edit_ safeguard: `restoreAll()` compares the bytes on disk against what this
+run wrote, so it fires when something edits a file **during** the run — an IDE save mid-control —
+and is silent about a tree that was already dirty when the run began. It may never appear in the
+case you need it for.
+
+#### Recovery
+
+Look before you restore, and look in two places:
+
+```bash
+git diff -- <path>           # unstaged: the leftover, possibly mixed with your own edits
+git diff --cached -- <path>  # staged: if the perturbation is here, checkout RESTORES it
+```
+
+`git checkout -- <path>` takes the file from the **index**, so it reinstates a staged perturbation
+and discards unstaged work in the same file. Reach for it only when the unstaged change is purely
+the leftover and the index is known good. Otherwise restore from a ref —
+`git checkout <ref> -- <path>` — or remove just the perturbation by hand and keep your own edits.
+
+Both mistakes above were made on [#522](https://github.com/nuxeo/Nuxeo-Satori-UI/pull/522): a gate
+stopped twice mid-selftest, then `git add -A`, and the perturbation reached a commit and a pushed
+branch. It was caught by the gate rather than by the author.
 
 ## Environment
 

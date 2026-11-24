@@ -27,10 +27,17 @@
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
-      <sat-breadcrumbs
-        [items]="breadcrumbItems()"
-        (click)="onBreadcrumbClick($event)"
-      ></sat-breadcrumbs>
+      @let trailLabel = 'document-detail.document-detail.breadcrumbs' | translate;
+      <div class="detail-breadcrumbs">
+        <lib-extension-outlet
+          #breadcrumbsOutlet
+          [componentId]="primitiveIds.breadcrumbs"
+          [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+        />
+        @if (breadcrumbsOutlet.unresolved()) {
+          <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
+        }
+      </div>
     </div>
     <!-- By ID, so whatever is registered as the action bar renders here: Satori's in our app. -->
     <lib-extension-outlet
@@ -54,68 +61,53 @@
     }
   </div>
 
+  <!-- Each banner is rendered by ID; the wrapper keeps the layout whichever component the ID resolves to. -->
   @if (isTrashed()) {
-    <sat-banner variant="info" [border]="true">
-      <sat-banner-message>{{
-        'document-detail.document-detail.you-are-viewing-a-trashed-document' | translate
-      }}</sat-banner-message>
-      @if (canWriteDoc()) {
-        <button
-          mat-stroked-button
-          satBannerAction
-          (click)="restoreFromTrash()"
-          [disabled]="actionInProgress() === 'restore'"
-        >
-          <mat-icon svgIcon="restore" />
-          {{ 'document-detail.document-detail.restore' | translate }}
-        </button>
+    <div class="trashed-banner">
+      <lib-extension-outlet
+        #trashedOutlet
+        [componentId]="bannerId"
+        [componentInputs]="{
+          message: trashedBanner().message,
+          tone: 'info',
+          announce: 'none',
+          actions: trashedBanner().actions,
+        }"
+      />
+      @if (trashedOutlet.unresolved()) {
+        <nxs-banner
+          tone="info"
+          [message]="trashedBanner().message"
+          [actions]="trashedBanner().actions"
+        />
       }
-      @if (canRemoveDoc()) {
-        <button
-          mat-stroked-button
-          satBannerAction
-          (click)="permanentlyDelete()"
-          [disabled]="actionInProgress() === 'permanentDelete'"
-        >
-          <mat-icon svgIcon="trash_x" />
-          {{ 'document-detail.document-detail.delete-permanently' | translate }}
-        </button>
-      }
-    </sat-banner>
+    </div>
   }
 
   @if (isVersionView()) {
-    <sat-banner class="version-banner" variant="info" [border]="true">
-      <sat-banner-message>{{
-        'document-detail.version-viewing' | translate: { version: versionLabel() }
-      }}</sat-banner-message>
-      <button
-        class="version-banner-latest"
-        mat-button
-        type="button"
-        satBannerAction
-        (click)="showLatestVersion()"
-      >
-        {{ 'document-detail.version-go-to-latest' | translate }}
-      </button>
-      @if (canRestoreVersion()) {
-        <button
-          class="version-banner-restore"
-          mat-flat-button
-          type="button"
-          satBannerAction
-          (click)="confirmRestoreVersion()"
-          [disabled]="actionInProgress() === 'restore'"
-        >
-          <mat-icon svgIcon="restore" />
-          {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
-        </button>
+    <div class="version-banner">
+      <lib-extension-outlet
+        #versionOutlet
+        [componentId]="bannerId"
+        [componentInputs]="{
+          message: versionBanner().message,
+          tone: 'info',
+          announce: 'none',
+          actions: versionBanner().actions,
+        }"
+      />
+      @if (versionOutlet.unresolved()) {
+        <nxs-banner
+          tone="info"
+          [message]="versionBanner().message"
+          [actions]="versionBanner().actions"
+        />
       }
-    </sat-banner>
+    </div>
   }
 
   <!-- Workflow info banner — one per running workflow -->
-  @for (wf of documentWorkflows(); track wf.id) {
+  @for (wf of visibleWorkflows(); track wf.id) {
     <sat-banner variant="warning" [border]="true">
       <sat-banner-message>{{
         'document-detail.workflow-started-on-document'
@@ -128,6 +120,14 @@
         (click)="abandonWorkflow(wf)"
       >
         {{ 'document-detail.document-detail.abandon' | translate }}
+      </button>
+      <button
+        mat-icon-button
+        satBannerDismissButton
+        type="button"
+        (click)="dismissWorkflowBanner(wf)"
+      >
+        <mat-icon aria-hidden="true" svgIcon="x_large" />
       </button>
     </sat-banner>
   }
@@ -178,6 +178,7 @@
           }}</mat-label>
           <mat-select
             [value]="selectedWorkflowModel()"
+            [placeholder]="'document-detail.document-detail.select-a-process' | translate"
             (selectionChange)="selectedWorkflowModel.set($event.value)"
           >
             @for (wf of availableWorkflows(); track wf.name) {
@@ -307,7 +308,7 @@
                 [mimeType]="mimeType()"
                 [fileName]="fileName()"
                 [fileSize]="fileSize()"
-                [loading]="viewerLoading()"
+                [loading]="preferARender() && arenderUrl() !== null ? loading() : viewerLoading()"
                 [noteContent]="noteContent()"
                 [noteHtml]="noteHtml()"
                 [videoSources]="videoSources()"
@@ -324,6 +325,7 @@
                 [arenderReloadId]="arenderReloadId()"
                 [viewerDocUid]="doc()?.uid ?? ''"
                 [annotationsTab]="false"
+                [preferARender]="preferARender()"
                 [showMainFileControls]="!!fileName() && canWriteDoc() && !isTrashed()"
                 [mainFileActionInProgress]="actionInProgress()"
                 (downloadClicked)="download()"
@@ -904,9 +906,14 @@
                         <span class="ai-meta-key">{{
                           'document-detail.document-detail.primary-category' | translate
                         }}</span>
-                        <sat-category-tag category="blue">{{
-                          aiClassification()!.nature
-                        }}</sat-category-tag>
+                        <lib-extension-outlet
+                          #natureOutlet
+                          [componentId]="primitiveIds.tag"
+                          [componentInputs]="{ label: aiClassification()!.nature, color: 'blue' }"
+                        />
+                        @if (natureOutlet.unresolved()) {
+                          <nxs-tag [label]="aiClassification()!.nature" color="blue" />
+                        }
                       </div>
                       <div class="ai-meta-row">
                         <span class="ai-meta-key">{{
@@ -1116,7 +1123,16 @@
               @if (doc(); as versioned) {
                 <!-- A publication has no versions of its own to pick from; Web UI shows a tag too. -->
                 @if (versioned.isProxy) {
-                  <nxs-tag nxsVersion [label]="versionLabel()" />
+                  <span nxsVersion class="detail-version-tag">
+                    <lib-extension-outlet
+                      #versionTagOutlet
+                      [componentId]="primitiveIds.tag"
+                      [componentInputs]="{ label: versionLabel(), color: 'gray' }"
+                    />
+                    @if (versionTagOutlet.unresolved()) {
+                      <nxs-tag [label]="versionLabel()" color="gray" />
+                    }
+                  </span>
                 } @else {
                   <nxs-manage-versions
                     nxsVersion
@@ -1290,13 +1306,15 @@
               } @else {
                 @for (entry of panelActivity(); track $index) {
                   <div class="activity-card">
-                    <sat-avatar
-                      [initials]="entry.principalName"
-                      [category]="avatarColor(entry.principalName)"
-                      size="28"
-                      [borderless]="true"
-                      aria-hidden="true"
+                    @let color = avatarColor(entry.principalName);
+                    <lib-extension-outlet
+                      #avatarOutlet
+                      [componentId]="primitiveIds.avatar"
+                      [componentInputs]="{ initials: entry.principalName, color, size: '28' }"
                     />
+                    @if (avatarOutlet.unresolved()) {
+                      <nxs-avatar [initials]="entry.principalName" [color]="color" size="28" />
+                    }
                     <div class="activity-info">
                       <span class="activity-user">{{ entry.principalName }}</span>
                       <span class="activity-action">{{ activityLabel(entry) }}</span>

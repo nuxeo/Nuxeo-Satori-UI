@@ -7,3 +7,4 @@
 # entry and deleting this folder leaves it behind. See README.md.
 reports/
 artifacts/
+node_modules/

@@ -111,42 +111,18 @@
       </div>
     }
 
-    <!-- Grid View -->
+    <!-- Grid View. Rendered through its ID so a customer library can replace the cards; the
+         packaged component follows when nothing is registered. -->
     @if (!loading() && !error() && viewMode() === 'grid' && resultCount() > 0) {
-      <div class="asset-grid">
-        @for (asset of gridAssets(); track asset.id) {
-          <div class="asset-card" [class.selected]="isAssetSelected(asset.id)">
-            <div class="grid-card-checkbox col-hover-select">
-              <mat-checkbox
-                [checked]="isAssetSelected(asset.id)"
-                [attr.aria-label]="'common.select-item' | translate: { name: asset.name }"
-                (click)="$event.stopPropagation()"
-                (change)="toggleAssetSelection(asset.id)"
-              ></mat-checkbox>
-            </div>
-            <div class="asset-card-thumbnail">
-              @if (thumbnailMap()[asset.id]; as thumb) {
-                <img class="asset-thumbnail-image" [src]="thumb" alt="" />
-              } @else {
-                <mat-icon class="asset-icon" [svgIcon]="asset.icon" />
-              }
-            </div>
-            <div class="asset-card-body">
-              <div class="asset-card-head">
-                <button
-                  type="button"
-                  class="asset-card-name"
-                  [title]="asset.name"
-                  (click)="openAsset(asset); $event.stopPropagation()"
-                >
-                  {{ asset.name }}
-                </button>
-                <span class="asset-type-pill" [title]="asset.type | docTypeLabel">{{
-                  asset.type | docTypeLabel
-                }}</span>
-              </div>
-            </div>
-          </div>
+      <div class="asset-grid-host">
+        <lib-extension-outlet #gridOutlet [componentId]="gridId" [componentInputs]="gridInputs()" />
+        @if (gridOutlet.unresolved()) {
+          <nxs-asset-grid
+            [assets]="gridInputs().assets"
+            [selectedIds]="gridInputs().selectedIds"
+            (assetOpen)="openCardFromGrid($event)"
+            (selectionToggle)="toggleAssetSelection($event)"
+          />
         }
       </div>
     }

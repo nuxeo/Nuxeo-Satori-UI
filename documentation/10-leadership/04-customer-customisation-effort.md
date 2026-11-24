@@ -88,7 +88,7 @@ If Layers 0/1 cover FEW requests:
 
 **This distribution has never been measured**, and it is RFC risk **R8**. The RFC's own
 mitigation was to fix the addressable surface _before Phase 2_, informed by real customer
-requests. Phase 2 completed without that input.
+requests. Phase 2 was signed off without that input.
 
 Reinforcing evidence that the surface may be too narrow: **4 of the 8 slots are reserved** —
 `routes`, `toolbar`, `contextMenu`, `tabs` are read by nothing. A customer wanting a document

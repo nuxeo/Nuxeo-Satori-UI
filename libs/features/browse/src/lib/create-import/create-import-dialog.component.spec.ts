@@ -1,16 +1,26 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DateAdapter } from '@angular/material/core';
 import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ElementRef, provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  forwardRef,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule, provideNoopAnimations } from '@angular/platform-browser/animations';
-import { Subject, of, throwError, timer } from 'rxjs';
+import { Observable, Subject, of, throwError, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { vi } from 'vitest';
 
 import {
   BrowseService,
+  ContentModelService,
   DirectoryService,
   DocumentImportService,
   DOMAIN_CONTAINER_GUIDANCE_KEY,
@@ -18,8 +28,13 @@ import {
   type DirectoryEntry,
   type ImportProgress,
   type L10nDirectoryEntry,
+  type NuxeoContentModel,
+  type NuxeoDoctypeDefinition,
+  type NuxeoFacetDefinition,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
+
+import { DocumentLayoutFormComponent } from '@agentic-ui/shared/document-layouts';
 
 import { CreateImportDialogComponent } from './create-import-dialog.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -84,6 +99,74 @@ const mockBrowseService = {
   ),
 };
 
+/**
+ * Nuxeo's content model, which the dialog reads to tell which types keep a main file. Empty by
+ * default, so every test that does not name a type hierarchy sees the stock-name behaviour.
+ */
+const mockContentModelService = {
+  getContentModel: vi.fn<ContentModelService['getContentModel']>(() =>
+    of({ doctypes: {}, facets: [], schemas: [] }),
+  ),
+};
+
+/** A customer type that extends File, the way `/config/types` describes it. */
+const RENTAL_CONTRACT_DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
+  File: { parent: 'Document', schemas: ['common', 'dublincore', 'file', 'files'] },
+  RentalContract: { parent: 'File' },
+};
+
+/**
+ * A customer type that gets the `file` schema from a facet it declares, with the facet's schemas
+ * left out of its own. The local Nuxeo lists them there too; leaving them out proves the dialog
+ * hands the facet definitions to the check.
+ */
+const SCANNED_INVOICE_MODEL: Pick<NuxeoContentModel, 'doctypes' | 'facets'> = {
+  doctypes: {
+    Invoice: { parent: 'Document', facets: ['Downloadable', 'Scanned'], schemas: ['common'] },
+  },
+  facets: [
+    { name: 'Downloadable' },
+    { name: 'Scanned', schemas: [{ name: 'file', '@prefix': '' }] },
+  ],
+};
+
+/**
+ * Workspace and Section as the local Nuxeo reports them: both carry the `file` schema for their own
+ * use, and both are containers, not documents with a main file.
+ */
+const CONTAINER_DOCTYPES: Record<string, NuxeoDoctypeDefinition> = {
+  ...RENTAL_CONTRACT_DOCTYPES,
+  Folder: { parent: 'Document', facets: ['Folderish', 'NXTag'], schemas: ['common', 'dublincore'] },
+  Workspace: {
+    parent: 'Folder',
+    facets: ['Folderish', 'NXTag', 'SuperSpace'],
+    schemas: ['file', 'webcontainer', 'publishing', 'files', 'common', 'dublincore', 'facetedTag'],
+  },
+  Section: {
+    parent: 'Folder',
+    facets: ['Folderish', 'NXTag', 'SuperSpace', 'PublishSpace'],
+    schemas: ['file', 'common', 'dublincore', 'facetedTag'],
+  },
+};
+
+function useDoctypes(
+  doctypes: Record<string, NuxeoDoctypeDefinition>,
+  facets: NuxeoFacetDefinition[] = [],
+): void {
+  mockContentModelService.getContentModel.mockReturnValue(of({ doctypes, facets, schemas: [] }));
+}
+
+/** A content model that has not answered yet; call the result to make it answer. */
+function useUnansweredContentModel(): (doctypes: Record<string, NuxeoDoctypeDefinition>) => void {
+  const pending = new Subject<NuxeoContentModel>();
+  mockContentModelService.getContentModel.mockReturnValue(pending.asObservable());
+  return (doctypes) => pending.next({ doctypes, facets: [], schemas: [] });
+}
+
+// `vi.clearAllMocks()` keeps a mock's implementation, so a test that names a type hierarchy
+// would otherwise leak it into every test after it.
+afterEach(() => useDoctypes({}));
+
 const mockDirectoryService = {
   getEntries: vi.fn(() => of([])),
   getAllL10nEntries: vi.fn(() => of([])),
@@ -102,6 +185,38 @@ async function flushAsync(): Promise<void> {
   await Promise.resolve();
 }
 
+/**
+ * Stands in for the create layout form, which has its own spec: the dialog finds it by the real
+ * component's token, so these tests decide what it holds, whether it passes, and when it is ready.
+ */
+@Component({
+  selector: 'lib-document-layout-form',
+  standalone: true,
+  template: '',
+  providers: [
+    { provide: DocumentLayoutFormComponent, useExisting: forwardRef(() => StubLayoutForm) },
+  ],
+})
+class StubLayoutForm {
+  readonly mode = input<string>('');
+  readonly type = input<string | null>(null);
+  readonly parentPath = input<string | null>(null);
+  readonly disabled = input(false);
+  readonly headingLevel = input(3);
+  readonly ready = signal(true);
+  properties: Record<string, unknown> = {};
+  valid = true;
+  readonly validate = vi.fn(() => this.valid);
+  readonly changedProperties = vi.fn(() => ({ ...this.properties }));
+  readonly showServerErrors = vi.fn((_errors: Readonly<Record<string, string>>): string[] => []);
+}
+
+const STUB_FORM = { imports: [StubLayoutForm], template: '<lib-document-layout-form />' };
+
+function stubForm(fixture: ComponentFixture<CreateImportDialogComponent>): StubLayoutForm {
+  return fixture.debugElement.query(By.directive(StubLayoutForm)).componentInstance;
+}
+
 describe('CreateImportDialogComponent (NXSAT-173)', () => {
   let component: CreateImportDialogComponent;
   let fixture: ComponentFixture<CreateImportDialogComponent>;
@@ -117,10 +232,11 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: ContentModelService, useValue: mockContentModelService },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
-        set: { imports: [], template: '<div></div>' },
+        set: STUB_FORM,
       })
       .compileComponents();
 
@@ -197,11 +313,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
 
   it('blocks partial expiry input when datepicker parsing fails', () => {
     component.onExpiresInput({ target: { value: '01/15/' } } as unknown as Event);
-    component.expiresNgModel = {
-      errors: { matDatepickerParse: { text: '01/15/' } },
-      invalid: true,
-      control: { markAsDirty: vi.fn(), updateValueAndValidity: vi.fn() },
-    } as unknown as typeof component.expiresNgModel;
 
     expect(component.isExpiresValid()).toBe(false);
   });
@@ -223,7 +334,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     );
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -304,7 +414,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       type: 'Collection',
       label: 'Collection',
     });
-    component.docTitle = 'My Collection';
+    stubForm(fixture).properties = { 'dc:title': 'My Collection' };
     component.createDocument();
     await flushAsync();
 
@@ -334,7 +444,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       type: 'Collection',
       label: 'Collection',
     });
-    component.docTitle = 'Minimal Collection';
+    stubForm(fixture).properties = { 'dc:title': 'Minimal Collection' };
     component.createDocument();
     await flushAsync();
 
@@ -362,7 +472,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     mockImportService.createBlobHoldingDocumentReliable.mockReturnValue(of(created));
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
+    stubForm(fixture).properties = { 'dc:title': 'Photo' };
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -392,7 +502,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     );
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
+    stubForm(fixture).properties = { 'dc:title': 'Photo' };
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -411,7 +521,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     );
 
     component.startCreateFromType(pictureType());
-    component.docTitle = 'Photo';
+    stubForm(fixture).properties = { 'dc:title': 'Photo' };
     component.onMainFileInputChange({
       target: { files: [jpegFile()], value: '' },
     } as unknown as Event);
@@ -426,7 +536,9 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
   });
 
   it('runUpload routes failures to importError instead of dialog error', async () => {
-    mockImportService.importFiles.mockReturnValue(throwError(() => ({ message: 'Upload failed' })));
+    mockImportService.importFilesWithProperties.mockReturnValueOnce(
+      throwError(() => ({ message: 'Upload failed' })),
+    );
 
     component.uploads.stage([jpegFile('import.pdf')]);
     component.runUpload();
@@ -453,6 +565,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: ContentModelService, useValue: mockContentModelService },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -645,6 +758,10 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     component.docTitle = 'My photo';
     component.description = 'A picture';
     component.nature = 'article';
+    // A day as the picker hands it over, local midnight: the import writer anchors it in UTC like
+    // every other `dc:expired` writer, so this is `2027-12-31T00:00:00.000Z` in every zone and not
+    // `2027-12-30T18:30:00.000Z` under the pinned one (NXSAT-727).
+    component.onExpiresChange(new Date(2027, 11, 31));
     component.importFileIndex.set(0);
 
     component.runImportWithProperties();
@@ -659,6 +776,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
             'dc:title': 'My photo',
             'dc:description': 'A picture',
             'dc:nature': 'article',
+            'dc:expired': '2027-12-31T00:00:00.000Z',
           }),
         }),
       ],
@@ -721,6 +839,7 @@ describe('CreateImportDialogComponent CSV', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: ContentModelService, useValue: mockContentModelService },
       ],
     }).compileComponents();
 
@@ -759,6 +878,38 @@ describe('CreateImportDialogComponent CSV', () => {
     await createDialog({ parentPath: '/default-domain/workspaces/demo' });
     expect(component.csvImportRestricted()).toBe(false);
     expect(component.importRestricted()).toBe(false);
+  });
+
+  it('keeps Add properties disabled where the folder allows no type with a main file', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await createDialog({ parentPath: '/default-domain/workspaces/demo' });
+    component.setActiveTab('import');
+    component.creatableTypes.set([
+      { type: 'Workspace', label: 'Workspace' },
+      { type: 'Folder', label: 'Folder' },
+    ]);
+    component.uploads.stage([jpegFile('plan.jpg')]);
+    fixture.detectChanges();
+    const addProperties = (): HTMLButtonElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('.btn-add-properties');
+
+    expect(component.importTypesUnsettled()).toBe(false);
+    expect(component.noImportBlobTypes()).toBe(true);
+    expect(addProperties()?.disabled).toBe(true);
+    component.startImportProperties();
+    expect(component.importEntries()).toEqual([]);
+    expect(component.view()).toBe('main');
+
+    // The same folder with one type that keeps a main file opens the step as before.
+    component.creatableTypes.set([
+      { type: 'Workspace', label: 'Workspace' },
+      { type: 'RentalContract', label: 'Rental Contract' },
+    ]);
+    fixture.detectChanges();
+    expect(addProperties()?.disabled).toBe(false);
+    component.startImportProperties();
+    expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    expect(component.view()).toBe('importProperties');
   });
 
   it('shows staged import cards and action buttons only after files are selected', async () => {
@@ -933,14 +1084,88 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: ContentModelService, useValue: mockContentModelService },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(CreateImportDialogComponent, {
+        remove: { imports: [DocumentLayoutFormComponent] },
+        add: { imports: [StubLayoutForm] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(CreateImportDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
     await Promise.resolve();
   }
+
+  const createButton = (): HTMLButtonElement | undefined =>
+    Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        'mat-dialog-actions button',
+      ),
+    ).find((button) => button.textContent?.trim() === 'Create');
+
+  it("renders the chosen type's create form, for the folder, read-only while busy", async () => {
+    await createDialog();
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
+    fixture.detectChanges();
+
+    const form = stubForm(fixture);
+    expect(form.mode()).toBe('create');
+    expect(form.type()).toBe('Domain');
+    expect(form.parentPath()).toBe('/');
+    expect(form.disabled()).toBe(false);
+    component.busy.set(true);
+    fixture.detectChanges();
+    expect(form.disabled()).toBe(true);
+  });
+
+  it('keeps Create disabled until the form is on screen', async () => {
+    await createDialog();
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
+    fixture.detectChanges();
+    const form = stubForm(fixture);
+
+    form.ready.set(false);
+    fixture.detectChanges();
+    expect(component.createFormReady()).toBe(false);
+    expect(createButton()?.disabled).toBe(true);
+
+    form.ready.set(true);
+    fixture.detectChanges();
+    expect(createButton()?.disabled).toBe(false);
+  });
+
+  it('keeps Create disabled for a type outside the stock four until the content model answers', async () => {
+    const answer = useUnansweredContentModel();
+    await createDialog();
+    component.startCreateFromType({ type: 'Domain', label: 'Domain' });
+    fixture.detectChanges();
+    expect(createButton()?.disabled).toBe(true);
+
+    component.createDocument();
+    expect(stubForm(fixture).validate).not.toHaveBeenCalled();
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+
+    answer({ Domain: { parent: 'Folder' }, Folder: { parent: 'Document' } });
+    fixture.detectChanges();
+    expect(createButton()?.disabled).toBe(false);
+  });
+
+  it('keeps Create enabled for a Workspace or Section, whose file schema is not a main file', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await createDialog();
+    for (const type of ['Workspace', 'Section']) {
+      component.startCreateFromType({ type, label: type });
+      fixture.detectChanges();
+      stubForm(fixture).ready.set(true);
+      fixture.detectChanges();
+      expect(component.hasContentField()).toBe(false);
+      expect(component.createMissingMainFile()).toBe(false);
+      expect(createButton()?.disabled).toBe(false);
+    }
+  });
 
   it('createDocument at repository root delegates Domain create to DocumentImportService', async () => {
     const created: NuxeoDocument = {
@@ -957,7 +1182,8 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
     expect(component.parentPath()).toBe('/');
 
     component.startCreateFromType({ type: 'Domain', label: 'Domain' });
-    component.docTitle = 'Test Domain';
+    fixture.detectChanges();
+    stubForm(fixture).properties = { 'dc:title': 'Test Domain' };
     component.createDocument();
     await Promise.resolve();
 
@@ -1166,11 +1392,10 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
           provide: DirectoryService,
           useValue: { getEntries: m.getEntries, getAllL10nEntries: m.getAllL10nEntries },
         },
+        { provide: ContentModelService, useValue: mockContentModelService },
       ],
     })
-      .overrideComponent(CreateImportDialogComponent, {
-        set: { imports: [], template: '<div></div>' },
-      })
+      .overrideComponent(CreateImportDialogComponent, { set: STUB_FORM })
       .compileComponents();
 
     fixture = TestBed.createComponent(CreateImportDialogComponent);
@@ -1696,6 +1921,21 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.coverage).toBeNull();
     });
 
+    it('removes a nature, coverage or subject chip through the handler its chip set calls', async () => {
+      await createDialog();
+      component.nature = 'contract';
+      component.coverage = 'tanzania';
+      component.subjects = ['cinema', 'art'];
+
+      component.removeNatureChip();
+      component.removeCoverageChip();
+      component.removeSubjectChip({ id: 'cinema', label: 'Cinema', removeLabel: 'Remove Cinema' });
+
+      expect(component.nature).toBeNull();
+      expect(component.coverage).toBeNull();
+      expect(component.subjects).toEqual(['art']);
+    });
+
     it('groups subject children under their parent, ordered, dropping obsolete and parent rows', async () => {
       await createDialog();
 
@@ -1881,6 +2121,122 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.mainFile.set(jpegFile());
       expect(component.createMissingMainFile()).toBe(false);
     });
+
+    it('exposes a content field for a type that extends File, and flags its missing file', async () => {
+      useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+      await createDialog();
+
+      component.startCreateFromType({ type: 'RentalContract', label: 'Rental Contract' });
+      expect(component.hasContentField()).toBe(true);
+      expect(component.createMissingMainFile()).toBe(true);
+
+      component.mainFile.set(jpegFile());
+      expect(component.createMissingMainFile()).toBe(false);
+    });
+
+    it('offers a type that extends File for imported files, even when it is the only one allowed', async () => {
+      useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'RentalContract', label: 'Rental Contract' },
+        { type: 'Folder', label: 'Folder' },
+      ]);
+      expect(component.importBlobTypeNames()).toEqual(['RentalContract']);
+
+      component.uploads.stage([jpegFile('lease.jpg')]);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    });
+
+    it('exposes a content field for a type whose facet contributes the file schema', async () => {
+      useDoctypes(SCANNED_INVOICE_MODEL.doctypes, SCANNED_INVOICE_MODEL.facets);
+      await createDialog();
+
+      component.startCreateFromType({ type: 'Invoice', label: 'Invoice' });
+      expect(component.hasContentField()).toBe(true);
+      expect(component.createMissingMainFile()).toBe(true);
+    });
+
+    it('offers a type whose facet contributes the file schema for imported files', async () => {
+      useDoctypes(SCANNED_INVOICE_MODEL.doctypes, SCANNED_INVOICE_MODEL.facets);
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'Invoice', label: 'Invoice' },
+        { type: 'Folder', label: 'Folder' },
+      ]);
+      expect(component.importBlobTypeNames()).toEqual(['Invoice']);
+
+      component.uploads.stage([jpegFile('invoice.jpg')]);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['Invoice']);
+    });
+
+    it('does not offer Workspace or Section for imported files', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'Workspace', label: 'Workspace' },
+        { type: 'Section', label: 'Section' },
+        { type: 'RentalContract', label: 'Rental Contract' },
+      ]);
+      expect(component.importBlobTypeNames()).toEqual(['RentalContract']);
+
+      component.uploads.stage([jpegFile('plan.jpg')]);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    });
+
+    it('decides on a type outside the stock four only once the content model answers', async () => {
+      const answer = useUnansweredContentModel();
+      await createDialog();
+      component.startCreateFromType({ type: 'RentalContract', label: 'Rental Contract' });
+      expect(component.mainFileUnsettled()).toBe(true);
+      expect(component.hasContentField()).toBe(false);
+
+      answer(RENTAL_CONTRACT_DOCTYPES);
+      expect(component.mainFileUnsettled()).toBe(false);
+      expect(component.hasContentField()).toBe(true);
+      expect(component.createMissingMainFile()).toBe(true);
+    });
+
+    it('never waits for the content model on a stock type that keeps a file', async () => {
+      useUnansweredContentModel();
+      await createDialog();
+      component.startCreateFromType(pictureType());
+      expect(component.mainFileUnsettled()).toBe(false);
+      expect(component.hasContentField()).toBe(true);
+    });
+
+    it("waits for it before choosing imported files' types where no stock type is allowed", async () => {
+      const answer = useUnansweredContentModel();
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'RentalContract', label: 'Rental Contract' },
+        { type: 'Folder', label: 'Folder' },
+      ]);
+      component.uploads.stage([jpegFile('lease.jpg')]);
+      expect(component.importTypesUnsettled()).toBe(true);
+      component.startImportProperties();
+      expect(component.importEntries()).toEqual([]);
+
+      answer(RENTAL_CONTRACT_DOCTYPES);
+      expect(component.importTypesUnsettled()).toBe(false);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['RentalContract']);
+    });
+
+    it('does not hold imported files back where a stock type is allowed', async () => {
+      useUnansweredContentModel();
+      await createDialog();
+      component.creatableTypes.set([
+        { type: 'File', label: 'File' },
+        { type: 'RentalContract', label: 'Rental Contract' },
+      ]);
+      component.uploads.stage([jpegFile('scan.jpg')]);
+      expect(component.importTypesUnsettled()).toBe(false);
+      component.startImportProperties();
+      expect(component.importEntries().map((entry) => entry.docType)).toEqual(['File']);
+    });
   });
 
   describe('import wizard navigation', () => {
@@ -2014,6 +2370,15 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
   });
 
   describe('create form', () => {
+    const folder = (title = 'Reports'): NuxeoDocument => ({
+      uid: 'folder-1',
+      title,
+      type: 'Folder',
+      path: `${WS_PATH}/${title}`,
+      lastModified: '',
+      properties: {},
+    });
+
     it('writes the note body and mime type for a Note', async () => {
       await createDialog();
       m.createChildDocument.mockReturnValue(
@@ -2028,7 +2393,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       );
 
       component.startCreateFromType({ type: 'Note', label: 'Note' });
-      component.docTitle = 'Minutes';
+      stubForm(fixture).properties = { 'dc:title': 'Minutes' };
       component.noteFormat = 'text/html';
       component.createDocument();
       await flushAsync();
@@ -2042,10 +2407,82 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(m.toast.show).toHaveBeenCalledWith('Created Note “Minutes”');
     });
 
+    it('keeps a Note body the form filled in, and its own format', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/html';
+      stubForm(fixture).properties = {
+        'dc:title': 'Minutes',
+        'note:note': '# Agenda',
+        'note:mime_type': 'text/x-web-markdown',
+      };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('# Agenda');
+      expect(properties['note:mime_type']).toBe('text/x-web-markdown');
+    });
+
+    it('gives a Note body the form filled in the chosen format when the form names none', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/plain';
+      stubForm(fixture).properties = { 'dc:title': 'Minutes', 'note:note': 'Agenda' };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('Agenda');
+      expect(properties['note:mime_type']).toBe('text/plain');
+    });
+
+    it('writes the empty body when the form left the Note body blank', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Minutes')));
+      component.startCreateFromType({ type: 'Note', label: 'Note' });
+      component.noteFormat = 'text/html';
+      stubForm(fixture).properties = {
+        'dc:title': 'Minutes',
+        'note:note': '  ',
+        'note:mime_type': 'text/plain',
+      };
+
+      component.createDocument();
+      await flushAsync();
+
+      const [, , , properties] = m.createChildDocument.mock.calls[0];
+      expect(properties['note:note']).toBe('<p></p>');
+      expect(properties['note:mime_type']).toBe('text/html');
+    });
+
+    it("sends what the form holds, the type's own fields included, through createChildDocument", async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder()));
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      const values = {
+        'dc:title': '  Reports ',
+        'dc:expired': '2027-12-31T00:00:00.000Z',
+        'acme:region': 'EMEA',
+      };
+      stubForm(fixture).properties = values;
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).validate).toHaveBeenCalledTimes(1);
+      expect(m.createChildDocument).toHaveBeenCalledWith(WS_PATH, 'Reports', 'Folder', values);
+      expect(m.close).toHaveBeenCalledWith(expect.objectContaining({ refreshed: true }));
+    });
+
     it('refuses to create a blob type with no file attached', async () => {
       await createDialog();
       component.startCreateFromType(pictureType());
-      component.docTitle = 'Photo';
+      stubForm(fixture).properties = { 'dc:title': 'Photo' };
 
       component.createDocument();
 
@@ -2060,7 +2497,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.stageFileInBatch.mockReturnValue(stall.asObservable());
 
       component.startCreateFromType(pictureType());
-      component.docTitle = 'Photo';
+      stubForm(fixture).properties = { 'dc:title': 'Photo' };
       const input = inputWith('c:/photo.jpg', [jpegFile()]);
       component.onMainFileInputChange(changeEvent(input));
       expect(input.value).toBe('');
@@ -2072,54 +2509,169 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       stall.complete();
     });
 
-    it('does nothing without a title or a selected type', async () => {
+    describe('a type that extends File', () => {
+      const rentalContract = { type: 'RentalContract', label: 'Rental Contract' };
+
+      it('refuses to create it with no file attached', async () => {
+        useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+        await createDialog();
+        component.startCreateFromType(rentalContract);
+        stubForm(fixture).properties = { 'dc:title': 'Lease' };
+
+        component.createDocument();
+
+        expect(component.contentError()).toBe('A file is required for this document type.');
+        expect(m.createBlobHoldingDocumentReliable).not.toHaveBeenCalled();
+        expect(m.createChildDocument).not.toHaveBeenCalled();
+      });
+
+      it('refuses to create it while its file is still uploading', async () => {
+        useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+        await createDialog();
+        const stall = new Subject<{ batchId: string; fileIndex: number }>();
+        m.stageFileInBatch.mockReturnValue(stall.asObservable());
+        component.startCreateFromType(rentalContract);
+        stubForm(fixture).properties = { 'dc:title': 'Lease' };
+        component.onMainFileInputChange(
+          changeEvent(inputWith('c:/lease.jpg', [jpegFile('lease.jpg')])),
+        );
+
+        component.createDocument();
+
+        expect(component.contentError()).toBe('Please wait for the file upload to finish.');
+        expect(m.createBlobHoldingDocumentReliable).not.toHaveBeenCalled();
+        expect(m.createChildDocument).not.toHaveBeenCalled();
+        stall.complete();
+      });
+
+      it('creates it with the chosen file and its staged batch once the upload is done', async () => {
+        useDoctypes(RENTAL_CONTRACT_DOCTYPES);
+        await createDialog();
+        m.createBlobHoldingDocumentReliable.mockReturnValue(
+          of({ ...folder('Lease'), type: 'RentalContract' }),
+        );
+        component.startCreateFromType(rentalContract);
+        stubForm(fixture).properties = { 'dc:title': 'Lease' };
+        const lease = jpegFile('lease.jpg');
+        component.onMainFileInputChange(changeEvent(inputWith('c:/lease.jpg', [lease])));
+        await flushAsync();
+        expect(component.mainFileUploadComplete()).toBe(true);
+
+        component.createDocument();
+        await flushAsync();
+
+        expect(m.createBlobHoldingDocumentReliable).toHaveBeenCalledWith(
+          WS_PATH,
+          'Lease',
+          'RentalContract',
+          expect.objectContaining({ 'dc:title': 'Lease' }),
+          lease,
+          { batchId: 'batch-1', fileIndex: 0 },
+          expect.any(Object),
+        );
+        expect(m.createChildDocument).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does nothing without a selected type', async () => {
       await createDialog();
 
       component.createDocument();
-      expect(m.createChildDocument).not.toHaveBeenCalled();
 
-      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = '   ';
-      component.createDocument();
+      expect(stubForm(fixture).validate).not.toHaveBeenCalled();
       expect(m.createChildDocument).not.toHaveBeenCalled();
     });
 
-    it('refuses to create while the expiry field is invalid', async () => {
+    it('sends nothing while the form is still being prepared', async () => {
       await createDialog();
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
-      component.onExpiresInput(changeEvent(inputWith('99/99/9999')));
+      stubForm(fixture).ready.set(false);
 
-      expect(component.showExpiresError()).toBe(true);
       component.createDocument();
 
+      expect(stubForm(fixture).validate).not.toHaveBeenCalled();
       expect(m.createChildDocument).not.toHaveBeenCalled();
     });
 
-    it('sends the expiry as an ISO date and clears the raw text once a date parses', async () => {
+    it('sends nothing when the form refuses its values, and clears the last error', async () => {
       await createDialog();
-      m.createChildDocument.mockReturnValue(
-        of({
-          uid: 'folder-1',
-          title: 'Reports',
-          type: 'Folder',
-          path: `${WS_PATH}/Reports`,
-          lastModified: '',
-          properties: {},
-        }),
-      );
-
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
-      component.onExpiresInput(changeEvent(inputWith('12/31/2027')));
-      component.onExpiresChange(new Date('2027-12-31T00:00:00.000Z'));
-      expect(component.expiresRawText).toBe('');
+      component.error.set('Name already used');
+      stubForm(fixture).valid = false;
+
+      component.createDocument();
+
+      expect(stubForm(fixture).validate).toHaveBeenCalledTimes(1);
+      expect(stubForm(fixture).changedProperties).not.toHaveBeenCalled();
+      expect(m.createChildDocument).not.toHaveBeenCalled();
+      expect(component.error()).toBeNull();
+    });
+
+    it('names the document after the type when a contributed form sends no title', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(of(folder('Folder')));
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      stubForm(fixture).properties = { 'acme:region': 'EMEA' };
 
       component.createDocument();
       await flushAsync();
 
-      const [, , , properties] = m.createChildDocument.mock.calls[0];
-      expect(properties['dc:expired']).toBe('2027-12-31T00:00:00.000Z');
+      expect(m.createChildDocument).toHaveBeenCalledWith(WS_PATH, 'untitled', 'Folder', {
+        'acme:region': 'EMEA',
+      });
+      expect(m.toast.show).toHaveBeenCalledWith('Created Folder “Folder”');
+    });
+
+    it("puts Nuxeo's constraint message on the field it names, and keeps the dialog open", async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 422,
+              error: {
+                'entity-type': 'exception',
+                message:
+                  "Constraint violation thrown on property acme:region: 'Pick a listed region.'",
+              },
+            }),
+        ),
+      );
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      stubForm(fixture).properties = { 'dc:title': 'Reports', 'acme:region': 'Mars' };
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).showServerErrors).toHaveBeenCalledWith({
+        'acme:region': 'Pick a listed region.',
+      });
+      expect(component.error()).toBeNull();
+      expect(component.busy()).toBe(false);
+      expect(m.close).not.toHaveBeenCalled();
+    });
+
+    it('reports above the form a constraint message the form has no field for', async () => {
+      await createDialog();
+      m.createChildDocument.mockReturnValue(
+        throwError(() => ({
+          error: {
+            'entity-type': 'validation_report',
+            violations: [{ message: 'Too many documents here.', path: [] }],
+          },
+        })),
+      );
+      component.startCreateFromType({ type: 'Folder', label: 'Folder' });
+      stubForm(fixture).properties = { 'dc:title': 'Reports' };
+      stubForm(fixture).showServerErrors.mockReturnValue(['Too many documents here.']);
+
+      component.createDocument();
+      await flushAsync();
+
+      expect(stubForm(fixture).showServerErrors).toHaveBeenCalledWith({
+        '': 'Too many documents here.',
+      });
+      expect(component.error()).toBe('Too many documents here.');
     });
 
     it('keeps the raw text when the datepicker could not parse what was typed', async () => {
@@ -2137,10 +2689,11 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.createChildDocument.mockReturnValue(throwError(() => ({ message: 'Name already used' })));
 
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
+      stubForm(fixture).properties = { 'dc:title': 'Reports' };
       component.createDocument();
       await flushAsync();
 
+      expect(stubForm(fixture).showServerErrors).not.toHaveBeenCalled();
       expect(component.error()).toBe('Name already used');
       expect(component.contentError()).toBeNull();
       expect(component.busy()).toBe(false);
@@ -2151,7 +2704,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       m.createChildDocument.mockReturnValue(throwError(() => ({})));
 
       component.startCreateFromType({ type: 'Folder', label: 'Folder' });
-      component.docTitle = 'Reports';
+      stubForm(fixture).properties = { 'dc:title': 'Reports' };
       component.createDocument();
       await flushAsync();
 
@@ -2277,7 +2830,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       await createDialog();
       component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
       let states: string[] = [];
-      m.importFiles.mockImplementation((_path, _files, options) => {
+      m.importFilesWithProperties.mockImplementation((_path, _entries, options) => {
         options?.onProgress?.({ phase: 'uploading', percent: 75, fileIndex: 1, fileCount: 2 });
         states = component.uploads.items().map((item) => `${item.state}:${item.percent}`);
         return of([
@@ -2300,7 +2853,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
     it('keeps the files created before a failure, and uploads only the rest on retry', async () => {
       await createDialog();
       component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
-      m.importFiles.mockImplementationOnce((_path, _files, options) => {
+      m.importFilesWithProperties.mockImplementationOnce((_path, _entries, options) => {
         options?.onProgress?.({ phase: 'creating', percent: 50, fileIndex: 0, fileCount: 2 });
         options?.onProgress?.({ phase: 'uploading', percent: 60, fileIndex: 1, fileCount: 2 });
         return throwError(() => ({ status: 403, message: 'Forbidden' }));
@@ -2312,11 +2865,13 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(component.importError()).toBe('Forbidden');
       expect(m.close).not.toHaveBeenCalled();
 
-      m.importFiles.mockReturnValueOnce(of([{ uid: 'd-b', title: 'b' } as NuxeoDocument]));
+      m.importFilesWithProperties.mockReturnValueOnce(
+        of([{ uid: 'd-b', title: 'b' } as NuxeoDocument]),
+      );
       component.runUpload();
-      expect(m.importFiles).toHaveBeenLastCalledWith(
+      expect(m.importFilesWithProperties).toHaveBeenLastCalledWith(
         WS_PATH,
-        [expect.objectContaining({ name: 'b.jpg' })],
+        [expect.objectContaining({ file: expect.objectContaining({ name: 'b.jpg' }) })],
         expect.anything(),
       );
     });
@@ -2324,7 +2879,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
     it('refreshes the folder when closed after a partly failed upload', async () => {
       await createDialog();
       component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
-      m.importFiles.mockImplementationOnce((_path, _files, options) => {
+      m.importFilesWithProperties.mockImplementationOnce((_path, _entries, options) => {
         options?.onProgress?.({ phase: 'creating', percent: 50, fileIndex: 0, fileCount: 2 });
         return throwError(() => ({ message: 'down' }));
       });
@@ -2349,7 +2904,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
     it('runUpload closes with the created document id for a single file', async () => {
       await createDialog();
-      m.importFiles.mockReturnValue(
+      m.importFilesWithProperties.mockReturnValue(
         of([
           {
             uid: 'file-1',
@@ -2366,11 +2921,20 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       component.runUpload();
       await flushAsync();
 
-      expect(m.importFiles).toHaveBeenCalledWith(
+      // The folder allows File and Picture, so the image starts as Picture, as Add properties
+      // would start it.
+      expect(m.importFilesWithProperties).toHaveBeenCalledWith(
         WS_PATH,
-        [expect.objectContaining({ name: 'a.jpg' })],
+        [
+          {
+            file: expect.objectContaining({ name: 'a.jpg' }),
+            docType: 'Picture',
+            properties: { 'dc:title': 'a' },
+          },
+        ],
         expect.objectContaining({ onProgress: expect.any(Function) }),
       );
+      expect(m.importFiles).not.toHaveBeenCalled();
       expect(m.toast.show).toHaveBeenCalledWith('Created 1 file.');
       expect(m.close).toHaveBeenCalledWith({
         refreshed: true,
@@ -2390,7 +2954,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         lastModified: '',
         properties: {},
       });
-      m.importFiles.mockReturnValue(of([doc('f1'), doc('f2')]));
+      m.importFilesWithProperties.mockReturnValue(of([doc('f1'), doc('f2')]));
       component.uploads.stage([jpegFile('a.jpg'), jpegFile('b.jpg')]);
 
       component.runUpload();
@@ -2407,11 +2971,11 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       await createDialog({ parentPath: '/default-domain' });
       component.uploads.stage([jpegFile('a.jpg')]);
       component.runUpload();
-      expect(m.importFiles).not.toHaveBeenCalled();
+      expect(m.importFilesWithProperties).not.toHaveBeenCalled();
 
       await createDialog();
       component.runUpload();
-      expect(m.importFiles).not.toHaveBeenCalled();
+      expect(m.importFilesWithProperties).not.toHaveBeenCalled();
     });
   });
 
@@ -2455,6 +3019,505 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
   });
 });
 
+/**
+ * Plain Create on the Import tab used to send every file as `File`, whatever the folder allows.
+ * Nuxeo does not refuse that: on the local server a `File` posted into a Section, or into
+ * WorkspaceRoot, is created. So each file now starts as Add properties would start it, and where
+ * the folder allows no type that keeps a main file, Create is disabled and the Import tab says why.
+ *
+ * The real template, and mocks of its own for each test, so that no folder leaks into another.
+ */
+describe('CreateImportDialogComponent Import tab in a folder that does not allow File', () => {
+  const SECTION_PATH = '/default-domain/sections/press';
+
+  let fixture: ComponentFixture<CreateImportDialogComponent>;
+  let component: CreateImportDialogComponent;
+  let getFolderContext: ReturnType<typeof vi.fn<BrowseService['getFolderContext']>>;
+  let importFiles: ReturnType<typeof vi.fn<DocumentImportService['importFiles']>>;
+  let importFilesWithProperties: ReturnType<
+    typeof vi.fn<DocumentImportService['importFilesWithProperties']>
+  >;
+
+  const folderAllowing = (type: string, subtypes: string[], path = WS_PATH): NuxeoDocument => ({
+    uid: `${type}-1`,
+    title: type,
+    type,
+    path,
+    lastModified: '',
+    properties: {},
+    contextParameters: { subtypes },
+  });
+
+  const pdfFile = (name = 'lease.pdf') => new File(['%PDF'], name, { type: 'application/pdf' });
+
+  const footerCreate = (): HTMLButtonElement | undefined =>
+    [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        'mat-dialog-actions button',
+      ),
+    ].find((button) => button.textContent?.trim() === 'Create');
+
+  const addProperties = (): HTMLButtonElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector('.btn-add-properties');
+
+  const reason = (): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector('.import-no-file-types');
+
+  const sentTypes = (): string[] =>
+    (importFilesWithProperties.mock.lastCall?.[1] ?? []).map((entry) => entry.docType);
+
+  /** Opens the dialog on `WS_PATH`, whose folder context answers `folders` in turn. */
+  async function openImportTab(
+    files: File[],
+    ...folders: Array<NuxeoDocument | Observable<NuxeoDocument>>
+  ): Promise<void> {
+    TestBed.resetTestingModule();
+    getFolderContext = vi.fn<BrowseService['getFolderContext']>();
+    for (const folder of folders) {
+      getFolderContext.mockReturnValueOnce(folder instanceof Observable ? folder : of(folder));
+    }
+    importFiles = vi.fn<DocumentImportService['importFiles']>(() => of([]));
+    importFilesWithProperties = vi.fn<DocumentImportService['importFilesWithProperties']>(() =>
+      of([]),
+    );
+    TestBed.overrideProvider(NxsToastService, { useValue: { show: vi.fn(), error: vi.fn() } });
+    await TestBed.configureTestingModule({
+      imports: [CreateImportDialogComponent, testTranslateModule(), NoopAnimationsModule],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: MAT_DIALOG_DATA, useValue: { parentPath: WS_PATH } },
+        { provide: MatDialogRef, useValue: { close: vi.fn(), updateSize: vi.fn() } },
+        {
+          provide: DocumentImportService,
+          useValue: {
+            getDefaultImportParentPath: vi.fn(() => of(WS_PATH)),
+            importFiles,
+            importFilesWithProperties,
+          },
+        },
+        {
+          provide: BrowseService,
+          useValue: {
+            getFolderContext,
+            getChildren: vi.fn(() =>
+              of({
+                entries: [],
+                totalSize: 0,
+                currentPageSize: 0,
+                currentPageIndex: 0,
+                numberOfPages: 0,
+              }),
+            ),
+          },
+        },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: ContentModelService, useValue: mockContentModelService },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(CreateImportDialogComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await flushAsync();
+    component.setActiveTab('import');
+    component.uploads.stage(files);
+    fixture.detectChanges();
+  }
+
+  it('starts each file as the File subtype the folder allows', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await openImportTab(
+      [pdfFile('lease.pdf'), jpegFile('scan.jpg')],
+      folderAllowing('Folder', ['RentalContract', 'Folder']),
+    );
+
+    expect(component.importBlobTypeNames()).toEqual(['RentalContract']);
+    expect(reason()).toBeNull();
+    expect(footerCreate()?.disabled).toBe(false);
+    component.runUpload();
+
+    expect(importFilesWithProperties).toHaveBeenCalledWith(
+      WS_PATH,
+      [
+        {
+          file: expect.objectContaining({ name: 'lease.pdf' }),
+          docType: 'RentalContract',
+          properties: { 'dc:title': 'lease' },
+        },
+        {
+          file: expect.objectContaining({ name: 'scan.jpg' }),
+          docType: 'RentalContract',
+          properties: { 'dc:title': 'scan' },
+        },
+      ],
+      expect.objectContaining({ onProgress: expect.any(Function) }),
+    );
+    expect(importFiles).not.toHaveBeenCalled();
+  });
+
+  it('keeps Create disabled, and says why, where the folder allows no type that keeps a main file', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    await openImportTab([pdfFile()], folderAllowing('Section', ['Section'], SECTION_PATH));
+
+    expect(component.noImportBlobTypes()).toBe(true);
+    expect(reason()?.textContent).toContain(
+      'this location allows no document type that holds a file',
+    );
+    expect(footerCreate()?.disabled).toBe(true);
+    expect(addProperties()?.disabled).toBe(true);
+
+    // runUpload refuses too, not only the button: the upload queue's retry calls it directly.
+    component.runUpload();
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+    expect(importFiles).not.toHaveBeenCalled();
+    expect(component.uploads.items().map((item) => item.state)).toEqual(['staged']);
+  });
+
+  it('waits for the content model, without saying the folder takes no file, before naming a File subtype', async () => {
+    const answer = useUnansweredContentModel();
+    await openImportTab([pdfFile()], folderAllowing('Folder', ['RentalContract', 'Folder']));
+
+    expect(component.importTypesUnsettled()).toBe(true);
+    expect(reason()).toBeNull();
+    expect(footerCreate()?.disabled).toBe(true);
+    component.runUpload();
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+    answer(CONTAINER_DOCTYPES);
+    fixture.detectChanges();
+    expect(footerCreate()?.disabled).toBe(false);
+    component.runUpload();
+    expect(sentTypes()).toEqual(['RentalContract']);
+  });
+
+  it("waits for the folder's types on opening, without saying it takes no file", async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    const folder = new Subject<NuxeoDocument>();
+    await openImportTab([pdfFile()], folder.asObservable());
+
+    // Nothing has answered, so the folder allows no type yet, which is not the same as none.
+    expect(component.loadingContext()).toBe(true);
+    expect(component.noImportBlobTypes()).toBe(true);
+    expect(reason()).toBeNull();
+    expect(footerCreate()?.disabled).toBe(true);
+    component.runUpload();
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+    folder.next(folderAllowing('Workspace', ['File', 'Folder']));
+    fixture.detectChanges();
+    expect(footerCreate()?.disabled).toBe(false);
+    component.runUpload();
+    expect(sentTypes()).toEqual(['File']);
+  });
+
+  it('does not start files as the previous folder allows, after a location change', async () => {
+    useDoctypes(CONTAINER_DOCTYPES);
+    const section = new Subject<NuxeoDocument>();
+    await openImportTab(
+      [pdfFile()],
+      folderAllowing('Workspace', ['File', 'Folder']),
+      section.asObservable(),
+    );
+
+    // A location typed and not yet committed: Create commits it, and stops there.
+    component.locationInput = SECTION_PATH;
+    component.runUpload();
+    expect(component.parentPath()).toBe(SECTION_PATH);
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+    // While the Section's types load, the Workspace's are still held, and Create waits.
+    fixture.detectChanges();
+    await flushAsync();
+    expect(getFolderContext).toHaveBeenLastCalledWith(SECTION_PATH);
+    expect(component.importBlobTypeNames()).toEqual(['File']);
+    expect(footerCreate()?.disabled).toBe(true);
+    expect(reason()).toBeNull();
+    component.runUpload();
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+    section.next(folderAllowing('Section', ['Section'], SECTION_PATH));
+    fixture.detectChanges();
+    expect(reason()).not.toBeNull();
+    component.runUpload();
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+  });
+
+  it("says the folder's types could not be read, rather than that it takes no file", async () => {
+    await openImportTab(
+      [pdfFile()],
+      throwError(() => new Error('boom')),
+    );
+    const error = (fixture.nativeElement as HTMLElement).querySelector(
+      '.import-tab-panel .types-error',
+    );
+
+    expect(component.typesLoadError()).toBeTruthy();
+    expect(error?.textContent?.trim()).toBe(component.typesLoadError());
+    expect(reason()).toBeNull();
+    expect(footerCreate()?.disabled).toBe(true);
+  });
+
+  it("reads the folder's types again when its location is committed again after a failed read", async () => {
+    await openImportTab(
+      [pdfFile()],
+      throwError(() => new Error('boom')),
+      folderAllowing('Workspace', ['File', 'Folder']),
+    );
+    expect(footerCreate()?.disabled).toBe(true);
+
+    // Enter or blur on the location field, unchanged.
+    component.commitLocationInput();
+    fixture.detectChanges();
+
+    expect(getFolderContext).toHaveBeenCalledTimes(2);
+    expect(component.typesLoadError()).toBeNull();
+    expect(footerCreate()?.disabled).toBe(false);
+    component.runUpload();
+    expect(sentTypes()).toEqual(['File']);
+  });
+
+  it('says the types could not be read, not that the folder takes no file, when the content model is refused', async () => {
+    mockContentModelService.getContentModel.mockReturnValue(throwError(() => new Error('500')));
+    await openImportTab([pdfFile()], folderAllowing('Folder', ['RentalContract', 'Folder']));
+    const unreadable = (fixture.nativeElement as HTMLElement).querySelector(
+      '.import-types-unreadable',
+    );
+
+    // Only the stock four count now, so RentalContract cannot be recognised as keeping a file.
+    expect(component.noImportBlobTypes()).toBe(true);
+    expect(reason()).toBeNull();
+    expect(unreadable?.textContent).toContain('Could not load the document types');
+    expect(footerCreate()?.disabled).toBe(true);
+    component.runUpload();
+    expect(importFilesWithProperties).not.toHaveBeenCalled();
+  });
+
+  describe('Add properties, and the properties step after its Location moves the files', () => {
+    const LEASES_PATH = '/default-domain/workspaces/leases';
+    const workspace = () => folderAllowing('Workspace', ['File', 'Picture', 'Folder']);
+    const leases = () => folderAllowing('Folder', ['RentalContract', 'Folder'], LEASES_PATH);
+    const section = () => folderAllowing('Section', ['Section'], SECTION_PATH);
+
+    const stepReason = (): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '.import-properties-form .import-no-file-types',
+      );
+    const stepTypes = (): string[] => component.importEntries().map((entry) => entry.docType);
+
+    /** Opens the properties step on `WS_PATH`, on its last file so Create is offered at once. */
+    async function openStep(
+      files: File[],
+      ...folders: Array<NuxeoDocument | Observable<NuxeoDocument>>
+    ): Promise<void> {
+      await openImportTab(files, ...folders);
+      component.startImportProperties();
+      fixture.detectChanges();
+      component.selectImportFile(files.length - 1);
+      fixture.detectChanges();
+    }
+
+    /** Types `path` into the Location field on screen, as a keystroke does, without committing it. */
+    function typeLocation(path: string): void {
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '.location-input',
+      );
+      if (!input) throw new Error('no Location field');
+      input.value = path;
+      input.dispatchEvent(new Event('input'));
+    }
+
+    /** The step's Location, typed and committed by Enter or blur. */
+    async function moveStepTo(path: string): Promise<void> {
+      component.locationInput = path;
+      component.commitLocationInput();
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+    }
+
+    it('keeps Create disabled, and says why, once the Location moves the files to a Section', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep([pdfFile(), jpegFile('scan.jpg')], workspace(), section());
+      expect(component.view()).toBe('importProperties');
+      expect(stepTypes()).toEqual(['File', 'Picture']);
+      expect(footerCreate()?.disabled).toBe(false);
+
+      await moveStepTo(SECTION_PATH);
+
+      expect(getFolderContext).toHaveBeenLastCalledWith(SECTION_PATH);
+      expect(component.noImportBlobTypes()).toBe(true);
+      expect(stepReason()?.textContent).toContain(
+        'this location allows no document type that holds a file',
+      );
+      expect(footerCreate()?.disabled).toBe(true);
+      // The method refuses too, not only the button.
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+    });
+
+    it('starts each file again as the File subtype a folder allows, once the Location moves it there', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep([pdfFile(), jpegFile('scan.jpg')], workspace(), leases());
+
+      await moveStepTo(LEASES_PATH);
+
+      expect(stepTypes()).toEqual(['RentalContract', 'RentalContract']);
+      expect(component.importDocType()).toBe('RentalContract');
+      expect(stepReason()).toBeNull();
+      expect(footerCreate()?.disabled).toBe(false);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).toHaveBeenCalledWith(
+        LEASES_PATH,
+        [
+          expect.objectContaining({ docType: 'RentalContract' }),
+          expect.objectContaining({ docType: 'RentalContract' }),
+        ],
+        expect.anything(),
+      );
+    });
+
+    it('keeps a type the new folder allows, and starts again only the files it does not', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep(
+        [pdfFile(), jpegFile('scan.jpg')],
+        folderAllowing('Workspace', ['File', 'Picture', 'RentalContract']),
+        folderAllowing('Folder', ['File', 'RentalContract'], LEASES_PATH),
+      );
+      // The user makes the lease a RentalContract, where it would otherwise start as File.
+      component.selectImportFile(0);
+      component.importDocType.set('RentalContract');
+      component.selectImportFile(1);
+      fixture.detectChanges();
+
+      await moveStepTo(LEASES_PATH);
+
+      // Picture is not allowed there, so the scan starts again as File; the lease keeps its type.
+      expect(stepTypes()).toEqual(['RentalContract', 'File']);
+      component.runImportWithProperties();
+      expect(sentTypes()).toEqual(['RentalContract', 'File']);
+    });
+
+    it("commits a Location typed on the step, and waits for its folder's types, before creating", async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      const folder = new Subject<NuxeoDocument>();
+      await openStep([pdfFile()], workspace(), folder.asObservable());
+
+      // Typed and not yet committed: the blur commits it only after a delay.
+      typeLocation(LEASES_PATH);
+      expect(component.parentPath()).toBe(WS_PATH);
+      component.runImportWithProperties();
+      expect(component.parentPath()).toBe(LEASES_PATH);
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      // While the folder's types load, the Workspace's are still held, and Create waits.
+      fixture.detectChanges();
+      await flushAsync();
+      expect(component.loadingContext()).toBe(true);
+      expect(footerCreate()?.disabled).toBe(true);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      folder.next(leases());
+      fixture.detectChanges();
+      expect(footerCreate()?.disabled).toBe(false);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).toHaveBeenLastCalledWith(
+        LEASES_PATH,
+        [expect.objectContaining({ docType: 'RentalContract' })],
+        expect.anything(),
+      );
+    });
+
+    it('waits for the content model before starting the files as a File subtype the new folder allows', async () => {
+      const answer = useUnansweredContentModel();
+      // The Workspace allows File, so the step opens without waiting for the content model.
+      await openStep([pdfFile()], folderAllowing('Workspace', ['File', 'Folder']), leases());
+      expect(component.view()).toBe('importProperties');
+
+      await moveStepTo(LEASES_PATH);
+      expect(component.importTypesUnsettled()).toBe(true);
+      expect(stepReason()).toBeNull();
+      expect(footerCreate()?.disabled).toBe(true);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      answer(CONTAINER_DOCTYPES);
+      fixture.detectChanges();
+      expect(stepTypes()).toEqual(['RentalContract']);
+      expect(footerCreate()?.disabled).toBe(false);
+      component.runImportWithProperties();
+      expect(sentTypes()).toEqual(['RentalContract']);
+    });
+
+    it('refuses a file whose type the folder does not allow, before it is started again', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep([pdfFile()], workspace());
+      // The folder's types change under the step, and change detection has not run since.
+      component.creatableTypes.set([{ type: 'RentalContract', label: 'RentalContract' }]);
+
+      expect(component.importEntryTypeDisallowed()).toBe(true);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      fixture.detectChanges();
+      expect(stepTypes()).toEqual(['RentalContract']);
+      component.runImportWithProperties();
+      expect(sentTypes()).toEqual(['RentalContract']);
+    });
+
+    it('keeps Create disabled, and says why, once the Location moves the files to a restricted one', async () => {
+      await openStep([pdfFile()], workspace());
+
+      await moveStepTo('/default-domain');
+
+      expect(component.importRestricted()).toBe(true);
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '.import-properties-form .import-location-restricted',
+        ),
+      ).not.toBeNull();
+      expect(footerCreate()?.disabled).toBe(true);
+    });
+
+    it('Add properties commits a typed Location first, and opens the step once its types load', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openImportTab([pdfFile()], workspace(), leases());
+
+      // Typed, and Add properties clicked before the blur's delayed commit.
+      typeLocation(LEASES_PATH);
+      expect(component.parentPath()).toBe(WS_PATH);
+      component.startImportProperties();
+      expect(component.parentPath()).toBe(LEASES_PATH);
+      expect(component.view()).toBe('main');
+
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+      component.startImportProperties();
+      expect(component.view()).toBe('importProperties');
+      expect(stepTypes()).toEqual(['RentalContract']);
+    });
+
+    it('Add properties does not open the step for a typed Location that is a Section', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openImportTab([pdfFile()], workspace(), section());
+
+      typeLocation(SECTION_PATH);
+      component.startImportProperties();
+      expect(component.parentPath()).toBe(SECTION_PATH);
+      expect(component.view()).toBe('main');
+
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+      expect(reason()).not.toBeNull();
+      expect(addProperties()?.disabled).toBe(true);
+      component.startImportProperties();
+      expect(component.view()).toBe('main');
+    });
+  });
+});
+
 /** Types `text` one keystroke at a time with change detection after each, as a browser does. */
 async function typeKeystrokes(
   fixture: ComponentFixture<unknown>,
@@ -2478,7 +3541,7 @@ const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(
 
 // Material keeps null for a partial date; a handler that stored anything else made [ngModel]
 // write back and erase the text mid-entry. Only a real template exercises that write-back.
-describe('CreateImportDialogComponent Expires typed into the real field', () => {
+describe('CreateImportDialogComponent with the real create form and Expires field', () => {
   async function render(): Promise<ComponentFixture<CreateImportDialogComponent>> {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -2491,29 +3554,167 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: ContentModelService, useValue: mockContentModelService },
+        provideHttpClient(),
+        provideHttpClientTesting(),
       ],
     }).compileComponents();
+    vi.clearAllMocks();
     const fixture = TestBed.createComponent(CreateImportDialogComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     return fixture;
   }
 
-  it('keeps every partial entry on the create form', async () => {
-    const fixture = await render();
-    fixture.componentInstance.startCreateFromType(pictureType());
+  /** `/config/types/Folder` with a customer schema added, one field of it required. */
+  const FOLDER_TYPE = {
+    name: 'Folder',
+    schemas: [
+      {
+        name: 'dublincore',
+        '@prefix': 'dc',
+        fields: {
+          title: 'string',
+          description: 'string',
+          expired: 'date',
+          nature: {
+            type: 'string',
+            constraints: [{ name: 'directoryResolver', parameters: { directory: 'nature' } }],
+          },
+        },
+      },
+      {
+        name: 'acme',
+        '@prefix': 'acme',
+        fields: {
+          region: { type: 'string', constraints: [{ name: 'NotNullConstraint', parameters: {} }] },
+        },
+      },
+    ],
+  };
+
+  /**
+   * Opens Folder's create form and answers the reads its layout needs: generated, or the
+   * contributed `Folder/create` file `content` when one is given.
+   */
+  async function openFolderForm(
+    fixture: ComponentFixture<CreateImportDialogComponent>,
+    content?: object,
+  ) {
+    const http = TestBed.inject(HttpTestingController);
+    fixture.componentInstance.startCreateFromType({ type: 'Folder', label: 'Folder' });
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector(
-      'nxs-date-input[name="expires"] input',
-    ) as HTMLInputElement;
+    const format = 'nuxeo-agentic-ui-config/1';
+    http.expectOne((request) => request.url.endsWith('/config/types/Folder')).flush(FOLDER_TYPE);
+    http
+      .expectOne((request) => request.url.endsWith('/layouts.json'))
+      .flush({
+        format,
+        layer: 'layouts',
+        layouts: content ? [{ type: 'Folder', mode: 'create', component: 'org.acme.config' }] : [],
+        diagnostics: [],
+      });
+    if (content) {
+      await fixture.whenStable();
+      http
+        .expectOne((request) => request.url.endsWith('/layouts/Folder/create.layout.json'))
+        .flush({ format, layer: 'layout', type: 'Folder', mode: 'create', content });
+    }
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return http;
+  }
 
-    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
-    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
+  const field = (fixture: ComponentFixture<unknown>, xpath: string) =>
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      `lib-document-layout-form [data-xpath="${xpath}"]`,
+    );
+
+  async function typeInto(fixture: ComponentFixture<unknown>, xpath: string, text: string) {
+    const input = field(fixture, xpath);
+    if (!input) throw new Error(`no field ${xpath}`);
+    input.value = text;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  it("creates through the type's generated create form, its own fields and Expires included", async () => {
+    const fixture = await render();
+    const http = await openFolderForm(fixture);
+    expect(fixture.componentInstance.createFormReady()).toBe(true);
+
+    await typeInto(fixture, 'dc:title', 'Reports');
+    await typeInto(fixture, 'acme:region', 'EMEA');
+    const expires = fixture.nativeElement.querySelector(
+      'nxs-date-input[data-xpath="dc:expired"] input',
+    ) as HTMLInputElement;
+    expect(await typeKeystrokes(fixture, expires, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+
+    mockImportService.createChildDocument.mockReturnValue(
+      of({ ...folderDoc, uid: 'f-1', type: 'Folder', title: 'Reports' }),
+    );
+    fixture.componentInstance.createDocument();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).toHaveBeenCalledWith(
+      PARENT_PATH,
+      'Reports',
+      'Folder',
+      expect.objectContaining({
+        'dc:title': 'Reports',
+        'acme:region': 'EMEA',
+        'dc:expired': '2027-12-31T00:00:00.000Z',
+      }),
+    );
+    http.verify();
+  });
+
+  it('sends nothing while a Dublin Core field the create file makes required is blank', async () => {
+    const fixture = await render();
+    await openFolderForm(fixture, {
+      version: 1,
+      sections: [{ id: 'classify', fields: [{ field: 'dc:nature', required: true }] }],
+    });
+    expect(
+      fixture.nativeElement
+        .querySelector('nxs-metadata-editor')
+        ?.getAttribute('data-layout-source'),
+    ).toBe('contributed');
+    await typeInto(fixture, 'dc:title', 'Reports');
+
+    fixture.componentInstance.createDocument();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('[data-xpath="dc:nature"] mat-error')?.textContent,
+    ).toContain('Required');
+  });
+
+  it('sends nothing while a required field of the type is blank, and says so on that field', async () => {
+    const fixture = await render();
+    await openFolderForm(fixture);
+    await typeInto(fixture, 'dc:title', 'Reports');
+
+    fixture.componentInstance.createDocument();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockImportService.createChildDocument).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('lib-document-layout-form mat-error')?.textContent,
+    ).toContain('Region is required.');
   });
 
   it('keeps every partial entry on the import form', async () => {
     const fixture = await render();
+    // A folder that takes File. Without this the folder context is whatever an earlier test left
+    // the mock returning, and one that allows no type with a main file opens no properties step.
+    fixture.componentInstance.creatableTypes.set([{ type: 'File', label: 'File' }]);
     fixture.componentInstance.uploads.stage([jpegFile('photo.png')]);
     fixture.componentInstance.startImportProperties();
     fixture.detectChanges();

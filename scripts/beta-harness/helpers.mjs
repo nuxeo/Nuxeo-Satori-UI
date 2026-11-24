@@ -14,6 +14,7 @@
  */
 
 import { resolve } from 'node:path';
+import { PINNED_AXE, PINNED_AXE_INSTALL } from './axe-engine.mjs';
 import { requireNuxeoCredentials } from './nuxeo-credentials.mjs';
 import { sameUser, strayRequests } from './identity-guard.mjs';
 
@@ -147,13 +148,14 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * `since` where no later boundary will either. So a transition with one outstanding **refuses**,
    * naming it, rather than letting it through unjudged.
    *
-   * Refusing and not waiting is the deliberate choice. Discarding traffic the guard could not
-   * read is worse than the hardcoded fallback this guard replaced: the run reports
+   * Refusing and not waiting is the decided behaviour (NXSAT-703). Discarding traffic the guard
+   * could not read is worse than the hardcoded fallback this guard replaced: the run reports
    * `identity.valid: true` over a result that may have been read as the guest, which is false
-   * evidence rather than a missing check. Refusing is noisy and correct. A bounded wait needs a
-   * deadline *and* an expiry policy, and admits a harness that hangs instead of reporting — its
-   * own failure mode. See `pendingRequests` in `identity-guard.mjs` for the full trade-off; the
-   * design question is NXSAT-703, not settled here.
+   * evidence rather than a missing check. A bounded wait would need a deadline *and* an expiry
+   * policy, and admits a harness that hangs instead of reporting — its own failure mode. The
+   * cost is that a legitimately slow request invalidates the run, though the run was not
+   * compromised; this refusal's message says to let the app settle before the transition is
+   * declared. See `pendingRequests` in `identity-guard.mjs` for the full trade-off.
    *
    * @param {string} what names the transition, e.g. `h.signedOut()`
    * @param {string} [where] distinguishes a second verification of the same transition, e.g.
@@ -524,17 +526,21 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      * every impact, so the debt is visible rather than filtered away.
      *
      * `@axe-core/playwright` is installed the same way Playwright is — with
-     * `--no-save`, so CI installs stay unaffected:
-     *   npm install --no-save @axe-core/playwright
+     * `--no-save`, so CI installs stay unaffected — at the versions `axe-engine.mjs` pins:
+     *   npm install --no-save @playwright/test @axe-core/playwright@<pin> axe-core@<pin>
      *
      * @param {string} [name]
      * @param {object} [opts]
      * @param {string[]} [opts.ignore] axe rule ids to exclude from the verdict
      * @param {('minor'|'moderate'|'serious'|'critical')[]} [opts.failOn]
      * @param {string} [opts.include] CSS selector to scope the scan
+     * @param {string} [opts.engine] the `axe-core` version the verdict is measured with. A scan
+     *   that ran on any other engine fails, whatever it found: another engine runs other rules,
+     *   so its result is not the measurement the check claims. Compared with the version axe
+     *   reports for the scan itself (`testEngine`), not with what is on disk.
      */
     async expectNoA11yViolations(name = 'no WCAG 2.1 AA violations', opts = {}) {
-      const { ignore = [], failOn = ['serious', 'critical'], include } = opts;
+      const { ignore = [], failOn = ['serious', 'critical'], include, engine } = opts;
 
       let AxeBuilder;
       try {
@@ -545,7 +551,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         return this.check(
           name,
           false,
-          '@axe-core/playwright is not installed, so no scan ran. `npm install --no-save @axe-core/playwright`',
+          `@axe-core/playwright is not installed, so no scan ran. \`${PINNED_AXE_INSTALL}\``,
         );
       }
 
@@ -592,6 +598,20 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         );
       }
 
+      // After the findings are recorded, which stay informative, and before they are judged.
+      const ran = results.testEngine?.version ?? null;
+      if (engine !== undefined && ran !== engine) {
+        const fix =
+          engine === PINNED_AXE['axe-core'] ? `\`${PINNED_AXE_INSTALL}\`` : `Install axe-core ${engine}.`;
+        return this.check(
+          name,
+          false,
+          `axe-core ${ran ?? '(version not reported)'} ran this scan, but the verdict is measured ` +
+            `with ${engine}, so this is not that measurement (${blocking.length} ` +
+            `${failOn.join('/')} violation(s) under it). ${fix}`,
+        );
+      }
+
       return this.check(
         name,
         blocking.length === 0,
@@ -606,7 +626,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      */
     async goTo(route) {
       const url = route.startsWith('http') ? route : `${this.baseUrl}${route}`;
-      await page.goto(url, { waitUntil: 'networkidle' });
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
       await page.waitForTimeout(1200);
     },
 
@@ -784,7 +804,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // checks the interval before `expectApp` restarts the window.
       if (!replacing) identity?.sessionInstalled();
 
-      await page.reload({ waitUntil: 'networkidle' });
+      // The default 30s is shorter than this instance takes to go idle after a restart. Longer, not
+      // unbounded: a page that never settles still fails.
+      await page.reload({ waitUntil: 'networkidle', timeout: 120000 });
       await page.waitForTimeout(1200);
     },
   };

@@ -18,8 +18,6 @@ const CATALOGUE_MASKS = {
   de: 'tt.mm.jjjj',
   ja: 'yyyy/mm/dd',
   nl: 'dd-mm-jjjj',
-  th: 'dd/mm/yyyy',
-  zh: 'yy-mm-dd',
 } as const;
 
 describe('dateMaskFor', () => {
@@ -30,7 +28,11 @@ describe('dateMaskFor', () => {
   /**
    * A language's own mask is already right, and must come back untouched — including the
    * localized letters a translator chose. Every locale this application can actually produce is
-   * one of these seven, so this row set is also "the app's behaviour does not change".
+   * one of these five, so this row set is also "the app's behaviour does not change".
+   *
+   * The other five the application targets — `ar`, `es`, `he`, `it`, `sv` — are not in
+   * `DATE_FNS_LOCALES` until their catalogues land, so they resolve to English here and have no
+   * meaningful row yet. Add one with each catalogue.
    */
   describe.each(Object.entries(CATALOGUE_MASKS))('%s', (language, mask) => {
     it('returns the catalogue value unchanged', () => {
@@ -94,8 +96,6 @@ describe('dateMaskFor', () => {
     { locale: 'de', expected: 'dd.mm.yyyy', why: 'German uses dots' },
     { locale: 'nl', expected: 'dd-mm-yyyy', why: 'Dutch uses hyphens' },
     { locale: 'ja', expected: 'yyyy/mm/dd', why: 'Japanese is year-first' },
-    { locale: 'th', expected: 'dd/mm/yyyy', why: 'Thai parses day-first' },
-    { locale: 'zh', expected: 'yy-mm-dd', why: 'Chinese is a two-digit year' },
     { locale: 'fr-CA', expected: 'yy-mm-dd', why: 'the yy-dd-mm case the review found' },
     { locale: 'fr-CH', expected: 'dd.mm.yyyy', why: 'French order, Swiss dots' },
     { locale: 'en-GB', expected: 'dd/mm/yyyy', why: 'English letters already' },

@@ -29,7 +29,7 @@ If not provided, ask: "Which PR number?"
 
 ```bash
 # Inline (line-level) comments
-gh api repos/nuxeo/agentic-ui-poc/pulls/<N>/comments \
+gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<N>/comments \
   | jq '.[] | { path: .path, line: .line, body: .body, id: .id }'
 
 # Review-level comments
@@ -79,7 +79,7 @@ git push
 ### 7. Reply to comments (optional)
 
 ```bash
-gh api repos/nuxeo/agentic-ui-poc/pulls/<N>/comments/<id>/replies \
+gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<N>/comments/<id>/replies \
   -f body="Fixed: added takeUntilDestroyed() to subscription in search.ts line 145"
 ```
 

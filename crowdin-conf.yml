@@ -31,9 +31,8 @@
 # ## The trap in the glob
 #
 # The HXP standard's example is `/**/**/i18n/en.json`. Do not copy it. With `base_path: "."` it
-# sweeps `node_modules`, which holds 48 upstream catalogues — adf-core's 19 locales, both
-# adf-hx bundles, satori-ui's 15. That pushes Alfresco's and Satori's strings into our project
-# and bills the translation crew for work another team has already paid for.
+# sweeps `node_modules`, which holds upstream catalogues, including satori-ui's. That pushes
+# third-party strings into our project and bills the translation crew for work another team has already paid for.
 #
 # Scoped to `apps/` and `libs/`, as D8 requires. `node_modules` sits beside both, so neither
 # pattern can reach it. `checkCrowdinConfig` in `scripts/review-guardrails.mjs` fails any

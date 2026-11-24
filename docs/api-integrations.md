@@ -1480,9 +1480,13 @@ prefers `dc:source` (rarely auto-filled) and falls back to `dc:rights` when
 | ------------ | -------------------------------- |
 | **Endpoint** | `/nuxeo/api/v1/path{parentPath}` |
 
-**Request body:** Merged document entity from `@emptyWithDefault` with user overrides applied (`mergeCreateDocumentBody`). Null/empty optional Dublin Core fields are omitted so server defaults (e.g. Domain schema fields) are preserved.
+**Request body:** Merged document entity from `@emptyWithDefault` with user overrides applied (`mergeCreateDocumentBody`). Null or empty values the form sends are omitted so server defaults (e.g. Domain schema fields) are preserved.
 
-**Usage:** Dashboard Add Content (+) → Create tab → Domain at repository root `/` (`CreateImportDialogComponent` → `createChildDocument`).
+**Usage:** Create / Import → Create tab, in Browse and from the dashboard's Add Content (+), Domain at repository root `/` included (`CreateImportDialogComponent` → `createChildDocument`). The properties are those of the type's create form (`lib-document-layout-form mode="create"`, NXSAT-630): its Dublin Core fields and its create layout — generated from the type's schemas, or a contributed `<Type>/create.layout.json` — plus the Note body and format for a Note. Blob-holding types send the same form's properties to the same path endpoint with the staged main file (`createBlobHoldingDocumentReliable`).
+
+The create form opens empty and sends only the fields the user filled in, so every untouched field — an unticked checkbox included — takes its server default from Step 1, and a default cannot be cleared at creation (NXSAT-630).
+
+**Which types are blob-holding:** File, Picture, Audio and Video, any type that extends one of them, and any type that carries the `file` schema — itself, or through a facet it or an ancestor declares — and is not folderish. A folderish type (`Folderish`, its own or an ancestor's) holds a main file only by extending one of the four: Workspace and Section carry `file` for their own use, so Create asks no file of them and Import does not offer them for files. Nuxeo Web UI leaves containers out of its import by a list of names (`importBlacklist`: Workspace, Folder, OrderedFolder, Collection, Domain, Root); the facet also covers Section and a customer's containers. A customer's `RentalContract extends File`, for instance, or an `Invoice` whose own facet contributes `file`. The local Nuxeo already lists a type's inherited and facet schemas among its own `schemas` in `/config/types`; the check also walks the ancestry and reads each declared facet in `/config/facets`, so it does not depend on that. The dialog reads the type hierarchy from Nuxeo's content model through `ContentModelService` (`GET /nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas`, cached for the application's lifetime). Until it arrives, or if the server refuses it, only the four stock names count. The same rule decides which types the Import tab offers for files, and what each file starts as, for plain Create and Add properties alike: the stock type its MIME type suggests if the folder allows it, else the first allowed type that holds a main file (`importFilesWithProperties`, not `importFiles`, which sends `File` whatever the folder allows). Where the folder allows none of them — a Section, or only Workspace and Folder — plain Create and Add properties stay disabled and the tab says why. They wait, too, while the folder's types load. Nuxeo would not stop it: measured on the local server, `POST /path{parentPath}` answers 201 for a type the parent's allowed subtypes do not list, a `File` in a Section included. The properties step's Location can move its files to another folder: once that folder's types load, each file whose type it does not allow starts again as it would have started there, a type it allows is kept, and until then, or where it allows none, the step's Create is disabled with the same reason. Add properties, plain Create and the step's Create each commit a location typed and not yet committed, and stop when that changes the folder. Files dropped on the browse list are typed the same way, against the folder's allowed subtypes read at the drop (`getFolderContext`) and the content model; where none holds a main file the drop is refused with a toast saying so, and nothing is queued. A retry sends its files to the folder they were dropped on, as the types read for it; so while files of an earlier drop are still pending, a drop on another folder is turned away until they are retried or removed.
 
 ---
 
@@ -1531,16 +1535,16 @@ within 10 s (`CONFIG_LOAD_TIMEOUT_MS`) leaves the compiled defaults in force and
 
 ## 29. Per-Type Layouts — Layout Files and Document Type Schemas (NXSAT-311)
 
-| Field           | Value                                                                                                                                                                  |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service**     | `DocumentLayoutService` (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)                                                                            |
-| **Method**      | `layoutFor(type, mode, documentSchemas)`, per document shown; `vocabularyLabel(directory, id)`, per vocabulary value shown; each read below is cached for the session  |
-| **HTTP Method** | `GET`                                                                                                                                                                  |
-| **Endpoints**   | `/nuxeo/agentic-ui-config/layouts.json` and `/nuxeo/agentic-ui-config/layouts/<type>/<mode>.layout.json` — without interceptors, no `Authorization` header             |
-|                 | `/nuxeo/api/v1/config/types/<type>` with header `fetch-schema: fields` — authenticated, through `NuxeoApiBase`                                                         |
-|                 | `/nuxeo/api/v1/config/schemas/<schema>` with header `fetch-schema: fields`, for a schema a dynamic facet added to the document — authenticated, through `NuxeoApiBase` |
-|                 | `/nuxeo/api/v1/directory/<directory>/<id>` with headers `translate-directoryEntry: label` and `Accept-Language: en` — authenticated, through `NuxeoApiBase`            |
-| **Server side** | `AgenticUiConfigServlet` (from `<layout>` contributions to `org.nuxeo.agentic.ui.config`); Nuxeo's type registry and directories                                       |
+| Field           | Value                                                                                                                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DocumentLayoutService` (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)                                                                                                                                                                                                                                            |
+| **Method**      | `layoutFor(type, mode, documentSchemas)`, per document shown; `vocabularyLabel(directory, id)`, per vocabulary value shown; each read below is cached for the session                                                                                                                                                                  |
+| **HTTP Method** | `GET`                                                                                                                                                                                                                                                                                                                                  |
+| **Endpoints**   | `/nuxeo/agentic-ui-config/layouts.json` and `/nuxeo/agentic-ui-config/layouts/<type>/<mode>.layout.json` — without interceptors, no `Authorization` header                                                                                                                                                                             |
+|                 | `/nuxeo/api/v1/config/types/<type>` with header `fetch-schema: fields` — authenticated, through `NuxeoApiBase`                                                                                                                                                                                                                         |
+|                 | `/nuxeo/api/v1/config/schemas/<schema>` with header `fetch-schema: fields`, for a schema a dynamic facet added to the document — authenticated, through `NuxeoApiBase`                                                                                                                                                                 |
+|                 | `/nuxeo/api/v1/directory/<directory>/<entry id>` with headers `translate-directoryEntry: label` and `Accept-Language: en` — authenticated, through `NuxeoApiBase`. For an `l10n…` value the entry id is the **last segment** of the stored path, not the path: `art/architecture` is read as `architecture`, then `art` for its parent |
+| **Server side** | `AgenticUiConfigServlet` (from `<layout>` contributions to `org.nuxeo.agentic.ui.config`); Nuxeo's type registry and directories                                                                                                                                                                                                       |
 
 The layout URLs sit beside `bootstrap.json` (from `APP_BOOTSTRAP_CONFIG_URL`), so under `nx serve`
 they are `/agentic-ui-config/layouts.json` and `/agentic-ui-config/layouts/…`, written by
@@ -1580,8 +1584,16 @@ document shows, plus one for its parent in an `l10n…` vocabulary, which is lab
 term, which the pickers use, returns every entry, and a customer vocabulary can be of any size.
 `translate-directoryEntry: label` makes the server translate a label that is a message key, as
 `SuggestEntries` with `localize` does, and `Accept-Language: en` keeps it in English, as the
-panel's own vocabulary rows are. An entry that cannot be read shows the stored id, and is asked
-for again by the next document that shows it.
+panel's own vocabulary rows are. An entry that cannot be read shows the stored id, says so in
+the console, and is asked for again by the next document that shows it.
+
+A hierarchical `l10n…` field (`dc:subjects`, `dc:coverage`) stores the **path** through the
+vocabulary, `art/architecture`, while the entry carries only the leaf as its id —
+`architecture`, whose `parent` is `art`. So the read is by that leaf, and the path is never a
+path segment: Tomcat refuses the encoded slash with HTTP 400, and the unencoded form is a
+different resource that answers 404 (NXSAT-726). The label is still composed from the stored
+path, which is what names the parent. Both the formatter and the stock vocabularies are two
+levels deep; a deeper path labels as the stored id.
 
 **Usage:** the Properties panel on document detail (`metadata` mode).
 
@@ -1715,6 +1727,8 @@ writes lasts through its last day and one written here ends as that day starts.
 
 Every date is shown as the calendar day its writer picked (`nxsAceTimeFrame`), not the UTC date
 Nuxeo returns, so the Permissions tab's card, the panel and all three dialogs show the same day.
+That includes an end Web UI wrote: `moment(end).endOf('day').format()` is 23:59:59 in the browser's
+zone, one second before the next day starts, and is shown as its last day rather than the next.
 
 **Usage:** the external-shares card on document detail's Permissions tab. The manifest's
 `featureToggles["permissions.externalUsers"]` hides the card and its share action when `false`.
@@ -1925,20 +1939,6 @@ Returns users and groups sorted by creation date descending (newest first), usin
 -->
 
 ---
-
-## Adf-hx Nuxeo bridge (NXENG-619 Scope A) — removed
-
-_Changed by NXSAT-635 (2026-10):_ the library and its POC route were removed on 2026-10-14. The old
-path redirects to `/#/browse` with its query string intact (`apps/nuxeo-ui/src/app/retired-routes.ts`).
-The table is kept as the record of what the integration was.
-
-| Field                      | Value                                                                    |
-| -------------------------- | ------------------------------------------------------------------------ |
-| **Library**                | `@agentic-ui/shared/adf-hx-bridge`                                       |
-| **Purpose**                | Map Nuxeo REST responses to HxPR `Document` shapes for adf-hx browse POC |
-| **POC route**              | `/#/browse-adf-hx?path=<nuxeo-path>`                                     |
-| **HxPR APIs implemented**  | `DocumentApi`, `QueryApi` (`tree_children`, `advanced_document_content`) |
-| **Nuxeo backing services** | `BrowseService`, `DocumentDetailService`                                 |
 
 ## ARender / NEV 2026 — Previewer and Diff URLs
 

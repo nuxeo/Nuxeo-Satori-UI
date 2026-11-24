@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { NxsColumnPickerComponent, type NxsPickableColumn } from './column-picker.component';
 
@@ -47,6 +47,31 @@ type Story = StoryObj<NxsColumnPickerComponent>;
 
 /** The title column is required, so its checkbox is checked and disabled. */
 export const SomeColumnsHidden: Story = {};
+
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = canvas.getByRole('dialog');
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(dialog).toHaveFocus();
+    await expect(canvas.getByRole('checkbox', { name: 'Title' })).toBeDisabled();
+    await userEvent.tab();
+    const modified = canvas.getByRole('checkbox', { name: 'Modified' });
+    await expect(modified).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await waitFor(() => expect(modified).not.toBeChecked());
+    await userEvent.keyboard('{Escape}');
+    await expect(args.dismiss).toHaveBeenCalledTimes(1);
+    await expect(args.apply).not.toHaveBeenCalled();
+    // This story keeps the panel mounted, exposing the discarded pending selection.
+    await waitFor(() => expect(modified).toBeChecked());
+    await userEvent.keyboard(' ');
+    const done = canvas.getByRole('button', { name: 'Done' });
+    done.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.apply).toHaveBeenCalledWith(['title']);
+  },
+};
 
 export const AllColumnsShown: Story = {
   args: {

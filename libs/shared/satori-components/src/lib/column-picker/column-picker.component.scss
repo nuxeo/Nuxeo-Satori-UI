@@ -19,10 +19,12 @@ $scroll-cue: color-mix(in srgb, var(--mat-sys-on-surface) 22%, transparent);
   cursor: pointer;
 }
 
+// Logical, so the panel hangs from the end of the toolbar it was opened from. Physical `right`
+// put it off the far side of its own trigger when the direction flipped.
 .nxs-column-picker__panel {
   position: absolute;
   top: 43px;
-  right: 0;
+  inset-inline-end: 0;
   z-index: 100;
   display: flex;
   flex-direction: column;

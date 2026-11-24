@@ -105,6 +105,23 @@ export const Selected: Story = {
   args: { selected: true },
 };
 
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const checkbox = canvas.getByRole('checkbox', { name: args.selectionLabel });
+    checkbox.focus();
+    await userEvent.keyboard(' ');
+    await expect(args.selectionHandler).toHaveBeenCalledWith(true);
+    await expect(args.openHandler).not.toHaveBeenCalled();
+    const open = canvas.getByRole('button', { name: args.heading });
+    open.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.openHandler).toHaveBeenCalledTimes(1);
+    await userEvent.keyboard(' ');
+    await expect(args.openHandler).toHaveBeenCalledTimes(2);
+  },
+};
+
 /** Search's card view adds Favorite and Download at the foot. They show on hover or focus. */
 export const WithActions: Story = {
   render: (args) => ({

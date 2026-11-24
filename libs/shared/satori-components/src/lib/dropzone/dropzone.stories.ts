@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';
-import { fn } from 'storybook/test';
+import { expect, fn, spyOn, userEvent, within } from 'storybook/test';
 
 import { NxsDropzoneComponent } from './dropzone.component';
 
@@ -37,6 +37,28 @@ type Story = StoryObj<NxsDropzoneComponent>;
 
 /** Several files, from a drop or the chooser. */
 export const SeveralFiles: Story = {};
+
+/** The browser owns the native picker; assert the keyboard invokes it, then supply its result. */
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const picker = canvasElement.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!picker) throw new Error('The dropzone must render a native file input.');
+    const choose = spyOn(picker, 'click').mockImplementation(() => undefined);
+    try {
+      const trigger = within(canvasElement).getByRole('button', { name: 'Choose files' });
+      trigger.focus();
+      await userEvent.keyboard('{Enter}');
+      await expect(choose).toHaveBeenCalledTimes(1);
+      await userEvent.keyboard(' ');
+      await expect(choose).toHaveBeenCalledTimes(2);
+      const file = new File(['claim'], 'claim.txt', { type: 'text/plain' });
+      await userEvent.upload(picker, file);
+      await expect(args.files).toHaveBeenCalledWith([file]);
+    } finally {
+      choose.mockRestore();
+    }
+  },
+};
 
 /** One CSV file, as the CSV import takes it. */
 export const OneCsvFile: Story = {

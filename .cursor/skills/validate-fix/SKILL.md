@@ -1,7 +1,7 @@
 ---
 name: validate-fix
 description: >-
-  Independent validation pass over a delivered agentic-ui-poc bug fix, before it is pushed or
+  Independent validation pass over a delivered Nuxeo-Satori-UI bug fix, before it is pushed or
   before QA sign-off — runs the static and runtime accessibility gates, checks the fix across
   Chromium and WebKit, audits user-facing strings and theming, exercises corner cases and the
   blast radius, and produces a Pass/Fail/Blocked verdict with evidence. Use when asked to
@@ -40,7 +40,7 @@ all of a ticket's artifacts collect in one deletable folder.
 A generic QA checklist will ask for four things here and three of them do not apply. **Do not
 report on a capability that does not exist**; say it is not applicable and why.
 
-| Concern       | Reality in `agentic-ui-poc`                                                                                       |
+| Concern       | Reality in `Nuxeo-Satori-UI`                                                                                      |
 | ------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Accessibility | **Fully applicable.** Static gate + runtime axe gate, both at WCAG 2.1 AA with an empty known-violations list     |
 | Browsers      | **Partly.** `chromium` and `webkit` are the registered Playwright projects. **No Firefox.** WebKit ≠ Safari       |
@@ -92,10 +92,7 @@ npm run beta:evidence -- phase-6-a11y
 `scripts/beta-harness/steps/phase-6-a11y.mjs` drives fifteen surfaces with axe at WCAG 2.1 AA. Its
 `KNOWN_VIOLATIONS` list is **empty** and its verdict is unconditional, so any violation fails it.
 
-- There is exactly one exclusion: `aria-required-children` on the adf-hx POC surface, which is
-  upstream's defect in `@alfresco/adf-core` (finding 1.2 of `docs/adf-hx-upstream-findings.md`).
-  It is scoped to a single step on purpose. **Do not widen it**, and do not add a second exclusion
-  to get green — that is a stop-and-report, not a fix.
+- There are no exclusions. **Do not add one** to get green — that is a stop-and-report, not a fix.
 - If your fix added a new surface or dialog, the existing steps will not visit it. Add a step, or
   state plainly in the report that the new surface is unscanned. An unscanned surface reported as
   "a11y clean" is exactly the under-sampling failure this harness was rewritten to remove.

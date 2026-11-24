@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';
+import { NXS_STORYBOARD_ID, NxsStoryboardComponent } from '@nuxeo/satori-platform/components';
 import { DocumentViewerComponent, type VideoSource } from './document-viewer.component';
 
 describe('DocumentViewerComponent', () => {
@@ -91,6 +93,56 @@ describe('DocumentViewerComponent', () => {
     render();
 
     expect(component.showVideoStoryboard()).toBe(true);
+  });
+
+  /**
+   * The product's storyboard seeks only through `seekHandler` on the outlet's inputs. An outlet
+   * sets inputs and cannot bind an output, so the `(seek)` binding in this template belongs to the
+   * packaged fallback and says nothing about the registered path.
+   *
+   * Every other test here would stay green if that handler were dropped: the storyboard suite binds
+   * `(seek)` on its own host, and the seek test below calls `seekTo()` directly. Clicking a frame in
+   * the product would simply stop seeking. So this registers the packaged strip under its ID and
+   * clicks a rendered frame.
+   */
+  it('seeks the video when a frame of the registered storyboard is clicked', async () => {
+    TestBed.inject(ExtensionComponentRegistry).register({
+      [NXS_STORYBOARD_ID]: NxsStoryboardComponent,
+    });
+
+    const sought: number[] = [];
+    fixture.componentRef.setInput('mimeType', 'video/mp4');
+    fixture.componentRef.setInput('blobUrl', null);
+    fixture.componentRef.setInput('previewUrl', null);
+    fixture.componentRef.setInput('videoSources', [
+      { url: 'blob:mock-video' as VideoSource['url'], mimeType: 'video/mp4' },
+    ]);
+    fixture.componentRef.setInput('storyboard', [
+      { timecode: 2, thumbnailUrl: 'blob:mock-thumb', label: '2s' },
+      { timecode: 17.5, thumbnailUrl: 'blob:mock-thumb-2', label: '17s' },
+    ]);
+    component.storyboardSeek.subscribe((timecode) => sought.push(timecode));
+    render();
+    // The outlet resolves through a promise, so the strip appears only on the round after the
+    // microtask queue has drained.
+    await fixture.whenStable();
+    render();
+
+    const videoEl = fixture.nativeElement.querySelector('video') as HTMLVideoElement;
+    expect(videoEl).toBeTruthy();
+
+    const frames = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        'nxs-storyboard .nxs-storyboard__frame',
+      ),
+    );
+    expect(frames).toHaveLength(2);
+
+    frames[1].click();
+    render();
+
+    expect(videoEl.currentTime).toBe(17.5);
+    expect(sought).toEqual([17.5]);
   });
 
   it('seeks without auto-playing (Web UI parity)', async () => {

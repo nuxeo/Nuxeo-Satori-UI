@@ -877,6 +877,531 @@ Two details that bite:
 
 ---
 
+## 26. A security rule stated about hosts, compared as strings — and a refusal that says nothing
+
+```typescript
+// BAD ❌ — the rule is "any host that serves Nuxeo is refused", but this compares the
+// hostname the URL parser happened to produce. The parser normalises case and every IPv4
+// form, which hides how much it does NOT normalise: `localhost.` is the FQDN form of
+// `localhost`, shares its cookie jar, and compares unequal. Returning a bare `null` then
+// loses the reason, so nobody can tell a refusal from "nothing was configured".
+const nuxeoHosts = origins.map((o) => parseUrl(o)?.hostname);
+if (nuxeoHosts.includes(url.hostname)) return null;
+
+// GOOD ✅ — compare on a canonical form, and make the reason the return value.
+if (nuxeoHosts.some((host) => isSameHost(host, url.hostname))) {
+  return { refused: 'it names a host that serves Nuxeo, where an <img> would carry the cookie' };
+}
+```
+
+Two defects that travel together (NXSAT-724), both worth checking for separately.
+
+**A rule written about a concept, enforced on a representation.** `url.hostname` is already
+canonical for case and for IPv4 (`127.1` and `0x7f.0.0.1` both arrive as `127.0.0.1`) — which is
+exactly what makes this one hard to see: the partial normalisation reads as full normalisation.
+It keeps a trailing dot, and it cannot know `localhost`, `127.0.0.0/8` and `[::1]` are one
+machine. Before trusting a parser's output as canonical, **print the forms you care about and
+look**, rather than reasoning about what it ought to do:
+
+```bash
+node -e "for (const h of ['localhost','localhost.','127.1','[::1]']) console.log(h, new URL('https://'+h).hostname)"
+```
+
+Note where it must stop: resolving a name to an address needs DNS, which a browser does not
+expose. State the residual gap rather than implying the rule is total.
+
+**And check the other address family.** The first fix of this covered `localhost`, `127.0.0.0/8`
+and `[::1]`, and the reviewer found `[::ffff:127.0.0.1]` straight through it — IPv6 can embed an
+IPv4 address three ways, and the parser canonicalises each into a different shape
+(`[::ffff:7f00:1]`, `[::7f00:1]`, `[::ffff:0:7f00:1]`). Decode the embedded address for each of
+those three prefixes **and only those**.
+
+The first attempt generalised instead, accepting any address whose upper groups were `0` or
+`ffff` on the reasoning that an enumerated list "is incomplete the moment a fourth embedding
+exists". That reasoning is wrong here, and the next round of review caught it: the
+generalisation was **unsound**, not merely broad. It read an IPv4 address out of hosts that embed
+none, so `[::ffff:ffff:7f00:1]` was treated as loopback, and `[::ffff:0:0:0:1]` and
+`[::ffff:0:1]` — two distinct addresses — collapsed onto one key. Both refused logos that should
+have loaded.
+
+The distinction worth carrying: enumerating is right when the set is **defined by a
+specification** (three IPv4-in-IPv6 embeddings, which change only when a standard changes) and
+wrong when it is defined by an open-ended implementation (which elements a browser makes
+focusable). An incomplete list fails closed on something it has not heard of; an unsound
+generalisation fails _open_ in both directions, and in a host-equivalence rule that means
+refusing a customer's logo.
+
+**A guard added for diagnostics must not become a new failure mode.** The same review found that
+reporting the refusal parsed the configuration URL unguarded, inside a method documented to
+never reject because it runs as an `APP_INITIALIZER`. A malformed override turned a _tolerated_
+load failure into a failed startup — the reporting was worse than the silence it replaced. When
+you add a pass over configuration to explain it, the pass inherits that contract.
+
+**Say only what you know.** The first message read `refused, keeping the Satori marks`, which is
+false whenever an earlier layer set a valid value: a refusal falls back to `base`, not to the
+packaged default. Report what was refused and why; do not narrate the merged outcome from one
+contribution's point of view.
+
+**Never canonicalise to a sentinel drawn from the value space.** The second review round found
+that mapping every loopback spelling to the string `'loopback'` made a third-party server
+_actually named_ `loopback` compare equal to `localhost`, so its logo was refused. A sentinel
+only works where it cannot be a real value, and `'loopback'` is a legal DNS name. Express the
+equivalence as a predicate on both sides instead:
+
+```typescript
+// BAD ❌ — the key is itself a possible hostname.
+const key = (h: string) => (isLoopback(h) ? 'loopback' : h);
+return key(a) === key(b);
+
+// GOOD ✅ — no key, so nothing to collide with.
+if (isLoopback(a) && isLoopback(b)) return true;
+return a === b;
+```
+
+The same round found the narrower equivalence twice more: `*.localhost` resolves to loopback
+(RFC 6761) and was missed, and the embedded-IPv4 decode was applied only to loopback, so a
+deployment on `10.0.0.5` still accepted `[::ffff:10.0.0.5]`. **Decide the equivalence once, for
+all values**, rather than special-casing the one address you were looking at. Each fix needs a
+negative control — `mylocalhost` and `localhost.example.com` must stay allowed — because the
+failure mode of an over-broad host rule is a customer's logo silently refused.
+
+**A refusal with no reason is indistinguishable from no configuration.** A function returning
+`null` for "refused" throws the reason away at the moment it is known. Return the reason and
+derive the boolean from it — `isAccepted = describeRefusal(x) === null` — so the verdict and the
+explanation are one implementation and cannot disagree. Two functions that must agree, with
+nothing comparing them, is the `proxy-check` class the pre-PR review keeps finding. Then log it
+from the service, **once per load**, not from a `computed` that re-runs.
+
+**One reason per cause, not per rule.** A predicate that returns `false` for several unrelated
+reasons gives one message for all of them, and that message is then wrong for most of them. On
+this fix a path refused because the _server_ would re-read `;` or `%` was reported as pointing
+outside the configuration directory — untrue for a file named `acme;v=1.svg`, which is inside it,
+and it sends the administrator looking in the wrong place. Likewise `javascript:` and `http:`
+shared "must use https:". When a boolean predicate covers several causes, return the reason and
+let the boolean be `reason === null`.
+
+Regression test pattern: a table of every refused form asserting the message names the value, the
+contributing package and the reason, plus one accepted value asserting silence — that negative
+control is what proves the reporting is not unconditional
+(`libs/shared/app-config/src/lib/app-config.service.spec.ts`). Add one assertion that **no two
+causes share a message**: it is a single test over the table, and it is what caught both
+collisions above (`bootstrap-config.spec.ts`, `describeBrandingLogoRefusal`).
+
+---
+
+## 27. A name validated for its shape but not for the namespace it joins
+
+```typescript
+// BAD ❌ — every check is about the characters. None asks whether the name is already taken
+// in the namespace it is about to enter.
+if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) throw new Error(`"${name}" must be kebab-case.`);
+if (name.length > 128) throw new Error(`"${name}" is too long for a fragment name.`);
+if (tree.exists(projectRoot)) throw new Error(`${projectRoot} already exists.`);
+
+// GOOD ✅ — shape first, then the namespaces the value is copied into.
+const clash = SATORI_NAMES.get(name);
+if (clash !== undefined) throw new Error(`"${name}" is a name Satori itself uses: ${clash}.`);
+if (isWindowsDeviceName(name)) throw new Error(`"${name}" is a device name Windows reserves.`);
+```
+
+Ask of every generated or configured identifier **where the value ends up**, and who is already
+there. A pattern and a length are properties of the string; a collision is a property of the
+namespace, and the two look equally like "validation" in a diff. The existing-directory check is
+the tell: it reads as a uniqueness check and is why nobody noticed one was missing, but it can
+only see the one workspace in front of it.
+
+NXSAT-729: the `config-package` generator copies the package name into three namespaces it does
+not own — the fragment name in the component XML, the Marketplace package name, and a directory
+on disk. A package named `defaults` therefore contributed `fragment bootstrap/defaults`, the key
+Satori's own packaged defaults occupy, and `ContributionRegistry.resolve()` did what it is
+designed to do and let the later contribution take the key. Replacement is a documented feature,
+so the server was not the thing to change. The only trace was an `info` diagnostic — which
+NXSAT-747 since raised to a `warning` with its own code for the case where what was displaced is
+something we packaged, because the generator can only protect the names it hands out and a
+hand-written component XML reaches the server regardless.
+
+- **The operating system is one of those namespaces.** A name that becomes a path has to clear
+  the Windows device names (`con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`) — through
+  any case, and through a trailing extension, since `NUL.txt` reaches `NUL`. A directory
+  generated on macOS under one of them leaves a repository that cannot be checked out on Windows
+  at all, and this repository supports Windows deliberately.
+- **Enforce it where the message can explain itself.** A `not`/`enum` in an Nx `schema.json` is
+  validated before the generator runs, so the CLI user gets a generic schema violation instead of
+  the sentence naming what the name clashes with. Keep the list in the generator and document it
+  in the schema's `description`.
+- **Check the prior art before deciding the behaviour.** `scripts/dev-config.mjs` already refused
+  this exact collision, with this exact reasoning — "the server keeps only the later of two
+  fragments with the same name". When one tool in the repo refuses something and its sibling
+  accepts it, the sibling is the defect.
+
+Regression test pattern: refuse through **every** entry point, assert the message names the
+clash, and assert the near-misses (`defaults2`, `constellation`, `aux-config`) still generate —
+otherwise a prefix match passes for an exact one.
+`tools/satori-generators/src/config-package/generator.spec.ts`, `create.spec.ts`.
+
+---
+
+## 28. Two paths to one view model, and only one of them drops the empty rows
+
+```typescript
+// BAD ❌ — the generated path ends with a filter; the contributed path, which builds the same
+// shape for the same template, just maps.
+function sectionsOf(schemas, mode) {
+  return schemas.map(/* … */).filter((section) => section.fields.length > 0);
+}
+export function applyLayoutFile(type, mode, file) {
+  const sections = file.sections.map((section) => ({ ...section, fields: resolve(section) }));
+  return { layout: { sections }, skipped };
+}
+
+// GOOD ✅ — the same emptiness rule, in the same place, on both paths.
+const sections = file.sections
+  .map((section) => ({ ...section, fields: resolve(section) }))
+  // Mapped first, so a field dropped from a section that is itself dropped is still reported.
+  .filter((section) => section.fields.length > 0);
+```
+
+When two code paths produce the same view model, the test to apply is not "does each one look
+right" but **"do they agree"**. Put the invariant where both reach it, or assert it of both; a
+rule that lives at the end of one `.map()` chain is invisible from the other.
+
+NXSAT-728: a contributed `<Type>/metadata.layout.json` whose section listed no fields, or only
+fields the document type does not have, rendered its heading with nothing under it — and in
+`"tabs"` display, a tab with nothing in it. The generated layout had dropped such a section since
+it was written, and the metadata editor's `typeSections` filters the same way, so the contributed
+path was the only one of three that did not.
+
+- **Fix it in the resolver, not the template.** The empty-layout and empty-tab cases then fall
+  out of guards that already exist (`@if (layout.sections.length > 0)`, `@for (section of
+layout.sections)`) instead of needing a new branch each, and the edit/create path gets the
+  same behaviour without a second change.
+- **Dropping a container must not drop its diagnostics.** Map before you filter: the console
+  warning naming each unknown field is the only signal a typo in a customer's layout file gets,
+  and a `flatMap` that skipped the section before resolving its fields would have silenced it.
+- **The reference is the sibling path, not the ticket.** The expected behaviour here was already
+  written down twice in this repo — in `sectionsOf`'s filter and in the editor's — which settles
+  it without a product decision.
+
+Regression test pattern: assert the dropped cases **and the control** — a section that does
+resolve a field still renders its rows — or a fix that renders nothing at all passes. Cover the
+empty list, the all-unknown list, every-section-empty, and the tabs surface.
+`libs/shared/document-layouts/src/lib/resolve-layout.spec.ts`,
+`document-layout/document-layout.spec.ts`.
+
+---
+
+## 29. A calendar day anchored in one zone and read in another
+
+**Found in:** NXSAT-727 — a date picked in the Edit dialog was saved as local midnight, and the
+layout row, which formats in UTC, showed the previous day for every user ahead of UTC. Two rows of
+the same panel disagreed about the same property.
+
+**The pattern, not the instance.** A calendar day ("6 March") and an instant ("2024-03-06T05:00Z")
+are different kinds, and JavaScript gives you one type for both. Every bug in this family is the
+same mistake: a day is turned into an instant in one zone and turned back into a day in another.
+It has now been hit at least five times in this repo — the ACE begin/end dates
+(`permission-timeframe.utils.ts`, `permissions-model.ts`), the version-compare rows
+(`formatCompareDate`), the layout `date` renderer (`field-view.ts`) and the metadata editor.
+
+```ts
+// WRONG — the instant depends on the writer's zone, so the same picked day is five
+// different values across five zones, and only a reader in the writer's zone agrees.
+return pickedDay.toISOString(); // local midnight
+
+// WRONG, the mirror image — reads the day in the reader's zone
+const day = new Date(property).getDate();
+
+// RIGHT — one anchor, used on both sides
+return utcMidnightOf(pickedDay); // Date.UTC(y, m, d) from the picker's own y/m/d
+const day = new Date(property).getUTCDate();
+```
+
+**The rule:** pick UTC as the anchor for a day, write it there, read it there, and format it there.
+UTC because that is what Nuxeo stores for a day-only write (`2024-03-06` →
+`2024-03-06T00:00:00.000Z`), which makes it the one anchor the server, the client and another
+client all already agree on. Do not anchor a day locally "because the user is local" — the user
+who reads it is not always the user who wrote it.
+
+**Do not "recover" the day with a rounding heuristic** in general-purpose code. `dayToDate` in
+`permissions-model.ts` snaps an instant to the nearest UTC midnight and is correct _there_, because
+an ACE date really is midnight in some zone — or, for an end Nuxeo Web UI wrote, the last second
+before one, which it reads as the day that second closes. Applied to a field that renders arbitrary `date`
+properties it is wrong for every timestamp after 12:00 UTC, which it reports as the next day.
+Narrow correctness does not generalise; check what the values actually are.
+
+**A real instant is not a calendar day and must not be converted.** In one panel,
+`dc:created`/`dc:modified` are server stamps and belong in the reader's zone, while `dc:expired` is
+a picked day and belongs in UTC. Formatting them alike is a second bug wearing consistency's
+clothes. The layout `date` view had it until 2026-11-23, formatting every value in UTC; it now asks
+`isStoredCalendarDay` (`document-layouts/…/stored-calendar-day.ts`) and formats only a stored day
+there. The edit form opens a value by the same rule, through its own copy in
+`satori-components/…/stored-calendar-day.ts`, so the form opens on the day the view shows. Both
+copies run one case list, `libs/shared/testing/…/stored-calendar-day-cases.ts`. Every other
+`dc:expired` reader — the Expires row, the collection and Browse edit dialogs, the Expired queue
+label and the version comparison — still reads every value on its UTC day, so for a value that is
+not a stored day (Web UI's local midnight) the form and they name different days. One exported
+predicate would close that; it is a published-API decision and is deferred.
+
+Regression test pattern — and this is the part that is easy to get wrong:
+
+- **In UTC, local anchoring and UTC anchoring are byte-identical, so no assertion can tell them
+  apart.** CI runners are UTC. A date test that does not control the zone asserts nothing about
+  this family of bugs, which is how NXSAT-727 passed a 1 652-case suite. `satori-components`
+  pins `process.env['TZ']` in its `vite.config.mts` for exactly this reason.
+- **Setting `process.env.TZ` inside a case does not work** under `pool: 'threads'` (this repo's
+  default): Node reads the zone once at startup, so the assignment is accepted and ignored. A
+  four-zone loop written that way ran the host zone four times and read as though it proved four.
+  Verify with `Intl.DateTimeFormat().resolvedOptions().timeZone` before trusting any such loop.
+- Assert **literals** (`'2024-03-06T00:00:00.000Z'`), never `new Date(y, m, d).toISOString()` —
+  the derived form is the buggy behaviour restated, so it passes either way.
+- Use an instant whose UTC and local days actually differ (`20:00Z` at +05:30, `00:00Z` west of
+  UTC). `09:00Z` is the same day in most zones and proves nothing.
+- **An east-of-UTC pin cannot see the stored-day half of a reader's-day rule.** East of UTC, a
+  stored day's UTC midnight falls on the same local day, so under `Asia/Calcutta` "a stored day on
+  its UTC day, an instant on the reader's" and "everything on the reader's day" pass the same cases.
+  Measured: with the stored-day branch deleted from the edit form's `openingDay`, every case in the
+  pinned zone passed except two that name a zone west of UTC through its `offset` parameter. Give the
+  rule a zone parameter a case can set, as `openingDay`'s `offset` and the view's `timeZone` are, so
+  CI covers both sides.
+- Angular's `DatePipe` memoises on (value, pattern, timezone, locale). Re-asserting a value an
+  earlier render in the same file used returns the cached string and passes unfixed.
+- **A pin in a config file is an unenforced guarantee.** Delete it and the suite goes quietly green
+  and stops protecting anything, with no failure to notice. Assert the zone in a spec of its own —
+  `suite-timezone.spec.ts` in `satori-components`, `features/browse` and `shared/ui`.
+- **A Karma project pins on the Nx target, not in a vite config.** `apps/nuxeo-ui` runs
+  `ng test --browsers=ChromeHeadless`, so there is no `vite.config.mts`; `test.options.env.TZ` in
+  `project.json` reaches the browser Karma launches, and beats an inherited shell `TZ`. Stating the
+  gap in a comment instead — "this case cannot fail in UTC, and this project has no pin" — is a
+  documented hole, not a tested one.
+- **A zone override has to be an Nx cache input.** The three pinned suites take `SATORI_TEST_TZ`,
+  and `nx.json` lists it as an `env` input on the `test` targets. Without that, a second run asking
+  for another zone is answered from the first run's cache — the command reports a pass it never
+  performed. Verified: the same `nx test` twice is a 1/1 cache hit, and with `SATORI_TEST_TZ` set it
+  is 0/1.
+- **Name the variable, and do not reuse `TZ`.** The pin overrides an inherited `TZ` so the verdict
+  is the same on every machine, which means prose documenting a `TZ=...` command is wrong the moment
+  the pin lands. That mistake was made twice in this fix, in two files, the second time after being
+  told about the first; `grep -rn "TZ="` is the check.
+
+**`new Date(y, m, d)` is not reversible.** A day its zone skipped — Samoa has no 30 December 2011 —
+rolls forward, so a stored `2011-12-30T00:00:00.000Z` reaches a picker in `Pacific/Apia` as the
+31st. Re-deriving the stored day from the instant at write time then reads that as a user edit and
+rewrites an untouched field. Remember the day you actually handed over, not the instant you derived
+it from: whatever the conversion did, an untouched control still holds the day it was given.
+
+**Find every writer AND every reader before calling it fixed.** `dc:expired` had five sites across
+four libraries: the metadata editor, browse's edit-metadata dialog, the collection dialog, the
+create/import dialog, and the nav drawer's Expired queue. Fixing one writer and formatting one row
+in UTC makes the other writers _newly_ wrong, because their locally anchored values are then read in
+UTC — and a reader left in the browser's zone says "Mar 5" for a document whose Properties panel
+says March 6.
+
+`grep -rn "toISOString()"` and a grep for the **property name** over `libs/` and `apps/` are the
+searches that find them. Following the symbols you edited does not: each site does its own
+conversion inline, so there is no shared symbol and the dependency graph shows nothing. After
+fixing the writers, search again for readers — that is the step this fix skipped, twice.
+
+---
+
+## 30. A recursive validator, and a mirrored limit whose owner was never asked
+
+```javascript
+// BAD ❌ — the walk that validates the input is itself a function of the input's depth, so it
+// dies on exactly what it exists to refuse. And the limit it does not check is the one that
+// belongs to somebody else.
+function rejectDuplicateKeys(text) {
+  const value = (path) => (text[i] === '{' ? object(path) : …); // object() calls value()
+}
+const MAX_JSON_BYTES = 1024 * 1024; // mirrored from ConfigSnapshot — which really does set it
+
+// GOOD ✅ — count with a counter, before anything descends; and say whose limit it is.
+function nestingDepth(text) {
+  for (let i = 0; i < text.length; i++) { /* ++ on { and [, -- on } and ] */ }
+}
+if (nestingDepth(text) > MAX_JSON_DEPTH) report(`nested ${depth} deep; the server’s JSON parser …`);
+```
+
+Two defects that travel together, because a checker that mirrors a server is where both live.
+
+**A recursive walk over untrusted input needs a bound, and the bound cannot be the stack.** The
+stack is a property of the machine, so the same file passes on one and fails on another, and the
+failure arrives as a `RangeError` rather than as the refusal the tool exists to produce. Worse when
+a `try` already wraps the walk for another purpose: NXSAT-730's overflow was _caught_, and reported
+as the bare words "Maximum call stack size exceeded" — a refusal naming no limit, no number and no
+remedy, which reads as a tool bug rather than as a verdict on the file. The one in the same file
+with no `try` printed a raw Node trace instead. Count iteratively, bound explicitly, and a
+recursive counter is not a fix: it overflows on the same input and looks correct in a test at
+depth 100. `libs/shared/extensions/src/lib/extension-rules.ts` had already settled this for
+manifest rules — `MAX_RULE_DEPTH = 32`, for the same reason.
+
+**Before mirroring a limit, establish who owns the number.** `MAX_JSON_BYTES` and
+`MAX_ASSET_BYTES` are `ConfigSnapshot`'s own constants, so copying them is safe. The nesting limit
+is not: `ConfigSnapshot` parses with a plain `new ObjectMapper()`, which leaves the depth at
+jackson-core's `StreamReadConstraints` default. The number is the parser's, it travels with the
+server's Jackson, and `nuxeo-agentic-core` never mentions it — grepping our own source for it
+finds nothing, which reads as "no such limit" rather than "somebody else's limit". Ask the
+dependency: the probe was eight lines of `jshell` against the server's own jars, and it returned
+the boundary and the message verbatim. Then **name the owner in the refusal** — "the server's JSON
+parser", not "the server" — so a customer on a server whose default moved knows which thing to go
+and read. And pick the safe direction to be wrong in: stricter than the server refuses a package
+that would have worked, which the customer sees immediately; more generous ships one that installs,
+starts, and silently does nothing.
+
+**Bounding the input does not bound the walks inside the bound.** QA found the rest of this one.
+Refusing past 1000 fixed everything deeper than 1000 and nothing below it: both remaining walks —
+the recursive tokeniser, and the `JSON.stringify` that packages the result — are still functions of
+depth, so the greatest depth the tool can actually handle stayed a property of the machine. It just
+moved to inside the band the server accepts, where the tool now claims to work. On Windows with
+Node 20 that is about depth 993, and `JSON.stringify` was the one depth-sensitive call left outside
+a `try`, so the build died there with the raw trace the fix was supposed to have removed. After
+bounding the input, **list every walk that is still a function of it** and decide what each one does
+at its own limit. A refusal inside the accepted band must also say _whose_ limit it was: "the server
+accepts this depth but this Node ran out of stack walking it" sends the reader to their toolchain,
+where "nested 993 deep" alone sends them to edit a file that was fine.
+
+**Which recursive walk gives out first flips by platform, so one OS proves nothing about the
+others.** On macOS and Linux the tokeniser goes first in the real script at every stack size tried
+(`--stack-size` from 100 KB up: always the caught refusal, never a `JSON.stringify` trace); on
+Windows with Node 20 the order is reversed, from about depth 993. So on this machine the
+`JSON.stringify` branch is **unreachable**, and a test that only shrinks the stack leaves it
+unexercised while looking thorough. Reach it by injecting the failure at that exact call
+(`--import` a preload that makes `JSON.stringify` throw the `RangeError`), and keep the real
+small-stack test beside it for the branch this platform does reach. One genuine overflow, one
+injected at the site only another platform reaches.
+
+Measure in the script, not in a probe. Each call's overflow depth in isolation — roughly 3800–4700
+for the tokeniser on Node 20 to 24 against 5900–6200 for `JSON.stringify`, which is iterative from
+Node 25 — moves by hundreds between runs of the same probe, enough to reverse the order, because it
+depends on how much stack the caller had already spent. Only the end-to-end run is stable enough to
+conclude from.
+
+Regression test pattern: the boundary on **both** sides (1000 builds, 1001 refused), a depth far
+past any stack asserting no trace and a one-line refusal, both container kinds since the parser
+counts arrays too, a string full of `{` that must still build, and a shallow control — otherwise a
+check that refuses everything passes. Then, for the band the server accepts: a small `--stack-size`
+with a normal package as the control that Node still starts, the real overflow there, the injected
+overflow at the platform-only site, and a non-stack `RangeError` asserting it is **not** dressed up
+as one — "Invalid string length" told to build with a newer Node sends the reader after the wrong
+thing. `tools/satori-generators/src/config-package/generator.spec.ts`, "nesting depth".
+
+---
+
+## 31. A URL rule enforced on the string, where the parser decides
+
+```typescript
+// BAD ❌ — the rule is "this value is a path on our own origin", and this tests a prefix.
+// `//evil.example/sso` starts with a slash and the browser reads it as another host.
+if (typeof path !== 'string' || !path.startsWith('/')) continue;
+
+// STILL BAD ❌ — the two prefixes the ticket suggested. The parser DELETES tabs, newlines and
+// carriage returns from the input before it reads anything, so this sees a harmless string:
+//   new URL('/\t/evil.example/sso', 'http://app.example/') === 'http://evil.example/sso'
+if (path.startsWith('//') || path.startsWith('/\\')) continue;
+
+// GOOD ✅ — at the boundary, resolve and compare the thing the rule is actually about.
+const url = new URL(path, base.href);
+if (url.origin !== base.origin) return { refused: `resolves to ${url.origin}, not ${base.origin}` };
+```
+
+NXSAT-731: `sso.endpoints[].path` was checked with `startsWith('/')`, so an administrator-written
+`//evil.example/sso` put a "Company SSO" button on the **pre-authentication** login page that sent
+the user to another site — an open redirect on the screen where people type passwords.
+
+**Compare the resolved URL, not the string.** A string rule has to enumerate the shapes a parser
+can reach an authority from, and the list is longer than it looks: `//host`, `/\host`, `/\/host`,
+a tab/LF/CR anywhere in the prefix, and whatever the next browser version normalises. One
+`url.origin !== base.origin` closes all of them at once and keeps closing them. Prove it the way
+this repo already insists on — print the forms and look, rather than reasoning about the spec:
+
+```bash
+node -e "for (const p of ['//h/x','/\\\\h/x','/\t/h/x','/%2f%2fh']) console.log(JSON.stringify(p), new URL(p,'http://a.example/').origin)"
+```
+
+**Put the boundary where the browser is sent, not only where the value is parsed.** A fix at merge
+time alone leaves every other caller unguarded — `NUXEO_SAML_LOGIN_ENDPOINTS` is a public token a
+host application can fill directly. A fix at navigation time alone still renders a button that
+looks legitimate. Both, with the roles written down: the merge refuses what is wrong whatever it
+resolves to (so no button appears), and the navigation refuses on the resolved origin.
+
+**Do not reuse the neighbouring predicate because it looks like the same rule.** `isAcceptedLogoSrc`
+sits four lines away and refuses _every_ absolute path, because a logo must be relative. An SSO
+path must be absolute. Same technique, opposite requirement.
+
+**Watch the leniency that defeats the check.** `startSamlLogin` prepended a `/` to a path written
+without one, which quietly turned `https://evil.example/sso` into the path `/https://evil.example/sso`
+— on our origin, so the origin comparison allowed it, and all the administrator saw was a 404.
+Refuse a value that carries a scheme before any such normalisation, and name the scheme.
+
+Regression test pattern: one case per bypass class **plus the control** (`/nuxeo/login/azure` must
+still render a working button), and one property test that resolves every accepted value against
+more than one base and asserts the origin did not move — that last one is what ties the string
+rule to the behaviour it claims, rather than testing a proxy for it
+(`bootstrap-config.spec.ts`, `auth.service.sso.spec.ts`).
+
+---
+
+## 32. One source, two module systems, and a test that only ever sees the forgiving one
+
+```typescript
+// BAD ❌ — works in the compiled CommonJS every customer runs, and in vitest. Throws
+// `ReferenceError: __dirname is not defined` in the one place the documentation sends people:
+// Nx loads this .ts with Node's native type stripping, so the module is ESM.
+generateFiles(tree, join(__dirname, 'files'), projectRoot, substitutions);
+
+// GOOD ✅ — one resolver, both module systems, and both branches asserted.
+generateFiles(tree, generatorFilesDir('config-package'), projectRoot, substitutions);
+```
+
+NXSAT-795: all four generators that write templates used `join(__dirname, 'files')`.
+`scripts/build-platform-generators.mjs` compiles them to CommonJS for `@nuxeo/satori-platform`,
+where `__dirname` exists, and vitest defines it too — so 187 tests, 34 gates and a QA pass of
+NXSAT-729 were all green while `npx nx g ./tools/satori-generators:config-package …`, the command
+in `docs/extension-reference.md`, `docs/beta-demo-runbook.md` and `libs/platform/AGENTS.md`, had
+never once worked on Node ≥ 22.6. QA found it by running the documented command.
+
+**A file loaded two ways needs the harsher way tested, and tests run the forgiving one.** Nx 23's
+`loadTsFile` prefers Node's native type stripping and falls back to swc only when stripping
+_fails_; stripping does not transform module syntax, so a `.ts` with `import` statements is ESM
+and nothing in CJS is defined. Vitest and `tsc --module commonjs` both give you the CJS globals,
+so no unit test and no build can see this. `NX_PREFER_NODE_STRIP_TYPES=false` restores the old
+behaviour — useful to confirm a diagnosis, not a fix, because a documented command must not need
+an environment variable.
+
+**Reach for a static check when no runtime test can see the gap.** `checkGeneratorsEsmSafe` in
+`scripts/review-guardrails.mjs` fails on `__dirname`, `__filename` or `require` anywhere under
+`tools/satori-generators/src` except the one resolver that guards with `typeof`, with specs
+exempt. That is what would have caught this; a test could not, because the test harness is the
+forgiving environment.
+
+**Ask which paths your evidence actually covered.** NXSAT-729's own verification ran the generator
+through `create.mjs` (a subprocess), the Nx generator through vitest (in-process) and the
+published compiled copy — three ways, none of them the Nx command line on the TypeScript source.
+Count the ways a thing can be invoked before reporting that it was exercised.
+
+**A default parameter cannot be overridden with `undefined`, so it cannot be used to reach the
+branch it hides.** The first fix for this had the shape below, and its "no `__dirname`" tests all
+ran the CommonJS branch — the default is applied whether the argument was omitted or passed as
+`undefined`. They passed, because both branches resolve to the same directory here. Measured, not
+argued: with the ESM branch deliberately returning a wrong path, all ten tests stayed green.
+
+```typescript
+// BAD ❌ — `f('x', undefined)` runs the default, so the `here === undefined` branch is unreachable.
+function f(generator: string, here = typeof __dirname === 'undefined' ? undefined : __dirname) {}
+
+// GOOD ✅ — a pure function taking the value, and a thin wrapper that supplies it.
+export function filesDirFrom(here: string | undefined, generator: string) {}
+export function generatorFilesDir(generator: string) {
+  return filesDirFrom(moduleDir(), generator);
+}
+```
+
+`__dirname` cannot be stubbed to reach the branch either: in CommonJS it is a module-scoped
+binding, not a property of `globalThis`. And when both branches return the same value, assert one
+that **cannot** — give the CommonJS branch a directory outside the workspace and check the answer
+came from it. Without that case, a branch that stops reading its input still passes.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -896,3 +1421,6 @@ Fix proactively to avoid a review cycle:
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
 - "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio
 - "No fallback if the image fails to load" → bind `(error)` and clear the state the template branches on, not a flag local to one component; and measure `naturalWidth` after `load` too, because an image that draws nothing fires no `error`
+- "Host comparison may be bypassed by equivalent forms" → canonicalise before comparing (strip a trailing dot, alias the loopback spellings); the URL parser normalises case and IPv4 but not those
+- "Silent rejection" → return the reason and derive the boolean from it, then log it once from the service; a bare `null` makes a refusal look like nothing was configured
+- "Open redirect / unvalidated redirect" → resolve the value and compare `url.origin` against the origin it must stay on; a prefix check loses to the tab, newline and backslash forms the parser rewrites

@@ -2,6 +2,7 @@ import { formatDate, formatNumber } from '@angular/common';
 
 import { LayoutFieldType } from '../layout.model';
 import { humanize } from '../resolve-layout';
+import { isStoredCalendarDay } from './stored-calendar-day';
 
 /** One rendered value: text, or a boolean the template translates. */
 export type ValueView = { readonly text: string } | { readonly flag: boolean };
@@ -21,6 +22,11 @@ export interface ValueContext {
   readonly locale: string;
   /** The vocabulary entry's label for an id, or the id itself when it is not known. */
   readonly vocabulary: (directory: string, id: string) => string;
+  /**
+   * The zone an instant is shown in: absent, the reader's own, as the panel leaves it; an offset
+   * such as `+0530`, so that a test controls it. A stored day is shown in UTC whatever this is.
+   */
+  readonly timeZone?: string;
 }
 
 /** Complex values nest arbitrarily in Nuxeo; past this depth the rest is shown as JSON. */
@@ -48,16 +54,71 @@ function textOf(value: unknown): string {
   return JSON.stringify(value) ?? '';
 }
 
+/**
+ * A date as a long date: a stored day in UTC, an instant in the reader's zone (pattern 29).
+ *
+ * A stored day, `2024-03-06T00:00:00.000Z`, is formatted in UTC, where Nuxeo and the edit form
+ * anchor it, so every reader sees the day that was written; in the reader's zone it would be 5
+ * March west of Greenwich. An instant, such as `dc:created` at `2026-11-23T20:00:00Z`, is formatted
+ * in the reader's zone, so that a reader at +05:30 sees 24 November, the day it was there. In UTC
+ * it would be the 23rd, which is the day it was in London and not where the reader is.
+ */
 function dateView(value: unknown, context: ValueContext): ValueView {
-  // In UTC, as formatCompareDate does: a calendar date is stored at midnight UTC, and the
-  // browser's timezone would move it to the previous day west of Greenwich.
   const date = new Date(textOf(value));
   if (Number.isNaN(date.getTime())) return { text: textOf(value) };
-  return { text: formatDate(date, 'longDate', context.locale, 'UTC') };
+  const zone = isStoredCalendarDay(value) ? 'UTC' : context.timeZone;
+  return { text: formatDate(date, 'longDate', context.locale, zone) };
 }
 
+/**
+ * Angular refuses a larger maximum: "Exceeded maximum limits of 100 digits" (NG02306). Measured,
+ * not read off the spec — ECMA-402 and Angular's own validator do not have to agree.
+ */
+const MAX_FRACTION_DIGITS = 100;
+
+/**
+ * Fraction digits needed to write `value` out exactly, read off its shortest round-trip form.
+ *
+ * `String(value)` is that form, and it is the one the edit form and `nxsPropertyText` show, so
+ * matching it is what makes the view and the form agree. The exponent has to be folded in:
+ * `1e-21` carries no fraction digits in its mantissa but needs 21 of them written out, and
+ * `1e+21` needs none at all.
+ */
+function fractionDigitsOf(value: number): number {
+  const text = String(value);
+  const exponent = /e([+-]\d+)$/i.exec(text);
+  const mantissa = exponent ? text.slice(0, exponent.index) : text;
+  const afterPoint = mantissa.split('.')[1]?.length ?? 0;
+  if (!exponent) return afterPoint;
+  return Math.max(0, afterPoint - Number(exponent[1]));
+}
+
+/**
+ * A number at full precision, never rounded (NXSAT-725).
+ *
+ * `formatNumber`'s own default is `1.0-3`, which showed `3.14159265` as `3.142` and — worse —
+ * `0.0004` as `0`, a non-zero measurement reading as absent with nothing on screen to say the
+ * value had been cut.
+ *
+ * The precision is derived per value rather than capped at a constant. A fixed maximum only
+ * moves the same defect further out: at `1.0-20`, which this first shipped as, `1e-21` still
+ * rendered as `0` and `1.23456789012345e-7` still lost digits, because a digits format counts
+ * fractional *places* and not significant ones (caught in review on PR 515). Deriving it means
+ * there is no magnitude at which the panel shows a number that is not the stored one.
+ *
+ * Above Angular's ceiling — only a denormal gets there — the round-trip form is the only exact
+ * one left, so it is used directly. That loses the locale's grouping, which a value of that size
+ * has no integer part to need.
+ *
+ * It stays `formatNumber` elsewhere precisely for that grouping: `2480` shows as `2,480`, and a
+ * small value as `0.0000001` rather than `1e-7`. Angular's formatter does not expand a double's
+ * binary representation the way `toFixed` does, so `0.1` stays `0.1`.
+ */
 function numberView(value: unknown, context: ValueContext): ValueView {
-  return { text: typeof value === 'number' ? formatNumber(value, context.locale) : textOf(value) };
+  if (typeof value !== 'number') return { text: textOf(value) };
+  const digits = fractionDigitsOf(value);
+  if (digits > MAX_FRACTION_DIGITS) return { text: textOf(value) };
+  return { text: formatNumber(value, context.locale, `1.0-${digits}`) };
 }
 
 function booleanView(value: unknown): ValueView {

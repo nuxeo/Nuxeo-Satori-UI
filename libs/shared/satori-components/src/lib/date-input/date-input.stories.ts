@@ -1,6 +1,6 @@
 import { LOCALE_ID } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 
 import { NxsDateInputComponent } from './date-input.component';
 
@@ -63,6 +63,39 @@ export default meta;
 type Story = StoryObj<NxsDateInputComponent>;
 
 export const Default: Story = {};
+
+export const KeyboardContract: Story = {
+  args: { value: new Date(2026, 2, 4) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: 'Open calendar' });
+    trigger.focus();
+    await userEvent.keyboard('{Enter}');
+    const body = within(canvasElement.ownerDocument.body);
+    const calendar = await body.findByRole('dialog');
+    await waitFor(() => expect(calendar).toBeVisible());
+    await waitFor(() =>
+      expect(calendar.contains(canvasElement.ownerDocument.activeElement)).toBe(true),
+    );
+    // Material ignores close() during its enter animation, even after focus has arrived.
+    const content = calendar.closest('mat-datepicker-content');
+    if (!content) throw new Error('The calendar must belong to a datepicker overlay.');
+    await Promise.all(
+      content.getAnimations({ subtree: true }).map((animation) => animation.finished),
+    );
+    // Animation promises resolve before Material receives the animationend event.
+    await waitFor(() => expect(content).not.toHaveClass('mat-datepicker-content-animating'));
+    // Escape is read by CDK through keyCode, as are the existing picker keyboard stories.
+    fireEvent.keyDown(canvasElement.ownerDocument.activeElement ?? calendar, {
+      key: 'Escape',
+      code: 'Escape',
+      keyCode: 27,
+    });
+    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
+    await expect(trigger).toHaveFocus();
+    await expect(canvasElement.querySelector('output')).toHaveTextContent('2026-03-04');
+  },
+};
 
 /** `03/04/2026` typed in American English is 4 March. */
 export const TypedInAmericanEnglish: Story = {

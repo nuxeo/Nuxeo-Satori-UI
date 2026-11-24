@@ -1,61 +1,78 @@
 # NXSAT-820 verification
 
-Verified on 24 November 2026 using the local preview at `http://localhost:4204` against
-`https://satori-ui.beta.nuxeocloud.com/`. These observations apply to this branch before
-integration with the latest main branch. Counts reflect the test data at verification time.
+Browser verification on 25 November 2026 used the merged branch, Satori UI 1.0.0,
+and `http://localhost:4204` connected to `https://satori-ui.beta.nuxeocloud.com/`.
+Counts reflect that environment's data at verification time. Screenshots were captured
+from the running application, not generated mockups.
 
 ## Scope
 
-Grouped navigation and a search workspace using Satori, Angular Material and the existing
+Grouped navigation and a search workspace built with Satori, Angular Material and existing
 shared components. Existing search endpoints, aggregation keys and filter semantics are retained.
 Department and new app-area, current-folder and Assets search scopes are excluded by agreement.
 
-## Observed interactions
+## Observed interactions after merging main
 
-| Area                   | Result                                                                                                         |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Navigation             | Five groups; no extra Search sidebar item; configurable view opens its own prototype placeholder.              |
-| Collapsed separators   | All four lines measure 40px; expand/collapse retains the existing expanded margins.                            |
-| Search header          | Keywords when collapsed, Search when expanded; Clear, Close, Escape and click-to-reopen work.                  |
-| Keywords               | Enter and Search execute NEV and return 125 results.                                                           |
-| Suggestions            | Readable in dark mode; selecting the PDF suggestion opens its document.                                        |
-| In                     | Existing Files-only filter changes 125 results to 112; Close discards an unapplied draft.                      |
-| Properties             | Nature Article returns 24 results. Size options render; selecting a size was not exercised live.               |
-| Date / People          | Last week returns 34 results for the tested Files search; adding nco-admin narrows to 2.                       |
-| Categories / Tags      | Technology/IT returns 25 results; angular tag returns 1; removing the tag restores results.                    |
-| Coverage / Collections | Asia/India returns 1 result; the tested Marketing Documents collection returns 4.                              |
-| Saved searches         | Save, switch to Default and reopen restores NEV and 125 results.                                               |
-| Reset                  | Clears metadata and quick filters; Validated-only reset restores 648 results.                                  |
-| Paging                 | Next, Last and First work; final-page Next is disabled; page-size selection works.                             |
-| Views / columns        | Table, List and Grid work; adding and removing a column works.                                                 |
-| Selection              | Select page and Select all results work; clear removes the selection. No destructive bulk action was executed. |
-| Sorting / empty state  | Title and Most Recent work; an unmatched keyword shows zero results and Clear recovers.                        |
-| CSV                    | Export downloads the current page: 40 rows and 12 columns in the tested configuration.                         |
-| Queue                  | Opens a result, switches documents and returns with the keyword restored.                                      |
-| Dropdowns              | Open/close, Escape with focus restoration, draft cancellation and advanced-filter collapse/expand work.        |
+| Area                        | Observation                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation                  | Five groups and no extra Search sidebar entry. Browse opens its existing tree and results.                                                                                      |
+| Collapsed Browse separators | All four separators measure 40px. Expand/collapse works.                                                                                                                        |
+| Header                      | Keywords when collapsed and Search when expanded. Escape, click-to-reopen, Clear and keyword submission work.                                                                   |
+| Keyword results             | Enter with NEV returns 125 results. An unmatched term returns zero; Clear restores 648.                                                                                         |
+| Suggestions                 | Dark-theme text is readable. Selecting NEV_PDF_File_Testing navigates to its document UUID.                                                                                     |
+| In                          | Applying existing Files-only narrows NEV from 125 to 112. Draft cancellation is also covered by the rendered component test.                                                    |
+| Properties / Size           | Between 100 KB and 1 MB narrows NEV to 17. Removing it restores 125. Nature options and counts render. Nature selection was exercised in the 24 November pre-merge pass.        |
+| Date                        | Files-only plus Last week returns 34 results. Existing multi-select date ranges remain.                                                                                         |
+| People                      | Selecting nco-admin produces its removable chip and 366 results on the default search.                                                                                          |
+| Categories / Coverage       | Technology/IT returns 25. Adding Asia/Japan narrows it to 7.                                                                                                                    |
+| Tags                        | Selecting the angular autocomplete suggestion returns one result; removing it restores 648. Repeated after the chip-input fix on a fresh page, with no new browser errors.      |
+| Collections                 | Marketing Documents nxsat_qa_nev-domain1 returns four results.                                                                                                                  |
+| Saved searches              | Existing saved NEV search reopens with 125 results. Clear restores Default. Saving and reopening a new collection filter set restores its selected collection and four results. |
+| Reset                       | Clears metadata and the Validated quick filter; the default search returns 648 results.                                                                                         |
+| Paging                      | Last shows 121–125 of 125 and disables Next. First works; choosing 25 changes the page size.                                                                                    |
+| Selection                   | Select page selects 25. Select all results selects 125. Clear removes the selection.                                                                                            |
+| Views / columns / sorting   | Grid, List and Table switch correctly. Type column can be added and removed. Title sorting puts Apple first.                                                                    |
+| CSV                         | Export downloads the current page, with 25 data rows; its first title is Apple after title sorting.                                                                             |
+| Queue                       | Opens the existing document queue, displays Apple, and returns to filters with NEV restored.                                                                                    |
+| Dropdown dismissal          | Close and Escape work. Advanced Filters collapses and expands. Focus restoration, scope drafts, and registered chip replacement have rendered regression tests.                 |
 
-The live verification saved a search named `NXSAT-820 UI verification 2026-11-24` for review.
-AI Ask was disabled in that session, so its backend interaction was not verified live.
+The saved filter set `NXSAT-820 post-merge verification 2026-11-25` remains available
+on beta for reviewers. No destructive bulk action was executed.
 
-## Automated validation
+## Prototype comparison and deliberate limits
 
-- Affected lint, build and test: passed for 24 projects, 50 tasks (46 cached on the final divider run).
-- 6,496 tests across the affected suites; the app suite reports 526 passing tests.
-- Modified shell stylesheet: Stylelint passed. `git diff --check` passed.
-- Existing lint and build warnings remain; these checks were not warning-free.
+The linked Claude prototype was accessible during this pass. Its grouped navigation,
+expanded search header and dropdown presentation informed the implementation.
 
-## Remaining review items
+- Department and new Location/app-area/current-folder/Assets scopes remain excluded.
+- Coverage retains geographic metadata semantics; it is not relabelled as the prototype's
+  Location app-area selector. Collections retains the existing collection filter.
+- Date keeps Last 24h/week/month/year/older. Prototype Today/Earlier options would change
+  search semantics, so they are not substituted.
+- Satori 1.0 supplies its standard navigation branding, icons and selected-item treatment.
+  These differ from the prototype's custom shell artwork; this is not a pixel-identical shell.
+- Logic and User's Configurable View remain prototype placeholders. Existing Properties,
+  People and metadata filters remain functional even where the prototype has placeholders.
+- AI Ask is disabled in this signed-in session. Its backend was not exercised live; automated
+  search tests cover the separate Ask input and state. This report does not claim AI backend validation.
 
-- Integrate with current main and rerun validation before declaring merge readiness.
-- The prototype Date menu uses Any time / Today / Earlier. Existing server ranges such as
-  Last 24 hours / Last week remain because they have different semantics.
-- Satori branding, some icons, active-state styling and spacing still differ from the prototype.
-- Logic and configurable view remain placeholders consistent with the prototype.
-- Complete live Size-filter and AI Ask verification where configured.
+## Integration fixes and automated evidence
+
+- Resolved source conflicts with main and regenerated the English fallback and public API snapshot.
+- Corrected the extension reference for the new sidebar and retained search queue descriptor.
+- Preserved main's external-recipient navigation rules, drawer behavior, saved-search clearing,
+  and registered chip-set replacement in both filter layouts.
+- Fixed unstable chip inputs causing repeated change detection in a horizontal overlay.
+  The focused filter suite passes all 24 tests, including the replacement-component regression.
+- Affected lint and builds pass. After the fixes, all 325 extension, 248 search and 2,168
+  shared-component tests pass; the app suite passes all 687 tests. The broad pre-commit
+  run also included unchanged configuration-generator tests, which fail locally on
+  Windows stderr, line-ending and symlink expectations. That run is not an all-green test run.
+  Remote CI results are recorded in the PR; existing build/lint warnings remain.
 
 ## Screenshots
 
-Search results:
+Search workspace:
 
 ![Search workspace](search.jpg)
 
@@ -63,10 +80,26 @@ Readable suggestions:
 
 ![Search suggestions](suggestions.jpg)
 
-Date dropdown with retained server ranges:
+Date dropdown with existing server ranges:
 
 ![Date dropdown](date-dropdown.jpg)
 
-Browse with corrected collapsed navigation separators:
+Size filter:
+
+![Size filter](size-filter.jpg)
+
+Tags with a selected, removable chip:
+
+![Tags dropdown](tags-dropdown.jpg)
+
+Saved collection search restored:
+
+![Saved search](saved-search.jpg)
+
+Selection across all result pages:
+
+![All results selected](select-all.jpg)
+
+Browse with 40px collapsed navigation separators:
 
 ![Collapsed navigation](collapsed-navigation.jpg)

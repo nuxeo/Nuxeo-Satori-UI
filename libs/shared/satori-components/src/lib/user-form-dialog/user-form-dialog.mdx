@@ -1,0 +1,68 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as UserFormDialogStories from './user-form-dialog.stories';
+
+<Meta of={UserFormDialogStories} name="Overview" />
+
+# User form dialog
+
+The user form dialog creates a user or edits one. An administrator opens it from the users and groups
+page. In create mode it writes the new account itself; in edit mode it closes with the values and the
+caller saves them.
+
+## Key features
+
+- **Create, or create another.** Create writes the account and closes. Create another does the same and
+  tells the caller to open a fresh form, for entering many users in a row.
+- **Invitation when there is no password.** With Set user password off, the server sends the user an
+  invitation. The dialog reports that the account was invited.
+- **Groups from the directory.** Search the groups as you type, pick one, or type a group's name and press
+  Enter. Only the chosen names are saved.
+- **A refusal stays visible.** When the server refuses, the dialog stays open and names the reason:
+  the username is taken, the server needs a password, or a generic failure.
+
+## Accessibility
+
+Each field has a label. The refusal and the password mismatch are announced with `role="alert"`. The
+username is read-only in edit mode and says so through the disabled state. Group chips have accessible
+names that include the group's name.
+
+## Demo showcase
+
+<Canvas of={UserFormDialogStories.Creating} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsUserFormDialogComponent,
+  type NxsUserFormDialogData,
+  type NxsUserFormDialogResult,
+} from '@nuxeo/satori-platform/components';
+
+this.dialog
+  .open<NxsUserFormDialogComponent, NxsUserFormDialogData, NxsUserFormDialogResult>(
+    NxsUserFormDialogComponent,
+    { data: { mode: 'create' } },
+  )
+  .afterClosed()
+  .subscribe((result) => {
+    if (result?.createAnother) this.openCreate();
+    else if (result) this.reload();
+  });`;
+
+<Source language="typescript" dark code={usageTs} />
+
+`mode` is required. In `edit` mode pass the `user` as well. The dialog's words are translated with
+ngx-translate under `satori-components.user-form-dialog.*`. It has no registered ID: open it with `MatDialog`.
+
+## Where its data comes from
+
+It reads groups through `UserService.searchGroupsPaged` and creates accounts through `UserService.createUser`,
+with the application's sign-in. Nuxeo checks the permission on each request; the dialog only reports
+the answer.
+
+## Examples
+
+### Refused
+
+<Canvas of={UserFormDialogStories.Refused} />

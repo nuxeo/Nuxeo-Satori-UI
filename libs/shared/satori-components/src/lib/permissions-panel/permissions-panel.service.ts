@@ -175,8 +175,8 @@ export class NxsPermissionsService {
           id: change.target.id,
           username: change.target.principal,
           permission: change.permission,
-          begin: dateToWrite(change.begin, change.target.begin),
-          end: dateToWrite(change.end, change.target.end),
+          begin: dateToWrite(change.begin, change.target.begin, 'begin'),
+          end: dateToWrite(change.end, change.target.end, 'end'),
           notify: false,
         });
       case 'remove':

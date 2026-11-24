@@ -104,21 +104,17 @@
     }
   </div>
 
-  <!-- Video storyboard -->
+  <!-- Video storyboard. Rendered through its ID so a customer library can replace the strip; the
+       packaged component follows when nothing is registered. -->
   @if (showVideoStoryboard()) {
-    <div class="viewer-storyboard">
-      @for (item of storyboard(); track item.timecode) {
-        <button
-          type="button"
-          class="storyboard-item"
-          [matTooltip]="item.label || formatTimecode(item.timecode)"
-          (click)="seekTo(item.timecode)"
-        >
-          <img [src]="item.thumbnailUrl" [alt]="item.label" class="storyboard-thumb" />
-          <span class="storyboard-time">{{ formatTimecode(item.timecode) }}</span>
-        </button>
-      }
-    </div>
+    <lib-extension-outlet
+      #storyboardOutlet
+      [componentId]="storyboardId"
+      [componentInputs]="storyboardInputs()"
+    />
+    @if (storyboardOutlet.unresolved()) {
+      <nxs-storyboard [items]="storyboard()" (seek)="seekTo($event)" />
+    }
   }
 
   <!-- Image toolbar (zoom/rotate) -->
@@ -178,7 +174,7 @@
       }
     </div>
     <div class="viewer-footer-actions">
-      @if (!annotationsTab()) {
+      @if (!annotationsTab() && !showARenderViewer()) {
         <button
           mat-icon-button
           [matTooltip]="'shared-ui.document-viewer.open-with-nuxeo-drive' | translate"
@@ -206,7 +202,7 @@
       >
         <mat-icon svgIcon="download" />
       </button>
-      @if (showMainFileControls()) {
+      @if (showMainFileControls() && (annotationsTab() || !showARenderViewer())) {
         <button
           mat-icon-button
           [matTooltip]="'shared-ui.document-viewer.replace-main-file' | translate"
@@ -234,7 +230,12 @@
 
   <!-- Video metadata card -->
   @if (showVideoInfoCard()) {
-    <div class="picture-cards">
+    <div
+      class="picture-cards"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="'shared-ui.document-viewer.video-metadata-region' | translate"
+    >
       <div class="picture-card">
         <h4 class="picture-card-title">{{ 'shared-ui.document-viewer.video-info' | translate }}</h4>
         <div class="picture-card-body">
@@ -293,7 +294,12 @@
 
   <!-- Picture metadata cards -->
   @if (showPictureCards()) {
-    <div class="picture-cards">
+    <div
+      class="picture-cards"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="'shared-ui.document-viewer.picture-metadata-region' | translate"
+    >
       <!-- Picture Info -->
       <div class="picture-card">
         <h4 class="picture-card-title">

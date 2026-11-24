@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <fragment version="1">
 
-  <extension target="web#WEB-INF/web.xml">
+  <!-- Target the web template's FILTER-MAPPING marker, not the generated file path. -->
+  <extension target="web#FILTER-MAPPING">
     <filter-mapping>
       <filter-name>NuxeoAuthenticationFilter</filter-name>
       <url-pattern>/agentic-ui/*</url-pattern>

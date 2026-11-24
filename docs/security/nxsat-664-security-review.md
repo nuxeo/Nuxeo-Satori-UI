@@ -2,7 +2,7 @@
 
 - **Ticket:** NXSAT-664, Goal "independent security review of the component library before it is used more widely".
 - **Scope:** `libs/shared/satori-components/src/lib` as shipped on `main` (non-spec, non-story runtime code, plus `.storybook/` and `test-setup.ts` for credential checks). Concerns: blob URL creation and revocation, subscriptions (`takeUntilDestroyed`), image binding, sanitizer use, credential handling.
-- **Base:** reviewed at `origin/main` `e317be02c`. `origin/main` has since advanced to `d4d00fb36`; no file cited here changed in between. NXSAT-649 (PR #446, "merge the ADF-free platform to main") is merged and an ancestor of that commit.
+- **Base:** reviewed at `origin/main` `e317be02c`. `origin/main` has since advanced to `d4d00fb36`; no file cited here changed in between. NXSAT-649 (PR #446) is merged and an ancestor of that commit.
 - **Method:** static review by four read-only reviewers, one per concern, each reading the code rather than its comments. Every finding below was checked against the code by the author of this document. The reviewers and the author are different models from the author of the code under review.
 - **Not done:** `npm audit` (the ticket says "if approved"; it was not approved, so it was not run). Runtime or browser testing of the findings was not done. This is a static review.
 

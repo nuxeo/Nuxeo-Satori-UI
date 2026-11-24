@@ -34,6 +34,7 @@
   bottom: max(40px, calc(24px + env(safe-area-inset-bottom, 0px)));
 
   --mdc-fab-container-color: var(--mat-sys-primary);
+  --mat-fab-container-color: var(--mat-sys-primary);
   --mdc-fab-icon-color: var(--mat-sys-on-primary);
   --mat-fab-foreground-color: var(--mat-sys-on-primary);
 

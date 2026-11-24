@@ -45,7 +45,12 @@ export function nxsAceTimeFrame(
   translate: (key: string, params?: Record<string, unknown>) => string,
   locale: string,
 ): string {
-  return formatAceDateRange(instantToDay(ace.begin), instantToDay(ace.end), translate, locale);
+  return formatAceDateRange(
+    instantToDay(ace.begin, 'begin'),
+    instantToDay(ace.end, 'end'),
+    translate,
+    locale,
+  );
 }
 
 /** The key for a failed write: a refusal (401/403) reads as one rather than as a fault. */

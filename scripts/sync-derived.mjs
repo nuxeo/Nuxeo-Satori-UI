@@ -18,13 +18,15 @@ import { spawnToolSync } from './beta-harness/package-command.mjs';
  * 2. **Regenerate**, each from the merged tree:
  *    - the English fallback catalogue, `libs/shared/ui/src/lib/i18n/platform-en.ts`
  *      (`tools/i18n/platform-english.mjs`);
- *    - the agent-config mirrors under `.claude/` and `.agent/` (`mirror-agent-config.mjs sync`);
+ *    - the agent-config mirrors under `.claude/` and `.agent/`: `skills/`, `agents/`, `rules/` and
+ *      `MIRROR.md` (`mirror-agent-config.mjs sync`);
  *    - the platform build — which copies the extension reference into the package — and from it the
  *      API snapshot, `docs/api/platform.api.md` (`api-surface.mjs --update`);
  *    - the coverage baseline, `.ai/state/coverage-baseline.json`, but only when it conflicted or
  *      `--coverage` is given: the projects whose entries the two sides disagree on (or every
  *      project with `--coverage`), plus the floor projects, are measured again and recorded.
- * 3. **Stage** the derived files that changed, so the merge commit carries them.
+ * 3. **Stage** the derived files that changed, so the merge commit carries them, and nothing else.
+ *    Any other file under `.claude/` or `.agent/`, tracked or not, is left as it was.
  * 4. **The fast gates** — `node`, `lockfile`, `guardrails`, `reference-drift`, `nxs-comparison`,
  *    `agent-mirror`, `api-surface` — through `verify-gate.mjs`, so a regenerated file that still
  *    disagrees with the code is red here, not in CI.
@@ -52,12 +54,27 @@ export const DERIVED = Object.freeze({
   coverageBaseline: '.ai/state/coverage-baseline.json',
 });
 
-/** The generated copies of `.cursor/{skills,agents,rules}` — `mirror-agent-config.mjs`. */
-const MIRROR = /^\.(claude|agent)\/(skills|agents|rules)\//;
+/**
+ * What `mirror-agent-config.mjs sync` writes in each of `.claude/` and `.agent/`: the copies of
+ * `.cursor/{skills,agents,rules}`, and the `MIRROR.md` notice. Nothing else in those directories
+ * is derived. They also hold files that belong to one machine, such as the desktop app's
+ * `launch.json` and local settings, and staging the whole directory once put an untracked
+ * `.claude/launch.json` into a merge commit. `sync-derived.selftest.mjs` runs the real mirror
+ * script and checks that what it writes is what step 3 stages.
+ */
+const MIRROR_TARGETS = ['.claude', '.agent'];
+const MIRROR_TREES = MIRROR_TARGETS.flatMap((target) =>
+  ['skills', 'agents', 'rules'].map((subtree) => `${target}/${subtree}`),
+);
+const MIRROR_NOTICES = MIRROR_TARGETS.map((target) => `${target}/MIRROR.md`);
 
 /** Whether a path is a derived file. */
 export function isDerived(path) {
-  return Object.values(DERIVED).includes(path) || MIRROR.test(path);
+  return (
+    Object.values(DERIVED).includes(path) ||
+    MIRROR_NOTICES.includes(path) ||
+    MIRROR_TREES.some((tree) => path.startsWith(`${tree}/`))
+  );
 }
 
 /**
@@ -224,9 +241,9 @@ function main() {
     }
   }
 
-  // 3. Stage what changed.
-  const derivedPaths = [...Object.values(DERIVED), '.claude', '.agent'].filter((path) =>
-    existsSync(join(root, path)),
+  // 3. Stage what changed: the derived files and the mirrors, and nothing else.
+  const derivedPaths = [...Object.values(DERIVED), ...MIRROR_TREES, ...MIRROR_NOTICES].filter(
+    (path) => existsSync(join(root, path)),
   );
   if (dryRun) {
     say(`would stage changes to: ${derivedPaths.join(', ')}`);

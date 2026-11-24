@@ -11,10 +11,8 @@ audience: engineering
 
 > **Last reviewed:** 2026-10-16 · **Repository:** `250ec9a` (`integration/nxsat-308`)
 > E2E section re-verified for NXSAT-646; other sections retain their earlier review scope.
-> On 2026-10-15 at `c053e63`, only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > Before that, last reviewed 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`):
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Only the repository links were re-verified at that commit: made relative, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 > Standards: [`AGENTS/05-test-standards.md`](../../AGENTS/05-test-standards.md)
 
 ---
@@ -86,7 +84,6 @@ visible.
 | `shared-ke-client`    |     70.9% |     1 |
 | `ui`                  |     68.2% |     4 |
 | `knowledge-discovery` |     64.8% |     3 |
-| `adf-hx-bridge`       |     65.6% |    12 |
 | `administration`      |     62.1% |     3 |
 | `browse`              |     56.7% |     4 |
 | `document-detail`     | **29.8%** |     4 |
@@ -94,9 +91,6 @@ visible.
 | `tasks`               |    _100%_ | **0** |
 | `assets`              |    _100%_ | **0** |
 | `core`                |    _100%_ | **0** |
-
-_Changed by NXSAT-635 (2026-10):_ `adf-hx-bridge` was removed on 2026-10-14; its row is the
-measurement above, kept as it was.
 
 > **Three of those numbers are artefacts.** `tasks`, `assets` and `core` have **zero spec files**.
 > Their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%. So
@@ -318,18 +312,49 @@ travel with a clone. **Anything load-bearing belongs in the repo docs.**
 by default; everything is recorded at every impact so the debt is visible rather than filtered
 away. If `@axe-core/playwright` is missing it is a **failed check**, never a silent skip.
 
-Current state — **AA met on the fifteen cases scanned**, `KNOWN_VIOLATIONS` **empty** (2026-08-24):
+**As of 2026-11-23, AA is not met.** `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at
+e27deeaa0, fails 15 of 35 checks. Fourteen are `label-content-name-mismatch` (2.5.3 Label in
+Name, Level A) on the navigation's user-profile control, which is in the shell and so failed on
+every surface. With the rail collapsed it shows only the avatar initials NXSAT-673 added on
+2026-10-26, and they were not a word of its accessible name. The fifteenth is a Health 404 on an
+optional configuration file the local server does not serve, which is an environment condition.
+The check's ignore list now names that file, for the 404 only.
 
-| Rule                          | Nodes | Now | Owner                                        |
-| ----------------------------- | ----- | --- | -------------------------------------------- |
-| `label`                       | 42    | 0   | ours                                         |
-| `nested-interactive`          | 40    | 0   | ours                                         |
-| `button-name`                 | 21    | 0   | ours                                         |
-| `role-img-alt`                | 12    | 0   | ours                                         |
-| `color-contrast`              | 7     | 0   | ours                                         |
-| `scrollable-region-focusable` | 2     | 0   | ours                                         |
-| `aria-progressbar-name`       | 2     | 0   | ours                                         |
-| `aria-required-children`      | 3     | 3   | **`@alfresco/adf-core@9.0.0`** — finding 1.2 |
+**Fixed the same day, and AA is still not met.** The shell now names the control with
+`aria-labelledby`: the initials, then the display name. `phase-6-a11y/2026-11-23T18-53-44`,
+with axe-core 4.14.1, passes all 14 axe checks. It is 34 of 35 because Health still fails, on
+404s that are not accessibility findings, most of them from the local environment and its test
+data. Clearing the capture is not conformance:
+failures are recorded in states the capture does not reach, and the capture scans only the
+collapsed rail. `platform-nav-user-profile-label-in-name.spec.ts` holds the control's name to
+the text it paints on both rails, and fails on the old markup. The case it replaces passed on the
+defect because it ignored `aria-hidden` text, which is hidden from a screen reader but not from
+sight.
+
+The rule only now counts because the engine changed. The capture's `--no-save` install pinned no
+version, and resolved axe-core 4.14.1; the 35/35 of 2026-10-22 ran on 4.13.0, which tags the
+rule `experimental` and so does not run it under the WCAG tags. A full capture with 4.13.0 on the
+same commit passes every axe check. The diagnosis and both control runs are in
+[the accessibility standard](../../docs/accessibility.md#the-2026-11-23-measurement). The engine
+is now pinned to 4.14.1 (`scripts/beta-harness/axe-engine.mjs`): `phase-6-a11y` refuses any other
+with exit 2, each scan checks the engine axe reports, and every `beta:evidence` manifest records
+`axeCore` under `environment`. Quote it with any later verdict.
+
+The table below is the 2026-08-24 measurement: **AA met on the fifteen cases scanned**,
+`KNOWN_VIOLATIONS` **empty**, with one upstream exclusion (the last row). The captures of
+2026-09-15 and 2026-09-16 failed three `button-name` checks on browse, which do not reproduce on
+2026-11-23.
+
+| Rule                          | Nodes | Now | Owner                                             |
+| ----------------------------- | ----- | --- | ------------------------------------------------- |
+| `label`                       | 42    | 0   | ours                                              |
+| `nested-interactive`          | 40    | 0   | ours                                              |
+| `button-name`                 | 21    | 0   | ours                                              |
+| `role-img-alt`                | 12    | 0   | ours                                              |
+| `color-contrast`              | 7     | 0   | ours                                              |
+| `scrollable-region-focusable` | 2     | 0   | ours                                              |
+| `aria-progressbar-name`       | 2     | 0   | ours                                              |
+| `aria-required-children`      | 3     | 3   | upstream; excluded, and its surface since removed |
 
 The lesson is about the **baseline**, not the fixes. The previous capture scanned **three** surfaces
 and ratcheted **four** rule ids. Widening it to fifteen cases found **seven** classes and 77 nodes,
@@ -337,8 +362,10 @@ and three of the classes lived only in view-mode and column-panel states a singl
 never reaches. A ratchet over an under-sampled scan reports "no new violations" while the ones it
 cannot see accumulate — the same failure mode as a gate nobody has watched go red.
 
-The single exclusion is scoped to the **adf-hx step alone**, not to `KNOWN_VIOLATIONS`, so the same
-rule failing on a surface we own still fails the capture.
+The one exclusion was scoped to the step that scanned the upstream library's surface, not to
+`KNOWN_VIOLATIONS`, so the same rule failing on a surface we own still failed the capture. That
+step went when the library and its route were removed in October 2026: the three nodes left with
+them unfixed, and were never re-scanned.
 
 **Not covered:** dialogs, the upload flow, dark mode, and the pre-auth login surface. The last is a
 harness limitation — the capture signs in before its first scan, and on a guest-enabled Nuxeo an

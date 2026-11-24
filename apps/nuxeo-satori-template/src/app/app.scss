@@ -103,6 +103,9 @@
 }
 
 .shell__warning {
+  // `<output>` is inline by default, where the `<p>` these replaced was block. Set explicitly so
+  // the diagnostics still stack instead of running together on one line (SonarCloud, PR 534).
+  display: block;
   margin: 0 0 1.5rem;
   padding: 0.75rem 1rem;
   border-radius: 6px;

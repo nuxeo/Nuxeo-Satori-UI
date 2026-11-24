@@ -10,11 +10,10 @@ audience: leadership
 # Roadmap Recommendations
 
 > **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Only the repository links were re-verified at that commit. The rest of the page as of 2026-08-24 · `77265f9`.
 >
 > **These are recommendations, not commitments, and not a plan of record.** The plan of record
-> is [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md).
+> is [`docs/beta-plan.md`](../../docs/beta-plan.md).
 > Sequencing here is derived from what the repository shows and what the RFC identifies as
 > unresolved. No dates are given, because effort in this programme has never been measured and
 > a date derived from an unmeasured baseline would be quoted as though it were real.
@@ -52,13 +51,13 @@ should widen Layer 1 before Beta rather than discover the problem in an engageme
 
 Already planned; sequenced by what unblocks a customer conversation.
 
-| #          | Recommendation                                                                                                                                | Unblocks                                                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~**X1**~~ | ~~**Meet WCAG 2.1 AA.**~~ **Done 2026-08-24** — 7 rule classes and 77 nodes fixed, `KNOWN_VIOLATIONS` empty, 15 cases scanned                 | Procurement blocker removed. The one remaining violation is `adf-core`'s (finding 1.2)                                                                               |
-| ~~**X2**~~ | ~~**SAST + a real SCA gate.**~~ **Done** — but SAST already existed and was reporting 21 unread alerts, 6 high. Two gates now read the output | Two caveats kept: the suite is `default` not `security-and-quality` (a repo setting), and CodeQL would likely have found none of the nine defects human review found |
-| **X3**     | **Coverage, worst-first** — `search` 22.8%, `document-detail` 29.8%                                                                           | The two highest-traffic surfaces are the least tested. Most of the phase's remaining effort                                                                          |
-| **X4**     | **Safari/WebKit**                                                                                                                             | "Chrome and Safari verified" is in the Beta checklist                                                                                                                |
-| ~~**X5**~~ | ~~**Remove the two unused production dependencies**~~ **Done 2026-08-24** — it was **four**: `openai`, `express`, `cors`, `dotenv`            | The last two were found by the new gate, not by the review that recorded the first two                                                                               |
+| #          | Recommendation                                                                                                                                                                                                                                                                                                                                         | Unblocks                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **X1**     | **Meet WCAG 2.1 AA.** Done 2026-08-24 (7 rule classes and 77 nodes fixed, `KNOWN_VIOLATIONS` empty, 15 cases scanned). **Not met as of 2026-11-23.** The navigation's user-profile control (2.5.3) was fixed that day and the capture's axe checks pass again. Next: the failures `docs/accessibility.md` records in states the capture does not reach | Procurement blocker, back as of 2026-11-23. It was removed on 2026-08-24, with three upstream nodes excluded                                                         |
+| ~~**X2**~~ | ~~**SAST + a real SCA gate.**~~ **Done** — but SAST already existed and was reporting 21 unread alerts, 6 high. Two gates now read the output                                                                                                                                                                                                          | Two caveats kept: the suite is `default` not `security-and-quality` (a repo setting), and CodeQL would likely have found none of the nine defects human review found |
+| **X3**     | **Coverage, worst-first** — `search` 22.8%, `document-detail` 29.8%                                                                                                                                                                                                                                                                                    | The two highest-traffic surfaces are the least tested. Most of the phase's remaining effort                                                                          |
+| **X4**     | **Safari/WebKit**                                                                                                                                                                                                                                                                                                                                      | "Chrome and Safari verified" is in the Beta checklist                                                                                                                |
+| ~~**X5**~~ | ~~**Remove the two unused production dependencies**~~ **Done 2026-08-24** — it was **four**: `openai`, `express`, `cors`, `dotenv`                                                                                                                                                                                                                     | The last two were found by the new gate, not by the review that recorded the first two                                                                               |
 
 ---
 
@@ -83,14 +82,13 @@ trouble with".
 
 Deliberately after validation, not before.
 
-| #      | Recommendation                                                                                                 | Depends on                                                                                                               |
-| ------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **W1** | **Make the 4 reserved slots real** — `toolbar`, `contextMenu`, `tabs`, `routes` need a host that resolves them | N1 should say which matter                                                                                               |
-| **W2** | **Populate the `selection` rule context with documents**                                                       | Unblocks permission-gated bulk actions; two documented rules currently always answer `false`                             |
-| **W3** | **Lazy adf-core**                                                                                              | Recovers ~1.15 MB of eager bundle. The ceiling note explicitly says do not raise the limit again without attempting this |
-| **W4** | **Client-side caching for repeated reads**                                                                     | Damps Nuxeo load, improves perceived performance                                                                         |
-| **W5** | **A Studio position**                                                                                          | Studio's relationship to Satori is **not verified in repository**, and it is how many customers configure Nuxeo today    |
-| **W6** | **A Web UI migration story**                                                                                   | Nothing addresses it. Customers with a customised Web UI will ask first                                                  |
+| #      | Recommendation                                                                                                 | Depends on                                                                                                            |
+| ------ | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **W1** | **Make the 4 reserved slots real** — `toolbar`, `contextMenu`, `tabs`, `routes` need a host that resolves them | N1 should say which matter                                                                                            |
+| **W2** | **Populate the `selection` rule context with documents**                                                       | Unblocks permission-gated bulk actions; two documented rules currently always answer `false`                          |
+| **W3** | **Client-side caching for repeated reads**                                                                     | Damps Nuxeo load, improves perceived performance                                                                      |
+| **W4** | **A Studio position**                                                                                          | Studio's relationship to Satori is **not verified in repository**, and it is how many customers configure Nuxeo today |
+| **W5** | **A Web UI migration story**                                                                                   | Nothing addresses it. Customers with a customised Web UI will ask first                                               |
 
 ---
 
@@ -129,7 +127,7 @@ Stated because roadmaps are also about refusal.
 | N3 — review capacity        | Ongoing headcount                       | Prevents the POC failure mode at scale       | High — already demonstrated       |
 | X1–X5 — quality bar         | ~Phase 6 remainder, coverage dominating | Removes named blockers                       | High                              |
 | O1–O3 — observability       | Small–medium                            | Makes the Beta supportable                   | **High, and currently unplanned** |
-| W1–W6 — platform widening   | Medium each                             | More configuration, less code per engagement | **Conditional on N1**             |
+| W1–W5 — platform widening   | Medium each                             | More configuration, less code per engagement | **Conditional on N1**             |
 | S1 — productise the harness | Medium–large                            | Potential new line, independent of Satori    | Speculative                       |
 
 **If only three things happen: N1, N3, O1.** Validate the thesis, resource the constraint, and be

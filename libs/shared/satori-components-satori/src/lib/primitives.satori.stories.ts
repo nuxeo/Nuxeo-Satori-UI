@@ -25,7 +25,8 @@ const meta: Meta = {
   decorators: [
     applicationConfig({
       providers: [
-        provideAndConfigureSatoriTranslations({ fallbackLang: 'en' }),
+        // A regional code, as in `.storybook/preview.ts`: satori-ui 1.0.0 ships no bare `en.json`.
+        provideAndConfigureSatoriTranslations({ fallbackLang: 'en-US' }),
         provideRouter(
           [{ path: 'browse', children: [] }],
           withHashLocation(),

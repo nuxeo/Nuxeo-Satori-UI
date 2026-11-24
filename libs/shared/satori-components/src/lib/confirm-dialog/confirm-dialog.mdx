@@ -1,0 +1,55 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ConfirmDialogStories from './confirm-dialog.stories';
+
+<Meta of={ConfirmDialogStories} name="Overview" />
+
+# Confirm dialog
+
+The confirm dialog asks the user to confirm an action that cannot be undone. It does not do the
+action itself: it closes with `true` on confirm and with nothing on cancel, so `afterClosed()` is
+where the caller acts.
+
+## Key features
+
+- **The caller words the question.** The title, the message and the confirm button are passed in,
+  already translated, so one dialog serves users and groups alike.
+- **Nothing happens by itself.** The dialog never calls a service.
+
+## Accessibility
+
+The title is the dialog's heading, and the message is read with it. Cancel is the first button, so
+focus does not land on the destructive action by default.
+
+## Demo showcase
+
+<Canvas of={ConfirmDialogStories.Asking} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsConfirmDialogComponent,
+  type NxsConfirmDialogData,
+} from '@nuxeo/satori-platform/components';
+
+this.dialog
+  .open<NxsConfirmDialogComponent, NxsConfirmDialogData, true>(NxsConfirmDialogComponent, {
+    data: { title, message, confirmLabel },
+  })
+  .afterClosed()
+  .subscribe((ok) => {
+    if (ok) this.delete(id);
+  });`;
+
+<Source language="typescript" dark code={usageTs} />
+
+All three fields are required. The Cancel label is translated under `satori-components.confirm-dialog.cancel`.
+It has no registered ID: open it with `MatDialog`.
+
+## Examples
+
+### Asking before a deletion
+
+The caller passes the title, the message and the confirm label; Cancel closes with nothing, and confirming closes with `true`.
+
+<Canvas of={ConfirmDialogStories.Asking} />

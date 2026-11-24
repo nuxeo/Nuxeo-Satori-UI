@@ -1,7 +1,7 @@
 ---
 name: batch-bug-fixes
 description: >-
-  Run many agentic-ui-poc bug fixes at once — one subagent per ticket, each in its own isolated
+  Run many Nuxeo-Satori-UI bug fixes at once — one subagent per ticket, each in its own isolated
   workspace — by invoking the single-ticket fix-bug skill unchanged inside each of them. Resolves
   the batch from a Jira JQL/epic (parent = <EPIC>) or an explicit ticket list, plans capacity into
   waves that fit the machine, creates each workspace serially so git and the port allocator are

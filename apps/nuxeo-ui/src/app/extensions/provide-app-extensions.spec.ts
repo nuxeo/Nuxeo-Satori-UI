@@ -6,7 +6,9 @@ import { Router } from '@angular/router';
 import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  NXS_PUBLISH_DIALOG_ID,
   NxsPermissionsPanelComponent,
+  NxsPublishDialogComponent,
 } from '@nuxeo/satori-platform/components';
 import {
   AppExtensionsService,
@@ -106,6 +108,12 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
     const components = TestBed.inject(ExtensionComponentRegistry);
     expect(components.has(NXS_PERMISSIONS_PANEL_ID)).toBe(true);
     expect(await components.resolve(NXS_PERMISSIONS_PANEL_ID)).toBe(NxsPermissionsPanelComponent);
+  });
+
+  it('registers the packaged publish dialog under the ID both publish actions open', async () => {
+    await loadManifest({});
+    const components = TestBed.inject(ExtensionComponentRegistry);
+    expect(await components.resolve(NXS_PUBLISH_DIALOG_ID)).toBe(NxsPublishDialogComponent);
   });
 
   it('merges manifest contributions into all four slots', async () => {

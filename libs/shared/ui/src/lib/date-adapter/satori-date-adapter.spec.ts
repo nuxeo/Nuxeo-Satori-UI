@@ -15,11 +15,12 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
-import { de, enGB, enUS, fr, frCA, zhCN } from 'date-fns/locale';
+import { de, enGB, enUS, fr, frCA } from 'date-fns/locale';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   DATE_ADAPTER_LANGUAGES,
+  canFormatDatesIn,
   dateFnsLocaleFor,
   provideSatoriDateAdapter,
 } from './satori-date-adapter';
@@ -198,7 +199,6 @@ describe('provideSatoriDateAdapter', () => {
   // still resolve correctly through the fallback.
   it('resolves a region identical to its base through the bare-language fallback', () => {
     expect(dateFnsLocaleFor('de-AT')).toBe(de);
-    expect(dateFnsLocaleFor('zh-TW')).toBe(zhCN);
     expect([
       parseAsInput('de-AT', '03.04.2026')?.getMonth(),
       parseAsInput('de-AT', '03.04.2026')?.getDate(),
@@ -240,26 +240,98 @@ describe('provideSatoriDateAdapter', () => {
     }
   });
 
-  // NXSAT-629 review: the native adapter rendered Thai through `Intl`, which resolves `th` to
-  // the Buddhist calendar, so it showed 3 April 2026 as `03/04/2569` — a string its own
-  // `Date.parse` then read back as 4 March 2569. Angular's `DatePipe` has always shown the
-  // Gregorian year for `th` (it never calls `Intl`, and the locale data has no calendar), so
-  // Gregorian here makes the picker agree with every other date in the application.
-  it('renders Thai with the Gregorian year, matching every other date surface', () => {
-    const { adapter, formats } = adapterFor('th');
+  // NXSAT-629 found this on Thai, which shipped then and does not now: `Intl` resolves `th` to
+  // the Buddhist calendar, so the native adapter wrote 3 April 2026 as `03/04/2569` — a string
+  // its own `Date.parse` read back as 4 March 2569.
+  //
+  // What that case was really about is the field reading back exactly what it displayed, which
+  // the round-trip test above asserts for every language in the map. Kept as a named case
+  // because the general test passes for the wrong reason if `format` and `parse` ever drift
+  // onto different locales — here they are pinned to one explicitly.
+  it('parses the string it displayed, not an equivalent one', () => {
+    const { adapter, formats } = adapterFor('fr');
+    const written = adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput);
 
-    expect(adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput)).toBe(
-      '03/04/2026',
-    );
-    expect(adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput)).not.toContain(
-      '2569',
-    );
+    expect(written).toBe('03/04/2026');
+    const readBack = adapter.parse(written, formats.parse.dateInput);
+    expect([readBack?.getFullYear(), readBack?.getMonth(), readBack?.getDate()]).toEqual([
+      2026, 3, 3,
+    ]);
   });
 
   it('falls back to English for a language it has no locale for, rather than failing to start', () => {
     // A customer can set `defaultLanguage` to anything; a typo must not be fatal.
     expect(dateFnsLocaleFor('xx')).toBe(enUS);
     expect(dateFnsLocaleFor('')).toBe(enUS);
+  });
+
+  /**
+   * `DATE_FNS_LOCALES` is an object literal, so it inherits from `Object.prototype` and a bare
+   * `map[key]` answers for keys it does not own. Found by review on #522 against
+   * `canFormatDatesIn`, which returned `true` for `constructor` — but the exact-tag lookup in
+   * `dateFnsLocaleFor` had the same hole from the start, and there it is worse than a wrong
+   * boolean: it returns the `Object` function where a `Locale` is expected, and
+   * `provideSatoriDateAdapter` hands that straight to `MAT_DATE_LOCALE`.
+   *
+   * ## Which of these were actually reachable: `constructor` only
+   *
+   * Worth being exact, because the obvious answer is wrong twice over. The lookup normalises
+   * first — `tag = localeId.toLowerCase().replaceAll('_', '-')` — and that destroys almost every
+   * inherited name before it reaches the map:
+   *
+   * | input | after normalising | pre-fix result |
+   * | --- | --- | --- |
+   * | `constructor` | `constructor` | **the `Object` function** |
+   * | `constructor-US` | `constructor-us` → base `constructor` | **the `Object` function** |
+   * | `__proto__` | `--proto--` | `undefined` — `_` became `-` |
+   * | `toString`, `valueOf`, `hasOwnProperty`, … | `tostring`, `valueof`, … | `undefined` — camelCase lost |
+   *
+   * So `constructor` and its suffixed form are the regression; everything below it is
+   * **defensive**, and passed before the fix as well. They stay because the two normalising
+   * steps are what makes them unreachable, and someone dropping `replaceAll` or `toLowerCase`
+   * — neither obviously load-bearing for security — would hand the rest of `Object.prototype`
+   * straight back. Labelled rather than trimmed so this file is not read as evidence that nine
+   * keys were exploitable.
+   */
+  const REACHABLE_BEFORE_FIX = ['constructor', 'constructor-US'] as const;
+  const DEFENSIVE_ONLY = [
+    '__proto__',
+    '__proto__-US',
+    'toString',
+    'valueOf',
+    'hasOwnProperty',
+    'isPrototypeOf',
+    'propertyIsEnumerable',
+  ] as const;
+  const INHERITED_KEYS = [...REACHABLE_BEFORE_FIX, ...DEFENSIVE_ONLY] as const;
+
+  it('does not mistake an inherited Object property for locale data', () => {
+    // The key travels in the asserted value rather than a message, which is this file's existing
+    // habit and the only one that works here: `libs/shared/ui` runs Vitest, so Jasmine's
+    // `withContext` is not available and a bare loop would report "false !== true" with no input.
+    expect(INHERITED_KEYS.map((key) => [key, canFormatDatesIn(key)])).toEqual(
+      INHERITED_KEYS.map((key) => [key, false]),
+    );
+  });
+
+  it('returns a real Locale, not Object, for an inherited property name', () => {
+    // `toBe(enUS)` rather than "is truthy": the defect returned a truthy non-Locale, so an
+    // existence check would have passed on exactly the value this test exists to reject.
+    expect(INHERITED_KEYS.map((key) => [key, dateFnsLocaleFor(key)])).toEqual(
+      INHERITED_KEYS.map((key) => [key, enUS]),
+    );
+  });
+
+  it('still answers true for every locale the map really has', () => {
+    // The mirror: the own-property restriction must not start refusing real entries.
+    const probes = [...DATE_ADAPTER_LANGUAGES, 'en-GB', 'de-AT', 'xx'];
+    expect(probes.map((id) => [id, canFormatDatesIn(id)])).toEqual([
+      ...DATE_ADAPTER_LANGUAGES.map((id) => [id, true]),
+      ['en-GB', true],
+      // A region with no entry of its own, resolved through its base language.
+      ['de-AT', true],
+      ['xx', false],
+    ]);
   });
 
   // The map and the shipped languages are two lists that must not drift. They did once already:

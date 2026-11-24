@@ -1,0 +1,36 @@
+@if (visible()) {
+  <!-- A real `<ul>`/`<li>` rather than a `div` carrying `role="group"`. It says more — a screen
+       reader announces how many frames there are before reading them — and it says it without an
+       ARIA attribute, which is what `Web:S6819` asks for. The markers are gone because the items
+       are `display: flex`, not `display: list-item`; `list-style: none` is deliberately not used,
+       as that is the one way to lose the list role in VoiceOver. -->
+  <ul
+    class="nxs-storyboard__strip"
+    [attr.aria-label]="ownLabel() || ('satori-components.storyboard.label' | translate)"
+  >
+    @for (frame of frames(); track frame.item.timecode) {
+      <li class="nxs-storyboard__item">
+        <button
+          type="button"
+          class="nxs-storyboard__frame"
+          [class.nxs-storyboard__frame--active]="frame.active"
+          [attr.aria-current]="frame.active ? 'true' : null"
+          [attr.aria-label]="
+            'satori-components.storyboard.seek-to' | translate: { frame: frame.name }
+          "
+          [matTooltip]="frame.caption"
+          (click)="select(frame.item)"
+        >
+          @if (frame.item.thumbnailUrl; as url) {
+            <img class="nxs-storyboard__thumb" [src]="url" alt="" />
+          } @else {
+            <span class="nxs-storyboard__thumb nxs-storyboard__thumb--empty">
+              <mat-icon svgIcon="page" />
+            </span>
+          }
+          <span class="nxs-storyboard__time" aria-hidden="true">{{ frame.timecode }}</span>
+        </button>
+      </li>
+    }
+  </ul>
+}

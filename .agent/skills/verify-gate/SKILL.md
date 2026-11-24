@@ -1,6 +1,6 @@
 ---
 name: verify-gate
-description: Run the agentic-ui-poc quality gates and iterate to green without churning — cheapest-first gate ordering, fix only the first reported failure, three-attempt cap, and explicit stop conditions that require a human. Use when asked to verify a change, get the build green, run preflight or the Beta gate, fix lint/test/build failures, or confirm a step is actually complete.
+description: Run the Nuxeo-Satori-UI quality gates and iterate to green without churning — cheapest-first gate ordering, fix only the first reported failure, three-attempt cap, and explicit stop conditions that require a human. Use when asked to verify a change, get the build green, run preflight or the Beta gate, fix lint/test/build failures, or confirm a step is actually complete.
 ---
 
 # Verify and iterate to green
@@ -30,14 +30,14 @@ Every gate in `ALL_GATES`, cheapest first: `node`, `lockfile`, `lockfile-selftes
 `sanitizer-selftest`, `assertions`, then affected `lint`, `test`, `build`, `typecheck`,
 then `spec-types`, `bundle`, `api-surface`, `publishability`, `peer-installability`, `fork-simulation`,
 `upgrade-rehearsal`, `reference-drift`, `nxs-comparison`, `nxs-comparison-selftest`,
-`storybook-publication-selftest`, `agent-mirror` and `customer-guardrails`. Stops at
+`storybook-publication-selftest`, `storybook-satori`, `agent-mirror` and `customer-guardrails`. Stops at
 the first failure and prints only its output tail. Reports land in
 `$AGENTIC_UI_EVIDENCE_DIR/beta/gates/`. The count is the verdict line's, not this
 paragraph's — an unknown `--gates` id prints the current list.
 
-`dependency-tree` is **blocking** since the ADF removal (NXSAT-638): any adf-hx, adf-core,
-adf-extensions, js-api or hxcs-js-client finding fails it, so a red here means your change
-brought one of them back. It is also red if a location cannot be read.
+`dependency-tree` is **blocking** (NXSAT-638): any finding for a retired
+dependency (the legacy UI libraries, `js-api` or `hxcs-js-client`) fails it, so a red here means
+your change brought one of them back. It is also red if a location cannot be read.
 
 Only a run with **no** `--gates` filter can be cited for a phase. A filtered run
 reports `verdict: pass-partial` and prints `PASS (PARTIAL) — n of <total>`, because two
@@ -93,7 +93,6 @@ command as uninterpretable until you have reproduced it inside the gate.
 | `SecurityError: Cannot initialize local storage` | Wrong Node major, not a code defect. Run the preflight above. Never "fix" the spec.                                  |
 | Nx reports a task **flaky**                      | Often one task hash run under two Node majors, not genuine flakiness. Check the preflight first.                     |
 | `Cannot find module '@hylandsoftware/...'`       | Registry token missing. Check `SATORI_GH_READONLY_TOKEN` before touching code.                                       |
-| `Cannot find module '@alfresco/...'`             | A leftover import. No `@alfresco` package is installed since NXSAT-637, so a token will not help: remove the import. |
 | `__decorate is not defined` in a spec            | `tsconfig.spec.json` missing `importHelpers: false` — compare against `libs/shared/nuxeo-client/tsconfig.spec.json`. |
 | Test passes alone, fails in the suite            | Shared state. Check for un-reset signals or a missing `takeUntilDestroyed()`.                                        |
 | Lint error about cross-feature import            | Real architecture violation. Move the shared code to `libs/shared/`, do not suppress.                                |
@@ -119,7 +118,7 @@ command as uninterpretable until you have reproduced it inside the gate.
 
 - The same failure survives three distinct fix attempts.
 - Passing would require any item from "Never do these".
-- The fix widens the public API or exposes an adf-hx type through it.
+- The fix widens the public API or exposes a third-party component type through it.
 - The fix touches `install.xml` or marketplace packaging.
 - The fix contradicts a verified fact in `AGENTS/11-beta-program.md` section 3.
 

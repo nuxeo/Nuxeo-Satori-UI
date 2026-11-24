@@ -2,6 +2,7 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../dist/out-tsc/a11y",
+    "rootDir": "..",
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "es2022",

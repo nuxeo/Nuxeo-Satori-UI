@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  InjectionToken,
   LOCALE_ID,
   computed,
   inject,
@@ -30,6 +31,18 @@ import { humanize, readDocumentSchemas } from '../resolve-layout';
 import { FieldView, VocabularyValue, describeField, vocabularyValues } from './field-view';
 
 type Vocabularies = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
+/**
+ * The zone an instant is shown in: `undefined`, the reader's own. A token, so that a test chooses
+ * an offset such as `+0530`. In whatever zone the suite happens to run, UTC on CI, an instant read
+ * in the wrong zone can still show the right day, and the test would prove nothing
+ * (AGENTS/08-bug-patterns.md, pattern 29). Layout version 2's record page (PR 632) has
+ * `RECORD_PAGE_TIME_ZONE` for the same reason.
+ */
+export const DOCUMENT_LAYOUT_TIME_ZONE = new InjectionToken<string | undefined>(
+  'DOCUMENT_LAYOUT_TIME_ZONE',
+  { providedIn: 'root', factory: () => undefined },
+);
 
 interface LayoutTarget {
   readonly uid: string;
@@ -112,6 +125,7 @@ export class DocumentLayoutComponent {
   private readonly layouts = inject(DocumentLayoutService);
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
+  private readonly timeZone = inject(DOCUMENT_LAYOUT_TIME_ZONE);
   private readonly extensions = inject(AppExtensionsService);
   private readonly components = inject(ExtensionComponentRegistry);
   private readonly ruleContext = inject(ExtensionRuleContextService);
@@ -235,6 +249,7 @@ export class DocumentLayoutComponent {
     const context = {
       locale: this.locale,
       vocabulary: (directory: string, id: string) => vocabularies.get(directory)?.get(id) ?? id,
+      timeZone: this.timeZone,
     };
     const sections = layout.sections.map((section) => ({
       id: section.id,

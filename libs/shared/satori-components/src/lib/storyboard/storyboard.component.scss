@@ -1,0 +1,95 @@
+// The strip sits under a video player, so it defaults to the inverse surface rather than the page's:
+// a light strip under a dark video is the one combination that reads badly. A host that wants it on
+// the page surface overrides the four tokens below.
+//
+// They are `var()` fallbacks at each use rather than `:host` declarations on purpose: a property
+// declared on `:host` is set on this element and so beats the same property inherited from an
+// ancestor, and `AppThemeService.applyTheme()` delivers a customer's `theme.tokens` by writing them
+// inline on `<html>`. Declared here, an override would be read and then ignored.
+:host {
+  display: block;
+  flex-shrink: 0;
+}
+
+.nxs-storyboard__strip {
+  display: flex;
+  gap: 8px;
+  // The `<ul>`'s own margin and indent, reset. No `list-style: none` — the items are `display:
+  // flex` so no marker is generated anyway, and `list-style: none` is what makes VoiceOver drop
+  // the list role.
+  margin: 0;
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: var(--nxs-storyboard-surface, var(--mat-sys-inverse-surface));
+  scrollbar-width: thin;
+}
+
+.nxs-storyboard__item {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.nxs-storyboard__frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+
+  // `inverse-primary`, not `primary`: every accent here is drawn on `inverse-surface`, and the two
+  // primaries are tuned for opposite backgrounds. In the default azure theme `--mat-sys-primary`
+  // (#005cbb) on `--mat-sys-inverse-surface` (#2f3033) is 2.04:1, under the 3:1 WCAG 1.4.11 asks of
+  // a focus indicator; `--mat-sys-inverse-primary` (#abc7ff) on the same surface is 7.76:1.
+  &:hover {
+    border-color: var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
+  }
+}
+
+.nxs-storyboard__frame--active {
+  border-color: var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
+}
+
+// IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
+// rule rather than a list with `:focus-visible`.
+.nxs-storyboard__frame:focus {
+  outline: 2px solid var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
+  outline-offset: 2px;
+}
+
+.nxs-storyboard__frame:focus-visible {
+  outline: 2px solid var(--nxs-storyboard-accent, var(--mat-sys-inverse-primary));
+  outline-offset: 2px;
+}
+
+.nxs-storyboard__thumb {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--nxs-storyboard-placeholder, var(--mat-sys-surface-variant));
+}
+
+.nxs-storyboard__thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nxs-storyboard-text, var(--mat-sys-inverse-on-surface));
+}
+
+.nxs-storyboard__time {
+  font: var(--mat-sys-body-small);
+  font-family: monospace;
+  color: var(--nxs-storyboard-text, var(--mat-sys-inverse-on-surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nxs-storyboard__frame {
+    transition: none;
+  }
+}

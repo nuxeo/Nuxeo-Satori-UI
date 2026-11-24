@@ -38,6 +38,10 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsToastService,
   provideNxsComponents,
+  type NxsBannerAction,
+  type NxsBannerAnnounce,
+  type NxsBannerInputs,
+  type NxsBannerTone,
   type NxsCardInputs,
 } from '@nuxeo/satori-platform/components';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
@@ -47,6 +51,17 @@ type SearchResponseLike = {
   aggregations: Record<string, unknown>;
   hasNextPage?: boolean;
 };
+
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
 
 /** A card registered under the packaged card's ID, which shows what the page passed it. */
 @Component({
@@ -72,6 +87,20 @@ class ProbeCardComponent implements NxsCardInputs {
   readonly media = input<TemplateRef<unknown> | null>(null);
   readonly headerAction = input<TemplateRef<unknown> | null>(null);
   readonly actions = input<TemplateRef<unknown> | null>(null);
+}
+
+/** A banner registered under `nxs.primitives.banner`, which shows the message the page passed it. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-probe-banner',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<p class="probe-message">{{ message() }}</p>`,
+})
+class ProbeBannerComponent implements NxsBannerInputs {
+  readonly message = input('');
+  readonly tone = input<NxsBannerTone>('info');
+  readonly announce = input<NxsBannerAnnounce>('none');
+  readonly actions = input<readonly NxsBannerAction[]>([]);
 }
 
 const mockSearchService = {
@@ -564,6 +593,31 @@ describe('SearchComponent', () => {
   });
 
   describe('separate search inputs', () => {
+    it('clears the saved filter set through its clear button and restores Default', async () => {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      mockSearchService.getSavedSearchById.mockReturnValue(of({ ecm_fulltext: 'invoice' }));
+      component.selectFilterSet('ss-1', 'Invoices');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const clear = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        'nxs-saved-search-select .nxs-saved-search-select__clear',
+      );
+      expect(clear).not.toBeNull();
+      clear?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(component.selectedSavedSearchId()).toBe('');
+      expect(TestBed.inject(SearchSession).filters().fulltext).toBe('');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+          'nxs-saved-search-select input',
+        )?.value,
+      ).toBe('Default');
+    });
+
     it('keeps the saved filter set visibly selected when options are refreshed', async () => {
       TestBed.resetTestingModule();
       await configure({}, { rendered: true });
@@ -1585,6 +1639,52 @@ describe('SearchComponent', () => {
     });
   });
 
+  /**
+   * NXSAT-652. A list row's type renders through `nxs.primitives.tag`, so a component registered
+   * under the ID replaces it; with nothing registered, `nxs-tag` renders. The grid shows the type
+   * as its card's subheading instead, which `grid view` covers. Seen red on purpose by restoring
+   * the plain-text type badge.
+   */
+  describe('the type tag', () => {
+    async function renderList(providers: (Provider | EnvironmentProviders)[]): Promise<void> {
+      mockSearchService.search.mockReturnValue(
+        of({ items: [resultItem({ id: 'a', type: 'File' })], aggregations: {} }),
+      );
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      component.setViewMode('list');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      // An unregistered ID is reported unresolved from a promise.
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+    }
+
+    const override = provideSatoriExtensions({
+      components: { [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent },
+    });
+    const el = (selector: string): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(selector);
+
+    it('renders the list row’s type through nxs.primitives.tag', async () => {
+      await renderList([override]);
+
+      const tag = el('.simple-list-type .acme-tag');
+      expect(tag?.textContent?.trim()).toBe('File');
+      expect(tag?.dataset['color']).toBe('gray');
+      expect(el('.simple-list-type')?.getAttribute('title')).toBe('File');
+    });
+
+    it('falls back to nxs-tag when nothing is registered under the ID', async () => {
+      await renderList([]);
+
+      expect(el('.simple-list-type nxs-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.simple-list-type .acme-tag')).toBeNull();
+    });
+  });
+
   describe('exportCsv', () => {
     it('writes a header row plus one row per result, and revokes the blob URL', async () => {
       mockSearchService.search.mockReturnValue(
@@ -1601,7 +1701,7 @@ describe('SearchComponent', () => {
 
       if (!lastBlob) throw new Error('exportCsv created no Blob');
       expect(lastBlob.type).toContain('text/csv');
-      const lines = (await lastBlob.text()).split('\n');
+      const lines = (await lastBlob.text()).split('\r\n');
       expect(lines[0]).toContain('"Title"');
       expect(lines).toHaveLength(2);
       expect(lines[1]).toContain('"Report"');
@@ -1626,7 +1726,7 @@ describe('SearchComponent', () => {
       expect(await lastBlob.text()).toContain('"He said ""hi"""');
     });
 
-    it('renders an em dash for the optional columns that are absent', async () => {
+    it('writes the optional columns that are absent as empty cells, not a dash', async () => {
       mockSearchService.search.mockReturnValue(
         of({
           items: [resultItem({ id: '1', state: undefined, version: undefined, flags: undefined })],
@@ -1640,7 +1740,46 @@ describe('SearchComponent', () => {
       component.exportCsv();
 
       if (!lastBlob) throw new Error('exportCsv created no Blob');
-      expect(await lastBlob.text()).toContain('"—"');
+      const text = await lastBlob.text();
+      // The "—" this wrote used to reach Excel as `â€”`, for want of a UTF-8 marker.
+      expect(text).not.toContain('—');
+      const [header, row] = text.split('\r\n').map((line) => line.slice(1, -1).split('","'));
+      for (const column of ['State', 'Version', 'Flags']) {
+        expect(row?.[header?.indexOf(column) ?? -1]).toBe('');
+      }
+    });
+
+    it('starts the file with the UTF-8 byte order mark so Excel reads accents and dashes', async () => {
+      mockSearchService.search.mockReturnValue(
+        of({ items: [resultItem({ id: '1', title: 'Café' })], aggregations: {} }),
+      );
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+
+      component.exportCsv();
+
+      if (!lastBlob) throw new Error('exportCsv created no Blob');
+      const bytes = new Uint8Array(await lastBlob.arrayBuffer());
+      expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      expect(await lastBlob.text()).toContain('"Café"');
+    });
+
+    it('writes a title that would run as a spreadsheet formula as plain text', async () => {
+      mockSearchService.search.mockReturnValue(
+        of({
+          items: [resultItem({ id: '1', title: '=HYPERLINK("http://x","y")' })],
+          aggregations: {},
+        }),
+      );
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+
+      component.exportCsv();
+
+      if (!lastBlob) throw new Error('exportCsv created no Blob');
+      expect(await lastBlob.text()).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
     });
   });
 
@@ -1985,6 +2124,62 @@ describe('SearchComponent', () => {
       expect(navigate).toHaveBeenCalledWith('/doc/a');
       cards[1].querySelector<HTMLInputElement>('.nxs-card__select input')?.click();
       expect(mockSelectionService.toggle).toHaveBeenCalledWith('b', 'Claims');
+    });
+  });
+
+  describe('the AI error banner', () => {
+    const el = () => fixture.nativeElement as HTMLElement;
+
+    async function renderAiError(
+      providers: (Provider | EnvironmentProviders)[] = [],
+    ): Promise<void> {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      component.aiSearchMode.set(true);
+      component.aiError.set('The AI search is unavailable');
+      // An outlet learns from a promise that its ID is unregistered, so it settles twice.
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    it('shows the message through the registered banner ID, with no built-in banner beside it', async () => {
+      await renderAiError([
+        provideNxsComponents(),
+        provideSatoriExtensions({
+          components: { [NXS_PRIMITIVE_IDS.banner]: ProbeBannerComponent },
+        }),
+      ]);
+
+      expect(el().querySelectorAll('lib-extension-outlet lib-test-probe-banner')).toHaveLength(1);
+      expect(el().querySelector('lib-test-probe-banner .probe-message')?.textContent?.trim()).toBe(
+        'The AI search is unavailable',
+      );
+      expect(el().querySelector('.ai-error nxs-banner')).toBeNull();
+    });
+
+    // The app registers the built-in banner under the ID, so the outlet resolves to it and the
+    // fallback never renders. The layout wrapper must hold it anyway, or the margin is lost.
+    it('keeps the layout wrapper around the built-in banner the app registers under the ID', async () => {
+      await renderAiError([provideNxsComponents()]);
+
+      expect(el().querySelector('.ai-error lib-extension-outlet nxs-banner')).not.toBeNull();
+      expect(el().querySelector('.ai-error nxs-banner')?.textContent).toContain(
+        'The AI search is unavailable',
+      );
+    });
+
+    it('falls back to the built-in banner when nothing is registered under the ID', async () => {
+      await renderAiError();
+
+      expect(el().querySelector('lib-test-probe-banner')).toBeNull();
+      const banner = el().querySelector('.ai-error nxs-banner');
+      expect(banner?.getAttribute('role')).toBe('alert');
+      expect(banner?.textContent).toContain('The AI search is unavailable');
     });
   });
 });

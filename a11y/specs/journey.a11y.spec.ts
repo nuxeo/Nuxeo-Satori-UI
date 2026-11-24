@@ -1244,7 +1244,9 @@ journeyTest('tasks', async ({ signedIn: page, a11y }) => {
     await expect(page, 'with tasks, the page opens the first one').toHaveURL(
       (url) => decodeURIComponent(url.hash) === `#/tasks/${firstId}`,
     );
-    await expect(page.locator('lib-tasks-page .task-form-title')).toBeVisible();
+    await expect(
+      page.locator('lib-tasks-page nxs-task-detail .nxs-task-detail__title'),
+    ).toBeVisible();
     await expect(page.locator(`${NAV_DRAWER} button.task-item`).first()).toBeVisible();
   } else {
     await expect(page.locator('lib-tasks-page .empty-detail')).toBeVisible();

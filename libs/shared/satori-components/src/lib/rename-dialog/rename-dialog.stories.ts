@@ -3,7 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -11,13 +11,15 @@ import { dialogPreview } from '../../../.storybook/dialog-preview';
 
 import { NxsRenameDialogComponent } from './rename-dialog.component';
 
+const closeDialog = fn(action('dialogRef.close'));
+
 const DATA = { documentId: 'claim-42', title: 'Claim 42 — water damage' };
 
 /** The dialog with its data, and a server that answers the title change with `answer`. */
 const withServer = (answer: (title: string) => Observable<unknown>) => {
   const providers: Provider[] = [
     { provide: MAT_DIALOG_DATA, useValue: DATA },
-    { provide: MatDialogRef, useValue: { close: action('dialogRef.close') } },
+    { provide: MatDialogRef, useValue: { close: closeDialog } },
     {
       provide: BrowseService,
       useValue: {
@@ -78,5 +80,17 @@ export const Refused: Story = {
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
       'You do not have permission to rename this document.',
     );
+  },
+};
+
+/** The preview stays mounted; this asserts the dialog's close request. */
+export const KeyboardCancellation: Story = {
+  ...Renaming,
+  play: async ({ canvasElement }) => {
+    closeDialog.mockClear();
+    const cancel = await within(canvasElement).findByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(closeDialog).toHaveBeenCalledTimes(1);
   },
 };

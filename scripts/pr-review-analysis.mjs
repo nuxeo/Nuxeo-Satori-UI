@@ -72,7 +72,7 @@ export const CATEGORIES = {
 
 const PAGE_ID = process.env['PR_ANALYSIS_PAGE_ID'] ?? '4301586839';
 const CONFLUENCE = process.env['AGENT_METRICS_CONFLUENCE'] ?? 'https://hyland.atlassian.net/wiki';
-const REPO = process.env['PR_ANALYSIS_REPO'] ?? 'nuxeo/agentic-ui-poc';
+const REPO = process.env['PR_ANALYSIS_REPO'] ?? 'nuxeo/Nuxeo-Satori-UI';
 const OUT_DIR = resolve(EVIDENCE_ROOT, 'pr-review-analysis');
 
 /**

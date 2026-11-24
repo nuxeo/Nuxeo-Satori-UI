@@ -2,6 +2,25 @@
 
 This document describes the AI capabilities integrated into the Nuxeo Angular UI.
 
+> **Every feature on this page is switched off for every user, and no AI request can reach the
+> backend from a current build.** `AI_FEATURES_ENABLED` is `false` at
+> `libs/shared/ai-client/src/lib/ai-feature-flag.service.ts:35`, set by `a519ebd5d` ("disable AI
+> features for all users behind a non-bypassable kill switch", 2026-10-16). There is no runtime
+> toggle and no user opt-in: `toggle()` and `setEnabled()` return early, the header menu entry is
+> commented out, the two `localStorage` keys are purged on construction, and `AiGatewayService`
+> refuses the request independently (`ai-gateway.service.ts:64`). Re-enabling is a code change and
+> a release. Read the rest of this page as the design of record, not as what a user can do today —
+> `AGENTS/10-ai-features.md` is the status of record.
+>
+> **One precision, because it is the half that is configuration rather than code.** The AI
+> _surfaces_ are hidden by a rule, not removed: `app.tabs.aiInsights` carries
+> `rule: 'app.rules.isAiEnabled'` (`packaged-tabs.ts:30`), and a manifest override of
+> `{"rule": null}` clears a packaged rule (`extension-slot-registry.service.ts:178-180`), so a
+> configuration package can put an AI surface back on screen. It cannot make one work — the
+> gateway's own check refuses every request regardless. Treat the gateway as the control and the
+> rule as presentation, which is the same "hiding is not a security control" rule that applies to
+> every other slot.
+
 > **The AI backend is not in this repository.** An earlier iteration used a Node.js Express
 > service at `apps/ai-backend/`. That has moved to its own repository and now ships as a
 > **Nuxeo marketplace package** exposing Automation operations. This repo contains only the

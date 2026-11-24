@@ -7,7 +7,7 @@
   "properties": {
     "name": {
       "type": "string",
-      "description": "Marketplace package name, kebab-case, at most 128 characters. Also the directory, the Nx project name and the fragment name. Renaming it later is a different package to Nuxeo.",
+      "description": "Marketplace package name, kebab-case, at most 128 characters. Also the directory, the Nx project name and the fragment name. Renaming it later is a different package to Nuxeo. A name Satori itself uses ('defaults', 'nuxeo-agentic-ui') or a device name Windows reserves ('con', 'nul', 'com1'…) is refused by the generator, which says what it would clash with — the list is not expressible here as a message a reader could act on.",
       "maxLength": 128,
       "$default": {
         "$source": "argv",
@@ -43,7 +43,7 @@
     },
     "directory": {
       "type": "string",
-      "description": "Parent directory for the package: a relative path of letters, digits, '.', '_' and '-', no part starting with '-'. It goes into the build command unquoted.",
+      "description": "Parent directory for the package: a relative path of letters, digits, '.', '_' and '-', no part starting with '-', and no part a device name Windows reserves. It goes into the build command unquoted.",
       "default": "config-packages",
       "pattern": "^[A-Za-z0-9._][A-Za-z0-9._-]*(/[A-Za-z0-9._][A-Za-z0-9._-]*)*$"
     },

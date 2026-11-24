@@ -1,6 +1,6 @@
 name: Storybook on GitHub Pages
 
-# Publishes two Storybooks of `satori-components` to https://nuxeo.github.io/agentic-ui-poc/: the
+# Publishes two Storybooks of `satori-components` to https://nuxeo.github.io/Nuxeo-Satori-UI/: the
 # Material build at the root, and the same library under Satori's theme at `/satori/`. The root is
 # unchanged, so every existing link to the site still lands where it always did.
 #
@@ -17,6 +17,13 @@ name: Storybook on GitHub Pages
 #
 # Still NOT published: `satori-components-satori`'s own Storybook, the components that exist only
 # under Satori. Nobody asked for it, and the approval above was for the themed build.
+#
+# Also published, at `/prototypes/business-apps/`: the clickable business-apps prototype, one
+# self-contained page built from `docs/prototype/business-apps/src` with Satori's compiled theme
+# and the Satori icons it uses inlined. It is built here, where `@hylandsoftware` is installed, and
+# never committed (`.gitignore`), so the repository itself carries no Satori output. That this is
+# covered by the approval above was confirmed on 2026-11-21 by Narasimha Koppula; record the
+# approver or the ticket here if there is one. Like `/satori`, it is deliberately ungated.
 #
 # A workflow of its own rather than a job in ci.yml: that one runs on pull requests and every feature
 # branch, and its `cancel-in-progress` concurrency would cancel a deployment half-way through.
@@ -83,6 +90,13 @@ jobs:
       # its own rather than inherit this one; its `env:` block says why.
       - name: Build the Satori-themed Storybook
         run: npx nx run satori-components:build-storybook:satori --skip-nx-cache
+
+      # Also while GitHub Packages is installed: the prototype inlines Satori's compiled theme and
+      # icons. No `nx`, so it neither computes nor warms the project graph the next step guards.
+      # `build.cjs` refuses to write the page when it names an icon Satori does not have, so a
+      # renamed icon fails here rather than publishing buttons with nothing in them.
+      - name: Build the business-apps prototype
+        run: node docs/prototype/business-apps/src/build.cjs
 
       # Then as ci.yml builds it, with `@hylandsoftware` and `@alfresco` removed from node_modules,
       # so a Satori import fails this build instead of compiling into the root of the site. Nothing
@@ -166,6 +180,43 @@ jobs:
           node scripts/storybook-assemble-site.mjs \
             --material "$MATERIAL_DIR" --satori "$SATORI_DIR" --out "$SITE_DIR"
 
+      # After the assembly, which knows only the two Storybooks. Refuses a missing or empty page and
+      # a path the assembled site already has, so it can neither publish a blank prototype nor
+      # overwrite part of a Storybook.
+      - name: Add the business-apps prototype to the site
+        shell: bash
+        run: |
+          set -euo pipefail
+          page=docs/prototype/business-apps/index.html
+          dest="$SITE_DIR/prototypes/business-apps"
+          if [ ! -s "$page" ]; then echo "::error::$page is missing or empty"; exit 1; fi
+          if [ -e "$SITE_DIR/prototypes" ]; then echo "::error::$SITE_DIR/prototypes already exists in the assembled site"; exit 1; fi
+          mkdir -p "$dest"
+          cp "$page" "$dest/index.html"
+
+      # `/dev-analytics/`: the dashboard dev-analytics.yml generates nightly. That workflow owns the
+      # page; this step only copies the latest one in, because a Pages deployment replaces the
+      # whole site and anything not copied here would vanish on the next Storybook publish.
+      #
+      # Deliberately fail-soft, unlike the steps around it: an absent branch (before the first
+      # nightly run), an unreachable remote or an empty page costs the dashboard, never the
+      # Storybook. It says so as a warning rather than passing silently. The page is a single
+      # self-contained HTML file with its own CSP, so it needs no assets from the rest of the site.
+      - name: Add the dev-analytics dashboard to the site
+        shell: bash
+        run: |
+          set -uo pipefail
+          dest="$SITE_DIR/dev-analytics"
+          skip() { echo "::warning::dev-analytics dashboard not published: $1"; exit 0; }
+          if [ -e "$dest" ]; then echo "::error::$dest already exists in the assembled site"; exit 1; fi
+          git fetch --quiet --depth=1 "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" dev-analytics-data \
+            || skip "branch dev-analytics-data could not be fetched"
+          git show FETCH_HEAD:site/index.html > "$RUNNER_TEMP/dev-analytics.html" 2>/dev/null \
+            || skip "site/index.html is not on dev-analytics-data"
+          [ -s "$RUNNER_TEMP/dev-analytics.html" ] || skip "site/index.html is empty"
+          mkdir -p "$dest"
+          cp "$RUNNER_TEMP/dev-analytics.html" "$dest/index.html"
+
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ${{ env.SITE_DIR }}
@@ -185,3 +236,65 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # The `storybook-satori` gate: build `satori-components-satori`'s Storybook and open every story
+  # in Chromium, failing a story whose Satori translation catalogue is not served (satori-ui 1.0.0
+  # dropped `en.json`, and this Storybook rendered raw `sat.*` keys with every gate green). It
+  # needs `@hylandsoftware/satori-ui`, which only this workflow installs without then removing it.
+  #
+  # A job of its own, not a step of `build`: this Storybook is not published, so a failure here
+  # must not stop the site from deploying — `deploy` needs `build` only — and `build` removes
+  # `@hylandsoftware` part-way through, on purpose. Locally the gate reports NOT RUN without the
+  # token or Playwright; here either one missing exits non-zero and fails the job, which is what a
+  # revoked token should do.
+  storybook-satori:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Explicit, for the same reason as `build`: this job holds the registry token.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # From the one runtime source for the pin, as ci.yml's Storybook job reads it.
+      - name: Resolve the pinned Playwright version
+        id: playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
+          test -n "$version" || { echo "could not read PLAYWRIGHT_TEST_VERSION"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "pinned @playwright/test: $version"
+
+      # `--no-save`, so the lockfile is untouched, as in ci.yml. Both token variables: the
+      # repository's `.npmrc` reads `SATORI_GH_READONLY_TOKEN`, takes precedence over setup-node's
+      # user config, and a step's `env:` does not carry over from the install step above.
+      - name: Install Playwright and Chromium
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          PLAYWRIGHT_TEST_VERSION: ${{ steps.playwright.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "@playwright/test@${PLAYWRIGHT_TEST_VERSION}"
+          npx playwright install --with-deps chromium
+
+      - name: Satori Storybook is served its catalogues
+        run: node scripts/beta-harness/storybook-satori.mjs

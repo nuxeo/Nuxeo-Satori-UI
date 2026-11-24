@@ -10,7 +10,6 @@ audience: engineering
 # Architecture
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > The rest of the page as of 2026-08-24 · `77265f9`.
 > Supersedes [`docs/architecture.md`](../../docs/architecture.md) (54 lines) and the
 > architecture sections of [`docs/technical-walkthrough.md`](../../docs/technical-walkthrough.md).
@@ -58,9 +57,6 @@ flowchart TD
   shared --> plat
   plat --> tmpl
 ```
-
-_Changed by NXSAT-635 and NXSAT-638 (2026-10):_ the diagram showed the adf-hx bridge library
-wrapping `@alfresco/adf-hx-content-services`. Both were removed, so neither is drawn.
 
 **The load-bearing fact:** the AI operations are invoked by this application but
 **implemented elsewhere**. An absent backend produces HTTP 500, which is expected and not a
@@ -132,22 +128,11 @@ sequenceDiagram
   B->>N: guarded navigation → AuthService.ensureHydrated()
 ```
 
-Three consequences worth knowing before you touch startup:
+Two consequences worth knowing before you touch startup:
 
-1. **The adf-hx ports must be in the root injector.** Eleven upstream services are
-   `providedIn: 'root'` and resolve the port tokens from the root injector —
-   `SingleItemCopyService`, `SingleItemMoveService`, `CreateDocumentVersionService`,
-   `RestoreDocumentVersionService`, `BlobDownloadService`, `SharedDocumentService`,
-   `RenditionsService`, `DocumentModelService`, `SearchService`, `UserService`,
-   `RouterExtService`. Providing them on a component instead fails one `NG0201` at a time.
-   The cost is that adf-core becomes eager: initial bundle 1.71 MB → 2.86 MB, accepted
-   deliberately with the reasoning recorded at
-   [`app.config.ts:37`](../../apps/nuxeo-ui/src/app/app.config.ts#L37).
-   _Changed by NXSAT-635 and NXSAT-638 (2026-10):_ the bridge and its ports were removed, and
-   adf-hx with them, so nothing registers a port and this no longer applies.
-2. **`provideAppInitializer` callbacks run concurrently.** A one-shot config read races the
+1. **`provideAppInitializer` callbacks run concurrently.** A one-shot config read races the
    loader. Do not assume ordering between initializers.
-3. **`withHashLocation()` changes what a "reload" means.** `goto('/#/x')` is
+2. **`withHashLocation()` changes what a "reload" means.** `goto('/#/x')` is
    same-document, so `APP_INITIALIZER` never re-runs. Any test asserting a _reloaded_ app
    needs a real `page.reload()`.
 

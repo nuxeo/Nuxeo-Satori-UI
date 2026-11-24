@@ -1,6 +1,6 @@
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import type { Meta, StoryObj } from '@storybook/angular';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { NxsPropertiesPanelComponent, type NxsVocabularyLabel } from './properties-panel.component';
 
@@ -110,7 +110,13 @@ export default meta;
 type Story = StoryObj<NxsPropertiesPanelComponent>;
 
 /** A file with a creator, contributors, Dublin Core properties, tags and a collection. */
-export const FileProperties: Story = {};
+export const FileProperties: Story = {
+  play: async ({ args, canvasElement }) => {
+    within(canvasElement).getByRole('button', { name: '2' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.publicationsSelected).toHaveBeenCalledTimes(1);
+  },
+};
 
 /**
  * Directory entries, users and blobs that arrive as objects rather than IDs. The panel shows their

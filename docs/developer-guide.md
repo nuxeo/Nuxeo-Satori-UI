@@ -18,7 +18,7 @@ This guide documents the coding conventions, project structure, and step-by-step
 ### First-time setup
 
 ```bash
-git clone <repo-url> && cd agentic-ui-poc
+git clone <repo-url> && cd Nuxeo-Satori-UI
 ```
 
 Set a GitHub Packages read token for the Hyland scoped packages (required for `@hylandsoftware/satori-ui` and the Satori fonts, icons and tokens it brings):
@@ -46,7 +46,7 @@ The proxy is defined in `apps/nuxeo-ui/proxy.conf.json` and referenced from `ang
 ## 2. Project Structure
 
 ```text
-agentic-ui-poc/
+Nuxeo-Satori-UI/
 ├── apps/
 │   └── nuxeo-ui/                  # Application shell
 │       ├── proxy.conf.json        # Dev proxy: /nuxeo -> localhost:8080

@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { vi } from 'vitest';
 
 import type { NxsBreadcrumbItem } from '../primitives';
 import { breadcrumbsToFold } from './breadcrumb-fit';
@@ -263,6 +264,25 @@ describe('NxsBreadcrumbsComponent folding', () => {
       '/browse/default-domain',
       '/browse/default-domain/workspaces',
     ]);
+  });
+
+  it('routes a folded router item through the app router, not a full-page navigation', async () => {
+    layout(330);
+    resize?.();
+    await render();
+    (el().querySelector('.nxs-breadcrumbs__overflow') as HTMLButtonElement).click();
+    await render();
+
+    // The menu renders in the CDK overlay, outside the component's host, so the click must still
+    // reach the router link on the item itself.
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    const domain = document.querySelector<HTMLAnchorElement>('[role="menuitem"]');
+    expect(domain?.textContent?.trim()).toBe('Domain');
+    domain?.click();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate.mock.calls[0][0].toString()).toBe('/browse/default-domain');
+    navigate.mockRestore();
   });
 
   it('keeps the current page on screen however narrow the box, folding the first too', async () => {

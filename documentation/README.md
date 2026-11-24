@@ -12,10 +12,10 @@ audience: all
 
 > **Last reviewed:** 2026-10-08 · **Repository:** `fb97d44` (`feature/nxsat-308-dependency-tree-gate`)
 > Only the Dev Harness & Gates row was re-verified at that commit; the rest of the index was last
-> reviewed on 2026-08-24 at `77265f9` on `feature/adf-hx-browse-poc`.
+> reviewed on 2026-08-24 at `77265f9`.
 
 This is the authoritative documentation set for **Nuxeo Satori** — the Angular content
-management UI being converted into a customer-shippable Beta on real `adf-hx` components,
+management UI being converted into a customer-shippable Beta on `nxs-` Satori components,
 with a four-layer customisation contract.
 
 It exists because the product was built largely through AI-assisted development, and the
@@ -30,6 +30,7 @@ use on its own.
 | You are                               | Read                                                                                                                                                                                 | Time                     |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
 | **Presales, customer or partner**     | [The short version](20-product/00-the-short-version.md) → [Feature Catalog](20-product/02-feature-catalog.md) → [Extension reference](../docs/extension-reference.md)                | ~5 minutes               |
+| **Customising it, right now**         | [CUSTOMISING.md](../CUSTOMISING.md) — clone, scaffold, edit, build, install. **Node and nothing else**; none of the engineering pages below are on this path                         | ~20 minutes              |
 | **A developer joining the team**      | [Developer Getting Started](30-engineering/01-getting-started.md) → [Architecture](30-engineering/02-architecture.md) → [Code KT](30-engineering/11-code-kt.md)                      | ~2 hours to first commit |
 | **A product manager**                 | [Product Overview](20-product/01-product-overview.md) → [Feature Catalog](20-product/02-feature-catalog.md) → [Nuxeo Web UI Comparison](20-product/06-nuxeo-web-ui-comparison.md)    | ~45 minutes              |
 | **An executive or sponsor**           | [Executive Overview](10-leadership/01-executive-overview.md) → [Cost & TCO](10-leadership/03-cost-and-tco.md) → [Risks & Opportunities](10-leadership/07-risks-and-opportunities.md) | ~20 minutes              |
@@ -141,12 +142,11 @@ should not be read as current status:
 | [`docs/developer-guide.md`](../docs/developer-guide.md)                               | Still the best detail on component and service patterns; superseded for setup by [Getting Started](30-engineering/01-getting-started.md)                                  |
 | [`docs/technical-walkthrough.md`](../docs/technical-walkthrough.md)                   | Presentation walkthrough; superseded by [Architecture](30-engineering/02-architecture.md)                                                                                 |
 | [`docs/architecture.md`](../docs/architecture.md)                                     | 54 lines, thin; superseded by [Architecture](30-engineering/02-architecture.md)                                                                                           |
-| [`docs/adf-hx-poc-action-plan.md`](../docs/adf-hx-poc-action-plan.md)                 | Explicitly superseded by `docs/adf-hx-beta-plan.md` in its own header                                                                                                     |
 | [`docs/consolidated-agentic-ai-report.md`](../docs/consolidated-agentic-ai-report.md) | Retrospective with a cost-benefit section; cited by [Cost & TCO](10-leadership/03-cost-and-tco.md)                                                                        |
 
 **Still authoritative and not superseded**, because they are maintained and gated:
 
-- [`docs/adf-hx-beta-plan.md`](../docs/adf-hx-beta-plan.md) — the plan of record, with a
+- [`docs/beta-plan.md`](../docs/beta-plan.md) — the plan of record, with a
   dated Programme status section
 - [`docs/extension-reference.md`](../docs/extension-reference.md) — the customer-facing
   registered-ID contract, gated by `npm run beta:reference`
@@ -154,9 +154,6 @@ should not be read as current status:
   gated by `npm run beta:api`
 - [`AGENTS/`](../AGENTS) and [`CLAUDE.md`](../CLAUDE.md) — the agent contract. Read by AI
   tools on every task; these pages describe it but do not replace it
-- [`docs/adf-hx-workarounds.md`](../docs/adf-hx-workarounds.md) and
-  [`docs/adf-hx-upstream-findings.md`](../docs/adf-hx-upstream-findings.md) — both gated
-  in `scripts/review-guardrails.mjs`
 
 ---
 

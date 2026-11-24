@@ -111,7 +111,7 @@ NOT COVERED:          explicit list
 **Question:** does the phase deliver what the plan said, and does the _record_ match
 what the code does?
 
-Runs after the evidence auditor. Reads `docs/adf-hx-beta-plan.md`, the phase's
+Runs after the evidence auditor. Reads `docs/beta-plan.md`, the phase's
 todos, and the diff.
 
 ### Checklist
@@ -135,17 +135,11 @@ todos, and the diff.
    `typecheck` where the plan said `build`) must be recorded as a deviation with its
    reason, not silently absorbed.
 7. **Is it written down?** A phase is **not closed** until `docs/beta-delivery-record.md`
-   accounts for every change, diversion, challenge and reverted attempt, and any upstream
-   defect appears in `docs/adf-hx-upstream-findings.md`. **Verdict `incomplete` if the
+   accounts for every change, diversion, challenge and reverted attempt. **Verdict `incomplete` if the
    record is thinner than the work.**
    - Reverted work is the specific thing to look for, because it leaves no trace in the
      diff. Read the session's history, not only its final state. A dead end that
      eliminated an option belongs in section 10 with what it bought.
-   - Anything that exists only because adf-hx or adf-core forces it needs a row in
-     `docs/adf-hx-workarounds.md` **and** a marker at the site. The `guardrails` gate
-     checks that pair in both directions, so a missing one is a red gate rather than your
-     judgement call — but a row whose **Removable?** column is wrong is yours: structural
-     and "future cleanup" are not the same claim, and leadership reads the count.
    - A decision that belongs to a human goes in section 9 with its cost of delay. "We
      will decide later" inside a phase write-up is not a record of a decision.
 

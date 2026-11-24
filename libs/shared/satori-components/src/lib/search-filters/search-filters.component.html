@@ -98,11 +98,24 @@
                   <p>{{ 'satori-components.search-filters.no-results' | translate }}</p>
                 }
               </div>
-              <nxs-chip-set
-                [label]="'satori-components.search-filters.chosen-authors' | translate"
-                [items]="chipItems('authors', filters().authors)"
-                (removed)="removeChoice('authors', $event.id)"
-              />
+              <div>
+                <lib-extension-outlet
+                  #chipsOutlet0
+                  [componentId]="chipSetId"
+                  [componentInputs]="{
+                    items: chipItems('authors', filters().authors),
+                    label: ('satori-components.search-filters.chosen-authors' | translate),
+                    removeHandler: chipRemover('authors'),
+                  }"
+                />
+                @if (chipsOutlet0.unresolved()) {
+                  <nxs-chip-set
+                    [label]="'satori-components.search-filters.chosen-authors' | translate"
+                    [items]="chipItems('authors', filters().authors)"
+                    [removeHandler]="chipRemover('authors')"
+                  />
+                }
+              </div>
             }
             @case ('collections') {
               <label [for]="ids.collections">{{
@@ -136,11 +149,24 @@
                   }
                 }
               </div>
-              <nxs-chip-set
-                [label]="'satori-components.search-filters.chosen-collections' | translate"
-                [items]="chipItems('collections', filters().collections)"
-                (removed)="removeChoice('collections', $event.id)"
-              />
+              <div>
+                <lib-extension-outlet
+                  #chipsOutlet1
+                  [componentId]="chipSetId"
+                  [componentInputs]="{
+                    items: chipItems('collections', filters().collections),
+                    label: ('satori-components.search-filters.chosen-collections' | translate),
+                    removeHandler: chipRemover('collections'),
+                  }"
+                />
+                @if (chipsOutlet1.unresolved()) {
+                  <nxs-chip-set
+                    [label]="'satori-components.search-filters.chosen-collections' | translate"
+                    [items]="chipItems('collections', filters().collections)"
+                    [removeHandler]="chipRemover('collections')"
+                  />
+                }
+              </div>
             }
             @case ('tags') {
               <label [for]="ids.tags">{{
@@ -169,11 +195,24 @@
                   </p>
                 }
               </div>
-              <nxs-chip-set
-                [label]="'satori-components.search-filters.chosen-tags' | translate"
-                [items]="chipItems('tags', filters().tags)"
-                (removed)="removeChoice('tags', $event.id)"
-              />
+              <div>
+                <lib-extension-outlet
+                  #chipsOutlet2
+                  [componentId]="chipSetId"
+                  [componentInputs]="{
+                    items: chipItems('tags', filters().tags),
+                    label: ('satori-components.search-filters.chosen-tags' | translate),
+                    removeHandler: chipRemover('tags'),
+                  }"
+                />
+                @if (chipsOutlet2.unresolved()) {
+                  <nxs-chip-set
+                    [label]="'satori-components.search-filters.chosen-tags' | translate"
+                    [items]="chipItems('tags', filters().tags)"
+                    [removeHandler]="chipRemover('tags')"
+                  />
+                }
+              </div>
             }
             @default {
               @if (activeGroup(); as group) {
@@ -474,12 +513,24 @@
 
   <ng-template #chips let-field="field" let-values="values" let-titleKey="titleKey">
     @if (values.length > 0) {
-      <nxs-chip-set
-        class="nxs-search-filters__chips"
-        [label]="titleKey | translate"
-        [items]="chipItems(field, values)"
-        (removed)="removeChoice(field, $event.id)"
-      />
+      <div class="nxs-search-filters__chips">
+        <lib-extension-outlet
+          #chipsOutlet3
+          [componentId]="chipSetId"
+          [componentInputs]="{
+            items: chipItems(field, values),
+            label: (titleKey | translate),
+            removeHandler: chipRemover(field),
+          }"
+        />
+        @if (chipsOutlet3.unresolved()) {
+          <nxs-chip-set
+            [label]="titleKey | translate"
+            [items]="chipItems(field, values)"
+            [removeHandler]="chipRemover(field)"
+          />
+        }
+      </div>
     }
   </ng-template>
 
@@ -490,7 +541,7 @@
         class="nxs-search-filters__toggle"
         [id]="ids.group(group.field) + '-toggle'"
         [attr.aria-expanded]="isExpanded(group.field)"
-        [attr.aria-controls]="ids.group(group.field)"
+        [attr.aria-controls]="isExpanded(group.field) ? ids.group(group.field) : null"
         (click)="toggleGroup(group.field)"
       >
         <span

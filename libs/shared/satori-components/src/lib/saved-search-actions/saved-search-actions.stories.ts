@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of } from 'rxjs';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -58,6 +58,15 @@ type Story = StoryObj<NxsSavedSearchActionsComponent>;
 
 /** Filters set, no saved search open: only Save as. */
 export const UnsavedFilters: Story = {};
+
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const save = within(canvasElement).getByRole('button', { name: 'Save As' });
+    save.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.saveAs).toHaveBeenCalledTimes(1);
+  },
+};
 
 /** A saved search the user owns, with its filters changed: Save as, Save and the menu. */
 export const ChangedSavedSearch: Story = { args: { savedSearchId: 'ss-1', dirty: true } };

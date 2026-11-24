@@ -391,6 +391,8 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
       ] as const) {
         mockDialog.open.mockClear();
         component.runToolbarAction(offered(id));
+        // Publish resolves its dialog through the component registry first, a microtask later.
+        await Promise.resolve();
         expect(mockDialog.open, `${id} opened nothing`).toHaveBeenCalledTimes(1);
       }
 

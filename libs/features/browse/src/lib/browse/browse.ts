@@ -3,6 +3,7 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
   NxsActionMenuComponent,
+  NxsAvatarComponent,
   NxsBreadcrumbsComponent,
   NxsCardComponent,
   NxsColumnPickerComponent,
@@ -15,11 +16,16 @@ import {
   NxsFolderHeaderComponent,
   NxsPagerComponent,
   NxsPermissionsPanelComponent,
+  NxsShareExternalDialogComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsTagEditorComponent,
   NxsThumbnailComponent,
+  NxsUpdatePermissionDialogComponent,
   NxsUploadQueue,
   NxsUploadQueueComponent,
+  nxsAceTimeFrame,
+  nxsDownloadCsv,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsBreadcrumbItem,
@@ -33,6 +39,8 @@ import {
   type NxsRenameDialogData,
   type NxsMenuAction,
   type NxsPickableColumn,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
   NxsToastService,
   nxsVisibleText,
   provideNxsToast,
@@ -49,16 +57,17 @@ import {
   untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
-import { DatePipe } from '@angular/common';
+import { NavigationEnd, Router, RouterLink, UrlTree } from '@angular/router';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { forkJoin, of, Subject, timer, EMPTY } from 'rxjs';
+import { forkJoin, of, Subject, timer, EMPTY, type Observable } from 'rxjs';
 import {
   catchError,
   debounceTime,
   distinctUntilChanged,
   filter,
+  finalize,
   map,
   switchMap,
 } from 'rxjs/operators';
@@ -94,6 +103,7 @@ import {
   parseBrowseNuxeoPathFromRouterUrl,
   isBrowseRouterUrl,
   nuxeoPathsEqualFlexible,
+  normalizeNuxeoPath,
   DocumentDetailService,
   DirectoryService,
   DocumentImportService,
@@ -126,13 +136,13 @@ import {
   postTrashBrowseRouterUrl,
   isCollectionDocument,
   formatRelativeTime,
-  formatAceDateRange,
   permissionRightLabel,
   DocTypeLabelPipe,
+  ContentModelService,
+  resolveCreatableSubtypes,
+  titleFromFileName,
+  type ImportFileEntry,
 } from '@nuxeo/satori-platform/nuxeo-client';
-
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
-import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 
 import {
   ConfirmDialogComponent,
@@ -151,12 +161,8 @@ import {
 } from '@nuxeo/satori-platform/ui';
 
 import {
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
   DeletePermissionDialogComponent,
   DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
 } from '@agentic-ui/shared-permission-dialogs';
 
 import {
@@ -182,6 +188,12 @@ import {
   EditMetadataDialogData,
 } from '../edit-metadata-dialog/edit-metadata-dialog';
 import { CreateImportDialogComponent } from '../create-import/create-import-dialog.component';
+import {
+  NO_CONTENT_MODEL,
+  importBlobTypesAllowed,
+  importDocTypeFor,
+} from '../create-import/import-doc-type';
+import type { MainBlobContentModel } from '../create-import/main-blob-type';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 /**
@@ -218,6 +230,13 @@ const SORT_FIELDS: Readonly<Record<string, string>> = {
 const PAGE_SIZE = 50;
 
 /**
+ * Session-storage key the app shell writes the share link's landing path under. Duplicated as a
+ * literal in apps/nuxeo-ui/src/app/auth/share-token.util.ts because a feature library cannot import the
+ * app; keep the two in step.
+ */
+const SHARED_DOCUMENT_STORAGE_KEY = 'nxs.sharedDocumentPath';
+
+/**
  * How long a changed filter waits before the listing reloads.
  *
  * The filters run on the server now, so each keystroke would otherwise be a request. The loader's
@@ -239,6 +258,7 @@ export const FILTER_DEBOUNCE_MS = 250;
   imports: [
     NxsDateInputComponent,
     NxsActionMenuComponent,
+    NxsAvatarComponent,
     NxsBreadcrumbsComponent,
     NxsCardComponent,
     NxsColumnPickerComponent,
@@ -248,16 +268,19 @@ export const FILTER_DEBOUNCE_MS = 250;
     NxsFolderHeaderComponent,
     NxsPagerComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
     NxsTagEditorComponent,
     NxsThumbnailComponent,
     NxsUploadQueueComponent,
     DocTypeLabelPipe,
     TranslatePipe,
     DatePipe,
+    NgTemplateOutlet,
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
     MatButtonModule,
+    RouterLink,
     MatTabsModule,
     MatTableModule,
     MatSortModule,
@@ -269,8 +292,6 @@ export const FILTER_DEBOUNCE_MS = 250;
     MatInputModule,
     MatSelectModule,
     MatChipsModule,
-    SatAvatarModule,
-    SatTagModule,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
   ],
@@ -296,10 +317,18 @@ export class BrowseComponent {
   private readonly dialog = inject(MatDialog);
   private readonly toast = inject(NxsToastService);
   private readonly importService = inject(DocumentImportService);
+  private readonly contentModel = inject(ContentModelService);
   /** Files dropped on the list: each one's progress and outcome, through the import's own queue. */
   readonly droppedUploads = new NxsUploadQueue();
   /** The folder the dropped files go into, kept for a retry after the page has moved on. */
   private droppedUploadPath: string | null = null;
+  /**
+   * The types a file can be created as in that folder (`importBlobTypesAllowed`), read when the
+   * files were dropped and kept with the path, so a retry types its files as the first run did.
+   */
+  private droppedUploadTypes: readonly string[] = [];
+  /** A drop whose folder's types are being read: a second drop is turned away until it is done. */
+  private resolvingDroppedTypes = false;
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly adminAccess = inject(ADMIN_ACCESS_CHECKS);
 
@@ -365,14 +394,31 @@ export class BrowseComponent {
   // Permissions tab
   readonly permissionsLoaded = signal(false);
   readonly permissionsLoading = signal(false);
+  /**
+   * Bumped by every permissions read and by every change of folder, so an answer is applied only
+   * by the read that is still current. Comparing paths or uids cannot tell a first visit to a
+   * folder from a return to it.
+   */
+  private permissionsRequest = 0;
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadPermissions();
+  /**
+   * The document's own pending and effective external shares, as document detail and collections
+   * list them. An inherited share is the parent's to edit, and an archived one has expired.
+   */
   readonly externalAces = computed<NuxeoAce[]>(() => {
-    const doc = this.currentDoc();
-    const acls = doc?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
+    const acls = this.currentDoc()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces)
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
   readonly canWriteCurrentDoc = computed(() => canWriteDocument(this.currentDoc()));
   readonly canCreateContentHere = computed(() => {
@@ -405,6 +451,16 @@ export class BrowseComponent {
   readonly canManageCurrentPermissions = computed(() =>
     canManageDocumentPermissions(this.currentDoc()),
   );
+  /**
+   * The type's `userVisiblePermissions` from the permissions read, the rights the external-share
+   * dialogs offer. Held apart from `currentDoc`, which every listing refresh replaces with a read
+   * that does not ask for them.
+   */
+  private readonly typeRights = signal<{ uid: string; permissions: string[] } | null>(null);
+  private readonly visiblePermissions = computed(() => {
+    const rights = this.typeRights();
+    return rights && rights.uid === this.currentDoc()?.uid ? rights.permissions : undefined;
+  });
   readonly actionInProgress = signal<string | null>(null);
 
   // History tab
@@ -836,6 +892,8 @@ export class BrowseComponent {
 
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** The avatar and tag in the template's `primitiveAvatar` and `primitiveTag`, by ID likewise. */
+  readonly primitiveIds = NXS_PRIMITIVE_IDS;
   /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   /** Each card in the card view is rendered by ID, so a component registered under it replaces them. */
@@ -857,7 +915,20 @@ export class BrowseComponent {
     })),
   );
 
+  /**
+   * The trail as the signed-in user may use it. A transient user (an external recipient of a share)
+   * can open none of the ancestors, so they are shown as plain text and only the current item stays
+   * as it is. Presentation only: the server still refuses those paths to the same user.
+   */
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
+    const trail = this.fullTrail();
+    if (!this.isExternalUser()) return trail;
+    return trail.map((crumb, index) =>
+      index === trail.length - 1 ? crumb : { label: crumb.label },
+    );
+  });
+
+  private readonly fullTrail = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();
     const doc = this.currentDoc();
     // A folder that could not be opened has no document, so its trail comes from the address and
@@ -890,6 +961,37 @@ export class BrowseComponent {
     }
     return crumbs;
   });
+
+  /**
+   * A folder the user may not read. Shown by the browse-level error state rather than the list, so
+   * the "back to shared document" action can sit in it; other failures keep the list's own state.
+   */
+  readonly isForbidden = computed(() => this.error() !== null && this.errorStatus() === 403);
+
+  /** A transient user: the `transient/` principal Nuxeo gives an external share recipient. */
+  isExternalUser(): boolean {
+    return (this.currentUsername() ?? '').startsWith('transient/');
+  }
+
+  /**
+   * Where the share link the recipient came in by landed, as a route to navigate to, for the "back to
+   * shared document" action. Written by the app shell when the share token is exchanged, together with
+   * the principal it was issued to: offered only to that same principal, and never as a raw string, so
+   * an encoded path resolves once. Null when it is not there or was issued to someone else.
+   */
+  sharedDocumentLink(): UrlTree | null {
+    try {
+      const raw = window.sessionStorage.getItem(SHARED_DOCUMENT_STORAGE_KEY);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as { user?: unknown; path?: unknown };
+      if (typeof stored.user !== 'string' || typeof stored.path !== 'string') return null;
+      if (stored.user !== this.currentUsername()) return null;
+      if (!stored.path.startsWith('/')) return null;
+      return this.router.parseUrl(stored.path);
+    } catch {
+      return null;
+    }
+  }
 
   readonly showBreadcrumbs = computed(() => {
     const doc = this.currentDoc();
@@ -1025,6 +1127,11 @@ export class BrowseComponent {
           // actions in the header, its count, nor the end of the trail. The same folder failing
           // on another page or order keeps them.
           if (payload.nuxeoPath !== this.openedPath) {
+            // Including a permissions read still in flight for it. A Permissions tab opened while
+            // this listing was on its way read the folder the user had left, and an answer that
+            // outlived the failure would hand that folder's ACL and rights back under an address
+            // that never opened.
+            this.invalidatePermissions();
             this.openedPath = null;
             this.currentDoc.set(null);
             this.entries.set([]);
@@ -1040,8 +1147,12 @@ export class BrowseComponent {
           void this.router.navigateByUrl(`/browse${redirectTo}`, { replaceUrl: true });
           return;
         }
+        // A Permissions tab opened before this listing arrived read the folder the user had left.
+        const folderChanged = this.currentDoc()?.uid !== folder.uid;
+        if (folderChanged) this.invalidatePermissions();
         this.currentDoc.set(folder);
         this.openedPath = payload.nuxeoPath;
+        if (folderChanged && this.activeTabIndex() === 1) this.loadPermissions();
         this.unopenedPath.set(null);
         this.browseContext.setFromNuxeoPath(folder.path);
         this.entries.set(entries);
@@ -1195,8 +1306,7 @@ export class BrowseComponent {
   private resetBrowseTabState(): void {
     this.historyLoaded = false;
     this.trashLoaded = false;
-    this.permissionsLoaded.set(false);
-    this.permissionsLoading.set(false);
+    this.invalidatePermissions();
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
     this.syncPendingPasteList();
@@ -1292,28 +1402,127 @@ export class BrowseComponent {
 
   // ── Files dropped on the list ──
 
-  /** Uploads files dropped on the list into the folder on screen, as Create / Import's do. */
+  /**
+   * Uploads files dropped on the list into the folder on screen, each as a type that folder allows,
+   * chosen as Create / Import chooses it (`importDocTypeFor`): the stock type its MIME type
+   * suggests if allowed, else the first allowed type that keeps a main file.
+   *
+   * `canCreateContentHere` admits a Section, which allows no such type, and Nuxeo creates a `File`
+   * posted into one anyway — measured on the local server, as for a File subtype posted into a
+   * folder that does not list it. So the folder's allowed subtypes and the content model are read
+   * first, and where none keeps a main file the drop is refused, saying why, with nothing queued.
+   */
   uploadDropped(files: readonly File[]): void {
     const folder = this.currentDoc();
     if (!folder || !this.canCreateContentHere()) return;
-    if (this.droppedUploads.busy()) {
+    if (this.droppedUploads.busy() || this.resolvingDroppedTypes) {
       this.toast.show(this.translate.instant('browse.message.upload-in-progress'));
       return;
     }
-    this.droppedUploads.clearDone();
-    this.droppedUploads.stage(files);
-    this.droppedUploadPath = folder.path;
-    this.runDroppedUploads();
+    const path = folder.path;
+    // Files of an earlier drop that are still pending — refused, or never started after a refusal —
+    // are retried into that drop's folder, as its types. A run sends every pending file to one
+    // folder, so a drop on another would carry them there and re-type them for it. It waits until
+    // they are retried or removed. A drop on the same folder takes them along, as it always has.
+    // Only one drop is read at a time, so this cannot change while the types are read. Both paths
+    // are the server's own, so they are compared exactly: Nuxeo names are case-sensitive, and the
+    // flexible match would take `Reports` and `reports`, or `a b` and `a-b`, for one folder.
+    const earlierPath = this.droppedUploadPath;
+    if (
+      earlierPath &&
+      this.droppedUploads.pending().length > 0 &&
+      normalizeNuxeoPath(earlierPath) !== normalizeNuxeoPath(path)
+    ) {
+      this.toast.show(this.translate.instant('browse.message.drop-pending-elsewhere'));
+      return;
+    }
+    const name = folder.title ?? '';
+    this.resolvingDroppedTypes = true;
+    this.droppedImportTypes(path)
+      .pipe(
+        finalize(() => (this.resolvingDroppedTypes = false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: ({ types, contentModelRefused }) => {
+          if (types.length === 0) {
+            // With the content model refused only the stock four count, so a folder allowing only
+            // a type that extends one cannot be told from one allowing none: say the types could
+            // not be read, as Create / Import does.
+            this.toast.error(
+              this.translate.instant(
+                contentModelRefused
+                  ? 'browse.create-import.types-load-failed'
+                  : 'browse.message.drop-allows-no-file-types',
+                { name },
+              ),
+            );
+            return;
+          }
+          // A retry of an earlier upload can start while these types are read. Staging now would
+          // leave the files waiting with no run to start them and no Retry control, and would
+          // retarget that retry. Turn the drop away, as one made during an upload is.
+          if (this.droppedUploads.busy()) {
+            this.toast.show(this.translate.instant('browse.message.upload-in-progress'));
+            return;
+          }
+          this.droppedUploads.clearDone();
+          this.droppedUploads.stage(files);
+          this.droppedUploadPath = path;
+          this.droppedUploadTypes = types;
+          this.runDroppedUploads();
+        },
+        error: (err: unknown) => {
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(err)
+                ? PERMISSION_DENIED_KEY
+                : 'browse.create-import.types-load-failed',
+            ),
+          );
+        },
+      });
   }
 
-  /** Uploads what is pending in the dropped files' queue: all of them, or what failed last time. */
+  /**
+   * The types a file dropped into `path` can be created as: the folder's allowed subtypes that keep
+   * a main file, by Nuxeo's content model. A refused content model leaves the stock four, as in
+   * Create / Import.
+   */
+  private droppedImportTypes(
+    path: string,
+  ): Observable<{ types: string[]; contentModelRefused: boolean }> {
+    return forkJoin({
+      folder: this.browseService.getFolderContext(path),
+      model: this.contentModel.getContentModel().pipe(
+        map(({ doctypes, facets }): MainBlobContentModel | null => ({ doctypes, facets })),
+        catchError(() => of(null)),
+      ),
+    }).pipe(
+      map(({ folder, model }) => ({
+        types: importBlobTypesAllowed(resolveCreatableSubtypes(folder), model ?? NO_CONTENT_MODEL),
+        contentModelRefused: model === null,
+      })),
+    );
+  }
+
+  /**
+   * Uploads what is pending in the dropped files' queue: all of them, or what failed last time.
+   * Each file is typed against the types read for the drop, and nothing is sent without one.
+   */
   runDroppedUploads(): void {
     const path = this.droppedUploadPath;
+    const types = this.droppedUploadTypes;
     const files = this.droppedUploads.pending();
-    if (!path || files.length === 0 || this.droppedUploads.busy()) return;
+    if (!path || types.length === 0 || files.length === 0 || this.droppedUploads.busy()) return;
+    const entries: ImportFileEntry[] = files.map((file) => ({
+      file,
+      docType: importDocTypeFor(file, types),
+      properties: { 'dc:title': titleFromFileName(file.name) },
+    }));
     this.droppedUploads.start();
     this.importService
-      .importFiles(path, files, {
+      .importFilesWithProperties(path, entries, {
         onProgress: (progress) => this.droppedUploads.progress(progress),
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -1835,12 +2044,7 @@ export class BrowseComponent {
       .pipe(switchMap((commandId) => this.browseService.pollAndDownloadCsv(commandId)))
       .subscribe({
         next: (blob) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${doc.title ?? 'export'}.csv`;
-          a.click();
-          URL.revokeObjectURL(url);
+          nxsDownloadCsv(`${doc.title ?? 'export'}.csv`, blob);
           this.csvExporting.set(false);
           this.toast.show(this.translate.instant('browse.message.csv-exported-successfully'));
         },
@@ -2534,13 +2738,9 @@ export class BrowseComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
+  /** The calendar days the share's writer picked, as the update dialog reads them. */
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -2557,34 +2757,50 @@ export class BrowseComponent {
     if (!doc || this.permissionsLoading()) return;
     if (this.permissionsLoaded() && !force) return;
 
+    const request = ++this.permissionsRequest;
     this.permissionsLoading.set(true);
     this.detailService
       .getDocumentPermissions(doc.uid)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
-          this.applyPermissionsDoc(updated);
-          this.permissionsLoaded.set(true);
+          if (request !== this.permissionsRequest) return;
+          this.permissionsLoaded.set(this.applyPermissionsDoc(updated));
           this.permissionsLoading.set(false);
         },
         error: () => {
+          if (request !== this.permissionsRequest) return;
           this.permissionsLoading.set(false);
           this.toast.error(this.translate.instant('browse.message.failed-to-load-permissions'));
         },
       });
   }
 
-  private applyPermissionsDoc(updated: NuxeoDocument): void {
+  /** Merges a permissions read into the folder on screen. Returns false if there is none left. */
+  private applyPermissionsDoc(updated: NuxeoDocument): boolean {
     const existing = this.currentDoc();
-    if (!existing) {
-      this.currentDoc.set(updated);
-      return;
-    }
+    // Every outcome that takes a folder off screen invalidates its permissions read, so a read
+    // that is still current always has a document to merge into. Dropping rather than installing
+    // keeps that true the next time an outcome is added: the cost of forgetting is a panel with
+    // no permissions in it, not the folder the user left reappearing under another one's address.
+    if (!existing) return false;
+    const visible = updated.contextParameters?.['userVisiblePermissions'];
+    this.typeRights.set(
+      Array.isArray(visible) ? { uid: updated.uid, permissions: visible as string[] } : null,
+    );
     this.currentDoc.set(mergeDocumentPermissionsContext(existing, updated));
+    return true;
   }
 
   private reloadPermissions(): void {
     this.loadPermissions(true);
+  }
+
+  /** Forgets this tab's permissions read, and discards any answer still on its way. */
+  private invalidatePermissions(): void {
+    this.permissionsRequest++;
+    this.permissionsLoaded.set(false);
+    this.permissionsLoading.set(false);
   }
 
   deletePermission(ace: NuxeoAce): void {
@@ -2613,36 +2829,37 @@ export class BrowseComponent {
   shareWithExternal(): void {
     const doc = this.currentDoc();
     if (!doc) return;
-    const dialogRef = this.dialog.open(ShareExternalDialogComponent, {
-      data: { documentUid: doc.uid } satisfies ShareExternalDialogData,
-      width: '520px',
-    });
-    dialogRef
+    this.dialog
+      .open(NxsShareExternalDialogComponent, {
+        maxWidth: '95vw',
+        data: {
+          documentUid: doc.uid,
+          permissions: this.visiblePermissions(),
+        } satisfies NxsShareExternalDialogData,
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((created: boolean | undefined) => {
-        if (created) {
-          this.reloadPermissions();
-          this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
-        }
+      .subscribe((shared: boolean | undefined) => {
+        if (shared) this.reloadPermissions();
       });
   }
 
   editExternalPermission(ace: NuxeoAce): void {
     const doc = this.currentDoc();
     if (!doc) return;
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: { documentUid: doc.uid, ace, isExternal: true } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-    dialogRef
+    this.dialog
+      .open(NxsUpdatePermissionDialogComponent, {
+        maxWidth: '95vw',
+        data: {
+          documentUid: doc.uid,
+          ace,
+          permissions: this.visiblePermissions(),
+        } satisfies NxsUpdatePermissionDialogData,
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((updated: boolean | undefined) => {
-        if (updated) {
-          this.reloadPermissions();
-          this.toast.show(this.translate.instant('browse.message.permission-updated'));
-        }
+        if (updated) this.reloadPermissions();
       });
   }
 

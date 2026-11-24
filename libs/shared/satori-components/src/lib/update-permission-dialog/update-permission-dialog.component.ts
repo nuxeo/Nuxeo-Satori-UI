@@ -104,8 +104,8 @@ export class NxsUpdatePermissionDialogComponent {
   protected readonly right = signal(this.ace.permission);
   protected readonly dated = signal(this.external || !!this.ace.begin || !!this.ace.end);
   /** The entry's days, at local midnight. */
-  protected readonly begin = signal<Date | null>(dayToDate(this.ace.begin));
-  protected readonly end = signal<Date | null>(dayToDate(this.ace.end));
+  protected readonly begin = signal<Date | null>(dayToDate(this.ace.begin, 'begin'));
+  protected readonly end = signal<Date | null>(dayToDate(this.ace.end, 'end'));
   protected readonly notify = signal(this.external);
   protected readonly comment = signal('');
   protected readonly saving = signal(false);
@@ -134,8 +134,8 @@ export class NxsUpdatePermissionDialogComponent {
         id: this.ace.id,
         username: this.ace.username,
         permission: this.right(),
-        begin: this.dated() ? dateToWrite(toDay(this.begin()), this.ace.begin) : null,
-        end: this.dated() ? dateToWrite(toDay(this.end()), this.ace.end) : null,
+        begin: this.dated() ? dateToWrite(toDay(this.begin()), this.ace.begin, 'begin') : null,
+        end: this.dated() ? dateToWrite(toDay(this.end()), this.ace.end, 'end') : null,
         notify,
         comment: notify ? this.comment().trim() || null : null,
       })

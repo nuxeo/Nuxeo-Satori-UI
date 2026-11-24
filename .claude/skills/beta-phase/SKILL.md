@@ -1,6 +1,6 @@
 ---
 name: beta-phase
-description: End-to-end SDLC orchestrator for one phase of the Nuxeo Satori Beta program in agentic-ui-poc — load the phase contract, plan, implement in verifiable steps, iterate against the quality gate until green, capture per-step image evidence with assertions, run a multi-model adversarial review, open a conventional-commit PR with the evidence report attached, then monitor CI to green. Use when asked to run or continue a Beta phase (phase-0-baseline through phase-6-quality), to "execute the Beta plan", to implement Layer 0/1/2/3 work, or to adopt adf-hx components.
+description: End-to-end SDLC orchestrator for one phase of the Nuxeo Satori Beta program in Nuxeo-Satori-UI — load the phase contract, plan, implement in verifiable steps, iterate against the quality gate until green, capture per-step image evidence with assertions, run a multi-model adversarial review, open a conventional-commit PR with the evidence report attached, then monitor CI to green. Use when asked to run or continue a Beta phase (phase-0-baseline through phase-6-quality), to "execute the Beta plan", to implement Layer 0/1/2/3 work, or to adopt `nxs-` components.
 ---
 
 # Run a Beta phase, end to end
@@ -18,8 +18,6 @@ Read first, in this order:
 
 The four sub-skills this delegates to: [`verify-gate`](../verify-gate/SKILL.md),
 [`capture-phase-evidence`](../capture-phase-evidence/SKILL.md),
-[`implement-api-port`](../implement-api-port/SKILL.md),
-[`adopt-adf-hx-component`](../adopt-adf-hx-component/SKILL.md),
 [`add-extension-point`](../add-extension-point/SKILL.md).
 
 ## Phase 1 — Intake
@@ -61,7 +59,6 @@ For each planned step:
 5. Run the fast inner loop and iterate per [`verify-gate`](../verify-gate/SKILL.md).
 
 Delegate repetitive work to the specialised skills rather than improvising:
-API ports to `implement-api-port`, component swaps to `adopt-adf-hx-component`,
 manifest wiring to `add-extension-point`.
 
 Update `AGENTS/01-services.md` and `docs/api-integrations.md` as you go, not at
@@ -152,17 +149,6 @@ before debugging code.
   - A number moved? Update section 5.
   - A gap opened or closed? Section 6.
   - A claim turned out wrong? Section 7. Do not delete the original claim.
-- **Update `docs/adf-hx-workarounds.md`** for anything the phase added that exists only
-  because adf-hx or adf-core forces it. Put the marker at the site —
-  `WORKAROUND(adf-hx): W<n>`, `MISSING(adf-hx): M<n>`, `REFUSES: R<n>` or
-  `DEGRADED(adf-hx): D<n>` — **and** the row in the register. The two are gated against
-  each other by `guardrails`, in both directions, so a marker without a row or a row
-  without a marker fails the phase. Set the **Removable?** column honestly: structural
-  is not the same as future cleanup, and leadership reads the count.
-- **Update `docs/adf-hx-upstream-findings.md`** if the cause was upstream's. That file is
-  written to be sent to the adf-hx team, so every finding needs a version, a file path and
-  a reproduction. Keep our own environmental problems out of it — a Node global, a macOS
-  lockfile, an Angular config array. Including them weakens the real findings.
 - **Exhaustive is the standard, not brevity.** A phase's write-up is judged against the
   work, not against a word count:
   - **every** diversion, challenge and dead end gets **its own line** in section 10,
@@ -181,7 +167,7 @@ before debugging code.
 Escalate to a human rather than attempting a fourth time when a fix would:
 
 - weaken or skip a test
-- widen the public API, or expose an adf-hx type through it
+- widen the public API, or expose a third-party component type through it
 - change `install.xml` or marketplace packaging
 - contradict a verified fact in section 3
-- require pinning an adf-hx dist-tag instead of an exact version
+- require pinning a dependency to a dist-tag instead of an exact version

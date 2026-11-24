@@ -141,7 +141,13 @@
         <dt class="nxs-properties-panel__label">
           {{ 'satori-components.properties-panel.expires' | translate }}
         </dt>
-        <dd class="nxs-properties-panel__text">{{ expires() | date: 'longDate' }}</dd>
+        <!--
+          In UTC, unlike the two rows above. `dc:expired` is a calendar day a user picked, so it is
+          stored at UTC midnight and reads back as that day in every zone; Last modified and Created
+          are instants the server stamped, which belong in the reader's own zone. Formatting this one
+          locally showed the day before west of UTC once the day was anchored in UTC (NXSAT-727).
+        -->
+        <dd class="nxs-properties-panel__text">{{ expires() | date: 'longDate' : 'UTC' }}</dd>
       </div>
     }
 

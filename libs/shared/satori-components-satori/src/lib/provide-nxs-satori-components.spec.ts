@@ -9,7 +9,9 @@ import {
   type Type,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
+import { SatBreadcrumbs } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import {
   NXS_PRIMITIVE_IDS,
@@ -299,9 +301,13 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(nav()?.getAttribute('aria-label')).toBe('sat.breadcrumbs.breadcrumbs');
   });
 
-  it('renders each new trail on a new sat-breadcrumbs, so Satori measures it, and keeps our label', async () => {
-    // Satori runs its fitting only when it starts or its box resizes, never when its items change,
-    // so a trail handed to the same instance after navigation overflowed until the window resized.
+  it('fits each new trail to its box without a resize, and keeps our label', async () => {
+    // NXSAT-308: Browse hands the same breadcrumbs a new trail on every folder, and a long one
+    // overflowed until the window resized. satori-ui 1.0.0 re-fits whenever `items` changes, which
+    // made our old remount of `sat-breadcrumbs` per trail unnecessary — and the remount logged
+    // NG0956 on every navigation. jsdom has no layout, so the box is given one: 200px wide, each
+    // shown crumb 100px. The ResizeObserver polyfill never fires, so only the items-change path can
+    // collapse the trail, which is the behaviour under test.
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -312,26 +318,71 @@ describe('the Satori primitives, rendered by ID', () => {
     });
     const fixture = TestBed.createComponent(NxsSatoriBreadcrumbsComponent);
     const el = fixture.nativeElement as HTMLElement;
-    fixture.componentRef.setInput('label', 'Fil d’Ariane');
-    fixture.componentRef.setInput('items', [{ label: 'Domain', href: '/d' }, { label: 'Claims' }]);
-    await fixture.whenStable();
-    const first = el.querySelector('sat-breadcrumbs');
+    const shown = (): number =>
+      fixture.debugElement.query(By.directive(SatBreadcrumbs))?.componentInstance.visibleItems()
+        .length ?? 0;
+    const proto = HTMLElement.prototype;
+    const original = {
+      offsetWidth: Object.getOwnPropertyDescriptor(proto, 'offsetWidth'),
+      scrollWidth: Object.getOwnPropertyDescriptor(Element.prototype, 'scrollWidth'),
+    };
+    const isTrail = (node: Element) => node.tagName === 'SAT-BREADCRUMBS';
+    Object.defineProperty(proto, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return isTrail(this) ? 200 : (original.offsetWidth?.get?.call(this) ?? 0);
+      },
+    });
+    Object.defineProperty(proto, 'scrollWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return isTrail(this) ? 100 * shown() : (original.scrollWidth?.get?.call(this) ?? 0);
+      },
+    });
+    /** Lets Satori's chained 0ms truncation steps run to the end. */
+    const settle = async () => {
+      for (let step = 0; step < 12; step++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        await fixture.whenStable();
+      }
+    };
+    const showMore = () => el.querySelector('button[aria-label="sat.breadcrumbs.show-more"]');
 
-    fixture.componentRef.setInput('items', [
-      { label: 'Domain', href: '/d' },
-      { label: 'Claims', href: '/d/claims' },
-      { label: 'Claim 42' },
-    ]);
-    await fixture.whenStable();
-    const second = el.querySelectorAll('sat-breadcrumbs');
-    expect(second).toHaveLength(1);
-    expect(second[0]).not.toBe(first);
-    expect(second[0].textContent).toContain('Claim 42');
-    expect(el.querySelector('nav')?.getAttribute('aria-label')).toBe('Fil d’Ariane');
+    try {
+      fixture.componentRef.setInput('label', 'Fil d’Ariane');
+      fixture.componentRef.setInput('items', [
+        { label: 'Domain', href: '/d' },
+        { label: 'Claims' },
+      ]);
+      await settle();
+      expect(shown()).toBe(2);
+      expect(showMore()).toBeNull();
+      // The instance that must survive the trail change. A remount would fit the new trail too — a
+      // new `sat-breadcrumbs` measures itself as it starts — so only this proves the items-change
+      // path did the fitting, and that the remount (and its NG0956) has not come back.
+      const first = el.querySelector('sat-breadcrumbs');
+      expect(first).not.toBeNull();
 
-    fixture.componentRef.setInput('label', 'Breadcrumb trail');
-    await fixture.whenStable();
-    expect(el.querySelector('sat-breadcrumbs')).toBe(second[0]);
+      fixture.componentRef.setInput('items', [
+        { label: 'Domain', href: '/d' },
+        { label: 'Claims', href: '/d/claims' },
+        { label: '2026', href: '/d/claims/2026' },
+        { label: 'November', href: '/d/claims/2026/11' },
+        { label: 'Claim 42' },
+      ]);
+      await settle();
+      // Collapsed to what fits, with the rest behind "show more", on the same box, unresized.
+      expect(100 * shown()).toBeLessThanOrEqual(200);
+      expect(showMore()).not.toBeNull();
+      expect(el.textContent).toContain('Claim 42');
+      expect(el.querySelector('nav')?.getAttribute('aria-label')).toBe('Fil d’Ariane');
+      expect(el.querySelectorAll('sat-breadcrumbs')).toHaveLength(1);
+      expect(el.querySelector('sat-breadcrumbs')).toBe(first);
+    } finally {
+      if (original.offsetWidth) Object.defineProperty(proto, 'offsetWidth', original.offsetWidth);
+      // `scrollWidth` lives on Element.prototype; only the HTMLElement shadow was added.
+      Reflect.deleteProperty(proto, 'scrollWidth');
+    }
   });
 
   it("leaves Satori's own name on the landmark when our label is blank", async () => {

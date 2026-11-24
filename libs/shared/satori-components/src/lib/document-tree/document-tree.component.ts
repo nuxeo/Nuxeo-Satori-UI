@@ -6,6 +6,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -61,9 +63,10 @@ interface TreeRow {
 }
 
 /**
- * The folder tree of the repository, as the browse drawer shows it: domains at the root, the open
- * domain's branch inside one, expanded down to the folder on screen, which is marked as the
- * current page.
+ * The folder tree of the repository, as the browse drawer shows it, drilling down as Nuxeo Web UI's
+ * does: at the repository root, the root with its domains; anywhere deeper, one back row for each
+ * ancestor of the folder on screen, then that folder alone, expanded to its own folders and marked as
+ * the current page. Its siblings are not shown; a back row steps up a level.
  *
  * It reads the repository itself through `BrowseService`, with the application's credentials:
  * a level's folders through `getNavTreeChildren` (the `tree_children` page provider Nuxeo Web UI's
@@ -90,7 +93,7 @@ interface TreeRow {
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'nxs-document-tree' },
+  host: { class: 'nxs-document-tree', '(focusout)': 'onFocusOut($event)' },
 })
 export class NxsDocumentTreeComponent {
   /** The Nuxeo path of the folder on screen: the tree expands down to it and marks it. */
@@ -107,6 +110,7 @@ export class NxsDocumentTreeComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
   private readonly direction = inject(Directionality, { optional: true });
+  private readonly injector = inject(Injector);
 
   protected readonly status = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly loadError = signal<NxsErrorStatus>(500);
@@ -116,12 +120,59 @@ export class NxsDocumentTreeComponent {
   private root: TreeNode | null = null;
   private loadGeneration = 0;
   private syncGeneration = 0;
+  /**
+   * The path whose folders are all loaded, which is the one the tree is narrowed to. It trails
+   * `currentPath` while a new folder loads, so the tree keeps its last view and then narrows, instead
+   * of widening back to the whole domain in between.
+   */
+  private readonly settledPath = signal<string | null>(null);
+  /**
+   * The folder a row or back button just opened. Opening it replaces the element that had focus (the
+   * row moves to the top of the narrowed tree, a back button leaves), so once the tree has settled on
+   * that folder, focus is put on its row. Only the folder asked for: a sync for anything else, such as
+   * the page moving on its own, never takes focus.
+   */
+  private pendingFocusPath: string | null = null;
 
-  /** At the repository root, the root with its domains; inside a domain, that domain's branch. */
+  /** The folders from the first level down to the settled path's deepest folder the tree holds. */
+  private readonly pathChain = computed<readonly TreeNode[]>(() => {
+    this.revision();
+    const root = this.root;
+    const settled = this.settledPath();
+    if (!root || settled === null) return [];
+    const chain: TreeNode[] = [];
+    let nodes: readonly TreeNode[] = root.children;
+    for (const prefix of cumulativeNuxeoPathPrefixes(settled)) {
+      const node = nodeAt(nodes, prefix);
+      if (!node) {
+        // A user who can only read a workspace has it directly under the root, with no domain above
+        // it: skip the leading folders the tree does not hold, but stop at a gap further down.
+        if (chain.length === 0) continue;
+        break;
+      }
+      chain.push(node);
+      nodes = node.children;
+    }
+    // Never narrow to a folder whose folders are still to load: after a retry, an ancestor holds new
+    // children that nothing has expanded yet, and narrowing to one would show it empty.
+    while (chain.length > 0) {
+      const last = chain[chain.length - 1];
+      if (last.loaded || last.error) break;
+      chain.pop();
+    }
+    return chain;
+  });
+
+  /**
+   * At the repository root, the root with its domains; anywhere deeper, the folder on screen alone
+   * (or, while its path is still loading, the open domain's branch).
+   */
   protected readonly topNodes = computed<readonly TreeNode[]>(() => {
     this.revision();
     const root = this.root;
     if (!root) return [];
+    const chain = this.pathChain();
+    if (chain.length > 0) return [chain[chain.length - 1]];
     const path = normalizeNuxeoPath(this.currentPath());
     if (isRepositoryRootPath(path)) return [root];
     const domainPath = topLevelNuxeoFolderPath(path);
@@ -129,9 +180,15 @@ export class NxsDocumentTreeComponent {
     return domain ? [domain] : [root];
   });
 
-  protected readonly showRootBack = computed(
-    () => this.status() === 'ready' && this.topNodes()[0]?.root === false,
-  );
+  /** The back rows, from the repository root down to the folder above the one shown. */
+  protected readonly ancestors = computed<readonly TreeNode[]>(() => {
+    if (this.status() !== 'ready') return [];
+    const top = this.topNodes()[0];
+    if (!top || top.root) return [];
+    const trail: TreeNode[] = [];
+    for (let node = top.parent; node; node = node.parent) trail.unshift(node);
+    return trail;
+  });
 
   /** Every visible row, in reading order, which is what the arrow keys walk. */
   protected readonly rows = computed<readonly TreeRow[]>(() => {
@@ -223,6 +280,7 @@ export class NxsDocumentTreeComponent {
   /** Reads the tree again from the repository, as after a folder is created, moved or deleted. */
   reload(): void {
     this.root = null;
+    this.settledPath.set(null);
     this.focusKey.set(null);
     this.bump();
     this.load();
@@ -312,18 +370,64 @@ export class NxsDocumentTreeComponent {
     );
   }
 
-  protected openRoot(): void {
-    if (this.root) this.open(this.root);
+  /** A back row opens that ancestor, which narrows the tree to it. */
+  protected openAncestor(node: TreeNode): void {
+    this.open(node);
   }
 
   private open(node: TreeNode): void {
+    let target: NuxeoDocument;
     if (node.root) {
       // Web UI's shortcut: a repository with one domain opens that domain, not an empty root.
       const only = node.children.length === 1 ? node.children[0] : null;
-      this.navigate.emit(only ? only.doc : { ...node.doc, path: '/' });
-      return;
+      target = only ? only.doc : { ...node.doc, path: '/' };
+    } else {
+      target = node.doc;
     }
-    this.navigate.emit(node.doc);
+    const targetPath = target.path ?? '/';
+    // Focus is only brought back for a user who was in the tree when they opened the folder, and
+    // only to a folder that is not already the one on screen.
+    this.pendingFocusPath =
+      this.focusIsInTree() && !nuxeoPathsEqualFlexible(targetPath, this.currentPath())
+        ? targetPath
+        : null;
+    this.navigate.emit(target);
+  }
+
+  private focusIsInTree(): boolean {
+    const active = this.host.nativeElement.ownerDocument.activeElement;
+    return !!active && this.host.nativeElement.contains(active);
+  }
+
+  /** Focus that moves to another control cancels the focus a pending navigation would restore. */
+  protected onFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (next instanceof Node && !this.host.nativeElement.contains(next)) {
+      this.pendingFocusPath = null;
+    }
+  }
+
+  /**
+   * Puts focus on the current folder's row, once the tree has been redrawn around it. `requested`
+   * is the folder the user opened: if the page has since moved on, or focus has gone to a control
+   * outside the tree, a late response must not pull it back.
+   */
+  private focusCurrentRow(requested: string): void {
+    afterNextRender(
+      () => {
+        if (!nuxeoPathsEqualFlexible(requested, this.currentPath())) return;
+        const active = this.host.nativeElement.ownerDocument.activeElement;
+        const body = this.host.nativeElement.ownerDocument.body;
+        if (active && active !== body && !this.host.nativeElement.contains(active)) return;
+        const key = this.currentKey();
+        if (!key) return;
+        this.focusKey.set(key);
+        [...this.host.nativeElement.querySelectorAll<HTMLElement>('[data-row-key]')]
+          .find((element) => element.dataset['rowKey'] === key)
+          ?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   private toggle(node: TreeNode): void {
@@ -351,7 +455,19 @@ export class NxsDocumentTreeComponent {
     node.loaded = false;
     node.expanded = false;
     this.focusKey.set(node.key);
-    this.toggle(node);
+    // A folder on the current path is retried through the sync, which goes on to load the rest of
+    // the path below it; loading just this one would leave the folder on screen unexpanded.
+    if (this.onCurrentPath(node)) this.syncTo(this.currentPath());
+    else this.toggle(node);
+  }
+
+  /** Whether `node` is the current folder or one above it, matched as `nodeAt` matches the path. */
+  private onCurrentPath(node: TreeNode): boolean {
+    if (node.root) return true;
+    const own = node.doc.path ?? '';
+    return cumulativeNuxeoPathPrefixes(normalizeNuxeoPath(this.currentPath())).some((prefix) =>
+      nuxeoPathsEqualFlexible(prefix, own),
+    );
   }
 
   private load(): void {
@@ -391,17 +507,33 @@ export class NxsDocumentTreeComponent {
   private syncTo(path: string): void {
     const root = this.root;
     if (!root) return;
+    // A sync for some other folder supersedes the one the user asked for; its focus is not wanted.
+    if (this.pendingFocusPath !== null && !nuxeoPathsEqualFlexible(this.pendingFocusPath, path)) {
+      this.pendingFocusPath = null;
+    }
     const generation = ++this.syncGeneration;
     const prefixes = cumulativeNuxeoPathPrefixes(normalizeNuxeoPath(path));
     root.expanded = true;
+    const settle = (): void => {
+      this.settledPath.set(normalizeNuxeoPath(path));
+      this.bump();
+      if (this.pendingFocusPath !== null && nuxeoPathsEqualFlexible(this.pendingFocusPath, path)) {
+        this.pendingFocusPath = null;
+        this.focusCurrentRow(path);
+      }
+    };
     const step = (nodes: readonly TreeNode[], index: number): void => {
       if (generation !== this.syncGeneration) return;
-      const next = index < prefixes.length ? nodeAt(nodes, prefixes[index]) : undefined;
+      let next = index < prefixes.length ? nodeAt(nodes, prefixes[index]) : undefined;
+      // The first level may start below the top of the path: see `pathChain`.
+      if (!next && nodes === root.children) {
+        while (!next && ++index < prefixes.length) next = nodeAt(nodes, prefixes[index]);
+      }
       for (const node of nodes) {
         if (node !== next) collapse(node);
       }
       if (!next) {
-        this.bump();
+        settle();
         return;
       }
       if (next.loaded) {

@@ -10,14 +10,9 @@ audience: engineering
 # Developer Learning Path — Building This Application Without AI Agents
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
-> Before that, last reviewed 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
-> Only the package table and the authentication paragraph in §16, the `import type` line in §2, the
-> version-pin rows in §18 and the ADF rows in Appendix A were re-verified at that commit, for
-> NXSAT-637. On
-> 2026-10-08 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`) the
-> `@alfresco/adf-extensions` lines in §15 and §16 and the platform version in §19 were
-> re-verified, and only §22.2, the local gate list, at `fb97d44`
+> Only the package table and the authentication paragraph in §16, the `import type` line in §2 and
+> the version-pin rows in §18 were re-verified at that commit. On 2026-10-08 the platform version in
+> §19 was re-verified, and only §22.2, the local gate list, at `fb97d44`
 > (`feature/nxsat-308-dependency-tree-gate`), and the `@hylandsoftware/satori-ui` row at
 > `d500aae` (`feature/nxsat-308-satori-ui-0-2-1`). The Angular and `dompurify` rows were re-verified on
 > 2026-10-05 at `b15d9cf` (`fix/nxsat-303-production-advisories`) — see Appendix A.
@@ -111,8 +106,8 @@ Topics you will actually hit:
   affects every `process.env['X']` and every Nuxeo `properties['dc:title']` access in the codebase.
 - Declaration files (`.d.ts`) and what "public API surface" means — the `beta:api` gate diffs the
   emitted `.d.ts` against `docs/api/platform.api.md`
-- `import type` and why it matters for bundle size (`@alfresco/js-api` was a devDependency
-  precisely because it was types-only, avoiding 7 MB at runtime, until NXSAT-637 removed it)
+- `import type` and why it matters for bundle size (a types-only import is erased at compile
+  time and adds nothing to the bundle)
 - Path mapping (`tsconfig.base.json` holds 25 path aliases across two scopes)
 
 - [TypeScript handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
@@ -135,9 +130,8 @@ theming layer. You need:
   `@use '@hylandsoftware/satori-ui/theme' as sat`); `@import` is deprecated and not used
 - Mixins, functions, maps, `@each`
 - **CSS custom properties as an API.** This is the Layer 0 customer seam: `--mat-sys-*`,
-  `--sat-tag-*`, `--hxp-*`, `--agentic-pill-*`. `apps/nuxeo-ui/src/styles/hxp-theme.scss` defines a
-  `tokens-from-satori()` mixin that aliases `--mat-sys-*` onto `--hxp-*` so bridge components
-  consume only `--hxp-*` and never reach into Material directly.
+  `--sat-tag-*`, `--agentic-pill-*`. The `nxs-` components read these tokens rather than hardcoded
+  values, so a customer restyles by overriding a token.
 - `color-mix(in srgb, ...)`, `color-scheme: light dark`, `:host`, `::ng-deep` and view encapsulation
 - **Specificity as a design decision.** The styles file carries extensive commentary on why
   overriding a third-party component with higher specificity is correct and `!important` is not:
@@ -209,7 +203,7 @@ standalone components and signals, treat this as learning a new framework, not a
 | `APP_INITIALIZER`                                                           | Yes, twice in `nuxeo-ui`                                                                         | The template app uses the modern `provideAppInitializer` instead. Know both.                 |
 | Angular Material + CDK                                                      | Yes, ~25 modules per large feature                                                               |                                                                                              |
 | Route resolvers                                                             | **No**                                                                                           | Data loading happens in components via signals.                                              |
-| Zoneless change detection                                                   | **No**                                                                                           | `zone.js` is explicitly imported in `main.ts`; adf-core reaches `NgZone`.                    |
+| Zoneless change detection                                                   | **No**                                                                                           | `zone.js` is explicitly imported in `main.ts`.                                               |
 | SSR / hydration                                                             | **No**                                                                                           | Browser-only `@angular/build:application`.                                                   |
 | `resource()` / `httpResource()`                                             | **No**                                                                                           | Angular 20's newer async primitives are not adopted.                                         |
 | Reactive Forms                                                              | Yes                                                                                              | Template-driven forms are marginal.                                                          |
@@ -230,7 +224,7 @@ initializer. `apps/nuxeo-ui/src/app/config/provide-app-config.ts` shows the patt
 3. Dependency injection — `inject()`, `InjectionToken`, `providedIn: 'root'`, hierarchical
    injectors, `provide*` factory functions. **DI tokens are this codebase's configuration seam**:
    `NUXEO_API_ORIGIN`, `CURRENT_USERNAME`, `ARENDER_CONFIG`, `AI_BACKEND_URL`, `KD_CIC_OPERATIONS`,
-   `ADMIN_ACCESS_CHECKS`, and the twelve adf-hx API tokens.
+   `ADMIN_ACCESS_CHECKS`.
 4. `HttpClient` — `provideHttpClient(withInterceptors([...]))`, `HttpContext` and
    `HttpContextToken` (used for `NUXEO_ESTABLISH_BROWSER_SESSION`), `HttpParams`, `responseType`,
    progress events
@@ -241,8 +235,7 @@ initializer. `apps/nuxeo-ui/src/app/config/provide-app-config.ts` shows the patt
 7. Change detection — `OnPush`, how signals interact with it, why `zone.js` is still present
 8. Reactive Forms — `FormControl`, `FormGroup`, `FormArray`, validators, `valueChanges`
 9. Content projection, `ng-template`, `ngTemplateOutlet`, dynamic components
-10. Pipes, including the fact that **adf-core injects pipes as services**, so `DecimalNumberPipe`,
-    `LocalizedDatePipe` and `FileSizePipe` must be explicitly provided or you get `NG0201`
+10. Pipes, including how a pipe used from TypeScript must be provided explicitly or you get `NG0201`
 
 - [Angular official docs (start here, they were rewritten for the modern API)](https://angular.dev/)
 - [Signals guide](https://angular.dev/guide/signals)
@@ -293,7 +286,7 @@ Resolved: **7.8.2** (`~7.8.0`).
 Signals own UI state; RxJS owns everything async and HTTP. Both, always. The operator set in
 active use, counted across `libs/`:
 
-- **Promise bridging: `firstValueFrom`** — 324 uses in `nuxeo-client`, 114 in `adf-hx-bridge` (removed since, NXSAT-635),
+- **Promise bridging: `firstValueFrom`** — 324 uses in `nuxeo-client`,
   59 in `kd-client`. This is the dominant idiom in the data layer, so learn it first.
 - `switchMap` (59 in `nuxeo-client`, 16 in `knowledge-discovery` for answer polling), `concatMap`,
   `mergeMap`
@@ -381,14 +374,14 @@ Estimated effort: **20 hours**.
 | ng-packagr                   | **22.2.5**                                                                                        | Builds the one publishable library                     |
 
 Topics: builder configuration in `angular.json`, `inlineStyleLanguage`, asset globs (this app pulls
-assets from five `node_modules` locations for adf-core, adf-hx and Satori i18n), `outputHashing`,
+assets from `node_modules` locations for Satori i18n), `outputHashing`,
 `inlineCritical`, `--base-href` (production builds under `/nuxeo/agentic-ui/`), and **budgets**.
 
 Budgets differ per app and the difference is the lesson:
 
 | App                     | initial warn / error | Why                                                                                                |
 | ----------------------- | -------------------- | -------------------------------------------------------------------------------------------------- |
-| `nuxeo-ui`              | 2.5 MB / 4 MB        | adf-core is eager; measured 1.71 MB → 2.86 MB after the ports and document-list swap               |
+| `nuxeo-ui`              | 2.5 MB / 4 MB        | The app shell and the eager routes; the budget is the guard on initial payload                     |
 | `nuxeo-satori-template` | **450 kB / 700 kB**  | A customer fork that stays on the published entry points should be small, and the budget proves it |
 
 There are **no `src/environments/` files**. Environment-specific values come from the Layer 0
@@ -448,8 +441,8 @@ Estimated effort: **8 hours**.
 
 | Tool                                                        | Version    |
 | ----------------------------------------------------------- | ---------- |
-| Vitest                                                      | **4.1.10** |
-| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.10     |
+| Vitest                                                      | **4.1.12** |
+| `@vitest/coverage-v8`, `@vitest/ui`                         | 4.1.12     |
 | jsdom                                                       | **28.1.0** |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | **2.9.0**  |
 
@@ -465,7 +458,7 @@ Four things in every `test-setup.ts` that you must understand rather than copy:
 
 1. `import '@angular/compiler'` — JIT compilation in tests
 2. `import '@analogjs/vitest-angular/setup-zone'` — without it, `TestBed.createComponent` throws
-   `NG0908` for anything that reaches `NgZone` through adf-core
+   `NG0908` for anything that reaches `NgZone`
 3. `global.ResizeObserver` stub — jsdom does not implement it
 4. `TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting())`
 
@@ -473,7 +466,7 @@ Three Vite workarounds baked into every config, each with a real cause:
 
 - `resolve.alias` rewriting `date-fns/locale` — Node's ESM resolver rejects directory imports that
   the Angular bundler tolerates
-- `server.deps.inline: [/@alfresco\//, /^date-fns/]` — so the alias actually applies to
+- `server.deps.inline: [/^date-fns/]` — so the alias actually applies to
   externalised `node_modules`
 - `pool: 'threads'` and `forceExit: true` — the default pool crashes under Node 20, and zone.js
   keeps the event loop alive after TestBed teardown
@@ -510,8 +503,8 @@ Configuration facts worth knowing before you write a spec:
   (NXSAT-643). `storageState` does not work
   because the app uses `sessionStorage`, not `localStorage`.
 
-Accessibility: `@axe-core/playwright` (also untracked), scanning 15 cases across 8 routes against
-WCAG 2.1 A/AA. Separately, `npm run a11y` runs 11 `@angular-eslint/template` a11y rules over 89
+Accessibility: `@axe-core/playwright` (also untracked), scanning against WCAG 2.1 A/AA. The
+2026-11-23 capture made 14 axe scans across 9 routes; quote the counts of the run you cite. Separately, `npm run a11y` runs 11 `@angular-eslint/template` a11y rules over 89
 templates and compares against `tools/a11y/baseline.json` — the verdict is "no _new_ violations",
 not "zero violations".
 
@@ -760,106 +753,54 @@ change**. Eight slots: `navbar` (14 packaged entries), `bulk-actions` (6), `tool
 - `overrides` honours exactly four keys — `order`, `label`, `rule`, `visible`. Anything else is
   silently dropped; `hiddenByDefault` must go through `slots`.
 
-`$references` layering uses our own copy of ACA's `mergeObjects`, pinned to the output of
-`@alfresco/adf-extensions` 9.0.0 (Alfresco Content App semantics): later wins, `$`-prefixed keys do not merge, arrays of objects merge **by
+`$references` layering uses our own `mergeObjects`: later wins, `$`-prefixed keys do not merge, arrays of objects merge **by
 `id`**, `"<key>.$replace"` replaces, `$ignoreReferenceList` drops a layer.
 
 - **In-repo:** `docs/extension-reference.md`, `libs/platform/extension-reference.md`,
   `AGENTS/11-beta-program.md`, `libs/extensions/acme-extensions/` (the worked customer example)
-- [ADF extensibility (the upstream model this borrows from)](https://alfresco-content-app.netlify.app/#/extending/)
-- [`@alfresco/adf-extensions` source](https://github.com/Alfresco/alfresco-ng2-components/tree/develop/lib/extensions)
 
 Estimated effort: **20 hours**.
 
 ---
 
-### 16. adf-hx, ADF and the Hyland Experience stack — **Area** (but Must for browse/search work)
+### 16. The `nxs-` component stack and the Hyland Satori design system — **Area** (but Must for browse/search work)
 
-_Changed by NXSAT-635 and NXSAT-638 (2026-10):_ none of this module is in the product any more. The
-bridge library, its ports and the POC routes were removed on 2026-10-14 (NXSAT-635), and the
-packages below by NXSAT-637. §16.1 to §16.4 are kept as the record; skip them unless
-you are reading history. Browse and search now use the `nxs-` components in
-`libs/shared/satori-components`.
+Browse, search, document detail and administration are built from the `nxs-` components in
+`libs/shared/satori-components`, published as `@nuxeo/satori-platform/components`. A second
+library, `libs/shared/satori-components-satori`, registers the same primitive IDs on
+`@hylandsoftware/satori-ui` and is published as `@nuxeo/satori-platform/components-satori`.
 
-| Package                             | Version             | Registry             | Note                                                        |
-| ----------------------------------- | ------------------- | -------------------- | ----------------------------------------------------------- |
-| `@alfresco/adf-hx-content-services` | 7.20.0-automate.292 | GitHub Packages only | **Removed in NXSAT-637**                                    |
-| `@alfresco/adf-core`                | 9.0.0               | GitHub Packages      | **Removed in NXSAT-637**                                    |
-| `@alfresco/adf-extensions`          | 9.0.0               | public npm           | **Removed in NXSAT-637**                                    |
-| `@alfresco/js-api`                  | 10.0.0              | devDependency        | **Removed in NXSAT-637**                                    |
-| `@hylandsoftware/hxcs-js-client`    | 2.0.111             | GitHub Packages      | **Removed in NXSAT-637**                                    |
-| `@hylandsoftware/satori-ui`         | 0.4.2 (`^0.4.2`)    | GitHub Packages      | Hyland design system; deliberately absent from the template |
+| Package                     | Version         | Registry        | Note                                                        |
+| --------------------------- | --------------- | --------------- | ----------------------------------------------------------- |
+| `@hylandsoftware/satori-ui` | 1.0.0 (`1.0.0`) | GitHub Packages | Hyland design system; deliberately absent from the template |
 
 Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on the Hyland org.
-`.npmrc` maps `@hylandsoftware` to `https://npm.pkg.github.com`; the `@alfresco` mapping went with
-the last `@alfresco` package in NXSAT-637.
+`.npmrc` maps `@hylandsoftware` to `https://npm.pkg.github.com`.
 
-Context that explains a lot of the workarounds: there has been no stable adf-hx release in twelve
-months (last true stable `7.19.5`, on an Angular 15 baseline); the published packages are compiled
-against **Angular 19.2.18** while this repo ran 20.3.34; and the dependency contract is
-**under-declared** — one declared peer against thirteen imported packages — so the pin set is
-maintained by hand.
+#### 16.1 Where a component lives
 
-#### 16.1 The twelve API ports
+Imports of `@hylandsoftware/satori-ui` stay inside the two satori-components libraries; a feature
+uses the `nxs-` wrapper, never the vendor component. `AGENTS/00-architecture.md` ("Adding a
+component") describes the `satori-component` generator that scaffolds a new one.
 
-adf-hx exposes twelve overridable injection tokens, all bound in
-`libs/shared/adf-hx-bridge/src/lib/providers/provide-adf-hx-nuxeo-bridge.ts`:
+#### 16.2 Nuxeo document model — mapping gotchas
 
-`DOCUMENT_API_TOKEN`, `QUERY_API_TOKEN`, `VERSION_API_TOKEN`, `COPY_API_TOKEN`, `MOVE_API_TOKEN`,
-`CHECKIN_API_TOKEN`, `DOWNLOAD_API_TOKEN`, `USER_API_TOKEN`, `GROUP_API_TOKEN`,
-`RENDITIONS_API_TOKEN`, `UPLOAD_API_TOKEN`, `MODEL_API_TOKEN`, plus `IDENTITY_USER_SERVICE_TOKEN`.
-
-`UPLOAD` is bound to an implementation that **refuses every call**, because Nuxeo's batch upload is
-a different protocol rather than a different endpoint. Bound-but-refusing is deliberate: eleven
-upstream services inject their token at construction, so an _unbound_ token stops components
-constructing at all, whereas a refusing one constructs and then fails at the point of use with a
-message naming the operation.
-
-#### 16.2 The HxPR document model — mapping gotchas
-
-Every one of these cost real debugging time and none is documented upstream:
-
-- **Nuxeo has no `sys` schema**, so the MODEL mapper supplies a pseudo-schema describing what our
-  own mapper emits. Without it, `Created` renders as a raw ISO string and `Creator` as
-  `[object Object]`.
-- **HxPR keys schema fields by their _prefixed_ name** (`dc_title`) while sub-fields stay
-  unprefixed. Get it wrong and every field silently becomes `FieldType.String`.
-- **A Nuxeo `@prefix` of `''` means "use the schema name"** — `file`, `uid` and `files` all report
-  empty and are addressed as `file:content`, `uid:major_version`.
-- **`sys_primaryType` must carry the real Nuxeo doctype name**, because it is the key into
-  `Model.primaryTypes`. Classify with `sys_isFolderish` and `sys_mixinTypes`, never
-  `sys_primaryType`.
-- **adf-hx writes `SysFilish`, with no `e`.**
+- **Nuxeo schema fields are prefixed** (`dc:title`, `file:content`, `uid:major_version`). A Nuxeo
+  `@prefix` of `''` means "use the schema name" — `file`, `uid` and `files` all report empty.
 - **Nuxeo sends no `versionLabel`** — build it from `uid:major_version` / `uid:minor_version`. A
   version's `parentRef` is the live document's _folder_; the live document id is `versionableId`.
-- **Never hand upstream a `User` with an unset `firstName`** — `getFullName` is an unguarded
-  template literal that renders `undefined undefined`.
+- **Classify documents with `isFolder` and the facets**, not by comparing the doctype name.
 
-#### 16.3 The `hxp-*` prefix lies
+#### 16.3 Keep the layers apart
 
-The prefix tells you nothing about authorship; the **import** does. Genuinely upstream:
-`hxp-document-list`, `hxp-breadcrumb`, `hxp-properties-sidebar`, `hxp-ui-document-viewer`,
-`hxp-manage-versions-sidebar`, `hxp-document-tree`, `PermissionsManagementPanelComponent`.
-Everything else under `libs/shared/adf-hx-bridge/src/lib/ui/` — thirteen components — is ours.
+The `nxs-` library may import only Angular, the Nuxeo-owned libraries and its own files; the
+`checkSatoriComponentsDependencies` guardrail walks the import graph transitively to prove it. Read
+`AGENTS/11-beta-program.md` for the Beta contract that the component IDs belong to.
 
-#### 16.4 The two-entry-point split
+- [`docs/beta-plan.md`](../../docs/beta-plan.md) — the plan of record
+- [`docs/extension-reference.md`](../../docs/extension-reference.md) — the registered-ID contract
 
-`adf-hx-bridge` exports from two barrels on purpose. A barrel is one module, so re-exporting the
-ports from the main barrel dragged adf-core into the _initial_ bundle: measured 1.70 MB baseline →
-2.65 MB with ports → 2.86 MB with the document-list swap, against a 2.00 MB `maximumError` at the
-time. Anything importing `@alfresco/adf-hx-*` is exported only from
-`@agentic-ui/shared/adf-hx-bridge/providers`. The lazy POC route is the intended consumer for
-most of that surface; `app.config.ts` and the shell nav drawer also import it on purpose for
-`provideAdfHxNuxeoBridge()` and `HxpBrowseNavDrawerComponent` (documented in
-`providers.ts` and the guardrail allowlist in `scripts/review-guardrails.mjs`).
-
-- [ADF documentation](https://alfresco-ng2-components.netlify.app/)
-- [ADF source](https://github.com/Alfresco/alfresco-ng2-components)
-- **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
-  (removed with the bridge; in git history),
-  `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-workarounds.md`, `docs/adf-hx-beta-plan.md`
-
-Estimated effort: **30 hours**.
+Estimated effort: **10 hours**.
 
 ---
 
@@ -895,9 +836,19 @@ consequence of Automation's flat parameter model.
 RAG happens **server-side**. There is no client-side streaming: no `EventSource`, no chunked reads.
 Each chat turn is a single POST with the history replayed.
 
-Feature flag: `AiFeatureFlagService` is a signal backed by `localStorage['ai-features-enabled']`,
-**default on** with an explicit user opt-out, surfaced to the manifest as rule
-`app.rules.isAiEnabled`, which gates the `app.tabs.aiInsights` tab.
+Feature flag: `AiFeatureFlagService.aiEnabled` is **`false` for every user and not toggleable at
+runtime** — `AI_FEATURES_ENABLED = false` at `ai-feature-flag.service.ts:35` since `a519ebd5d`. It
+does not read `localStorage` while off; both stored keys are purged on construction. The flag is
+still surfaced to the manifest as rule `app.rules.isAiEnabled` (`surface-rules.ts:30`), which gates
+the `app.tabs.aiInsights` tab (`packaged-tabs.ts:30`), so the tab is **hidden by default**.
+
+**Hidden by default is not the same as unreachable, and the difference is worth knowing.** A
+manifest override of `{"rule": null}` clears a packaged rule rather than being ignored
+(`extension-slot-registry.service.ts:178-180`), and the tab body has no second flag check of its
+own (`document-detail.html:725`), so a manifest can put that tab back on screen. What it cannot do
+is make it work: `AiGatewayService` checks the flag itself (`ai-gateway.service.ts:64`) and refuses
+every request, so an unhidden tab renders its errors and no AI traffic reaches the wire. **The
+network block is unconditional; the UI gate is configuration.**
 
 Concepts to learn: prompt/response contracts, RAG at a conceptual level, why a UI must treat every
 AI response as untrusted content (the `AiMarkdownPipe` renders through DOMPurify), and graceful
@@ -961,13 +912,13 @@ Estimated effort: **20 hours** for §17.1 and §17.2 together.
 
 ### 18. Third-party UI and utility libraries — **Area**
 
-| Library                         | Version                | Where                                         | What to learn                                                                                                                                                                                                                                                     |
-| ------------------------------- | ---------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Quill**                       | **2.0.3** (`^2.0.3`)   | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                                                                                                                                    |
-| **DOMPurify**                   | **3.4.17** (`^3.4.16`) | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                                                                                                                                                |
-| **`@ngx-translate/core`**       | **17.0.0**             | App and three features                        | Custom `TranslateLoader`. **Trap:** adf-core's `TranslationService` does _not_ use the ngx-translate loader interface — extend `AppTranslateLoader` and override `getTranslation`; swapping in adf-core's loader deletes the manifest-`labels` Layer 0 capability |
-| **`@hylandsoftware/satori-ui`** | **0.4.2**              | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`. 0.4 renamed its classes with a `Sat` prefix and re-exports the old names                                                                                                                                  |
-| **`date-fns`**                  | **2.30.0** (`^2.30.0`) | `libs/shared/ui`'s Satori date adapter        | Locales and parsing behind `provideSatoriDateAdapter`, with `@angular/material-date-fns-adapter`.                                                                                                                                                                 |
+| Library                         | Version                | Where                                         | What to learn                                                                                                                                   |
+| ------------------------------- | ---------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quill**                       | **2.0.3** (`^2.0.3`)   | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                  |
+| **DOMPurify**                   | **3.4.17** (`^3.4.16`) | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                              |
+| **`@ngx-translate/core`**       | **18.0.0**             | App and three features                        | Custom `TranslateLoader`. **Trap:** the manifest-`labels` Layer 0 capability depends on `AppTranslateLoader`; a replacement loader must keep it |
+| **`@hylandsoftware/satori-ui`** | **1.0.0**              | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`. 1.0.0 removed the old unprefixed and `…Component` names (DS-1850, DS-2107)              |
+| **`date-fns`**                  | **2.30.0** (`^2.30.0`) | `libs/shared/ui`'s Satori date adapter        | Locales and parsing behind `provideSatoriDateAdapter`, with `@angular/material-date-fns-adapter`.                                               |
 
 - [Quill](https://quilljs.com/docs/quickstart)
 - [DOMPurify](https://github.com/cure53/DOMPurify)
@@ -1136,7 +1087,9 @@ rather than a fixed 90% cliff.
 
 #### 22.3 SonarCloud
 
-Organisation `nuxeo`, project key `nuxeo_agentic-ui-poc`. Coverage is **one explicit path** —
+Organisation `nuxeo`, project key `nuxeo_agentic-ui-poc` — still the repository's former name,
+because a Sonar key is an identifier and does not follow a GitHub rename. Coverage is **one
+explicit path** —
 `coverage/lcov.info`, written by `scripts/lcov-merge.mjs`, which rebases every project's LCOV onto
 the repository root and fails if any source path does not resolve. Sonar drops unresolvable paths
 silently and reports 0%, which is exactly what happened before the merge script existed.
@@ -1183,19 +1136,17 @@ is the "do not miss a single feature" checklist.
 
 ### Feature libraries
 
-| Feature                       | Route                          | Capability                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Extra technologies                                                                                     |
-| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Browse** (largest)          | `/#/browse`                    | Folder tree, breadcrumbs, list/card/table views, sortable paginated tables, column picker with persisted settings, details panel, inline metadata editing, multi-select bulk actions (zip download, delete, add to collection, clipboard, compare, publish), create/import (single, multi-file, CSV server import), folder picker, CSV export, permissions with notification email, history, trash, Drive launch                                                                                                                                                                                                          | 82 signals, `ResizeObserver`, blob lifecycle, `localStorage`, §13 batch upload, §16 for the POC routes |
-| **Document Detail** (richest) | `/#/doc/:uid`                  | Six tabs — View, Annotations, Permissions, History, Publishing, AI Insights. Preview of main blob and attachments, download, versions (create/restore/compare), permissions (add/edit/delete/external share/inheritance block), audit log, publishing and republish/unpublish, threaded comments with edit/reply/delete plus AI sentiment, tags with AI suggestions, favorites, subscription, lock/unlock, clipboard, trash/restore/permanent delete, workflow start and abandon, attachment upload/replace/remove, rich-text note editor, Drive launch, Content Lake ingestion, AI actions, Knowledge Enrichment actions | §18 Quill + DOMPurify, §17.1 five AI ops, §17.2 KE, Canvas, `ResizeObserver`, §15 extension outlets    |
-| **Search**                    | `/#/search`                    | Faceted/aggregated search, filters drawer, natural-language→NXQL with AI suggestions, saved searches (create, share internally and externally), thumbnail grids, bulk actions, search queue                                                                                                                                                                                                                                                                                                                                                                                                                               | §17.1 `AI.NlToNxql`, `toSignal` + `toObservable`, §13 page providers                                   |
-| **Assets**                    | `/#/documents`                 | Digital-asset results in grid or table, aggregation drawer, manageable columns, CSV export, saved searches, sorting, queue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `assets_search` page provider, blob lifecycle                                                          |
-| **Collections**               | `/#/collections/:uid`          | Member listing with sort/paginate/search, add and remove members, edit and delete, permissions tab, history tab, export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `Collection.Create`, `Document.AddToCollection`                                                        |
-| **Tasks**                     | `/#/tasks`, `/#/tasks/:taskId` | Workflow inbox, task detail with the attached document previewed inline, form fields, completion and delegation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | §13 workflow and task APIs. **The simplest feature to read first — no RxJS at all.**                   |
-| **Trash**                     | `/#/trash`                     | Grid/table/list views, filter drawer, restore and permanent delete (single and bulk), saved searches over trash                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `ecm:isTrashed`, trash operations                                                                      |
-| **Administration**            | `/#/administration`            | Eight pages — Analytics (repository, distribution, workflow, search dashboards), Users & Groups, User Details, Group Details, Vocabularies, Audit log with AI search and summary, Cloud Services (OAuth2 providers/consumers/tokens), raw NXQL console. Three pages behind `fullAdministratorGuard`                                                                                                                                                                                                                                                                                                                       | §13 user/group/directory/audit/OAuth2 APIs, §17.1 three AI ops                                         |
-| **Knowledge Discovery**       | `/#/knowledge-discovery`       | Agent selection, guardrail display, model info, answers rendered as segments with inline numbered citations openable in a dialog, question history, thumbs feedback, direct Content Lake upload, `?debug=1` diagnostic surface                                                                                                                                                                                                                                                                                                                                                                                            | §17.2 in full; 16 `switchMap` for answer polling                                                       |
-| ~~**adf-hx Browse POC**~~     | ~~`/#/browse-adf-hx`~~         | Removed on 2026-10-14 (NXSAT-635); the path redirects to `/#/browse`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ~~**adf-hx Search POC**~~     | ~~`/#/search-adf-hx`~~         | Removed on 2026-10-14 (NXSAT-635); the path redirects to `/#/search`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Feature                       | Route                          | Capability                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Extra technologies                                                                                  |
+| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Browse** (largest)          | `/#/browse`                    | Folder tree, breadcrumbs, list/card/table views, sortable paginated tables, column picker with persisted settings, details panel, inline metadata editing, multi-select bulk actions (zip download, delete, add to collection, clipboard, compare, publish), create/import (single, multi-file, CSV server import), folder picker, CSV export, permissions with notification email, history, trash, Drive launch                                                                                                                                                                                                          | 82 signals, `ResizeObserver`, blob lifecycle, `localStorage`, §13 batch upload                      |
+| **Document Detail** (richest) | `/#/doc/:uid`                  | Six tabs — View, Annotations, Permissions, History, Publishing, AI Insights. Preview of main blob and attachments, download, versions (create/restore/compare), permissions (add/edit/delete/external share/inheritance block), audit log, publishing and republish/unpublish, threaded comments with edit/reply/delete plus AI sentiment, tags with AI suggestions, favorites, subscription, lock/unlock, clipboard, trash/restore/permanent delete, workflow start and abandon, attachment upload/replace/remove, rich-text note editor, Drive launch, Content Lake ingestion, AI actions, Knowledge Enrichment actions | §18 Quill + DOMPurify, §17.1 five AI ops, §17.2 KE, Canvas, `ResizeObserver`, §15 extension outlets |
+| **Search**                    | `/#/search`                    | Faceted/aggregated search, filters drawer, natural-language→NXQL with AI suggestions, saved searches (create, share internally and externally), thumbnail grids, bulk actions, search queue                                                                                                                                                                                                                                                                                                                                                                                                                               | §17.1 `AI.NlToNxql`, `toSignal` + `toObservable`, §13 page providers                                |
+| **Assets**                    | `/#/documents`                 | Digital-asset results in grid or table, aggregation drawer, manageable columns, CSV export, saved searches, sorting, queue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `assets_search` page provider, blob lifecycle                                                       |
+| **Collections**               | `/#/collections/:uid`          | Member listing with sort/paginate/search, add and remove members, edit and delete, permissions tab, history tab, export                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `Collection.Create`, `Document.AddToCollection`                                                     |
+| **Tasks**                     | `/#/tasks`, `/#/tasks/:taskId` | Workflow inbox, task detail with the attached document previewed inline, form fields, completion and delegation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | §13 workflow and task APIs. **The simplest feature to read first — no RxJS at all.**                |
+| **Trash**                     | `/#/trash`                     | Grid/table/list views, filter drawer, restore and permanent delete (single and bulk), saved searches over trash                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `ecm:isTrashed`, trash operations                                                                   |
+| **Administration**            | `/#/administration`            | Eight pages — Analytics (repository, distribution, workflow, search dashboards), Users & Groups, User Details, Group Details, Vocabularies, Audit log with AI search and summary, Cloud Services (OAuth2 providers/consumers/tokens), raw NXQL console. Three pages behind `fullAdministratorGuard`                                                                                                                                                                                                                                                                                                                       | §13 user/group/directory/audit/OAuth2 APIs, §17.1 three AI ops                                      |
+| **Knowledge Discovery**       | `/#/knowledge-discovery`       | Agent selection, guardrail display, model info, answers rendered as segments with inline numbered citations openable in a dialog, question history, thumbs feedback, direct Content Lake upload, `?debug=1` diagnostic surface                                                                                                                                                                                                                                                                                                                                                                                            | §17.2 in full; 16 `switchMap` for answer polling                                                    |
 
 ### Shared libraries
 
@@ -1205,7 +1156,6 @@ is the "do not miss a single feature" checklist.
 | `shared/ui`                  | Document viewer (image zoom/rotate/fit, video storyboard, picture formats, EXIF/IPTC, ARender tab), compare dialog, confirm, export, saved-search and share dialogs, selection topbar, widget grid | Blob lifecycle, §21 ARender                               |
 | `shared/extensions`          | Slot, rule, action and component registries; the manifest engine                                                                                                                                   | §15 in full                                               |
 | `shared/app-config`          | Bootstrap config and runtime manifest loading                                                                                                                                                      | `APP_INITIALIZER`, §15                                    |
-| ~~`shared/adf-hx-bridge`~~   | Removed on 2026-10-14 (NXSAT-635)                                                                                                                                                                  | —                                                         |
 | `shared/ai-client`           | `AiGatewayService`, `AiChatService`, feature flag                                                                                                                                                  | §17.1                                                     |
 | `shared/kd-client`           | KD operations, citation parsing (~22 utilities)                                                                                                                                                    | §17.2                                                     |
 | `shared/ke-client`           | KE enrichment operations                                                                                                                                                                           | §17.2, multipart                                          |
@@ -1231,7 +1181,7 @@ The dependency order matters more than the pace. Each phase assumes the previous
 | **2 — Framework**      | 4–7               | §5 Angular, §7 RxJS, §6 Material                                  | Build a standalone page with signals, a service, a Material table and a dialog |
 | **3 — Repository**     | 8–9               | §8 Nx, §9 build, §10 lint, §11 Vitest                             | Add a library with correct tags, wire its targets, get `beta:gate` green       |
 | **4 — Domain**         | 10–13             | §13 Nuxeo, §14 auth/security                                      | Add a service method that calls a new Nuxeo endpoint, with tests               |
-| **5 — The product**    | 14–16             | §15 extension contract, §16 adf-hx                                | Register a new action and rule; make a hardcoded list manifest-driven          |
+| **5 — The product**    | 14–16             | §15 extension contract, §16 `nxs-` components                     | Register a new action and rule; make a hardcoded list manifest-driven          |
 | **6 — Specialisation** | 17–20             | §12 E2E, §17 AI/KD/KE, §18 libraries, §19–22 packaging, infra, CI | Ship a feature end to end with evidence and a green PR                         |
 
 ### Prove it to yourself — graduation exercises
@@ -1288,8 +1238,8 @@ before relying on it.
 | `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)   |
 | `zone.js`                                                                                  | 0.16.3 (`~0.16.3`) |
 | `tslib`                                                                                    | `^2.3.0`           |
-| `@hylandsoftware/satori-ui`                                                                | 0.4.2 (`^0.4.2`)   |
-| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`) |
+| `@hylandsoftware/satori-ui`                                                                | 1.0.0 (`1.0.0`)    |
+| `@ngx-translate/core`                                                                      | 18.0.0 (`18.0.0`)  |
 | `quill`                                                                                    | 2.0.3 (`^2.0.3`)   |
 | `dompurify`                                                                                | 3.4.17 (`^3.4.16`) |
 | `date-fns`                                                                                 | 2.30.0 (`^2.30.0`) |
@@ -1304,7 +1254,7 @@ before relying on it.
 | `ng-packagr`                                                | 22.2.5                                                   |
 | `vite`                                                      | 8.3.5 (`^8.3.5`; the same version pinned by `overrides`) |
 | `esbuild`                                                   | 0.28.2 (pinned by `overrides`)                           |
-| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.10                                                   |
+| `vitest`, `@vitest/coverage-v8`, `@vitest/ui`               | 4.1.12                                                   |
 | `jsdom`                                                     | 28.1.0                                                   |
 | `@analogjs/vite-plugin-angular`, `@analogjs/vitest-angular` | 1.22.5                                                   |
 | `eslint`                                                    | 9.39.5                                                   |

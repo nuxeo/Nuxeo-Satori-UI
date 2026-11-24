@@ -1,7 +1,9 @@
 # SonarCloud security remediation plan
 
 **Scope:** the 34 issues with a `SECURITY` software-quality impact, status `OPEN` or `CONFIRMED`, on
-`nuxeo_agentic-ui-poc`.
+`nuxeo_agentic-ui-poc` — the SonarCloud project key, which kept the repository's former name when
+GitHub renamed `nuxeo/agentic-ui-poc` to `nuxeo/Nuxeo-Satori-UI` on 30 October 2026. Every
+`componentKeys=` below is that key and is correct as written.
 **Sonar effort estimate:** 1 000 minutes (16 h 40 m). That number is Sonar's per-rule default
 (30 min × 32 + 5 + 5), not an estimate of this plan.
 
@@ -243,7 +245,7 @@ So the gate is accepted as red, which is what `sonarcloud.yml` already does via
 consecutive runs over an unowned threshold and taught everyone to ignore it. It is not a required
 status check. This is **not** a statement that the findings are acceptable: the endgame is to finish
 A, B and D to reach the floor, then transition the residual issues to _Accepted_ with a justification
-naming this document and the allowlist entry — which needs **Administer Issues** (open question 4).
+naming this document and the allowlist entry — which needs **Administer Issues** (open question 3).
 
 Deliberately not done: `// NOSONAR`, a blanket `eslint-disable`, or an Accepted transition while the
 code is unchanged and unguarded. Each clears the number and destroys the record of the reasoning at
@@ -504,15 +506,10 @@ the `DomSanitizer` injection goes with it wherever it becomes unused (an explici
 `.cursor/rules/angular-conventions.mdc`).
 
 **Blast radius — this is the one thing to get right.** These maps do not all stop at the component.
-Three shared consumers are typed on the value and must change in the same commit:
+Two shared consumers are typed on the value and must change in the same commit:
 
 - `SelectionService` preview map → `libs/shared/ui/selection-topbar.component.html:66`
 - `TrashFilterService.resultThumbnails` → `trash-filters-drawer.component.html:205`
-- `libs/shared/adf-hx-bridge` → `hxp-document-cards.component.html:15`,
-  `hxp-browse-trash.component.html:28`
-
-`adf-hx-bridge` is public API surface. Confirm with `npm run beta:api` that widening `SafeUrl` to
-`string` there is an allowed change, or keep the bridge's signature and convert at its boundary.
 
 **Follow-on cleanup, once the raw string is readable again.** The `thumbnailBlobUrls: string[]`
 shadow arrays in `browse.ts`, `collection-detail.ts`, `dashboard-page.component.ts` and
@@ -834,7 +831,7 @@ Two traps from `CLAUDE.md` that apply directly to this work:
 - **Nothing but the `lockfile` gate reads `package-lock.json`.** No dependency changes are expected;
   if one appears, do not run a bare `npm install`.
 
-Also relevant: `beta:api` (Category A touches `adf-hx-bridge` public API), `beta:coverage` (new
+Also relevant: `beta:api`, `beta:coverage` (new
 helpers need tests), `a11y` (Category B edits templates).
 
 ### Per-category functional evidence
@@ -1117,29 +1114,25 @@ Each of these would close the Sonar issues and leave the codebase worse.
 
 ## 8. Open questions for a human
 
-1. **`adf-hx-bridge` public API.** Category A widens `SafeUrl` to `string` in
-   `hxp-document-cards` and `hxp-browse-trash`. Is that an acceptable Beta-contract change, or should
-   the bridge keep `SafeUrl` and convert at its boundary? `npm run beta:api` will have an opinion;
-   the contract owner should have the deciding one.
-2. **ARender in production.** Is `integrations.arender` expected to arrive from a server-side
+1. **ARender in production.** Is `integrations.arender` expected to arrive from a server-side
    manifest today? If yes, the compiled `localhost:8180` fallback can simply go. If no, ARender is
    already non-functional in any deployed build and Category E site 1 is a live defect rather than a
    lint finding.
-3. **Has anyone noticed audio and transcoded video being broken?** Section 2 establishes that those
+2. **Has anyone noticed audio and transcoded video being broken?** Section 2 establishes that those
    paths write a `"SafeValue must use…"` string into `src`; the coercion is spec'd DOM behaviour, so
    this is not a jsdom artefact. The open question is a product one: if nobody has reported it, these
    branches are effectively unused, which changes how much of section 6 group B is worth building and
    whether the fix belongs in PR 4 or a bug ticket of its own.
-4. **Sonar token.** Resolving the three residual issues needs _Administer Issues_ on the project.
+3. **Sonar token.** Resolving the three residual issues needs _Administer Issues_ on the project.
    Who grants it, and should it live in CI or stay a human action?
-5. **`sonar.exclusions` hides the files most likely to hold findings.** `**/*.config.ts` (lines 25
+4. **`sonar.exclusions` hides the files most likely to hold findings.** `**/*.config.ts` (lines 25
    and 64 of `sonar-project.properties`) meant the two hardcoded `http://` endpoints in
    `arender.config.ts` were never scanned; they were found only because a reviewer read the file.
    `**/scripts/**` and `**/tools/**` are excluded on the same grounds. The rationale — "configuration
    and tooling" is not product code — is reasonable for _maintainability_ rules and wrong for
    _security_ rules, which is precisely where hardcoded endpoints and credentials live. Worth
    narrowing the exclusion to the non-security rule set, and expecting new findings when it is.
-6. ~~**Does `mergeIntegrations` mean what its comment says?**~~ **Answered by NXSAT-279.** It claimed
+5. ~~**Does `mergeIntegrations` mean what its comment says?**~~ **Answered by NXSAT-279.** It claimed
    both ARender endpoints were required and enforced neither. Rather than enforce both, the Layer 0
    semantics decision was to require only `viewerOrigin`: `nuxeoInternalUrl` became vestigial when
    the client stopped building `?url=` values, so gating on it could only reject configurations that

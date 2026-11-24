@@ -48,8 +48,12 @@ jobs:
           cache: npm
       - name: Install the locked dependency tree
         run: npm ci
-      - name: Generate the documentation imported by spec typechecks
-        run: npx nx run satori-components:compodoc
+      # There was a `satori-components:compodoc` step here, and it was the reason this job never
+      # saw the defect that made `npm run beta:gate` red on every fresh clone: it generated the
+      # gitignored `documentation.json` that `spec-types` needs, so the gate's own missing
+      # dependency was invisible from CI. `spec-typecheck.mjs` declares it in `PREREQUISITES` and
+      # runs the target itself now, so the step is redundant — and keeping a workaround that hides
+      # the failure it works around is how this stayed unnoticed.
       - name: Build the application required by the bundle gate
         run: npx nx build nuxeo-ui
       - name: CodeQL wait controls

@@ -299,6 +299,28 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       expect(update().disabled).toBe(true);
     });
 
+    it('blocks a malformed start date in the button and the direct write, then accepts a date', async () => {
+      await open(external());
+      const write = () => ref.componentInstance['update']();
+      const start = dateBoxes()[0];
+
+      await type(start, 'not-a-date');
+      start.dispatchEvent(new Event('blur'));
+      await settle();
+      expect(update().disabled).toBe(true);
+      write();
+      expect(replace).not.toHaveBeenCalled();
+
+      // Month first, as this suite's other typed dates; a day of 20 cannot be read the other way.
+      await type(start, '1/20/2030');
+      start.dispatchEvent(new Event('blur'));
+      await settle();
+      expect(update().disabled).toBe(false);
+      write();
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(sent()).toMatchObject({ begin: '2030-01-20' });
+    });
+
     it('is replaced in place, with a notification, its unchanged end kept', async () => {
       const end = localMidnight(2031, 2, 1);
       await open(external({ end }));
@@ -411,6 +433,24 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       await save();
 
       expect(sent()).toMatchObject({ permission: 'ReadWrite', begin, end });
+    });
+
+    it('shows the last day of a share Nuxeo Web UI wrote, and keeps its end when it is kept', async () => {
+      // Web UI's `endOf('day')` in the user's own zone: one second before 5 March starts.
+      const end = new Date(new Date(2030, 2, 5).getTime() - 1000).toISOString();
+      await open(external({ end }));
+      expect(dateBoxes()[1].value).toBe('2030-03-04');
+      await pick('Edit');
+
+      await save();
+
+      expect(sent()).toMatchObject({ permission: 'ReadWrite', end });
+    });
+
+    it('reads a start a second short of a quarter hour as its own day, not as an end', async () => {
+      await open(local({ begin: '2030-01-02T00:14:59.000Z', end: localMidnight(2030, 3, 4) }));
+
+      expect(dateBoxes()[0].value).toBe('2030-01-02');
     });
 
     it('writes a typed date as the day it names', async () => {

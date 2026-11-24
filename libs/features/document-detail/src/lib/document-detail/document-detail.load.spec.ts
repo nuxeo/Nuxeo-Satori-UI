@@ -171,6 +171,9 @@ const mockAiGateway = {
 };
 const mockNuxeoApi = {
   nxqlSearch: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
+  // The rendered page asks for each document type's schema; an empty answer means "no schema",
+  // which DocumentLayoutService already treats as a null definition.
+  get: vi.fn((): Observable<unknown> => of(undefined)),
 };
 const mockDialog = {
   open: vi.fn((..._args: unknown[]): { afterClosed: () => Observable<unknown> } => ({
@@ -280,6 +283,38 @@ describe('DocumentDetailComponent — load chain', () => {
     mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
 
     await configure();
+  });
+
+  describe('start process dialog', () => {
+    it('gives the empty Choose process field a visible placeholder (NXSAT-323)', async () => {
+      mockDetailService.getRunnableWorkflows.mockReturnValueOnce(
+        of([{ 'entity-type': 'workflowModel', name: 'Review', title: 'Review' }]),
+      );
+      TestBed.resetTestingModule();
+      await configure({ rendered: true });
+      mockDetailService.getFullDocument.mockReturnValue(of(doc()));
+      fixture = TestBed.createComponent(DocumentDetailComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+      // The first pass loads the document the dialog sits inside; then the dialog opens.
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      component.openStartProcess();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.selectedWorkflowModel()).toBe('');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('.start-process-field'),
+      ).not.toBeNull();
+      // Without a placeholder the empty field reads as broken. The text must be readable,
+      // not an unresolved i18n key.
+      const select = fixture.debugElement.query((de) => de.name === 'mat-select')
+        .componentInstance as { placeholder: string };
+      expect(select.placeholder).toBeTruthy();
+      expect(select.placeholder).not.toMatch(/^document-detail\./);
+    });
   });
 
   describe('loadDocument', () => {
@@ -729,6 +764,20 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
   describe('trash and permanent delete', () => {
+    it('offers Restore and Delete permanently on the trashed banner, through its actions', async () => {
+      await build(doc({ state: 'deleted' }));
+      mockDetailService.restoreFromTrash.mockReturnValue(of(undefined));
+      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
+      mockDetailService.permanentlyDelete.mockReturnValue(of(undefined));
+
+      const [restore, remove] = component.trashedBanner().actions;
+      restore.press();
+      remove.press();
+
+      expect(mockDetailService.restoreFromTrash).toHaveBeenCalledWith('doc-1');
+      expect(mockDetailService.permanentlyDelete).toHaveBeenCalled();
+    });
+
     it('trashes after confirmation and navigates away', async () => {
       await build();
       mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });

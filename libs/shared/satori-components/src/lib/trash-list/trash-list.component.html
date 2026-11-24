@@ -1,0 +1,312 @@
+@if (selectedCount() > 0) {
+  <section
+    class="nxs-trash-list__selection"
+    [attr.aria-label]="'satori-components.trash-list.selection' | translate"
+  >
+    <span class="nxs-trash-list__selection-count">{{
+      (selectedCount() === 1
+        ? 'satori-components.trash-list.selected-one'
+        : 'satori-components.trash-list.selected-many'
+      ) | translate: { count: selectedCount() }
+    }}</span>
+    <button mat-button type="button" (click)="clearSelection()">
+      {{ 'satori-components.trash-list.clear-selection' | translate }}
+    </button>
+    <span class="nxs-trash-list__spacer"></span>
+    <button
+      mat-flat-button
+      type="button"
+      class="nxs-trash-list__restore-selected"
+      [disabled]="selectionBusy()"
+      (click)="restoreSelected()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="restore" />
+      {{ 'satori-components.trash-list.restore' | translate }}
+    </button>
+    <button
+      mat-stroked-button
+      type="button"
+      class="nxs-trash-list__purge-selected"
+      [disabled]="selectionBusy()"
+      (click)="purgeSelected()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="trash_x" />
+      {{ 'satori-components.trash-list.purge' | translate }}
+    </button>
+  </section>
+}
+
+<div class="nxs-trash-list__toolbar">
+  <output class="nxs-trash-list__count">
+    @if (!loading() && !error() && totalSize() >= 0) {
+      {{
+        (totalSize() === 1
+          ? 'satori-components.trash-list.count-one'
+          : 'satori-components.trash-list.count-many'
+        ) | translate: { count: totalSize() }
+      }}
+    }
+  </output>
+
+  <div class="nxs-trash-list__tools">
+    @if (view() !== 'table') {
+      <mat-select
+        class="nxs-trash-list__sort"
+        [value]="sort().key"
+        [aria-label]="'satori-components.trash-list.sort-by' | translate"
+        (selectionChange)="onSortKey($event.value)"
+      >
+        @for (choice of sortChoices; track choice.key) {
+          <mat-option [value]="choice.key">{{ choice.labelKey | translate }}</mat-option>
+        }
+      </mat-select>
+      @let directionLabel =
+        (sort().direction === 'asc'
+          ? 'satori-components.trash-list.sorted-ascending'
+          : 'satori-components.trash-list.sorted-descending'
+        ) | translate;
+      <button
+        mat-icon-button
+        type="button"
+        class="nxs-trash-list__direction"
+        [matTooltip]="directionLabel"
+        [attr.aria-label]="directionLabel"
+        (click)="toggleDirection()"
+      >
+        <mat-icon
+          aria-hidden="true"
+          [svgIcon]="sort().direction === 'asc' ? 'arrow_up' : 'arrow_down'"
+        />
+      </button>
+    } @else {
+      <button
+        mat-icon-button
+        type="button"
+        class="nxs-trash-list__columns"
+        [matTooltip]="'satori-components.trash-list.columns' | translate"
+        [attr.aria-label]="'satori-components.trash-list.columns' | translate"
+        [attr.aria-expanded]="pickerOpen()"
+        (click)="pickerOpen.set(!pickerOpen())"
+      >
+        <mat-icon aria-hidden="true" svgIcon="settings" />
+      </button>
+    }
+    <button
+      mat-icon-button
+      type="button"
+      [matTooltip]="'satori-components.trash-list.export-csv' | translate"
+      [attr.aria-label]="'satori-components.trash-list.export-csv' | translate"
+      [disabled]="loading() || documents().length === 0"
+      (click)="exportCsv()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="download" />
+    </button>
+    <fieldset
+      class="nxs-trash-list__views"
+      [attr.aria-label]="'satori-components.trash-list.views' | translate"
+    >
+      @for (option of views; track option) {
+        <button
+          mat-icon-button
+          type="button"
+          class="nxs-trash-list__view"
+          [class.nxs-trash-list__view--active]="view() === option"
+          [attr.data-view]="option"
+          [attr.aria-pressed]="view() === option"
+          [matTooltip]="viewLabel(option)"
+          [attr.aria-label]="viewLabel(option)"
+          (click)="setView(option)"
+        >
+          <mat-icon aria-hidden="true" [svgIcon]="viewIcon(option)" />
+        </button>
+      }
+    </fieldset>
+  </div>
+</div>
+
+@if (view() === 'table') {
+  <div class="nxs-trash-list__table">
+    @if (pickerOpen()) {
+      <nxs-column-picker
+        [columns]="pickerColumns()"
+        [required]="requiredColumns"
+        [defaults]="defaultColumns"
+        (apply)="applyColumns($event)"
+        (dismiss)="pickerOpen.set(false)"
+      />
+    }
+    <nxs-document-list
+      [documents]="documents()"
+      [columns]="columns()"
+      [label]="'satori-components.trash-list.label' | translate"
+      [sort]="sort()"
+      [selectedIds]="selectedIds()"
+      (selectedIdsChange)="selectedIds.set($event)"
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalSize]="totalSize()"
+      [hasNextPage]="hasNextPage()"
+      [loading]="loading()"
+      [error]="error()"
+      [errorHeading]="'satori-components.trash-list.load-failed' | translate"
+      [emptyHeading]="emptyHeading()"
+      [rowActions]="rowActions()"
+      (sortChange)="onSortChange($event)"
+      (pageChange)="goToPage($event)"
+      (open)="open($event)"
+      (rowAction)="onRowAction($event)"
+      (retry)="reload()"
+    />
+  </div>
+} @else if (loading()) {
+  <div class="nxs-trash-list__state">
+    <nxs-spinner diameter="36" [label]="'satori-components.trash-list.loading' | translate" />
+  </div>
+} @else if (error(); as status) {
+  <nxs-error-state
+    [status]="status"
+    [heading]="status === 500 ? ('satori-components.trash-list.load-failed' | translate) : ''"
+    retryable
+    (retry)="reload()"
+  />
+} @else if (documents().length === 0) {
+  <!-- An empty page past the first is not an empty trash: the pager below says there is nothing more. -->
+  @if (pageIndex() === 0) {
+    <nxs-empty-state icon="trash" [heading]="emptyHeading()" />
+  }
+} @else {
+  <div class="nxs-trash-list__select-all">
+    <mat-checkbox [checked]="allSelected()" (change)="toggleAll($event.checked)">
+      {{ 'satori-components.trash-list.select-page' | translate }}
+    </mat-checkbox>
+  </div>
+
+  @if (view() === 'grid') {
+    <div class="nxs-trash-list__grid">
+      @for (doc of documents(); track doc.uid) {
+        @let handlers = cardHandlers().get(doc.uid);
+        <ng-template #cardMedia>
+          <nxs-thumbnail class="nxs-trash-list__card-media" [documentId]="doc.uid">
+            <mat-icon aria-hidden="true" [svgIcon]="icon(doc)" />
+          </nxs-thumbnail>
+        </ng-template>
+        @let cardInputs =
+          {
+            heading: title(doc),
+            subheading: (doc.type | docTypeLabel),
+            selected: isSelected(doc.uid),
+            selectionLabel:
+              ('satori-components.trash-list.select' | translate: { title: title(doc) }),
+            selectionHandler: handlers?.select ?? null,
+            openHandler: handlers?.open ?? null,
+            media: cardMedia,
+            headerAction: null,
+            actions: null,
+          };
+        <!-- One grid cell per document, so the outlet and its fallback never take a cell each. -->
+        <div class="nxs-trash-list__card">
+          <lib-extension-outlet #cardOutlet [componentId]="cardId" [componentInputs]="cardInputs" />
+          @if (cardOutlet.unresolved()) {
+            <nxs-card
+              [heading]="cardInputs.heading"
+              [subheading]="cardInputs.subheading"
+              [selected]="cardInputs.selected"
+              [selectionLabel]="cardInputs.selectionLabel"
+              [selectionHandler]="cardInputs.selectionHandler"
+              [openHandler]="cardInputs.openHandler"
+              [media]="cardInputs.media"
+            />
+          }
+        </div>
+      }
+    </div>
+  } @else {
+    <ul
+      class="nxs-trash-list__list"
+      [attr.aria-label]="'satori-components.trash-list.label' | translate"
+    >
+      @for (doc of documents(); track doc.uid) {
+        <li
+          class="nxs-trash-list__list-item"
+          [class.nxs-trash-list__list-item--selected]="isSelected(doc.uid)"
+        >
+          <mat-checkbox
+            [checked]="isSelected(doc.uid)"
+            [aria-label]="'satori-components.trash-list.select' | translate: { title: title(doc) }"
+            (change)="setSelected(doc.uid, $event.checked)"
+          />
+          <nxs-thumbnail class="nxs-trash-list__list-media" [documentId]="doc.uid">
+            <mat-icon aria-hidden="true" [svgIcon]="icon(doc)" />
+          </nxs-thumbnail>
+          <div class="nxs-trash-list__list-body">
+            @if (openHandler()) {
+              <button type="button" class="nxs-trash-list__list-title" (click)="open(doc)">
+                {{ title(doc) }}
+              </button>
+            } @else {
+              <span class="nxs-trash-list__list-title">{{ title(doc) }}</span>
+            }
+            <span class="nxs-trash-list__list-meta">
+              @let type = doc.type | docTypeLabel;
+              <lib-extension-outlet
+                #tagOutlet
+                [componentId]="tagId"
+                [componentInputs]="{ label: type, color: 'gray' }"
+              />
+              @if (tagOutlet.unresolved()) {
+                <nxs-tag [label]="type" color="gray" />
+              }
+              @if (cellText(doc, 'modified'); as modified) {
+                <span>{{ modified | date: 'medium' }}</span>
+              }
+            </span>
+          </div>
+          <div class="nxs-trash-list__list-actions">
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="busy().has(doc.uid)"
+              [matTooltip]="
+                'satori-components.trash-list.restore-named' | translate: { title: title(doc) }
+              "
+              [attr.aria-label]="
+                'satori-components.trash-list.restore-named' | translate: { title: title(doc) }
+              "
+              (click)="restore([doc])"
+            >
+              <mat-icon aria-hidden="true" svgIcon="restore" />
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="busy().has(doc.uid)"
+              [matTooltip]="
+                'satori-components.trash-list.purge-named' | translate: { title: title(doc) }
+              "
+              [attr.aria-label]="
+                'satori-components.trash-list.purge-named' | translate: { title: title(doc) }
+              "
+              (click)="purge([doc])"
+            >
+              <mat-icon aria-hidden="true" svgIcon="trash_x" />
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+}
+
+<!-- The table's pager is inside nxs-document-list. This one stays on an empty page and while loading,
+     so there is always a way back to the other pages. -->
+@if (view() !== 'table' && !error()) {
+  <nxs-pager
+    [pageIndex]="pageIndex()"
+    [pageSize]="pageSize()"
+    [itemCount]="documents().length"
+    [totalSize]="totalSize()"
+    [hasNextPage]="hasNextPage()"
+    [disabled]="loading()"
+    (pageChange)="goToPage($event)"
+  />
+}

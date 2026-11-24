@@ -44,7 +44,8 @@ export const FollowingALink: Story = {
     window.history.replaceState(null, '', `${location.pathname}${location.search}`);
     const errors = spyOn(console, 'error');
     try {
-      await userEvent.click(canvas.getByRole('link', { name: 'Domain' }));
+      canvas.getByRole('link', { name: 'Domain' }).focus();
+      await userEvent.keyboard('{Enter}');
       await waitFor(() => expect(location.hash).toBe('#/browse?path=%2Fdefault-domain'));
       await expect(location.pathname).toMatch(/\/iframe\.html$/);
       await expect(canvas.getByRole('link', { name: 'Workspaces' })).toBeVisible();

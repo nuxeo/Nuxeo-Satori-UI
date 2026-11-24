@@ -296,50 +296,6 @@
   }
 }
 
-/* ─── Storyboard ─── */
-.viewer-storyboard {
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-  overflow-x: auto;
-  background: #1a1a1a;
-  flex-shrink: 0;
-  scrollbar-width: thin;
-  scrollbar-color: #555 #1a1a1a;
-}
-
-.storyboard-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 4px;
-  padding: 4px;
-  background: none;
-  transition: border-color 0.15s;
-  flex-shrink: 0;
-
-  &:hover {
-    border-color: #0073e6;
-  }
-}
-
-.storyboard-thumb {
-  width: 120px;
-  height: 68px;
-  object-fit: cover;
-  border-radius: 2px;
-  background: #333;
-}
-
-.storyboard-time {
-  font-size: 11px;
-  color: #aaa;
-  font-family: monospace;
-}
-
 /* ─── Image toolbar ─── */
 .viewer-toolbar {
   display: flex;
@@ -357,6 +313,13 @@
     width: 36px;
     height: 36px;
     line-height: 36px;
+    // NXSAT-809 — centre the icon. A Material icon button is 40px: 24px icon plus 8px padding on
+    // each side. Resized to 36px with the padding left in place and a 20px icon, the icon sat
+    // 4px low; centring it is correct at any size.
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
 
     mat-icon {
       font-size: 20px;
@@ -439,14 +402,41 @@
 /* ─── Picture metadata cards ─── */
 .picture-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  /* NXSAT-803 — a card needs ~380px for its widest row (format name + dimensions + size + type +
+     download). With fewer columns than that the rows spilled into the next card, so columns wrap
+     to fewer, wider ones whenever the viewer is narrow (e.g. with the Properties panel open). */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: 0;
   border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
   background: var(--document-viewer-light-strip-surface);
-  flex-shrink: 0;
+  /* NXSAT-803 — was `flex-shrink: 0`, which let the cards take all the height and left the
+     preview a ~100px strip. They now shrink and scroll within their own strip instead. */
+  flex: 0 1 auto;
+  /* The floors scale down with the window: fixed 240px + 96px did not fit a short viewer, and the
+     panel clips overflow, so part of the strip could not be scrolled into view. */
+  min-height: min(96px, 20vh);
+  overflow-y: auto;
+}
+
+/* The strip scrolls, so it must be reachable and visibly focused from the keyboard (Safari does
+   not focus a scroller on its own). Both selectors: IBM Equal Access reads `:focus` only. */
+.picture-cards:focus {
+  outline: 2px solid var(--document-viewer-focus-on-light-surface);
+  outline-offset: -2px;
+}
+
+.picture-cards:focus-visible {
+  outline: 2px solid var(--document-viewer-focus-on-light-surface);
+  outline-offset: -2px;
+}
+
+/* NXSAT-803 — keep a usable preview whenever the metadata cards share the panel. */
+.viewer-content:has(~ .picture-cards) {
+  min-height: min(240px, 35vh);
 }
 
 .picture-card {
+  min-width: 0;
   padding: 16px 20px;
   border-right: 1px solid var(--mat-sys-outline-variant, #eee);
 
@@ -455,7 +445,9 @@
   }
 }
 
-.picture-card-title {
+/* Scoped under the card: the theme's `html[data-app-theme] .mat-typography h4` outranks a single
+   class, and drew every card title as a 32px display title. */
+.picture-card > .picture-card-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--document-viewer-on-light-strip);
@@ -477,6 +469,9 @@
 }
 
 .info-label {
+  /* NXSAT-803 — never squeezed below its text (it overran the value beside it, e.g. IPTC
+     "Description"); the value wraps instead. */
+  flex-shrink: 0;
   font-size: 12px;
   /* NXENG-812 / NXSAT-493 / NXSAT-507 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018, IBM 1668870227); mat-sys-on-surface-variant fails in dark theme. Runtime axe (phase-6-a11y) owns WCAG clearance; this comment is audit trace only. */
   color: var(--document-viewer-muted-on-light-surface);
@@ -485,6 +480,8 @@
 }
 
 .info-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 13px;
   color: var(--document-viewer-on-light-strip);
   font-weight: 500;
@@ -492,6 +489,7 @@
 
 .format-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 4px 0;
@@ -510,9 +508,10 @@
   color: var(--document-viewer-muted-on-light-surface);
   flex: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  white-space: nowrap;
+  gap: 4px 8px;
+  white-space: normal;
 }
 
 /* NXENG-768 / NXENG-806 / NXENG-825 / NXSAT-494 — secondary size label in the format row (was #999 ~2.85:1; IBM 626137632, 1088600166, 1406866183 / NXENG-837). */
@@ -530,6 +529,11 @@
   width: 28px !important;
   height: 28px !important;
   line-height: 28px !important;
+  // NXSAT-809 — centre the icon (see `.viewer-toolbar button`).
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   flex-shrink: 0;
 
   mat-icon {

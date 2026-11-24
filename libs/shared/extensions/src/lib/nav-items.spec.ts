@@ -129,3 +129,50 @@ describe('APP_NAV_ITEMS — Administration gating', () => {
     expect(added).toEqual({ id: 'app.navbar.browseAdfHx', order: 5 });
   });
 });
+
+/**
+ * The rail for an external share recipient (NXSAT-211). They can open none of Browse, Favorites,
+ * Collections or Trash, so those four entries are hidden for a `transient/` principal, and nothing
+ * else goes with them. Presentation only: the server still refuses those paths.
+ */
+describe('APP_NAV_ITEMS — external share recipients', () => {
+  const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
+  const hiddenFromRecipients = [
+    'app.navbar.browse',
+    'app.navbar.favorites',
+    'app.navbar.collections',
+    'app.navbar.trash',
+  ];
+
+  beforeEach(() => {
+    manifest.set({ extensionLayers: [] });
+    TestBed.configureTestingModule({
+      providers: [{ provide: AppConfigService, useValue: { manifest } }],
+    });
+  });
+
+  function navIds(): readonly string[] {
+    return TestBed.inject(APP_NAV_ITEMS)().map((item) => item.id);
+  }
+
+  it('hides the four entries a recipient cannot use, and nothing else', () => {
+    TestBed.inject(ExtensionRuleContextService).username.set('transient/recipient@example.invalid');
+    const ids = navIds();
+    for (const id of hiddenFromRecipients) expect(ids).not.toContain(id);
+    expect(ids).toEqual(
+      // Administration is gated on access this user does not have, so it is absent too.
+      PACKAGED_NAV_ITEMS.filter(
+        (item) =>
+          !item.disabled &&
+          item.id !== 'app.navbar.administration' &&
+          !hiddenFromRecipients.includes(item.id),
+      ).map((item) => item.id),
+    );
+  });
+
+  it('shows the same four entries to a signed-in user who is not external', () => {
+    TestBed.inject(ExtensionRuleContextService).username.set('jdoe');
+    const ids = navIds();
+    for (const id of hiddenFromRecipients) expect(ids).toContain(id);
+  });
+});

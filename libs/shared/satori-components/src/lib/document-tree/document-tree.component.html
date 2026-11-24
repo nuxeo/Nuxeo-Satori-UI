@@ -14,10 +14,10 @@
     (retry)="reload()"
   />
 } @else {
-  @if (showRootBack()) {
-    <button type="button" class="nxs-document-tree__back" (click)="openRoot()">
+  @for (ancestor of ancestors(); track ancestor.key) {
+    <button type="button" class="nxs-document-tree__back" (click)="openAncestor(ancestor)">
       <mat-icon class="nxs-document-tree__back-icon" aria-hidden="true" svgIcon="chevron_left" />
-      {{ 'satori-components.document-tree.root' | translate }}
+      {{ nodeLabel(ancestor) }}
     </button>
   }
   @if (rows().length === 0) {

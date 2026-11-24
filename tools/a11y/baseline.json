@@ -2,7 +2,5 @@
   "apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.html::click-events-have-key-events": 1,
   "apps/nuxeo-ui/src/app/dashboard/dashboard-page.component.html::interactive-supports-focus": 1,
   "apps/nuxeo-ui/src/app/shell/app-shell.component.html::click-events-have-key-events": 1,
-  "apps/nuxeo-ui/src/app/shell/app-shell.component.html::interactive-supports-focus": 1,
-  "libs/features/trash/src/lib/trash/trash.component.html::click-events-have-key-events": 1,
-  "libs/features/trash/src/lib/trash/trash.component.html::interactive-supports-focus": 1
+  "apps/nuxeo-ui/src/app/shell/app-shell.component.html::interactive-supports-focus": 1
 }

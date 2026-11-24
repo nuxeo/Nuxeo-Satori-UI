@@ -1,4 +1,5 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
+import { DIR_DOCUMENT, Directionality } from '@angular/cdk/bidi';
 import {
   Component,
   provideZonelessChangeDetection,
@@ -443,6 +444,55 @@ describe('NxsDocumentListComponent', () => {
       host.documents.set([doc(7), doc(8)]);
       await render();
       expect(rows().map((row) => row.tabIndex)).toEqual([0, -1]);
+    });
+  });
+
+  /**
+   * Right-to-left, "forward along the row" is Left. The component reads `Directionality`, which
+   * the shell's `syncDocumentDirection` writes from the active language, so this provides
+   * `DIR_DOCUMENT` and lets the real `Directionality` resolve from it — a hand-made double would
+   * assert the double's behaviour rather than CDK's.
+   *
+   * Untested until Arabic and Hebrew were advertised: the branch existed and nothing set `dir`,
+   * so it had never run.
+   */
+  describe('keyboard, right to left', () => {
+    beforeEach(async () => {
+      const rtlDocument = document.implementation.createHTMLDocument('rtl');
+      rtlDocument.documentElement.dir = 'rtl';
+      await configure([provideNxsComponents(), { provide: DIR_DOCUMENT, useValue: rtlDocument }]);
+    });
+
+    it('reads rtl from Directionality', () => {
+      expect(TestBed.inject(Directionality).value).toBe('rtl');
+    });
+
+    it('moves along a row with Left and back with Right', async () => {
+      host.rowActions.set({ 'uid-1': [{ id: 'acme.edit', label: 'Edit' }] });
+      await render();
+      const row = rows()[0];
+      row.focus();
+
+      key(row, 'ArrowLeft');
+      expect(document.activeElement).toBe(checkbox(0));
+      key(checkbox(0), 'ArrowLeft');
+      expect((document.activeElement as HTMLElement).classList).toContain(
+        'nxs-document-list__open',
+      );
+      key(document.activeElement as HTMLElement, 'ArrowRight');
+      expect(document.activeElement).toBe(checkbox(0));
+      key(checkbox(0), 'ArrowRight');
+      expect(document.activeElement).toBe(row);
+    });
+
+    it('leaves Up and Down alone, which do not mirror', async () => {
+      rows()[0].focus();
+      key(rows()[0], 'ArrowDown');
+      await render();
+      expect(document.activeElement).toBe(rows()[1]);
+      key(rows()[1], 'ArrowUp');
+      await render();
+      expect(document.activeElement).toBe(rows()[0]);
     });
   });
 

@@ -125,6 +125,10 @@ test.describe('authentication and authorisation', () => {
     const viewport = page.viewportSize();
     expect(viewport).not.toBeNull();
 
+    // WebKit reports fractional layout boxes (320.8125 for a 320px viewport). Under one CSS pixel
+    // is rounding, not a clipped field; a field actually pushed out of view by the keyboard
+    // or a sticky footer misses by tens of pixels, which this still catches.
+    const SUBPIXEL_TOLERANCE = 1;
     const assertInViewport = async (locator: ReturnType<typeof page.locator>, name: string) => {
       const box = await locator.boundingBox();
       expect(box, `${name} should have layout box`).not.toBeNull();
@@ -132,7 +136,7 @@ test.describe('authentication and authorisation', () => {
       expect(
         box!.y + box!.height,
         `${name} should not be clipped below viewport`,
-      ).toBeLessThanOrEqual(viewport!.height);
+      ).toBeLessThanOrEqual(viewport!.height + SUBPIXEL_TOLERANCE);
     };
 
     await assertInViewport(passwordLabel, 'password label');

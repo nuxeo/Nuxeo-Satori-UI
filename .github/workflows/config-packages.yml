@@ -1,0 +1,150 @@
+name: Configuration packages
+
+# The customer path, checked the way a customer runs it: Node and nothing else.
+#
+# The configuration packages this repository used to carry, `presales-demo` and `satori-beta`, moved
+# to nuxeo/Nuxeo-Satori-Config, whose own CI builds them the same credential-free way and compares
+# their `build.mjs` and schemas against this repository's generator templates. What stays here is
+# the generator, so this workflow checks what a customer gets from it: a package scaffolded by
+# `create.mjs`, built with Node alone, and verified as a well-formed Nuxeo Package.
+#
+# It runs without an install because `ci.yml` cannot test that claim: it runs `npm ci` with
+# `NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}` first, and without that token there is
+# no `node_modules` and no `nx`. A `require()` of a third-party module added to the `build.mjs`
+# template would stay green there forever, because `ci.yml` installs the whole tree.
+#
+# Nothing here calls `npm ci`, `npm install` or `nx`, and `setup-node` is deliberately used WITHOUT
+# `registry-url`, so no `.npmrc` with an auth line is written and no `NODE_AUTH_TOKEN` is in scope.
+# The first step of the build job asserts that rather than trusting the paragraph above, because a
+# future edit that adds an install would otherwise make this workflow quietly meaningless while
+# still reporting green.
+#
+# What this proves and what it does not: it proves the scripts run with no credentials and that
+# what they write is a well-formed Nuxeo Package — `scripts/verify-package-zip.mjs` lists its
+# assertions, and its limits, in its own header. It does NOT stand up a Nuxeo server and install
+# the zip. That needs a Nuxeo image from a private registry and a Marketplace account to resolve
+# the `nuxeo-agentic-ui` dependency, which are the very credentials this lane exists without. A
+# real install is exercised by a person, against a real server, in `docs/beta-demo-runbook.md`.
+#
+# The `paths` lists below are duplicated rather than shared: GitHub Actions does not resolve YAML
+# anchors in a workflow file, so an alias here would be read as a literal string and the filter
+# would match nothing.
+
+on:
+  pull_request:
+    paths:
+      - 'tools/satori-generators/src/config-package/**'
+      - 'scripts/verify-package-zip.mjs'
+      - 'scripts/verify-package-zip.selftest.mjs'
+      - '.github/workflows/config-packages.yml'
+  # Also on `main`, so a change that reaches it another way — a merge commit, an edit through the
+  # web UI, a revert — is still checked rather than only checked on the way in. The same holds for
+  # `integration/**` branches (AGENTS/06-git-workflow.md): `main` is merged into them daily, and
+  # those merge commits reach them without a pull request.
+  push:
+    branches: [main, 'integration/**']
+    paths:
+      - 'tools/satori-generators/src/config-package/**'
+      - 'scripts/verify-package-zip.mjs'
+      - 'scripts/verify-package-zip.selftest.mjs'
+      - '.github/workflows/config-packages.yml'
+
+concurrency:
+  group: config-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # I3 — build every configuration package, and one freshly scaffolded, with no install, no
+  # registry configuration and no token.
+  credential-free-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # No `registry-url:`. Passing one writes an `.npmrc` whose auth line reads $NODE_AUTH_TOKEN,
+      # which is exactly the coupling this job exists to be free of.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The claim under test, asserted rather than described. Each of these would make a green run
+      # here meaningless in a different way, and none of them is visible in a build log.
+      - name: Check this job really has no credentials and no install
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          if [ -d node_modules ]; then
+            fail "node_modules exists: something installed the tree, so this job no longer tests the no-install path"
+          fi
+          for var in NODE_AUTH_TOKEN NPM_TOKEN SATORI_GH_READONLY_TOKEN NPM_PACKAGES_TOKEN GITHUB_PACKAGES_TOKEN; do
+            if [ -n "${!var:-}" ]; then
+              fail "$var is set in this job; the credential-free path must not have one in scope"
+            fi
+          done
+          # An auth line matters only if it RESOLVES to a credential, which is a distinction this
+          # step learned the hard way: its first run went red on the repository's own committed
+          # `.npmrc`, whose `_authToken=${SATORI_GH_READONLY_TOKEN}` is inert when that variable
+          # is unset. npm substitutes nothing and the registry answers E401 — which is precisely
+          # the state a customer is in, and the state the clean room reproduced. Refusing it would
+          # have been refusing the thing under test.
+          #
+          # So: a literal value on an auth line is a leak, and a `${VAR}` whose VAR is set is a
+          # leak. The loop above already refuses the five variables we know about by name; this
+          # catches a sixth that nobody thought to list, which is the case worth catching.
+          for rc in "$HOME/.npmrc" .npmrc; do
+            [ -f "$rc" ] || continue
+            while IFS= read -r line; do
+              value=${line#*=}
+              if [[ "$value" =~ ^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$ ]]; then
+                var="${BASH_REMATCH[1]}"
+                if [ -n "${!var:-}" ]; then
+                  fail "$rc authenticates with \$$var, which is set in this job; the credential-free path must not have one in scope"
+                fi
+              elif [ -n "$value" ]; then
+                fail "$rc carries a literal value on an auth line; this job would resolve packages a customer cannot"
+              fi
+            done < <(grep -iE '^[^;#]*(_auth|_authtoken|_password)[[:space:]]*=' "$rc" || true)
+          done
+          echo "No node_modules, no token in scope, no auth line that resolves. Node $(node --version)."
+
+      # The generator's own output — what a customer scaffolds today. Scaffolded OUTSIDE the clone,
+      # which also catches a `create.mjs` that assumed the repository was the working directory.
+      - name: Scaffold a package with create.mjs and build that
+        run: |
+          set -euo pipefail
+          repo=$PWD
+          scratch=$(mktemp -d)
+          cd "$scratch"
+          node "$repo/tools/satori-generators/src/config-package/create.mjs" acme-config --owner=acme
+          node config-packages/acme-config/build.mjs
+          node "$repo/scripts/verify-package-zip.mjs" \
+            config-packages/acme-config/dist/acme-config-1.0.0.zip
+          # Documentation examples are not active contributions. Check the generated builder
+          # and artifact verifier agree even when an example names a file that is not packaged.
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const file = 'config-packages/acme-config/bundle/OSGI-INF/acme-config-config.xml';
+          const examples = '<documentation><code>' +
+            '<fragment name="example" layer="manifest" src="examples/missing.json" />' +
+            '<fragment name="inline-example" layer="manifest"><json>{}</json></fragment>' +
+            '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+            '<asset name="example.svg" src="examples/missing.svg" />' +
+            '</code></documentation>';
+          const docs = examples + '<extension-point name="examples">' + examples + '</extension-point>';
+          writeFileSync(file, readFileSync(file, 'utf8').replace('<require>', docs + '<require>'));
+          NODE
+          node config-packages/acme-config/build.mjs
+          node "$repo/scripts/verify-package-zip.mjs" \
+            config-packages/acme-config/dist/acme-config-1.0.0.zip
+          cd "$repo"
+          rm -rf "$scratch"
+
+      # The verifier's negative controls: without them the step above proves only that the check
+      # can pass, never that it can fail.
+      - name: Controls for the package verifier
+        run: node scripts/verify-package-zip.selftest.mjs

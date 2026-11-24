@@ -336,3 +336,77 @@ describe('AuthService poweruser access', () => {
     expect(service.shareAuthToken()).toBeNull();
   });
 });
+
+describe('AuthService share landing', () => {
+  const KEY = 'nxs.sharedDocumentPath';
+  const RECIPIENT = 'transient/recipient@example.invalid';
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+    AuthService.resetNuxeoLogoutProbe();
+    TestBed.configureTestingModule({
+      imports: [testTranslateModule(), HttpClientTestingModule],
+      providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
+    });
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    // Anything the test left in flight is not what it is checking.
+    httpMock.match(() => true);
+    httpMock.verify();
+    history.replaceState(null, '', '/');
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  it('remembers the route a token-bearing link opened, for the principal it signed in, and strips the token', () => {
+    history.replaceState(null, '', '/#/browse/default-domain/workspaces/ws-1/doc?token=share-abc');
+
+    service.ensureHydrated().subscribe();
+
+    const req = httpMock.expectOne((r) => r.url.includes('/nuxeo/api/v1/me'));
+    expect(req.request.headers.get('X-Authentication-Token')).toBe('share-abc');
+    req.flush({ id: RECIPIENT, properties: { username: RECIPIENT, groups: [] } });
+
+    expect(service.username()).toBe(RECIPIENT);
+    expect(JSON.parse(sessionStorage.getItem(KEY) ?? 'null')).toEqual({
+      user: RECIPIENT,
+      path: '/browse/default-domain/workspaces/ws-1/doc',
+    });
+    expect(location.hash).not.toContain('token=');
+  });
+
+  it('remembers nothing when the token exchange fails, and forgets a previous landing', () => {
+    sessionStorage.setItem(KEY, JSON.stringify({ user: RECIPIENT, path: '/browse/old' }));
+    history.replaceState(null, '', '/#/browse/default-domain/workspaces/ws-1/doc?token=bad');
+
+    service.ensureHydrated().subscribe();
+
+    httpMock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me'))
+      .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('forgets the remembered landing on sign-in', () => {
+    sessionStorage.setItem(KEY, JSON.stringify({ user: RECIPIENT, path: '/browse/old' }));
+
+    service.login('member01', 'secret', false).subscribe({ error: () => undefined });
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('forgets the remembered landing on sign-out', () => {
+    sessionStorage.setItem(KEY, JSON.stringify({ user: RECIPIENT, path: '/browse/old' }));
+
+    service.logout();
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+});

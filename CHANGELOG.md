@@ -11,24 +11,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
 so the next publish has to be a minor. Nothing has been published yet.
 
+### Changed (configuration service) — a displaced packaged default is a warning
+
+A fragment, layout or asset that replaces or disables one **we** packaged is now reported at
+`warning` with its own diagnostic code — `replaced-packaged-default` or
+`removed-packaged-default` — instead of `info` with `replaced` / `removed` (NXSAT-747). It reaches
+`server.log` at `WARN` and the `diagnostics` of the served `bootstrap.json` and `manifest.json`.
+The usual way to arrive is naming a configuration package `defaults`, which makes its fragment
+`defaults` too and silently takes the place of ours; the generator refuses that name since
+NXSAT-729, but a hand-written component XML still reaches the server.
+
+Displacing **another package's** contribution is unchanged — ordinary layering, still `replaced` /
+`removed` at `info`. Nothing is blocked either way: replacement remains a supported operation, so
+a customer who meant it keeps the behaviour and gains a record of it. The distinction is drawn on
+the bundle that contributed the displaced item, so it covers anything we package rather than only
+the fragments named `defaults`. `level` was already one of `error` / `warning` / `info` and `code`
+is an open string, so neither is a schema change — but a consumer that matched on `replaced` or
+`removed` to notice this case should match the new codes instead.
+
+### Fixed (generators) — a configuration package's manifest is one Java can read
+
+A generated package's `build.mjs` packaged a `bundle/META-INF/MANIFEST.MF` that Java's
+`java.util.jar.Manifest` refuses outright, and `scripts/verify-package-zip.mjs` passed the result.
+The Nuxeo runtime reads a bundle's headers through that class, which throws at the first line it
+cannot read, so the bundle has no headers at all and the package installs and configures nothing.
+A blank line inside the main section with an ordinary header after it, a header name with a space
+or a dot in it or over 70 characters, a colon with no space after it, and a first line that starts
+with a space each built a package, and JDK 21 refused its jar with `invalid manifest format`,
+`invalid header field` or `misplaced continuation line`. No component went unchecked: the server
+loaded none.
+
+`build.mjs` now refuses a manifest Java would refuse, quoting the line: a line that is neither a
+header — a name of 1 to 70 letters, digits, `-` and `_`, then `: ` and the value — nor a
+continuation of one, a first line that starts with a space, or a section after a blank line that
+does not begin with `Name: `. It checks the manifest as packaged, the unfolded source refolded at
+72 bytes, so a source line longer than Java's 512-byte limit, or one with no line break at its
+end, still builds. The new check refuses nothing Java reads, and packaging is unchanged.
+`verify-package-zip.mjs` applies the same rules to the packaged jar, and two more, since its jar
+may come from anywhere: a line over 512 bytes with its line break, and text after the last line
+break, which Java ignores — a `Nuxeo-Component` header there loads nothing. Every copy of
+`build.mjs` made before this change keeps building such manifests until it is replaced with the
+template's.
+
+### Fixed (generators) — a configuration package's components are the ones the server loads
+
+A generated package's `build.mjs` read `bundle/META-INF/MANIFEST.MF`'s components from the first
+header spelt exactly `Nuxeo-Component`, anywhere in the file, split at commas. The server reads that
+header through `java.util.jar.Manifest` — from the main section alone, above the first blank line;
+the name in any letter case; the last of a repeated header; a line ended only at CR or LF — and its
+runtime splits the value at commas and whitespace. Everything under `bundle/` is packaged whatever
+the build read, so a second `Nuxeo-Component` header, one spelt `nuxeo-component`, a lookalike after
+a U+2028 inside another header's value, or a path with a space in it each built a jar whose server
+loaded a component the build had never checked.
+
+`build.mjs` now finds the header as the server does, splits it as the server does, refuses a
+manifest with more than one such header in its main section or another spelling, and checks the
+components of every one it found there. A header in a later `Name:` section is an entry attribute
+the server ignores, so it is ignored here too; a manifest that names its components only below its
+first blank line, which used to build a package that configured nothing, is refused.
+`scripts/verify-package-zip.mjs` applies the same rules to the packaged jar. The scaffold's
+manifest, and any that lists comma-separated paths without spaces in one header spelt
+`Nuxeo-Component`, reads as before. Every copy of `build.mjs` made before this change keeps the old
+reading until it is replaced with the template's.
+
+### Fixed (generators) — the documented `npx nx g ./tools/satori-generators:…` command runs
+
+Every generator that writes templates — `config-package`, `extension-library`,
+`extension-component`, `satori-component` — threw `ReferenceError: __dirname is not defined` when
+run through the Nx command line, on Node 22.6 and later (NXSAT-795). They resolved their template
+directory with `join(__dirname, 'files')`; since Nx 23, `loadTsFile` prefers Node's native type
+stripping, which gives the TypeScript source ESM semantics, and ESM has no `__dirname`. A single
+`generatorFilesDir()` now serves both module systems.
+
+This never affected customers: `@nuxeo/satori-platform` ships the generators compiled to
+CommonJS, where `__dirname` exists, and `npx nx g @nuxeo/satori-platform:<generator>` worked
+throughout. It affected anyone following `docs/extension-reference.md`,
+`docs/beta-demo-runbook.md` or `libs/platform/AGENTS.md` in this repository — the demo runbook
+among them. `checkGeneratorsEsmSafe` now fails the guardrails gate on a CommonJS-only global in
+those sources, since no test can see this: vitest defines `__dirname` too.
+
+The refusal message for a Windows device name now says a directory of that name "cannot be used
+there" rather than "cannot be created there" (NXSAT-729 QA). Node does create `con` or `nul` on
+Windows 11; Explorer and `cmd` then cannot open or delete it. The refusal is unchanged.
+
 ### Changed — BREAKING (registered IDs) — one Browse entry again
 
-The adf-hx proof of concept is removed, with its two routes and its navigation entry.
+The earlier parallel-browse proof of concept is removed, with its two routes and its navigation entry.
 
-- **`app.navbar.browseAdfHx` is retired.** An `overrides` key naming it now addresses nothing. A
-  `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
-  own — with no path or label unless it gives them, which renders a blank item: delete it. Its
-  label key, `nav.item.browse-adf-hx`, is on no entry any more: move a `labels` entry for it to
-  `nav.item.browse`.
-- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
+- **`app.navbar.browseAdfHx`, the proof of concept's navbar entry, is retired.** An `overrides` key
+  naming it now addresses nothing. A `navbar` slot entry naming it no longer patches a packaged
+  entry, so it becomes an entry of its own — with no path or label unless it gives them, which
+  renders a blank item: delete it. Its label key, `nav.item.browse-adf-hx`, is on no entry any
+  more: move a `labels` entry for it to `nav.item.browse`.
+- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the proof-of-concept entry read
   "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
   it is now redundant, not harmful.
 - **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
   with their query string intact, and a `?path=` folder opens in `/browse`.
 
-### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the adf-hx browse URL helpers
+### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the proof-of-concept browse URL helpers
 
-They built, recognised and parsed `/browse-adf-hx` URLs, and chose between that route and
+They built, recognised and parsed the proof-of-concept browse URLs, and chose between that route and
 `/browse` for document detail's way back. With the route retired, all seven go:
 `toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
 `toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
@@ -86,11 +169,11 @@ carrying it opens normally, with breadcrumbs into `/browse`.
 
 ### Removed (`@nuxeo-satori/platform`) — a peer dependency
 
-- **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine used three of
-  its functions — `filterEnabled`, `sortByOrder` and `mergeObjects` — and now has its own, pinned
-  case by case to the output 9.0.0 produced (`extension-element.spec.ts` and
-  `extension-merge.spec.ts` in `libs/shared/extensions`). No export changes. A consumer no longer
-  has to install the package, and can remove it unless its own code imports it.
+- **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine now has its
+  own `filterEnabled`, `sortByOrder` and `mergeObjects`, pinned case by case to the output 9.0.0
+  produced (`extension-element.spec.ts` and `extension-merge.spec.ts` in `libs/shared/extensions`).
+  No export changes. A consumer no longer has to install the package, and can remove it unless its
+  own code imports it.
 
 ### Fixed (`@nuxeo-satori/platform/extensions`)
 
@@ -145,6 +228,38 @@ private readonly locale = inject(LOCALE_ID);
 
 ### Changed (`@nuxeo-satori/platform` generators)
 
+- A generated package's `build.mjs` refuses JSON nested deeper than the server accepts, which was
+  the one server limit it did not know (NXSAT-730). Between 1001 and about 3700 deep the build used
+  to succeed and the package to install, while the server dropped the fragment at
+  `error invalid-json` and the customer's setting silently did nothing; deeper than that the
+  recursive duplicate-key check overflowed the stack and the build reported the bare words
+  "Maximum call stack size exceeded". Depth is now counted with an explicit stack before anything
+  walks the document, so the refusal names the file and the limit at any depth:
+  `nested 1001 deep; the server's JSON parser refuses a fragment or layout nested deeper than 1000`.
+  That limit is jackson-core's `StreamReadConstraints` default rather than one `nuxeo-agentic-core`
+  sets — `ConfigSnapshot` parses with a plain `ObjectMapper` — so the message names the parser, and
+  on a server whose Jackson raised the default the build is stricter than it needs to be rather
+  than generous enough to ship a package that does not work. Component XML is bounded the same way
+  at 256 elements, this script's own limit, because the recursive well-formedness walk used to
+  overflow and print a raw Node stack trace. Inside the band the server accepts, the build now also
+  says when the limit it met was its own: both the duplicate-key walk and the `JSON.stringify` that
+  packages a body still recurse through it, so a body nested close to 1000 can exhaust the stack of
+  the Node running the build — on Windows with Node 20 from about depth 993, where packaging gives
+  out first and, being the one depth-sensitive call outside a `try`, ended the build with a raw
+  `RangeError` trace. Both now report
+  `nested 993 deep; the server accepts this depth but this Node ran out of stack walking it. Build with Node 22 or newer.`,
+  naming the file and never writing a zip. A `RangeError` that is not the stack, such as
+  "Invalid string length", is still reported as itself rather than blamed on Node.
+- The `config-package` generator and `create.mjs` refuse a package name they cannot honour, before
+  writing anything, and say what it would clash with (NXSAT-729). Refused: `defaults`, the name of
+  Satori's own packaged fragments in both layers — a package of that name contributed a fragment on
+  the same key as ours and took its place on the server, reported only at `info`; `nuxeo-agentic-ui`,
+  the package every configuration package depends on; and the device names Windows reserves (`con`,
+  `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`), which cannot be directory names there, through
+  any case and through a trailing extension. A `--directory` segment is held to the Windows names
+  too, since it also becomes a directory; Satori's names are refused for the package name only. A
+  package already generated under one of these names is unaffected until it is regenerated with
+  `--force`.
 - The `config-package` generator no longer runs Prettier over what it writes, so its output no
   longer depends on the workspace's Prettier configuration or on the title (Prettier rewrote
   `*Claims*` as `_Claims_`). Its templates are stored as Prettier formatted them, so the only file
@@ -169,5 +284,5 @@ private readonly locale = inject(LOCALE_ID);
   already in use by `share-saved-search-dialog` — so this is the fourth copy of that shape
   selection rather than the first consumer of a dormant path. That dialog keeps its own copy
   deliberately: it re-parses its own label, so its dates must stay unformatted.
-- The Clipboard navigation item's accessible name and the `hxp-document-cards` selection
+- The Clipboard navigation item's accessible name and the document cards selection
   checkbox label are translated rather than concatenated (INFO-144).

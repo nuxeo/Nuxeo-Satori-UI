@@ -28,8 +28,26 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
+  NXS_ASSET_FACETS_DRAWER_ID,
+  NXS_ASSET_GRID_ID,
+  NXS_ADMIN_GROUP_DETAILS_PAGE_ID,
+  NXS_ADMIN_USER_DETAILS_PAGE_ID,
+  NXS_ADMIN_USERS_GROUPS_PAGE_ID,
   NXS_PERMISSIONS_PANEL_ID,
+  NXS_PUBLISH_DIALOG_ID,
+  NXS_STORYBOARD_ID,
+  NXS_TASK_DETAIL_ID,
+  NXS_TRASH_LIST_ID,
+  NxsAdminGroupDetailsPageComponent,
+  NxsAdminUserDetailsPageComponent,
+  NxsAdminUsersGroupsPageComponent,
+  NxsAssetFacetsDrawerComponent,
+  NxsAssetGridComponent,
   NxsPermissionsPanelComponent,
+  NxsPublishDialogComponent,
+  NxsStoryboardComponent,
+  NxsTaskDetailComponent,
+  NxsTrashListComponent,
 } from '@nuxeo/satori-platform/components';
 import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -166,6 +184,41 @@ function provideAppContributions(): EnvironmentProviders {
         // `app.config.ts` imports the library eagerly for `provideNxsComponents()`, so a lazy
         // import of it would load nothing later, and the module-boundary rule rejects the mix.
         [NXS_PERMISSIONS_PANEL_ID]: NxsPermissionsPanelComponent,
+
+        // The users and groups administration screens. The administration routes render each
+        // through its ID, so a customer library can re-register one, and fall back to the
+        // packaged component when no registration resolves.
+        [NXS_ADMIN_USERS_GROUPS_PAGE_ID]: NxsAdminUsersGroupsPageComponent,
+        [NXS_ADMIN_USER_DETAILS_PAGE_ID]: NxsAdminUserDetailsPageComponent,
+        [NXS_ADMIN_GROUP_DETAILS_PAGE_ID]: NxsAdminGroupDetailsPageComponent,
+
+        // The dialog both publish actions open — `app.toolbar.publish` and
+        // `app.bulkActions.publish` — through `nxsOpenPublishDialog`, so re-registering this ID
+        // replaces it for both.
+        [NXS_PUBLISH_DIALOG_ID]: NxsPublishDialogComponent,
+
+        // The task panel of the tasks page: reading a task and completing it. The page renders it
+        // through its ID, so a customer library can re-register it.
+        [NXS_TASK_DETAIL_ID]: NxsTaskDetailComponent,
+        // The trash list. `/trash` renders it through this ID, so a customer library can replace
+        // it, and falls back to the packaged component when no registration resolves.
+        [NXS_TRASH_LIST_ID]: NxsTrashListComponent,
+
+        // The strip of frames under a video that seeks it. The document viewer renders it through
+        // this ID wherever it shows a video — the document page's View tab, and the asset screens
+        // that use the same viewer — so re-registering it replaces the strip in all of them.
+        // Inputs only, so the viewer passes `seekHandler` rather than binding `seek`.
+        [NXS_STORYBOARD_ID]: NxsStoryboardComponent,
+
+        // The cards of the asset search screen's grid view. `/documents` renders them through this
+        // ID, so a customer library can replace the card without touching the search around it.
+        // Inputs only, so the screen passes `openHandler` and `selectionToggleHandler`.
+        [NXS_ASSET_GRID_ID]: NxsAssetGridComponent,
+
+        // The faceted filter panel inside the assets drawer. The drawer renders it through this ID,
+        // so a customer library can replace the facets without reimplementing the drawer's saved
+        // searches and queue around them. Inputs only, so the drawer passes handlers.
+        [NXS_ASSET_FACETS_DRAWER_ID]: NxsAssetFacetsDrawerComponent,
       },
     };
   });

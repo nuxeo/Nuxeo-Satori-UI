@@ -852,6 +852,12 @@
   width: 28px !important;
   height: 28px !important;
   line-height: 28px !important;
+  // NXSAT-809 — centre the icon. Material's 8px padding is left over from the 40px button this was
+  // shrunk from, so without this the icon starts 8px in and sits low and to the right.
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: var(--mat-sys-on-surface-variant);
 
   &:hover {
@@ -948,6 +954,12 @@
   width: 28px !important;
   height: 28px !important;
   line-height: 28px !important;
+  // NXSAT-809 — centre the icon. Material's 8px padding is left over from the 40px button this was
+  // shrunk from, so without this the icon starts 8px in and sits low and to the right.
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: var(--mat-sys-on-surface-variant);
 
   &:hover {

@@ -24,7 +24,8 @@
   flex-shrink: 0;
 }
 
-sat-breadcrumbs {
+.browse-breadcrumbs {
+  min-width: 0;
   padding-bottom: 12px;
   flex-shrink: 0;
 
@@ -536,6 +537,11 @@ sat-breadcrumbs {
   width: 32px;
   height: 32px;
   line-height: 32px;
+  // NXSAT-809 — centre the icon: Material's 8px padding is left over from the 40px button.
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: var(--mat-sys-on-surface-variant, #7a7d87);
   &:hover {
     color: var(--mat-sys-primary, #5c6bc0);

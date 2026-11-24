@@ -175,7 +175,7 @@ function resolveScoutReport() {
  * a11y-scout records the URL after any redirect, and `/#/administration` lands on
  * `/#/administration/analytics`, so `endsWith(route)` never matched it and a complete baseline
  * still exited 2 naming administration as unscanned. A child path or a query string counts; a
- * sibling that merely shares the prefix, as the retired `/#/browse-adf-hx` did `/#/browse`,
+ * sibling that merely shares the prefix, as `/#/browse-foo` would `/#/browse`,
  * does not.
  *
  * @param {unknown} url
@@ -216,7 +216,7 @@ if (reportPath && existsSync(reportPath)) {
   // the worker and discards everything it had accumulated — the run that hit the old 600s
   // limit wrote a "surfaces" report covering ONE of seven routes. Accepted as-is, every
   // missing surface read as "a11y-scout claimed 0", and a comparison against nothing exited 0.
-  // That happened here: the only baseline on disk covered /#/browse-adf-hx alone, and a
+  // That happened here: the only baseline on disk covered a single route alone, and a
   // `--surface browse` run reported a clean comparison. Flagged in review on PR #225.
   const scanned = Array.isArray(report?.meta?.pagesScanned) ? report.meta.pagesScanned : [];
   const uncovered = SURFACES.filter(([, route]) => !scanned.some((u) => reachedFrom(u, route)));

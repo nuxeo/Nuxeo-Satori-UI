@@ -35,6 +35,7 @@ function extractLocalRows(doc: NuxeoDocument, logicalPrincipal: string): Princip
       end: ace.end,
       grantedBy: ace.creator,
       acePrincipal: ace.username,
+      aceId: ace.id,
     });
   }
   return rows;

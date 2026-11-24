@@ -47,6 +47,7 @@ import { createHash } from 'node:crypto';
 import { resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { installedAxe, installedVersion } from './axe-engine.mjs';
 import { createHelpers } from './helpers.mjs';
 import { createIdentityMonitor, describeReport } from './identity-guard.mjs';
 import { missingNuxeoCredentialsMessage, readNuxeoCredentials } from './nuxeo-credentials.mjs';
@@ -171,10 +172,28 @@ if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1' && stepsLoaded) {
 }
 
 const baseUrl = process.env['APP_URL'] ?? 'http://localhost:4200';
+
+/**
+ * The untracked packages this run loads, as they resolve from here, or `null` for each one that is
+ * not installed. Nothing else records them: they are installed with `--no-save`, so neither the
+ * lockfile nor `package.json` says which version a checkout holds, and `npm ci` neither installs
+ * nor removes them. The 2026-11-23 accessibility verdict differed from the 2026-10-22 one because
+ * the axe engine had moved, and the manifests of both recorded Node only (gap 8 in
+ * `docs/accessibility.md`). Recorded for every phase: it costs three file reads, and someone
+ * comparing two manifests should not need to know which phases scan.
+ */
+const axe = installedAxe();
+const untracked = {
+  playwright: installedVersion('@playwright/test'),
+  axeCorePlaywright: axe['@axe-core/playwright'],
+  axeCore: axe['axe-core'],
+};
+
 console.log(`\nBeta phase evidence: ${phaseId}`);
 console.log(`  steps  ${stepsFile}`);
 console.log(`  app    ${baseUrl}`);
 console.log(`  out    ${outDir}`);
+console.log(`  with   ${describeEngines({ ...untracked, node: process.version })}`);
 
 /** @type {{ steps: import('./helpers.mjs').StepRecord[], consoleErrors: string[] }} */
 const recorder = { steps: [], consoleErrors: [] };
@@ -317,6 +336,7 @@ const manifest = {
     // runner had invented the pair.
     nuxeoUser: credentials?.username ?? null,
     node: process.version,
+    ...untracked,
     stepsFile,
   },
   totals: { steps: recorder.steps.length, checks: totalChecks, failed: failedChecks.length },
@@ -488,6 +508,17 @@ function recordScreenshotAudit(audit, rec) {
 }
 
 /**
+ * The engines a run used, in one line, for the console and for `INDEX.md`.
+ * @param {{ playwright: string | null, axeCorePlaywright: string | null, axeCore: string | null, node: string }} env
+ */
+function describeEngines({ playwright, axeCorePlaywright, axeCore, node }) {
+  const axe = axeCore
+    ? `axe-core ${axeCore}${axeCorePlaywright ? ` through @axe-core/playwright ${axeCorePlaywright}` : ''}`
+    : 'axe-core not installed';
+  return `Playwright ${playwright ?? 'not installed'}, ${axe}, Node ${node}`;
+}
+
+/**
  * Render the human readable report, with screenshots inlined so it can be
  * pasted into a PR description or attached to a Confluence page.
  * @param {typeof manifest} m
@@ -501,6 +532,7 @@ function renderIndex(m) {
     `- Started: ${m.startedAt}`,
     `- App: ${m.environment.appUrl}`,
     `- Steps file: \`${m.environment.stepsFile}\``,
+    `- Engines: ${describeEngines(m.environment)}`,
     ...(m.video ? [`- Video: \`${m.video}\``] : []),
     '',
   ];

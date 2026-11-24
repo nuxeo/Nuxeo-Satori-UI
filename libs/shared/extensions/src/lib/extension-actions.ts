@@ -94,6 +94,8 @@ export interface ExtensionColumnDescriptor extends ExtensionElement {
  * not a change to the host template.
  */
 export interface ExtensionTabDescriptor extends ExtensionElement {
+  /** On `app.tabs.view`, opt into NEV when this rule matches; absent keeps the built-in viewer. */
+  readonly preferARender?: ExtensionRule;
   readonly label: string;
   /**
    * A translation key for the text, preferred over `label` when it resolves.

@@ -285,18 +285,3 @@
   font-weight: 300;
   opacity: 0.5;
 }
-
-.profile-card__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  margin-top: 0.75rem;
-}
-
-.profile-card__pagination-label {
-  min-width: 3rem;
-  text-align: center;
-  color: var(--mat-sys-on-surface-variant);
-  font-size: 0.875rem;
-}

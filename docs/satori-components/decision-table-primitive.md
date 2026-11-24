@@ -32,7 +32,7 @@ files.
   `<th (click)>`: they cannot be reached by keyboard and carry no `aria-sort`.
 - **Server paging and sort exist in the service, but only for ordinary folders.**
   `BrowseService.getBrowseFolderContents(path, pageSize, { currentPageIndex, sort })` takes both, and the
-  adf-hx bridge's query port calls it that way. It forwards them only on the ordinary-folder branch
+  browse query port calls it that way. It forwards them only on the ordinary-folder branch
   (`getChildren`). The `Root`/`Domain` branch (`getNavTreeChildren`) and the `Favorites`/`Collection`
   branch (`getCollectionMembers`) take a page size and ignore the page index and sort. It returns
   Nuxeo's `isNextPageAvailable` as `hasNextPage`.
@@ -267,8 +267,7 @@ column is an `ExtensionColumnDescriptor`, and a cell shows the value of its `fie
 cell-renderer contract. That contract is primitive-neutral and should stay so. If custom cell rendering
 is added, it must be a renderer resolved by ID through the existing component-by-ID registry
 (plan section 3). It must never be `matColumnDef` or `MatCellDef` in a public signature: once a customer
-writes a `matCellDef`, the primitive can no longer change without breaking them. This is the same rule as
-"adf-hx types never appear in our public API", and the federation-readiness rule on serializable
+writes a `matCellDef`, the primitive can no longer change without breaking them. This is the same rule as the federation-readiness rule on serializable
 contracts.
 
 ## 7. Constraints for whoever builds `nxs-document-list`

@@ -68,6 +68,27 @@ type Story = StoryObj<NxsDocumentToolbarComponent>;
 /** Six inline actions and five behind "More actions"; the padlock is drawn as on. */
 export const FileLockedByAnotherUser: Story = {};
 
+export const KeyboardContract: Story = {
+  args: {
+    actions: FILE_TOOLBAR.map((action) =>
+      action.id === 'app.toolbar.edit' ? { ...action, disabled: true } : action,
+    ),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const edit = canvas.getByRole('button', { name: 'Edit' });
+    edit.focus();
+    await expect(edit).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.selected).not.toHaveBeenCalled();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Add to collection' })).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(args.selected).toHaveBeenCalledWith(FILE_TOOLBAR[1]);
+    await expect(args.actionHandler).toHaveBeenCalledWith(FILE_TOOLBAR[1]);
+  },
+};
+
 /** A user with Read only: the edit actions' enabled rules say no, so they stay visible and inert. */
 export const ReadOnlyUser: Story = {
   args: {

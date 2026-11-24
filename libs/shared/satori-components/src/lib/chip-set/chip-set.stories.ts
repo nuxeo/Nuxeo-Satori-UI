@@ -1,6 +1,6 @@
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { NXS_PRIMITIVE_IDS } from '../primitives';
 import { provideNxsComponents } from '../provide-nxs-components';
@@ -46,6 +46,20 @@ type Story = StoryObj<NxsChipSetComponent>;
 
 /** The values a metadata field holds, each removable. */
 export const RemovableValues: Story = {};
+
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const europe = canvas.getByRole('button', { name: 'Remove Europe' });
+    europe.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.removed).toHaveBeenLastCalledWith(args.items[0]);
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Remove Africa/Kenya' })).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(args.removed).toHaveBeenLastCalledWith(args.items[1]);
+  },
+};
 
 /** A single value, as a single-select field shows it. */
 export const SingleValue: Story = {

@@ -15,6 +15,12 @@ import {
 /**
  * Each language's `common.date-mask` as main's catalogues localize it (NXSAT-629), with the
  * letters each one uses for each field. The English one is held to the real catalogue below.
+ *
+ * Only the languages with a catalogue on disk. `ar`, `es`, `he`, `it` and `sv` are advertised
+ * but have no catalogue yet, so they have no translated mask to describe — they appear below
+ * under the English fallback, which is what they actually render. `th` and `zh` had entries
+ * here until their catalogues were dropped; they survive in the `Intl` sweeps, where they stand
+ * for any locale rather than for one this application ships.
  */
 const CATALOGUE = {
   en: { mask: NXS_ENGLISH_DATE_MASK, day: 'd', month: 'm', year: 'y' },
@@ -22,8 +28,6 @@ const CATALOGUE = {
   de: { mask: 'tt.mm.jjjj', day: 't', month: 'm', year: 'j' },
   nl: { mask: 'dd-mm-jjjj', day: 'd', month: 'm', year: 'j' },
   ja: { mask: 'yyyy/mm/dd', day: 'd', month: 'm', year: 'y' },
-  th: { mask: 'dd/mm/yyyy', day: 'd', month: 'm', year: 'y' },
-  zh: { mask: 'yy-mm-dd', day: 'd', month: 'm', year: 'y' },
 } as const;
 type Language = keyof typeof CATALOGUE;
 
@@ -76,7 +80,11 @@ describe('NxsLocaleDateAdapter', () => {
   // The hint is worked out from what the adapter writes, so it is only as good as the adapter
   // reading back what it wrote. Main's `provideSatoriDateAdapter` spec asserts the same of its own.
   it.each([
-    ...['en-US', 'fr', 'de', 'nl', 'ja', 'th', 'zh', 'en-GB', 'fr-CA', 'fr-CH', 'nl-BE'],
+    ...['en-US', 'fr', 'de', 'nl', 'ja', 'ar', 'es', 'he', 'it', 'sv'],
+    ...['en-GB', 'fr-CA', 'fr-CH', 'nl-BE', 'ar-SA', 'it-CH'],
+    // Dropped from the application's set but still valid locales a customer may configure, and
+    // the two that most stress this adapter: `th` is a non-Gregorian calendar, `zh` a two-digit year.
+    ...['th', 'zh'],
     // A locale that writes a word after the date: `3.04.2026 г.`.
     ...['bg', 'mk'],
     // A locale whose plain numbers `Intl` orders unlike its two-digit fields: Maltese `4/3/2026`.
@@ -176,9 +184,6 @@ describe('nxsDateMask', () => {
     { locale: 'de', language: 'de', hint: 'tt.mm.jjjj' },
     { locale: 'nl', language: 'nl', hint: 'dd-mm-jjjj' },
     { locale: 'ja', language: 'ja', hint: 'yyyy/mm/dd' },
-    { locale: 'th', language: 'th', hint: 'dd/mm/yyyy' },
-    // The field writes a four-digit year with slashes, so the hint does too.
-    { locale: 'zh', language: 'zh', hint: 'yyyy/mm/dd' },
     // A region that orders or separates the fields differently from its language.
     { locale: 'en-GB', language: 'en', hint: 'dd/mm/yyyy' },
     { locale: 'en-CA', language: 'en', hint: 'yyyy-mm-dd' },
@@ -191,8 +196,12 @@ describe('nxsDateMask', () => {
     { locale: 'de', language: 'en', hint: 'dd.mm.yyyy', english: true },
     { locale: 'nl', language: 'en', hint: 'dd-mm-yyyy', english: true },
     { locale: 'ja', language: 'en', hint: 'yyyy/mm/dd', english: true },
-    { locale: 'th', language: 'en', hint: 'dd/mm/yyyy', english: true },
-    { locale: 'zh', language: 'en', hint: 'yyyy/mm/dd', english: true },
+    // The five advertised with no catalogue: the English mask is their live behaviour today.
+    { locale: 'ar', language: 'en', hint: 'dd/mm/yyyy', english: true },
+    { locale: 'es', language: 'en', hint: 'dd/mm/yyyy', english: true },
+    { locale: 'it', language: 'en', hint: 'dd/mm/yyyy', english: true },
+    { locale: 'he', language: 'en', hint: 'dd.mm.yyyy', english: true },
+    { locale: 'sv', language: 'en', hint: 'yyyy-mm-dd', english: true },
     { locale: 'fr-CA', language: 'en', hint: 'yyyy-mm-dd', english: true },
     { locale: 'mt', language: 'en', hint: 'mm/dd/yyyy', english: true },
     { locale: 'ky', language: 'en', hint: 'yyyy-dd-mm', english: true },
@@ -220,7 +229,7 @@ describe('nxsDateMask', () => {
   describe.each([
     { active: 'fr_FR', locale: 'fr', language: 'fr', hint: 'jj/mm/aaaa' },
     { active: 'de_DE', locale: 'de', language: 'de', hint: 'tt.mm.jjjj' },
-    { active: 'zh_CN', locale: 'zh', language: 'zh', hint: 'yyyy/mm/dd' },
+    { active: 'nl_NL', locale: 'nl', language: 'nl', hint: 'dd-mm-jjjj' },
     { active: 'en_GB', locale: 'en-GB', language: 'en', hint: 'dd/mm/yyyy', mask: 'dd/mm/yyyy' },
     { active: 'fr_CA', locale: 'fr-CA', language: 'fr', hint: 'aaaa-mm-jj' },
   ] as const)('$active catalogue under $locale', ({ language, ...row }) => {

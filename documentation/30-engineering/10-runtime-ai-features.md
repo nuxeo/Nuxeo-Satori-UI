@@ -10,8 +10,7 @@ audience: engineering
 # Runtime AI Features — the 12 `AI.*` operations
 
 > **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> Only the repository links were re-verified at that commit: made relative, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 > These are the **customer-facing** AI features. For the development harness see
 > [Skills, Agents & Generators](09-skills-agents-generators.md). They are unrelated.
 
@@ -76,15 +75,21 @@ removing the need for a user to think in filters.
 
 ## 3. Configuration and gating
 
-| Concern          | Mechanism                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Backend location | `AI_BACKEND_URL` injection token, `libs/shared/ai-client/src/lib/ai.config.ts`                                                      |
-| Feature flag     | `AiFeatureFlagService` — `sessionStorage` key `ai-features-enabled`, with a one-time migration key `ai-features-default-enabled-v1` |
-| Per-user toggle  | `toggle()`                                                                                                                          |
+| Concern          | Mechanism                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Backend location | `AI_BACKEND_URL` injection token, `libs/shared/ai-client/src/lib/ai.config.ts`                                                     |
+| Feature flag     | `AiFeatureFlagService` — **`AI_FEATURES_ENABLED = false`** (`ai-feature-flag.service.ts:35`), off for every user since `a519ebd5d` |
+| Per-user toggle  | **None.** `toggle()` and `setEnabled()` return early while the flag is off, and the header menu entry is commented out             |
 
-**The flag is client-side and per-session.** There is no server-side entitlement check in this
-repository, and no telemetry on usage — so we cannot currently answer "how many users have AI
-features on?".
+**No user has AI features on, and none can turn them on.** `aiEnabled` is a module-level
+`computed(() => false)` sealed with `writable: false, configurable: false`; it does not read
+browser storage while off, and the two keys it once used (`localStorage` — not `sessionStorage`, as
+this table previously said) are purged on construction. `AiGatewayService` refuses the request as a
+second backstop (`ai-gateway.service.ts:64`).
+
+There is still no server-side entitlement check in this repository and no telemetry on usage, so if
+the flag is ever flipped back on we would again be unable to answer "how many users have AI features
+on?". That is a gap to close before re-enabling, not a live one.
 
 ## 4. Files
 
@@ -111,9 +116,9 @@ that is a gap worth closing — the client is thin, so the tests would be cheap.
 
 ### The one thing to look at properly
 
-`AI.NlToNxql` produces a **query** which is then executed. An HXQL/NXQL injection was already
+`AI.NlToNxql` produces a **query** which is then executed. An NXQL injection was already
 found and fixed in the _hand-built_ search path
-(`hxql-literal.ts`, since removed with the adf-hx search route) —
+(an earlier path that has since been removed) —
 it returned 155 documents against 0 for the plain term by escaping out of a literal and lifting
 its own clause to a top-level `OR`, defeating the `isVersion` and `isTrashed` hygiene filters.
 

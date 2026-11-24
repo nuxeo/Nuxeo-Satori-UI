@@ -6,7 +6,9 @@
   margin-top: 16px;
 }
 
-.document-layout__heading {
+/* Scoped under the section: the theme's `html[data-app-theme] .mat-typography h4` outranks a
+   single class, and drew every section heading as a 32px display title. */
+.document-layout__section > .document-layout__heading {
   font-size: 14px;
   font-weight: 600;
   color: var(--mat-sys-on-surface);

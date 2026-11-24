@@ -53,9 +53,15 @@
  * "WCAG 2.1 AA met" is a claim whose scope is the thing that makes it true or false.
  *
  * Prerequisites:
- *   npm install --no-save @playwright/test @axe-core/playwright
- *     ^ both in ONE command. `npm install --no-save X` prunes previously --no-save'd packages,
+ *   npm install --no-save @playwright/test @axe-core/playwright@4.14.0 axe-core@4.14.1
+ *     ^ all in ONE command. `npm install --no-save X` prunes previously --no-save'd packages,
  *       so installing axe alone silently removes Playwright.
+ *     ^ the axe pair is pinned, in `../axe-engine.mjs` (keep this line in sync with it), and the
+ *       first step refuses any other with exit 2. Unpinned, the engine moved from 4.13.0 to
+ *       4.14.1 between the 2026-10-22 and 2026-11-23 captures, and the verdict with it (gap 8 in
+ *       `docs/accessibility.md`). `axe-core` is named because the wrapper's `~4.14.0` range does
+ *       not hold it still. a11y-scout pins 4.13.0 (`a11y/versions.mjs`), so its preflight refuses
+ *       this install and this file refuses its install: install for the layer you run.
  *   npm run beta:backend
  *   npx nx serve nuxeo-ui
  *
@@ -66,6 +72,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { PINNED_AXE, PINNED_AXE_INSTALL, axeEngineProblem, installedAxe } from '../axe-engine.mjs';
 import { requireStepCredentials } from '../helpers.mjs';
 import { basicAuthorization } from '../nuxeo-credentials.mjs';
 
@@ -80,10 +87,66 @@ import { basicAuthorization } from '../nuxeo-credentials.mjs';
 const KNOWN_VIOLATIONS = [];
 
 /**
+ * What every scan below is judged with. `engine` makes each scan fail unless axe reports that it
+ * ran the pinned version. The first step has already checked the installed one, so this holds the
+ * verdicts to the engine that produced them rather than to what `node_modules` said beforehand.
+ */
+const SCAN = { ignore: KNOWN_VIOLATIONS, engine: PINNED_AXE['axe-core'] };
+
+/**
+ * The browser console errors the Health step does not count. Exported so a control can put a
+ * response through the real list, rather than through a copy of it.
+ */
+export const HEALTH_IGNORE = [
+  /automation\/AI\./,
+  '/nuxeo/logout',
+  '/agentic-ui-config/bootstrap.json',
+  '/agentic-ui-config/manifest.json',
+  // Their sibling, the configuration service's layout index, and only its 404. The local dev
+  // server serves no configuration package, so the file is absent, and that is designed:
+  // `DocumentLayoutService.index()` catches the failed read, warns, and resolves to an empty
+  // index, so every document gets its generated layout, and no per-type layout file is fetched
+  // because the empty index lists none. The read is lazy, made the first time a document needs a
+  // layout, and not every older capture shows the 404. It failed this step in the 2026-11-23
+  // record and in its control with axe-core 4.13.0, which passed every scan. Verified by reading
+  // libs/shared/document-layouts/src/lib/document-layout.service.ts. Narrower than the two
+  // above on purpose: any other status, or this file under another path, still fails here.
+  /^HTTP 404 \/agentic-ui-config\/layouts\.json$/,
+  // Added with the knowledge-discovery surface, and each verified against the server rather
+  // than assumed — widening this list to get to green is how a health check stops meaning
+  // anything.
+  //
+  // The KD operations ARE registered on this Nuxeo (6 of them, alongside 12 `AI.*`), so the
+  // 500 is not the absent-marketplace-package case the `AI.*` pattern above covers. The body
+  // says: "No authentication info for calling the Knowledge Discovery service" — the local
+  // instance has no KD credentials configured. An environment condition, not a client defect.
+  /automation\/HylandKnowledgeDiscovery\./,
+  // `NuxeoPrincipalResolver.resolve()` deliberately tries `/group/{name}` first and falls back
+  // to `/user/{name}` on failure, with a documented `catchError`. So a 404 for every principal
+  // that turns out to be a user is designed behaviour, not a defect. Verified by reading
+  // libs/shared/adf-hx-bridge/src/lib/services/nuxeo-principal-resolver.service.ts.
+  /HTTP 404 .*\/api\/v1\/group\//,
+];
+
+/**
  * @param {import('@playwright/test').Page} page
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
+  await h.step('Precondition: the pinned axe engine is installed, so this verdict is comparable');
+  // First, and before anything is scanned: a wrong engine makes every result below a different
+  // measurement, and stopping here says so once, as an environment fault (exit 2), instead of as
+  // fourteen failed scans. Each scan still checks the engine it actually ran; see `SCAN`.
+  const engine = installedAxe();
+  const engineProblem = axeEngineProblem(engine);
+  h.requirePrecondition(
+    `axe-core ${PINNED_AXE['axe-core']} through @axe-core/playwright ${PINNED_AXE['@axe-core/playwright']}`,
+    engineProblem === null,
+    `${engineProblem}. Another engine runs other rules, so its verdict cannot be compared with this ` +
+      `capture's record. Reinstall at the pin, in one command: \`${PINNED_AXE_INSTALL}\`. If a new ` +
+      'engine is deliberate, re-pin scripts/beta-harness/axe-engine.mjs and re-measure in the same change.',
+  );
+
   await h.step('Precondition: a backend is reachable, so data-bearing screens can be scanned');
   const probe = await page.request
     .get(`${h.baseUrl}/nuxeo/api/v1/me`, {
@@ -109,9 +172,7 @@ export default async function run(page, h) {
   await page.goto(`${h.baseUrl}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1500);
   await h.expectVisible('app shell rendered', 'app-shell');
-  await h.expectNoA11yViolations('landing: no WCAG 2.1 AA violations', {
-    ignore: KNOWN_VIOLATIONS,
-  });
+  await h.expectNoA11yViolations('landing: no WCAG 2.1 AA violations', SCAN);
   await h.screenshot('a11y-landing');
   h.note('the pre-auth login surface — this capture signs in before its first scan');
 
@@ -122,7 +183,7 @@ export default async function run(page, h) {
     'repository content listed',
     'lib-browse nxs-document-list .nxs-document-list__row',
   );
-  await h.expectNoA11yViolations('browse: no WCAG 2.1 AA violations', { ignore: KNOWN_VIOLATIONS });
+  await h.expectNoA11yViolations('browse: no WCAG 2.1 AA violations', SCAN);
   await h.screenshot('a11y-browse');
 
   await h.step('Browse, card view — a state a single visit per route never reaches');
@@ -130,9 +191,7 @@ export default async function run(page, h) {
   // ever saw the default table view. Two of the seven rule classes were found this way.
   await h.goTo('/#/browse');
   await clickIfPresent(page, 'button[aria-label="Card view"]');
-  await h.expectNoA11yViolations('browse cards: no WCAG 2.1 AA violations', {
-    ignore: KNOWN_VIOLATIONS,
-  });
+  await h.expectNoA11yViolations('browse cards: no WCAG 2.1 AA violations', SCAN);
   await h.screenshot('a11y-browse-cards');
 
   await h.step('Browse, column picker open');
@@ -148,29 +207,23 @@ export default async function run(page, h) {
     columnPanel,
     'button[aria-label="Manage columns"] was not present, so this step scanned a state it does not claim to',
   );
-  await h.expectNoA11yViolations('browse column panel: no WCAG 2.1 AA violations', {
-    ignore: KNOWN_VIOLATIONS,
-  });
+  await h.expectNoA11yViolations('browse column panel: no WCAG 2.1 AA violations', SCAN);
   await h.screenshot('a11y-browse-columns');
 
   await h.step('Search — the surface where the row markup was invalid');
   // 40 `nested-interactive` nodes: every row was a `<button>` wrapping a `mat-checkbox`. The rows
   // are now containers whose title is the control, with a stretched hit area for mouse users.
   await h.goTo('/#/search');
-  await h.expectNoA11yViolations('search: no WCAG 2.1 AA violations', { ignore: KNOWN_VIOLATIONS });
+  await h.expectNoA11yViolations('search: no WCAG 2.1 AA violations', SCAN);
   await h.screenshot('a11y-search');
 
   await h.step('Search, grid and list views');
   await h.goTo('/#/search');
   await clickIfPresent(page, 'button[aria-label="Grid view"]');
-  await h.expectNoA11yViolations('search grid: no WCAG 2.1 AA violations', {
-    ignore: KNOWN_VIOLATIONS,
-  });
+  await h.expectNoA11yViolations('search grid: no WCAG 2.1 AA violations', SCAN);
   await h.goTo('/#/search');
   await clickIfPresent(page, 'button[aria-label="List view"]');
-  await h.expectNoA11yViolations('search list: no WCAG 2.1 AA violations', {
-    ignore: KNOWN_VIOLATIONS,
-  });
+  await h.expectNoA11yViolations('search list: no WCAG 2.1 AA violations', SCAN);
   await h.screenshot('a11y-search-views');
 
   await h.step('Trash, tasks, collections, administration, knowledge discovery');
@@ -185,9 +238,7 @@ export default async function run(page, h) {
     ['knowledge discovery', '/#/knowledge-discovery'],
   ]) {
     await h.goTo(route);
-    await h.expectNoA11yViolations(`${label}: no WCAG 2.1 AA violations`, {
-      ignore: KNOWN_VIOLATIONS,
-    });
+    await h.expectNoA11yViolations(`${label}: no WCAG 2.1 AA violations`, SCAN);
   }
   await h.screenshot('a11y-secondary-surfaces');
 
@@ -212,7 +263,7 @@ export default async function run(page, h) {
     if (stripLabelVisible) {
       await h.expectNoA11yViolations(
         'document detail (picture metadata strip): no WCAG 2.1 AA violations',
-        { ignore: KNOWN_VIOLATIONS },
+        SCAN,
       );
       await h.screenshot('a11y-document-detail-picture-metadata');
     }
@@ -255,7 +306,7 @@ export default async function run(page, h) {
     }
     await h.expectNoA11yViolations(
       'document detail (replace-main-file tooltip): no WCAG 2.1 AA violations',
-      { ignore: KNOWN_VIOLATIONS },
+      SCAN,
     );
     await h.screenshot('a11y-document-detail-replace-main-file');
   }
@@ -355,7 +406,7 @@ export default async function run(page, h) {
       'configuration, so adding it to one and not the others fixes only some builds',
   );
 
-  const served = await page.request.get(`${h.baseUrl}/assets/satori-ui/i18n/en.json`, {
+  const served = await page.request.get(`${h.baseUrl}/assets/satori-ui/i18n/en-US.json`, {
     failOnStatusCode: false,
   });
   let servedLabel = null;
@@ -369,31 +420,12 @@ export default async function run(page, h) {
   h.check(
     'the served satori-ui catalogue supplies a non-empty nav label',
     typeof servedLabel === 'string' && servedLabel.trim().length > 0,
-    `GET /assets/satori-ui/i18n/en.json -> ${served.status()}, sat.platform-nav.expand=${JSON.stringify(servedLabel)}`,
+    `GET /assets/satori-ui/i18n/en-US.json -> ${served.status()}, sat.platform-nav.expand=${JSON.stringify(servedLabel)}`,
   );
   h.note(`served sat.platform-nav.expand = ${JSON.stringify(servedLabel)}`);
 
   await h.step('Health');
-  h.expectNoConsoleErrors('no unexpected browser console errors', [
-    /automation\/AI\./,
-    '/nuxeo/logout',
-    '/agentic-ui-config/bootstrap.json',
-    '/agentic-ui-config/manifest.json',
-    // Added with the knowledge-discovery surface, and each verified against the server rather
-    // than assumed — widening this list to get to green is how a health check stops meaning
-    // anything.
-    //
-    // The KD operations ARE registered on this Nuxeo (6 of them, alongside 12 `AI.*`), so the
-    // 500 is not the absent-marketplace-package case the `AI.*` pattern above covers. The body
-    // says: "No authentication info for calling the Knowledge Discovery service" — the local
-    // instance has no KD credentials configured. An environment condition, not a client defect.
-    /automation\/HylandKnowledgeDiscovery\./,
-    // `NuxeoPrincipalResolver.resolve()` deliberately tries `/group/{name}` first and falls back
-    // to `/user/{name}` on failure, with a documented `catchError`. So a 404 for every principal
-    // that turns out to be a user is designed behaviour, not a defect. Verified by reading
-    // libs/shared/adf-hx-bridge/src/lib/services/nuxeo-principal-resolver.service.ts.
-    /HTTP 404 .*\/api\/v1\/group\//,
-  ]);
+  h.expectNoConsoleErrors('no unexpected browser console errors', HEALTH_IGNORE);
 }
 
 const FILE_WITH_MAIN_BLOB_NXQL =

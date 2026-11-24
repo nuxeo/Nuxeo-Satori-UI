@@ -26,9 +26,13 @@
   --baseline: #383835;
   --border: rgba(255, 255, 255, 0.1);
 
-  /* Two entities recur across all three decks, in fixed slot order. Never cycled. */
-  --series-adfhx: #3987e5; /* slot 1 — upstream adf-hx */
-  --series-ours: #d95926; /* slot 2 — agentic-ui, our code */
+  /* Four palette slots in fixed order. Never cycled: a series name always means one colour.
+     The slot names are historical. `adfhx` was "upstream adf-hx" when a provenance deck
+     contrasted it with ours; adf-hx was removed in NXSAT-308 and that deck with it, so the
+     name now means nothing but "slot 1". Renaming it would touch every `"series"` in every
+     deck for no visual change, so it is left alone deliberately. */
+  --series-adfhx: #3987e5; /* slot 1 */
+  --series-ours: #d95926; /* slot 2 */
   --series-3: #199e70;
   --series-4: #c98500;
 

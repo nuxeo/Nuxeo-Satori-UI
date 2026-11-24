@@ -1,13 +1,20 @@
 import { FieldView, ValueContext, describeField, vocabularyValues } from './field-view';
 
+// Every case names its zone, as an offset, rather than inheriting the suite's. CI runs in UTC,
+// where an instant's UTC day and its day in the reader's zone are the same day, so a date case that
+// left the zone to the host would pass whichever way the view formatted (pattern 29).
 const context: ValueContext = {
   locale: 'en-US',
   vocabulary: (directory, id) =>
     directory === 'claim_status' && id === 'pending' ? 'Pending review' : id,
+  timeZone: '+0530',
 };
 
 const describe1 = (type: string, value: unknown, extra: Record<string, unknown> = {}): FieldView =>
   describeField('x:f', 'F', { type, ...extra }, value, context);
+
+const dateIn = (timeZone: string, value: unknown): FieldView =>
+  describeField('x:f', 'F', { type: 'date' }, value, { ...context, timeZone });
 
 describe('describeField', () => {
   it('shows a list of only empty entries as empty, not as an empty chip list', () => {
@@ -31,13 +38,51 @@ describe('describeField', () => {
     });
   });
 
-  it('shows a date in UTC, so a calendar date is the same day in every timezone', () => {
-    // Outside UTC, local formatting moves one of these two across a day boundary.
-    expect(describe1('date', '2026-09-14T00:00:00.000Z').value).toEqual({
-      text: 'September 14, 2026',
-    });
-    expect(describe1('date', '2026-09-14T23:59:00.000Z').value).toEqual({
-      text: 'September 14, 2026',
+  it.each<[string, string, string]>([
+    // The value, the reader's zone, and the day shown: in that zone it would be the day before.
+    ['2026-11-24T00:00:00.000Z', '-0500', 'November 24, 2026'],
+    ['2026-11-24T00:00:00Z', '-0800', 'November 24, 2026'],
+    ['2026-11-24T00:00Z', '-0300', 'November 24, 2026'],
+    ['2026-11-24T00:00:00+00:00', '-1000', 'November 24, 2026'],
+    ['2026-11-24', '-0500', 'November 24, 2026'],
+  ])('shows %s, a stored day, on its UTC day for a reader at %s', (value, zone, expected) => {
+    expect(dateIn(zone, value).value).toEqual({ text: expected });
+  });
+
+  it.each<[string, string, string]>([
+    // The value, the reader's zone, and the day shown there. Each one's UTC day is the other day.
+    ['2026-11-23T20:00:00Z', '+0530', 'November 24, 2026'],
+    ['2026-11-23T20:00:00.000Z', '+0900', 'November 24, 2026'],
+    ['2026-11-24T03:00:00.000Z', '-0500', 'November 23, 2026'],
+    ['2026-11-24T00:00:00.001Z', '-0500', 'November 23, 2026'],
+    ['2026-11-24T00:00:00-00:00', '-0500', 'November 23, 2026'],
+    ['2026-11-24T00:00:00+05:30', '+0530', 'November 24, 2026'],
+  ])('shows %s, an instant, on the reader’s day at %s', (value, zone, expected) => {
+    expect(dateIn(zone, value).value).toEqual({ text: expected });
+  });
+
+  it('shows the same instant on a different day to readers west and east of UTC', () => {
+    // dc:created at 20:00 UTC: still the 23rd in New York, already the 24th in Kolkata.
+    expect(dateIn('-0500', '2026-11-23T20:00:00Z').value).toEqual({ text: 'November 23, 2026' });
+    expect(dateIn('+0530', '2026-11-23T20:00:00Z').value).toEqual({ text: 'November 24, 2026' });
+  });
+
+  it('shows a stored day and an instant in one list each in its own zone', () => {
+    const view = describeField(
+      'x:f',
+      'F',
+      { type: 'date[]' },
+      ['2026-11-24T00:00:00.000Z', '2026-11-24T03:00:00.000Z'],
+      { ...context, timeZone: '-0500' },
+    );
+    expect(view.chips).toEqual([{ text: 'November 24, 2026' }, { text: 'November 23, 2026' }]);
+  });
+
+  it('shows an instant at exactly midnight UTC as a stored day: the one known misreading', () => {
+    // A dc:created stamped at 00:00:00.000Z is the evening of the 23rd in New York, but nothing in
+    // the value tells it from a day Nuxeo stored.
+    expect(dateIn('-0500', '2026-11-24T00:00:00.000Z').value).toEqual({
+      text: 'November 24, 2026',
     });
   });
 
@@ -53,6 +98,59 @@ describe('describeField', () => {
     expect(describe1('double', 1735.5).value).toEqual({ text: '1,735.5' });
     expect(describe1('long', 3).value).toEqual({ text: '3' });
     expect(describe1('long', '12').value).toEqual({ text: '12' });
+  });
+
+  /**
+   * NXSAT-725. `formatNumber`'s default digits format is `1.0-3`, so the panel showed a number
+   * that was not the stored value, and a non-zero value as `0`. The edit form stores and shows
+   * the full value (`step="any"` for a double), so the view disagreed with the form.
+   */
+  it('shows a decimal at full precision, rounding nothing', () => {
+    expect(describe1('double', 3.14159265).value).toEqual({ text: '3.14159265' });
+    expect(describe1('double', 100.0005).value).toEqual({ text: '100.0005' });
+    expect(describe1('double', 19.999999).value).toEqual({ text: '19.999999' });
+  });
+
+  it('shows a small decimal as itself rather than as zero', () => {
+    // The worst of the reported cases: a non-zero measurement read as absent.
+    expect(describe1('double', 0.0004).value).toEqual({ text: '0.0004' });
+    expect(describe1('double', -0.0004).value).toEqual({ text: '-0.0004' });
+    expect(describe1('double', 1e-7).value).toEqual({ text: '0.0000001' });
+  });
+
+  /**
+   * Caught in review on PR 515. A digits format counts fractional *places*, not significant
+   * digits, so any fixed maximum leaves the same defect intact below it — at `1.0-20`, `1e-21`
+   * still rendered as `0`. The precision is derived per value instead, so there is no magnitude
+   * at which the panel shows a number that is not the stored one.
+   */
+  it('shows a value below the old fixed limit rather than rounding it to zero', () => {
+    expect(describe1('double', 1e-21).value).toEqual({ text: '0.000000000000000000001' });
+    expect(describe1('double', -1e-21).value).toEqual({ text: '-0.000000000000000000001' });
+  });
+
+  it('keeps every digit of a value needing more than 20 fractional places', () => {
+    expect(describe1('double', 1.23456789012345e-7).value).toEqual({
+      text: '0.000000123456789012345',
+    });
+  });
+
+  it('falls back to the round-trip form past the formatter ceiling, rather than to zero', () => {
+    // Angular refuses a digits format above 100, and a denormal needs more. The exponential
+    // form is the only exact one left; what matters is that it is not 0.
+    expect(describe1('double', 5e-324).value).toEqual({ text: '5e-324' });
+  });
+
+  it('writes a large exponential value out in full, with grouping', () => {
+    expect(describe1('double', 1e21).value).toEqual({ text: '1,000,000,000,000,000,000,000' });
+  });
+
+  it('keeps grouping while not rounding, so it is not String(value)', () => {
+    // Full precision and thousands separators at once — the reason this is a digits format on
+    // `formatNumber` rather than `String(value)`, which would drop the separator.
+    expect(describe1('double', 123456789.12345679).value).toEqual({
+      text: '123,456,789.12345679',
+    });
   });
 
   it('hands a boolean to the template to translate, keeping false distinct from empty', () => {
@@ -92,6 +190,23 @@ describe('describeField', () => {
       [
         { key: 'name', label: 'Name', kind: 'value', value: { text: 'Priya Raman' } },
         { key: 'since', label: 'Since', kind: 'value', value: { text: 'January 2, 2024' } },
+      ],
+    ]);
+  });
+
+  it('shows a date sub-field by the same rule, in the zone the field was given', () => {
+    const view = describeField(
+      'claim:adjuster',
+      'Adjuster',
+      { type: 'complex', fields: { assigned: { type: 'date' }, since: { type: 'date' } } },
+      // West of UTC, where each of the two would be the other day under the other's rule.
+      { assigned: '2024-01-03T03:00:00.000Z', since: '2024-01-03T00:00:00.000Z' },
+      { ...context, timeZone: '-0500' },
+    );
+    expect(view.groups).toEqual([
+      [
+        { key: 'assigned', label: 'Assigned', kind: 'value', value: { text: 'January 2, 2024' } },
+        { key: 'since', label: 'Since', kind: 'value', value: { text: 'January 3, 2024' } },
       ],
     ]);
   });

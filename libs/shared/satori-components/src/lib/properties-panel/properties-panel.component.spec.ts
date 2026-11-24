@@ -152,6 +152,66 @@ describe('NxsPropertiesPanelComponent', () => {
     expect(text('Subjects')).toBe('art/cinema, sciences/astronomy');
   });
 
+  /**
+   * Expires is a calendar day a user picked, stored at UTC midnight (NXSAT-727), so it reads as
+   * that day in every zone. Created and Last modified are instants the server stamped, and belong
+   * in the reader's own zone. The two must NOT be formatted alike, so both halves are asserted.
+   *
+   * Two things are needed for this to be able to fail, and it asserted nothing without both:
+   *
+   * - **A zone that is not UTC.** In UTC the two formattings agree, and a CI runner is UTC;
+   *   `vite.config.mts` pins this suite to `Asia/Calcutta` for that reason. Setting
+   *   `process.env.TZ` from inside the case cannot substitute — this project runs
+   *   `pool: 'threads'` and Node has read the zone long before the case runs.
+   * - **Instants no earlier render in this file used, whose UTC and local days differ.**
+   *   `DatePipe` memoises on (value, pattern, timezone, locale), so re-asserting `FILE`'s own
+   *   `dc:expired` returned the string computed for the previous render and passed unfixed.
+   *   `20:00Z` is the following day at +05:30; `09:00Z`, which `FILE` uses, is not.
+   */
+  it('shows Expires as the stored day, while the stamped dates stay in the reader’s zone', async () => {
+    host.doc.set({
+      ...FILE,
+      properties: {
+        ...FILE.properties,
+        // UTC day 31 January; 01:30 on 1 February locally.
+        'dc:expired': '2027-01-31T20:00:00.000Z',
+        // UTC day 1 April; 01:30 on 2 April locally.
+        'dc:created': '2026-04-01T20:00:00.000Z',
+      },
+    });
+    await render();
+    // Zone-free: the stored UTC day, whatever zone the suite is pinned to.
+    expect(text('Expires')).toBe('January 31, 2027');
+    // Deliberately the PINNED zone's day, not the UTC one. Proving a row is formatted in the
+    // reader's zone means naming that zone, so this literal moves if the pin moves — which is the
+    // point: if it ever reads `April 1, 2026`, Created has been switched to UTC with Expires.
+    expect(text('Created')).toBe('April 2, 2026');
+  });
+
+  /**
+   * The Expires row reads every `dc:expired` on its UTC day, and the edit form does not: since it
+   * follows the layout view, it opens an instant on the reader's day. This case pins the row's
+   * half of that documented difference (`docs/extension-reference.md`, "`dc:expired` is read two
+   * ways"). 6 March picked in Web UI at +05:30 is stored as 18:30Z on the 5th. The row shows the
+   * 5th in every zone, while the form opens it on the 6th at +05:30; `metadata-editor-form.spec.ts`
+   * asserts that half for the same value. A stored day is the same day on both. The values are new
+   * to this file, because `DatePipe` memoises a value an earlier render used.
+   */
+  it('shows a day Web UI wrote at local midnight east of UTC on its UTC day, a stored day as is', async () => {
+    host.doc.set({
+      ...FILE,
+      properties: { ...FILE.properties, 'dc:expired': '2024-03-05T18:30:00.000Z' },
+    });
+    await render();
+    expect(text('Expires')).toBe('March 5, 2024');
+    host.doc.set({
+      ...FILE,
+      properties: { ...FILE.properties, 'dc:expired': '2024-03-06T00:00:00.000Z' },
+    });
+    await render();
+    expect(text('Expires')).toBe('March 6, 2024');
+  });
+
   it('labels vocabulary values through the host’s lookup, keeping the ID when it has none', async () => {
     host.labels.set((directory, id) =>
       directory === 'nature' ? 'Report' : directory === 'l10nsubjects' ? '' : `${directory}:${id}`,

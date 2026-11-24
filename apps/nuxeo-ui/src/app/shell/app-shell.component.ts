@@ -68,7 +68,7 @@ import {
   toAppNavItem,
 } from '../platform-nav-items';
 import { ThemingFeatureFlagService } from '../theme/theming-feature-flag.service';
-import { drawerItemForPath } from './drawer-route-match';
+import { drawerToOpenForRoute } from './drawer-route-match';
 import { NavDrawerComponent } from './nav-drawer/nav-drawer.component';
 import { PresetBadgeComponent } from './preset-badge/preset-badge.component';
 import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
@@ -163,6 +163,14 @@ export class AppShellComponent implements OnDestroy {
   protected readonly navItems = computed(() => this.navDescriptors().map(toAppNavItem));
 
   readonly displayName = computed(() => this.auth.username() ?? 'User');
+  /**
+   * The initials the profile avatar draws, worked out here and passed to the avatar, so the
+   * profile control's accessible name can contain exactly what the avatar shows (WCAG 2.5.3).
+   * At size 28 the avatar upper-cases the first two characters of its input, and one below that.
+   * Upper-casing comes first here because it can lengthen a string ("ﬁ" becomes "FI"): the result
+   * is then two characters the avatar draws unchanged.
+   */
+  readonly profileInitials = computed(() => this.displayName().toUpperCase().slice(0, 2));
   readonly drawerOpen = signal(false);
   readonly activeDrawerItem = signal<AppNavItem | null>(null);
   readonly clipboardCount = signal(this.readClipboardCount());
@@ -470,11 +478,15 @@ export class AppShellComponent implements OnDestroy {
   }
 
   /**
-   * Open the drawer belonging to the route being shown, if it has one.
+   * Open the drawer belonging to the route being shown, if it has one and none is open.
    *
    * Driven from the route rather than from the nav click, so a deep link and a browser
    * back both arrive with the tree already open — which is how the section is meant to
    * look, and previously only happened if the user clicked the nav item themselves.
+   *
+   * It never replaces a drawer that is already open (see `drawerToOpenForRoute`): following a
+   * document's breadcrumb into Browse from Favorites, Clipboard or any other drawer used to swap
+   * that drawer for the Browse tree.
    */
   private syncDrawerToRoute(currentPath: string): void {
     if (this.router.parseUrl(this.router.url).queryParams['searchQueue'] === 'true') {
@@ -489,17 +501,19 @@ export class AppShellComponent implements OnDestroy {
       this.drawerOpen.set(false);
       return;
     }
-    const matchingItem = drawerItemForPath(this.navItems(), currentPath);
-
-    // Re-setting the same item would reopen a drawer the user has just closed, so a
-    // navigation within one section leaves their choice alone.
-    if (matchingItem && this.activeDrawerItem()?.path !== matchingItem.path) {
-      this.activeDrawerItem.set(matchingItem);
+    const drawer = drawerToOpenForRoute(
+      this.navItems(),
+      currentPath,
+      this.activeDrawerItem(),
+      this.drawerOpen(),
+    );
+    if (drawer) {
+      this.activeDrawerItem.set(drawer);
       this.drawerOpen.set(true);
     }
 
-    // Navigating away deliberately does not close it: the drawer is the browse tree, and
-    // opening a document from it would otherwise dismiss the tree the user is working in.
+    // Navigating away deliberately does not close it: the drawer is the list or tree the user
+    // is working in, and opening a document from it would otherwise dismiss it.
   }
 
   toggleSettingsDrawer(): void {

@@ -14,8 +14,8 @@
 > §§2–5 — what a scope change costs, what is already proven, and what is deliberately
 > not done — remain accurate, with one correction recorded in §3.
 
-**Status:** scope decided; publishing deliberately deferred to the final deployment
-stage. `"private": true` is still in place and nothing publishes.
+**Status:** scope decided. `"private": true` was removed by NXSAT-667 and the package has a
+`publishConfig` for the Nuxeo registry. Nothing has been published yet.
 
 The package builds, installs from a tarball, resolves every subpath, compiles a real
 application against its published types, and — since 2026-08-24 — **survives an actual
@@ -107,12 +107,7 @@ across 190 sites — the same operation already done once, verified by running
 | Peers are declared                               | 10 peers; every specifier in the emitted `.d.ts` is a peer or a sibling entry point |
 | **`npm publish` is not refused**                 | `npm run beta:publishable` — a real `--dry-run` on a copy of the built bytes        |
 
-**No `@alfresco` package is a peer** since NXSAT-308. `@alfresco/adf-extensions` was one, for three
-functions the extension engine imported (`filterEnabled`, `sortByOrder`, `mergeObjects`); the engine
-now has its own, pinned case by case to 9.0.0's output. The peer was dropped with the import still in
-place first, and `beta:publishable` refused it — `Bundle imports "@alfresco/adf-extensions" but the
-built package.json declares it nowhere` — so the declared-imports check catches a peer dropped while
-something still imports it. It cannot tell you a peer is no longer needed.
+**The extension engine has no third-party UI dependency.** It has its own `filterEnabled`, `sortByOrder` and `mergeObjects`. Angular Material and CDK remain required peers, and `@hylandsoftware/satori-ui` is an optional peer, so consumers still install the UI packages they use. `beta:publishable` refuses a bundle that imports a package the built `package.json` declares nowhere, so it catches a peer dropped while something still imports it. It cannot tell you a peer is no longer needed.
 
 ### The row that was missing, and what it cost
 
@@ -142,7 +137,7 @@ before being trusted.
 ## 4. What flipping the switch requires
 
 1. Pick a scope (§1). **Human.**
-2. In `libs/platform/package.json`: remove `"private": true`, add `publishConfig`.
+2. In `libs/platform/package.json`: remove `"private": true`, add `publishConfig`. **Done in NXSAT-667.**
 3. If the scope changes, rename the 190 import specifiers and the `tsconfig.base.json`
    aliases, then `npm run beta:api -- --update`.
 4. Decide a version. It is `0.2.0` in the source, hand-maintained and not tied to the app
@@ -153,15 +148,16 @@ before being trusted.
    every sprint.
 5. `npm publish dist/libs/platform --dry-run` to confirm the tarball, then publish.
 
-`private: true` is what makes step 2 deliberate: `npm publish` refuses outright rather
-than pushing to a scope we might not own.
+Step 2 was the deliberate switch: while `private: true` was set, `npm publish` refused outright
+rather than pushing to a scope we might not own. NXSAT-667 removed that flag, so the deliberate
+step is now the dispatch of the publish workflow with `dryRun: false`.
 
 ## 5. Deliberately not done
 
 - **No real-publish CI workflow.** The manual `publish-platform` workflow (NXSAT-666) only
-  dry-runs by default. Its publish job runs whenever `dryRun` is false, and while `private` is
-  set npm refuses that publish with `EPRIVATE`. Publishing on a tag needs the scope decision first, and a workflow that publishes
-  to the wrong registry is worse than none.
+  dry-runs by default. Its publish job runs whenever `dryRun` is false, and the package is now
+  public, so that dispatch really publishes. Publishing on a tag needs the scope decision first, and a
+  workflow that publishes to the wrong registry is worse than none.
 - **No provenance / signing.** Worth doing at GA; needs a public registry and a trusted
   CI publisher.
 - **Version is not persistently automated.** The workflow bumps the version in the runner's

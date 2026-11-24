@@ -13,28 +13,44 @@ npm run satori:score          # the number alone
 npx sdsc check all --json     # the snapshot the dashboard reads
 ```
 
-Measured 2026-10-28, from `npx sdsc check all --json`:
+Measured 2026-11-20 with `satori-design-system-checker@1.0.0`, from `npx sdsc check all --json`:
 
-| Metric                | Value                        | Check |
-| --------------------- | ---------------------------- | ----- |
-| **Adoption Score**    | **99.69**                    |       |
-| Angular version       | 22.2.3                       | ✅    |
-| Satori UI version     | 1.0.0-alpha.171              | ✅    |
-| Design language       | 3.0 — all MDS2 checks pass   | ✅    |
-| Icons                 | 6 Material font, 492 Satori  | ❌\*  |
-| Componentry           | 0 legacy of 1,604 components | ✅    |
-| DS-internal overrides | 1 unsuppressed (of 155)      | ❌†   |
-| A11y overrides        | 0 — not penalised            | —     |
+| Metric                | Value                             | Check |
+| --------------------- | --------------------------------- | ----- |
+| **Adoption Score**    | **89.61**                         |       |
+| Angular version       | 22.2.3                            | ✅    |
+| Satori UI version     | 1.0.0                             | ✅    |
+| Design language       | 6 MDS2 checks + Satori theme pass | ✅    |
+| ↳ same KPI: CIC Nav   | not used — costs 10 points, see ‡ | ❌‡   |
+| Icons                 | 6 Material font, 444 Satori       | ❌\*  |
+| Componentry           | 0 legacy of 1,517 components      | ✅    |
+| DS-internal overrides | 4 unsuppressed (0.23 per 1k LOC)  | ❌†   |
+| A11y overrides        | 0 — not penalised                 | —     |
+
+‡ **The drop from 99.69 is the checker, not the code.** On the same tree, the
+`1.0.0-alpha.171` checker scores 99.61 and `1.0.0` scores 89.61, with identical icon, component
+and override counts. Checker 1.0.0 scores snapshot contract `1.0.0`, whose design-language KPI
+(weight 0.40) counts using CIC Nav (`cicNavCount > 0`, check weight 3 of 12) as one of its checks.
+This product does not use CIC Nav, so that KPI is 9/12 and the total loses 0.40 × 0.25 = 10 points.
+The check is excusable: the dashboard applies KPI exclusions from its `repos.json` (see
+[How to Register](#how-to-register)), as `designLanguageAlignment: { cicNavCount: true }`.
+Whether to ask for that excusal is a product decision for the Satori team; it is not set here.
+
+The previous measurement, 99.69 on 2026-10-28 with the alpha.171 checker, recorded 1 unsuppressed
+override and 492 Satori icons. The override count rose to 4 on `main` between then and this
+measurement, not because of the 1.0.0 bump: the alpha.171 checker reports the same 4 today.
 
 \* The icon check fails, but five of its six findings are a reverted experiment and one is not
 cheap — see [The 6 icons are not a migration backlog](#the-6-icons-are-not-a-migration-backlog).
 Do not read that ❌ as a backlog item.
 
-† One **unsuppressed** finding. 154 further overrides are suppressed with
+† On 2026-10-28 this was one **unsuppressed** finding (four on 2026-11-20, which this footnote has
+not re-audited). 154 further overrides were suppressed with
 `stylelint-disable-next-line` across 32 files, so 167 → 1 was largely suppression rather than
 removal — see [What is actually left](#what-is-actually-left--and-what-1-override-does-not-mean).
 
-Of the 1,604 components the checker counts, 100 are Satori and 1,261 Material. Neither number
+Of the 1,517 components the checker counts today, 83 are Satori and 1,129 Material (on
+2026-10-28: 1,604, 100 and 1,261). Neither number
 moves the score: adoption measures _conformance_ — supported versions, the MDS3 design language,
 Satori's SVG icons rather than Material's font icons, and CSS that does not reach into design-system
 internals. A Material component used correctly costs nothing; one overridden CSS internal does.
@@ -71,7 +87,7 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 2. **Ask the Satori team** to add this product to `adoption-data/repos.json` in the dashboard
    repo. Provide:
    - Product name: `Nuxeo-UI`
-   - Snapshot contract version: `0.0.0` (current)
+   - Snapshot contract version: `1.0.0` (what `satori-design-system-checker@1.0.0` writes as `__version__`; the alpha checkers wrote `0.0.0`)
    - Any KPI exclusions (none currently)
 
 3. **Set up CI** to push dated snapshots:
@@ -84,11 +100,11 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 
 ## Tooling Installed
 
-| Package                                        | Version         | Purpose                       |
-| ---------------------------------------------- | --------------- | ----------------------------- |
-| `@hylandsoftware/satori-design-system-checker` | 1.0.0-alpha.171 | CLI adoption scoring (`sdsc`) |
-| `@hylandsoftware/satori-lint`                  | 1.0.0-alpha.171 | ESLint + Stylelint rules      |
-| `@hylandsoftware/satori-migrations`            | 1.0.0-alpha.171 | Angular/Nx schematics         |
+| Package                                        | Version | Purpose                       |
+| ---------------------------------------------- | ------- | ----------------------------- |
+| `@hylandsoftware/satori-design-system-checker` | 1.0.0   | CLI adoption scoring (`sdsc`) |
+| `@hylandsoftware/satori-lint`                  | 1.0.0   | ESLint + Stylelint rules      |
+| `@hylandsoftware/satori-migrations`            | 1.0.0   | Angular/Nx schematics         |
 
 ### npm Scripts
 
@@ -107,16 +123,21 @@ sdsc check all --json  →  adoption-data/<product>/        → Dashboard reads
 
 ## Score Breakdown
 
-The score weights six KPIs. Four pass outright; two have a remainder:
+The score weights six KPIs. With `satori-design-system-checker@1.0.0` (measured 2026-11-20), three
+pass outright and three have a remainder:
 
-| KPI                    | Check | Remainder               | Is it work?                    |
-| ---------------------- | ----- | ----------------------- | ------------------------------ |
-| Angular version        | ✅    | —                       | Already compliant              |
-| Satori UI version      | ✅    | —                       | Already compliant              |
-| Design language (MDS3) | ✅    | —                       | All MDS2 checks passing        |
-| Icon adoption          | ❌    | 6 Material font icons   | Mostly **no** — see below      |
-| Componentry            | ✅    | —                       | No legacy component violations |
-| Styling hygiene        | ❌    | 1 unsuppressed override | Yes, but read the caveat below |
+| KPI               | Check | Remainder                                        | Is it work?                                                   |
+| ----------------- | ----- | ------------------------------------------------ | ------------------------------------------------------------- |
+| Angular version   | ✅    | —                                                | Already compliant                                             |
+| Satori UI version | ✅    | —                                                | Already compliant (1.0.0)                                     |
+| Design language   | ❌    | CIC Nav not used — 9 of 12 check weight, −10 pts | **No** code work; an excusal decision, see ‡ in Current State |
+| Icon adoption     | ❌    | 6 Material font icons                            | Mostly **no** — see below                                     |
+| Componentry       | ✅    | —                                                | No legacy component violations                                |
+| Styling hygiene   | ❌    | 4 unsuppressed overrides                         | Yes, but read the caveat below                                |
+
+Design language here means all six MDS2 checks and the Satori theme, which pass, plus CIC Nav
+use, which this product does not have. Under the alpha checkers this KPI passed outright, and
+the table had four passing KPIs.
 
 The per-KPI weights are the checker's, not ours, so this table deliberately gives raw counts rather
 than percentages. An earlier version quoted "0%" and "~82%" against figures that no longer held,
@@ -172,7 +193,10 @@ score and would render blank on a Satori-only host.
 
 ### What is actually left — and what "1 override" does not mean
 
-The checker's `cssOverridesCount: 1` is **one unsuppressed finding**, not one override in the
+_This section is the audit of the 2026-10-28 measurement. On 2026-11-20 the count was 4
+unsuppressed overrides; the three new findings have not been audited here._
+
+The checker's `cssOverridesCount: 1` was **one unsuppressed finding**, not one override in the
 codebase. There are **154 `stylelint-disable-next-line` suppressions of
 `no-ds-internals-overrides`, across 32 files** — `browse.scss`, `tabs.component.scss`,
 `document-detail.scss`, `tasks-page.component.scss`, `note-editor.scss` and more.

@@ -1,4 +1,9 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  provideZonelessChangeDetection,
+  signal,
+  type EnvironmentProviders,
+  type Provider,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -15,7 +20,7 @@ import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
 import { type MockInstance, vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import { NxsToastService, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -153,6 +158,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
   async function render(
     focused: NuxeoDocument,
     route: { query?: Record<string, string>; paramMap?: Observable<ParamMap> } = {},
+    extra: (Provider | EnvironmentProviders)[] = [],
   ): Promise<void> {
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
     TestBed.resetTestingModule();
@@ -163,6 +169,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         provideRouter([], withDisabledInitialNavigation()),
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        ...extra,
         {
           provide: ActivatedRoute,
           useValue: {
@@ -316,14 +323,10 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await render(live(), { query: { browseReturn: 'adf-hx' } });
       await openVersionsList();
 
-      expect(
-        fixture.componentInstance
-          .breadcrumbItems()
-          .map((item) => ('href' in item ? item.href : undefined)),
-      ).toEqual([
-        '/browse/default-domain',
-        '/browse/default-domain/workspaces',
-        '/browse/default-domain/workspaces/ws',
+      expect(fixture.componentInstance.breadcrumbItems().map((item) => item.routerLink)).toEqual([
+        ['/browse', 'default-domain'],
+        ['/browse', 'default-domain', 'workspaces'],
+        ['/browse', 'default-domain', 'workspaces', 'ws'],
       ]);
 
       versionItem('0.1')?.click();
@@ -448,6 +451,16 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
 
+    // The app registers the built-in banner under the ID, so the outlet resolves to it and the
+    // fallback never renders. The wrapper must still hold the banner, with its hook classes.
+    it('keeps the version banner in its wrapper when the app registers the built-in banner', async () => {
+      await render(version(1), {}, [provideNxsComponents()]);
+
+      expect(el('.version-banner lib-extension-outlet nxs-banner')).not.toBeNull();
+      expect(el('.version-banner-latest')).not.toBeNull();
+      expect(el('.version-banner')?.textContent).toContain("You're viewing the 0.1 version.");
+    });
+
     it('is read-only even though the permissions enricher reports Write', async () => {
       await render(version(1));
       const component = fixture.componentInstance;
@@ -488,20 +501,23 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
     it('reads as a plain tag, as Web UI shows a proxy, with no versions control', async () => {
       await render(publication());
+      // The tag renders by `nxs.primitives.tag`; an unregistered ID is reported from a promise.
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
 
       expect(el('nxs-manage-versions')).toBeNull();
-      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')?.textContent?.trim()).toBe('1.0');
+      expect(el('nxs-properties-panel [nxsVersion] nxs-tag')?.textContent?.trim()).toBe('1.0');
     });
 
     it('keeps the versions control on the live document and on a version', async () => {
       await render(live());
       expect(el('nxs-manage-versions .nxs-manage-versions__trigger')).not.toBeNull();
-      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')).toBeNull();
+      expect(el('nxs-properties-panel [nxsVersion] nxs-tag')).toBeNull();
 
       fixture.destroy();
       await render(version(1));
       expect(el('nxs-manage-versions .nxs-manage-versions__trigger')).not.toBeNull();
-      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')).toBeNull();
+      expect(el('nxs-properties-panel [nxsVersion] nxs-tag')).toBeNull();
     });
   });
 
@@ -520,8 +536,10 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await settle();
 
       expect(toast.error).not.toHaveBeenCalled();
-      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
-      expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({ documentUid: 'v-0-1' });
+      expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({
+        documentUid: 'v-0-1',
+        versionableUid: 'doc-live',
+      });
     });
 
     it('counts a version’s publications through its live document, as Web UI lists them', async () => {

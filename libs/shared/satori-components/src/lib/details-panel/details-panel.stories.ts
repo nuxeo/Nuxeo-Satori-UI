@@ -67,7 +67,7 @@ export const NotCommentable: Story = {
 
 /** The arrow keys move between views and select them. */
 export const SwitchedFromTheKeyboard: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     canvas.getByRole('tab', { name: 'Properties' }).focus();
     await userEvent.keyboard('{ArrowRight}');
@@ -78,5 +78,20 @@ export const SwitchedFromTheKeyboard: Story = {
     await expect(
       await canvas.findByText("The comments view's content, projected by the page."),
     ).toBeInTheDocument();
+    await expect(canvas.getByRole('tab', { name: 'Comments' })).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    const activity = canvas.getByRole('tab', { name: 'Activity' });
+    await expect(activity).toHaveFocus();
+    await expect(activity).toHaveAttribute('aria-selected', 'true');
+    await expect(canvas.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', activity.id);
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('tab', { name: 'Properties' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(activity).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    await expect(canvas.getByRole('tab', { name: 'Properties' })).toHaveFocus();
+    canvas.getByRole('button', { name: 'Close details' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.closed).toHaveBeenCalledTimes(1);
   },
 };

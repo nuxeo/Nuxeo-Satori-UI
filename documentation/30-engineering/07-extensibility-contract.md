@@ -10,14 +10,12 @@ audience: engineering
 # The Extensibility Contract — four layers
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
-> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
+> Last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only "The six guardrail checks" was verified at that commit, against
 > `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
 > `@nuxeo/satori-platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
 > The `@nuxeo/satori-platform/components` row in §6 was re-verified at
-> `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
-> upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
+> `effd434` (`feature/nxsat-308-satori-components`), and the tarball figure
 > in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.
 > Customer-facing companion: [`docs/extension-reference.md`](../../docs/extension-reference.md),
 > which is drift-gated by `npm run beta:reference`.
@@ -41,7 +39,7 @@ Layers 0 and 1 are expected to absorb most customer requests and need no build o
 the customer's configuration package is zipped by a dependency-free script and installed.
 
 > **This expectation is a design assumption, not a measured fact.** It has not been tested
-> against real customer requests. [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md)
+> against real customer requests. [`docs/beta-plan.md`](../../docs/beta-plan.md)
 > flags it as needing validation against The Church and one other account. **Not verified in
 > repository.**
 
@@ -63,16 +61,91 @@ fragment's `content` is a `bootstrap` fragment in your configuration package.
 | `nuxeoApiOrigin`                         | Where the Nuxeo REST API lives                                               |
 | `branding`                               | Product name, browser tab title, and `logo` (below)                          |
 | `themes` / `defaultThemeId`              | Named token sets applied to `<html>`                                         |
-| `defaultLanguage` / `availableLanguages` | i18n                                                                         |
+| `defaultLanguage` / `availableLanguages` | i18n — see the coverage caveat below                                         |
+| `sso`                                    | Sign-in buttons and the post-login return URL (below)                        |
 | `presales`                               | Presales presets, honoured only where a package sets `presetSwitching: true` |
+
+### `availableLanguages` is not uniform coverage
+
+An advertised language is **two** promises, and only one of them is ours to keep.
+
+The application's own catalogue is ours, and every advertised language has a complete one —
+`checkAdvertisedLocalesShip` fails a configuration that advertises a language without one. The
+shared-component strings are the vendor's. `@hylandsoftware/satori-ui` 1.0.0 ships **eight**
+catalogues, all regional — `de-DE`, `en-AU`, `en-US`, `es-ES`, `fr-FR`, `it-IT`, `pl-PL` and
+`pt-PT` — plus `languages.json`, a manifest of those locales. Earlier versions also shipped the
+bare names (`de en es fr it pl pt`); 1.0.0 dropped them.
+
+**The match is on the catalogue filename, with one mapping on top**, which is the part worth
+knowing. The bare codes `de en es fr it pl pt` reach their regional file through `aliases` in
+`UPSTREAM_FOLDERS` (`en` → `en-US`, `fr` → `fr-FR`, …). A deployment set to `en-US` or `fr-FR` is
+covered, because those files exist. One set to `pt-BR` is **not**: it is neither a shipped file
+nor an alias — nothing falls back from a regional variant to its base language — so `pt-BR` is
+in the same position as a language the vendor never shipped. **Any other locale id renders every
+`sat.*` string in English** — including the accessible names on the navigation rail — inside an
+otherwise translated application. Tracked upstream as
+[DS-2803](https://hyland.atlassian.net/browse/DS-2803); it cannot be closed in this repository,
+because the strings are the vendor's to author.
+
+The advertised set is deliberately not listed here. It is Layer 0 configuration, it changes
+without this document, and a list written down in prose is one that goes stale silently and is
+believed anyway. Read it from `availableLanguages` in `bootstrap-config.ts` and intersect it with
+the vendor set above; `checkUpstreamCatalogueLanguages` keeps the loader's view of that vendor set
+equal to what the installed package actually contains, so the intersection is always computable
+rather than remembered.
+
+A customer adding a language gets the same split: their own catalogue is honoured, the shared
+components are not. Nothing breaks and nothing 404s — the loader asks the vendor's folder only
+for languages it ships — but the shared strings stay in the fallback language.
+
+> **Right-to-left is a separate concern, and it is being addressed elsewhere.** The vendor's
+> components carry `:dir(rtl)` rules and depend on `@angular/cdk/bidi`. On `main` as of this
+> change, this application sets no `dir` at all — so advertising a right-to-left language would
+> render its text correctly and its layout mirrored the wrong way. **NXSAT-752 sets the document
+> direction from the active language**; check whether it has landed before relying on either
+> statement, and do not take the absence recorded here as current.
+
+### `defaultLanguage` must name a language this build ships
+
+An unsupported value — a typo, or a language dropped from a later release — falls back to `en`,
+and the console records one `[agentic-ui-config]` diagnostic naming the value, the reason and the
+fallback. It is not honoured as written, for two reasons that are both about honesty rather than
+about the strings: `<html lang>` is what a screen reader picks a voice from and what browser
+translation offers as the source language, so announcing a language the text is not in is a WCAG
+3.1.1 failure (NXSAT-733); and asking for a catalogue that cannot exist answers 404 on every
+load.
+
+A value is honoured only if **both** are true:
+
+| Check                                | Question                             | Who decides  |
+| ------------------------------------ | ------------------------------------ | ------------ |
+| a catalogue ships in the build       | will the text actually render in it? | this build   |
+| it is listed in `availableLanguages` | does this deployment offer it?       | the customer |
+
+`availableLanguages` alone is **not** sufficient, and this is the case worth knowing about when
+writing a fragment: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is valid
+configuration that parses cleanly, and because no `es.json` ships, the application's own strings
+would render English under `<html lang="es">`. `checkAdvertisedLocalesShip` cannot catch it —
+that gate reads the packaged config, not a customer's — so the build-time check is what refuses
+it, and the deployment gets `en` with a diagnostic rather than a page that misdescribes itself.
+
+Strings falling back to English is separate, deliberate, and unchanged: `setFallbackLang('en')`
+means any individual key missing from a catalogue renders its English source rather than a raw
+key.
+
+One locale is admitted by a third route, and it is not reachable from a deployment: the generated
+`zz` pseudo-locale, which `npm run i18n:audit` writes into the build to find strings hard-coded
+past the translation layer. It is honoured **only** under a development server — a release build
+refuses it exactly like any other language it ships no catalogue for — so it cannot be configured
+into a customer deployment.
 
 ### `branding.logo`
 
 `{ "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }` replaces the Satori word mark in the header
 and the Satori lockup on the login page. `null` or absent keeps the Satori marks. It does not
 replace the Hyland mark at the top of the navigation rail or the "Content Innovation Cloud" title
-shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`), and there is no
-key for the favicon.
+shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`). The browser tab
+icon has its own key, `branding.favicon`, below.
 
 - **`src`** is a relative path resolved against the directory `bootstrap.json` is served from,
   `/nuxeo/agentic-ui-config/`. The servlet serves images only under `assets/`, so a logo is
@@ -83,13 +156,25 @@ key for the favicon.
   logo is loaded without cookies and a redirect from it to a Nuxeo URL cannot carry the session —
   which means an `https:` logo only renders if its host sends `Access-Control-Allow-Origin`. A
   contributed asset is same-origin and unaffected.
-- **Every other form is rejected** and the Satori marks are kept. An `<img>` request bypasses the
-  HTTP interceptor but still sends the session cookie, so a `src` that could name a Nuxeo REST
-  endpoint is refused rather than left to fail. The deciding check runs on the **resolved** URL,
+- **Every other form is rejected.** What shows instead depends on which check rejected it, and the
+  two are not the same: a value rejected **while the fragments merge** is dropped and the previous
+  layer stands, so another package's valid logo keeps rendering and only a deployment with no
+  valid logo before it falls back to the Satori marks; a value rejected **after the merge**, on
+  the URL it resolves to, has no earlier layer left to fall back to and the Satori marks render.
+  A contributed value can therefore be retained by the merge and still not be displayed. An
+  `<img>` request bypasses the
+  HTTP interceptor. A **same-origin** `<img>` still sends the session cookie — `crossorigin="anonymous"`
+  means credentials mode "same-origin", so it withholds credentials cross-origin only — so a `src`
+  that could name a Nuxeo REST endpoint on the application's own origin is refused rather than left
+  to fail. Measured in Chrome: a same-origin anonymous `<img>` carries the cookie; a cross-origin
+  one does not. The deciding check runs on the **resolved** URL,
   after the URL parser has dropped tabs and newlines and collapsed `..` and `%2e%2e`. On any host
   that serves Nuxeo — the application's, and those of `nuxeoApiOrigin` and `nuxeoServerUrl`,
-  including protocol-relative values — it is refused whatever the scheme or port, because cookies
-  are scoped by host. The one exception is the configuration directory itself, where no path
+  including protocol-relative values — it is refused whatever the scheme or port. That rule is
+  **not** a cookie control: those requests are cross-origin and therefore credential-less while
+  `crossorigin="anonymous"` is present. It is a second, independent control, because the attribute
+  is the first and NXSAT-712 asked whether it was even required; it also keeps the browser from
+  asking a Nuxeo endpoint at all rather than relying on that endpoint to refuse. The one exception is the configuration directory itself, where no path
   segment may carry a `;`, an encoded `;` or `/`, or a double-encoded escape such as `%252e` —
   Tomcat strips `;` path parameters before it collapses `..`, so `..;/api/v1/me` would leave the
   directory on the server while staying inside it in the browser, and a proxy that decodes before
@@ -99,6 +184,54 @@ key for the favicon.
   or fragment with no path (it would load `bootstrap.json` itself), `http:`, `javascript:`, and a
   `data:` URI that is not an image or has no payload (a payload that starts with `#` is a
   fragment, so it counts as none).
+- **"The same host" means the same host however it is spelled** (NXSAT-724). The URL parser
+  lowercases names and canonicalises every IPv4 form — `127.1` and `0x7f.0.0.1` both arrive as
+  `127.0.0.1` — so neither case nor IPv4 notation was ever a way past the rule above. Two things
+  it does not do, and the check now does: a **trailing dot** is stripped, because `example.com.`
+  is the fully-qualified form of `example.com` and shares its cookie jar; and `localhost`,
+  anything in `127.0.0.0/8`, `[::1]` and any `*.localhost` subdomain are treated as one host,
+  because on a single-host deployment each of them reaches the Nuxeo the configuration itself came
+  from — `*.localhost` because RFC 6761 resolves it to loopback and browsers honour that. An IPv4
+  address embedded in IPv6 is **decoded**, for each of the three standardised embeddings the URL
+  parser accepts (`::ffff:127.0.0.1`, the deprecated `::127.0.0.1`, and `::ffff:0:127.0.0.1`,
+  which arrive as `[::ffff:7f00:1]`, `[::7f00:1]` and `[::ffff:0:7f00:1]`) and only those — an
+  address outside them embeds no IPv4 host and is left alone, because reading the low 32 bits of
+  anything that merely looks similar collapses distinct hosts together and refuses logos that
+  should load. Decoding applies to **every**
+  address, not just loopback, so a deployment on `10.0.0.5` also refuses `[::ffff:10.0.0.5]`;
+  that equivalence needs no DNS. Names that merely contain the word are unaffected —
+  `mylocalhost`, `localhost.example.com` and a host actually called `loopback` are ordinary
+  third-party hosts. A side effect
+  worth knowing: a logo inside the configuration directory is refused if its host carries a
+  trailing dot, since the same-origin exception is matched on the origin as written — write the
+  host the way the application is served, or use a relative path. What the check still cannot do
+  is resolve a name to an address, so a Nuxeo named `nuxeo.internal` and addressed as `10.0.0.5`
+  compares unequal; that is not a credential risk, because such a request is credential-less
+  cross-origin and the two spellings do not share a cookie jar either.
+- **Every refusal is reported** (NXSAT-724). A refused `src` used to keep the packaged mark and
+  say nothing, so a typo looked exactly like configuring no logo at all. Each contributed value
+  the checks refuse is now written once per load to the console as `[agentic-ui-config] …` and
+  recorded in `diagnostics().messages`, naming the value, where it came from and the reason. The
+  reason text comes from the same function that decides the verdict, so the two cannot drift
+  apart. The active preset's contribution is included and named as such; unselected presets
+  contribute nothing and stay quiet. A `src` written as an empty or whitespace-only string is
+  reported too — it is refused, and it used to be indistinguishable from declaring no logo.
+  What the report deliberately does **not** say is which mark ends up on screen: a refusal leaves
+  whatever an earlier layer set, so an earlier valid logo still wins and a later valid one
+  replaces a refused earlier one. Each cause gives its own wording — the scheme is named, so
+  `javascript:` and `http:` do not read alike; a backslash is not reported as a control
+  character; and a path refused for syntax the server re-reads is not reported as pointing outside
+  the configuration directory, because a file named `acme;v=1.svg` or `acme%e0.svg` is inside it
+  and saying otherwise sends the administrator looking in the wrong place. A `..` segment is
+  likewise reported as not allowed rather than as leaving the directory, since
+  `assets/../acme.svg` carries one and resolves back inside — it is refused on the written form
+  wherever it would resolve to, which is the point of checking the form at all. One log line
+  identifies what was wrong with the value.
+- **The two logo messages make different claims on purpose.** A failure _after_ loading (the
+  NXSAT-721 case above) says the Satori marks are in use, because the merge has already settled
+  which contribution won and suppressing that one URL leaves nothing to render but the packaged
+  marks. A refusal _during_ the merge says only that the value was refused, because an earlier
+  layer's valid logo survives it.
 - **A logo that is accepted and then does not render keeps the Satori marks too** (NXSAT-721).
   Every check above runs before the image is requested, so none of them can know whether the file
   exists, whether the bytes decode, or whether a remote host sent the CORS header. The two `<img>`
@@ -115,6 +248,122 @@ key for the favicon.
 - Contributed assets are served at `/nuxeo/agentic-ui-config/assets/<name>` (NXSAT-312). The servlet path is outside every
   `NuxeoAuthenticationFilter` URL pattern, which is what lets the login page load the logo before
   sign-in; the NXSAT-312 rehearsal fetched a contributed SVG there anonymously, as `image/svg+xml`.
+
+### `branding.favicon`
+
+`{ "src": "assets/acme-icon.png" }` replaces the browser tab icon. `null` or absent keeps the one
+the application bundle ships. It was the last branding surface that was not configurable
+(NXSAT-313), which showed: the tab _title_ has followed `branding.documentTitle` since NXSAT-722,
+so a demo branded for a prospect put their name next to the Nuxeo mark.
+
+- **Exactly the same forms and exactly the same checks as `branding.logo`.** A relative path
+  inside the configuration directory, an `https:` URL or a `data:image/` URI are accepted;
+  backslashes, control characters, a non-`https:` scheme, an absolute path, a `..` or `%2e%2e`
+  segment and any host that serves Nuxeo are refused. Not "the same rules" as a description —
+  literally the same functions, so a correction to one applies to the other. Four of the logo's
+  rules were added after review found a way past the first version, and a second implementation
+  would have had none of them.
+- **A refusal is reported the same way**, naming the key, the value, the fragment it came from and
+  the reason, once per load. The key is in the message, so a fragment that sets both a logo and a
+  favicon says which one was refused.
+- **A refused or absent value shows the packaged icon**, which is what every deployment saw before
+  this key existed.
+- **One icon, not a platform set.** Web UI ships six (`favicon-32x32.png`, `favicon-16x16.png`,
+  `favicon.ico`, `safari-pinned-tab.svg`, `apple-touch-icon.png`,
+  `ms-touch-icon-144x144-precomposed.png`) and has no configuration key for any of them — a
+  customer replaces the files inside a bundle. We cannot do that, because our Angular bundle is
+  installed whole and replaced on every upgrade, so a key is both the only mechanism open to us
+  and the better one. Accepting a single icon is a recorded limitation rather than an oversight;
+  the Apple and Microsoft variants are not addressable for Beta.
+- **`alt` is accepted and not used.** The shape is shared with `branding.logo`; a tab icon has no
+  accessible name to carry, because the tab title is its label.
+- The `type` hint `index.html` ships is removed when a configured icon is in force. It says
+  `image/x-icon`, which is false of the `.png` or `.svg` a customer is most likely to contribute,
+  and a browser may use it to skip a format it believes it cannot render.
+
+### Presales presets, and why they are not a hole in configuration-as-code
+
+One demo server can be shown to several prospects, each with their own branding, with nothing but
+a link — and this is **already shipped**, which is worth stating plainly because the most common
+request for it comes from people who believe it needs a fork (NXSAT-684).
+
+A bootstrap fragment declares named presets under `presales`; each carries a whole `bootstrap` and
+`manifest` patch applied **after** every package's fragments, so it wins over all of them:
+application title, document title, logo, favicon, the entire theme token map, `defaultThemeId`,
+languages, and every Layer 1 capability.
+[`presales-demo`](https://github.com/nuxeo/Nuxeo-Satori-Config/tree/main/config-packages/presales-demo),
+in nuxeo/Nuxeo-Satori-Config, ships two worked prospects, both fictional:
+
+```
+https://<server>/nuxeo/agentic-ui/?preset=insurance    # Acme Insurance
+https://<server>/nuxeo/agentic-ui/?preset=logistics    # Globex Logistics
+https://<server>/nuxeo/agentic-ui/?preset=             # clear it
+```
+
+The choice is remembered in `localStorage` for that browser and a badge in the header names the
+preset in force. The full key reference is in
+[the extension reference](../../docs/extension-reference.md#presales-presets).
+
+**This does not contradict the regulated-customer requirement that configuration is code.** The
+distinction is between the content and the selection, and only one of them is runtime:
+
+- A preset's **content** is a JSON fragment inside a reviewed, versioned, built-from-source
+  Marketplace package. Nothing is stored in the repository, nothing is edited on the server, and
+  it reaches a server by the same install path as every other fragment.
+- Only the **selection** is runtime, and it is per browser, held in `localStorage`, invisible to
+  every other user, and backed by no server-side state at all. It is a view switch in one browser,
+  not multi-tenancy.
+- **Nothing happens unless a package sets `presetSwitching: true`.** A customer production server
+  ignores `?preset=` and the stored choice alike, and records in the diagnostics and the console
+  that it did. A later fragment can turn it off, so a customer package layered over a demo one
+  wins.
+
+**What still costs a rebuild, said honestly:** adding a _new_ prospect means editing
+`bootstrap.json`, raising the version, rebuilding, reinstalling and restarting — two to four
+minutes, because presets are package content and package content is read once at startup. The fix
+is the development override directory: with `nuxeo.agentic.ui.config.dev=true` a new preset is one
+`docker cp` and a reload. See
+[The fast loop while you are tuning a value](../../docs/extension-reference.md#the-fast-loop-while-you-are-tuning-a-value)
+in the extension reference.
+
+### `sso.endpoints`
+
+`{ "id": "azure", "label": "Log In With Azure SAML", "path": "/nuxeo/oauth2/authorization/azure" }`
+adds a sign-in button to the login page. The registration id has to match the Nuxeo
+OpenID/SAML setup, which is exactly the per-deployment fact that used to require editing our
+source. `postLoginPath` and `returnQueryParam` control the return URL Nuxeo is asked to redirect
+to after sign-in; `returnQueryParam: null` sends none.
+
+- **`path` must be a path on the Nuxeo origin**, and only that. It must begin with a single `/`,
+  and it may contain no backslash and no control character. Those two refusals are not cosmetic:
+  the URL parser rewrites `\` as a path separator and **deletes** tabs, newlines and carriage
+  returns before it reads anything, so `/\evil.example/sso` and `/<TAB>/evil.example/sso` both
+  resolve to another host while looking like paths (NXSAT-731). An absolute address is refused
+  whatever its scheme, and the scheme is named in the message, because `javascript:` and
+  `https://idp.example` are very different mistakes to have made.
+- **A refused entry renders no button, and the refusal is reported** as
+  `[agentic-ui-config] sso.endpoints[<n>].path "<value>" from <component> was refused — <reason>`,
+  both on the console and in `diagnostics().messages`. The message names what was refused and not
+  what ended up on screen, because the outcome depends on the remaining contributions.
+- **`endpoints` is replaced, not merged entry by entry, and that matters when an entry is
+  refused.** A contribution that writes the key at all supplies the whole list: the merged value is
+  that contribution's **accepted** entries, and an earlier package's list is gone. So a
+  contribution whose every entry is refused leaves no buttons at all, and is indistinguishable from
+  the `"endpoints": []` that deliberately turns SSO off — which is the behaviour a deployment needs,
+  so it does not change. **This is not how `branding.logo` behaves**: a refused `logo.src` keeps the
+  logo an earlier layer set. Do not reason from one to the other (review of PR 519).
+- **The refusal during the merge is not the security boundary.** `AuthService.startSamlLogin` is:
+  it resolves the configured path against the Nuxeo origin and refuses to navigate unless the
+  resolved origin is that origin, so a value that never passed through the merge — the
+  `NUXEO_SAML_LOGIN_ENDPOINTS` token is public, and a host application may fill it directly — is
+  still refused at the point the browser would be sent somewhere. The comparison is on the
+  resolved URL rather than on the string, so it does not depend on having enumerated the shapes a
+  parser can reach an authority from.
+- **`postLoginPath` is held to the same rule against the application's own origin**, and a bad one
+  drops the return parameter rather than refusing the sign-in. The return path is a convenience;
+  blocking SSO over it would be the worse outcome.
+- The JSON schema the `config-package` generator writes carries the same rule, so an editor marks
+  a bad `path` as you type rather than at run time.
 
 ### Why it is contributed, not edited
 
@@ -275,15 +524,10 @@ Both answer `false` with no string parameter, and both read the focused document
 document-detail tabs and toolbar actions but not browse columns. Reference and examples:
 `docs/extension-reference.md` §4.
 
-### Our rule context is deliberately not upstream's
+### Our rule context is typed on Nuxeo
 
-`RuleContext` from `@alfresco/adf-extensions` is typed on Alfresco Content Services domain
-objects — `NodeEntry`, `SiteEntry`, `RepositoryInfo` — describing a repository we do not
-talk to. Reusing it would put ACS types in the signature every customer rule is written
-against. The _shape_ is upstream's; the types are ours. Upstream's domain-neutral helpers
-were used directly until NXSAT-308, which replaced the three the engine needed —
-`mergeObjects`, `filterEnabled` and `sortByOrder` — with our own, pinned case by case to
-upstream's output.
+`RuleContext` is typed on Nuxeo documents, not on the domain objects of a repository we do not
+talk to. The engine's helpers — `mergeObjects`, `filterEnabled` and `sortByOrder` — are our own.
 
 ---
 
@@ -297,7 +541,7 @@ One publishable library, six secondary entry points; `npm pack --dry-run` on the
 | `@nuxeo/satori-platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
 | `@nuxeo/satori-platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
 | `@nuxeo/satori-platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
-| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no Satori import                                                                                            |
 | `@nuxeo/satori-platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
 | `@nuxeo/satori-platform/nuxeo-client`      | Services and models                                                                                                                              |
 | `@nuxeo/satori-platform/ui`                | Shared presentational components                                                                                                                 |

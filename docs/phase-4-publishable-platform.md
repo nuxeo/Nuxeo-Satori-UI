@@ -37,10 +37,9 @@ npx nx build platform     # -> dist/libs/platform
 
 ### Why one package, not four
 
-The distribution model in `docs/adf-hx-beta-plan.md` promises an upgrade is "an npm
+The distribution model in `docs/beta-plan.md` promises an upgrade is "an npm
 version bump for the platform" — singular. Four independently versioned packages make
-that four bumps and a cross-compatibility matrix to support. It is also the shape
-`@alfresco/adf-hx-content-services` ships in, which this codebase already consumes.
+that four bumps and a cross-compatibility matrix to support.
 
 ### No files were moved
 
@@ -122,7 +121,7 @@ the generator both do this and say why.
 `apps/nuxeo-satori-template` — a real Nx project, so `nx run-many` builds and
 typechecks it and it cannot rot into a template that no longer compiles.
 
-**401 kB initial / 108 kB compressed**, against the product's 3.5 MB. No adf-hx, no
+**401 kB initial / 108 kB compressed**, against the product's 3.5 MB. No
 Angular Material — because a fork should not have to remove our design system before
 adding its own. The production budget is 450 kB warning / 700 kB error so a fork that
 pulls in something heavy is told at build time.
@@ -135,7 +134,7 @@ demonstrated the extension contract and nothing about building a content applica
 which is most of what a customer actually has to do.
 
 It now signs in and reads the repository, using `@nuxeo/satori-platform/nuxeo-client`
-and no adf-hx:
+and no content-services library:
 
 | Route              | What it does                                                                     |
 | ------------------ | -------------------------------------------------------------------------------- |
@@ -286,8 +285,6 @@ before the bundle-size step because that step begins with `rm -rf dist`.
 ## What is deliberately not done
 
 - **Publishing.** Blocked on `@nuxeo-satori` scope ownership (R10).
-- **`adf-hx-bridge` is not an entry point.** It would make adf-hx reachable from the
-  package; the existing `checkNoAdfHxInPublicApi` guardrail enforces this.
 - **Semantic compatibility checking.** The API gate is a shape gate; it does not read
   decorator metadata.
 - **The template resolves platform imports through workspace tsconfig aliases to
@@ -297,7 +294,7 @@ before the bundle-size step because that step begins with `rm -rf dist`.
 
 ## References
 
-- Plan: `docs/adf-hx-beta-plan.md` Phase 4 section
+- Plan: `docs/beta-plan.md` Phase 4 section
 - Package README: `libs/platform/README.md`
 - API snapshot: `docs/api/platform.api.md`
 - Layer 1 ID contract: `docs/extension-reference.md`

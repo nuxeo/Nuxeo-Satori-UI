@@ -1,10 +1,12 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
+import { DIR_DOCUMENT, Directionality } from '@angular/cdk/bidi';
 import {
   Component,
   provideZonelessChangeDetection,
   signal,
   viewChild,
   ChangeDetectionStrategy,
+  type Provider,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
@@ -65,12 +67,18 @@ const HOLD_FOLDERS = new Set(['domain', 'workspaces', 'claims']);
   template: `<nxs-document-tree
     label="Folders"
     [currentPath]="path()"
-    (navigate)="opened.push($event.path)"
+    (navigate)="onNavigate($event)"
   />`,
 })
 class HostComponent {
   readonly path = signal('/');
   readonly opened: string[] = [];
+  /** When set, the page follows a chosen folder, as the real shell does. */
+  follow = false;
+  onNavigate(doc: { path?: string }): void {
+    this.opened.push(doc.path ?? '');
+    if (this.follow) this.path.set(doc.path ?? '/');
+  }
   readonly tree = viewChild.required(NxsDocumentTreeComponent);
 }
 
@@ -121,6 +129,7 @@ describe('NxsDocumentTreeComponent', () => {
     path = '/',
     domains: NuxeoDocument[] = [DOMAIN, OTHER_DOMAIN],
     children: Record<string, NuxeoDocument[]> = CHILDREN,
+    extra: Provider[] = [],
   ): Promise<void> {
     browse = {
       getNavTreeBootstrap: vi.fn(() => of({ root: ROOT, entries: domains })),
@@ -136,6 +145,7 @@ describe('NxsDocumentTreeComponent', () => {
         provideZonelessChangeDetection(),
         { provide: BrowseService, useValue: browse },
         { provide: LiveAnnouncer, useValue: { announce } },
+        ...extra,
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(HostComponent);
@@ -209,15 +219,32 @@ describe('NxsDocumentTreeComponent', () => {
   describe('inside a domain', () => {
     beforeEach(() => create('/default-domain/workspaces/claims'));
 
-    it('shows that domain’s branch, expanded down to the current folder, which is marked', () => {
-      expect(labels()).toEqual(['Domain', 'Workspaces', 'Claims', 'Archive', 'Legal', 'Sections']);
+    const backLabels = (): string[] =>
+      [...el().querySelectorAll('.nxs-document-tree__back')].map(
+        (button) => button.textContent?.trim() ?? '',
+      );
+
+    it('shows the folder on screen alone, expanded to its folders, which is marked', () => {
+      expect(labels()).toEqual(['Claims', 'Archive']);
       expect(item('Claims').getAttribute('aria-current')).toBe('page');
-      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('true');
       expect(item('Claims').getAttribute('aria-expanded')).toBe('true');
       expect(item('Archive').hasAttribute('aria-expanded')).toBe(false);
       expect(items().filter((node) => node.getAttribute('aria-current') === 'page')).toHaveLength(
         1,
       );
+    });
+
+    it('hides the siblings of the folder and of each folder above it', () => {
+      // Legal is a sibling of Claims, Sections of Workspaces, the other domain of Domain.
+      expect(labels()).not.toContain('Legal');
+      expect(labels()).not.toContain('Sections');
+      expect(labels()).not.toContain('Workspaces');
+      expect(labels()).not.toContain('Domain');
+      expect(labels()).not.toContain('Other domain');
+    });
+
+    it('shows one back row for each ancestor, from the root down', () => {
+      expect(backLabels()).toEqual(['Root', 'Domain', 'Workspaces']);
     });
 
     it('goes back to the root from its button', () => {
@@ -227,12 +254,44 @@ describe('NxsDocumentTreeComponent', () => {
       expect(host.opened).toEqual(['/']);
     });
 
-    it('follows the page to another folder, folding the branch it left', async () => {
+    it('opens an ancestor from its back row', () => {
+      const buttons = [...el().querySelectorAll<HTMLButtonElement>('.nxs-document-tree__back')];
+      buttons[2].click();
+      buttons[1].click();
+      expect(host.opened).toEqual(['/default-domain/workspaces', '/default-domain']);
+    });
+
+    it('follows the page to another folder, narrowing to it', async () => {
       host.path.set('/default-domain/sections');
       await render();
-      expect(labels()).toEqual(['Domain', 'Workspaces', 'Sections']);
+      expect(labels()).toEqual(['Sections']);
+      expect(backLabels()).toEqual(['Root', 'Domain']);
       expect(item('Sections').getAttribute('aria-current')).toBe('page');
-      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('shows a domain on its own at its own level, with the root as the one back row', async () => {
+      host.path.set('/default-domain');
+      await render();
+      expect(labels()).toEqual(['Domain', 'Workspaces', 'Sections']);
+      expect(backLabels()).toEqual(['Root']);
+    });
+
+    it('stays narrowed while a newly opened folder loads, rather than widening to the domain', async () => {
+      const held = new Subject<{ entries: NuxeoDocument[] }>();
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) =>
+        doc.uid === 'legal' ? held : of({ entries: CHILDREN[doc.uid] ?? [] }),
+      );
+      host.path.set('/default-domain/workspaces/legal');
+      await render();
+      // The folder just left is folded as the path moves; nothing around it is brought back.
+      expect(labels()).toEqual(['Claims']);
+      expect(backLabels()).toEqual(['Root', 'Domain', 'Workspaces']);
+
+      held.next({ entries: [] });
+      held.complete();
+      await render();
+      expect(labels()).toEqual(['Legal']);
+      expect(backLabels()).toEqual(['Root', 'Domain', 'Workspaces']);
     });
 
     it('marks the nearest shown folder when the current one is not in the tree', async () => {
@@ -287,13 +346,13 @@ describe('NxsDocumentTreeComponent', () => {
 
       key(item('Claims'), 'End');
       await render();
-      expect(document.activeElement).toBe(item('Sections'));
-      key(item('Sections'), 'Home');
+      expect(document.activeElement).toBe(item('Legal'));
+      key(item('Legal'), 'Home');
       await render();
-      expect(document.activeElement).toBe(item('Domain'));
-      key(item('Domain'), 'ArrowUp');
+      expect(document.activeElement).toBe(item('Workspaces'));
+      key(item('Workspaces'), 'ArrowUp');
       await render();
-      expect(document.activeElement).toBe(item('Domain'));
+      expect(document.activeElement).toBe(item('Workspaces'));
     });
 
     it('expands with Right, then steps into the first child', async () => {
@@ -306,14 +365,14 @@ describe('NxsDocumentTreeComponent', () => {
       expect(document.activeElement).toBe(item('Archive'));
     });
 
-    it('collapses with Left, then steps out to the parent', async () => {
-      item('Workspaces').focus();
+    it('steps out to the parent with Left, then collapses it', async () => {
+      item('Claims').focus();
+      key(item('Claims'), 'ArrowLeft');
+      await render();
+      expect(document.activeElement).toBe(item('Workspaces'));
       key(item('Workspaces'), 'ArrowLeft');
       await render();
       expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
-      key(item('Workspaces'), 'ArrowLeft');
-      await render();
-      expect(document.activeElement).toBe(item('Domain'));
     });
 
     it('opens with Enter and toggles with Space', async () => {
@@ -323,6 +382,244 @@ describe('NxsDocumentTreeComponent', () => {
       await render();
       expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
       expect(host.opened).toHaveLength(1);
+    });
+  });
+
+  /**
+   * The ARIA tree pattern puts "inward" on the key that points along the reading direction, so
+   * right to left it is Left that expands and Right that collapses. The component reads
+   * `Directionality`, which the shell's `syncDocumentDirection` writes from the active language;
+   * providing `DIR_DOCUMENT` lets the real `Directionality` resolve from it rather than asserting
+   * a double's behaviour.
+   *
+   * Untested until Arabic and Hebrew were advertised: nothing set `dir`, so this branch of
+   * `onKeydown` had never run.
+   */
+  describe('keyboard, right to left', () => {
+    beforeEach(() => {
+      const rtlDocument = document.implementation.createHTMLDocument('rtl');
+      rtlDocument.documentElement.dir = 'rtl';
+      return create('/default-domain/workspaces', [DOMAIN, OTHER_DOMAIN], CHILDREN, [
+        { provide: DIR_DOCUMENT, useValue: rtlDocument },
+      ]);
+    });
+
+    it('reads rtl from Directionality', () => {
+      expect(TestBed.inject(Directionality).value).toBe('rtl');
+    });
+
+    it('expands with Left, then steps into the first child', async () => {
+      item('Claims').focus();
+      key(item('Claims'), 'ArrowLeft');
+      await render();
+      expect(item('Claims').getAttribute('aria-expanded')).toBe('true');
+      key(item('Claims'), 'ArrowLeft');
+      await render();
+      expect(document.activeElement).toBe(item('Archive'));
+    });
+
+    it('steps out to the parent with Right, then collapses it', async () => {
+      item('Claims').focus();
+      key(item('Claims'), 'ArrowRight');
+      await render();
+      expect(document.activeElement).toBe(item('Workspaces'));
+      key(item('Workspaces'), 'ArrowRight');
+      await render();
+      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('leaves Up and Down alone, which do not mirror', async () => {
+      const start = item('Workspaces');
+      start.focus();
+      key(start, 'ArrowDown');
+      await render();
+      expect(document.activeElement).toBe(item('Claims'));
+      key(item('Claims'), 'ArrowUp');
+      await render();
+      expect(document.activeElement).toBe(item('Workspaces'));
+    });
+  });
+
+  describe('for a user who can only read a workspace', () => {
+    // The bootstrap puts such workspaces directly under the root, with no domain above them.
+    const MINE = folder('mine', '/default-domain/UserWorkspaces/mine', 'Mine', 'Workspace');
+    const THEIRS = folder('theirs', '/default-domain/UserWorkspaces/theirs', 'Theirs', 'Workspace');
+    const SUB = folder('sub', '/default-domain/UserWorkspaces/mine/sub', 'Sub');
+    const accessible: Record<string, NuxeoDocument[]> = { mine: [SUB], theirs: [], sub: [] };
+    const backLabels = (): string[] =>
+      [...el().querySelectorAll('.nxs-document-tree__back')].map(
+        (button) => button.textContent?.trim() ?? '',
+      );
+
+    it('narrows to the opened workspace, with the root as its one back row', async () => {
+      await create('/default-domain/UserWorkspaces/mine', [MINE, THEIRS], accessible);
+      expect(labels()).toEqual(['Mine', 'Sub']);
+      expect(backLabels()).toEqual(['Root']);
+      expect(item('Mine').getAttribute('aria-current')).toBe('page');
+    });
+
+    it('narrows to a folder inside it, with the workspace as a back row', async () => {
+      await create('/default-domain/UserWorkspaces/mine/sub', [MINE, THEIRS], accessible);
+      expect(labels()).toEqual(['Sub']);
+      expect(backLabels()).toEqual(['Root', 'Mine']);
+    });
+  });
+
+  describe('after navigating and retrying', () => {
+    const backs = (): HTMLButtonElement[] => [
+      ...el().querySelectorAll<HTMLButtonElement>('.nxs-document-tree__back'),
+    ];
+
+    it('resumes loading the path below a folder whose retry succeeds', async () => {
+      await create('/');
+      let failed = false;
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) => {
+        if (doc.uid === 'workspaces' && !failed) {
+          failed = true;
+          return throwError(() => ({ status: 500 }));
+        }
+        return of({ entries: CHILDREN[doc.uid] ?? [] });
+      });
+      host.path.set('/default-domain/workspaces/claims');
+      await render();
+      // The sync stopped at Workspaces; the tree stays on it with its failure row.
+      expect(item('Workspaces').getAttribute('aria-expanded')).toBe('true');
+      const failure = el().querySelector('.nxs-document-tree__item--error') as HTMLElement;
+      expect(failure).not.toBeNull();
+
+      key(failure, 'Enter');
+      await render();
+      // Retrying goes on to Claims and its folders, rather than narrowing to Claims unexpanded.
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(item('Claims').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('stays on the failed folder, not an empty one, while the retry loads the rest of the path', async () => {
+      await create('/');
+      const claimsFolders = new Subject<{ entries: NuxeoDocument[] }>();
+      let failed = false;
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) => {
+        if (doc.uid === 'workspaces' && !failed) {
+          failed = true;
+          return throwError(() => ({ status: 500 }));
+        }
+        if (doc.uid === 'claims') return claimsFolders;
+        return of({ entries: CHILDREN[doc.uid] ?? [] });
+      });
+      host.path.set('/default-domain/workspaces/claims');
+      await render();
+      key(el().querySelector('.nxs-document-tree__item--error') as HTMLElement, 'Enter');
+      await render();
+      // Workspaces has its folders back, but Claims is still loading: the tree must not narrow to
+      // Claims yet, because there is nothing under it to show.
+      expect(labels()).toEqual(['Workspaces', 'Claims', 'Legal']);
+
+      claimsFolders.next({ entries: CHILDREN['claims'] });
+      claimsFolders.complete();
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+    });
+
+    it('puts focus on the opened folder’s row after Enter', async () => {
+      await create('/default-domain/workspaces');
+      host.follow = true;
+      const claims = item('Claims');
+      claims.focus();
+      key(claims, 'Enter');
+      await render();
+      expect(host.path()).toBe('/default-domain/workspaces/claims');
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(document.activeElement).toBe(item('Claims'));
+      expect(item('Claims').tabIndex).toBe(0);
+    });
+
+    it('puts focus on the folder a back button opened', async () => {
+      await create('/default-domain/workspaces/claims');
+      host.follow = true;
+      const workspacesBack = backs()[2];
+      workspacesBack.focus();
+      workspacesBack.click();
+      await render();
+      expect(host.path()).toBe('/default-domain/workspaces');
+      expect(document.activeElement).toBe(item('Workspaces'));
+    });
+
+    it('retries through the sync when the route spells the path differently', async () => {
+      await create('/');
+      let failed = false;
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) => {
+        if (doc.uid === 'workspaces' && !failed) {
+          failed = true;
+          return throwError(() => ({ status: 500 }));
+        }
+        return of({ entries: CHILDREN[doc.uid] ?? [] });
+      });
+      host.path.set('/DEFAULT-DOMAIN/WORKSPACES/claims');
+      await render();
+      key(el().querySelector('.nxs-document-tree__item--error') as HTMLElement, 'Enter');
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+    });
+
+    it('does not pull focus back once the user has moved it out of the tree', async () => {
+      await create('/default-domain/workspaces');
+      host.follow = true;
+      const claimsFolders = new Subject<{ entries: NuxeoDocument[] }>();
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) =>
+        doc.uid === 'claims' ? claimsFolders : of({ entries: CHILDREN[doc.uid] ?? [] }),
+      );
+      const claims = item('Claims');
+      claims.focus();
+      key(claims, 'Enter');
+      await render();
+
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+      claimsFolders.next({ entries: CHILDREN['claims'] });
+      claimsFolders.complete();
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
+    });
+
+    it('drops the focus intent when another folder supersedes the one opened', async () => {
+      await create('/default-domain/workspaces');
+      host.follow = true;
+      const claimsFolders = new Subject<{ entries: NuxeoDocument[] }>();
+      browse.getNavTreeChildren.mockImplementation((doc: NuxeoDocument) =>
+        doc.uid === 'claims' ? claimsFolders : of({ entries: CHILDREN[doc.uid] ?? [] }),
+      );
+      const claims = item('Claims');
+      claims.focus();
+      key(claims, 'Enter');
+      await render();
+
+      // Another control sends the page to Sections before Claims has answered.
+      host.path.set('/default-domain/sections');
+      await render();
+      (document.activeElement as HTMLElement | null)?.blur();
+      claimsFolders.next({ entries: CHILDREN['claims'] });
+      claimsFolders.complete();
+      await render();
+
+      // Later the page comes back to Claims by itself: that is not the user's Enter any more.
+      host.path.set('/default-domain/workspaces/claims');
+      await render();
+      expect(labels()).toEqual(['Claims', 'Archive']);
+      expect(el().contains(document.activeElement)).toBe(false);
+    });
+
+    it('does not take focus when the page moves on its own', async () => {
+      await create('/default-domain/workspaces');
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+      host.path.set('/default-domain/sections');
+      await render();
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
     });
   });
 

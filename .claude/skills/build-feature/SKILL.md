@@ -2,7 +2,7 @@
 name: build-feature
 description: >-
   End-to-end agentic playbook for building a feature, enhancement or new module in the
-  agentic-ui-poc Nx/Angular monorepo. Extends the fix-bug skill: inherits its workspace,
+  Nuxeo-Satori-UI Nx/Angular monorepo. Extends the fix-bug skill: inherits its workspace,
   evidence story, gate, PR, CI, Jira and metrics machinery, and overrides the bug-shaped
   phases with design and layer placement, vertical-slice delivery, extension points, public
   API review and docs as deliverables. Use when asked to implement a feature or Jira story,
@@ -89,8 +89,8 @@ does. **Search before you scaffold.**
 
 1. Does **this repo** already have most of it? Check `AGENTS/01-services.md` for an existing
    service method and `libs/shared/ui/` for an existing component before writing either.
-2. Does **adf-hx** ship it? If a real component exists upstream, adopting it beats writing a
-   lookalike — see [`adopt-adf-hx-component`](../adopt-adf-hx-component/SKILL.md).
+2. Does **`libs/shared/satori-components`** ship it? If an `nxs-` component exists, use it
+   rather than writing a lookalike — see `AGENTS/00-architecture.md`, "Adding a component".
 3. Does the **Nuxeo server** already expose what you need? Check `AGENTS/02-nuxeo-apis.md` for
    the endpoint, enricher or automation operation, and probe the running instance to confirm the
    response shape before designing around an assumed one.
@@ -155,8 +155,8 @@ manifest wiring. Not "all the services, then all the components" — that leaves
 - The feature cannot be placed in a layer, or spans Layer 2 and our own source.
 - It needs a **new** public API on the platform package, or a new registered extension ID that
   is not obviously permanent — a registered ID is a published contract you cannot rename.
-- It needs an adf-hx type in a public signature (stop: nothing imports adf-hx since its bridge was
-  removed with the POC routes, NXSAT-635).
+- It needs a third-party component type in a public signature (stop: public APIs expose `nxs-`
+  components and platform types only).
 - It touches `install.xml`, marketplace packaging, or customer-facing config inside the packaged
   web directory — `install.xml` copies that with `overwrite="true"` and destroys it on upgrade.
 - It would take more than a day and you cannot find slice boundaries.
@@ -173,9 +173,9 @@ manifest wiring. Not "all the services, then all the components" — that leaves
 - **Close each slice before opening the next**: its tests pass, `beta:gate --gates guardrails,lint`
   is green, nothing is left referencing something that does not exist yet.
 - **No new hardcoded action lists, nav entries or theme values.** Route them through Layer 0/1.
-- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its bridge
-  was removed with the POC routes (NXSAT-635); do not reintroduce it. If adf-hx is ever
-  reintroduced, pin exact versions, never a range or a dist-tag.
+- **Third-party component types must never appear in our public API** — public APIs expose
+  `nxs-` components and platform types only. Pin exact versions for any new dependency, never a
+  range or a dist-tag.
 
 ### 4a — Demo capture _(overrides)_
 

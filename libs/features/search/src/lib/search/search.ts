@@ -14,6 +14,7 @@ import {
   descriptorLabel,
 } from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   type Observable,
@@ -74,7 +75,10 @@ import {
   NxsSavedSearchActionsComponent,
   NxsSavedSearchSelectComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsThumbnailComponent,
+  nxsCsvText,
+  nxsDownloadCsv,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsErrorStatus,
@@ -210,6 +214,8 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsSavedSearchActionsComponent,
     NxsSavedSearchSelectComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
+    NgTemplateOutlet,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
@@ -269,6 +275,9 @@ export class SearchComponent {
   private readonly aiGateway = inject(AiGatewayService);
   readonly featureFlags = inject(AiFeatureFlagService);
   readonly selectionService = inject(SelectionService);
+
+  /** A result's type renders by ID, so an override of `nxs.primitives.tag` reaches search too. */
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
 
   /**
    * Sequence for the whole AI request lifecycle — `nlToNxql` *and* the `nxqlSearch` it triggers.
@@ -520,6 +529,9 @@ export class SearchComponent {
 
   /** Each card in the grid view is rendered by ID, so a component registered under it replaces them. */
   readonly cardId = NXS_PRIMITIVE_IDS.card;
+
+  /** The AI error banner is rendered by ID, so a component registered under it replaces the built-in one. */
+  readonly bannerId = NXS_PRIMITIVE_IDS.banner;
 
   /**
    * The grid view's cards, each with its own open and selection callbacks.
@@ -806,33 +818,24 @@ export class SearchComponent {
       'Subjects',
       'Flags',
     ];
-    const escape = (value: string): string => `"${value.replaceAll('"', '""')}"`;
+    // An empty cell is written empty: the "—" this used to write is not ASCII, and Excel showed it
+    // as `â€”` for want of a UTF-8 marker; a blank is also what a spreadsheet user expects.
     const rows = this.sortedResults().map((row) => [
       row.name,
       row.type,
       row.modifiedDate,
       row.lastContributor,
-      row.state ?? '—',
-      row.version ?? '—',
-      row.createdDate ?? '—',
+      row.state,
+      row.version,
+      row.createdDate,
       row.author,
-      row.nature ?? '—',
-      row.coverage ?? '—',
-      row.subjects ?? '—',
-      row.flags ?? '—',
+      row.nature,
+      row.coverage,
+      row.subjects,
+      row.flags,
     ]);
 
-    const csv = [headers, ...rows]
-      .map((line) => line.map((cell) => escape(cell ?? '')).join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'search-results.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    nxsDownloadCsv('search-results.csv', nxsCsvText([headers, ...rows]));
   }
 
   /** A result's star confirmed a change: keep the page's view of it in step. */

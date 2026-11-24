@@ -20,6 +20,7 @@ import type {
   ValidationErrors,
   Validator,
 } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
   MatDatepickerInput,
@@ -27,6 +28,7 @@ import {
   MatDatepickerModule,
   type MatDatepickerInputEvent,
 } from '@angular/material/datepicker';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInput, MatInputModule } from '@angular/material/input';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -50,7 +52,14 @@ import { TranslatedDatepickerIntl } from './translated-datepicker-intl';
   standalone: true,
   templateUrl: './date-input.component.html',
   styleUrl: './date-input.component.scss',
-  imports: [NxsDateMaskPipe, MatDatepickerModule, MatInputModule, TranslatePipe],
+  imports: [
+    NxsDateMaskPipe,
+    MatButtonModule,
+    MatDatepickerModule,
+    MatIconModule,
+    MatInputModule,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     nxsPickerProviders(() => NxsDateInputComponent),
@@ -93,6 +102,8 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   protected readonly adapterMin = computed(() => nxsDateToAdapter(this.adapter, this.min()));
   protected readonly adapterMax = computed(() => nxsDateToAdapter(this.adapter, this.max()));
   protected readonly isDisabled = computed(() => this.disabled() || this.control.formDisabled());
+  /** A date is held, or text that is not a date is typed: either is something to clear. */
+  protected readonly hasText = computed(() => this.value() !== null || this.typed().trim() !== '');
   /** Why the typed text or the date is refused, if it is. */
   protected readonly problem = computed<'parse' | 'min' | 'max' | null>(() => {
     if (this.typed().trim() && !this.value()) return 'parse';
@@ -224,6 +235,20 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
     this.committed = date;
     this.value.set(date);
     this.control.changed(date);
+  }
+
+  /**
+   * Empties the field: the date, and any text that was not one. The field reports `null` like any
+   * other change, and the input keeps focus so the next date can be typed at once.
+   */
+  protected clear(): void {
+    this.typed.set('');
+    this.committed = null;
+    this.value.set(null);
+    const field = this.dateInput();
+    if (field) field.value = null;
+    this.control.changed(null);
+    this.input().focus();
   }
 
   protected blurred(): void {

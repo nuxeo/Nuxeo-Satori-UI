@@ -202,7 +202,7 @@ describe('DocumentLayoutFormComponent', () => {
   });
 
   describe('creating', () => {
-    it("reads the type's create layout without the parent's facets, empty, and sends every value", async () => {
+    it("reads the type's create layout without the parent's facets, empty, and sends what was filled in", async () => {
       await render({
         mode: 'create',
         type: 'Claim',
@@ -215,11 +215,40 @@ describe('DocumentLayoutFormComponent', () => {
       await type('dc:title', 'New claim');
       await type('claim:number', 'CLM-9');
       expect(form.validate()).toBe(true);
-      expect(form.changedProperties()).toMatchObject({
+      expect(form.changedProperties()).toEqual({
         'dc:title': 'New claim',
         'claim:number': 'CLM-9',
-        'dc:description': null,
       });
+    });
+
+    it('leaves an untouched checkbox to its server default, and sends one the user changed', async () => {
+      const withUrgent = layout('create', {
+        sections: [
+          {
+            id: 'claim',
+            label: { keys: [], fallback: 'Claim' },
+            fields: [
+              {
+                xpath: 'claim:urgent',
+                definition: { type: 'boolean' },
+                label: { keys: [], fallback: 'Urgent' },
+              },
+            ],
+          },
+        ],
+      });
+      await render({ mode: 'create', type: 'Claim', parentPath: '/ws' }, of(withUrgent));
+      await type('dc:title', 'New claim');
+      expect(form.changedProperties()).toEqual({ 'dc:title': 'New claim' });
+
+      const urgent = host().querySelector<HTMLInputElement>('input[type="checkbox"]');
+      if (!urgent) throw new Error('no checkbox');
+      urgent.click();
+      await settle();
+      expect(form.changedProperties()).toEqual({ 'dc:title': 'New claim', 'claim:urgent': true });
+      urgent.click();
+      await settle();
+      expect(form.changedProperties()).toEqual({ 'dc:title': 'New claim', 'claim:urgent': false });
     });
 
     it('asks for nothing until it knows the type', async () => {

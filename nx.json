@@ -8,11 +8,11 @@
     },
     "test": {
       "cache": true,
-      "inputs": ["default", "^production"]
+      "inputs": ["default", "^production", { "env": "SATORI_TEST_TZ" }]
     },
     "@nx/vitest:test": {
       "cache": true,
-      "inputs": ["default", "^production"]
+      "inputs": ["default", "^production", { "env": "SATORI_TEST_TZ" }]
     },
     "@nx/eslint:lint": {
       "cache": true,

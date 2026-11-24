@@ -39,7 +39,7 @@ This hook runs **automatically on every commit** for all developers.
 
 ### 4. Tested and Verified
 
-**Test commit:** [`ab52012`](https://github.com/nuxeo/agentic-ui-poc/commit/ab52012)
+**Test commit:** [`ab52012`](https://github.com/nuxeo/Nuxeo-Satori-UI/commit/ab52012)
 
 **Input (what was typed):**
 
@@ -72,8 +72,8 @@ feat: add automatic bot co-author stripping
 
 ```bash
 # Clone repo
-git clone https://github.com/nuxeo/agentic-ui-poc.git
-cd agentic-ui-poc
+git clone https://github.com/nuxeo/Nuxeo-Satori-UI.git
+cd Nuxeo-Satori-UI
 
 # Install dependencies (this installs hooks automatically)
 npm install

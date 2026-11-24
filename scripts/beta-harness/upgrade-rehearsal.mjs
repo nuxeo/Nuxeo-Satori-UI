@@ -352,8 +352,11 @@ function unpackInto(target) {
     .trim()
     .split('\n')
     .pop();
-  execFileSync('tar', ['-xzf', join(STAGE, packed), '-C', target, '--strip-components', '1'], {
-    cwd: ROOT,
+  // Run tar from the stage folder with relative paths. Windows' bsdtar reads a drive letter
+  // (`C:\…`) as a remote host, so absolute archive and target paths fail with
+  // "Cannot connect to C: resolve failed". Both sit under STAGE, so the relative form is exact.
+  execFileSync('tar', ['-xzf', packed, '-C', relative(STAGE, target), '--strip-components', '1'], {
+    cwd: STAGE,
   });
   return target;
 }

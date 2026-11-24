@@ -71,6 +71,17 @@ jobs:
       - name: Merge coverage for SonarCloud
         run: node scripts/lcov-merge.mjs
 
+      # Read by dev-analytics.yml for the coverage panel. `main` only, so the dashboard reports the
+      # default branch and not whichever feature branch ran last. A small text file; kept short.
+      - name: Publish merged coverage for dev analytics
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 7
+          if-no-files-found: error
+
       # Pinned to a release tag, not @master. `sonarcloud-github-action` is deprecated and
       # was itself a thin wrapper that delegated to this action, so we call it directly.
       # `sonar.organization` and `sonar.projectKey` come from sonar-project.properties

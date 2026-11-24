@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 
 import { readProjectConfiguration, type Tree } from '@nx/devkit';
@@ -168,6 +169,90 @@ describe('config-package generator', () => {
     ).rejects.toThrow(/129 characters; a fragment name may have at most 128/);
   });
 
+  // NXSAT-729. The package name is copied into three namespaces it does not own — the fragment
+  // name in the component XML, the Marketplace package name, and a directory on disk — and the
+  // only uniqueness check there was looked at this workspace's directories. A package named
+  // `defaults` contributes `fragment bootstrap/defaults`, which is the key Satori's own packaged
+  // defaults occupy, and `ContributionRegistry.resolve()` lets the later contribution take it.
+  describe('refuses a name it does not own', () => {
+    it.each([
+      ['defaults', /Satori itself uses/],
+      ['nuxeo-agentic-ui', /Satori itself uses/],
+    ])('%s, which Satori itself uses', async (name, message) => {
+      await expect(configPackageGenerator(tree, { name, owner: 'acme' })).rejects.toThrow(message);
+    });
+
+    it('names what it clashes with, rather than only saying no', async () => {
+      await expect(
+        configPackageGenerator(tree, { name: 'defaults', owner: 'acme' }),
+      ).rejects.toThrow(/replaces them on the server/);
+      await expect(
+        configPackageGenerator(tree, { name: 'nuxeo-agentic-ui', owner: 'acme' }),
+      ).rejects.toThrow(/every configuration package depends on/);
+    });
+
+    // The name becomes a directory, and a directory with one of these names cannot be used on
+    // Windows — so one generated on macOS leaves a repository that cannot be checked out there.
+    //
+    // "used", not "created", in the message and here: QA measured both on Windows 11 build
+    // 26100 (NXSAT-784). `cmd mkdir con` fails with "The directory name is invalid" and
+    // `cmd mkdir nul` exits 0 having created nothing — but Node's own mkdir *does* create the
+    // directory, and Explorer and cmd then cannot open or delete it. Refusing is right either
+    // way; claiming it cannot be created was not.
+    it.each(['con', 'prn', 'aux', 'nul', 'com1', 'com0', 'com9', 'lpt1', 'lpt0', 'lpt9'])(
+      '%s, a device name Windows reserves',
+      async (name) => {
+        await expect(configPackageGenerator(tree, { name, owner: 'acme' })).rejects.toThrow(
+          /device name Windows reserves/,
+        );
+      },
+    );
+
+    // The same harm through the other option that becomes a directory. Mixed case and a trailing
+    // extension both reach the same device on Windows, and `--directory` — unlike the name —
+    // permits both.
+    it.each(['con', 'customers/nul', 'CON', 'con.v1', 'customers/Nul.old'])(
+      'a --directory segment "%s", for the same reason',
+      async (directory) => {
+        await expect(
+          configPackageGenerator(tree, { name: 'acme-config', owner: 'acme', directory }),
+        ).rejects.toThrow(/device name Windows reserves/);
+      },
+    );
+
+    // Satori's names are refused as a package name only: a parent directory is neither a
+    // fragment name nor a Marketplace package name, so it clashes with nothing.
+    it('accepts "defaults" as a --directory segment, which clashes with nothing', async () => {
+      await expect(
+        configPackageGenerator(tree, { name: 'acme-config', owner: 'acme', directory: 'defaults' }),
+      ).resolves.toBeDefined();
+    });
+
+    it.each(['acme-config', 'contoso-claims', 'constellation', 'aux-config', 'nul2', 'defaults2'])(
+      'still accepts "%s", so the refusal is the listed names and not a prefix',
+      async (name) => {
+        await expect(
+          configPackageGenerator(createTreeWithEmptyWorkspace(), { name, owner: 'acme' }),
+        ).resolves.toBeDefined();
+      },
+    );
+
+    it('writes nothing when it refuses', async () => {
+      // The paths, not their count: a refusal that wrote one file and removed another would
+      // leave the count alone, and "writes nothing" is a claim about the files.
+      const paths = () =>
+        tree
+          .listChanges()
+          .map((change) => change.path)
+          .sort();
+      const before = paths();
+      await expect(
+        configPackageGenerator(tree, { name: 'defaults', owner: 'acme' }),
+      ).rejects.toThrow();
+      expect(paths()).toEqual(before);
+    });
+  });
+
   it.each([
     [{ owner: 'Acme Corp' }, /--owner "Acme Corp" must be/],
     [{ owner: 'acme', version: '1.0' }, /--version "1\.0" must be/],
@@ -204,7 +289,15 @@ describe('the generated build.mjs', () => {
     }
   }
 
-  function build(env: NodeJS.ProcessEnv = process.env): {
+  /**
+   * `nodeArgs` go to Node rather than to the script — `--stack-size` to run the build with less
+   * stack than the machine really has, which is how a platform that overflows on a document the
+   * server accepts is reproduced here (NXSAT-730).
+   */
+  function build(
+    env: NodeJS.ProcessEnv = process.env,
+    nodeArgs: string[] = [],
+  ): {
     status: number;
     output: string;
     zip?: Buffer;
@@ -212,7 +305,7 @@ describe('the generated build.mjs', () => {
     try {
       const output = execFileSync(
         process.execPath,
-        [join(dir, 'build.mjs'), '--out', join(dir, 'out')],
+        [...nodeArgs, join(dir, 'build.mjs'), '--out', join(dir, 'out')],
         {
           encoding: 'utf8',
           env,
@@ -272,6 +365,60 @@ describe('the generated build.mjs', () => {
     );
     expect(packaged.$schema).toBeUndefined();
     expect(packaged.presales.presetSwitching).toBe(true);
+  });
+
+  it('wraps manifest headers at 72 UTF-8 bytes and preserves their unfolded values', async () => {
+    await generate();
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const original = readFileSync(join(dir, manifestPath), 'utf8');
+    const value = 'a'.repeat(61) + 'é😀' + '界'.repeat(40);
+    const source = original.trimEnd() + '\nX-Customer: ' + value + '\nX-Folded: first\n second\n\n';
+    write(manifestPath, source);
+    const { status, zip } = build();
+    expect(status).toBe(0);
+    const archive = unzip(zip as Buffer);
+    const jar = unzip(archive.get('install/bundles/acme-config.jar') as Buffer);
+    const bytes = jar.get('META-INF/MANIFEST.MF') as Buffer;
+    const packaged = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    for (const line of packaged.split('\r\n')) {
+      expect(Buffer.byteLength(line), line).toBeLessThanOrEqual(72);
+    }
+    expect(packaged).not.toMatch(/(?<!\r)\n|\r(?!\n)/);
+    expect(packaged.endsWith('\r\n\r\n')).toBe(true);
+    const unfolded = packaged.replace(/\r\n /g, '');
+    expect(unfolded).toContain('X-Customer: ' + value + '\r\n');
+    expect(unfolded).toContain('X-Folded: firstsecond\r\n');
+    expect(readFileSync(join(dir, manifestPath), 'utf8')).toBe(source);
+  });
+
+  it('packages a manifest without its source byte-order mark', async () => {
+    await generate();
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const manifest = readFileSync(join(dir, manifestPath), 'utf8');
+    write(manifestPath, `\uFEFF${manifest}`);
+
+    const { status, zip } = build();
+    expect(status).toBe(0);
+    const archive = unzip(zip as Buffer);
+    const jar = unzip(archive.get('install/bundles/acme-config.jar') as Buffer);
+    const packaged = jar.get('META-INF/MANIFEST.MF') as Buffer;
+    // Check the nested JAR bytes: the validator's decoder already discarded the BOM,
+    // but copying the source bytes put it back in the artifact Java installs.
+    expect(packaged.subarray(0, 3)).not.toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+    expect(packaged.toString('utf8')).toBe(
+      manifest.trimEnd().replace(/\r?\n/g, '\r\n') + '\r\n\r\n',
+    );
+    expect(readFileSync(join(dir, manifestPath), 'utf8')).toBe(`\uFEFF${manifest}`);
+  });
+
+  it('refuses JSON nested under another recognized descriptor', async () => {
+    await generate();
+    contribute(
+      '<fragment name="outer" layer="manifest"><layout type="File" mode="view"><json>{}</json></layout></fragment>',
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<json> must be a direct child');
   });
 
   it('is reproducible: the same source builds the same bytes, whenever it is built', async () => {
@@ -338,6 +485,169 @@ describe('the generated build.mjs', () => {
     expect(build().status).toBe(0);
   });
 
+  // NXSAT-730. Nesting was the one server limit the build did not know, and it is the only one the
+  // server does not set itself: `ConfigSnapshot`'s ObjectMapper is a plain `new ObjectMapper()`, so
+  // the depth it accepts is jackson-core's `StreamReadConstraints` default. Measured against the
+  // server's own jars (jackson-core 2.20.0): 1000 parses, 1001 is refused with "Document nesting
+  // depth (1001) exceeds the maximum allowed (1000, from `StreamReadConstraints.getMaxNestingDepth()`)",
+  // and the fragment is then dropped at `error invalid-json` — so the package installed, Nuxeo
+  // started, and the customer's setting silently did nothing.
+  describe('nesting depth', () => {
+    /** `{}` is depth 1 and `{"a":{}}` is depth 2, which is how Jackson counts it. */
+    const nested = (depth: number) => `${'{"a":'.repeat(depth - 1)}{}${'}'.repeat(depth - 1)}`;
+
+    it('builds a fragment nested exactly as deep as the server accepts', async () => {
+      await generate();
+      write(fragment, nested(1000));
+      expect(build().status).toBe(0);
+    });
+
+    it('refuses one level deeper than the server accepts, naming the file', async () => {
+      await generate();
+      write(fragment, nested(1001));
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/agentic-ui-config/bootstrap.json');
+      expect(output).toMatch(
+        /nested 1001 deep; the server’s JSON parser refuses a fragment or layout nested deeper than 1000/,
+      );
+    });
+
+    // The depth is counted with an explicit stack, before anything walks the document, because a
+    // recursive counter would overflow on exactly the input it exists to refuse. Before this,
+    // `rejectDuplicateKeys` — recursive, and reached first on every supported Node — threw a
+    // RangeError that `parseObject` caught and reported as the bare words "Maximum call stack size
+    // exceeded", naming no limit and no number.
+    it.each([5000, 50_000])(
+      'refuses a fragment nested %i deep in one line, with no stack trace',
+      async (depth) => {
+        await generate();
+        write(fragment, nested(depth));
+        const { status, output } = build();
+        expect(status).toBe(1);
+        expect(output).toMatch(
+          new RegExp(`nested ${depth} deep; the server’s JSON parser refuses`),
+        );
+        expect(output).not.toMatch(/Maximum call stack size exceeded/);
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      },
+    );
+
+    it('counts an array as one level, as the server’s parser does', async () => {
+      await generate();
+      // One object around 1000 arrays: depth 1001, the first the server refuses.
+      write(fragment, `{"a":${'['.repeat(1000)}${']'.repeat(1000)}}`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toMatch(/nested 1001 deep; the server’s JSON parser refuses/);
+    });
+
+    it('counts structure, not braces and brackets inside strings', async () => {
+      await generate();
+      // One shallow object whose single value holds 2000 of each, an escaped quote and a backslash.
+      write(fragment, JSON.stringify({ note: `${'{['.repeat(2000)}"\\` }));
+      expect(build().status).toBe(0);
+    });
+
+    it('checks inline JSON too, which the server reads the same way', async () => {
+      await generate();
+      contribute(`<fragment name="deep" layer="manifest"><json>${nested(1001)}</json></fragment>`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /inline JSON of fragment "deep" in manifest: nested 1001 deep; the server’s JSON parser refuses/,
+      );
+    });
+
+    // NXSAT-730, found in QA. Inside the band the server accepts, how deep the build can actually
+    // go is a property of the machine rather than of the document: both the recursive tokeniser in
+    // `rejectDuplicateKeys` and `JSON.stringify` walk the whole thing. Which one runs out first
+    // flips by platform — on Linux and macOS the tokeniser, on Windows with Node 20
+    // `JSON.stringify`, from about depth 993 — and `JSON.stringify` was the one call outside a
+    // `try`, so there the build died with a raw RangeError trace. Both now say the same thing, and
+    // say whose limit it was: a reader given the bare words "Maximum call stack size exceeded"
+    // cannot tell a file the server would refuse from one their Node could not carry.
+    describe('a document the server accepts but this machine cannot walk', () => {
+      // Far below any platform's threshold for depth 1000: Windows with Node 20 overflows there
+      // with about 1 MB. Small enough to be certain, large enough that Node still starts and a
+      // normal package still builds — which the control below holds it to.
+      const SMALL_STACK = ['--stack-size=150'];
+
+      /**
+       * A preload that makes the packaging step throw, which is how Windows with Node 20 fails:
+       * past the tokeniser, then out of stack in `JSON.stringify`. Fires only for the deep
+       * document written below — it is the only one with a top-level `a` — so the build's other
+       * JSON files are packaged normally and the refusal names one file.
+       */
+      const injectPackagingFailure = (message: string) => {
+        write(
+          'inject.mjs',
+          `const real = JSON.stringify;\n` +
+            `JSON.stringify = function (value, ...rest) {\n` +
+            `  if (value !== null && typeof value === 'object' &&\n` +
+            `      Object.prototype.hasOwnProperty.call(value, 'a')) {\n` +
+            `    throw new RangeError(${JSON.stringify(message)});\n` +
+            `  }\n` +
+            `  return real.call(this, value, ...rest);\n` +
+            `};\n`,
+        );
+        return [`--import=${pathToFileURL(join(dir, 'inject.mjs')).href}`];
+      };
+
+      it('still builds a normal package on a stack that small', async () => {
+        await generate();
+        expect(build(process.env, SMALL_STACK).status).toBe(0);
+      });
+
+      it('refuses it naming the depth and whose limit it was, not the bare V8 words', async () => {
+        await generate();
+        write(fragment, nested(1000));
+        const { status, output } = build(process.env, SMALL_STACK);
+        expect(status).toBe(1);
+        expect(output).toContain('bundle/agentic-ui-config/bootstrap.json');
+        expect(output).toMatch(
+          /nested 1000 deep; the server accepts this depth but this Node ran out of stack walking it\. Build with Node 22 or newer\./,
+        );
+        expect(output).not.toMatch(/Maximum call stack size exceeded/);
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      });
+
+      // The Windows-with-Node-20 site specifically. It cannot be reached by shrinking the stack on
+      // Linux or macOS — the tokeniser always gives out first there, whatever the stack size, so
+      // the guard around `JSON.stringify` would never be exercised — hence the injection.
+      it('reports the same thing when it is the packaging step that runs out', async () => {
+        await generate();
+        write(fragment, nested(1000));
+        const { status, output } = build(
+          process.env,
+          injectPackagingFailure('Maximum call stack size exceeded'),
+        );
+        expect(status).toBe(1);
+        expect(output).toContain('bundle/agentic-ui-config/bootstrap.json');
+        expect(output).toMatch(
+          /nested 1000 deep; the server accepts this depth but this Node ran out of stack walking it\./,
+        );
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      });
+
+      // A RangeError that is not the stack must not be dressed up as one: "Invalid string length"
+      // is what packaging a file too big for a V8 string raises, and telling that reader to change
+      // Node would send them after the wrong thing.
+      it('does not blame the stack for a RangeError that is not the stack', async () => {
+        await generate();
+        write(fragment, nested(1000));
+        const { status, output } = build(
+          process.env,
+          injectPackagingFailure('Invalid string length'),
+        );
+        expect(status).toBe(1);
+        expect(output).toContain('bundle/agentic-ui-config/bootstrap.json: Invalid string length');
+        expect(output).not.toMatch(/ran out of stack/);
+        expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+      });
+    });
+  });
+
   it.each([
     ['single quotes', `<asset name='logo.svg' src='agentic-ui-config/assets/logo.svg' />`],
     ['spaces around =', `<asset name = "logo.svg" src = "agentic-ui-config/assets/logo.svg" />`],
@@ -361,6 +671,121 @@ describe('the generated build.mjs', () => {
     expect(output).toMatch(/must <require>org\.nuxeo\.agentic\.ui\.config\.defaults<\/require>/);
   });
 
+  it.each(['component', 'extension-point'])(
+    'ignores real XML examples in %s documentation',
+    async (location) => {
+      await generate();
+      const examples =
+        '<documentation><code>' +
+        '<require>example.defaults</require>' +
+        '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+        '<fragment name="example" layer="manifest"><json>{"labels":{}}</json></fragment>' +
+        '<fragment name="example-src" layer="bootstrap" src="examples/missing.json" />' +
+        '<layout type="Contract" mode="view" src="examples/missing-layout.json" />' +
+        '<asset name="example.svg" src="examples/missing.svg" />' +
+        '</extension>' +
+        '</code></documentation>';
+      const documentation =
+        location === 'component'
+          ? examples
+          : '<extension-point name="configuration">' + examples + '</extension-point>';
+      const xml = readFileSync(join(dir, componentXml), 'utf8');
+      write(componentXml, xml.replace('<require>', documentation + '<require>'));
+      expect(build().status).toBe(0);
+    },
+  );
+
+  it('ignores documented extensions without inventing an active dependency', async () => {
+    await generate();
+    write(
+      componentXml,
+      '<component name="acme.config.acme-config"><documentation><code>' +
+        '<extension target="org.nuxeo.agentic.ui.config" point="configuration">' +
+        '<fragment name="example" layer="manifest" src="examples/missing.json" />' +
+        '</extension></code></documentation></component>',
+    );
+    expect(build().status).toBe(0);
+  });
+
+  it('keeps extraction offsets after documentation containing CDATA and nested markup', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(
+        '<require>',
+        '<documentation><code title=">">' +
+          '<![CDATA[</documentation><require>not active</require>]]>' +
+          '<documentation><json>not JSON</json></documentation>' +
+          '</code></documentation><documentation/><require>',
+      ),
+    );
+    contribute('<fragment name="active" layer="manifest"><json>{"labels":{}}</json></fragment>');
+    expect(build().status).toBe(0);
+  });
+
+  it('does not let documentation inside a descriptor hide nested JSON', async () => {
+    await generate();
+    contribute(
+      '<fragment name="wrapped" layer="manifest"><documentation><json>{}</json></documentation></fragment>',
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<json> must be a direct child');
+  });
+
+  it('does not count a documented require as an active dependency', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(
+        /<require>([^<]*)<\/require>/,
+        '<documentation><code><require>$1</require></code></documentation>',
+      ),
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toMatch(/must <require>org\.nuxeo\.agentic\.ui\.config\.defaults<\/require>/);
+  });
+
+  it('refuses a nested require that the component loader does not read', async () => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    write(
+      componentXml,
+      xml.replace(/<require>([^<]*)<\/require>/, '<wrapper><require>$1</require></wrapper>'),
+    );
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('<require> must be a direct child of <component>');
+  });
+
+  it.each([
+    ['fragment', '<fragment name="wrapped" layer="manifest">', '</fragment>'],
+    ['layout', '<layout type="File" mode="view">', '</layout>'],
+  ])(
+    'refuses nested json in a %s that the descriptor does not read',
+    async (_kind, open, close) => {
+      await generate();
+      contribute(open + '<wrapper><json>{}</json></wrapper>' + close);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('<json> must be a direct child of <fragment> or <layout>');
+    },
+  );
+
+  it('keeps nested-tag lookalikes in comments and CDATA as text', async () => {
+    await generate();
+    contribute(
+      '<!-- <wrapper><require>ignored</require><json>{}</json></wrapper> -->' +
+        '<fragment name="lookalikes" layer="manifest"><json><![CDATA[' +
+        '{"labels":{"x":"<wrapper><require>x</require><json>{}</json></wrapper>"}}' +
+        ']]></json></fragment>',
+    );
+    expect(build().status).toBe(0);
+  });
+
   describe('an asset', () => {
     const withAsset = async (name: string, bytes: number) => {
       await generate();
@@ -376,6 +801,41 @@ describe('the generated build.mjs', () => {
       return build();
     };
 
+    const manifestAsset = async (headers: number) => {
+      await generate();
+      const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+      const original = readFileSync(join(dir, manifestPath), 'utf8');
+      // Each valid header needs both a continuation and CRLF normalization when packaged.
+      const source =
+        original.trimEnd() +
+        '\n' +
+        Array.from(
+          { length: headers },
+          (_, index) => 'X-Padding-' + index + ': ' + 'a'.repeat(100) + '\n',
+        ).join('');
+      expect(Buffer.byteLength(source)).toBeLessThanOrEqual(2 * 1024 * 1024);
+      write(manifestPath, source);
+      contribute('<asset name="manifest.svg" src="META-INF/MANIFEST.MF" />');
+      return { ...build(), source };
+    };
+
+    it('rejects a manifest asset that normalization enlarges over the server limit', async () => {
+      const { status, output, zip } = await manifestAsset(17500);
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /MANIFEST\.MF: packaged as \d+ bytes; the server refuses an asset over 2097152/,
+      );
+      expect(zip).toBeUndefined();
+    });
+
+    it('accepts a normalized manifest asset that stays under the server limit', async () => {
+      const { status, zip, source } = await manifestAsset(17000);
+      expect(status).toBe(0);
+      const jar = unzip(unzip(zip as Buffer).get('install/bundles/acme-config.jar') as Buffer);
+      const packaged = jar.get('META-INF/MANIFEST.MF') as Buffer;
+      expect(packaged.length).toBeGreaterThan(Buffer.byteLength(source));
+      expect(packaged.length).toBeLessThanOrEqual(2 * 1024 * 1024);
+    });
     it('is accepted as a plain image file name', async () => {
       expect((await withAsset('acme-logo.svg', 100)).status).toBe(0);
     });
@@ -432,6 +892,19 @@ describe('the generated build.mjs', () => {
   });
 
   describe('a fragment or layout body', () => {
+    it.each([
+      ['fragment', '<fragment name="manifest-body" layer="manifest" src="META-INF/MANIFEST.MF" />'],
+      ['layout', '<layout type="File" mode="view" src="META-INF/MANIFEST.MF" />'],
+    ])('rejects the JAR manifest used as a %s JSON body', async (_kind, element) => {
+      await generate();
+      contribute(element);
+      const { status, output, zip } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/META-INF/MANIFEST.MF:');
+      expect(output).toContain('not built');
+      expect(zip).toBeUndefined();
+    });
+
     it('is checked when its file is not called .json, and packaged compact', async () => {
       await generate();
       write('bundle/agentic-ui-config/labels.txt', '{\n  "labels": {}\n}\n');
@@ -561,6 +1034,298 @@ describe('the generated build.mjs', () => {
     expect(build().status).toBe(0);
   });
 
+  // The server reads `Nuxeo-Component` through `java.util.jar.Manifest`, which matches the name in
+  // any letter case, keeps the last of a repeated header, and ends a line only at CR or LF; the
+  // runtime then splits the value at commas and whitespace. The build read the first header spelt
+  // exactly so, split at commas alone, and packaged all of bundle/ whatever it had read — so each
+  // manifest below built a jar whose server loaded a component the build never looked at.
+  describe('reads the components the server loads, or refuses', () => {
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const configComponent = 'OSGI-INF/acme-config-config.xml';
+    const editManifest = (edit: (manifest: string) => string) =>
+      write(manifestPath, edit(readFileSync(join(dir, manifestPath), 'utf8')));
+    /** A second component no build passes once it reads it: its inline layout does not parse. */
+    const writeUnchecked = () =>
+      write(
+        'bundle/OSGI-INF/unchecked.xml',
+        '<?xml version="1.0"?>\n<component name="acme.config.unchecked" version="1.0">\n' +
+          '  <require>org.nuxeo.agentic.ui.config.defaults</require>\n' +
+          '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+          '    <layout type="Claim" mode="view"><json>{ not json</json></layout>\n' +
+          '  </extension>\n</component>\n',
+      );
+    const uncheckedRead = 'bundle/OSGI-INF/unchecked.xml: inline JSON of layout Claim/view';
+
+    it.each([
+      ['a second Nuxeo-Component header', 'Nuxeo-Component'],
+      ['a second header spelt nuxeo-component', 'nuxeo-component'],
+    ])('refuses %s, and still reads the components of both', async (_case, name) => {
+      await generate();
+      writeUnchecked();
+      editManifest((manifest) => `${manifest}${name}: OSGI-INF/unchecked.xml\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'bundle/META-INF/MANIFEST.MF: has 2 Nuxeo-Component headers, counting any letter case;',
+      );
+      // The server loads the last header's component, so it is read even though the first is too.
+      expect(output).toContain(uncheckedRead);
+    });
+
+    it('refuses its one Nuxeo-Component header spelt another way, and reads it', async () => {
+      await generate();
+      editManifest((manifest) => manifest.replace('Nuxeo-Component:', 'nuxeo-component:'));
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'bundle/META-INF/MANIFEST.MF: spells its Nuxeo-Component header "nuxeo-component";',
+      );
+      expect(output).not.toContain('needs a Nuxeo-Component line');
+    });
+
+    // `^` in a multiline pattern also matches after U+2028, which Java reads as part of a value.
+    it('reads the real header, not a lookalike after a U+2028 inside another header', async () => {
+      await generate();
+      writeUnchecked();
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          `X-Note: see\u2028Nuxeo-Component: ${configComponent}\n` +
+            'Nuxeo-Component: OSGI-INF/unchecked.xml',
+        ),
+      );
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(uncheckedRead);
+      expect(output).not.toContain('Nuxeo-Component headers');
+    });
+
+    // And the other way round: text in a header's value is not a header, however it reads.
+    it('builds a manifest with a lookalike after a U+2028 inside another header', async () => {
+      await generate();
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          'X-Note: see\u2028Nuxeo-Component: OSGI-INF/missing.xml\n' +
+            `Nuxeo-Component: ${configComponent}`,
+        ),
+      );
+      expect(build().status).toBe(0);
+    });
+
+    // One packaged file to a split at commas; two paths to the server, neither of them that file.
+    it('splits the component list at whitespace, as the server does, not only at commas', async () => {
+      await generate();
+      write(
+        'bundle/OSGI-INF/acme config.xml',
+        readFileSync(join(dir, `bundle/${configComponent}`), 'utf8'),
+      );
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          'Nuxeo-Component: OSGI-INF/acme config.xml',
+        ),
+      );
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'Nuxeo-Component names OSGI-INF/acme, which is not a packaged file in bundle/',
+      );
+      expect(output).toContain(
+        'Nuxeo-Component names config.xml, which is not a packaged file in bundle/',
+      );
+    });
+
+    it('builds two components separated by whitespace alone, which the server reads as two', async () => {
+      await generate();
+      write(
+        'bundle/OSGI-INF/acme-operations.xml',
+        '<?xml version="1.0"?>\n<component name="acme.config.operations" version="1.0" />\n',
+      );
+      editManifest((manifest) =>
+        manifest.replace(
+          `Nuxeo-Component: ${configComponent}`,
+          `Nuxeo-Component: ${configComponent}\tOSGI-INF/acme-operations.xml`,
+        ),
+      );
+      expect(build().status).toBe(0);
+    });
+
+    // Java reads the header from the main section alone, the lines before the first empty one. In
+    // a later `Name:` section it is that entry's attribute, and names nothing the server loads.
+    it('builds a manifest that repeats the header in a later Name: section, and ignores that one', async () => {
+      await generate();
+      editManifest(
+        (manifest) =>
+          `${manifest}\nName: OSGI-INF/missing.xml\nNuxeo-Component: OSGI-INF/missing.xml\n`,
+      );
+      const { status, output } = build();
+      expect(output).not.toContain('missing.xml');
+      expect(status).toBe(0);
+    });
+
+    // Sections are found after unfolding, because the package holds the unfolded text refolded: a
+    // continuation after a blank line joins that line, so its header lands in the packaged main
+    // section, where the server reads it. Splitting first would check only the header above.
+    it('reads a header that a continuation after a blank line folds into the main section', async () => {
+      await generate();
+      writeUnchecked();
+      editManifest((manifest) => `${manifest}\n Nuxeo-Component: OSGI-INF/unchecked.xml\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain('bundle/META-INF/MANIFEST.MF: has 2 Nuxeo-Component headers');
+      expect(output).toContain(uncheckedRead);
+    });
+
+    it.each([
+      [
+        'in a later Name: section',
+        `\nName: ${configComponent}\nNuxeo-Component: ${configComponent}`,
+      ],
+      ['after a blank line', `\nNuxeo-Component: ${configComponent}`],
+    ])('refuses a manifest that names its components only %s', async (_case, replacement) => {
+      await generate();
+      editManifest((manifest) =>
+        manifest.replace(`Nuxeo-Component: ${configComponent}`, replacement),
+      );
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        'bundle/META-INF/MANIFEST.MF: names its components only after its first blank line, where the server does not read them',
+      );
+    });
+  });
+
+  // The server reads the manifest with `java.util.jar.Manifest`, which refuses the whole of it at
+  // the first line it cannot read. The bundle then has no headers, so the package installs and
+  // configures nothing. Every manifest refused below but one built before this check and passed
+  // verify-package-zip.mjs, and JDK 21's `new JarFile(jar).getManifest()` threw on the jar it built.
+  // The one, a blank first line, was refused already for leaving the components below it, and Java
+  // refuses its packaged bytes too. Every manifest built below, Java read. What is checked is the
+  // manifest as packaged, the unfolded source refolded at 72 bytes, because that is what Java reads.
+  describe('refuses a manifest Java cannot read, and builds one it can', () => {
+    const manifestPath = 'bundle/META-INF/MANIFEST.MF';
+    const configComponent = 'OSGI-INF/acme-config-config.xml';
+    const editManifest = (edit: (manifest: string) => string) =>
+      write(manifestPath, edit(readFileSync(join(dir, manifestPath), 'utf8')));
+    const refused =
+      'Java refuses the whole manifest, and the server would read none of its headers';
+    const notAHeader = `, which is not a header: a name of 1 to 70 letters, digits, "-" and "_", then ": " and the value; ${refused}`;
+    /** How a line is quoted: escaped as JSON, and cut short after 59 characters. */
+    const quoted = (line: string) =>
+      JSON.stringify([...line].length > 60 ? `${[...line].slice(0, 59).join('')}…` : line);
+
+    it('refuses a blank line in the main section followed by a header, with no Name: to begin a section', async () => {
+      await generate();
+      editManifest((manifest) => `${manifest}\nBundle-Description: x\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        `bundle/META-INF/MANIFEST.MF: has "Bundle-Description: x" after a blank line, which ends a section, and the next section must begin with "Name: "; ${refused}. Remove the blank line, or begin the section with Name:`,
+      );
+    });
+
+    it.each([
+      [
+        'after a Name: section',
+        (m: string) => `${m}\nName: a\nX-Note: b\n\nX-Other: c\n`,
+        'X-Other: c',
+      ],
+      ['that begins with Name: and no space', (m: string) => `${m}\nName:a\n`, 'Name:a'],
+      [
+        'that begins the manifest, after a blank first line',
+        (m: string) => `\n${m}`,
+        'Manifest-Version: 1.0',
+      ],
+    ])('refuses a section %s', async (_case, edit, line) => {
+      await generate();
+      editManifest(edit);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        `bundle/META-INF/MANIFEST.MF: has ${quoted(line)} after a blank line, which ends a section`,
+      );
+    });
+
+    it.each([
+      ['a space in its name', 'Bundle Description: x'],
+      ['a character Java does not allow in its name', 'X.Note: x'],
+      ['a letter outside ASCII in its name', 'Bündle: x'],
+      // Folded at 72 bytes, the colon ends the first line and its space begins the next, so Java
+      // and the build refuse it for that, whatever the limit. The verifier's controls pin the 70.
+      ['a name of 71 characters, one over Java’s limit', `${'X'.repeat(71)}: x`],
+      ['no space after its colon', 'Bundle-Description:x'],
+      ['a tab after its colon', 'Bundle-Description:\tx'],
+      ['no colon', 'Bundle-Description x'],
+      ['no name before its colon', ': x'],
+      ['a space before its colon', 'Bundle-Description : x'],
+      ['a byte-order mark before its name, which Java reads as part of it', '\uFEFFBundle-X: x'],
+    ])('refuses a header with %s', async (_case, header) => {
+      await generate();
+      editManifest((manifest) => `${manifest}${header}\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(
+        `bundle/META-INF/MANIFEST.MF: has ${quoted(header).replace('\uFEFF', '\\ufeff')}${notAHeader}`,
+      );
+    });
+
+    it.each([
+      ['a space', (m: string) => ` ${m}`, ' Manifest-Version: 1.0'],
+      ['a line of nothing but a space', (m: string) => ` \n${m}`, ' '],
+    ])(
+      'refuses a manifest whose first line is %s, continuing no header',
+      async (_case, edit, line) => {
+        await generate();
+        editManifest(edit);
+        const { status, output } = build();
+        expect(status).toBe(1);
+        expect(output).toContain(
+          `bundle/META-INF/MANIFEST.MF: begins with ${quoted(line)}, which starts with a space and so continues a header above it, and there is none; ${refused}`,
+        );
+      },
+    );
+
+    it.each([
+      [
+        'a Name: section after a blank line',
+        (m: string) => `${m}\nName: ${configComponent}\nX-Note: a\n`,
+      ],
+      [
+        'sections after any number of blank lines, Name: in any letter case',
+        (m: string) => `${m}\n\n\nname: a\nX-Note: b\n\nNAME: \n`,
+      ],
+      ['a name of 70 characters, the most Java reads', (m: string) => `${m}${'X'.repeat(70)}: x\n`],
+      ['a name of letters, digits, "-" and "_"', (m: string) => `${m}X_Note-2: x\n`],
+      [
+        'values empty, holding a colon, or starting with a space',
+        (m: string) => `${m}X-Empty: \nX-Url: http://a:b\nX-Spaced:  x\n`,
+      ],
+      [
+        'a header wrapped onto a continuation line',
+        (m: string) =>
+          m.replace(
+            `Nuxeo-Component: ${configComponent}`,
+            'Nuxeo-Component: OSGI-INF/acme-config-co\n nfig.xml',
+          ),
+      ],
+      // Read as written, this line continues no header. Unfolding joins it to the blank line above,
+      // so the packaged manifest has neither, and Java reads that.
+      ['a line after a blank one that starts with a space', (m: string) => `${m}\n X-Note: a\n`],
+      // Java's 512-byte limit is on the packaged line, and the packaged line is at most 72.
+      ['a source line over 512 bytes', (m: string) => `${m}X-Long: ${'v'.repeat(600)}\n`],
+      ['lines ended by CR alone', (m: string) => m.replaceAll('\n', '\r')],
+      // Java ignores what follows the last line break, but the packaged manifest ends every line.
+      ['no line break after the last line', (m: string) => m.replace(/\n$/, '')],
+    ])('builds a manifest with %s', async (_case, edit) => {
+      await generate();
+      editManifest(edit);
+      const { status, output } = build();
+      expect(output).not.toContain('Java refuses');
+      expect(status).toBe(0);
+    });
+  });
+
   it.each([
     [
       'an unclosed element',
@@ -652,6 +1417,27 @@ describe('the generated build.mjs', () => {
     expect(output).toContain('bundle/OSGI-INF/acme-config-config.xml: is not well-formed XML');
     expect(output).toMatch(message);
   });
+
+  // NXSAT-730. The element walker is recursive and its catch rethrows anything that is not a
+  // well-formedness failure, so XML nested past the stack left Node printing a raw RangeError
+  // trace — the stack trace the ticket reports, whose uncaught site is this walker rather than
+  // `JSON.stringify`. The bound is the script's own, not a limit the server sets: it exists so the
+  // refusal is the same on every machine instead of depending on how much stack happened to be
+  // left. A component XML in this format is about five elements deep.
+  it.each([1000, 50_000])(
+    'refuses component XML nested %i deep in one line, with no stack trace',
+    async (depth) => {
+      await generate();
+      write(componentXml, `<?xml version="1.0"?>\n${'<a>'.repeat(depth)}${'</a>'.repeat(depth)}\n`);
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toMatch(
+        /acme-config-config\.xml: is not well-formed XML: elements nested more than 256 deep/,
+      );
+      expect(output).not.toMatch(/Maximum call stack size exceeded/);
+      expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+    },
+  );
 
   it('builds the untouched scaffold of a 128-character name', async () => {
     const longest = `a${'-b'.repeat(63)}a`;

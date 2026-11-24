@@ -65,8 +65,8 @@ const NOTHING_REPORTED: DocumentLayoutChange = { properties: {}, valid: false };
  * cannot be resolved leaves the Dublin Core fields, so the form degrades rather than breaks.
  *
  * The host owns Save: it calls `validate()`, then sends `changedProperties()` — what the user
- * changed, for an edit; everything, for a create — and hands Nuxeo's validation messages back to
- * `showServerErrors()`.
+ * changed, so a create leaves untouched fields to their server defaults — and hands Nuxeo's
+ * validation messages back to `showServerErrors()`.
  */
 @Component({
   selector: 'lib-document-layout-form',
@@ -244,12 +244,14 @@ export class DocumentLayoutFormComponent {
     return this.editor()?.validate() ?? false;
   }
 
-  /** What to send: the changed properties for an edit, every property for a create. */
+  /**
+   * What to send: the properties the user changed. For a create that leaves every untouched field
+   * — an unticked checkbox included — to take its server default, rather than sending the empty
+   * value the form starts with.
+   */
   changedProperties(): Record<string, unknown> {
     if (this.usesEntry()) return { ...this.reported().properties };
-    const editor = this.editor();
-    if (!editor) return {};
-    return this.mode() === 'edit' ? editor.dirtyProperties() : editor.properties();
+    return this.editor()?.dirtyProperties() ?? {};
   }
 
   /**

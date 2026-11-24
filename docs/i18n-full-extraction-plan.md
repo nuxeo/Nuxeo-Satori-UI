@@ -187,21 +187,20 @@ anything under two letters, CSS values, and Nuxeo property paths like `dc:title`
 
 Each step is its own PR, each green before the next starts.
 
-|   # | Slice                                                                                    | Strings | Notes                                                                                               |
-| --: | ---------------------------------------------------------------------------------------- | ------: | --------------------------------------------------------------------------------------------------- |
-|   0 | Inline `template:` → `.html`                                                             |       — | D4. Mechanical, no strings changed.                                                                 |
-|   1 | The codemod itself, with its own tests                                                   |       — | Including a test that the English value is byte-identical.                                          |
-|   2 | `apps/nuxeo-ui` remaining templates                                                      |    ~107 | 13 templates; shell already done.                                                                   |
-|   3 | `libs/features/document-detail`                                                          |     236 | Largest.                                                                                            |
-|   4 | `libs/features/administration`                                                           |     191 |                                                                                                     |
-|   5 | `libs/features/browse`                                                                   |     184 |                                                                                                     |
-|   6 | `libs/shared/ui`                                                                         |     116 | Shared — run the blast-radius check.                                                                |
-|   7 | `libs/features/search`, `tasks`, `collections`, `trash`, `assets`, `knowledge-discovery` |     339 | Batchable.                                                                                          |
-|   8 | `libs/shared/adf-hx-bridge`                                                              |      67 | Moot: the library was removed on 2026-10-14 (NXSAT-635), nothing left to extract.                   |
-|   9 | Descriptors: actions, columns, tabs                                                      |     242 | Extends the `labelKey` contract from nav. Columns need a decision on adf-core's `DataColumn.title`. |
-|  10 | Imperative `.ts` strings                                                                 |     192 | **Done 29 Sep 2026.** No ICU compiler: two keys per plural, chosen by `count === 1`.                |
-|  11 | `apps/nuxeo-satori-template`                                                             |     105 | Separate app, separate catalogue.                                                                   |
-|  12 | Flip `checkNoHardcodedUiText` and `checkNoHardcodedDescriptorText` to repo-wide          |       — | **Done 29 Sep 2026.** The descriptor flip surfaced 28 existing violations, all fixed.               |
+|   # | Slice                                                                                    | Strings | Notes                                                                                 |
+| --: | ---------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------- |
+|   0 | Inline `template:` → `.html`                                                             |       — | D4. Mechanical, no strings changed.                                                   |
+|   1 | The codemod itself, with its own tests                                                   |       — | Including a test that the English value is byte-identical.                            |
+|   2 | `apps/nuxeo-ui` remaining templates                                                      |    ~107 | 13 templates; shell already done.                                                     |
+|   3 | `libs/features/document-detail`                                                          |     236 | Largest.                                                                              |
+|   4 | `libs/features/administration`                                                           |     191 |                                                                                       |
+|   5 | `libs/features/browse`                                                                   |     184 |                                                                                       |
+|   6 | `libs/shared/ui`                                                                         |     116 | Shared — run the blast-radius check.                                                  |
+|   7 | `libs/features/search`, `tasks`, `collections`, `trash`, `assets`, `knowledge-discovery` |     339 | Batchable.                                                                            |
+|   9 | Descriptors: actions, columns, tabs                                                      |     242 | Extends the `labelKey` contract from nav.                                             |
+|  10 | Imperative `.ts` strings                                                                 |     192 | **Done 29 Sep 2026.** No ICU compiler: two keys per plural, chosen by `count === 1`.  |
+|  11 | `apps/nuxeo-satori-template`                                                             |     105 | Separate app, separate catalogue.                                                     |
+|  12 | Flip `checkNoHardcodedUiText` and `checkNoHardcodedDescriptorText` to repo-wide          |       — | **Done 29 Sep 2026.** The descriptor flip surfaced 28 existing violations, all fixed. |
 
 ## Verification, per slice
 

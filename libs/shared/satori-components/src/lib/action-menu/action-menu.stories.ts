@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { NxsActionMenuComponent, type NxsMenuAction } from './action-menu.component';
 
@@ -73,4 +73,37 @@ export const OpenedFromTheKeyboard: Story = {
 /** A manifest hid every entry: no trigger renders, rather than a button that opens an empty menu. */
 export const EveryEntryHidden: Story = {
   args: { actions: [] },
+};
+
+/** Selection skips disabled entries; dismissing restores the keyboard's starting point. */
+export const KeyboardContract: Story = {
+  args: WithADisabledEntry.args,
+  play: async ({ args, canvasElement }) => {
+    const trigger = within(canvasElement).getByRole('button', { name: 'More actions' });
+    const body = within(canvasElement.ownerDocument.body);
+    trigger.focus();
+    await userEvent.keyboard('{Enter}');
+    const share = await body.findByRole('menuitem', { name: 'Share' });
+    await waitFor(() => expect(share).toHaveFocus());
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.keyDown(share, { key: 'ArrowDown', keyCode: 40 });
+    const notify = body.getByRole('menuitem', { name: 'Notify Me' });
+    await waitFor(() => expect(notify).toHaveFocus());
+    fireEvent.keyDown(notify, { key: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(share).toHaveFocus());
+    fireEvent.keyDown(share, { key: 'ArrowUp', keyCode: 38 });
+    await waitFor(() => expect(notify).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(args.selected).toHaveBeenCalledWith(BROWSE_HEADER[1]));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await waitFor(() => expect(body.queryByRole('menu')).not.toBeInTheDocument());
+    await userEvent.keyboard('{Enter}');
+    const reopened = await body.findByRole('menuitem', { name: 'Share' });
+    await waitFor(() => expect(reopened).toHaveFocus());
+    fireEvent.keyDown(reopened, { key: 'Escape', code: 'Escape', keyCode: 27 });
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await expect(args.selected).toHaveBeenCalledTimes(1);
+  },
 };

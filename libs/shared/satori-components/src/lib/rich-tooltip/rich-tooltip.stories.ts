@@ -81,6 +81,22 @@ export const OtherIcon: Story = {
   },
 };
 
+export const KeyboardDismissal: Story = {
+  play: async ({ canvas, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'About versioning' });
+    await userEvent.tab();
+    await expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await expect(trigger).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    await userEvent.tab();
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+  },
+};
+
 /** Rendered by ID, the way a screen resolves `nxs.primitives.richTooltip`. */
 export const ByRegisteredId: Story = {
   name: 'By Registered ID',

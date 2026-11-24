@@ -91,6 +91,44 @@ describe('AppConfigService and the host application’s interceptors', () => {
   });
 });
 
+/**
+ * Review of PR 512. `load()` never rejects, by contract — it is an `APP_INITIALIZER` and the
+ * application has to start on the packaged defaults whatever the configuration says. The
+ * diagnostic pass added for NXSAT-724 parsed the configuration URL unguarded, so a malformed
+ * `APP_BOOTSTRAP_CONFIG_URL` override turned a tolerated load failure into a failed startup.
+ */
+describe('AppConfigService with a malformed configuration URL', () => {
+  it('still starts on the packaged defaults, and says why nothing was checked', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const malformed = 'https://[';
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: malformed },
+      ],
+    });
+    const service = TestBed.inject(AppConfigService);
+    const http = TestBed.inject(HttpTestingController);
+
+    const loaded = service.load();
+    // Both URLs are matched by shape rather than by name: the manifest URL is derived from the
+    // bootstrap one, so a malformed override makes it malformed too.
+    const requests = http.match(() => true);
+    expect(requests).toHaveLength(2);
+    requests.forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+
+    // The assertion is that this resolves at all: it used to reject with a TypeError.
+    await expect(loaded).resolves.toBeUndefined();
+    expect(service.bootstrap()).toEqual(DEFAULT_APP_BOOTSTRAP_CONFIG);
+    expect(service.diagnostics().messages.some((m) => m.includes('not a valid URL'))).toBe(true);
+    expect(service.brandingLogo()).toBeNull();
+
+    http.verify();
+    warn.mockRestore();
+  });
+});
+
 describe('AppConfigService', () => {
   let service: AppConfigService;
   let http: HttpTestingController;
@@ -446,6 +484,62 @@ describe('AppConfigService', () => {
     });
   });
 
+  /** NXSAT-313, plan item F1. The same resolver as the logo, on the other branding image. */
+  describe('brandingFavicon', () => {
+    const faviconUrl = (name: string) =>
+      new URL(`/agentic-ui-config/assets/${name}`, document.baseURI).href;
+
+    async function loadWithFavicon(src: string) {
+      await load(
+        envelope('bootstrap', [{ name: 'acme', content: { branding: { favicon: { src } } } }]),
+      );
+    }
+
+    it('is null until one is configured, so the packaged icon renders', () => {
+      expect(service.brandingFavicon()).toBeNull();
+    });
+
+    it('resolves a relative src against the configuration directory, where assets are served', async () => {
+      await loadWithFavicon('assets/acme-icon.png');
+
+      expect(service.brandingFavicon()).toBe(faviconUrl('acme-icon.png'));
+    });
+
+    it('is null for a src the URL check refuses, so the packaged icon renders', async () => {
+      // Accepted by the written-form check and refused on the URL it resolves to — the second of
+      // the two layers, which is the one a favicon would otherwise reach a Nuxeo endpoint past.
+      await loadWithFavicon('assets/../../api/v1/me');
+
+      expect(service.brandingFavicon()).toBeNull();
+    });
+
+    it('is unaffected by a logo the browser could not show', async () => {
+      // `reportBrandingLogoUnavailable` suppresses one URL for the logo. Sharing that state with
+      // the favicon would let a broken logo blank a perfectly good icon, or the reverse.
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            content: {
+              branding: {
+                logo: { src: 'assets/acme-logo.svg', alt: 'Acme' },
+                favicon: { src: 'assets/acme-icon.png' },
+              },
+            },
+          },
+        ]),
+      );
+
+      service.reportBrandingLogoUnavailable(
+        new URL('/agentic-ui-config/assets/acme-logo.svg', document.baseURI).href,
+        'the image could not be loaded',
+      );
+
+      expect(service.brandingLogo()).toBeNull();
+      expect(service.brandingFavicon()).toBe(faviconUrl('acme-icon.png'));
+    });
+  });
+
   /**
    * NXSAT-721. Every check before this one runs before the image is requested, so only the element
    * that loaded it can say whether the browser could show it.
@@ -515,6 +609,505 @@ describe('AppConfigService', () => {
       return loadWithLogo().then(() => {
         expect(service.brandingLogo()).toEqual({ url: logoUrl(), alt: 'Acme' });
       });
+    });
+  });
+
+  /**
+   * NXSAT-733. Whether a language renders depends on which catalogues the *application* bundles,
+   * which this library cannot see — so, like the logo above, the refusal is decided by the
+   * consumer and only reported here.
+   */
+  describe('reportUnsupportedDefaultLanguage', () => {
+    it('records one diagnostic naming the value, the reason and the fallback, and logs it', () => {
+      const before = service.diagnostics().messages.length;
+
+      service.reportUnsupportedDefaultLanguage(
+        'xx',
+        'en',
+        'this build ships no translation catalogue for it',
+      );
+
+      const added = service.diagnostics().messages.slice(before);
+      expect(added).toHaveLength(1);
+      expect(added[0]).toContain('"xx"');
+      expect(added[0]).toContain('this build ships no translation catalogue for it');
+      expect(added[0]).toContain('"en"');
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${added[0]}`);
+    });
+
+    it('names the key, so an administrator knows which setting to change', () => {
+      service.reportUnsupportedDefaultLanguage('xx', 'en', 'a reason');
+
+      expect(service.diagnostics().messages.at(-1)).toContain('defaultLanguage');
+    });
+
+    it('distinguishes the two reasons a language can be refused', () => {
+      // A typo and a language the deployment narrowed away need different fixes, so the message
+      // has to carry which one it was rather than only that something was wrong.
+      service.reportUnsupportedDefaultLanguage('fr', 'en', 'availableLanguages does not offer it');
+
+      expect(service.diagnostics().messages.at(-1)).toContain(
+        'availableLanguages does not offer it',
+      );
+    });
+  });
+
+  /**
+   * NXSAT-724. A refused `logo.src` kept the packaged mark, which is correct, and said nothing at
+   * all — so a typo was indistinguishable from configuring no logo. Each case here is one the
+   * ticket reports.
+   */
+  describe('a refused branding.logo is reported', () => {
+    async function loadWithSrc(src: string, component = 'com.acme.branding') {
+      await load(
+        envelope('bootstrap', [
+          { name: 'acme', component, content: { branding: { logo: { src, alt: 'Acme' } } } },
+        ]),
+      );
+    }
+
+    /** The messages this load recorded that are about `branding.logo`. */
+    const logoMessages = () =>
+      service.diagnostics().messages.filter((message) => message.includes('branding.logo'));
+
+    it.each([
+      ['a parent-directory segment', '../x.svg', 'parent-directory segment'],
+      // The scheme is named, so these two are no longer the same message.
+      ['a javascript: URL', 'javascript:alert(1)', 'uses "javascript:"'],
+      ['an http: URL', 'http://example.com/l.svg', 'uses "http:"'],
+      ['an absolute path', '/nuxeo/api/v1/me', 'absolute path is not allowed'],
+      ['a backslash', 'a\\b.svg', 'contains a backslash'],
+      ['a query with no path', '?v=2', 'no path'],
+      ['a data: URI that is not an image', 'data:text/html,<b>x', 'not an image'],
+    ])('reports %s, naming the value and the reason', async (_label, src, expected) => {
+      await loadWithSrc(src);
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(src);
+      expect(messages[0]).toContain('com.acme.branding');
+      expect(messages[0]).toContain(expected);
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('reports a logo on a Nuxeo host, including the trailing-dot and loopback spellings', async () => {
+      // BOOTSTRAP_URL is served from this document's origin, so the configuration host is the
+      // one the test page runs on — the same situation as the dev server in the ticket.
+      const host = new URL(document.baseURI).hostname;
+      await loadWithSrc(`https://${host}./nuxeo/icons/x.png`);
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('serves Nuxeo');
+      expect(service.brandingLogo()).toBeNull();
+    });
+
+    it('says nothing when the logo is accepted', async () => {
+      await loadWithSrc('assets/acme-logo.svg');
+
+      expect(logoMessages()).toEqual([]);
+      expect(service.brandingLogo()).not.toBeNull();
+    });
+
+    it('names each contributing package when more than one logo is refused', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'one',
+            component: 'com.one',
+            content: { branding: { logo: { src: '../a.svg', alt: 'A' } } },
+          },
+          {
+            name: 'two',
+            component: 'com.two',
+            content: { branding: { logo: { src: 'http://two.example/b.svg', alt: 'B' } } },
+          },
+        ]),
+      );
+
+      const messages = logoMessages();
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toContain('com.one');
+      expect(messages[1]).toContain('com.two');
+    });
+
+    it('reports once per load, not once per read of the logo', async () => {
+      await loadWithSrc('../x.svg');
+      service.brandingLogo();
+      service.brandingLogo();
+
+      expect(logoMessages()).toHaveLength(1);
+    });
+
+    /**
+     * NXSAT-313, plan item F1. A refused favicon has to be as audible as a refused logo: it goes
+     * through the same checks, so leaving it out of this pass would have recreated the exact
+     * silence NXSAT-724 closed, one key over.
+     */
+    describe('and so is a refused branding.favicon', () => {
+      const faviconMessages = () =>
+        service.diagnostics().messages.filter((message) => message.includes('branding.favicon'));
+
+      async function loadWithFavicon(src: string, component = 'com.acme.branding') {
+        await load(
+          envelope('bootstrap', [
+            { name: 'acme', component, content: { branding: { favicon: { src } } } },
+          ]),
+        );
+      }
+
+      it.each([
+        ['a parent-directory segment', '../x.png', 'parent-directory segment'],
+        ['a javascript: URL', 'javascript:alert(1)', 'uses "javascript:"'],
+        ['an http: URL', 'http://example.com/i.png', 'uses "http:"'],
+        ['an absolute path', '/nuxeo/api/v1/me', 'absolute path is not allowed'],
+        ['a src written as a blank string', '   ', 'blank'],
+      ])('reports %s, naming the key, the value and the reason', async (_l, src, expected) => {
+        await loadWithFavicon(src);
+
+        const messages = faviconMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain(src.trim() || '""');
+        expect(messages[0]).toContain('com.acme.branding');
+        expect(messages[0]).toContain(expected);
+        expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+        expect(service.brandingFavicon()).toBeNull();
+      });
+
+      it('says nothing when the favicon is accepted', async () => {
+        await loadWithFavicon('assets/acme-icon.png');
+
+        expect(faviconMessages()).toEqual([]);
+        expect(service.brandingFavicon()).not.toBeNull();
+      });
+
+      /**
+       * The other half of making the key optional (review of PR 546): a fragment that brands the
+       * application without mentioning the tab icon — every configuration written before this
+       * key existed — must be *silent*, not merely refused quietly. A reporting pass that walked
+       * `BRANDING_IMAGE_KEYS` and reported an unset one would turn every pre-existing
+       * configuration into a warning on every load.
+       */
+      it('says nothing when no favicon is configured at all', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'acme',
+              component: 'com.acme.branding',
+              content: { branding: { applicationTitle: 'Acme', logo: { src: 'assets/a.svg' } } },
+            },
+          ]),
+        );
+
+        expect(faviconMessages()).toEqual([]);
+        expect(service.brandingFavicon()).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+      });
+
+      it('names the key, so a fragment that sets both is not ambiguous', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'acme',
+              component: 'com.acme.branding',
+              content: {
+                branding: { logo: { src: '../a.svg' }, favicon: { src: '../b.png' } },
+              },
+            },
+          ]),
+        );
+
+        expect(logoMessages()).toHaveLength(1);
+        expect(logoMessages()[0]).toContain('../a.svg');
+        expect(faviconMessages()).toHaveLength(1);
+        expect(faviconMessages()[0]).toContain('../b.png');
+      });
+
+      it('reports one a preset contributes, as it does for a logo', async () => {
+        window.history.replaceState({}, '', '/?preset=acme');
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'demo',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    acme: {
+                      label: 'Acme',
+                      bootstrap: { branding: { favicon: { src: '../x.png' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        expect(faviconMessages()).toHaveLength(1);
+        expect(faviconMessages()[0]).toContain('preset "acme"');
+      });
+    });
+
+    /** Review of PR 512 — four things this pass got wrong. */
+    describe('review of PR 512', () => {
+      it('reports a src written as a blank string, which is refused but looked like none', async () => {
+        await loadWithSrc('   ');
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('blank');
+        expect(service.brandingLogo()).toBeNull();
+      });
+
+      it('stays silent for a contribution that declares no logo at all', async () => {
+        await load(
+          envelope('bootstrap', [
+            { name: 'acme', content: { branding: { applicationTitle: 'Acme' } } },
+          ]),
+        );
+
+        expect(logoMessages()).toEqual([]);
+      });
+
+      it('does not claim which mark is displayed, because an earlier logo survives a refusal', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'one',
+              component: 'com.one',
+              content: { branding: { logo: { src: 'assets/a.svg', alt: 'A' } } },
+            },
+            {
+              name: 'two',
+              component: 'com.two',
+              content: { branding: { logo: { src: '../b.svg', alt: 'B' } } },
+            },
+          ]),
+        );
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('com.two');
+        expect(messages[0]).not.toContain('Satori marks');
+        // The earlier valid logo is what is actually shown, so any such claim would be wrong.
+        expect(service.brandingLogo()?.url).toContain('/agentic-ui-config/assets/a.svg');
+      });
+
+      /**
+       * Fifth review round of PR 512: the documented retention guarantee and what actually
+       * renders are two different layers, and the docs used to conflate them. A value the merge
+       * keeps can still be refused afterwards, on the URL it resolves to — so the configuration
+       * holds a logo while the packaged marks are what shows.
+       */
+      it('keeps a value the merge accepts even when the resolved URL is refused afterwards', async () => {
+        const host = new URL(document.baseURI).host;
+        const src = `https://${host}/nuxeo/api/v1/me`;
+        await loadWithSrc(src);
+
+        // Retained: the written form is acceptable, so the merge does not drop it.
+        expect(service.bootstrap().branding.logo).toEqual({ src, alt: 'Acme' });
+        // Not displayed: this document is served over http, so an https URL on the same host is
+        // a different origin and the host rule refuses it — an `<img>` there would carry the
+        // session cookie.
+        expect(service.brandingLogo()).toBeNull();
+        expect(logoMessages()).toHaveLength(1);
+        expect(logoMessages()[0]).toContain('serves Nuxeo');
+      });
+
+      it('reports a logo the active preset contributes, naming the preset', async () => {
+        window.history.replaceState({}, '', '/?preset=insurance');
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'presales',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    insurance: {
+                      label: 'Insurance',
+                      bootstrap: { branding: { logo: { src: '../x.svg', alt: 'Acme' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        const messages = logoMessages();
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('preset "insurance"');
+        expect(messages[0]).toContain('../x.svg');
+      });
+
+      it('stays silent about a preset nobody selected', async () => {
+        await load(
+          envelope('bootstrap', [
+            {
+              name: 'presales',
+              content: {
+                presales: {
+                  presetSwitching: true,
+                  presets: {
+                    insurance: {
+                      label: 'Insurance',
+                      bootstrap: { branding: { logo: { src: '../x.svg', alt: 'Acme' } } },
+                    },
+                  },
+                },
+              },
+            },
+          ]),
+        );
+
+        expect(service.activePreset()).toBeNull();
+        expect(logoMessages()).toEqual([]);
+      });
+    });
+  });
+
+  /**
+   * NXSAT-731. The refusal is new, so the silence would be too: before this fix one of these
+   * values rendered a sign-in button that left the application, and now it renders nothing. An
+   * administrator told nothing has no way to tell a refused path from one they never wrote —
+   * the same defect NXSAT-724 raised for `branding.logo`.
+   */
+  describe('a refused sso.endpoints[].path is reported', () => {
+    async function loadWithPath(path: string, component = 'com.acme.sso') {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            component,
+            content: { sso: { endpoints: [{ id: 'company', label: 'Company SSO', path }] } },
+          },
+        ]),
+      );
+    }
+
+    /** The messages this load recorded that are about an SSO endpoint. */
+    const ssoMessages = () =>
+      service.diagnostics().messages.filter((message) => message.includes('sso.endpoints'));
+
+    it.each([
+      ['a protocol-relative path', '//evil.example/sso', 'starts with "//"'],
+      ['a backslash', '/\\evil.example/sso', 'contains a backslash'],
+      ['a tab the parser deletes', '/\t/evil.example/sso', 'control character'],
+      ['an absolute https address', 'https://evil.example/sso', 'absolute "https:" address'],
+      ['a javascript: URL', 'javascript:alert(1)', '"javascript:"'],
+      ['a path that is not absolute', 'nuxeo/login/azure', 'must start with "/"'],
+      ['a blank path', '   ', 'blank'],
+    ])('reports %s, naming the value and the reason', async (_label, path, expected) => {
+      await loadWithPath(path);
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(path);
+      expect(messages[0]).toContain('com.acme.sso');
+      expect(messages[0]).toContain(expected);
+      expect(warn).toHaveBeenCalledWith(`[agentic-ui-config] ${messages[0]}`);
+      expect(service.bootstrap().sso.endpoints).toEqual([]);
+    });
+
+    /**
+     * The negative control. Without it this whole pass could be unconditional and every test
+     * above would still be green.
+     */
+    it('says nothing when the path is accepted, and keeps the endpoint', async () => {
+      await loadWithPath('/nuxeo/login/azure');
+
+      expect(ssoMessages()).toEqual([]);
+      expect(service.bootstrap().sso.endpoints).toEqual([
+        { id: 'company', label: 'Company SSO', path: '/nuxeo/login/azure' },
+      ]);
+    });
+
+    it('names the index, so one bad entry among several can be found', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'acme',
+            component: 'com.acme.sso',
+            content: {
+              sso: {
+                endpoints: [
+                  { id: 'azure', label: 'Azure', path: '/nuxeo/login/azure' },
+                  { id: 'company', label: 'Company SSO', path: '//evil.example/sso' },
+                ],
+              },
+            },
+          },
+        ]),
+      );
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('sso.endpoints[1].path');
+      expect(service.bootstrap().sso.endpoints).toEqual([
+        { id: 'azure', label: 'Azure', path: '/nuxeo/login/azure' },
+      ]);
+    });
+
+    it('names each contributing package when more than one path is refused', async () => {
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'one',
+            component: 'com.one',
+            content: { sso: { endpoints: [{ id: 'a', path: '//evil.example/a' }] } },
+          },
+          {
+            name: 'two',
+            component: 'com.two',
+            content: { sso: { endpoints: [{ id: 'b', path: 'javascript:alert(1)' }] } },
+          },
+        ]),
+      );
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toContain('com.one');
+      expect(messages[1]).toContain('com.two');
+    });
+
+    it('stays silent for a contribution that configures no SSO at all', async () => {
+      await load(
+        envelope('bootstrap', [
+          { name: 'acme', content: { branding: { applicationTitle: 'Acme' } } },
+        ]),
+      );
+
+      expect(ssoMessages()).toEqual([]);
+    });
+
+    it('reports a path the active preset contributes, naming the preset', async () => {
+      window.history.replaceState({}, '', '/?preset=insurance');
+      await load(
+        envelope('bootstrap', [
+          {
+            name: 'presales',
+            content: {
+              presales: {
+                presetSwitching: true,
+                presets: {
+                  insurance: {
+                    label: 'Insurance',
+                    bootstrap: { sso: { endpoints: [{ id: 'x', path: '//evil.example/sso' }] } },
+                  },
+                },
+              },
+            },
+          },
+        ]),
+      );
+
+      const messages = ssoMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('preset "insurance"');
+      expect(messages[0]).toContain('//evil.example/sso');
     });
   });
 

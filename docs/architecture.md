@@ -13,8 +13,6 @@ The repo targets **Angular 22.2.x** (`@angular/*` and `@angular/build` in the **
 
 The shell uses **Hyland Satori Platform Nav** (`sat-platform-nav-container`, list items, main content with `router-outlet`). Navigation labels and paths are defined in `apps/nuxeo-ui/src/app/platform-nav-items.ts` and stay in the app until another surface needs the same config. With `@hylandsoftware/satori-ui` **0.2.x**, the sidebar product title is whatever Satori renders by default (Figma-specific title may require a newer Satori release or internal customization).
 
-**adf-hx browse POC — removed:** the parallel `/#/browse-adf-hx` and `/#/search-adf-hx` routes and `libs/shared/adf-hx-bridge`, which implemented HxPR API tokens over Nuxeo for them, were removed on 2026-10-14 (NXSAT-635). Browse is one surface, at `/#/browse`; both old paths redirect with their query string intact (`apps/nuxeo-ui/src/app/retired-routes.ts`).
-
 **Auth / Nuxeo (PoC):** Login, session storage, route guards, and the Nuxeo Basic-auth HTTP interceptor currently live under `apps/nuxeo-ui/src/app/auth/` (and related shell config). Per the layer rules below, these concerns are intended to move into **`libs/core`** and be consumed via `@agentic-ui/core` as the implementation hardens.
 
 ## Layers

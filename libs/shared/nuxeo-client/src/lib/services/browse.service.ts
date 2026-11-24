@@ -215,6 +215,18 @@ function pageOfFullList(
   };
 }
 
+/**
+ * The state of a Nuxeo `bulkStatus` message — `SCHEDULED`, `RUNNING`, `COMPLETED`, `ABORTED` — read
+ * from its `value` wrapper or the top level, or `null` when the body is not such a message.
+ */
+function bulkStatusState(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const message = body as { 'entity-type'?: unknown; state?: unknown; value?: unknown };
+  const inner = typeof message.value === 'object' && message.value !== null ? message.value : null;
+  const state = (inner as { state?: unknown } | null)?.state ?? message.state;
+  return message['entity-type'] === 'bulkStatus' && typeof state === 'string' ? state : null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class BrowseService {
   private readonly api = inject(NuxeoApiBase);
@@ -1083,7 +1095,8 @@ export class BrowseService {
   /**
    * Polls /@async/{executionId}/status until done, then downloads the CSV.
    *
-   * Native flow: GET /status → 202 (running) or 303 (done, redirects).
+   * Native flow: GET /status → 200 with a `bulkStatus` message (or 202) while the job is scheduled
+   * or running, then 303 (done, redirects).
    * The 303 redirect goes cross-origin (proxy→Nuxeo), so the browser
    * drops the auth header causing a 401. We catch that 401 as the
    * "completed" signal, then fetch the result with a separate
@@ -1107,21 +1120,32 @@ export class BrowseService {
         }),
       );
 
+    const again = (): Observable<Blob> => timer(1500).pipe(switchMap(() => poll()));
+
     const poll = (): Observable<Blob> =>
       this.http.get(statusUrl, { observe: 'response', responseType: 'text' }).pipe(
         switchMap((resp) => {
-          if (resp.status === 200 && resp.body) {
-            try {
-              const result = JSON.parse(resp.body) as { url: string };
-              const blobPath = new URL(result.url).pathname;
-              return this.http.get(this.api.apiUrl(blobPath), {
-                responseType: 'blob',
-              });
-            } catch {
-              return of(new Blob([resp.body], { type: 'text/csv' }));
-            }
+          if (resp.status !== 200 || !resp.body) return again();
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(resp.body);
+          } catch {
+            return of(new Blob([resp.body], { type: 'text/csv' }));
           }
-          return timer(1500).pipe(switchMap(() => poll()));
+          const url = (parsed as { url?: unknown } | null)?.url;
+          if (typeof url === 'string') {
+            return this.http.get(this.api.apiUrl(new URL(url).pathname), {
+              responseType: 'blob',
+            });
+          }
+          // While the job is scheduled or running, the status call answers 200 with a `bulkStatus`
+          // message rather than 202. That message is progress, not the file: saving it as the CSV
+          // is what produced a download holding `{"entity-type":"bulkStatus", ...}`.
+          const state = bulkStatusState(parsed);
+          if (state === 'COMPLETED') return fetchResult();
+          if (state === 'ABORTED') return throwError(() => new Error('CSV export was aborted'));
+          if (state) return again();
+          return of(new Blob([resp.body], { type: 'text/csv' }));
         }),
         catchError((err) => {
           if (err.status === 401 || err.status === 0) {

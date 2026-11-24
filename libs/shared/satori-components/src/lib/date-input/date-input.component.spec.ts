@@ -35,6 +35,13 @@ describe('nxsParseLocaleDate', () => {
     ['de', '03.04.2026', '2026-04-03'],
     ['nl', '03-04-2026', '2026-04-03'],
     ['ja', '2026/04/03', '2026-04-03'],
+    ['es', '03/04/2026', '2026-04-03'],
+    ['it', '03/04/2026', '2026-04-03'],
+    ['ar', '03/04/2026', '2026-04-03'],
+    ['he', '3.4.2026', '2026-04-03'],
+    ['sv', '2026-04-03', '2026-04-03'],
+    // Not in the application's language set, kept because this adapter is locale-general and
+    // these two stress it hardest: a non-Gregorian calendar and a two-digit year.
     ['zh', '2026/4/3', '2026-04-03'],
     ['th', '03/04/2026', '2026-04-03'],
     ['en-CA', '2026-04-03', '2026-04-03'],
@@ -97,6 +104,9 @@ describe('nxsParseLocaleDate', () => {
     expect(nxsParseLocaleDate(text, 'fr', today)).toBeNull();
   });
 
+  // Thai is no longer one of the application's languages, but `LOCALE_ID` is a customer setting
+  // and this adapter is locale-general, so the Buddhist-calendar handling in `locale-date.ts`
+  // still has to hold. It is also the only non-Gregorian case anything here covers.
   it('shows Thai dates with the Gregorian year it reads them in', () => {
     TestBed.configureTestingModule({
       providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: 'th' }],
@@ -359,5 +369,74 @@ describe('NxsDateInputComponent', () => {
     host.expires.disable();
     await render();
     expect(input().disabled).toBe(true);
+  });
+
+  describe('clear button', () => {
+    const clearButton = (): HTMLButtonElement | null =>
+      root().querySelector<HTMLButtonElement>('button.nxs-picker__clear');
+
+    it('is absent while the field is empty', async () => {
+      await setup('fr');
+      expect(clearButton()).toBeNull();
+    });
+
+    it('appears with a date, named for assistive technology', async () => {
+      await setup('fr');
+      await type('03/04/2026');
+      const button = clearButton();
+      expect(button).not.toBeNull();
+      expect(button?.type).toBe('button');
+      expect(button?.getAttribute('aria-label')).toBe('Clear');
+    });
+
+    it('appears for a date the form set', async () => {
+      await setup('fr');
+      host.expires.setValue(new Date(2026, 3, 3));
+      await render();
+      expect(clearButton()).not.toBeNull();
+    });
+
+    it('empties the field, reports null to the form and hides itself', async () => {
+      await setup('fr');
+      await type('03/04/2026');
+      const values: (Date | null)[] = [];
+      host.expires.valueChanges.subscribe((value) => values.push(value));
+      clearButton()?.click();
+      await render();
+      expect(input().value).toBe('');
+      expect(host.expires.value).toBeNull();
+      expect(values).toEqual([null]);
+      expect(clearButton()).toBeNull();
+    });
+
+    it('returns focus to the input', async () => {
+      await setup('fr');
+      await type('03/04/2026');
+      clearButton()?.focus();
+      clearButton()?.click();
+      await render();
+      expect(document.activeElement).toBe(input());
+    });
+
+    it('clears text that is not a date, with its error', async () => {
+      await setup('fr');
+      await type('31/02/2026');
+      await leave();
+      expect(error()).toBe('Enter a date like 31/12/2026');
+      clearButton()?.click();
+      await render();
+      expect(input().value).toBe('');
+      expect(host.expires.hasError('nxsDateParse')).toBe(false);
+      expect(error()).toBeUndefined();
+      expect(clearButton()).toBeNull();
+    });
+
+    it('is absent when the field is disabled', async () => {
+      await setup('fr');
+      await type('03/04/2026');
+      host.expires.disable();
+      await render();
+      expect(clearButton()).toBeNull();
+    });
   });
 });

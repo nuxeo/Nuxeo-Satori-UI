@@ -77,3 +77,20 @@ export const PastTheEnd: Story = {
 export const Loading: Story = {
   args: { disabled: true },
 };
+
+export const KeyboardContract: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const previous = canvas.getByRole('button', { name: 'Previous page' });
+    const next = canvas.getByRole('button', { name: 'Next page' });
+    previous.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.pageChange).toHaveBeenLastCalledWith(0);
+    await userEvent.tab();
+    await expect(next).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(args.pageChange).toHaveBeenLastCalledWith(2);
+    await userEvent.tab({ shift: true });
+    await expect(previous).toHaveFocus();
+  },
+};

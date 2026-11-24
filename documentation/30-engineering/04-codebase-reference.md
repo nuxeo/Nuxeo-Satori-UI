@@ -10,12 +10,11 @@ audience: engineering
 # Codebase Reference — file and folder responsibilities
 
 > **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > Before that, last reviewed 2026-10-11 at `ad60a57`:
 > Only the entry-point count, the peer count and the secondary-entry-point row of §6 were verified
 > at that commit. The rest of §6 and the `constants/avatar-colors.ts` row were re-verified at
 > `effd434` (`feature/nxsat-308-satori-components`). The repository
-> links (made relative rather than pinned to `feature/adf-hx-browse-poc`, every target present) and
+> links (made relative, every target present) and
 > the `review-guardrails.mjs` row were re-verified on 2026-10-08 at `2898046`
 > (`feature/nxsat-308-ci-cold-cache-tooling`), and the `verify-gate.mjs` and harness-script rows
 > on 2026-10-08 at `fb97d44`. The rest of the page as of 2026-08-24 · `77265f9`.
@@ -94,32 +93,6 @@ If you read six files, read these.
 | `auth/admin-access.token.ts`                |       | `ADMIN_ACCESS_CHECKS`, `CURRENT_USERNAME` — the app supplies the implementations                                                                                                                 |
 | `constants/avatar-colors.ts`                |       | `AvatarColor` — **our own** union; nuxeo-client imports no design system. The app's dashboard page asserts it equals `SatAvatarCategory` both ways. Previously leaked that third-party type      |
 | `src/index.ts`                              |   342 | The published barrel — 275 exported symbols                                                                                                                                                      |
-
----
-
-## 4. `libs/shared/adf-hx-bridge` — the containment boundary
-
-_Changed by NXSAT-635 (2026-10):_ removed on 2026-10-14 with the POC routes, and adf-hx with it by
-NXSAT-637; none of the paths below exists. The section is kept as the record of what the library
-held. The Nuxeo-owned components that replaced the adf-hx ones are in
-`libs/shared/satori-components`.
-
-8,380 lines, 12 spec files. **The only place adf-hx types may appear.** Enforced by
-`checkNoAdfHxInPublicApi`, which walks each barrel's re-export graph to depth — the leak that cost
-0.95 MB of initial bundle was two hops away.
-
-| Path                                               | Responsibility                                                                                                                                           |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lib/api/`                                         | Nuxeo implementations of the 12 adf-hx API ports                                                                                                         |
-| `lib/api/hxql-literal.ts`                          | **Query escaping.** Backslash escaped **first** — the other order turns `\'` into `\\'`, a literal backslash plus an unescaped quote, reopening the hole |
-| `lib/services/adf-hx-document.service.ts`          | Document mapping between Nuxeo and HxCS shapes                                                                                                           |
-| `lib/services/adf-hx-browse-*.service.ts`          | Browse context, folder, media                                                                                                                            |
-| `lib/services/nuxeo-acl.service.ts`                | ACL translation                                                                                                                                          |
-| `lib/services/nuxeo-principal-resolver.service.ts` | Principal resolution                                                                                                                                     |
-| `lib/services/nuxeo-document-router.service.ts`    | Routing adaptation                                                                                                                                       |
-| `lib/ui/hxp-browse-nav-drawer/`                    | **A documented exception** to the adf-hx-in-barrel rule, with the reason recorded in the guardrail's allowlist                                           |
-| `src/providers.ts`                                 | `provideAdfHxNuxeoBridge()` — all 12 ports                                                                                                               |
-| `ARCHITECTURE.md`                                  | Read this before changing the bridge                                                                                                                     |
 
 ---
 
@@ -203,7 +176,6 @@ Full table in [Dev Harness & Gates](08-dev-harness-and-gates.md). Structure:
 | `satori-generators/src/extension-{rule,action,component}/` | Generator + schema                                                                                                                                             |
 | `satori-generators/src/util/splice.ts`                     | Marker-comment splicing, **with a post-condition assertion** — the first version put every registration inside a comment                                       |
 | `satori-generators/src/util/library-context.ts`            | Reads the library's `prefix` as the owner segment. Declares `SatoriProjectConfiguration` because `prefix` is a real `project.json` field absent from Nx's type |
-| `stubs/ng-mocks/`                                          | Hand-written stub replacing the real `ng-mocks`, which adf-hx imports **from its shipped runtime bundle**                                                      |
 
 ---
 
@@ -234,7 +206,6 @@ Full table in [Dev Harness & Gates](08-dev-harness-and-gates.md). Structure:
 | Rules                                     | `ExtensionRuleRegistry`, `provideSatoriExtensions`                                               | Both               |
 | Actions                                   | `ExtensionActionRegistry`                                                                        | Both               |
 | Components by ID                          | `ExtensionComponentRegistry` + `ExtensionOutletComponent`                                        | Both               |
-| ~~12 adf-hx API ports~~                   | Removed with the bridge on 2026-10-14 (NXSAT-635)                                                | —                  |
 | `CURRENT_USERNAME`, `ADMIN_ACCESS_CHECKS` | Tokens the app implements                                                                        | Us                 |
 | `AI_BACKEND_URL`                          | Token                                                                                            | Deployment         |
 | Generators                                | Nx plugin in the package                                                                         | Customer           |

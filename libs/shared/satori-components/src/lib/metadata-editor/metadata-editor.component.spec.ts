@@ -312,6 +312,135 @@ describe('NxsMetadataEditorComponent', () => {
     expect(element.textContent).not.toContain('Duplicate title');
   });
 
+  it('takes the required flag and constraints of a section field Dublin Core has', async () => {
+    host.sections.set([
+      {
+        id: 'dc',
+        heading: null,
+        fields: [
+          {
+            xpath: 'dc:nature',
+            label: 'Kind',
+            definition: { type: 'string', directory: 'nature', required: true },
+          },
+          {
+            xpath: 'dc:description',
+            label: 'Summary',
+            definition: { type: 'string', constraints: { maxLength: 5 } },
+          },
+        ],
+      },
+    ]);
+    host.values.set({ 'dc:title': 'Claim' });
+    await settle();
+    expect(element.querySelectorAll('[data-xpath="dc:nature"]')).toHaveLength(1);
+    expect(element.textContent).not.toContain('Kind');
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    // A vocabulary field says so in the picker's own words.
+    expect(errors()).toContain('Required');
+    expect(summary()).toBe('1 field needs a correction before you can save.');
+
+    await type('dc:description', 'Too long');
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors().some((error) => error?.startsWith('Description'))).toBe(true);
+  });
+
+  it('keeps a Dublin Core field required when any section listing it says so', async () => {
+    const nature = (required: boolean) => ({
+      xpath: 'dc:nature',
+      label: 'Kind',
+      definition: { type: 'string', directory: 'nature', ...(required ? { required } : {}) },
+    });
+    host.sections.set([
+      { id: 'a', heading: null, fields: [nature(true)] },
+      { id: 'b', heading: null, fields: [nature(false)] },
+    ]);
+    host.values.set({ 'dc:title': 'Claim' });
+    await settle();
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors()).toContain('Required');
+  });
+
+  it('checks what new sections ask of a field already typed in, keeping what was typed', async () => {
+    const description = (maxLength?: number) => ({
+      id: 'dc',
+      heading: null,
+      fields: [
+        {
+          xpath: 'dc:description',
+          label: 'Summary',
+          definition: { type: 'string', ...(maxLength ? { constraints: { maxLength } } : {}) },
+        },
+      ],
+    });
+    await type('dc:description', 'Too long');
+    expect(host.editor().validate()).toBe(true);
+
+    host.sections.set([POLICY, description(5)]);
+    await settle();
+    expect(host.editor().validate()).toBe(false);
+    expect(field<HTMLTextAreaElement>('dc:description').value).toBe('Too long');
+    expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
+
+    host.sections.set([POLICY, description()]);
+    await settle();
+    expect(host.editor().validate()).toBe(true);
+    expect(host.editor().dirtyProperties()['dc:description']).toBe('Too long');
+  });
+
+  it('keeps a repeated field of the type required when any listing says so, in every listing', async () => {
+    const contacts = (required: boolean) => ({
+      xpath: 'pol:contacts',
+      label: 'Contacts',
+      definition: {
+        type: 'complex[]',
+        ...(required ? { required } : {}),
+        fields: { name: { type: 'string' } },
+      },
+    });
+    host.sections.set([
+      { id: 'a', heading: 'A', fields: [contacts(true)] },
+      { id: 'b', heading: 'B', fields: [contacts(false)] },
+    ]);
+    host.values.set({ 'dc:title': 'Claim', 'pol:contacts': [] });
+    await settle();
+
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(element.querySelectorAll('[data-xpath="pol:contacts"]')).toHaveLength(2);
+    expect(errors().filter((error) => error === 'Contacts is required.')).toHaveLength(2);
+  });
+
+  it('keeps a half-typed date, and its error, when new sections change the field’s checks', async () => {
+    const expires = (required: boolean) => ({
+      id: 'dc',
+      heading: null,
+      fields: [
+        {
+          xpath: 'dc:expired',
+          label: 'Expires',
+          definition: { type: 'date', ...(required ? { required } : {}) },
+        },
+      ],
+    });
+    host.sections.set([POLICY, expires(true)]);
+    await settle();
+    await type('dc:expired', '12/');
+    expect(host.editor().validate()).toBe(false);
+
+    host.sections.set([POLICY, expires(false)]);
+    await settle();
+    expect(field('dc:expired').value).toBe('12/');
+    expect(host.editor().validate()).toBe(false);
+    await settle();
+    expect(errors()).toContain(`Enter a date like 12/31/${new Date().getFullYear()}`);
+  });
+
   it('reports nothing changed until the user edits, then only what changed, trimmed', async () => {
     expect(host.editor().dirtyProperties()).toEqual({});
     await type('dc:title', '  New title  ');
@@ -789,36 +918,38 @@ describe('NxsMetadataEditorComponent, typed dates', () => {
   it('reads a typed date day first in French, under a day-first hint', async () => {
     await setup('fr');
     expect(expires().placeholder).toBe('dd/mm/yyyy');
-    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+    expect(await typeDate('03/04/2026')).toBe('2026-04-03T00:00:00.000Z');
   });
 
   it('reads the same text month first in American English, under a month-first hint', async () => {
     await setup('en-US');
     expect(expires().placeholder).toBe('mm/dd/yyyy');
-    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 2, 4).toISOString());
+    expect(await typeDate('03/04/2026')).toBe('2026-03-04T00:00:00.000Z');
   });
 
   it('reads as its hint says over a host’s native subclass that keeps Date.parse', async () => {
     await setup('fr', DatesHostWithNativeSubclassComponent);
     expect(expires().placeholder).toBe('dd/mm/yyyy');
-    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+    expect(await typeDate('03/04/2026')).toBe('2026-04-03T00:00:00.000Z');
   });
 
   it('uses a date adapter the host provides, for the hint and for what is typed', async () => {
     await setup('fr', DatesHostWithAdapterComponent);
     expect(expires().placeholder).toBe('yyyy-mm-dd');
-    expect(await typeDate('anything')).toBe(new Date(2030, 0, 1).toISOString());
+    expect(await typeDate('anything')).toBe('2030-01-01T00:00:00.000Z');
   });
 });
 
 /** A Nuxeo date property: an instant, with a time of day. */
 const EXPIRES = '2026-04-03T10:30:00.000Z';
 
-/** A day as `CalendarDayAdapter` writes it, `yyyy-mm-dd`, from a JS date's local fields. */
-const written = (date: Date) =>
-  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-    .map((n, i) => String(n).padStart(i === 0 ? 4 : 2, '0'))
-    .join('-');
+/**
+ * The calendar day `EXPIRES` opens on, as `CalendarDayAdapter` writes it, spelled out rather than
+ * derived from the host's local fields. `EXPIRES` is an instant, not a stored day, so it opens on
+ * the reader's day, as the layout view shows it. `10:30Z` is 3 April from UTC−10:30 to UTC+13:29,
+ * the pinned zone and New York included, and the next day in UTC+14.
+ */
+const EXPIRES_DAY = '2026-04-03';
 
 /** A host whose date adapter holds calendar days, not JS dates, as Luxon's holds `DateTime`s. */
 @Component({
@@ -865,7 +996,7 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
   });
 
   it('shows the property’s day, valid, and writes back its instant with its time of day', () => {
-    expect(expires().value).toBe(written(new Date(EXPIRES)));
+    expect(expires().value).toBe(EXPIRES_DAY);
     expect(editor().validate()).toBe(true);
     expect(editor().properties()['dc:expired']).toBe(EXPIRES);
     expect(editor().dirtyProperties()).toEqual({});
@@ -878,13 +1009,11 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     expires().dispatchEvent(new Event('blur'));
     await render();
     expect(editor().validate()).toBe(true);
-    expect(editor().dirtyProperties()).toEqual({
-      'dc:expired': new Date(2027, 4, 6).toISOString(),
-    });
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': '2027-05-06T00:00:00.000Z' });
   });
 
   it('keeps the property’s time of day when its date is cleared and typed again', async () => {
-    const day = written(new Date(EXPIRES));
+    const day = EXPIRES_DAY;
     expires().value = '';
     expires().dispatchEvent(new Event('input'));
     await render();
@@ -910,9 +1039,85 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     expect(fifteenth).toBeDefined();
     fifteenth?.click();
     await render();
-    const shown = new Date(EXPIRES);
-    const picked = new Date(shown.getFullYear(), shown.getMonth(), 15);
-    expect(expires().value).toBe(written(picked));
-    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': picked.toISOString() });
+    // The calendar opened on the day the property opens on, so the 15th is the 15th of its month.
+    expect(expires().value).toBe('2026-04-15');
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': '2026-04-15T00:00:00.000Z' });
   });
+});
+
+/**
+ * An instant whose day where the reader is differs from its UTC day, per zone this suite is run
+ * in: the pin, and New York for the deliberate west-of-UTC run. The layout `date` view shows it on
+ * the reader's day, so the field must open there too. It opened on its UTC day until the form
+ * followed the view's rule. Proving a field opens on the reader's day means naming the reader's
+ * zone, as `properties-panel.component.spec.ts` does for Created, so the literals are per zone.
+ */
+const READER_DAY: Readonly<
+  Record<string, { readonly value: string; readonly shows: string; readonly writes: string }>
+> = {
+  // 01:30 on the 24th at +05:30; its UTC day is the 23rd.
+  'Asia/Calcutta': {
+    value: '2026-11-23T20:00:00Z',
+    shows: '2026-11-24',
+    writes: '2026-11-23T20:00:00.000Z',
+  },
+  // 22:00 on the 23rd at −05:00; its UTC day is the 24th.
+  'America/New_York': {
+    value: '2026-11-24T03:00:00Z',
+    shows: '2026-11-23',
+    writes: '2026-11-24T03:00:00.000Z',
+  },
+};
+const READER_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const readerDay = READER_DAY[READER_ZONE];
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class ReaderDayHostComponent {
+  readonly values: NxsEditorValues = { 'dc:title': 'Report', 'dc:expired': readerDay?.value };
+  readonly editor = viewChild.required(NxsMetadataEditorComponent);
+}
+
+describe('NxsMetadataEditorComponent, opening an instant on the reader’s day', () => {
+  it('reports whether this run can assert anything, rather than passing silently', () => {
+    expect(typeof READER_ZONE).toBe('string');
+    if (!readerDay) {
+      console.warn(
+        `zone ${READER_ZONE} has no literal here; the reader's-day case does not run. ` +
+          'It runs under the pin, and with SATORI_TEST_TZ=America/New_York.',
+      );
+    }
+  });
+
+  if (readerDay) {
+    it(`shows ${readerDay.value} on ${readerDay.shows}, the day the view shows, and writes it back untouched`, async () => {
+      await TestBed.configureTestingModule({
+        imports: [ReaderDayHostComponent],
+        providers: [
+          provideZonelessChangeDetection(),
+          provideNoopAnimations(),
+          {
+            provide: DirectoryService,
+            useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+          },
+        ],
+      }).compileComponents();
+      const fixture = TestBed.createComponent(ReaderDayHostComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-xpath="dc:expired"] input',
+      ) as HTMLInputElement;
+      expect(input.value).toBe(readerDay.shows);
+      const editor = fixture.componentInstance.editor();
+      expect(editor.properties()['dc:expired']).toBe(readerDay.writes);
+      expect(editor.dirtyProperties()).toEqual({});
+    });
+  }
 });

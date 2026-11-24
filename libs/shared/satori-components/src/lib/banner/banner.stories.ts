@@ -1,6 +1,6 @@
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { NXS_PRIMITIVE_IDS } from '../primitives';
 import { provideNxsComponents } from '../provide-nxs-components';
@@ -57,6 +57,16 @@ export const TrashedDocument: Story = {
         press: fn(),
       },
     ],
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    canvas.getByRole('button', { name: 'Restore' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.actions[0].press).toHaveBeenCalledTimes(1);
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Delete permanently' })).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await expect(args.actions[1].press).toHaveBeenCalledTimes(1);
   },
 };
 

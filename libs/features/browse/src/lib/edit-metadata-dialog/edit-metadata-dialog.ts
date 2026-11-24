@@ -21,6 +21,7 @@ import {
   NxsToastService,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
+import { calendarDayOf, instantToWrite } from '../calendar-day';
 
 export interface EditMetadataDialogData {
   uid: string;
@@ -74,7 +75,8 @@ export class EditMetadataDialogComponent {
     this.nature = this.data.nature;
     this.subjects = [...this.data.subjects];
     this.coverage = this.data.coverage;
-    this.expires = this.data.expires ? new Date(this.data.expires) : null;
+    // The UTC day the stored instant names, not its local day (NXSAT-727).
+    this.expires = calendarDayOf(this.data.expires);
   }
   isExpiresValid(): boolean {
     return (
@@ -91,7 +93,10 @@ export class EditMetadataDialogComponent {
       'dc:nature': this.nature || null,
       'dc:subjects': this.subjects,
       'dc:coverage': this.coverage || null,
-      'dc:expired': this.expires ? this.expires.toISOString() : null,
+      // The picked day at UTC midnight, so the stored instant does not depend on the editor's
+      // zone and every row showing it names the same day — but the instant the read returned
+      // when the day was not touched, so saving another field cannot move it (NXSAT-727).
+      'dc:expired': instantToWrite(this.expires, this.data.expires),
     };
     this.service
       .updateDocument(this.data.uid, properties)

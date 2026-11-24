@@ -22,7 +22,11 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import {
+  NxsShareExternalDialogComponent,
+  NxsToastService,
+  NxsUpdatePermissionDialogComponent,
+} from '@nuxeo/satori-platform/components';
 
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
   return {
@@ -276,6 +280,224 @@ describe('BrowseComponent — permissions tab', () => {
     expect([...toast.show.mock.calls, ...toast.error.mock.calls]).toEqual([]);
   });
 
+  // A section root's list, so a fixed table could not pass: it holds CanAskForPublishing and
+  // not ReadCanCollect.
+  const SECTION_RIGHTS = ['Read', 'ReadWrite', 'Everything', 'CanAskForPublishing'];
+
+  /** Opens the Permissions tab on `ws-1`, whose permissions read reports `rights`. */
+  function openPermissionsWith(rights?: string[]): void {
+    component.currentDoc.set(doc({ uid: 'ws-1' }));
+    const context: Record<string, unknown> = { acls: [], permissions: ['Everything'] };
+    if (rights) context['userVisiblePermissions'] = rights;
+    detail.getDocumentPermissions.mockReturnValue(
+      of(doc({ uid: 'ws-1', contextParameters: context })),
+    );
+    component.onTabChange(1);
+  }
+
+  it("shareWithExternal opens the nxs dialog with the type's userVisiblePermissions", () => {
+    openPermissionsWith(SECTION_RIGHTS);
+
+    component.shareWithExternal();
+
+    expect(dialogOpen).toHaveBeenCalledWith(NxsShareExternalDialogComponent, {
+      maxWidth: '95vw',
+      data: { documentUid: 'ws-1', permissions: SECTION_RIGHTS },
+    });
+  });
+
+  it("editExternalPermission opens the nxs dialog with the type's userVisiblePermissions", () => {
+    openPermissionsWith(SECTION_RIGHTS);
+    const share = ace({ id: 'x-1', externalUser: true });
+
+    component.editExternalPermission(share);
+
+    expect(dialogOpen).toHaveBeenCalledWith(NxsUpdatePermissionDialogComponent, {
+      maxWidth: '95vw',
+      data: { documentUid: 'ws-1', ace: share, permissions: SECTION_RIGHTS },
+    });
+  });
+
+  it('hands both dialogs no list when the permissions read did not report one', () => {
+    openPermissionsWith(undefined);
+
+    component.shareWithExternal();
+    component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
+
+    expect(dialogData<{ permissions?: unknown }>(0).permissions).toBeUndefined();
+    expect(dialogData<{ permissions?: unknown }>(1).permissions).toBeUndefined();
+  });
+
+  it("keeps the type's rights when a listing refresh replaces the folder with a read that lacks them", () => {
+    openPermissionsWith(SECTION_RIGHTS);
+    // What sorting or paging the same folder does: `getByPath` asks for acls, not the rights.
+    component.currentDoc.set(withAcls([{ name: 'local', aces: [] }]));
+
+    component.shareWithExternal();
+
+    expect(dialogData<{ permissions?: unknown }>().permissions).toEqual(SECTION_RIGHTS);
+  });
+
+  it("does not offer one folder's rights on another", () => {
+    openPermissionsWith(SECTION_RIGHTS);
+    component.currentDoc.set(doc({ uid: 'ws-2' }));
+
+    component.shareWithExternal();
+
+    expect(dialogData<{ documentUid: string; permissions?: unknown }>()).toEqual({
+      documentUid: 'ws-2',
+      permissions: undefined,
+    });
+  });
+
+  describe('a permissions answer for a folder the user has moved on from', () => {
+    const sharedWith = (uid: string, id: string): NuxeoDocument =>
+      doc({
+        uid,
+        contextParameters: {
+          acls: [{ name: 'local', aces: [ace({ id, externalUser: true })] }],
+          permissions: ['Everything'],
+          userVisiblePermissions: SECTION_RIGHTS,
+        },
+      });
+    /** What the router does on a new browse URL: the tab resets before the listing arrives. */
+    const navigate = () => component['resetBrowseTabState']();
+    /** The new folder's listing arriving, as `getBrowseFolderContents` answers it. */
+    function listingArrives(uid: string): void {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder: doc({ uid }), entries: [], totalSize: 0 }),
+      );
+      component.loadContent();
+    }
+    function openTabOn(uid: string): Subject<NuxeoDocument> {
+      component.currentDoc.set(doc({ uid }));
+      const answer = new Subject<NuxeoDocument>();
+      detail.getDocumentPermissions.mockReturnValueOnce(answer);
+      component.onTabChange(1);
+      return answer;
+    }
+
+    it('is not applied after navigation, so the next folder still loads its own', () => {
+      const stale = openTabOn('ws-1');
+      navigate();
+
+      stale.next(sharedWith('ws-1', 'stale'));
+
+      expect(component.permissionsLoaded()).toBe(false);
+      expect(component.externalAces()).toEqual([]);
+    });
+
+    it('reports no failure for the folder the user has left', () => {
+      const stale = openTabOn('ws-1');
+      navigate();
+
+      stale.error({ status: 500 });
+
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('cannot overwrite a newer read of the same folder after a return to it', () => {
+      const first = openTabOn('ws-1');
+      navigate(); // to another folder…
+      navigate(); // …and back
+      detail.getDocumentPermissions.mockReturnValueOnce(of(sharedWith('ws-1', 'fresh')));
+      component.onTabChange(1);
+
+      first.next(sharedWith('ws-1', 'stale'));
+
+      expect(component.externalAces().map((a) => a.id)).toEqual(['fresh']);
+    });
+
+    it('is discarded when the new listing lands first, and the new folder is read instead', () => {
+      navigate();
+      // The tab opened before the listing arrived, so `currentDoc` is still the old folder.
+      const stale = openTabOn('ws-1');
+      detail.getDocumentPermissions.mockReturnValue(of(sharedWith('ws-2', 'own')));
+
+      listingArrives('ws-2');
+      stale.next(sharedWith('ws-1', 'stale'));
+
+      expect(detail.getDocumentPermissions).toHaveBeenLastCalledWith('ws-2');
+      expect(component.permissionsLoading()).toBe(false);
+      expect(component.externalAces().map((a) => a.id)).toEqual(['own']);
+    });
+
+    it('does not stand in for the new folder when it lands before the new listing', () => {
+      navigate();
+      const early = openTabOn('ws-1');
+      early.next(sharedWith('ws-1', 'old'));
+      detail.getDocumentPermissions.mockReturnValue(of(sharedWith('ws-2', 'own')));
+
+      listingArrives('ws-2');
+
+      expect(detail.getDocumentPermissions).toHaveBeenLastCalledWith('ws-2');
+      expect(component.externalAces().map((a) => a.id)).toEqual(['own']);
+    });
+  });
+
+  it('lists only the document’s own pending and effective external shares', () => {
+    component.currentDoc.set(
+      withAcls([
+        {
+          name: 'local',
+          aces: [
+            ace({ id: 'own', externalUser: true, status: 'effective' }),
+            ace({ id: 'pending', externalUser: true, status: 'pending' }),
+            ace({ id: 'expired', externalUser: true, status: 'archived' }),
+          ],
+        },
+        { name: 'inherited', aces: [ace({ id: 'parent', externalUser: true })] },
+      ]),
+    );
+
+    expect(component.externalAces().map((a) => a.id)).toEqual(['own', 'pending']);
+  });
+
+  it('shows a share’s end as the day its writer picked, as the update dialog reads it', () => {
+    // Midnight on 15 July in UTC+12, which the suite's zone (UTC+5:30) reads as 14 July locally.
+    const share = ace({ id: 'x-1', externalUser: true, end: '2030-07-14T12:00:00.000Z' });
+    // Built from the same `Intl` call for that day, so ICU data cannot make it brittle.
+    const fifteenth = new Date('2030-07-15').toLocaleDateString(component['locale'], {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+
+    expect(component.aceTimeFrame(share)).toBe(`Until ${fifteenth}`);
+  });
+
+  it('shows a share Nuxeo Web UI wrote as ending on the last day picked, not the next', () => {
+    // Web UI writes an end as the last second of the day in its browser's zone — CET here.
+    const share = ace({ id: 'x-2', externalUser: true, end: '2030-12-31T22:59:59.000Z' });
+    const lastDay = new Date('2030-12-31').toLocaleDateString(component['locale'], {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+
+    expect(component.aceTimeFrame(share)).toBe(`Until ${lastDay}`);
+  });
+
+  it('reads only the end that way, so a start a second short of a quarter hour keeps its day', () => {
+    const share = ace({
+      id: 'x-3',
+      externalUser: true,
+      begin: '2030-01-01T00:14:59.000Z',
+      end: '2030-12-31T22:59:59.000Z',
+    });
+    const day = (iso: string) =>
+      new Date(iso).toLocaleDateString(component['locale'], {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+
+    expect(component.aceTimeFrame(share)).toBe(`${day('2030-01-01')} - ${day('2030-12-31')}`);
+  });
+
   it('shareWithExternal reloads the ACLs only when a share was created', () => {
     component.currentDoc.set(doc({ uid: 'ws-1' }));
     detail.getDocumentPermissions.mockReturnValue(of(withAcls([{ name: 'local', aces: [] }])));
@@ -286,18 +508,23 @@ describe('BrowseComponent — permissions tab', () => {
 
     dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
     component.shareWithExternal();
-    expect(toast.show).toHaveBeenCalledWith('Shared with external user');
+    expect(detail.getDocumentPermissions).toHaveBeenCalledWith('ws-1');
+    // The dialog announces the share itself; a second toast from the page would repeat it.
+    expect(toast.show).not.toHaveBeenCalled();
   });
 
-  it('editExternalPermission marks the dialog as external', () => {
+  it('editExternalPermission reloads the ACLs only when the share was updated', () => {
     component.currentDoc.set(doc({ uid: 'ws-1' }));
     detail.getDocumentPermissions.mockReturnValue(of(withAcls([{ name: 'local', aces: [] }])));
-    dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
 
+    dialogOpen.mockReturnValue({ afterClosed: () => of(false) });
     component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
+    expect(detail.getDocumentPermissions).not.toHaveBeenCalled();
 
-    expect(dialogData<{ isExternal: boolean }>().isExternal).toBe(true);
+    dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
+    component.editExternalPermission(ace({ id: 'x-1', externalUser: true }));
     expect(detail.getDocumentPermissions).toHaveBeenCalledWith('ws-1');
+    expect(toast.show).not.toHaveBeenCalled();
   });
 
   it('opens no permission dialog at all without a browsed document', () => {

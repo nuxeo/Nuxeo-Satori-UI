@@ -23,7 +23,7 @@ re-litigate it.
 
 ## Sources, in precedence order
 
-1. `docs/adf-hx-beta-plan.md` — the plan of record
+1. `docs/beta-plan.md` — the plan of record
 2. `AGENTS/11-beta-program.md` section 3 — verified facts; section 4 — phase gates
 3. `.ai/state/phases.json` — the checkable mirror
 4. The diff: `git diff --stat origin/main...HEAD`

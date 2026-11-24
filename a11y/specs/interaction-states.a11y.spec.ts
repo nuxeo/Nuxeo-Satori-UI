@@ -9,7 +9,8 @@ import {
 } from '../fixtures';
 
 /**
- * WCAG 2.1 AA scan of **interaction states** — surfaces that exist only after a click.
+ * Keyboard/focus scan of interaction states reached with Enter. Axe observations are not
+ * a WCAG verdict; see docs/accessibility.md for the owning layers.
  *
  * ## Why this file exists
  *
@@ -132,7 +133,8 @@ async function enterState(name: string, trigger: Locator, evidence: Locator): Pr
     trigger,
     `"${name}": the trigger is not present, so the state is unreachable`,
   ).toBeVisible();
-  await trigger.click();
+  await trigger.focus();
+  await trigger.press('Enter');
   await expect(
     evidence,
     `"${name}": the state did not open — scanning here would prove nothing`,
@@ -185,9 +187,24 @@ test.describe('accessibility: interaction states', () => {
     await enterState(
       'column picker',
       page.getByRole('button', { name: 'Manage columns' }),
-      page.locator('.col-panel'),
+      page.locator('nxs-column-picker').getByRole('dialog'),
     );
+    const dialog = page.locator('nxs-column-picker').getByRole('dialog');
+    await expect(dialog).toBeFocused();
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
     await scanState(a11y, 'browse › column picker dialog', { keyboard: true });
+    // The scanner may dismiss overlays while walking. Reopen before testing the exit contract.
+    if (!(await dialog.isVisible())) {
+      await page.getByRole('button', { name: 'Manage columns' }).press('Enter');
+    } else {
+      // The scanner can leave focus elsewhere even when the dialog remains open.
+      await dialog.focus();
+    }
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Manage columns' })).toBeFocused();
   });
 
   /**
@@ -207,7 +224,7 @@ test.describe('accessibility: interaction states', () => {
   });
 
   /**
-   * The "Modified" date-range calendar overlay.
+   * The "Modified — From" calendar overlay (the first of the two nxs-date-input fields).
    *
    * Also the standing lead on an open question: five of a11y-scout's eight `color-contrast`
    * findings are on `.mat-start-date`, `.mat-end-date` and the select, and none of them
@@ -219,7 +236,7 @@ test.describe('accessibility: interaction states', () => {
     await openBrowse(page);
     await enterState(
       'date-range calendar',
-      page.locator('.toolbar-filter-date mat-datepicker-toggle button'),
+      page.locator('.toolbar-filter-date mat-datepicker-toggle button').first(),
       page.locator('mat-datepicker-content'),
     );
     await scanState(a11y, 'browse › date-range calendar', { keyboard: true });

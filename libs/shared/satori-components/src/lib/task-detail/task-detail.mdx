@@ -1,0 +1,109 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TaskDetailStories from './task-detail.stories';
+
+<Meta of={TaskDetailStories} name="Overview" />
+
+# Task detail
+
+The task detail shows one workflow task and everything the user can do with it: run one of the
+actions the task offers, abandon the workflow, delegate or reassign the task, and look at the
+workflow's steps. On the first step of a review it also asks who takes part and how. Use it beside
+the document a task is about, as the Tasks page does.
+
+## Key features
+
+- **The task's own actions.** Each action Nuxeo returns for the task is a button. Running one
+  completes the task with the comment typed, and the panel hands the task back to the host.
+- **Choosing participants.** A "choose participants" step adds a field that finds users and groups
+  as the user types, and a choice between a simple review and a validation. With nobody chosen, the
+  signed-in user is assigned; when the application does not know who is signed in, the panel asks
+  for a participant instead.
+- **Delegate and reassign.** Delegating shares the task with more people; reassigning gives it to
+  others instead. Both take an optional comment.
+- **The workflow graph.** The workflow's steps, with the task's own step marked as current.
+- **Outcomes are announced.** Each outcome is a toast. When Nuxeo refuses, its reason is shown, the
+  task stays, and the actions are enabled again.
+- **Late answers stay with their task.** If the host shows another task while a request is
+  running, its outcome is still announced, but it does not close the new task's panel or call the
+  callbacks for it.
+- **It does not navigate.** `taskDone` is called once the task has left the inbox, and
+  `taskChanged` after its assignees changed; the host decides what comes next.
+- **Replaceable by ID.** It is registered as `nxs.components.taskDetail`, so your own panel can
+  replace it on the Tasks page.
+
+## Demo showcase
+
+Select **Approve**. The **Actions** tab lists every call the panel makes.
+
+<Canvas of={TaskDetailStories.Review} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsTaskDetailComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-task-detail [task]="selectedTask()" [taskDone]="moveOn" [taskChanged]="reload" />`}
+/>
+
+`task` is required. `taskDone` receives the task and how it left the inbox, `'completed'` or
+`'abandoned'`; `taskChanged` receives the task whose assignees changed. Both are inputs rather than
+outputs, so the panel can be rendered by its ID, where a host can set inputs only. The panel's own
+words are translated under `satori-components.task-detail.*`.
+
+### By registered ID
+
+The Nuxeo Satori application registers the panel as `nxs.components.taskDetail`, exported as
+`NXS_TASK_DETAIL_ID`, and the Tasks page renders it through `lib-extension-outlet`. Register your
+own component under the same ID, taking the same inputs, to replace it:
+
+export const register = `provideSatoriExtensions({
+  components: { 'nxs.components.taskDetail': AcmeTaskPanelComponent },
+});`;
+
+<Source language="typescript" dark code={register} />
+
+## Where its data comes from
+
+The host passes the task, as `TaskService.getTask` or `getUserTasks` returns it. The panel writes
+through `TaskService` (complete, delegate, reassign) and `WorkflowService` (abandon, and the graph),
+which carry the application's sign-in. Nuxeo checks each permission on the request: hiding the panel
+is not a security control. The stories use an in-memory fake of both services.
+
+## Examples
+
+### Choosing participants
+
+<Canvas of={TaskDetailStories.ChooseParticipants} />
+
+### Overdue
+
+<Canvas of={TaskDetailStories.Overdue} />
+
+### The workflow graph
+
+<Canvas of={TaskDetailStories.WorkflowGraph} />
+
+### Delegating
+
+<Canvas of={TaskDetailStories.Delegate} />
+
+### Nuxeo refuses the action
+
+<Canvas of={TaskDetailStories.CompletionRefused} />
+
+## Accessibility
+
+- **Headings.** The task's title is a heading at `headingLevel`, three by default; the delegate,
+  reassign and graph panels are headings one level below it.
+- **Buttons.** Every action is a native button named by its text. Delegate, Reassign and View Graph
+  report whether their panel is open with `aria-expanded`; the icon-only close buttons are named.
+- **Fields.** The participants, assignee, review type and comment fields have visible labels.
+- **Progress and outcomes.** A running request is a named spinner; a graph that cannot be loaded is
+  an alert; the current step of the graph carries `aria-current="step"`.

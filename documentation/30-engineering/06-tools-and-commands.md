@@ -9,7 +9,7 @@ audience: engineering
 
 # Tools & Commands — complete reference
 
-> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c`
 > Only the `SATORI_GH_READONLY_TOKEN` row was re-verified at that commit, for NXSAT-637; the three
 > `beta:coverage` rows on 2026-10-09 at `effd434`; §3 (the gate and the
 > dependency-tree commands) was re-verified on 2026-10-08 at `fb97d44`; the rest of the page was
@@ -20,6 +20,10 @@ audience: engineering
 ---
 
 ## 1. Setup
+
+> Everything on this page except §7's first block is **contributor** tooling and needs
+> `SATORI_GH_READONLY_TOKEN`. A customer customising Satori needs none of it —
+> [`CUSTOMISING.md`](../../CUSTOMISING.md) is their path, and it is Node and nothing else.
 
 | Command                                  | Purpose                            | Notes                                                  |
 | ---------------------------------------- | ---------------------------------- | ------------------------------------------------------ |
@@ -72,28 +76,28 @@ filtered run — **not** a phase gate), `fail`. A report is written under `~/Des
 
 ### Individual gates
 
-| Command                                                                | Asserts                                                              | Exit                                                                                                                   |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `npm run beta:api`                                                     | Published `.d.ts` matches the snapshot                               | 1 on drift                                                                                                             |
-| `npm run beta:api -- --update`                                         | Re-record the snapshot                                               | Review the diff                                                                                                        |
-| `npm run beta:publishable`                                             | 7 checks incl. a real `npm publish --dry-run`                        | 1, or 2 if `dist` absent                                                                                               |
-| `npm run beta:fork`                                                    | Template compiles against the built package                          | 1                                                                                                                      |
-| `npm run beta:upgrade`                                                 | A Layer 0/1/2 customisation survives a version bump                  | 1, or 2 if `dist` absent                                                                                               |
-| `node scripts/beta-harness/upgrade-rehearsal.mjs --break-slot toolbar` | **Negative control** — proves the slot check is sensitive            | 1 by design                                                                                                            |
-| `npm run beta:bundle`                                                  | No banned symbols; required assets present and non-empty             | 1                                                                                                                      |
-| `npm run beta:reference`                                               | Extension reference agrees with the code, both directions            | 1                                                                                                                      |
-| `npm run beta:customer-guardrails`                                     | The shipped guardrail, against our reference library                 | 1                                                                                                                      |
-| `npm run beta:audit`                                                   | Every evidence assertion can fail                                    | 1                                                                                                                      |
-| `npm run beta:coverage`                                                | Ratchet (no regression/orphan/unratcheted); `FLOORS` met             | 1                                                                                                                      |
-| `npm run beta:coverage -- --run`                                       | Run the tests first                                                  |                                                                                                                        |
-| `npm run beta:coverage -- --update-baseline`                           | Re-record; prunes orphans                                            |                                                                                                                        |
-| `node scripts/beta-harness/lockfile-integrity.mjs`                     | Every dependency edge resolves in the lock                           | 1                                                                                                                      |
-| `node scripts/beta-harness/lockfile-integrity.mjs --lock <path>`       | Check a copy                                                         |                                                                                                                        |
-| `npm run beta:dependency-tree`                                         | No ADF package in lock, installed tree, manifests, `.npmrc`, imports | 1 on any finding, **blocking** since the ADF removal (NXSAT-638) and report-only before; 2 if a location can't be read |
-| `npm run beta:dependency-tree -- --blocking --list-files`              | Preview the blocking verdict, every importing file listed            |                                                                                                                        |
-| `npm run beta:dependency-tree-selftest`                                | The gate's negative and positive controls                            | 1                                                                                                                      |
-| `npm run review:guardrails`                                            | The 10 repo invariants                                               | 1                                                                                                                      |
-| `npm run review:preflight`                                             | guardrails + affected lint + affected test                           | 1                                                                                                                      |
+| Command                                                                | Asserts                                                                  | Exit                                                          |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `npm run beta:api`                                                     | Published `.d.ts` matches the snapshot                                   | 1 on drift                                                    |
+| `npm run beta:api -- --update`                                         | Re-record the snapshot                                                   | Review the diff                                               |
+| `npm run beta:publishable`                                             | 7 checks incl. a real `npm publish --dry-run`                            | 1, or 2 if `dist` absent                                      |
+| `npm run beta:fork`                                                    | Template compiles against the built package                              | 1                                                             |
+| `npm run beta:upgrade`                                                 | A Layer 0/1/2 customisation survives a version bump                      | 1, or 2 if `dist` absent                                      |
+| `node scripts/beta-harness/upgrade-rehearsal.mjs --break-slot toolbar` | **Negative control** — proves the slot check is sensitive                | 1 by design                                                   |
+| `npm run beta:bundle`                                                  | No banned symbols; required assets present and non-empty                 | 1                                                             |
+| `npm run beta:reference`                                               | Extension reference agrees with the code, both directions                | 1                                                             |
+| `npm run beta:customer-guardrails`                                     | The shipped guardrail, against our reference library                     | 1                                                             |
+| `npm run beta:audit`                                                   | Every evidence assertion can fail                                        | 1                                                             |
+| `npm run beta:coverage`                                                | Ratchet (no regression/orphan/unratcheted); `FLOORS` met                 | 1                                                             |
+| `npm run beta:coverage -- --run`                                       | Run the tests first                                                      |                                                               |
+| `npm run beta:coverage -- --update-baseline`                           | Re-record; prunes orphans                                                |                                                               |
+| `node scripts/beta-harness/lockfile-integrity.mjs`                     | Every dependency edge resolves in the lock                               | 1                                                             |
+| `node scripts/beta-harness/lockfile-integrity.mjs --lock <path>`       | Check a copy                                                             |                                                               |
+| `npm run beta:dependency-tree`                                         | No retired package in lock, installed tree, manifests, `.npmrc`, imports | 1 on any finding, **blocking**; 2 if a location can't be read |
+| `npm run beta:dependency-tree -- --blocking --list-files`              | Preview the blocking verdict, every importing file listed                |                                                               |
+| `npm run beta:dependency-tree-selftest`                                | The gate's negative and positive controls                                | 1                                                             |
+| `npm run review:guardrails`                                            | The 10 repo invariants                                                   | 1                                                             |
+| `npm run review:preflight`                                             | guardrails + affected lint + affected test                               | 1                                                             |
 
 ---
 
@@ -150,16 +154,43 @@ and silently corrupts the snapshot.
 
 ## 7. Generators
 
+### The configuration package — Node only, no install, no token
+
+The one generator a customer runs, and the only one that works without this repository's
+dependencies. `create.mjs` imports Node built-ins and nothing else, so it runs in a fresh clone
+before anything is installed:
+
+```bash
+node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme
+node config-packages/acme-config/build.mjs      # checks the fragments, writes the installable zip
+```
+
+[`CUSTOMISING.md`](../../CUSTOMISING.md) is the customer-facing version of those two lines, with
+what to edit between them. The `config-package` Nx generator writes the **same files, byte for
+byte** — `create.spec.ts` runs both and compares — and is the form to use once the workspace is
+installed:
+
+```bash
+npx nx g ./tools/satori-generators:config-package acme-config --owner=acme
+npx nx build acme-config                        # same zip, into dist/config-packages/acme-config/
+```
+
+### The extension library — Layer 2, needs the install
+
 ```bash
 # In this repository
 npx nx g ./tools/satori-generators:extension-library acme-extensions --owner=acme
-
-# From the published package, as a customer
-npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
+npx nx g ./tools/satori-generators:extension-rule      is-legal-team --library=acme-extensions
+npx nx g ./tools/satori-generators:extension-action    export-claim  --library=acme-extensions
+npx nx g ./tools/satori-generators:extension-component claim-summary --library=acme-extensions
 ```
+
+> **The `@nuxeo/satori-platform:` forms of the four commands above do not work yet.** They are the
+> intended customer route and they are what the customer documentation describes, but the package
+> is unpublished — it 404s on npmjs.org, npm.pkg.github.com and packages.nuxeo.com alike — so
+> `npx nx g @nuxeo/satori-platform:extension-library …` cannot resolve. Use the
+> `./tools/satori-generators:` forms until D-c publishes the first alpha. The configuration-package
+> path above is unaffected: it needs no package and no registry.
 
 `--directory` is the **parent**: `--directory=libs/custom` yields `libs/custom/<name>`.
 Default parent is `libs/extensions`.
@@ -206,11 +237,11 @@ verified anything.
 
 ## 10. Slides and showcase
 
-| Command                                             | Purpose                                         |
-| --------------------------------------------------- | ----------------------------------------------- |
-| `npm run beta:slides`                               | Export the deck (`tools/video/export-pptx.mjs`) |
-| `npm run beta:evidence -- showcase showcase-adf-hx` | Presentation-quality screenshots — not a gate   |
-| `node scripts/beta-harness/annotate-showcase.mjs`   | Annotated comparison artifact                   |
+| Command                                           | Purpose                                         |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `npm run beta:slides`                             | Export the deck (`tools/video/export-pptx.mjs`) |
+| `npm run beta:evidence -- showcase`               | **Unavailable** until its steps are migrated    |
+| `node scripts/beta-harness/annotate-showcase.mjs` | Annotated comparison artifact                   |
 
 ---
 

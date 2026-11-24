@@ -164,6 +164,27 @@ class ConfigEndpointTest {
         assertEquals(0, body(endpoint.respond("/manifest.json", null)).get("diagnostics").size());
     }
 
+    /**
+     * The registry deciding on a warning is not the same as a customer seeing one: the level and
+     * the code have to survive into the served envelope, which is the only thing the browser and
+     * any support tooling ever read (NXSAT-747).
+     */
+    @Test
+    void displacingOneOfOurPackagedDefaultsIsServedAsAWarning() throws Exception {
+        ContributionRegistry registry = new ContributionRegistry();
+        registry.add(TestContributions.packagedFragment("bootstrap", "defaults", "{}"));
+        registry.add(fragment("dflt", "bootstrap", "defaults", "{}"));
+        ConfigEndpoint endpoint = new ConfigEndpoint(ConfigSnapshot.build(registry.resolve()));
+
+        JsonNode bootstrap = body(endpoint.respond("/bootstrap.json", null));
+
+        assertEquals(1, bootstrap.get("diagnostics").size());
+        assertEquals("replaced-packaged-default", bootstrap.at("/diagnostics/0/code").asText());
+        assertEquals("warning", bootstrap.at("/diagnostics/0/level").asText());
+        assertEquals("dflt", bootstrap.at("/diagnostics/0/component").asText());
+        assertTrue(bootstrap.at("/diagnostics/0/message").asText().contains("fragment bootstrap/defaults"));
+    }
+
     @Test
     void contributionDiagnosticsAreFiledUnderTheirResponse() throws Exception {
         ContributionRegistry registry = new ContributionRegistry();
@@ -175,6 +196,8 @@ class ConfigEndpointTest {
         JsonNode bootstrap = body(endpoint.respond("/bootstrap.json", null));
         JsonNode manifest = body(endpoint.respond("/manifest.json", null));
 
+        // "ours" here is a component name, not our bundle, so this is one package replacing
+        // another's fragment: ordinary layering, reported at info (NXSAT-747).
         assertEquals("replaced", bootstrap.at("/diagnostics/0/code").asText());
         assertEquals("info", bootstrap.at("/diagnostics/0/level").asText());
         assertEquals("partner", bootstrap.at("/diagnostics/0/component").asText());

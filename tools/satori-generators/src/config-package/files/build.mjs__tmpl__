@@ -20,11 +20,22 @@
  *     `<json>`;
  *   - a `src` that names no packaged file in `bundle/` — a directory or a Markdown file is not one;
  *   - a fragment or layout body — a `src` file whatever its name, or inline `<json>` — that does
- *     not parse, is not an object, repeats a key, or is packaged over 1 MiB; an asset over 2 MiB.
+ *     not parse, is not an object, repeats a key, nests deeper than the server's JSON parser
+ *     accepts, or is packaged over 1 MiB; an asset over 2 MiB.
  * And around them:
  *   - XML that is not UTF-8, or not well-formed as Nuxeo's namespace-aware parser reads it, which
- *     Nuxeo cannot load at all;
- *   - a `Nuxeo-Component` that names no packaged file in `bundle/`;
+ *     Nuxeo cannot load at all, or nested deeper than this script checks;
+ *   - a `Nuxeo-Component` that names no packaged file in `bundle/`; a manifest whose main section,
+ *     above its first blank line, names its components in more than one such header or spells
+ *     its one header another way, since the server reads that section alone, matches the name in
+ *     any letter case and keeps the last, so it could load a component this script never read; or
+ *     one that names them only below that line, where the server does not look. A header in a
+ *     later `Name:` section is that entry's attribute, ignored here as on the server;
+ *   - a manifest that Java's `java.util.jar.Manifest`, which the server reads it with, refuses
+ *     outright, leaving the bundle no headers at all: a line that is neither a header — a name of
+ *     1 to 70 letters, digits, `-` and `_`, then `: ` — nor a continuation of one; a first line
+ *     that starts with a space; or a section after a blank line that does not begin with `Name: `.
+ *     Checked on the manifest as packaged;
  *   - a component contributing configuration without
  *     `<require>org.nuxeo.agentic.ui.config.defaults</require>`, without which this package's
  *     fragments could register before Satori's own and lose to them;
@@ -59,6 +70,20 @@ const PACKAGE = join(HERE, 'package');
 // nuxeo-agentic-core.
 const MAX_JSON_BYTES = 1024 * 1024;
 const MAX_ASSET_BYTES = 2 * 1024 * 1024;
+// Nesting is the one limit the server does not set itself, so it is the one number here that can
+// move under you: `ConfigSnapshot`'s mapper is a plain `new ObjectMapper()`, which leaves the depth
+// at jackson-core's `StreamReadConstraints` default — 1000 since Jackson 2.15, read from the
+// server's own jars rather than from the documentation. That is why the refusal below says "the
+// server's JSON parser" and not "the server": on a server whose Jackson raised the default this is
+// stricter than it needs to be, which refuses a package that would have worked, where being
+// generous would ship one that silently does not.
+const MAX_JSON_DEPTH = 1000;
+// This script's own bound, mirroring no server limit — Nuxeo's XML parser sets no comparable one.
+// It exists so that XML too deep for the recursive walk below is refused the same way on every
+// machine, rather than overflowing the stack at whatever depth that machine happens to have left.
+// Component XML in this format is about five elements deep, so this is far above anything real and
+// far below where the walk runs out.
+const MAX_XML_DEPTH = 256;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 const MODE = /^[a-z][a-z0-9-]{0,31}$/;
@@ -215,8 +240,12 @@ function notWellFormed(xml) {
     }
   };
 
-  const element = (scope) => {
+  const element = (scope, depth) => {
     const at = i;
+    // Refused before the recursion below runs out of stack, so the verdict is the file's and not
+    // the machine's. Without this a deeply nested file threw a RangeError that the catch at the
+    // end rethrows — it carries no `malformed` flag — and Node printed a raw trace.
+    if (depth > MAX_XML_DEPTH) fail(`elements nested more than ${MAX_XML_DEPTH} deep`, at);
     i += 1;
     const tag = sticky(XML_QNAME)?.[0];
     if (!tag) fail('a tag with no valid element name', at);
@@ -289,10 +318,10 @@ function notWellFormed(xml) {
         fail(`<${tag}> has two attributes with the same namespace and name`, where);
       expanded.add(key);
     }
-    if (!empty) content(tag, at, declared);
+    if (!empty) content(tag, at, declared, depth);
   };
 
-  const content = (tag, at, scope) => {
+  const content = (tag, at, scope, depth) => {
     for (;;) {
       if (i >= xml.length) fail(`<${tag}> is never closed`, at);
       if (sticky(XML_TEXT)) continue;
@@ -314,7 +343,7 @@ function notWellFormed(xml) {
         i = end + 3;
       } else if (xml.startsWith('<?', i)) instruction();
       else if (xml.startsWith('<!', i)) fail('a declaration inside an element');
-      else if (xml[i] === '<') element(scope);
+      else if (xml[i] === '<') element(scope, depth + 1);
       else if (xml[i] === '&') reference();
       else if (xml.startsWith(']]>', i)) fail('a "]]>" in text');
       else i += 1;
@@ -341,7 +370,7 @@ function notWellFormed(xml) {
     misc();
     if (xml.startsWith('<!', i)) fail('a DOCTYPE, which none of these files needs');
     if (xml[i] !== '<') fail(i < xml.length ? 'text before the root element' : 'no root element');
-    element(new Map([['xml', XML_NAMESPACE]]));
+    element(new Map([['xml', XML_NAMESPACE]]), 1);
     misc();
     if (i < xml.length)
       fail(xml[i] === '<' ? 'markup after the root element' : 'text after the root element');
@@ -440,6 +469,48 @@ function withoutCommentsOrInstructions(xml) {
 const withoutCdata = (xml) =>
   xml.replace(/<!\[CDATA\[[\s\S]*?(?:\]\]>|$)/g, (section) => ' '.repeat(section.length));
 
+/**
+ * Component and extension-point documentation may contain real XML examples. Nuxeo does not
+ * register those examples, so hide these supported documentation subtrees from every extraction
+ * below. Keep their offsets (and line breaks) so inline JSON is read from the matching location.
+ * A documentation element inside an actual descriptor is not a supported documentation path.
+ */
+function withoutDocumentation(xml) {
+  const parents = [];
+  let start;
+  let depth;
+  let at = 0;
+  let out = '';
+  for (const match of withoutCdata(xml).matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    const [tag, close, name, tail] = match;
+    const empty = tail.trimEnd().endsWith('/');
+    if (
+      !close &&
+      name === 'documentation' &&
+      start === undefined &&
+      parents[0] === 'component' &&
+      (parents.length === 1 || (parents.length === 2 && parents[1] === 'extension-point'))
+    ) {
+      start = match.index;
+      depth = parents.length;
+    }
+    if (
+      start !== undefined &&
+      ((close && parents.length === depth + 1) || (empty && match.index === start))
+    ) {
+      const end = match.index + tag.length;
+      out += xml.slice(at, start) + xml.slice(start, end).replace(/[^\n]/g, ' ');
+      at = end;
+      start = undefined;
+    }
+    if (close) parents.pop();
+    else if (!empty) parents.push(name);
+  }
+  return out + xml.slice(at);
+}
+
 const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 
 /** XML character data with its character and predefined entity references resolved. */
@@ -463,6 +534,40 @@ function attributes(tag) {
     found[name] = decode(double ?? single).trim();
   }
   return found;
+}
+
+/**
+ * The server reads component requirements and descriptor JSON by child path, not a descendant
+ * search. Reject misleading nested elements before the text checks below can mistake them for
+ * a requirement or body the server will actually read. Comments, instructions and CDATA have
+ * already been removed or blanked; quoted ">" characters must not end a start tag.
+ */
+function checkElementParents(markup, report) {
+  const parents = [];
+  for (const [, close, name, tail] of markup.matchAll(
+    /<(\/)?([^\s/>]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g,
+  )) {
+    if (close) {
+      parents.pop();
+      continue;
+    }
+    const parent = parents.at(-1);
+    if (name === 'require' && (parent !== 'component' || parents.length !== 1)) {
+      report('<require> must be a direct child of <component>');
+    }
+    if (
+      name === 'json' &&
+      (parents.length !== 3 ||
+        parents[0] !== 'component' ||
+        parents[1] !== 'extension' ||
+        (parent !== 'fragment' && parent !== 'layout'))
+    ) {
+      report(
+        '<json> must be a direct child of <fragment> or <layout> under <component>/<extension>',
+      );
+    }
+    if (!tail.trimEnd().endsWith('/')) parents.push(name);
+  }
 }
 
 /**
@@ -499,14 +604,75 @@ function inlineJson(xml, from, element) {
   }
 }
 
-/** The server's checks on a fragment or layout body: it parses, repeats no key, is an object. */
+/**
+ * How deeply `text` nests objects and arrays: `{}` is 1 and `{"a":{}}` is 2, which is how the
+ * server's parser counts. A scan of the raw text, not a parse — it is wanted before anything else
+ * looks at the document, and it has to answer for input that does not parse at all.
+ *
+ * Counted with a depth counter rather than by recursing, deliberately: a recursive counter would
+ * overflow on exactly the input it exists to refuse, and would look correct in a test at depth 100.
+ */
+function nestingDepth(text) {
+  let depth = 0;
+  let deepest = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (inString) {
+      // A backslash escapes the next character, so a `\"` does not end the string.
+      if (character === '\\') i += 1;
+      else if (character === '"') inString = false;
+    } else if (character === '"') inString = true;
+    else if (character === '{' || character === '[') {
+      depth += 1;
+      if (depth > deepest) deepest = depth;
+    } else if (character === '}' || character === ']') depth -= 1;
+  }
+  return deepest;
+}
+
+/**
+ * Whether `error` is V8 running out of stack, rather than anything about the document. Both
+ * depth-sensitive steps below report it this way — the recursive tokeniser in
+ * `rejectDuplicateKeys` and `JSON.stringify` — and which of them reaches it first is a property of
+ * the platform and the Node version rather than of the file: on Linux and macOS the tokeniser goes
+ * first on every supported Node, on Windows with Node 20 `JSON.stringify` does.
+ */
+const ranOutOfStack = (error) =>
+  error instanceof RangeError && /call stack|stack size/i.test(error.message);
+
+/**
+ * Said only of a document the server would accept: the depth check has already refused anything
+ * deeper than `MAX_JSON_DEPTH`, so reaching this means the limit hit was this machine's and not
+ * Nuxeo's. It says so, because a reader told only `Maximum call stack size exceeded` cannot tell a
+ * file that is too deep for the server from one that is merely too deep for their Node, and the
+ * two want opposite fixes — edit the file, or change Node.
+ */
+const outOfStack = (depth) =>
+  `nested ${depth} deep; the server accepts this depth but this Node ran out of stack walking it. Build with Node 22 or newer.`;
+
+/**
+ * The server's checks on a fragment or layout body: it is not nested deeper than the parser
+ * accepts, it parses, it repeats no key, and it is an object. Both bodies the server reads go
+ * through here — a `src` file and inline `<json>` — so a check added here covers both.
+ */
 function parseObject(text, report) {
+  // First, before `JSON.parse` and before the recursive walk in `rejectDuplicateKeys`: both are
+  // depth-sensitive, and on every supported Node the walk overflows first and throws a RangeError
+  // that the catch below would report as the bare words "Maximum call stack size exceeded".
+  const depth = nestingDepth(text);
+  if (depth > MAX_JSON_DEPTH) {
+    report(
+      `nested ${depth} deep; the server’s JSON parser refuses a fragment or layout nested deeper than ${MAX_JSON_DEPTH}`,
+    );
+    return null;
+  }
   let parsed;
   try {
     parsed = JSON.parse(text);
     rejectDuplicateKeys(text);
   } catch (error) {
-    report(error.message);
+    report(ranOutOfStack(error) ? outOfStack(depth) : error.message);
     return null;
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -524,8 +690,18 @@ function checkJson(file) {
   const parsed = parseObject(text, (message) => problem(file, message));
   if (!parsed) return null;
   delete parsed.$schema;
-  // The limit applies to what is packaged, which is what the server reads.
-  const packaged = Buffer.from(JSON.stringify(parsed));
+  // The limit applies to what is packaged, which is what the server reads. `JSON.stringify`
+  // recurses through the document, so it is the second place a deep one can exhaust the stack —
+  // and on Windows with Node 20 it is the first, overflowing from about depth 993 while the
+  // tokeniser above survives. It was the one depth-sensitive call outside a `try`, so there it
+  // ended the build with a raw `RangeError` trace instead of a refusal naming the file.
+  let packaged;
+  try {
+    packaged = Buffer.from(JSON.stringify(parsed));
+  } catch (error) {
+    problem(file, ranOutOfStack(error) ? outOfStack(nestingDepth(text)) : error.message);
+    return null;
+  }
   if (packaged.length > MAX_JSON_BYTES) {
     problem(
       file,
@@ -587,14 +763,147 @@ const manifest = ((existsSync(manifestFile) ? readUtf8(manifestFile) : '') ?? ''
   /(?:\r\n|\r|\n) /g,
   '',
 );
-const componentPaths = (/^Nuxeo-Component:\s*(.+?)\s*$/m.exec(manifest)?.[1] ?? '')
-  .split(',')
-  .map((path) => path.trim())
-  .filter(Boolean);
-if (componentPaths.length === 0) problem(manifestFile, 'needs a Nuxeo-Component line');
+/** Fold logical headers without splitting UTF-8 characters; continuation spaces count too. */
+function packageManifest(text) {
+  const lines = [];
+  for (const header of text.replace(/[\r\n]+$/, '').split(/\r\n|\r|\n/)) {
+    let line = '';
+    let size = 0;
+    for (const character of header) {
+      const bytes = Buffer.byteLength(character);
+      if (size + bytes > 72) {
+        lines.push(line);
+        line = ' ';
+        size = 1;
+      }
+      line += character;
+      size += bytes;
+    }
+    lines.push(line);
+  }
+  return Buffer.from(lines.join('\r\n') + '\r\n\r\n');
+}
+
+/**
+ * A manifest line quoted for a message, cut short, with control and invisible characters escaped
+ * so that a tab or a byte-order mark reads as what it is.
+ */
+function quoteLine(text) {
+  const characters = [...text];
+  return JSON.stringify(
+    characters.length > 60 ? `${characters.slice(0, 59).join('')}…` : text,
+  ).replace(
+    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,
+    (character) => `\\u${character.codePointAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/** A header as `java.util.jar.Attributes` reads one: its name, a colon and one space. */
+const MANIFEST_HEADER = /^[A-Za-z0-9_-]{1,70}: /;
+/** The line that begins a section after the main one, `Name` in any letter case. */
+const MANIFEST_SECTION_NAME = /^[Nn][Aa][Mm][Ee]: /;
+
+/**
+ * Why Java cannot read the manifest this script packages, or `null` when it can. The Nuxeo runtime
+ * reads a bundle's headers through `java.util.jar.Manifest`, which refuses the whole manifest at
+ * the first line it cannot read, and then the bundle has no headers: the package installs and
+ * configures nothing. JDK 21's `Manifest.read` and `Attributes.read` take every line that is not
+ * empty as one of three things, each confirmed against JDK 21 on a jar built without this check:
+ *   - a header: a name of 1 to 70 letters, digits, `-` and `_`, then a colon, one space and the
+ *     value, the colon and space on the line itself rather than on a continuation of it;
+ *   - a continuation, which starts with a space and extends the line above it, so it cannot be the
+ *     first line. Nowhere else can one lack a header above it here: the unfolding above joins a
+ *     line that starts with a space to the one before it, an empty one included;
+ *   - after an empty line, which ends a section, the `Name: ` line that begins the next, `Name`
+ *     in any letter case. The main section is the one before the first empty line.
+ * Java also refuses a line over 512 bytes, line break included, and ignores whatever follows the
+ * last line break. Neither can happen to these bytes, which is why neither is checked:
+ * `packageManifest` folds every line to at most 72 bytes and ends every line with CRLF.
+ */
+function unreadableManifest(packaged) {
+  // Every line ends with CRLF, so what follows the last one is not a line.
+  const lines = packaged.toString('utf8').split('\r\n').slice(0, -1);
+  // A line with its continuations, as Java joins them, which is how it reads in the source.
+  const quoted = (index) => {
+    let text = lines[index];
+    for (let next = index + 1; lines[next]?.startsWith(' '); next++) text += lines[next].slice(1);
+    return quoteLine(text);
+  };
+  const refused = 'Java refuses the whole manifest, and the server would read none of its headers';
+  for (const [index, line] of lines.entries()) {
+    if (line === '') continue;
+    if (line.startsWith(' ')) {
+      if (index > 0) continue;
+      return `begins with ${quoted(index)}, which starts with a space and so continues a header above it, and there is none; ${refused}`;
+    }
+    if (index > 0 && lines[index - 1] === '') {
+      if (!MANIFEST_SECTION_NAME.test(line)) {
+        return `has ${quoted(index)} after a blank line, which ends a section, and the next section must begin with "Name: "; ${refused}. Remove the blank line, or begin the section with Name:`;
+      }
+    } else if (!MANIFEST_HEADER.test(line)) {
+      return `has ${quoted(index)}, which is not a header: a name of 1 to 70 letters, digits, "-" and "_", then ": " and the value; ${refused}`;
+    }
+  }
+  return null;
+}
+
+// Whether Java can read the manifest at all, checked on what the jar holds: the unfolded text
+// refolded, not the source bytes. The checks below still run when it cannot, so every problem is
+// reported at once.
+const unreadable = unreadableManifest(packageManifest(manifest));
+if (unreadable) problem(manifestFile, unreadable);
+
+// The components the server loads, found the way it finds them. The Nuxeo runtime reads this
+// header through `java.util.jar.Manifest`, which ends a line at CR, LF or CRLF and nowhere else,
+// matches a header's name in any letter case, keeps the last of a repeated one, and looks for it in
+// the main section alone — the lines before the first empty one; a header in a later `Name:`
+// section belongs to that entry. The runtime then splits the value at commas, spaces, tabs, line
+// breaks and form feeds. Sections are found after unfolding, because the packaged manifest is this
+// unfolded text refolded. Reading the first header spelt exactly so, anywhere — with a pattern
+// whose `^` also matched after a U+2028 inside another header's value — checked components the
+// server does not load, while everything in bundle/ was packaged anyway.
+const manifestLines = manifest.split(/\r\n|\r|\n/);
+const mainSectionEnd = manifestLines.indexOf('');
+const isComponentHeader = (line) => /^nuxeo-component:/i.test(line);
+const componentHeaders = (
+  mainSectionEnd < 0 ? manifestLines : manifestLines.slice(0, mainSectionEnd)
+).filter(isComponentHeader);
+if (componentHeaders.length > 1) {
+  problem(
+    manifestFile,
+    `has ${componentHeaders.length} Nuxeo-Component headers, counting any letter case; the server loads only the last one's components, so list every component in a single header`,
+  );
+} else if (componentHeaders.length === 1 && !componentHeaders[0].startsWith('Nuxeo-Component:')) {
+  problem(
+    manifestFile,
+    `spells its Nuxeo-Component header "${componentHeaders[0].slice(0, componentHeaders[0].indexOf(':'))}"; the server accepts any letter case, but tools that read a manifest look for Nuxeo-Component exactly, so write it that way`,
+  );
+}
+// Every header's components are checked even when the manifest is refused, so none that the
+// server could load goes unread.
+const componentPaths = [
+  ...new Set(
+    componentHeaders.flatMap((header) =>
+      header
+        .slice(header.indexOf(':') + 1)
+        .split(/[, \t\n\r\f]+/)
+        .filter(Boolean),
+    ),
+  ),
+];
+if (componentPaths.length === 0) {
+  problem(
+    manifestFile,
+    mainSectionEnd >= 0 && manifestLines.slice(mainSectionEnd).some(isComponentHeader)
+      ? 'names its components only after its first blank line, where the server does not read them; put the Nuxeo-Component line before it'
+      : 'needs a Nuxeo-Component line',
+  );
+}
 
 /** Fragment and layout bodies named by `src`: JSON whatever the file is called. */
 const jsonBodies = new Set();
+/** Enabled asset sources, checked again after any packaging transform. */
+const assetBodies = new Set();
 
 for (const componentPath of componentPaths) {
   const componentFile = resolve(BUNDLE, componentPath);
@@ -607,11 +916,12 @@ for (const componentPath of componentPaths) {
   }
   const source = readXml(componentFile);
   if (source === null) continue;
-  // Comments and processing instructions removed first, so neither a commented-out example nor
-  // markup written inside an instruction can satisfy or fail a check.
-  const xml = withoutCommentsOrInstructions(source);
+  // Comments, instructions and supported documentation are not active contributions.
+  // Remove their examples before checking ancestry or extracting requirements and entries.
+  const xml = withoutDocumentation(withoutCommentsOrInstructions(source));
   // Markup is looked for here; text, including inline JSON, is read from `xml` at the same offsets.
   const markup = withoutCdata(xml);
+  checkElementParents(markup, (message) => problem(componentFile, message));
   const contributes = [
     ...markup.matchAll(/<extension(?=[ \t\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>/g),
   ].some(([, tag]) => attributes(tag).target === 'org.nuxeo.agentic.ui.config');
@@ -682,6 +992,7 @@ for (const componentPath of componentPaths) {
       jsonBodies.add(target);
       continue;
     }
+    assetBodies.add(target);
     const size = statSync(target).size;
     if (size > MAX_ASSET_BYTES) {
       problem(target, `${size} bytes; the server refuses an asset over ${MAX_ASSET_BYTES}`);
@@ -693,8 +1004,20 @@ const entries = [];
 for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE).sort()) {
   if (!isPackaged(file)) continue;
   const name = relative(BUNDLE, file).split(sep).join('/');
+  // A contribution's JSON contract also applies when its src names the JAR manifest.
+  // Validate bodies before choosing a file-specific packaging transform.
   const data =
-    file.endsWith('.json') || jsonBodies.has(file) ? checkJson(file) : readFileSync(file);
+    file.endsWith('.json') || jsonBodies.has(file)
+      ? checkJson(file)
+      : name === MANIFEST_ENTRY
+        ? packageManifest(manifest)
+        : readFileSync(file);
+  if (data && assetBodies.has(file) && data.length > MAX_ASSET_BYTES) {
+    problem(
+      file,
+      `packaged as ${data.length} bytes; the server refuses an asset over ${MAX_ASSET_BYTES}`,
+    );
+  }
   if (data) entries.push({ name, data });
 }
 

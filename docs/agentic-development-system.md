@@ -1,6 +1,6 @@
 # Agentic Development System — Design & Implementation Plan
 
-**Repository:** `agentic-ui-poc`  
+**Repository:** `Nuxeo-Satori-UI`  
 **Status:** Proposed — pre-implementation  
 **Authors:** Narasimha Koppula  
 **Last updated:** April 2026
@@ -32,7 +32,7 @@
 
 ## 1. Executive Summary
 
-This document describes the design for transforming the `agentic-ui-poc` repository into a **self-directing development system** where most of the software development lifecycle is automated through AI agents.
+This document describes the design for transforming the `Nuxeo-Satori-UI` repository into a **self-directing development system** where most of the software development lifecycle is automated through AI agents.
 
 **The core insight:** This repository already has ~60% of the required infrastructure. The goal is not to build from scratch but to **wire together existing tools and fill the gaps** with structured context and workflow rules.
 
@@ -659,7 +659,7 @@ echo "$CONTEXT"
 ### New Files to Create
 
 ```
-agentic-ui-poc/
+Nuxeo-Satori-UI/
 │
 ├── AGENTS.md                                    ← NEW — summary + index to AGENTS/ directory
 │
@@ -1225,7 +1225,7 @@ When asked to "fix PR comments" or "address review feedback":
      | jq '.reviews[] | select(.state == "CHANGES_REQUESTED") | .body'
 
 2. List all inline comments:
-   gh api repos/nuxeo/agentic-ui-poc/pulls/<PR-number>/comments \
+   gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<PR-number>/comments \
      | jq '.[] | { path: .path, line: .line, body: .body }'
 
 3. For each comment:
@@ -1242,7 +1242,7 @@ When asked to "fix PR comments" or "address review feedback":
    - Push: git push
 
 5. Reply to each comment with what was done (optional but good practice):
-   gh api repos/nuxeo/agentic-ui-poc/pulls/<PR-number>/comments/<comment-id>/replies \
+   gh api repos/nuxeo/Nuxeo-Satori-UI/pulls/<PR-number>/comments/<comment-id>/replies \
      -f body="Fixed: <brief description of what was changed>"
 
 Common Copilot comments and what they mean:

@@ -32,7 +32,9 @@ import {
   BrowseContextService,
   SelectionService,
   TagService,
+  type AuditEntry,
   type NuxeoDocument,
+  CURRENT_USERNAME,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent, FILTER_DEBOUNCE_MS } from './browse';
@@ -136,6 +138,28 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
  * branches are the whole of what a user sees on this page, so they are asserted
  * here through the DOM, driving the controls rather than calling the methods.
  */
+
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
+
+/** A customer's avatar, registered under `nxs.primitives.avatar`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-avatar',
+  template: '<span class="acme-avatar" [attr.data-size]="size()">{{ initials() }}</span>',
+})
+class AcmeAvatarComponent {
+  readonly initials = input('');
+  readonly size = input('');
+}
 
 /** A customer's permissions panel, registered under the packaged panel's ID. */
 @Component({
@@ -610,6 +634,88 @@ describe('BrowseComponent — rendered document list', () => {
       'You do not have access',
     );
     expect(query('nxs-error-state button')).toBeNull();
+  });
+
+  describe('an external share recipient', () => {
+    const transient = {
+      provide: CURRENT_USERNAME,
+      useValue: () => 'transient/recipient@example.invalid',
+    };
+    const sharedLink = '/browse/default-domain/workspaces/ws-1/shared-doc';
+
+    afterEach(() => window.sessionStorage.removeItem('nxs.sharedDocumentPath'));
+
+    const remembered = (user: string, path: string) =>
+      window.sessionStorage.setItem('nxs.sharedDocumentPath', JSON.stringify({ user, path }));
+
+    it('is offered a way back to the document they were sent, from a folder they cannot read', async () => {
+      remembered('transient/recipient@example.invalid', sharedLink);
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      const back = query('nxs-error-state a');
+      expect(back?.textContent?.trim()).toBe('Back to shared document');
+      expect(back?.getAttribute('href')).toBe(sharedLink);
+    });
+
+    it('resolves an encoded path once, so a folder with a space is reached, not a doubly encoded one', async () => {
+      remembered(
+        'transient/recipient@example.invalid',
+        '/browse/default-domain/workspaces/Shared%20Folder/doc',
+      );
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state a')?.getAttribute('href')).toBe(
+        '/browse/default-domain/workspaces/Shared%20Folder/doc',
+      );
+    });
+
+    it('is not offered a landing that was issued to someone else', async () => {
+      remembered('transient/someone-else@example.invalid', sharedLink);
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(query('nxs-error-state a')).toBeNull();
+    });
+
+    it('gets no way back when the landing was not remembered', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+
+      await render([transient]);
+
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(query('nxs-error-state a')).toBeNull();
+    });
+
+    it('sees its trail as text, with no ancestor it cannot open as a link', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: [doc({ uid: 'c-1', title: 'Report.pdf' })], totalSize: 1 }),
+      );
+      const component = await render([transient]);
+      const crumbs = component.breadcrumbs();
+
+      expect(crumbs.length).toBeGreaterThan(1);
+      expect(crumbs.slice(0, -1).filter((crumb) => crumb.routerLink !== undefined)).toEqual([]);
+    });
+
+    it('still gets the ancestor links for a signed-in user who is not external', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: [doc({ uid: 'c-1', title: 'Report.pdf' })], totalSize: 1 }),
+      );
+      const component = await render();
+
+      expect(
+        component
+          .breadcrumbs()
+          .slice(0, -1)
+          .some((crumb) => crumb.routerLink !== undefined),
+      ).toBe(true);
+    });
   });
 
   describe('a folder that cannot be opened, after one that could', () => {
@@ -1870,6 +1976,107 @@ describe('BrowseComponent — rendered document list', () => {
     const reads = detail.getDocumentPermissions.mock.calls.length;
     custom.permissionsChanged()?.();
     expect(detail.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+  });
+
+  /**
+   * NXSAT-652. The details panel's avatars and tags render by their `nxs.primitives.*` ID, so a
+   * component registered under one replaces every use; with nothing registered, the `nxs-`
+   * element renders instead. Seen red on purpose by restoring `<sat-avatar>` in the info panel.
+   */
+  describe('nxs.primitives.* in the details panel', () => {
+    const described = doc({
+      ...folder,
+      properties: {
+        'dc:creator': 'alice',
+        'dc:lastContributor': 'bob',
+        'nxtag:tags': [{ label: 'urgent' }, 'q3'],
+      },
+    });
+    const overrides = provideSatoriExtensions({
+      components: {
+        [NXS_PRIMITIVE_IDS.avatar]: AcmeAvatarComponent,
+        [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent,
+      },
+    });
+    const texts = (selector: string): string[] =>
+      [...fixture.nativeElement.querySelectorAll(selector)].map(
+        (el) => (el as HTMLElement).textContent?.trim() ?? '',
+      );
+
+    beforeEach(() => {
+      browse.getByPath.mockReturnValue(of(described));
+      browse.getFolderContext.mockReturnValue(of(described));
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder: described, entries: [], totalSize: 0 }),
+      );
+    });
+
+    async function openPanel(
+      tab: 'info' | 'tags' | 'activity',
+      providers: unknown[],
+    ): Promise<BrowseComponent> {
+      const component = await render(providers);
+      component.panelOpen.set(true);
+      component.panelSubTab.set(tab);
+      await settleOutlets();
+      return component;
+    }
+
+    it('renders the creator and contributor avatars through nxs.primitives.avatar', async () => {
+      await openPanel('info', [overrides]);
+
+      expect(texts('.details-panel .avatar-value .acme-avatar')).toEqual(['alice', 'bob']);
+      expect(query('.details-panel .avatar-value nxs-avatar')).toBeNull();
+    });
+
+    it('renders the tags in the shared tag editor, which does not take nxs.primitives.tag', async () => {
+      await openPanel('tags', [overrides]);
+
+      expect(texts('.details-panel nxs-tag-editor mat-chip-row')).toEqual(['urgent', 'q3']);
+      expect(texts('.details-panel .acme-tag')).toEqual([]);
+    });
+
+    it('renders the activity avatars through nxs.primitives.avatar', async () => {
+      const component = await openPanel('activity', [overrides]);
+      component.activityLoading.set(false);
+      component.activityEntries.set([
+        { id: 1, principalName: 'carol', eventId: 'documentModified' } as AuditEntry,
+      ]);
+      await settle();
+
+      const avatar = query('.details-panel .activity-item .acme-avatar');
+      expect(avatar?.textContent?.trim()).toBe('carol');
+      expect(avatar?.dataset['size']).toBe('28');
+    });
+
+    it('falls back to the nxs- elements when nothing is registered under the IDs', async () => {
+      await openPanel('info', []);
+
+      expect(texts('.details-panel .avatar-value nxs-avatar.nxs-avatar')).toEqual(['A', 'B']);
+
+      fixture.componentInstance.panelSubTab.set('tags');
+      await settleOutlets();
+      expect(texts('.details-panel nxs-tag-editor mat-chip-row')).toEqual(['urgent', 'q3']);
+    });
+
+    it('renders a trashed child type through nxs.primitives.tag', async () => {
+      browse.getTrashedChildren.mockReturnValue(
+        of({
+          entries: [doc({ uid: 'trash-1', title: 'Old', type: 'File' })],
+          totalSize: 1,
+          currentPageSize: 1,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+        }),
+      );
+
+      const component = await render([provideNoopAnimations(), overrides]);
+      component.onTabChange(3);
+      await settleOutlets();
+
+      expect(texts('.browse-table .acme-tag')).toEqual(['File']);
+      expect(query('.browse-table nxs-tag')).toBeNull();
+    });
   });
   /**
    * The card view renders each document's card by `nxs.primitives.card`, so whatever is registered

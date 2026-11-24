@@ -2,7 +2,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { NXS_PRIMITIVE_IDS } from '../primitives';
 import { provideNxsComponents } from '../provide-nxs-components';
@@ -55,6 +55,14 @@ type Story = StoryObj<NxsErrorStateComponent>;
 /** A folder listing the server failed to answer (HTTP 500). Press Retry: `retry` is emitted. */
 export const ServerErrorWithRetry: Story = {
   args: { retryable: true },
+  play: async ({ args, canvasElement }) => {
+    const retry = within(canvasElement).getByRole('button', { name: 'Retry' });
+    retry.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.retry).toHaveBeenCalledTimes(1);
+    await userEvent.keyboard(' ');
+    await expect(args.retry).toHaveBeenCalledTimes(2);
+  },
 };
 
 /**

@@ -47,9 +47,30 @@ final class ContributionRegistry {
 
     /** The contributions in force, in order, and what happened to the others. */
     synchronized Resolution resolve() {
+        return resolve(List.of(), List.of());
+    }
+
+    /**
+     * The same, with the development override directory's contributions appended after every
+     * registered one.
+     *
+     * Appended rather than served separately, which is the whole design of {@link DevOverrides}:
+     * an override is last in the order so it wins, and is otherwise an ordinary contribution —
+     * validated here, read and parsed by {@link ConfigSnapshot#load}, able to replace a named
+     * fragment in place, and reported with its provenance if it is rejected. Nothing below
+     * distinguishes one, so there is no second set of rules to keep in step with these.
+     *
+     * @param appended contributions read from outside the registry, in the order they apply
+     * @param notices what the scan that produced them has to say — a file whose name it did not
+     *            recognise, or a directory it could not read. Carried through rather than logged
+     *            at the scan, so it reaches the browser's diagnostics with everything else.
+     */
+    synchronized Resolution resolve(List<Contribution> appended, List<Diagnostic> notices) {
         Map<String, ConfigSnapshot.Loaded> inForce = new LinkedHashMap<>();
-        List<Diagnostic> diagnostics = new ArrayList<>();
-        for (Contribution contribution : contributions) {
+        List<Diagnostic> diagnostics = new ArrayList<>(notices);
+        List<Contribution> all = new ArrayList<>(contributions);
+        all.addAll(appended);
+        for (Contribution contribution : all) {
             String invalid = validate(contribution);
             if (invalid != null) {
                 diagnostics.add(Diagnostic.error("invalid-contribution", contribution.scope(),
@@ -67,7 +88,7 @@ final class ContributionRegistry {
                                     contribution.kind() == Contribution.Kind.LAYOUT ? "type and mode" : "name")));
                 } else {
                     inForce.remove(key);
-                    diagnostics.add(Diagnostic.info("removed", contribution.scope(), contribution.provenance(),
+                    diagnostics.add(displacement(previous, contribution, "removed", "removed-packaged-default",
                             String.format("%s from %s is removed by %s.", key, describe(previous.provenance()),
                                     describe(contribution.provenance()))));
                 }
@@ -85,13 +106,36 @@ final class ContributionRegistry {
             if (previous != null) {
                 // `put` on an existing key keeps its position: a replacement takes the place of the
                 // fragment it replaces rather than jumping over everything registered in between.
-                diagnostics.add(Diagnostic.info("replaced", contribution.scope(), contribution.provenance(),
+                diagnostics.add(displacement(previous, contribution, "replaced", "replaced-packaged-default",
                         String.format("%s from %s is replaced by %s.", key, describe(previous.provenance()),
                                 describe(contribution.provenance()))));
             }
             inForce.put(key, loaded);
         }
         return new Resolution(List.copyOf(inForce.values()), List.copyOf(diagnostics));
+    }
+
+    /**
+     * One contribution displacing another: a replacement, or a removal by a disabled contribution.
+     *
+     * Displacing another package's contribution is ordinary layering — that is what the ordering
+     * and the disable flag are for — so it stays {@code info}. Displacing something <em>we</em>
+     * packaged is almost never deliberate: the customer loses documented product behaviour, and
+     * before NXSAT-747 the only trace was an {@code info}, which nobody greps {@code server.log}
+     * for. That case is a {@code warning}, and carries its own code so a consumer can recognise it
+     * without matching on prose.
+     *
+     * The message is deliberately the same either way: it already names what was displaced and who
+     * displaced it, and two wordings would be two things to keep in step.
+     *
+     * @param displaced what was in force on this key until now
+     * @param by the contribution taking or clearing the key
+     */
+    private static Diagnostic displacement(Contribution displaced, Contribution by, String code,
+            String packagedCode, String message) {
+        return displaced.provenance().isPackaged()
+                ? Diagnostic.warning(packagedCode, by.scope(), by.provenance(), message)
+                : Diagnostic.info(code, by.scope(), by.provenance(), message);
     }
 
     /** Why a contribution cannot be used, or {@code null} when it can. */

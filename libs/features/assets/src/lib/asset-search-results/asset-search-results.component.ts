@@ -7,7 +7,14 @@ import {
   effect,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
+import { DescriptorLabelPipe, ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
+import {
+  NXS_ASSET_GRID_ID,
+  NxsAssetGridComponent,
+  nxsCsvText,
+  nxsDownloadCsv,
+  type NxsAssetCard,
+} from '@nuxeo/satori-platform/components';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { switchMap, map, catchError, of, tap, finalize } from 'rxjs';
@@ -301,6 +308,8 @@ function inVideoDurationBucket(durationSec: number | undefined, bucket: string):
   imports: [
     DocTypeLabelPipe,
     DescriptorLabelPipe,
+    ExtensionOutletComponent,
+    NxsAssetGridComponent,
     TranslatePipe,
     MatButtonModule,
     MatMenuModule,
@@ -401,6 +410,48 @@ export class AssetSearchResultsComponent {
   readonly gridTemplate = computed(() =>
     ['40px', ...this.visibleColumns().map((c) => `minmax(${c.width}, 1fr)`), '40px'].join(' '),
   );
+
+  /** The ID the grid is rendered under, so a customer library can replace the cards. */
+  protected readonly gridId = NXS_ASSET_GRID_ID;
+
+  /**
+   * The grid's rows, as the grid takes them. The thumbnail is this component's object URL — it
+   * created it and `clearThumbnails()` revokes it, because the selection layer holds the same
+   * strings and the grid holds none.
+   */
+  protected readonly gridCards = computed<readonly NxsAssetCard[]>(() => {
+    const thumbnails = this.thumbnailMap();
+    return this.gridAssets().map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      type: asset.type,
+      icon: asset.icon,
+      thumbnailUrl: thumbnails[asset.id] ?? null,
+    }));
+  });
+
+  /**
+   * What a grid registered under that ID is given. Handlers rather than output bindings because
+   * `lib-extension-outlet` sets inputs only and cannot bind an output.
+   */
+  protected readonly gridInputs = computed(() => ({
+    assets: this.gridCards(),
+    selectedIds: this.selectionService.selectedIds(),
+    selectable: true,
+    openHandler: this.openCard,
+    selectionToggleHandler: this.toggleAssetSelectionById,
+  }));
+
+  /** Open the document a grid card stands for. Bound by the fallback element's `assetOpen`. */
+  protected openCardFromGrid(card: NxsAssetCard): void {
+    void this.router.navigate(['/doc', card.id]);
+  }
+
+  private readonly openCard = (card: NxsAssetCard): void => this.openCardFromGrid(card);
+
+  private readonly toggleAssetSelectionById = (id: string): void => {
+    this.toggleAssetSelection(id);
+  };
 
   openAsset(asset: AssetResult): void {
     void this.router.navigate(['/doc', asset.id]);
@@ -708,31 +759,21 @@ export class AssetSearchResultsComponent {
       'Subjects',
       'Flags',
     ];
-    const escape = (value: string): string => `"${value.replaceAll('"', '""')}"`;
     const rows = this.filteredAssets().map((a) => [
       a.name,
       a.type,
       a.modifiedDate,
       a.lastContributor,
-      a.state ?? '',
-      a.version ?? '',
-      a.createdDate ?? '',
-      a.author ?? '',
-      a.nature ?? '',
-      a.coverage ?? '',
-      a.subjects ?? '',
-      a.flags ?? '',
+      a.state,
+      a.version,
+      a.createdDate,
+      a.author,
+      a.nature,
+      a.coverage,
+      a.subjects,
+      a.flags,
     ]);
-    const csv = [headers, ...rows]
-      .map((r) => r.map((cell) => escape(cell ?? '')).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'assets.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    nxsDownloadCsv('assets.csv', nxsCsvText([headers, ...rows]));
   }
 
   openSaveAsDialog(): void {

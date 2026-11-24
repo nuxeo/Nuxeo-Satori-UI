@@ -4,7 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { BehaviorSubject, of, throwError, type Observable } from 'rxjs';
+import { BehaviorSubject, Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -116,6 +116,32 @@ describe('SearchFiltersDrawerComponent', () => {
     expect(searchService.search).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the last facet counts on screen while a new search loads, then swaps in the new ones', async () => {
+    const counts = (n: number) => ({
+      dc_modified_agg: { buckets: [{ key: 'lastMonth', docCount: n }] },
+    });
+    const second = new Subject<SearchResponse>();
+    searchService.search
+      .mockReturnValueOnce(
+        of({ items: [], aggregations: counts(36), totalSize: 36, hasNextPage: false }),
+      )
+      .mockReturnValueOnce(second);
+    // The first request was already made in beforeEach; send a fresh one for the first answer.
+    component.onFiltersChange({ ...NXS_EMPTY_SEARCH_FILTERS, fulltext: 'a' });
+    await fixture.whenStable();
+    expect(component.aggregations().dc_modified_agg?.buckets[0].docCount).toBe(36);
+
+    // A second search is now loading: the counts must not blank out.
+    component.onFiltersChange({ ...NXS_EMPTY_SEARCH_FILTERS, fulltext: 'ab' });
+    await fixture.whenStable();
+    expect(component.aggregations().dc_modified_agg?.buckets[0].docCount).toBe(36);
+
+    // The answer replaces them once it arrives.
+    second.next({ items: [], aggregations: counts(7), totalSize: 7, hasNextPage: false });
+    await fixture.whenStable();
+    expect(component.aggregations().dc_modified_agg?.buckets[0].docCount).toBe(7);
+  });
+
   it('writes a change of the filters into the session and shows the results page', async () => {
     await router.navigateByUrl('/doc/abc');
     component.onFiltersChange({ ...NXS_EMPTY_SEARCH_FILTERS, fulltext: 'contract' });
@@ -135,6 +161,21 @@ describe('SearchFiltersDrawerComponent', () => {
     session.savedSearchId.set('ss-1');
     component.onReset();
     expect(session.savedSearchId()).toBe('');
+  });
+
+  it('clears the open saved search and the filters it applied, and shows the results page', async () => {
+    component.onSavedSearchChosen({ id: 'ss-1', title: 'Mine' });
+    await fixture.whenStable();
+    expect(session.savedSearchId()).toBe('ss-1');
+    expect(session.filters().fulltext).toBe('x');
+    await router.navigateByUrl('/doc/abc');
+
+    component.onSavedSearchCleared();
+    await fixture.whenStable();
+    expect(session.savedSearchId()).toBe('');
+    expect(session.savedSearchTitle()).toBe('');
+    expect(session.filters().fulltext).toBe('');
+    expect(path()).toBe('/search');
   });
 
   it('opens a chosen saved search and shows its results', async () => {

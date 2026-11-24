@@ -21,12 +21,18 @@ const preview: Preview = {
         provideSatori(),
         provideNxsComponents(),
         provideNxsSatoriComponents(),
-        provideAndConfigureSatoriTranslations({ fallbackLang: 'en' }),
+        // `en-US`, not `en`: satori-ui 1.0.0 ships regional catalogues only, so `en` found no
+        // `sat.*` strings and the stories rendered raw keys. Satori's loader asks for the exact
+        // code and falls back to the base language, so the app catalogue path ('') still
+        // resolves: `/i18n/en-US.json` 404s (expected, once per load) and `/i18n/en.json` loads.
+        // The application does not take this route; `AppTranslateLoader` maps bare codes to
+        // regional files itself, without the doomed request.
+        provideAndConfigureSatoriTranslations({ fallbackLang: 'en-US' }),
         provideSatoriTranslationPaths(['']),
         {
           provide: ENVIRONMENT_INITIALIZER,
           multi: true,
-          useValue: () => inject(TranslateService).use('en'),
+          useValue: () => inject(TranslateService).use('en-US'),
         },
         provideRouter(
           [{ path: 'browse', children: [] }],

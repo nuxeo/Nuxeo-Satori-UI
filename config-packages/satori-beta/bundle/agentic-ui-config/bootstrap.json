@@ -1,8 +1,0 @@
-{
-  "$schema": "../../schema/bootstrap.schema.json",
-  "integrations": {
-    "arender": {
-      "viewerOrigin": "https://nev-satori.beta.nuxeocloud.com"
-    }
-  }
-}

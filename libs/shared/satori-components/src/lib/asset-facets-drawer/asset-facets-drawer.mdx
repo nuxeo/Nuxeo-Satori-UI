@@ -1,0 +1,203 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as AssetFacetsDrawerStories from './asset-facets-drawer.stories';
+
+<Meta of={AssetFacetsDrawerStories} name="Overview" />
+
+# Asset facets drawer
+
+The asset facets drawer is the faceted filter panel inside the assets drawer: a full-text box, a
+collapsible group per facet with its choices and their result counts, and a footer that resets the
+filters, saves them as a search, or runs them. Use it in any drawer that narrows a listing by facets.
+
+It is the panel, not the drawer. The saved-search picker above it and the upload queue beside it
+belong to the screen, which is what lets a customer replace the facets without reimplementing either.
+
+## Key features
+
+- **It owns no query.** No aggregates, no NXQL, no navigation, no dialogs. The host passes groups
+  whose labels and counts are already resolved, and acts on what the panel reports.
+- **A count only where there is one.** `count: null` shows no number at all, so a facet the server
+  said nothing about does not claim zero.
+- **An empty group reads correctly.** A `dynamic` group with no choices says "No available results",
+  because the server answered and had no buckets. A non-dynamic group with no choices says nothing,
+  because it has not loaded yet. Same empty list, two different truths.
+- **Expansion is the panel's own.** Which group is open is view state; nothing outside depends on
+  it, so no host has to carry a `Set` it never reads. `initiallyExpandedGroupIds` seeds it.
+- **Manual search when asked.** With `autoSearch` false a Search button appears, so a user changing
+  five facets over a slow index pays for one query rather than five.
+
+## Demo showcase
+
+<Canvas of={AssetFacetsDrawerStories.AssetFilters} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsAssetFacetsDrawerComponent,
+  NXS_ASSET_FACETS_DRAWER_ID,
+} from '@nuxeo/satori-platform/components';`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-asset-facets-drawer
+  [groups]="facetGroups()"
+  [fullText]="fullText()"
+  [autoSearch]="autoSearch()"
+  [canSaveAs]="hasActiveFilters()"
+  (fullTextChange)="fullText.set($event)"
+  (fullTextSubmit)="search($event)"
+  (optionToggle)="toggle($event.groupId, $event.value)"
+  (autoSearchChange)="autoSearch.set($event)"
+  (action)="run($event)"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+Every input is optional, but **the events are not, once you bind the input they report.** The panel
+owns no query and no mode: `autoSearch` is read straight from its input, and `fullText` seeds the box
+and is then the panel's to display. So binding `[autoSearch]` without listening to
+`autoSearchChange` leaves a switch that moves, reports, and is redrawn from the unchanged input —
+announcing `aria-checked="false"` while every facet change still searches at once. Binding
+`[fullText]` without listening to `fullTextSubmit` leaves a box that types and never searches,
+because Enter and Clear report a submission nobody acts on.
+
+The panel's own words are translated under
+`satori-components.asset-facets-drawer.*`, and `providePlatformEnglishFallback()` supplies the
+English when your catalogue does not. **The facet labels are not**: they arrive already translated,
+because only the host knows whether a choice is a vocabulary entry to look up, a MIME type to show
+as-is, or a range with a name of its own.
+
+### By registered ID
+
+Its ID is `NXS_ASSET_FACETS_DRAWER_ID`, `nxs.components.assetFacetsDrawer`. The assets drawer renders
+the panel through that ID with `lib-extension-outlet` and falls back to `nxs-asset-facets-drawer`
+when nothing resolves, so registering your own component replaces the facets without reimplementing
+the saved searches above them or the upload queue beside them:
+
+export const registration = `provideSatoriExtensions({
+  components: { 'nxs.components.assetFacetsDrawer': AcmeFacetsComponent },
+});`;
+
+<Source language="typescript" dark code={registration} />
+
+Your component receives the same inputs, and the five events as callback inputs instead —
+`fullTextChangeHandler`, `fullTextSubmitHandler`, `optionToggleHandler`, `autoSearchChangeHandler`
+and `actionHandler` — because the outlet binds inputs only and can bind no output. The packaged panel
+does both on every interaction, so neither path is the special case. `fullTextSubmitHandler` is
+passed the submitted text, so a panel that buffers edits until Enter needs no preceding change call.
+
+## Where its data comes from
+
+Nothing. Build the groups from the page provider's aggregates:
+
+- `options[].value` is the bucket key you filter by, and `count` is its `docCount` — or `null` when
+  the aggregate has no such bucket and you do not want to claim zero. A **range** facet is the
+  exception worth knowing: Nuxeo reports a range bucket only when something falls in it, so there
+  an absent bucket really does mean `0`.
+- `label` is whatever the user should read, resolved by you. Pass a vocabulary label through your
+  directory lookup first; `descriptorLabel()` from `@nuxeo/satori-platform/extensions` resolves the
+  `label`/`labelKey` pair the Layer 1 descriptors use.
+- `dynamic` is `true` when the choices came from the aggregates and `false` when they are a fixed
+  list you wrote, which is the difference the empty state reads.
+
+Resolving labels in TypeScript rather than with the impure `descriptorLabel` pipe means a language
+change no longer re-renders them for free — read the active language as a signal
+(`translate.onLangChange`) in the `computed` that builds the groups, as the assets drawer does.
+
+## Examples
+
+### Expanding a group
+
+<Canvas of={AssetFacetsDrawerStories.ExpandingAGroup} />
+
+### A facet the server had nothing for
+
+<Canvas of={AssetFacetsDrawerStories.AnEmptyFacet} />
+
+### Searching manually
+
+<Canvas of={AssetFacetsDrawerStories.ManualSearch} />
+
+### Nothing filtered yet
+
+<Canvas of={AssetFacetsDrawerStories.NothingFiltered} />
+
+### Full text
+
+<Canvas of={AssetFacetsDrawerStories.FullText} />
+
+## Theming
+
+Four custom properties, each read with the default below. Set them on `nxs-asset-facets-drawer` or
+on any ancestor, including `<html>` — which is where a customer's `theme.tokens` land. They are
+declared nowhere: a property declared on `:host` is set on the element itself and would beat an
+inherited override, which would put the panel's colours outside a customer's reach.
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Default</th>
+      <th>What it colours</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>--nxs-asset-facets-drawer-text</code>
+      </td>
+      <td>
+        <code>--mat-sys-on-surface</code>
+      </td>
+      <td>The choices and the group headings</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-facets-drawer-muted</code>
+      </td>
+      <td>
+        <code>--mat-sys-on-surface-variant</code>
+      </td>
+      <td>The headings, the chevrons and the empty note</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-facets-drawer-border</code>
+      </td>
+      <td>
+        <code>--mat-sys-outline-variant</code>
+      </td>
+      <td>The full-text box</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-facets-drawer-accent</code>
+      </td>
+      <td>
+        <code>--mat-sys-primary</code>
+      </td>
+      <td>Every focus ring</td>
+    </tr>
+  </tbody>
+</table>
+
+## Accessibility
+
+- **A named region.** The panel is a `section` with a name, "Asset filters" unless you give it a
+  `label`, so a screen reader can jump to the filters rather than walking the drawer.
+- **Groups announce their state.** Each group heading is a button with `aria-expanded`, so the
+  collapsed state is announced and not merely drawn as a chevron. While the group is open the
+  button also carries `aria-controls` naming its choices; while it is closed the attribute is
+  dropped, because the element it would name is not rendered and the reference would dangle.
+- **Named checkboxes.** Each is named with its label through Material's own `[aria-label]`, so the
+  name lands on the `input` that carries the checkbox role — `[attr.aria-label]` on the
+  `mat-checkbox` host does not reach it. The count stays in the visible text rather than the name,
+  so the name does not change as results come and go.
+- **The switch is labelled.** `aria-labelledby` points the auto-search toggle at its visible label,
+  rather than repeating the words as a second string to translate.
+- **Keyboard.** Everything is an ordinary control: **Tab** reaches it, **Enter** submits the
+  full-text box, **Space** ticks a checkbox and opens a group. Every focus ring is drawn on
+  `:focus` as well as `:focus-visible`.
+- **Logical properties.** The clear button sits at the trailing edge of the box and the choices are
+  indented from the leading edge, so a right-to-left page mirrors correctly.

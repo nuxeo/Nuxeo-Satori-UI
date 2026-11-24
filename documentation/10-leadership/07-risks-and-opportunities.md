@@ -26,7 +26,7 @@ change materially.
 - RFC risk **R8**: _"Too few addressable IDs in Layer 1 would cap customisation and push work
   into Layer 2, undermining the maintenance economics."_
 - The RFC's own mitigation was to _"fix the addressable surface explicitly before Phase 2
-  begins, informed by real customer requests."_ **Phase 2 completed without that input.**
+  begins, informed by real customer requests."_ **Phase 2 was signed off without that input.**
 - Reinforcing evidence: **4 of 8 slots are reserved** (`routes`, `toolbar`, `contextMenu`,
   `tabs`) — read by nothing. The addressable surface is narrower than the slot list implies.
 
@@ -40,31 +40,42 @@ benefit claim in the product documentation is mechanical rather than observed.
 
 **Mitigation:** a design partner, framed as the Beta ask.
 
-### C3 · Accessibility — REOPENED 2026-09-23
+### C3 · Accessibility — NOT MET as of 2026-11-23
 
-**It was closed on 2026-08-24 and is open again.** Five consecutive `phase-6-a11y` captures from 2026-09-15 to 2026-09-16 fail 3 `button-name` checks (browse, browse cards, column panel). The last passing capture is `2026-08-24T14-40-16` (27/27). Undiagnosed, so
-this is unverified rather than known false.
+**It was closed on 2026-08-24, reopened on 2026-09-23, and is not met as of 2026-11-23.**
+`phase-6-a11y/2026-11-23T08-09-11`, captured on `main`, failed 15 of 35 checks. Fourteen were one
+WCAG 2.5.3 (Label in Name, Level A) defect that failed on every screen. With the navigation rail
+collapsed, the user-profile control showed only the signed-in user's avatar initials, while its
+accessible name was the full display name, which did not contain them. A speech-input user who
+said what they saw did not reach the control. The fifteenth was a 404 from the local environment,
+not an accessibility finding. The September `button-name` failures do not reproduce.
 
-**A likely place to start, from the paragraph below:** the original `button-name` was caused by a
-translation key resolving to the empty string, and the current failures are the same rule class.
-`apps/nuxeo-ui/src/app/i18n/en-fallback.ts` documents that trap and the invariant it enforces —
-every key bound to an accessible name must be present there. Worth checking whether a key reaching
-browse, the card view or the column panel now resolves to empty or to a raw key.
+**The defect was fixed the same day, and the risk stays open.** The control's accessible name now
+starts with the initials it shows. The re-run, `phase-6-a11y/2026-11-23T18-53-44`, passes all 14
+axe checks. Its one failure is the Health check, on 404s that are not accessibility findings. That clears the capture, not the risk: `docs/accessibility.md` records failures in states
+the capture does not reach.
+
+**Where it comes from:** the control's content is ours. The shell projects the avatar into the
+upstream navigation component's profile button, which takes its accessible name from a label
+that is hidden while the rail is collapsed. The initials arrived on 2026-10-26 (NXSAT-673). The
+35/35 capture of 2026-10-22 predates them, and it ran on an axe-core release that does not run
+this rule under the WCAG tags. The capture's install pinned no version, and the newer release it
+resolved runs the rule. The capture is now pinned to that newer release, so the next verdict is
+measured the same way.
 
 What was true of the August capture: **WCAG 2.1 AA was met on the fifteen cases scanned.** Seven
 rule classes and 77 nodes fixed, and `KNOWN_VIOLATIONS` empty, so that verdict was unconditional
 rather than ratcheted.
 
 The finding worth carrying forward is how the worst one arose. `button-name` (critical) fired on the
-nav toggle on **every** screen because our own catalogue set the upstream translation key to the
-empty string — deliberately, to suppress a tooltip — and upstream binds that one string to both the
+nav toggle on **every** screen because our own catalogue set the translation key to the
+empty string — deliberately, to suppress a tooltip — and the component binds that one string to both the
 tooltip and the accessible name. An empty accessible name is invisible unless you use a screen
 reader, so it outlived every other kind of review.
 
-**Residual risk, and it is real:** one violation remains and it is `@alfresco/adf-core@9.0.0`'s —
-`role="row"` with non-cell children, reported as finding 1.2 and not fixable by a host. And the scan
-covers 8 routes plus view-mode and panel states; **dialogs, the upload flow, dark mode and the
-pre-auth login surface are not covered**. "AA met" is a claim about what was scanned, and an
+**Residual risk, and it is real:** the 2026-11-23 capture makes 14 axe scans over 9 routes,
+including view-mode and panel states. The August pass counted fifteen cases over eight routes.
+**Dialogs, the upload flow, dark mode and the pre-auth login surface are not covered**. "AA met" is a claim about what was scanned, and an
 accessibility-obligated customer will ask for exactly that scope.
 
 **Mitigation:** Phase 6 step 3. Self-contained and demoable.
@@ -73,27 +84,7 @@ accessibility-obligated customer will ask for exactly that scope.
 
 ## 2. High
 
-### H1 · adf-hx supply chain — no stable release in twelve months
-
-RFC **R2**. The `latest` dist-tag is itself a **prerelease** from January 2026
-(`7.20.0-automate.292`); the last true stable is `7.19.5` (August 2025) with an Angular **15**
-baseline. We would ship an enterprise product depending on a prerelease.
-
-Pin exact versions, never a dist-tag — this is a hard stop in the phase skill.
-
-### H2 · adf-hx dependency contract is under-declared
-
-RFC **R3**, verified first-hand. `package.json` declares **one** peer (`@angular/core`) and one
-dependency (`tslib`) against **thirteen** packages actually imported. We maintain the true pin
-set ourselves.
-
-Worse, **test artifacts ship in the published bundle**: `ng-mocks` appears among bundle imports
-and `api/index.d.ts` exports `./lib/testing/hxcs-js-client.mock`. That put a test library's
-implementation and **two `eval()` calls** into a customer-facing chunk. Mitigated locally with a
-hand-written stub (`tools/stubs/ng-mocks`) and guarded by `npm run beta:bundle`, which now
-reports 0 `eval()`. The stub went in NXSAT-672 after adf-hx left the tree; the guard stays.
-
-### H3 · Review capacity is the binding constraint
+### H1 · Review capacity is the binding constraint
 
 RFC **R10**: _"Autonomous delivery outpaces review capacity, so defects accumulate faster than
 they are caught — the failure mode the POC branch already demonstrated at smaller scale."_
@@ -105,7 +96,7 @@ phase had self-reported green while containing at least one overstated claim**.
 are expensive to reverse — public API, action descriptor shape, anything touching
 authentication, credentials or blob lifecycle.
 
-### H4 · SAST and SCA — closed, and the finding is not the one we expected
+### H2 · SAST and SCA — closed, and the finding is not the one we expected
 
 **The premise was wrong.** Every document here said "No SAST". CodeQL **default setup** had been
 configured since 2026-07-24, analysing every push with 87 JavaScript/TypeScript rules — and it was
@@ -156,18 +147,11 @@ permanently red and therefore bypassed.
   architectural and lifecycle defects, not taint flow. SAST closes a class of gap; it does not
   replace the review that has actually been finding things here.
 
-### H5 · No production observability
+### H3 · No production observability
 
 No APM, structured logging, metrics export or error reporting. **We could not diagnose a
 customer incident.** The cost of a production problem is currently unbounded because diagnosis
 has no tooling.
-
-### H6 · `@alfresco/js-api` in a Nuxeo product
-
-RFC **R5**. The Alfresco REST client becomes a mandatory dependency of a Nuxeo product, along
-with the wider adf-core peer set including `pdfjs-dist` and `@mat-datetimepicker/core`. SCA,
-licensing and **product-optics** implications. Mitigated for `js-api` by making it a
-devDependency (types-only import), but the adf-core surface remains.
 
 ---
 
@@ -180,13 +164,11 @@ devDependency (types-only import), but the adf-core surface remains.
 | M3  | **Knowledge-base decay**                                  | 13 `AGENTS/` files, ~3.1k lines. Exactly **one** has an automated staleness check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | M4  | **Gates rot**                                             | Seven were found asserting less than they claimed. Gates are software                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | M5  | **RFC and reality diverge**                               | RFC plans 5+ npm packages and 3 repositories; reality is 1 package and 1 monorepo. Both simplifications, but the RFC has not been revised                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| M6  | **Component render fidelity**                             | RFC **R4** — adf-hx component inputs are typed on the HxPR SDK and upstream's neutral-type work has not started                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| M7  | **Eager adf-core**                                        | Initial bundle 1.71 → 2.86 MB. The real fix (lazy adf-core) is explicitly deferred; the ceiling note says do not raise it again without attempting that first                                                                                                                                                                                                                                                                                                                                                                                                               |
-| M8  | **Two unused production dependencies**                    | `openai` and `express` are in `package.json` and imported nowhere. Dead weight in the shipped lockfile and an SCA surface                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| M9  | **Anonymous auth behaviour**                              | With anonymous auth enabled server-side, the app signs unauthenticated visitors in as `Anonymous`. Correct behaviour, invisible from the UI, and it makes a class of auth test unobservable                                                                                                                                                                                                                                                                                                                                                                                 |
-| M10 | **E2E does not run in PR CI**                             | Needs Docker Nuxeo plus a served app. A check that only runs when someone remembers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| M11 | **Reserved slots read as capability**                     | 4 of 8. Easy to over-promise from the slot list                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| M12 | **`selection` rule context empty**                        | Permission-gated bulk actions are not manifest-gateable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| M6  | **Two unused production dependencies**                    | `openai` and `express` are in `package.json` and imported nowhere. Dead weight in the shipped lockfile and an SCA surface                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| M7  | **Anonymous auth behaviour**                              | With anonymous auth enabled server-side, the app signs unauthenticated visitors in as `Anonymous`. Correct behaviour, invisible from the UI, and it makes a class of auth test unobservable                                                                                                                                                                                                                                                                                                                                                                                 |
+| M8  | **E2E does not run in PR CI**                             | Needs Docker Nuxeo plus a served app. A check that only runs when someone remembers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| M9  | **Reserved slots read as capability**                     | 4 of 8. Easy to over-promise from the slot list                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| M10 | **`selection` rule context empty**                        | Permission-gated bulk actions are not manifest-gateable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ---
 
@@ -211,7 +193,6 @@ devDependency (types-only import), but the adf-core surface remains.
 | -------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
 | Coverage gap in `search` / `document-detail` | Regressions in the highest-traffic paths                           | Large — the two biggest files in the repo, ~60pp each |
 | 4 reserved extension slots                   | Over-promising; narrower surface than advertised                   | Medium — each needs a host that resolves it           |
-| Eager adf-core (+1.15 MB)                    | Slower first load for every user                                   | Medium — defer behind an outlet                       |
 | `selection` rule context                     | Two documented rules permanently `false`                           | Small–medium — needs a fetch per selected row         |
 | Zero-statement 100% coverage artefact        | Inflated reporting                                                 | Small — treat a zero-statement report as unmeasured   |
 | 12 unwatched `AGENTS/` files                 | Silent drift                                                       | Small per file — extend the staleness pattern         |

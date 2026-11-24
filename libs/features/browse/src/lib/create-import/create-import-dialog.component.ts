@@ -1,6 +1,11 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
+  DocumentLayoutFormComponent,
+  readValidationFailure,
+} from '@agentic-ui/shared/document-layouts';
+import {
+  NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
   NxsChipSetComponent,
   type NxsChipItem,
@@ -13,6 +18,7 @@ import {
   NxsUploadQueueComponent,
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
@@ -26,9 +32,11 @@ import {
   effect,
   inject,
   signal,
+  untracked,
+  viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -38,8 +46,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { FormsModule, NgModel } from '@angular/forms';
-import { finalize, forkJoin } from 'rxjs';
+import { FormsModule } from '@angular/forms';
+import { catchError, finalize, forkJoin, map, of } from 'rxjs';
 
 import {
   BrowseService,
@@ -52,13 +60,13 @@ import {
   docTypeLabel,
   directoryPickerLabel,
   filterDirectoryPickerEntries,
+  ContentModelService,
   isBlobHoldingDocType,
   isDomainParentType,
   isFolderishDocument,
   isRepositoryRootPath,
   isRestrictedImportParentPath,
   resolveCreatableSubtypes,
-  resolveImportBlobDocType,
   titleFromFileName,
   type ImportFileEntry,
   NOTE_FORMAT_OPTIONS,
@@ -79,6 +87,9 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
+import { utcMidnightOf } from '../calendar-day';
+import { type MainBlobContentModel, typeHoldsMainBlob } from './main-blob-type';
+import { NO_CONTENT_MODEL, importDocTypeFor } from './import-doc-type';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -196,8 +207,10 @@ const DIALOG_SIZE = {
   selector: 'lib-create-import-dialog',
   standalone: true,
   imports: [
+    DocumentLayoutFormComponent,
     NxsDateInputComponent,
     NgTemplateOutlet,
+    ExtensionOutletComponent,
     NxsBannerComponent,
     NxsChipSetComponent,
     NxsDocTypeIconComponent,
@@ -224,7 +237,6 @@ const DIALOG_SIZE = {
 export class CreateImportDialogComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   @ViewChild('mainFileInput') mainFileInput?: ElementRef<HTMLInputElement>;
-  @ViewChild('expiresInput') expiresNgModel?: NgModel;
 
   private readonly dialogRef = inject(
     MatDialogRef<CreateImportDialogComponent, CreateImportDialogResult>,
@@ -237,6 +249,47 @@ export class CreateImportDialogComponent implements OnInit {
   private readonly browse = inject(BrowseService);
   private readonly directoryService = inject(DirectoryService);
   private readonly toast = inject(NxsToastService);
+  private readonly contentModel = inject(ContentModelService);
+
+  /**
+   * Nuxeo's doctypes and facet definitions, to tell which types keep a main file
+   * (`typeHoldsMainBlob`), which reads a type's facets against the facet definitions as well as
+   * its own schemas. The content model — `/config/types`, `/config/facets` and `/config/schemas`
+   * — is read once and cached for the application's lifetime. `null` until it has answered; empty
+   * if the server refused it, when the check falls back to the stock type names.
+   */
+  private readonly answeredContentModel = toSignal(
+    this.contentModel.getContentModel().pipe(
+      map(({ doctypes, facets }): MainBlobContentModel => ({ doctypes, facets })),
+      catchError(() => of(NO_CONTENT_MODEL)),
+    ),
+    { initialValue: null },
+  );
+
+  /**
+   * The selected type is none of the stock four, and the content model that says whether it
+   * extends one, or carries the `file` schema itself or through a facet, has not answered yet —
+   * which happens only in the session's first dialog, until its three cached reads return. Create
+   * waits rather than guess, so a type that extends File is never created without its file. File,
+   * Picture, Audio and Video never wait; any other type, Folder included, can, since only the
+   * content model rules it out.
+   */
+  readonly mainFileUnsettled = computed(() => {
+    const type = this.selectedDocType()?.type;
+    return !!type && !isBlobHoldingDocType(type) && this.answeredContentModel() === null;
+  });
+
+  /**
+   * The Import tab cannot yet choose each file's starting type, for plain Create or Add
+   * properties: this folder allows none of the stock four, and the content model that names the
+   * types extending them has not answered. Where a stock type is allowed, files start as one and
+   * do not wait.
+   */
+  readonly importTypesUnsettled = computed(
+    () =>
+      this.answeredContentModel() === null &&
+      !this.creatableTypes().some((dt) => isBlobHoldingDocType(dt.type)),
+  );
 
   private folderContextRequestId = 0;
   private locationSuggestionsRequestId = 0;
@@ -257,6 +310,15 @@ export class CreateImportDialogComponent implements OnInit {
         return;
       }
       this.loadFolderContext(path);
+    });
+
+    // The properties step's Location can move its files to another folder. Once that folder's
+    // types are known, each file whose type it does not allow starts again as Add properties would
+    // start it there; a type it allows is kept. Nuxeo would create the old type regardless.
+    effect(() => {
+      const importTypes = this.importBlobTypeNames();
+      if (this.view() !== 'importProperties' || this.importTypesUnavailable()) return;
+      untracked(() => this.reresolveImportEntryTypes(importTypes));
     });
 
     effect(() => {
@@ -338,17 +400,17 @@ export class CreateImportDialogComponent implements OnInit {
 
   readonly hasContentField = computed(() => {
     const type = this.selectedDocType()?.type;
-    return type ? isBlobHoldingDocType(type) : false;
+    return type ? this.holdsMainBlob(type) : false;
   });
 
   readonly createMissingMainFile = computed(() => {
     const type = this.selectedDocType()?.type;
-    return type ? isBlobHoldingDocType(type) && !this.mainFile() : false;
+    return type ? this.holdsMainBlob(type) && !this.mainFile() : false;
   });
 
   readonly mainFileUploadPending = computed(() => {
     const type = this.selectedDocType()?.type;
-    if (!type || !isBlobHoldingDocType(type)) return false;
+    if (!type || !this.holdsMainBlob(type)) return false;
     const file = this.mainFile();
     if (!file) return false;
     return this.mainFileUploading() || !this.mainFileUploadComplete();
@@ -356,17 +418,113 @@ export class CreateImportDialogComponent implements OnInit {
 
   readonly isNoteType = computed(() => this.selectedDocType()?.type === 'Note');
 
+  /** The selected type's create form: its create layout, or a `documentCreate` component. */
+  private readonly layoutForm = viewChild(DocumentLayoutFormComponent);
+
+  /** Create waits for the form to be on screen; until then there is nothing to send. */
+  readonly createFormReady = computed(() => this.layoutForm()?.ready() ?? false);
+
   readonly importBlobTypeOptions = computed(() =>
-    this.creatableTypes().filter((dt) => isBlobHoldingDocType(dt.type)),
+    this.creatableTypes().filter((dt) => this.holdsMainBlob(dt.type)),
   );
 
   readonly importBlobTypeNames = computed(() => this.importBlobTypeOptions().map((dt) => dt.type));
 
-  /** Dublin Core metadata fields for blob-holding import types (File, Picture, Audio, Video). */
+  /**
+   * The Import tab has no type to start the files as: this folder allows none that keeps a main
+   * file — a Section, or one that takes only Workspace and Folder. Each file would otherwise start
+   * as `File`, `resolveImportBlobDocType`'s fallback, which the folder does not allow. Nuxeo does
+   * not refuse it either: measured on the local server, a `File` posted into a Section or into
+   * WorkspaceRoot is created. So `importTypesUnavailable` disables plain Create, Add properties,
+   * and the properties step's Create once its Location moves the files to such a folder.
+   */
+  readonly noImportBlobTypes = computed(() => this.importBlobTypeNames().length === 0);
+
+  /**
+   * Plain Create, Add properties and the properties step's Create all wait while the staged files
+   * cannot be given a type the folder allows: its allowed types are loading (after a location
+   * change, the previous folder's are still held), the content model has not answered
+   * (`importTypesUnsettled`), or it allows none that keeps a main file (`noImportBlobTypes`).
+   */
+  readonly importTypesUnavailable = computed(
+    () => this.loadingContext() || this.importTypesUnsettled() || this.noImportBlobTypes(),
+  );
+
+  /**
+   * A checked file on the properties step is of a type this folder does not allow. Each file's type
+   * was chosen for the folder the step opened on; when the step's Location moves them,
+   * `reresolveImportEntryTypes` starts each one the new folder does not allow again, once its types
+   * load. Until it has, Create waits, and `runImportWithProperties` refuses. The file on screen is
+   * judged on the type its form shows, which it saves on leaving.
+   */
+  readonly importEntryTypeDisallowed = computed(() => {
+    const importTypes = this.importBlobTypeNames();
+    const current = this.importFileIndex();
+    const shown = this.importDocType();
+    return this.importEntries().some(
+      (entry, index) =>
+        entry.checked &&
+        !importTypes.includes(index === current ? shown || entry.docType : entry.docType),
+    );
+  });
+
+  /**
+   * The properties step's Create waits as plain Create does — a restricted location, or no type
+   * yet that the folder allows — and while a checked file's type is not allowed here.
+   */
+  readonly importPropertiesTypesBlocked = computed(
+    () =>
+      this.importRestricted() || this.importTypesUnavailable() || this.importEntryTypeDisallowed(),
+  );
+
+  /**
+   * The Import tab says why Create is disabled: this folder allows no type that keeps a main file.
+   * Not while its types or the content model are still loading, and not when the folder's types
+   * could not be read, which `typesLoadError` says instead.
+   */
+  readonly importAllowsNoFiles = computed(
+    () =>
+      this.noImportBlobTypes() &&
+      !this.loadingContext() &&
+      !this.importTypesUnsettled() &&
+      !this.typesLoadError() &&
+      !this.contentModelRefused(),
+  );
+
+  /**
+   * The server refused the content model, so only the four stock names count, and a folder that
+   * allows only a type extending one looks as if it allowed none. The dialog cannot tell which,
+   * so the Import tab says the types could not be read rather than that the folder takes no file.
+   * Reopening the dialog reads the content model again: `ContentModelService` does not keep a
+   * refusal.
+   */
+  readonly importTypesUnreadable = computed(
+    () =>
+      this.noImportBlobTypes() &&
+      !this.loadingContext() &&
+      !this.typesLoadError() &&
+      this.contentModelRefused(),
+  );
+
+  /** The content model's read failed: `answeredContentModel` fell back to `NO_CONTENT_MODEL`. */
+  private readonly contentModelRefused = computed(
+    () => this.answeredContentModel() === NO_CONTENT_MODEL,
+  );
+
+  /**
+   * Dublin Core metadata fields for blob-holding import types: File, Picture, Audio, Video and
+   * any type that extends one of them, or carries the `file` schema, itself or through a facet,
+   * and is not folderish.
+   */
   readonly showImportBlobMetadataFields = computed(() => {
     const type = this.importDocType();
-    return !!type && isBlobHoldingDocType(type);
+    return !!type && this.holdsMainBlob(type);
   });
+
+  /** Whether `type` keeps a main file, by its ancestry and facets in Nuxeo's content model. */
+  private holdsMainBlob(type: string): boolean {
+    return typeHoldsMainBlob(type, this.answeredContentModel() ?? NO_CONTENT_MODEL);
+  }
 
   readonly canEditImportPrevious = computed(() => this.importFileIndex() > 0);
 
@@ -537,6 +695,13 @@ export class CreateImportDialogComponent implements OnInit {
     const raw = this.locationInput.trim();
     if (!raw) return;
     const normalized = this.normalizePath(raw);
+    // The same location again, after its types could not be read: read them again. Setting the
+    // path to the value it already holds changes nothing, so the effect that reads them would not
+    // run, and the Import tab's Create, which waits for them, would stay disabled until the dialog
+    // was reopened.
+    if (normalized === this.parentPath() && this.typesLoadError()) {
+      this.loadFolderContext(normalized);
+    }
     this.parentPath.set(normalized);
     this.locationInput = normalized;
     this.locationDropdownOpen.set(false);
@@ -760,12 +925,6 @@ export class CreateImportDialogComponent implements OnInit {
     );
     // The datepicker already holds null or this instant; another value makes [ngModel] rewrite the text.
     if (parsed?.getTime() !== this.expires?.getTime()) this.expires = parsed;
-    const ctrl = this.expiresNgModel?.control;
-    if (ctrl) {
-      ctrl.markAsDirty();
-      ctrl.markAsTouched();
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    }
   }
 
   onExpiresChange(value: Date | null): void {
@@ -864,6 +1023,15 @@ export class CreateImportDialogComponent implements OnInit {
   clearCoverage(): void {
     this.coverage = null;
   }
+
+  /** The banner and chip set are rendered by ID, so a component registered under one replaces the built-in. */
+  readonly bannerId = NXS_PRIMITIVE_IDS.banner;
+  readonly chipSetId = NXS_PRIMITIVE_IDS.chipSet;
+
+  /** A chip set rendered by ID binds no outputs, so each removal reaches the page as a handler. */
+  readonly removeNatureChip = (): void => this.clearNature();
+  readonly removeCoverageChip = (): void => this.clearCoverage();
+  readonly removeSubjectChip = (item: NxsChipItem): void => this.removeSubject(item.id);
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
@@ -984,8 +1152,18 @@ export class CreateImportDialogComponent implements OnInit {
     this.contentError.set(null);
   }
 
+  /**
+   * Opens the properties step, each file starting as plain Create would start it
+   * (`importDocTypeFor`). A location typed and not yet committed is committed first, as plain
+   * Create does: the blur commits it only after a delay, so a quick click would otherwise start
+   * the files as types the previous folder allows. When that commit changes the folder, whose
+   * types have not been read yet, this stops; Add properties is offered again once they load.
+   */
   startImportProperties(): void {
-    if (this.importRestricted()) return;
+    const folderBeforeCommit = this.parentPath();
+    this.commitLocationInput();
+    if (this.importRestricted() || this.importTypesUnavailable()) return;
+    if (this.parentPath() !== folderBeforeCommit) return;
     const files = this.uploads.pending();
     if (files.length === 0) return;
 
@@ -993,7 +1171,7 @@ export class CreateImportDialogComponent implements OnInit {
     const entries: StagedImportFile[] = files.map((file) => ({
       file,
       checked: true,
-      docType: resolveImportBlobDocType(file, allowedTypes),
+      docType: importDocTypeFor(file, allowedTypes),
       visited: false,
       state: defaultImportPropertiesState(file),
     }));
@@ -1058,9 +1236,40 @@ export class CreateImportDialogComponent implements OnInit {
     this.loadImportEntryToForm(lastIndex);
   }
 
+  /**
+   * Starts each staged file whose type `importTypes`, this folder's, does not include again, as
+   * Add properties would start it here (`importDocTypeFor`). A type the folder allows is kept, the
+   * one the form shows included; a form showing no type is left for the user to choose.
+   */
+  private reresolveImportEntryTypes(importTypes: readonly string[]): void {
+    const entries = this.importEntries();
+    if (entries.some((entry) => !importTypes.includes(entry.docType))) {
+      this.importEntries.set(
+        entries.map((entry) =>
+          importTypes.includes(entry.docType)
+            ? entry
+            : { ...entry, docType: importDocTypeFor(entry.file, importTypes) },
+        ),
+      );
+    }
+    const shown = this.importDocType();
+    const current = this.importEntries()[this.importFileIndex()];
+    if (shown && !importTypes.includes(shown) && current) {
+      this.importDocType.set(importDocTypeFor(current.file, importTypes));
+    }
+  }
+
+  /**
+   * Creates the checked files with their properties. As plain Create does, it commits a location
+   * typed on this step and stops when that changes the folder, whose types have not been read
+   * yet; and it refuses while `importPropertiesTypesBlocked` holds, the button aside, so no file
+   * is created as a type the folder does not allow.
+   */
   runImportWithProperties(): void {
+    const folderBeforeCommit = this.parentPath();
     this.commitLocationInput();
-    if (this.importRestricted()) return;
+    if (this.importPropertiesTypesBlocked()) return;
+    if (this.parentPath() !== folderBeforeCommit) return;
     if (!this.canCreateImportWithProperties()) return;
 
     const path = this.parentPath();
@@ -1177,47 +1386,53 @@ export class CreateImportDialogComponent implements OnInit {
       'dc:nature': state.nature || null,
       'dc:subjects': [...state.subjects],
       'dc:coverage': state.coverage || null,
-      'dc:expired':
-        state.expires && !Number.isNaN(state.expires.getTime())
-          ? state.expires.toISOString()
-          : null,
+      // The picked day at UTC midnight, as the edit dialogs write it (NXSAT-727).
+      'dc:expired': utcMidnightOf(state.expires),
     };
   }
 
-  private buildDocumentProperties(title: string): Record<string, unknown> {
-    const docType = this.selectedDocType();
-    const props: Record<string, unknown> = {
-      'dc:title': title,
-      'dc:description': this.description.trim() || null,
-      'dc:nature': this.nature || null,
-      'dc:subjects': this.subjects,
-      'dc:coverage': this.coverage || null,
-      'dc:expired':
-        this.expires && !Number.isNaN(this.expires.getTime()) ? this.expires.toISOString() : null,
-    };
-
-    if (docType?.type === 'Note') {
-      props['note:note'] = defaultNoteContent(this.noteFormat);
-      props['note:mime_type'] = this.noteFormat;
+  /**
+   * The create form's values. A Note gets an empty body in the chosen format unless the form
+   * filled one in — a create layout or a `documentCreate` component may offer `note:note`.
+   */
+  private buildDocumentProperties(
+    docType: string,
+    formProperties: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const props: Record<string, unknown> = { ...formProperties };
+    if (docType === 'Note') {
+      const body = props['note:note'];
+      if (typeof body !== 'string' || body.trim() === '') {
+        props['note:note'] = defaultNoteContent(this.noteFormat);
+        props['note:mime_type'] = this.noteFormat;
+      } else {
+        props['note:mime_type'] ??= this.noteFormat;
+      }
     }
-
     return props;
   }
 
+  /**
+   * Creates the document from the type's create form. The form checks its fields first and
+   * shows each error on its field; Nuxeo's constraint messages go back to the fields they name.
+   */
   createDocument(): void {
     this.commitLocationInput();
     if (this.locationRestricted()) return;
     const path = this.parentPath();
     const docType = this.selectedDocType();
-    if (!path || !docType || !this.docTitle.trim()) return;
+    const form = this.layoutForm();
+    if (!path || !docType || !form?.ready() || this.mainFileUnsettled()) return;
 
-    if (!this.isExpiresValid()) return;
+    this.error.set(null);
+    if (!form.validate()) return;
 
-    const title = this.docTitle.trim();
+    const properties = this.buildDocumentProperties(docType.type, form.changedProperties());
+    const rawTitle = properties['dc:title'];
+    const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
     const name = sanitizeDocumentName(title);
-    const properties = this.buildDocumentProperties(title);
     const mainFile = this.mainFile();
-    const hasBlob = isBlobHoldingDocType(docType.type);
+    const hasBlob = this.holdsMainBlob(docType.type);
 
     if (hasBlob && !mainFile) {
       this.contentError.set(
@@ -1265,8 +1480,18 @@ export class CreateImportDialogComponent implements OnInit {
         }),
       )
       .subscribe({
-        next: (doc) => this.finishCreateAndNavigate(doc, title, docType.type, !!mainFile),
+        next: (doc) =>
+          this.finishCreateAndNavigate(doc, title || doc.title, docType.type, !!mainFile),
         error: (err: { error?: { message?: string }; message?: string }) => {
+          const refused = readValidationFailure(
+            err,
+            this.translate.instant('browse.create-import-dialog.not-accepted'),
+          );
+          if (refused) {
+            const unplaced = form.showServerErrors(refused);
+            if (unplaced.length) this.error.set(unplaced.join(' '));
+            return;
+          }
           const raw = err?.error?.message ?? err?.message;
           const message =
             raw === BLOB_NOT_ATTACHED_ERROR
@@ -1449,20 +1674,36 @@ export class CreateImportDialogComponent implements OnInit {
   /**
    * Uploads the pending files in one batch, each file followed in the queue. A failure keeps the
    * files already created, says which one was refused, and leaves it and the rest for another try.
+   *
+   * Each file starts as Add properties would start it (`importDocTypeFor`): the stock type its
+   * MIME type suggests if the folder allows it, else the first allowed type that keeps a main
+   * file. `DocumentImportService.importFiles` would send `File` whatever the folder allows, and
+   * Nuxeo creates it anyway, so this resolves the type here and calls `importFilesWithProperties`.
    */
   runUpload(): void {
+    const folderBeforeCommit = this.parentPath();
     this.commitLocationInput();
-    if (this.importRestricted()) return;
+    if (this.importRestricted() || this.importTypesUnavailable()) return;
+    // A location typed and not yet committed — the blur commits it only after a delay. Its
+    // folder's types have not been read, so the files would start as types the previous folder
+    // allows. Stop here; Create is offered again once the new folder's types load.
+    if (this.parentPath() !== folderBeforeCommit) return;
     const path = this.parentPath();
     const files = this.uploads.pending();
     if (!path || files.length === 0) return;
+    const allowedTypes = this.importBlobTypeNames();
+    const entries: ImportFileEntry[] = files.map((file) => ({
+      file,
+      docType: importDocTypeFor(file, allowedTypes),
+      properties: { 'dc:title': titleFromFileName(file.name) },
+    }));
     this.busy.set(true);
     this.error.set(null);
     this.importError.set(null);
     this.uploadProgress.set(null);
     this.uploads.start();
     this.importService
-      .importFiles(path, files, {
+      .importFilesWithProperties(path, entries, {
         onProgress: (progress) => {
           this.uploadProgress.set(progress);
           this.uploads.progress(progress);

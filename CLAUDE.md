@@ -2,8 +2,7 @@
 
 Angular 22 + Nx monorepo. A Nuxeo content management UI being converted into a
 customer-shippable Beta ("Nuxeo Satori") on our own `nxs-` components
-(`libs/shared/satori-components`), with a four-layer customisation contract. It began on
-`adf-hx`; NXSAT-308 removed adf-hx and ADF.
+(`libs/shared/satori-components`), with a four-layer customisation contract.
 
 ---
 
@@ -14,8 +13,8 @@ customer-shippable Beta ("Nuxeo Satori") on our own `nxs-` components
    established first-hand, do not re-litigate. If you believe one is wrong, **prove it
    before acting on it** — two phases contradicted a verified fact without proof and both
    cost real time.
-3. **`docs/adf-hx-beta-plan.md`** — the plan of record: phases, timelines, risks,
-   decisions already taken. Supersedes `docs/adf-hx-poc-action-plan.md`.
+3. **`docs/beta-plan.md`** — the plan of record: phases, timelines, risks,
+   decisions already taken.
 4. The `AGENTS/` file for your task — `01-services.md`, `02-nuxeo-apis.md`,
    `05-test-standards.md`, `07-security.md`, `08-bug-patterns.md`.
 
@@ -29,7 +28,7 @@ For Beta work also read `docs/extension-reference.md` (the registered-ID contrac
 npm run beta:state        # per-phase status, checked against the evidence on disk
 ```
 
-and the **Programme status** section of `docs/adf-hx-beta-plan.md`, which is dated.
+and the **Programme status** section of `docs/beta-plan.md`, which is dated.
 
 That instruction is here because the paragraph it replaces said "Phases 0, 1 and 2 are
 complete, Phase 3 is next" for weeks after Phases 3, 4 and 5 had shipped, and pointed at
@@ -55,10 +54,18 @@ copies with nothing comparing them is how a wrong half survives unread.
 | `capture-phase-evidence/SKILL.md` | Producing evidence that proves something           |
 | `add-extension-point/SKILL.md`    | Making something manifest-addressable              |
 | `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket    |
+| `satori-developer/SKILL.md`       | Which Satori component fits, its import and API    |
 
-`implement-api-port` and `adopt-adf-hx-component` are kept as a record only: the adf-hx API
-ports and components they describe were removed with adf-hx (NXSAT-635, NXSAT-637). A new
-`nxs-` component starts from the `satori-component` generator — `AGENTS/00-architecture.md`,
+`satori-developer` is vendored unchanged from
+[`HylandSoftware/satori-skills`](https://github.com/HylandSoftware/satori-skills) (commit `ceaa31cb`).
+It is a reference for Satori's own components, not for our layering: imports of
+`@hylandsoftware/satori-ui` stay inside the two satori-components libraries
+(`checkAdoptedPatternsNotBypassed`), and a feature uses the `nxs-` wrapper. Its sibling
+`satori-setup` is deliberately **not** installed — it rewrites `.npmrc` to the Cloudsmith registry,
+and this repo installs from GitHub Packages (see the lockfile rules above). To refresh, re-copy the
+folder from upstream, then `npm run mirror:agents`.
+
+A new `nxs-` component starts from the `satori-component` generator — `AGENTS/00-architecture.md`,
 "Adding a component".
 
 ## The gate
@@ -123,8 +130,8 @@ Two traps that have each cost a phase:
   `error` with Nx's permissive default and could not reject a single edge, and four
   violations had accumulated
 - Credentials from environment only; never hardcoded, never in a URL query string
-- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its
-  bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes
+- **Third-party component types must never appear in our public API** — public APIs expose
+  `nxs-` components and platform types only
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 - **Hiding an action in a manifest is not a security control** — server-side Nuxeo
   permissions still gate operations
@@ -139,7 +146,7 @@ Two traps that have each cost a phase:
   scenes file that needs no backend opts out with `skipHttpCredentials = true`. What refuses,
   and with which exit code, is in `scripts/beta-harness/README.md`.
 - `SATORI_GH_READONLY_TOKEN` is required to install the `@hylandsoftware` packages from
-  GitHub Packages. No `@alfresco` package is installed since NXSAT-637.
+  GitHub Packages.
 - Node is pinned to 24 (`.nvmrc`); Angular 22 refuses Node 20. On Node 25+ a built-in `localStorage`
   shadows jsdom's; `npm run beta:gate` works around it, a bare `nx test` does not.
 - Playwright is installed with `--no-save` on purpose, so CI installs stay unaffected.

@@ -12,8 +12,10 @@ import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Observable, Subject, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
-import { LayoutSection, ResolvedLayout } from '../layout.model';
-import { DocumentLayoutComponent } from './document-layout';
+import { readLayoutFile } from '../layout-file';
+import { DocumentTypeDefinition, LayoutSection, ResolvedLayout } from '../layout.model';
+import { applyLayoutFile, readDocumentType } from '../resolve-layout';
+import { DOCUMENT_LAYOUT_TIME_ZONE, DocumentLayoutComponent } from './document-layout';
 
 const claimDocument = (overrides: Record<string, unknown> = {}): NuxeoDocument =>
   ({
@@ -128,6 +130,9 @@ describe('DocumentLayoutComponent', () => {
       providers: [
         { provide: DocumentLayoutService, useValue: { layoutFor, vocabularyLabel } },
         { provide: AppExtensionsService, useValue: { resolve } },
+        // A named offset rather than the host's zone, for every case that renders a date: a
+        // midday instant is the next day at +13, Auckland in summer (pattern 29).
+        { provide: DOCUMENT_LAYOUT_TIME_ZONE, useValue: '+0530' },
       ],
     });
   });
@@ -167,6 +172,25 @@ describe('DocumentLayoutComponent', () => {
       ),
     ).toEqual(['R51.9', 'G44.209']);
     expect(vocabularyLabel.mock.calls).toEqual([['claim_status', 'pending']]);
+  });
+
+  describe('the zone a date is shown in', () => {
+    it('is the reader’s own unless a test chooses one', () => {
+      // Without this suite's provider, as the panel runs.
+      TestBed.resetTestingModule();
+      expect(TestBed.inject(DOCUMENT_LAYOUT_TIME_ZONE)).toBeUndefined();
+    });
+
+    it.each<[string, string, string]>([
+      // The zone, the value, and the day shown. Each value's other reading is the other day.
+      ['+0530', '2026-11-23T20:00:00.000Z', 'November 24, 2026'],
+      ['-0500', '2026-11-24T03:00:00.000Z', 'November 23, 2026'],
+      ['-0500', '2026-11-24T00:00:00.000Z', 'November 24, 2026'],
+    ])('at %s shows %s on %s', async (zone, serviceDate, expected) => {
+      TestBed.overrideProvider(DOCUMENT_LAYOUT_TIME_ZONE, { useValue: zone });
+      await render(claimDocument({ 'claim:serviceDate': serviceDate }));
+      expect(value('claim:serviceDate')).toBe(expected);
+    });
   });
 
   it('translates a boolean false as No and an unset value as a dash', async () => {
@@ -385,6 +409,91 @@ describe('DocumentLayoutComponent', () => {
         host().querySelector('[data-layout-entry="acme.documentMetadata.claim"]'),
       ).not.toBeNull();
       expect(host().querySelector('[data-section-id="claim"]')).not.toBeNull();
+    });
+  });
+
+  /**
+   * Rendered from the real resolver rather than a hand-built layout, so these assert what a
+   * contributed file puts on screen — the surface NXSAT-728 was reported against.
+   */
+  describe('a contributed section with nothing to show', () => {
+    const claimType = (): DocumentTypeDefinition => {
+      const type = readDocumentType(
+        {
+          schemas: [
+            { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+            { name: 'claim', '@prefix': 'claim', fields: { number: 'string' } },
+          ],
+        },
+        'Claim',
+      );
+      if (!type) throw new Error('fixture did not read');
+      return type;
+    };
+
+    const fromFile = (content: Record<string, unknown>): ResolvedLayout => {
+      const read = readLayoutFile(content);
+      if ('invalid' in read) throw new Error(read.invalid);
+      return applyLayoutFile(claimType(), 'metadata', read).layout;
+    };
+
+    const headings = () =>
+      [...host().querySelectorAll('.document-layout__heading')].map((heading) =>
+        heading.textContent?.trim(),
+      );
+
+    it('renders only the section that resolved a field, heading and rows included', async () => {
+      await render(
+        claimDocument(),
+        fromFile({
+          version: 1,
+          sections: [
+            { id: 'details', label: 'Details', fields: ['claim:number'] },
+            { id: 'extra', label: 'Extra info', fields: ['qa:missing', 'qa:gone'] },
+            { id: 'nothing', label: 'Nothing here', fields: [] },
+          ],
+        }),
+      );
+      expect(headings()).toEqual(['Details']);
+      // The control: the section that does resolve a field still renders its row, so the fix
+      // cannot pass by rendering nothing at all.
+      expect(host().querySelector('[data-section-id="details"]')).not.toBeNull();
+      expect(value('claim:number')).toBe('CLM-1');
+      expect(host().querySelector('[data-section-id="extra"]')).toBeNull();
+      expect(host().querySelector('[data-section-id="nothing"]')).toBeNull();
+    });
+
+    it('renders no layout at all when no section resolved a field', async () => {
+      await render(
+        claimDocument(),
+        fromFile({
+          version: 1,
+          sections: [
+            { id: 'only', label: 'Nothing at all', fields: ['qa:missing'] },
+            { id: 'empty', label: 'Nothing here either', fields: [] },
+          ],
+        }),
+      );
+      expect(host().querySelector('.document-layout')).toBeNull();
+      expect(headings()).toEqual([]);
+    });
+
+    it('offers no tab for a section with nothing under it', async () => {
+      await render(
+        claimDocument(),
+        fromFile({
+          version: 1,
+          display: 'tabs',
+          sections: [
+            { id: 'details', label: 'Details', fields: ['claim:number'] },
+            { id: 'extra', label: 'Extra info', fields: ['qa:missing'] },
+          ],
+        }),
+      );
+      expect(
+        [...host().querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()),
+      ).toEqual(['Details']);
+      expect(value('claim:number')).toBe('CLM-1');
     });
   });
 });

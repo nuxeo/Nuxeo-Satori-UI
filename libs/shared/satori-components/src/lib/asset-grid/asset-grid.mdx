@@ -1,0 +1,249 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as AssetGridStories from './asset-grid.stories';
+
+<Meta of={AssetGridStories} name="Overview" />
+
+# Asset grid
+
+The asset grid is the card view of a set of documents: a thumbnail, the document's name, and its
+type as a pill, with a checkbox that appears on hover, on focus and while the card is selected. Use
+it wherever a listing should be shown as cards rather than rows — the asset search screen's grid
+view is one, and `nxs-document-list` is the table equivalent.
+
+## Key features
+
+- **It owns nothing.** No search, no selection, no navigation, no fetching. The host passes the
+  cards and the selection and acts on the two events, so the same grid serves any query.
+- **Thumbnail or icon.** A card with a `thumbnailUrl` shows it; a card with `null` shows its
+  document-type icon and keeps exactly the same shape, so a page does not reflow as thumbnails land.
+- **The whole card opens the document** — without the card being a control. A card holding a
+  checkbox and a button cannot itself be a button (`nested-interactive`, WCAG 4.1.2), so the name is
+  the control and an `::after` overlay stretches its hit area over the card. The card's content
+  sits below that overlay in paint order, so it intercepts nothing; the type pill also carries
+  `pointer-events: none`, because it is the one part that had been lifted above the overlay and
+  that rule keeps it click-through even if it is lifted again. The checkbox is the one thing
+  deliberately above the overlay, at `z-index: 2`, because it is its own control.
+  `TheWholeCardOpens` holds this with `elementFromPoint` rather than a synthetic click, which would
+  report a hit on a point no pointer could reach.
+- **One tooltip, on the card.** Both the title and the type are clipped with an ellipsis, so the
+  name button's `title` carries both in full and the overlay serves it from anywhere on the card.
+  The pill has no tooltip of its own — it could not have one and stay click-through.
+- **Nothing for no cards.** With an empty `assets` it renders nothing, leaving the empty state to
+  the screen, which is the only place that knows whether the list is empty because of a filter,
+  because of an error, or because nothing is there.
+
+## Demo showcase
+
+<Canvas of={AssetGridStories.SearchResults} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsAssetGridComponent, NXS_ASSET_GRID_ID } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-asset-grid
+  [assets]="cards()"
+  [selectedIds]="selection.selectedIds()"
+  (assetOpen)="open($event)"
+  (selectionToggle)="toggle($event)"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+Every input is optional. `selectedIds` takes either a `Set` — `SelectionService.selectedIds()`
+passes straight in — or a list. The grid's own words, its name and each checkbox's name, are
+translated under `satori-components.asset-grid.*`, and `providePlatformEnglishFallback()` supplies
+the English when your catalogue does not.
+
+### By registered ID
+
+Its ID is `NXS_ASSET_GRID_ID`, `nxs.components.assetGrid`. The asset search screen renders the grid
+through that ID with `lib-extension-outlet` and falls back to `nxs-asset-grid` when nothing resolves,
+so registering your own component replaces the cards without reimplementing the query, the selection
+or the saved searches around them:
+
+export const registration = `provideSatoriExtensions({
+  components: { 'nxs.components.assetGrid': AcmeAssetGridComponent },
+});`;
+
+<Source language="typescript" dark code={registration} />
+
+Your component receives the same inputs, and the two events as `openHandler` and
+`selectionToggleHandler` callback inputs instead, because the outlet binds inputs only and can bind
+no output. `selectedIds` still arrives from the screen's `SelectionService`, so report a toggle and
+the new set comes back — a grid that keeps its own selection will disagree with the selection bar.
+
+## Where its data comes from
+
+Nothing. Build an `NxsAssetCard` per document from a search result: `id` from `uid`, `name` from
+`dc:title`, `type` from `ecm:primaryType`, and `icon` from `docTypeIcon()`.
+
+`thumbnailUrl` is an **object URL the host owns**. Fetch the thumbnail rendition through the
+authenticated client and pass `createObjectURL()`'s result; the grid never makes or revokes one, so
+revoke yours when the results change and on destroy. A Nuxeo URL does not work: the browser loads
+an image with no credentials, so the request is unauthenticated and nothing appears.
+
+There is no way to hand the grid a thumbnail component instead. It projects no content and takes no
+template, so a card with `null` draws its `icon` and nothing else — that is the icon fallback, not a
+slot. A host that would rather not own URLs at all registers its own component under the ID above
+and places `nxs-thumbnail` there, which fetches and revokes its own.
+
+## Examples
+
+### With a selection
+
+<Canvas of={AssetGridStories.WithASelection} />
+
+### A read-only listing
+
+<Canvas of={AssetGridStories.NotSelectable} />
+
+### Before the thumbnails arrive
+
+<Canvas of={AssetGridStories.ThumbnailsMissing} />
+
+### No results
+
+<Canvas of={AssetGridStories.NoAssets} />
+
+## Theming and layout
+
+The colours are custom properties the grid reads with a default. Set them on `nxs-asset-grid` or on
+any ancestor, including `<html>` — which is where a customer's `theme.tokens` land:
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Default</th>
+      <th>What it colours</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-card-surface</code>
+      </td>
+      <td>
+        <code>--mat-sys-surface</code>
+      </td>
+      <td>The card</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-card-border</code>
+      </td>
+      <td>
+        <code>--mat-sys-outline-variant</code>
+      </td>
+      <td>Its border</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-thumbnail-surface</code>
+      </td>
+      <td>
+        <code>--mat-sys-surface-container</code>
+      </td>
+      <td>Behind the thumbnail</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-icon</code>
+      </td>
+      <td>
+        <code>--mat-sys-on-surface-variant</code>
+      </td>
+      <td>The document-type icon</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-accent</code>
+      </td>
+      <td>
+        <code>--mat-sys-primary</code>
+      </td>
+      <td>The selected border and the focus ring</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-selected-surface</code>
+      </td>
+      <td>
+        <code>--mat-sys-primary-container</code>
+      </td>
+      <td>A selected card</td>
+    </tr>
+  </tbody>
+</table>
+
+The three **layout** knobs work the other way round — set them on any ancestor, which is what lets a
+screen change the grid at a breakpoint:
+
+<table>
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Default</th>
+      <th>What it sets</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-columns</code>
+      </td>
+      <td>
+        <code>repeat(auto-fill, minmax(…, 1fr))</code>
+      </td>
+      <td>The whole track list</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-min-column</code>
+      </td>
+      <td>
+        <code>180px</code>
+      </td>
+      <td>The narrowest a card gets before the grid drops a column</td>
+    </tr>
+    <tr>
+      <td>
+        <code>--nxs-asset-grid-gap</code>
+      </td>
+      <td>
+        <code>16px</code>
+      </td>
+      <td>The space between cards</td>
+    </tr>
+  </tbody>
+</table>
+
+Both tables work the same way, and the reason is worth knowing because it is easy to get wrong: a
+custom property **declared on `:host`** is set on the grid element itself, so it beats the same
+property inherited from an ancestor. Every knob here is therefore written as a `var()` fallback at
+the point it is used and declared nowhere, which leaves both overrides working — the media query a
+screen puts on the box around the grid, and the `theme.tokens` a customer ships, which
+`AppThemeService.applyTheme()` writes inline on `<html>` and which the grid inherits.
+
+## Accessibility
+
+- **A named list.** The grid is a `<ul>` of `<li>`s, named "Assets" unless you give it a `label`, so
+  a screen reader announces how many results there are instead of reading a run of unrelated
+  controls. Native elements rather than `role="list"`, and no `list-style: none`, which is what
+  makes VoiceOver drop the list role.
+- **Named checkboxes.** Each is named "Select &lt;document&gt;", bound through Material's own
+  `[aria-label]` so the name lands on the `input` that carries the checkbox role — `[attr.aria-label]`
+  on the `mat-checkbox` host does not reach it.
+- **Decorative thumbnails.** `alt=""`, because the name button beside the image already says which
+  document it is.
+- **The checkbox is reachable.** It is hidden until hover **or focus**: `:focus-within` is as
+  load-bearing as `:hover`, since without it a keyboard user lands on a `visibility: hidden` control.
+- **Keyboard.** Checkbox and name are ordinary controls: **Tab** reaches them, **Space** ticks the
+  checkbox, **Enter** or **Space** presses the name. The focus ring is drawn on `:focus` as well as
+  `:focus-visible`.
+- **Reduced motion.** The hover transitions are dropped under `prefers-reduced-motion`.

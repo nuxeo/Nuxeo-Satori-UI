@@ -65,9 +65,9 @@ import { execToolSync } from './package-command.mjs';
  * ## Safety
  *
  * Nothing here can publish. The dry run happens in a throwaway copy under the OS temp
- * directory, `--dry-run` makes no registry request, and the copy is the only place
- * `private: true` is stripped — the built package keeps it, so a stray real `npm publish`
- * in `dist/` is still refused by npm.
+ * directory, and `--dry-run` makes no registry request. The package is public now, so the
+ * guard against a stray publish is the dispatch-only `publish-platform.yml` workflow, not
+ * a `private` flag in the built package.
  */
 
 import {
@@ -455,20 +455,27 @@ const copy = join(staging, 'platform');
 try {
   cpSync(DIST, copy, { recursive: true });
 
-  // Stripped in the COPY only. `private: true` stays in dist so an accidental real
-  // publish is refused. npm would dry-run a private package anyway, so the copy's flag
-  // is removed only to dry-run the package as a public one would be published.
+  // The package is public (NXSAT-667 removed `private: true`). A `private` flag would make
+  // every publish fail with EPRIVATE, and a missing `publishConfig` would leave `npm publish`
+  // without the Nuxeo registry it must target.
   const copied = JSON.parse(readFileSync(join(copy, 'package.json'), 'utf8'));
-  if (copied.private !== true) {
+  if (copied.private) {
     fail(
-      'The built package.json is not `private: true`.\n' +
-        '    It is the last thing standing between a mistyped `npm publish` and a public\n' +
-        '    release of an unfinished package. Publishing is a deliberate, later step —\n' +
-        '    see docs/publishing-to-nuxeo-registry.md.',
+      'The built package.json is `private: true`.\n' +
+        '    npm refuses every publish of a private package with EPRIVATE, so the package cannot\n' +
+        '    ship. Remove the flag from libs/platform/package.json.',
     );
   }
-  delete copied.private;
-  writeFileSync(join(copy, 'package.json'), JSON.stringify(copied, null, 2));
+  if (
+    copied.publishConfig?.access !== 'public' ||
+    copied.publishConfig?.registry !== 'https://packages.nuxeo.com/repository/npm-public/'
+  ) {
+    fail(
+      'The built package.json does not publish to the Nuxeo registry.\n' +
+        '    publishConfig must be { access: "public", registry: "https://packages.nuxeo.com/repository/npm-public/" }.\n' +
+        '    See docs/publishing-to-nuxeo-registry.md §2.',
+    );
+  }
 
   try {
     execToolSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {

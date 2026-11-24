@@ -53,9 +53,16 @@
   white-space: nowrap;
 }
 
-sat-breadcrumbs {
+.detail-breadcrumbs {
+  min-width: 0;
   font-size: 11px;
-  color: #888;
+  color: var(--mat-sys-on-surface-variant);
+
+  ::ng-deep nxs-breadcrumbs,
+  ::ng-deep .sat-breadcrumbs-nav {
+    font: inherit;
+    color: inherit;
+  }
 
   /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-chevron {
@@ -293,6 +300,11 @@ sat-breadcrumbs {
     width: 30px !important;
     height: 30px !important;
     line-height: 30px !important;
+    // NXSAT-809 — centre the icon: Material's 8px padding is left over from the 40px button.
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     color: #555;
 
     mat-icon {
@@ -996,17 +1008,6 @@ sat-breadcrumbs {
 .activity-time {
   color: #999;
   font-size: 11px;
-}
-
-// Publish dialog panel - remove default Material dialog padding
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
-  padding: 0;
-}
-
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__content {
-  padding: 0;
 }
 
 /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */

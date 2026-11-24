@@ -6,9 +6,18 @@ import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
  * Routes the template ships with.
  *
  * A plain array, because **routing is not one of the four layers** — a fork owns
- * its route table. `docs/extension-reference.md` is explicit that the `routes`
- * slot is declared but that *nothing resolves it*, so a library cannot contribute
- * a route on its own and a host must map the path itself.
+ * its route table.
+ *
+ * The `routes` slot does resolve, in a host that wires it:
+ * `docs/extension-reference.md` lists it as "Resolves", and the product
+ * application gets that by calling `provideExtensionRoutes()`
+ * (`apps/nuxeo-ui/src/app/extensions/provide-app-extensions.ts:256`). What a
+ * *library* cannot do is contribute a route on its own — the host has to opt in.
+ *
+ * This template deliberately does not opt in. Its `app.config.ts` provides no
+ * `provideExtensionRoutes()`, so a manifest route contributed to this application
+ * resolves nothing and the table below is the whole of its routing. Add the
+ * provider if you want a fork whose routes a manifest can extend.
  */
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'documents' },

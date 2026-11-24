@@ -32,6 +32,12 @@ Run it in this directory. `build.mjs` needs only Node 20 — nothing to install,
 so the package can live in your own repository. In an Nx workspace, `npx nx build <%= name %>` runs
 the same script and writes the zip to `dist/<%= projectRoot %>/` at the workspace root instead.
 
+One limit of the build rather than of the server: a body nested close to the 1000 levels the server
+allows can use up the stack of the Node running the build, which on Windows with Node 20 happens
+from about 993. The build refuses it naming the file and the depth, and says that the depth itself
+was fine — it does not write a package. Node 22 and newer reach 1000 on every platform we test, so
+that is the fix if you ever see it; nothing nested less than about 900 deep is affected anywhere.
+
 `build.mjs` refuses — with the file and the reason — what the server would
 leave out: a fragment or layout body, in a file or inline, that does not parse, is not an object,
 repeats a key, or exceeds 1 MiB; an asset over 2 MiB or not named as a plain image file; an entry
@@ -40,11 +46,118 @@ well-formed UTF-8, a `src` or `Nuxeo-Component` that names no packaged file, a s
 or `package/`, a package name or version that is not a plain file name, and a component that does
 not `<require>` Satori's defaults.
 
+List every component in the one `Nuxeo-Component` header, spelt that way, above any blank line. The
+server reads the name in any letter case, loads only the last of a repeated header, and looks only
+above the manifest's first blank line, so `build.mjs` refuses a manifest with a second one there,
+another spelling, or none there at all, rather than check components the server would not load.
+
+Keep every line of the manifest a header — a name of 1 to 70 letters, digits, `-` and `_`, then
+`: ` and the value — or a continuation of the one above it, which starts with a space. The server
+reads the manifest with Java's `java.util.jar.Manifest`, which refuses the whole file at any other
+line and takes a blank line as the end of a section, so it expects `Name: ` after a blank line.
+`build.mjs` refuses a manifest Java would refuse, quoting the line, because the server would read
+none of its headers.
+
+The packaged JAR manifest is written without a UTF-8 BOM, with CRLF line endings and headers
+wrapped at 72 bytes, including continuation spaces. The source manifest is left unchanged.
+Asset size limits apply to both source and packaged bytes, including manifest normalization.
+A `<require>` must be a direct child of `<component>`; inline `<json>` must be a direct child
+of its `<fragment>` or `<layout>` under `<component>/<extension>`. Nested live configuration
+elements are refused. Examples in component or extension-point `<documentation>` are ignored
+when checking contributions.
+
 **Raise the version for every change you install.** Nuxeo installs a higher version as an upgrade;
 the same version is the package it already has.
 
 The server reads the fragments once, at startup. A change applies after the restart that installing
-the package requires, and a browser picks it up on its next load.
+the package requires, and a browser picks it up on its next load. **While you are still deciding
+what a value should be, do not pay that.** Switch on the development override directory below,
+edit a file, reload the tab.
+
+## The fast loop while you are tuning a value
+
+Everything above is the way a change reaches a customer: reviewed, versioned, built from source,
+installed. It is also two to four minutes per iteration and a restart that drops every open
+session, which is the wrong price for finding out whether a title fits in the header.
+
+A development server can read a directory on its own disk on every request instead
+(NXSAT-312). Switch it on in `nuxeo.conf`:
+
+```
+nuxeo.agentic.ui.config.dev=true
+# optional; defaults to ${nuxeo.data.dir}/agentic-ui-config-dev
+# nuxeo.agentic.ui.config.dev.dir=/var/lib/nuxeo/agentic-ui-config-dev
+```
+
+Restart once, for that line only. From then on the loop is **edit the file, reload the tab** —
+no rebuild, no version bump, no reinstall, no restart. Measured on a local Docker Nuxeo: 0.1 s
+against 8.5 s for the restart alone on that same container, and the plan's figure for a real
+demo server is 60–120 s.
+
+The directory has the same shape as `bundle/agentic-ui-config/`, so you copy a file across rather
+than learn a second layout:
+
+| File                                     | What it contributes                                             |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `bootstrap.json`                         | a bootstrap fragment named `dev`, applied after every package's |
+| `bootstrap.<name>.json`                  | a bootstrap fragment named `<name>`                             |
+| `manifest.json` / `manifest.<name>.json` | the same, in the manifest layer                                 |
+| `layouts/<Type>/<mode>.layout.json`      | a per-type layout                                               |
+| `assets/<file>`                          | an image a fragment names                                       |
+
+`bootstrap.json` is named `dev`, which no package uses, so it is appended and wins on the keys it
+sets. Name the file after a packaged fragment instead — `bootstrap.defaults.json` — and it
+**replaces** that fragment in place, losing every key it does not restate. Both are useful; pick
+deliberately. Any other file name is reported in the response's `diagnostics` rather than passed
+over, so a mistyped `bootsrap.json` tells you what happened.
+
+An override is an ordinary contribution and nothing about the contract is relaxed for it: it is
+validated the same way, a malformed one is rejected and reported and the packaged fragment stays
+in force, replacements keep their position, each fragment carries the file it came from in its
+provenance, and a contributed image is served with the same `default-src 'none'; sandbox` policy
+and the same name allow-list. That is deliberate — an override that skipped validation would be
+worse than the restart it saves.
+
+### Getting the file onto the server
+
+Docker, which is what a local Nuxeo usually is:
+
+```bash
+# Once, before the first copy. The server reports the directory as absent rather than creating
+# it, and `docker cp` of a single file into a parent that does not exist fails.
+docker exec nuxeo mkdir -p /var/lib/nuxeo/agentic-ui-config-dev
+
+docker cp bundle/agentic-ui-config/bootstrap.json \
+  nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/bootstrap.json
+```
+
+To watch and copy on every save, with `fswatch` (macOS) or `inotifywait` (Linux):
+
+```bash
+fswatch -o bundle/agentic-ui-config | while read -r _; do
+  docker cp bundle/agentic-ui-config/. nuxeo:/var/lib/nuxeo/agentic-ui-config-dev/
+done
+```
+
+**`nuxeo sync` does not help in Docker mode, and this is worth knowing before you try.** The
+Nuxeo CLI watcher is real and does exactly this job, but `generator-nuxeo`'s configure step skips
+the destination prompt when the deployment is Docker and hardcodes
+`/opt/nuxeo/server/nxserver/nuxeo.war/ui/`, which is Web UI's directory, not ours
+(`generators/synchronize/configure-delegate.js`, verified against `generator-nuxeo@4.0.7`). In
+**local** deployment mode `dest` is prompted and free, so on a non-containerised server
+`nuxeo sync` can target the override directory and works.
+
+### Before you put it on anything shared
+
+- **It is off unless that property is set.** With the property unset the directory is not read,
+  not stat-ed and not reached, whatever is in it — asserted on the response bytes by
+  `AgenticUiConfigDevOverrideTest`, and by the `checkDevConfigOverrideIsNotProductionReachable`
+  guardrail on anything this repository ships.
+- **Never set it in production.** It makes configuration editable by anyone who can write to the
+  server's filesystem, which is exactly the privilege separation a regulated customer is relying
+  on. It belongs on a development box or a demo box, nowhere else.
+- **A value you keep is not finished until it is in the package.** The override directory is for
+  deciding; `bundle/agentic-ui-config/` plus a version bump is how the decision ships.
 
 ## Three things to know
 

@@ -22,7 +22,7 @@ The real pipeline:
 ```text
 tools/video/decks/04-walkthrough.json      the content — slides, prose, code, speaker notes
         ↓  drawn by
-tools/video/deck.html + deck.css           the 3840x2160 dark deck style, shared with 01-03
+tools/video/deck.html + deck.css           the 3840x2160 dark deck style, shared with 02-03
         ↓  photographed at 2x by
 tools/video/export-pptx.mjs                full-bleed images + speaker notes from the JSON
         ↓

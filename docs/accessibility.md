@@ -40,7 +40,8 @@ warning rather than failing the story. CI's Storybook interaction runner
 stories the panel's axe pass found violations in — a count, never a failure. Treat what it shows as a
 cross-check: triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
 its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
-difference between the two is not an engine difference.
+difference between Storybook and a11y-scout is not an engine difference. The runtime layer is pinned
+to 4.14.1 (gap 8), so a difference between Storybook and the runtime layer can be one.
 
 **Not an accessibility verdict either: the dialog layout check.** The same runner fails a
 `Dialogs/` story whose preview is not laid out as MatDialog lays the dialog out in the application,
@@ -51,11 +52,17 @@ owns is narrower: that a preview shows the dialog a page opens. Reflow (1.4.10) 
 stay a11y-scout's, on the application's screens; a preview that fits 320 px says nothing about a
 route that opens it.
 
+The component stories also assert keyboard API contracts: emitted selections, activation,
+overlay dismissal and focus restoration. Their inventory and preview limitations are in
+[Component keyboard contracts](satori-components/keyboard-contracts.md). These behavior
+assertions do not add a WCAG verdict or change the ownership table below. In particular, a
+dialog preview with a fake `MatDialogRef` cannot establish the real modal's focus trap.
+
 ### Why axe is owned by `phase-6-a11y.mjs` and not by a11y-scout
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:
 
-1. **It was driven to zero, and is back at zero.** Seven rule classes and 77
+1. **It was driven to zero, and was back at zero on 2026-10-22.** Seven rule classes and 77
    violating nodes were cleared to empty `KNOWN_VIOLATIONS` and make the verdict
    unconditional. That zero went stale — two `color-contrast` nodes on `/#/tasks`
    still failed under phase-6's own tags as of 2026-09-30; see
@@ -65,9 +72,12 @@ Both run axe, so one of them had to give it up. phase-6 keeps it for three reaso
    1.4.3's 4.5:1. Both reported nodes sit on that background — `.task-item.active` differs only
    by an inset box-shadow, not its fill. Fixed under NXSAT-647 by moving to
    `--mat-sys-on-surface-variant` (8.93:1), and phase-6 re-measured at **35/35, `verdict PASS`**
-   on 2026-10-22.
+   on 2026-10-22, with axe-core 4.13.0.
    The remedy was to fix those and re-measure phase-6, not to move the verdict to a scanner
-   with 22 untriaged axe findings.
+   with 22 untriaged axe findings. That zero did not hold either. On 2026-11-23 phase-6 failed
+   one rule on one control, on every screen. The control was fixed the same day and the next
+   capture passes every axe check; see
+   [The 2026-11-23 measurement](#the-2026-11-23-measurement).
 2. **It depends on a public package.** `@axe-core/playwright` is on the public registry.
    a11y-scout is distributed as hand-passed tarballs that no registry can serve. A
    customer-shippable product should not have its conformance claim depend on a file
@@ -172,7 +182,10 @@ violation.
 Seven consecutive rounds in one class is a statement about the approach: the rule needs a real
 Sass parser (`postcss-scss`), not a regex, and that is tracked as **NXSAT-709**. Recorded here so the
 next attempt starts from the ten known cases and their controls rather than from scratch. The
-WCAG verdict is unaffected either way — it belongs to axe, and `phase-6-a11y` is `PASS 35/35`.
+WCAG verdict is unaffected either way. It belongs to axe. `phase-6-a11y` was `PASS 35/35` on
+2026-10-22 and `FAIL`, 20 of 35, in the first capture of 2026-11-23. After that day's fix it is
+`FAIL`, 34 of 35, with every axe check passing
+([The 2026-11-23 measurement](#the-2026-11-23-measurement)).
 
 ## Baselines and suppression
 
@@ -195,10 +208,8 @@ Three properties make it the right shape, each of them learned the hard way and 
 
 Two further rules apply to every layer:
 
-- **An exclusion is scoped to one surface and cites an owner.** `phase-6-a11y.mjs` is the
-  model: `ADF_HX_UPSTREAM` is applied to the adf-hx POC step alone and cites
-  `docs/adf-hx-upstream-findings.md` §1.2. A global rule-id list silences that rule
-  everywhere, including on surfaces we own — the file says so itself, and it is the reason
+- **An exclusion is scoped to one surface and cites an owner.** A global rule-id list silences
+  that rule everywhere, including on surfaces we own, and it is the reason
   `KNOWN_VIOLATIONS` must stay empty.
 - **A new gate is not trusted until it has been seen to fail on purpose.** The static scan was
   negative-controlled before adoption: a second `click-events-have-key-events` in an
@@ -261,10 +272,7 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   depends on what the test repository happens to hold rather than on anything the journey asserts.
 - **Six routes no runtime layer visits:** `/#/contracts` and the five `/#/settings/*` pages
   (Nuxeo Drive, profile, authorized applications, cloud services, themes). Contracts was dropped
-  from the journey on purpose — see "Fifteen screens" below. `/#/search-adf-hx` was the seventh
-  until the adf-hx routes were retired on 2026-10-14; it and `/#/browse-adf-hx` now redirect to
-  `/#/search` and `/#/browse`, which the surfaces and display-modes suites scan, so both suites
-  dropped their `/#/browse-adf-hx` row rather than moved it.
+  from the journey on purpose — see "Fifteen screens" below.
 - **Populated tasks and expired-queue screens.** The journey scans their empty states on a server
   with neither, and says so in its output; a task form or an expired card has never been scanned.
 - **Horizontal scrolling inside a region at 320px.** Reflow checks the document's `scrollWidth`
@@ -305,6 +313,150 @@ checked against `/me`.
   `#999999` on `#fafafa`). Neither phase-6 visit sees it: one opens a Picture, the other a File
   with a main blob.
 
+## The 2026-11-23 measurement
+
+`phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at e27deeaa0, is **`FAIL`, 20 of 35
+checks**. WCAG 2.1 AA is **not met**. The capture ran exactly as its prerequisites document, and
+the `--no-save` install resolved `@axe-core/playwright` 4.14.0 and `axe-core` 4.14.1. Its scope is
+14 axe scans over 9 routes, counting document detail once: landing, browse in three states, search
+in three, trash, tasks, collections, administration, knowledge discovery, and two document-detail
+states. The August pass's "fifteen cases over eight routes" was that run's count. Quote the counts
+of the run you cite.
+
+| Failed checks | What                                                                                                                                        | Verdict                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 14            | `label-content-name-mismatch` (2.5.3 Label in Name, Level A, serious): one node, `#sat-platform-nav-user-profile`, on every scanned surface | **product defect**, ours to fix                   |
+| 1             | Health: `HTTP 404 /agentic-ui-config/layouts.json`                                                                                          | **environment**, and not an accessibility finding |
+
+No other axe rule reported a violation at any impact.
+
+**The defect.** The control is the navigation's user-profile button, and it is in the shell, so
+every surface failed. On 2026-10-26 NXSAT-673 started projecting the signed-in user's avatar into
+it, and the avatar renders their initials as text. The rail is collapsed in the state the capture
+scans, so the initials are all the control shows. Its accessible name was the full display name,
+which the upstream navigation component copies from a label that is hidden in that state. A
+speech-input user who said what they saw therefore did not name the control. The avatar is
+`aria-hidden`, which hides it from a screen reader but not from sight, and 2.5.3 concerns what
+is visible.
+
+**What fixing it would show.** It would clear this capture's axe checks, and nothing more. The
+Health 404 failed this record too, and the check's ignore list now names it (below). The fix was
+made and measured the same day; see [The fix, measured the same day](#the-fix-measured-the-same-day).
+Health still fails locally on other 404s; see [Re-measured with the pin](#re-measured-with-the-pin).
+[Storybook observations](#storybook-observations--triaged-2026-10-15) above records failures
+under the same tags in states the capture does not reach, among them the viewer placeholder for
+a File without a main file. [What nothing covers](#what-nothing-covers) lists what no layer
+scans at all. Conformance needs those fixed and measured too.
+
+**Why 2026-10-22 passed.** Three runs on one checkout separate the engine from the product:
+
+| Run                                                            | Engine | Result                                                                                                        |
+| -------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| `phase-6-a11y/2026-11-23T08-09-11`, the record                 | 4.14.1 | 20 of 35, as above                                                                                            |
+| The full capture again, with `@axe-core/playwright@4.13.0`     | 4.13.0 | 34 of 35: every axe check passes, and the same Health 404 fails                                               |
+| One page, each engine, the rule selected by tag and then by id | both   | 4.13.0 does not run the rule under the WCAG tags and passes the control when it is forced on. 4.14.1 fails it |
+
+In 4.13.0 the rule is tagged `experimental`, so the WCAG tags never select it. Its comparison
+also matches characters, and these initials happen to be the first two letters of the capture
+account's display name, so it finds them inside the name. 4.14 drops the `experimental` tag and
+compares whole words. The 2026-10-22 pass was measured with 4.13.0, four days before the initials
+arrived, so it measured neither this rule nor the control as it is now. The two control runs are kept outside
+the evidence of record, under `agentic-ui-evidence/a11y-engine-diagnostic-2026-11-23/`, so they
+are never mistaken for it.
+
+**The engine was not pinned, and now is.** `a11y/versions.mjs` pins axe for a11y-scout, and
+Storybook's lock resolves 4.13.0, but `phase-6-a11y` installed whatever `--no-save` resolved and
+its manifest did not record the version. That is how the verdict changed without a commit (gap 8
+below). Its prerequisites now install `@axe-core/playwright@4.14.0` and `axe-core@4.14.1`, the
+pair this record ran, as `scripts/beta-harness/axe-engine.mjs` pins them. The engine is named as
+well as the wrapper because the wrapper accepts any `~4.14.0` engine, and the registry published
+4.14.0 on 2026-10-05 and 4.14.1 on 2026-11-16. The capture's first step refuses any other pair
+with exit 2, each scan fails unless axe reports that it ran 4.14.1, and every `beta:evidence`
+manifest records `playwright`, `axeCorePlaywright` and `axeCore` under `environment`. a11y-scout
+and its diagnostics stay on 4.13.0, so one `node_modules` holds one layer's install at a time, and
+`axe-differential.mjs` no longer runs phase-6's engine. Each guard was seen to fail on purpose:
+
+| Control                                                                                            | Result                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The real steps, on 4.14.0 under the same wrapper, with and without a live backend                  | Refused at step 1 with exit 2: `axe-core is 4.14.0, pinned 4.14.1`                                                                                       |
+| The real steps, on a11y-scout's install (4.13.0 for both)                                          | Refused at step 1 with exit 2, naming both packages                                                                                                      |
+| A scan that must have run 4.13.0, on 4.14.1                                                        | That check fails and names the engine axe reports. The same scan with the pin, and with no engine named, passes                                          |
+| The installed-version lookup, in five throwaway trees, two with an engine nested under the wrapper | Agrees in all five with what the wrapper's own import loads. Reading the root copy instead disagrees in both nested trees, and passes one it must refuse |
+
+**What else the run shows.** The September `button-name` failures on browse (2026-09-15 and
+2026-09-16) do not reproduce under either engine. The Health 404 is the configuration service's
+optional layout index, which the local dev server does not serve. The layout service falls back to
+generated layouts by design. The check's ignore list named the sibling `bootstrap.json` and
+`manifest.json`, but not this file. It now names it, for the 404 only, with the verification beside
+the entry. A 500 on the index, the same file under the production base href, or a per-type layout
+file still fails the check. Run through the list before and after the entry, this record's own
+eleven console errors fail Health and then pass it.
+
+### Re-measured with the pin
+
+`phase-6-a11y/2026-11-23T17-42-07` ran the change that pins the engine, on `main` at 63376d1de,
+as the prerequisites now document it. It is **`FAIL`, 21 of 36 checks**. Its manifest records
+axe-core 4.14.1 through `@axe-core/playwright` 4.14.0, and the new first step passes. The 14 axe
+failures are the same `label-content-name-mismatch` node as above, and nothing else. Health
+ignored the `layouts.json` 404 and still failed, on two kinds of error the morning record did not
+have:
+
+| Errors | What                                                                     | Known                                                                            |
+| ------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 51     | `HTTP 404 /nuxeo/api/v1/id/<uid>/@rendition/thumbnail`, for 23 documents | 14 follow the landing page and 37 come before knowledge discovery. Not diagnosed |
+| 1      | `HTTP 404 /nuxeo/agentic-ui/`                                            | Not diagnosed                                                                    |
+
+No code in this repository that requests a thumbnail changed between the two captures. Two other
+things did: the Satori package moved from 1.0.0-alpha.201 to 1.0.0 (#602), and other work wrote to
+the shared local server. Which explains the errors is not known. The documents were not read,
+because the guest account may not read them. Neither error is in the ignore list, because neither
+has been verified as designed. The same capture on axe-core 4.14.0 is kept under
+`agentic-ui-evidence/a11y-engine-pin-controls-2026-11-23/` and stopped at step 1 with exit 2.
+
+### The fix, measured the same day
+
+The shell now names the control with `aria-labelledby`: the initials the avatar draws, then the
+display name. That name contains what the control shows on either rail. Its source is a `hidden`
+span. The upstream directive builds its own `aria-label` and its tooltip from the label's
+`innerText`, which skips hidden text, so both are still the display name.
+
+`phase-6-a11y/2026-11-23T18-53-44` was captured on the fix's branch at `82c8372c7`, which is `main`
+at `89d3095f8` plus the fix. It used the same `--no-save` install, with axe-core 4.14.1. It is
+**`FAIL`, 34 of 35**. **All 14 axe checks pass**, and no rule reported a violation at any impact.
+The one failing check is Health, and none of its errors is an accessibility finding:
+
+| Errors | What                                                                                                                                               | Verdict                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1      | `HTTP 404 /agentic-ui-config/layouts.json`, as in the record above                                                                                 | **environment**                           |
+| 43     | `HTTP 404` on the thumbnails of 23 documents seeded into the local repository that day, after the first capture, as custom types with no thumbnail | **environment**: test data                |
+| 1      | `HTTP 404 /nuxeo/agentic-ui/`, the unexplained request that keeps Phases 1 and 2 open (NXSAT-660)                                                  | **open** elsewhere, and not accessibility |
+
+Two earlier captures after the fix gave the same axe result:
+`phase-6-a11y/2026-11-23T17-24-58` at `be4be35cd`, before `main` brought in two heading-selector
+fixes on document detail (#658), and `phase-6-a11y/2026-11-23T18-44-35` at `594ea9551`, before the
+initials were taken after upper-casing. The record is the run on the final code. The number of
+thumbnail requests varies from run to run, and all three hit the same 23 documents.
+
+WCAG 2.1 AA is still **not met**. The fix clears this capture's axe checks and nothing more, as
+[What fixing it would show](#the-2026-11-23-measurement) says.
+
+The capture scans only the collapsed rail. The expanded rail was measured once, by a diagnostic
+kept outside the evidence of record under
+`agentic-ui-evidence/a11y-label-in-name-diagnostic-2026-11-23/`. With axe-core 4.14.1 and the
+capture's tags, the control passes on both rails. It fails on both once its `aria-labelledby` is
+removed in the page, which restores the old name.
+
+`apps/nuxeo-ui/src/app/shell/platform-nav-user-profile-label-in-name.spec.ts` holds the
+invariant on both rails: the accessible name contains, word for word, the text the control
+paints, `aria-hidden` text included. On the old markup it fails on both rails. The case it
+replaces passed on the defect, because it counted only text exposed to assistive technology. It
+is a declared cross-check under
+[the rule above](#component-specs-are-a-declared-cross-check-not-a-fifth-layer), and it asserts
+that invariant, not a verdict. The runtime layer cannot hold it: phase-6 needs a local backend, so
+it never runs on a pull request, and until gap 8 was closed a 4.13.0 install passed the broken
+control even with the rule forced on. The capture now refuses that engine. Scanning the expanded
+rail is still the runtime layer's job, and phase-6 does not do it yet.
+
 ## The disagreement — resolved 2026-09-11, against phase-6
 
 The first a11y-scout baseline reported **8 `color-contrast`** and **2 `button-name`** findings
@@ -314,11 +466,10 @@ while `phase-6-a11y.mjs` recorded both rules as driven to zero. Two scripts sett
 **a11y-scout was right. phase-6's zero is stale.** Under phase-6's _own_ four-tag set, at its
 own 1440×900 viewport, measured on 2026-09-11 and again on 2026-09-30:
 
-| Surface            | Rule                     | Impact   | 11 Sep                                | 30 Sep                               |
-| ------------------ | ------------------------ | -------- | ------------------------------------- | ------------------------------------ |
-| `/#/browse`        | `button-name`            | critical | 2 — the document-tree expand toggles  | **0** — fixed by `NXSAT-227`         |
-| `/#/tasks`         | `color-contrast`         | serious  | 2                                     | **2** — still open                   |
-| `/#/browse-adf-hx` | `aria-required-children` | critical | 2 — the documented upstream exclusion | 2 — unchanged, legitimately excluded |
+| Surface     | Rule             | Impact   | 11 Sep                               | 30 Sep                       |
+| ----------- | ---------------- | -------- | ------------------------------------ | ---------------------------- |
+| `/#/browse` | `button-name`    | critical | 2 — the document-tree expand toggles | **0** — fixed by `NXSAT-227` |
+| `/#/tasks`  | `color-contrast` | serious  | 2                                    | **2** — still open           |
 
 On 11 September that was **four blocking nodes** phase-6 claimed did not exist. Its table is
 dated 2026-08-24; the claim was true when written and was never re-measured. `KNOWN_VIOLATIONS`
@@ -699,7 +850,7 @@ reasoning is kept because the _mechanism_ is general: any element whose loading 
 
 `screenUnsettledReason()` in `a11y/surface.mjs` therefore waits for the screen to hold still for
 1.5 seconds with no loader visible. On every poll it reads, across the nav drawer and the feature
-host together, every visible spinner (Material's or the hand-written `hxp-spinner`), progress
+host together, every visible spinner (Material's or a hand-written one), progress
 indicator and text or skeleton loader listed in its `LOADING_SELECTOR`, plus the tree
 node count, the `<img>` count and the element count; the window restarts whenever a loader is
 visible or any count changes. (It first accepted a single repeated count, which proves only that
@@ -808,6 +959,7 @@ should be closed:
 | 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                                                                                                                                                                                                                                                                                                |
 | 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half                                                                                                                                                                                                                                                                                   |
 | 7   | Three untriaged text uses of `--mat-sys-outline`, in states no harness renders                       | **Open** — `tasks-page.component.scss:312` (`.graph-empty`, 0.82rem), `:569` (`.dropdown-id`, 0.72rem) and `kd-citation-dialog.scss:129` (`.__mime`, 11px). Found by token search under `NXSAT-647`, not by a scan; each needs its background measured in the state that renders it before it is called a violation. `:281` was checked and is an 18px icon, so 1.4.11's 3:1 applies and it is correct |
+| 8   | phase-6's axe engine is not pinned, and its manifest does not record the version                     | **Closed** 2026-11-23. The `--no-save` install had moved from 4.13.0 to 4.14.x and changed the verdict without a commit. `axe-core` 4.14.1 and `@axe-core/playwright` 4.14.0 are now pinned in `scripts/beta-harness/axe-engine.mjs`, the capture refuses any other pair, each scan checks the engine that ran, and manifests record it. See [The 2026-11-23 measurement](#the-2026-11-23-measurement) |
 
 Do not describe accessibility as standardised until rows 2 and 5 are closed. Rows 3 and 4
 depend on triage and are expected to take longer.
