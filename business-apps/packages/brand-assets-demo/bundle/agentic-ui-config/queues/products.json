@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "brand.queue.products",
+  "pageProvider": "acme_products",
+  "columns": [
+    "dc:title",
+    "acmeproduct:style",
+    "acmeproduct:season",
+    { "field": "acmeproduct:launch", "widget": "date" }
+  ],
+  "sort": [{ "field": "acmeproduct:launch", "order": "asc" }],
+  "pageSize": 50
+}

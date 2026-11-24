@@ -384,4 +384,41 @@ describe('DocumentLayoutFormComponent, with a version 2 file', () => {
       '[agentic-ui-layouts] Claim/edit layout: cards[0].fields[0].checks[0] not checked: core.atMost compares numbers, not "x"',
     ]);
   });
+
+  it("reads its date rules against the page's clock, not the browser's", async () => {
+    // The browser's clock says 1 November, and the page's, RECORD_PAGE_TODAY, 23 November: the
+    // 22nd has passed on the page's day only, and is within 30 days of the browser's only.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-01T12:00:00Z'));
+    try {
+      await render(
+        { mode: 'edit', document: CLAIM },
+        {
+          version: 2,
+          cards: [
+            {
+              id: 'claim',
+              label: 'Claim',
+              fields: [
+                'claim:number',
+                {
+                  field: 'claim:denial',
+                  visibleWhen: { type: 'app.rules.datePassed', parameters: ['2026-11-22'] },
+                },
+                {
+                  field: 'claim:notes',
+                  visibleWhen: { type: 'app.rules.dateWithin', parameters: ['2026-11-22', 30] },
+                },
+              ],
+            },
+          ],
+        },
+      );
+      expect(input$('claim:number')).not.toBeNull();
+      expect(input$('claim:denial')).not.toBeNull();
+      expect(input$('claim:notes')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

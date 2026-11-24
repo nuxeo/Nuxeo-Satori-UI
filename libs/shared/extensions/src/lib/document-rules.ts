@@ -10,7 +10,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { daysFromToday } from './date-rules';
-import type { ExtensionRuleEvaluator } from './extension-rules';
+import type { ExtensionRuleContext, ExtensionRuleEvaluator } from './extension-rules';
 
 /** The furthest `app.rules.dateWithin` looks ahead: a hundred years, as the validator allows. */
 const MAX_DAYS_AHEAD = 36500;
@@ -40,6 +40,14 @@ function fieldOf(parameter: unknown): string | null {
 function subjectOf(document: NuxeoDocument | null, parameter: unknown): unknown {
   const field = fieldOf(parameter);
   return field !== null ? document?.properties?.[field] : parameter;
+}
+
+/**
+ * How many days `value` is after today, for the date rules: today and the zone are the context's,
+ * as the record page gives them from its clock, else the browser's clock and the reader's zone.
+ */
+function daysFromContextToday(context: ExtensionRuleContext, value: unknown): number | null {
+  return daysFromToday(value, context.today ?? new Date(), context.timeZone);
 }
 
 /**
@@ -145,9 +153,11 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
    * parameter is the date, a property of the focused record, `{ "field": "dc:expired" }`, or a
    * literal, read as `date-rules.ts` reads one: a stored day as written, an instant on the reader's
    * own day. No date, or a value that is not one, does not pass, so a banner it shows stays hidden.
+   * Today and the reader's zone are the context's, `today` and `timeZone`, which the record page
+   * gives from its own clock; without them, the browser's.
    */
   'app.rules.datePassed': (context, parameters) => {
-    const days = daysFromToday(subjectOf(context.document, parameters[0]), new Date());
+    const days = daysFromContextToday(context, subjectOf(context.document, parameters[0]));
     return days !== null && days < 0;
   },
   /**
@@ -159,7 +169,7 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
     const [subject, ahead] = parameters;
     if (!(Number.isInteger(ahead) && (ahead as number) >= 0 && (ahead as number) <= MAX_DAYS_AHEAD))
       return false;
-    const days = daysFromToday(subjectOf(context.document, subject), new Date());
+    const days = daysFromContextToday(context, subjectOf(context.document, subject));
     return days !== null && days >= 0 && days <= (ahead as number);
   },
   /** The focused record's lifecycle state is one of `parameters`, matched exactly. */

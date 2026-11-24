@@ -1,0 +1,49 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "product",
+      "labelKey": "brand.product.card",
+      "fields": [
+        "acmeproduct:style",
+        "acmeproduct:season",
+        { "field": "acmeproduct:colorways", "widget": "chips" },
+        { "field": "acmeproduct:channels", "widget": "chips" },
+        { "field": "acmeproduct:launch", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "missing-shots",
+      "labelKey": "brand.product.missingShots",
+      "related": {
+        "pageProvider": "acme_product_missing_shots",
+        "parameters": [{ "field": "acmeproduct:style" }],
+        "columns": [
+          "acmeshot:colorway",
+          "acmeshot:shot",
+          { "field": "acmeshot:due", "widget": "date" }
+        ],
+        "sort": [{ "field": "acmeshot:due", "order": "asc" }]
+      }
+    },
+    {
+      "id": "shots",
+      "labelKey": "brand.product.shots",
+      "span": 2,
+      "related": {
+        "pageProvider": "acme_product_assets",
+        "parameters": [{ "field": "acmeproduct:style" }],
+        "columns": [
+          "dc:title",
+          "acmeasset:colorway",
+          "acmeasset:shot",
+          { "field": "dc:expired", "labelKey": "brand.asset.rightsEnd", "widget": "date" }
+        ],
+        "sort": [{ "field": "dc:title", "order": "asc" }],
+        "pageSize": 20
+      }
+    }
+  ]
+}

@@ -1386,6 +1386,147 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     });
 
     /**
+     * A picture's record page shows its views, not its own file, so the page does not download
+     * the original for it: only for the Annotations tab, whose viewer shows it, or for the packaged
+     * viewer of a type with no record page. The type is a kit's own, with the `Picture` facet, as
+     * the brand assets kit's `AcmeAsset` is. Seen red with the original fetched on load.
+     */
+    describe("a picture's own file", () => {
+      const asset = (): NuxeoDocument =>
+        Object.assign(
+          doc({
+            uid: 'doc-1',
+            type: 'AcmeAsset',
+            facets: ['Picture', 'Versionable'],
+            properties: {
+              'dc:title': 'Trail jacket, front',
+              'file:content': {
+                name: 'front.png',
+                'mime-type': 'image/png',
+                length: 4096,
+                digest: 'd1',
+              },
+              'picture:info': { width: 1600, height: 1200 },
+              'picture:views': [
+                {
+                  title: 'Medium',
+                  width: 1000,
+                  height: 750,
+                  content: { name: 'medium.jpg', 'mime-type': 'image/jpeg', length: 900 },
+                },
+              ],
+            },
+          }),
+          {
+            schemas: [
+              { name: 'dublincore', prefix: 'dc' },
+              { name: 'file', prefix: 'file' },
+              { name: 'picture', prefix: 'picture' },
+            ],
+          },
+        );
+      const ASSET_VIEW = {
+        version: 2,
+        cards: [{ id: 'details', label: 'Details', fields: ['dc:title'] }],
+      };
+
+      /** The layouts index naming `entries`, and the asset's `view` file when one is given. */
+      async function answerAsset(entries: readonly string[], view?: unknown): Promise<void> {
+        const http = TestBed.inject(HttpTestingController);
+        http
+          .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+          .forEach((request) =>
+            request.flush({
+              format: FORMAT,
+              layer: 'layouts',
+              layouts: entries.map((entry) => {
+                const [type, mode] = entry.split('/');
+                return { type, mode, component: 'org.acme.config' };
+              }),
+              diagnostics: [],
+            }),
+          );
+        if (view !== undefined) {
+          http
+            .expectOne((request) =>
+              request.url.endsWith('/agentic-ui-config/layouts/AcmeAsset/view.layout.json'),
+            )
+            .flush({
+              format: FORMAT,
+              layer: 'layout',
+              type: 'AcmeAsset',
+              mode: 'view',
+              content: view,
+            });
+        }
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+      }
+
+      const originalFetches = () =>
+        mockDetailService.fetchBlob.mock.calls.filter((call) => (call as unknown[])[0] === 'doc-1')
+          .length;
+
+      beforeEach(() => mockDetailService.fetchBlob.mockClear());
+
+      it('is not downloaded while the record page holds the View tab, and is for Annotations', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, asset());
+        await answerAsset(['AcmeAsset/view'], ASSET_VIEW);
+
+        expect(viewBody().querySelector('lib-record-page')).toBeTruthy();
+        expect(viewBody().querySelector('lib-record-picture-views')).toBeTruthy();
+        expect(originalFetches()).toBe(0);
+
+        const annotations = fixture.componentInstance
+          .detailTabs()
+          .findIndex((tab) => tab.id === 'app.tabs.annotations');
+        fixture.componentInstance.onTabChange(annotations);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(originalFetches()).toBe(1);
+        expect(fixture.componentInstance.blobUrl()).not.toBeNull();
+      });
+
+      it('is downloaded again at once when the record reloads while the Annotations tab is open', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, asset());
+        await answerAsset(['AcmeAsset/view'], ASSET_VIEW);
+        const page = fixture.componentInstance;
+        page.onTabChange(page.detailTabs().findIndex((tab) => tab.id === 'app.tabs.annotations'));
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(originalFetches()).toBe(1);
+
+        // An edit saved from the Annotations tab reloads the record, and holds its original back
+        // again: the tab still shows it, so it is fetched again without waiting for anything.
+        vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({
+          afterClosed: () => of({ ...asset(), lastModified: '2026-08-24T11:00:00.000Z' }),
+        } as unknown as ReturnType<MatDialog['open']>);
+        const reads = mockDetailService.getFullDocument.mock.calls.length;
+        page.openEditDialog();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(mockDetailService.getFullDocument.mock.calls.length).toBe(reads + 1);
+        expect(originalFetches()).toBe(2);
+      });
+
+      it('is downloaded for the packaged viewer when the type has no record page', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, asset());
+        expect(originalFetches()).toBe(0);
+        await answerAsset(['AcmeAsset/metadata']);
+
+        expect(viewBody().querySelector('lib-record-page')).toBeNull();
+        expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
+        expect(originalFetches()).toBe(1);
+      });
+    });
+
+    /**
      * The record on screen reloaded, as after an edit, a transition or a check-in: the record page
      * stays, so that its cards keep what the reader was doing. Each was seen red on purpose: the
      * spinner on every reload, the layout compared by object rather than by `uid`, the layout kept

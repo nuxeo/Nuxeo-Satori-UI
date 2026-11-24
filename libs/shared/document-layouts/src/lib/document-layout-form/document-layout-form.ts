@@ -346,7 +346,14 @@ export class DocumentLayoutFormComponent {
     if (!layout || !isVersion2(layout)) return null;
     const document = this.ruleDocument();
     const value = (xpath: string): unknown => document.properties[xpath];
-    const ruleContext = { ...this.ruleContext.context(), document };
+    // The date rules read the page's clock, as the record page's do and as the form's dates do.
+    const today = this.today();
+    const ruleContext = {
+      ...this.ruleContext.context(),
+      document,
+      today,
+      timeZone: this.timeZone,
+    };
     const passes = (rule: unknown): boolean =>
       rule === null || this.rules.evaluate(rule as ExtensionRule, ruleContext);
     const label = (entry: LayoutLabel): string | null => layoutLabelText(this.translate, entry);
@@ -354,7 +361,7 @@ export class DocumentLayoutFormComponent {
       this.translate.instant(flag ? 'document-layouts.yes' : 'document-layouts.no');
     const widgets: RecordValueContext = {
       locale: this.locale,
-      today: this.today(),
+      today,
       timeZone: this.timeZone,
       ...labelLookups(this.labels()),
       ...recordLookups(

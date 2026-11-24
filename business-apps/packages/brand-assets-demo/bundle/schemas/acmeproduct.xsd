@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a brand team's own model arrives: a fictional Acme Outdoor product, a record
+     with no file. Its name is its dc:title. Replace it with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/brand-assets-demo/acmeproduct"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/brand-assets-demo/acmeproduct">
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <!-- The style number, such as AO-3101: what its assets and its shots name it by. -->
+  <xs:element name="style" type="xs:string" />
+  <!-- The season it launches in, such as Spring 2027. -->
+  <xs:element name="season" type="xs:string" />
+  <!-- Its colourways, such as Moss and Slate. -->
+  <xs:element name="colorways" type="nxs:stringList" />
+  <!-- The channels it is sold through. -->
+  <xs:element name="channels" type="nxs:stringList" />
+  <xs:element name="launch" type="xs:date" />
+</xs:schema>

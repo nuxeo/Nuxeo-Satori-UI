@@ -1,0 +1,17 @@
+<package type="addon" name="brand-assets-demo" version="0.1.0">
+  <title>Brand assets (demo)</title>
+  <description>
+    <p>The brand assets starter kit of the Nuxeo Satori business apps, for the fictional Acme Outdoor, with fictional data.</p>
+  </description>
+  <vendor>Nuxeo</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <dependencies>
+    <package>nuxeo-agentic-ui:2026.0.2</package>
+  </dependencies>
+  <visibility>PRIVATE</visibility>
+</package>

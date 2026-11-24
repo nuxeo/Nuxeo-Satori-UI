@@ -229,6 +229,12 @@ describe('RecordPageComponent', () => {
   >;
   /** The zone the page shows an instant in: the process's own, unless a test chooses one. */
   let timeZone: string | undefined;
+  /**
+   * The page's today, `RECORD_PAGE_TODAY`: noon UTC on 23 November, unless a test chooses another.
+   * That instant is the 23rd only west of UTC+12, and a computation reads today as the reader's day
+   * (`libs/shared/computations`, `dates.ts`), so a case about a day gives a time where the reader is.
+   */
+  let pageToday: Date;
   let warnings: string[];
   let execute: ReturnType<typeof vi.fn>;
   /** The record's history and comments: what the timeline and the comments cards ask for. */
@@ -269,6 +275,7 @@ describe('RecordPageComponent', () => {
     rowProperties = () => of(new Map());
     warnings = [];
     timeZone = undefined;
+    pageToday = new Date('2026-11-23T12:00:00Z');
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
       warnings.push(String(message)),
     );
@@ -290,7 +297,7 @@ describe('RecordPageComponent', () => {
             linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
           },
         },
-        { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
+        { provide: RECORD_PAGE_TODAY, useValue: () => pageToday },
         { provide: RECORD_PAGE_TIME_ZONE, useFactory: () => timeZone },
         // The timeline's second ask is its own spec's: here, one ask per timeline.
         { provide: RECORD_TIMELINE_AUDIT_DELAY, useValue: null },
@@ -340,10 +347,24 @@ describe('RecordPageComponent', () => {
   });
 
   it('shows what the registered computations work out from the record', async () => {
+    // Born 24 November 1980: 45 on 23 November 2026, the day before the birthday. Noon on the
+    // 23rd where the reader is, not an instant: noon UTC is already the 24th at UTC+12 and east of
+    // it, where the reader has turned 46 (AGENTS/08-bug-patterns.md, pattern 29).
+    pageToday = new Date(2026, 10, 23, 12);
     const root = await render();
     expect(valueOf(root, 'name')).toBe('Jane Roe');
-    // Born 24 November 1980: 45 on 23 November 2026, the day before the birthday.
     expect(valueOf(root, 'age')).toBe('45');
+  });
+
+  it("turns an age over at the reader's midnight, which only a zone off UTC tells from UTC's", async () => {
+    // The stored birth date is midnight UTC, 24 November 1980: that day in any zone. A page that
+    // read today in UTC fails this case in any zone east of UTC (the second age) or west of it
+    // (the first), and cannot fail it in a zone at UTC's own offset, where both midnights agree.
+    // This suite pins no zone, so on a UTC runner, as CI's are, it asserts only the ages.
+    pageToday = new Date(2026, 10, 23, 23, 59);
+    expect(valueOf(await render(), 'age')).toBe('45');
+    pageToday = new Date(2026, 10, 24, 0, 1);
+    expect(valueOf(await render(), 'age')).toBe('46');
   });
 
   it('shows each property through its widget', async () => {
@@ -1338,13 +1359,21 @@ describe('RecordPageComponent', () => {
       }));
 
     /**
-     * The day `offset` days from the reader's today, stored as Nuxeo stores a day: its midnight UTC.
-     * Derived from the reader's own day on purpose: these cases are about each rule's window, and
-     * hold in any zone; how a stored day and an instant are read in a zone is `date-rules.spec.ts`'s,
-     * with literals in zones chosen either side of UTC.
+     * The page's today, `RECORD_PAGE_TODAY`, months from the browser's, which is faked to
+     * 24 November below: a banner that read the browser's clock would fall outside every window
+     * these cases draw, so each of them fails if the rules stop reading the page's clock.
+     */
+    const PAGE_TODAY = new Date('2027-03-10T12:00:00Z');
+
+    /**
+     * The day `offset` days from the page's today, in the reader's zone, stored as Nuxeo stores a
+     * day: its midnight UTC. Derived from the reader's own day on purpose: these cases are about
+     * each rule's window, and hold in any zone; how a stored day and an instant are read in a zone
+     * is `date-rules.spec.ts`'s, with literals in zones chosen either side of UTC, and the last
+     * case here.
      */
     const storedDay = (offset: number): string => {
-      const now = new Date();
+      const now = PAGE_TODAY;
       const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
       const pad = (n: number) => String(n).padStart(2, '0');
       return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}T00:00:00.000Z`;
@@ -1355,9 +1384,32 @@ describe('RecordPageComponent', () => {
       // Only `Date` is faked, so the page's own timers still run.
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+      pageToday = PAGE_TODAY;
     });
 
     afterEach(() => vi.useRealTimers());
+
+    const shownFor = async (expired: string): Promise<(string | undefined)[]> =>
+      bannersOf(await render(member({ 'dc:expired': expired }), RIGHTS)).map((banner) => banner.id);
+
+    it("reads its rules' today from the page's clock, not the browser's", async () => {
+      // A day the browser's 24 November says is months away, and the page's 10 March says passed.
+      expect(await shownFor('2027-03-09T00:00:00.000Z')).toEqual(['rights-ended']);
+    });
+
+    // RECORD_PAGE_TIME_ZONE is read once per test bed, so each zone has a case of its own. The
+    // instant is 20:00 UTC on 9 March, the 9th in UTC and already the 10th at +05:30.
+    it("reads an instant's day in the page's zone: east of UTC, still today", async () => {
+      timeZone = '+0530';
+      pageToday = new Date('2027-03-10T09:00:00Z');
+      expect(await shownFor('2027-03-09T20:00:00Z')).toEqual(['rights-ending']);
+    });
+
+    it("reads an instant's day in the page's zone: in UTC, passed", async () => {
+      timeZone = '+0000';
+      pageToday = new Date('2027-03-10T09:00:00Z');
+      expect(await shownFor('2027-03-09T20:00:00Z')).toEqual(['rights-ended']);
+    });
 
     it('draws a banner while its date rule passes, above the cards', async () => {
       const root = await render(member({ 'dc:expired': storedDay(7) }), RIGHTS);

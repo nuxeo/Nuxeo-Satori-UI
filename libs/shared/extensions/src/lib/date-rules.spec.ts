@@ -157,3 +157,63 @@ describe('the date rules, read against the clock', () => {
     expect(evaluate('app.rules.dateWithin', on(null), storedDay(6, true), 7)).toBe(true);
   });
 });
+
+describe("the date rules, read against the context's clock", () => {
+  // The browser's clock says 24 November; the context pins another day, as the record page does
+  // from RECORD_PAGE_TODAY. Each case fails if a rule reads the browser's clock or zone instead.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  const pinned = (
+    document: NuxeoDocument | null,
+    today: Date,
+    timeZone?: string,
+  ): ExtensionRuleContext => ({ ...on(document), today, timeZone });
+
+  it("reads the context's today, not the browser's", () => {
+    const march = new Date('2027-03-10T12:00:00Z');
+    const ended = asset('2027-01-15T00:00:00.000Z');
+    // On the browser's 24 November these rights have not ended, and do not end within 30 days.
+    expect(evaluate('app.rules.datePassed', on(ended), expired)).toBe(false);
+    expect(evaluate('app.rules.datePassed', pinned(ended, march, 'UTC'), expired)).toBe(true);
+    const ending = asset('2027-03-25T00:00:00.000Z');
+    expect(evaluate('app.rules.dateWithin', on(ending), expired, 30)).toBe(false);
+    expect(evaluate('app.rules.dateWithin', pinned(ending, march, 'UTC'), expired, 30)).toBe(true);
+  });
+
+  it("reads today's day and an instant's in the context's zone, an offset included", () => {
+    // 21:00 UTC on the 9th is 02:30 on the 10th at +05:30, and 16:00 on the 9th at -05:00.
+    const evening = new Date('2027-03-09T21:00:00Z');
+    const endsOnThe10th = asset('2027-03-10');
+    const within = (zone: string) =>
+      evaluate('app.rules.dateWithin', pinned(endsOnThe10th, evening, zone), expired, 0);
+    expect(within('+0530')).toBe(true);
+    expect(within('-0500')).toBe(false);
+    // 20:00 UTC on the 9th is already the 10th at +05:30: on the 10th there it has not passed.
+    const instant = asset('2027-03-09T20:00:00Z');
+    const passed = (today: Date, zone: string) =>
+      evaluate('app.rules.datePassed', pinned(instant, today, zone), expired);
+    expect(passed(new Date('2027-03-10T09:00:00Z'), '+0530')).toBe(false);
+    expect(passed(new Date('2027-03-10T09:00:00Z'), 'UTC')).toBe(true);
+  });
+
+  it('pass neither rule in a zone the browser cannot read', () => {
+    const today = new Date('2026-11-24T12:00:00Z');
+    expect(daysFromToday('2026-11-01', today, 'Not/AZone')).toBeNull();
+    const ended = asset('2026-11-01');
+    expect(evaluate('app.rules.datePassed', pinned(ended, today, 'Not/AZone'), expired)).toBe(
+      false,
+    );
+    const ending = asset('2026-11-30');
+    expect(evaluate('app.rules.dateWithin', pinned(ending, today, 'Not/AZone'), expired, 30)).toBe(
+      false,
+    );
+    // The same values pass in a zone it reads, so the refusal above is the zone's.
+    expect(evaluate('app.rules.datePassed', pinned(ended, today, 'UTC'), expired)).toBe(true);
+    expect(evaluate('app.rules.dateWithin', pinned(ending, today, 'UTC'), expired, 30)).toBe(true);
+  });
+});

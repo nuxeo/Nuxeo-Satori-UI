@@ -432,16 +432,27 @@ export class RecordPageComponent {
     };
   }
 
-  /** What a widget reads besides its value, with the labels and the linked records read so far. */
+  /**
+   * What a widget reads besides its value, with the labels and the linked records read so far.
+   * Its rules read the page's clock, today and the zone, as its dates and computations do, so a
+   * banner on a date agrees with the date field beside it, and a test or a demo that pins the
+   * page's day pins the banners too.
+   */
   private valueContext(
     document: NuxeoDocument,
     labels: Labels,
     records: LinkedRecords,
   ): RecordValueContext {
-    const ruleContext = { ...this.ruleContext.context(), document };
+    const today = this.today();
+    const ruleContext = {
+      ...this.ruleContext.context(),
+      document,
+      today,
+      timeZone: this.timeZone,
+    };
     return {
       locale: this.locale,
-      today: this.today(),
+      today,
       timeZone: this.timeZone,
       ...labelLookups(labels),
       ...recordLookups(records, this.translate.instant('document-layouts.record.unavailable')),

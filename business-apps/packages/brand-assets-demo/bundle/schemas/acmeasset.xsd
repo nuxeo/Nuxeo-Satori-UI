@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a brand team's own model arrives: what a fictional Acme Outdoor asset carries
+     beside a Picture's own schemas. Its rights end on dc:expired, the day after which the asset may
+     no longer be used, and dc:rights says who holds them. Replace it with theirs. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/brand-assets-demo/acmeasset"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/brand-assets-demo/acmeasset">
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <!-- The product the asset shows, by its style number, such as AO-3101: acmeproduct:style. The
+       product page's lists and the library's Product facet read it. -->
+  <xs:element name="product" type="xs:string" />
+  <!-- The product's colourway in the shot, such as Moss. -->
+  <xs:element name="colorway" type="xs:string" />
+  <!-- Which shot it is: Front, Back, On model, Detail, Side or Campaign. -->
+  <xs:element name="shot" type="xs:string" />
+  <!-- The campaign it was made for, if any. -->
+  <xs:element name="campaign" type="xs:string" />
+  <!-- Who made it: a studio, by name. -->
+  <xs:element name="credit" type="xs:string" />
+  <!-- Where the rights let it be used: E-commerce, Wholesale, Social, Print. -->
+  <xs:element name="channels" type="nxs:stringList" />
+  <!-- Where, as a text: Worldwide, or North America and Europe. -->
+  <xs:element name="regions" type="xs:string" />
+</xs:schema>

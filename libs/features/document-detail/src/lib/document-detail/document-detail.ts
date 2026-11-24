@@ -9,6 +9,7 @@ import {
   signal,
   computed,
   effect,
+  untracked,
   ElementRef,
   viewChild,
   ChangeDetectionStrategy,
@@ -262,6 +263,29 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   json: 'application/json',
   md: 'text/markdown',
 };
+
+/**
+ * Nuxeo's `Picture` facet. It gives a record the `picture` schema, and Nuxeo makes the record's
+ * picture views for any record that has it: a Picture, or a type of a kit's own that extends
+ * Picture or declares the facet. A Video has the `Video` facet instead (measured on Nuxeo 2025).
+ */
+const PICTURE_FACET = 'Picture';
+
+function hasPictureFacet(doc: NuxeoDocument): boolean {
+  return Array.isArray(doc.facets) && doc.facets.includes(PICTURE_FACET);
+}
+
+/**
+ * Whether the record's View tab may be its record page, which shows its picture views and not its
+ * own file (layout-v2.md, section 11): it has the `picture` schema and not the `video` one, as
+ * `DocumentLayoutService.recordLayoutFor` decides. Read from its properties, which this page asks
+ * for whole, so a record with a schema has that schema's: `picture:views` for `picture`, and the
+ * `vid:` ones for `video`.
+ */
+function mayShowPictureRecordPage(doc: NuxeoDocument): boolean {
+  const keys = Object.keys(doc.properties ?? {});
+  return keys.includes('picture:views') && !keys.some((key) => key.startsWith('vid:'));
+}
 
 /** A banner's text and the actions it offers, as a banner rendered by ID takes them. */
 interface DocumentBanner {
@@ -556,6 +580,36 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly activeTabId = computed<string | null>(
     () => this.detailTabs()[this.activeTabIndex()]?.id ?? null,
   );
+
+  /**
+   * The record's own file, held back while nothing on the page shows it: a record whose View tab
+   * may be its record page, which shows its picture views instead (`mayShowPictureRecordPage`).
+   * `null` when nothing is held back. `fetchHeldBackMainBlob` fetches it once something does.
+   */
+  private readonly heldBackMainBlob = signal<{
+    readonly doc: NuxeoDocument;
+    readonly generation: number;
+  } | null>(null);
+
+  /**
+   * Fetches the file held back once a surface that shows it is drawn: the Annotations tab, whose
+   * viewer shows it, or the packaged viewer, when the record's type turns out to have no record
+   * page. While the record page holds the View tab, the original is not downloaded at all, where
+   * it used to be fetched for a viewer that was never drawn: a request per asset page, the
+   * original file's size, which nothing showed (layout-v2.md, section 11).
+   */
+  private readonly fetchHeldBackMainBlob = effect(() => {
+    const held = this.heldBackMainBlob();
+    if (!held) return;
+    const resolved = this.resolvedRecordLayout();
+    const noRecordPage = resolved?.document.uid === held.doc.uid && resolved.layout === null;
+    if (this.activeTabId() !== 'app.tabs.annotations' && !noRecordPage) return;
+    untracked(() => {
+      this.heldBackMainBlob.set(null);
+      if (held.generation === this.blobLoadGeneration && held.doc.uid === this.docUid)
+        this.fetchMainBlob(held.doc, held.generation);
+    });
+  });
 
   readonly loading = signal(true);
   readonly blobLoading = signal(false);
@@ -1182,6 +1236,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     // `resetViewerState()` above now revokes and clears `rawBlobUrl`, so the block that used to
     // repeat it here is gone. Two places doing the same cleanup is how they drift apart.
     this.resetViewerState();
+    this.heldBackMainBlob.set(null);
     this.doc.set(null);
     this.blobUrl.set(null);
     this.blobLoading.set(false);
@@ -1591,6 +1646,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private loadBlob(doc: NuxeoDocument): void {
     const generation = ++this.blobLoadGeneration;
     this.resetViewerState();
+    this.heldBackMainBlob.set(null);
     this.blobLoading.set(true);
 
     const noteText = doc.properties['note:note'] as string | undefined;
@@ -1619,10 +1675,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
 
     const traits = documentTypeTraits(doc.type);
+    // A Picture, or any record Nuxeo makes picture views for, keeps its original in its views too.
+    const picture = traits.picture || hasPictureFacet(doc);
     const fc = doc.properties['file:content'] as Record<string, unknown> | null;
     if (!fc) {
-      if (traits.picture) {
-        this.fetchMainBlob(doc, generation);
+      if (picture) {
+        this.fetchMainBlobWhenShown(doc, generation);
         return;
       }
       if (traits.preview) {
@@ -1635,8 +1693,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
     const mime = this.resolveMainContentMime(fc, doc);
 
-    if (traits.picture || (picViews?.length && !mime)) {
-      this.fetchMainBlob(doc, generation);
+    if (picture || (picViews?.length && !mime)) {
+      this.fetchMainBlobWhenShown(doc, generation);
       return;
     }
 
@@ -1648,7 +1706,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
 
     if (mime.startsWith('audio/') || mime.startsWith('image/') || mime === 'application/pdf') {
-      this.fetchMainBlob(doc, generation);
+      this.fetchMainBlobWhenShown(doc, generation);
       return;
     }
 
@@ -1719,6 +1777,22 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       (typeof fc['name'] === 'string' && fc['name'].length > 0) ||
       Number(fc['length'] ?? 0) > 0
     );
+  }
+
+  /**
+   * The record's own file, fetched now, or held back while its View tab may be its record page,
+   * which does not show it: `fetchHeldBackMainBlob` fetches it once something on the page does.
+   */
+  private fetchMainBlobWhenShown(doc: NuxeoDocument, generation: number): void {
+    if (mayShowPictureRecordPage(doc)) {
+      this.heldBackMainBlob.set({ doc, generation });
+      // A fetch that succeeds clears `?fresh=1`; one held back must too, or a reload or a shared
+      // link would read the record as just uploaded again. `freshBlobDocument` stays, for the
+      // retries of a later fetch.
+      this.clearFreshUploadQueryParam();
+      return;
+    }
+    this.fetchMainBlob(doc, generation);
   }
 
   private fetchMainBlob(doc: NuxeoDocument, generation: number, attempt = 0): void {
@@ -1816,13 +1890,19 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.loadStoryboard(doc);
     }
     if (!this.blobUrl() && this.videoSources().length === 0) {
-      this.fetchMainBlob(doc, this.blobLoadGeneration);
+      this.fetchMainBlobWhenShown(doc, this.blobLoadGeneration);
     }
   }
 
+  /**
+   * Whether Nuxeo may still be making the record's picture views or video information, so the
+   * page asks for the record again. Picture views are made for any record with the `Picture`
+   * facet, not only a Picture: a kit's own type that extends Picture, such as the brand assets
+   * kit's `AcmeAsset`, is asked again too, and its record page shows the views once they come.
+   */
   private documentMetadataIncomplete(doc: NuxeoDocument): boolean {
     const traits = documentTypeTraits(doc.type);
-    if (traits.picture) {
+    if (traits.picture || hasPictureFacet(doc)) {
       return this.pictureMetadataIncomplete(doc);
     }
     if (traits.video) {
