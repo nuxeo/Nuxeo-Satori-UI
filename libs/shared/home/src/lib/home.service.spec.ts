@@ -1,8 +1,9 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 
 import { HomeService, homeFileUrl, navigationFileUrl, type HomeLoad } from './home.service';
 
@@ -118,5 +119,46 @@ describe('HomeService', () => {
     expect(request.request.params.has('queryParams')).toBe(false);
     request.flush('', { status: 404, statusText: 'Not Found' });
     await expect(results).rejects.toThrow('HTTP 404');
+  });
+});
+
+/**
+ * Where the app provides the app registry, the home and the menu are read through it: with the
+ * path the registry knows each by, and the development server's address to try first.
+ */
+describe('HomeService, where the app provides the app registry', () => {
+  it('reads the home and the menu through APP_DEFINITION_FILES', async () => {
+    const asked: [string, string | null][] = [];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: '/nuxeo/agentic-ui-config/bootstrap.json' },
+        {
+          provide: APP_DEFINITION_FILES,
+          useValue: {
+            file: (path: string, developmentUrl: string | null) => {
+              asked.push([path, developmentUrl]);
+              return path === 'home.json'
+                ? of({ from: 'registry' })
+                : throwError(() => new HttpErrorResponse({ status: 404 }));
+            },
+            labelLanguages: () => of([]),
+          },
+        },
+      ],
+    });
+    const service = TestBed.inject(HomeService);
+
+    expect(await firstValueFrom(service.load())).toEqual<HomeLoad>({
+      kind: 'file',
+      content: { from: 'registry' },
+    });
+    expect(await firstValueFrom(service.loadNavigation())).toEqual<HomeLoad>({ kind: 'none' });
+    expect(asked).toEqual([
+      ['home.json', '/nuxeo/agentic-ui-config/home.json'],
+      ['navigation.json', '/nuxeo/agentic-ui-config/navigation.json'],
+    ]);
+    TestBed.inject(HttpTestingController).verify();
   });
 });

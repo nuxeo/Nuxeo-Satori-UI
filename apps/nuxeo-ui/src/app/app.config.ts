@@ -25,6 +25,7 @@ import { AppTranslateLoader } from './i18n/app-translate-loader';
 import { registerShippedLocaleData } from './i18n/register-locale-data';
 import { AppThemeService } from './theme/app-theme.service';
 import { startAppMenu } from './business-apps.menu-start';
+import { provideAppRegistry } from './business-apps.registry';
 
 // At module load rather than in an `APP_INITIALIZER`, because `registerLocaleData` populates a
 // global registry that `DatePipe` reads on its first evaluation — which can happen in a
@@ -58,6 +59,10 @@ export const appConfig: ApplicationConfig = {
       deps: [AppThemeService],
       multi: true,
     },
+    // The app registry: each file of an app definition is read from it, after sign-in, where the
+    // development server does not serve it, and the page follows the person signed in
+    // (docs/business-apps/app-definition-v2.md, section 13).
+    ...provideAppRegistry(),
     // The app's menu, navigation.json, joined to the platform's before the shell first reads it
     // (docs/business-apps/app-definition-v2.md, section 9). Its code is loaded lazily, so neither
     // engine it uses is in the first bundle, and it never rejects, not even when that code cannot

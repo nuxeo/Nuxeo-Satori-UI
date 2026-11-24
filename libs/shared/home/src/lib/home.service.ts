@@ -1,5 +1,6 @@
-import { HttpBackend, HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import { NuxeoApiBase } from '@nuxeo/satori-platform/nuxeo-client';
 import { Observable, TimeoutError, catchError, map, of, throwError, timeout } from 'rxjs';
@@ -27,10 +28,11 @@ export type HomeLoad =
   | { readonly kind: 'file'; readonly content: unknown };
 
 /**
- * `home.json`, beside the layouts in the directory the configuration service answers from
- * (app-definition-v2.md, section 10): `agentic-ui-config/home.json`. The configuration servlet of
- * `nuxeo-agentic-core` does not answer there; only the development server does, from
- * `npm run config:dev -- --home <file>`.
+ * Where the development server serves `home.json`, beside the layouts in the directory the
+ * configuration service answers from (app-definition-v2.md, section 10):
+ * `agentic-ui-config/home.json`, from `npm run config:dev -- --home <file>`. The configuration
+ * servlet of `nuxeo-agentic-core` does not answer there; on a server, the app registry serves the
+ * home of the app open (`APP_DEFINITION_FILES`).
  */
 export function homeFileUrl(bootstrapUrl: string): string {
   const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
@@ -38,9 +40,9 @@ export function homeFileUrl(bootstrapUrl: string): string {
 }
 
 /**
- * `navigation.json`, the app's menu, beside `home.json` (app-definition-v2.md, section 9):
- * `agentic-ui-config/navigation.json`. As for the home, only the development server answers there,
- * from `npm run config:dev -- --navigation <file>`.
+ * Where the development server serves `navigation.json`, the app's menu, beside `home.json`
+ * (app-definition-v2.md, section 9): `agentic-ui-config/navigation.json`, from
+ * `npm run config:dev -- --navigation <file>`. As for the home, a server's app registry serves it.
  */
 export function navigationFileUrl(bootstrapUrl: string): string {
   const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
@@ -60,29 +62,29 @@ function describe(error: unknown): string {
 /**
  * The home's two reads: its file, and the page provider results its KPIs count.
  *
- * The file is read as the layouts are, past the interceptors: no `Authorization` header and no
- * reset of the idle timer, though same-origin, so the browser still attaches its cookies. The
- * results are read through `NuxeoApiBase`, as every other REST call is, so they are the signed-in
- * person's: the server returns only what they may read.
+ * The file is read through `APP_DEFINITION_FILES`: where the development server serves it, past the
+ * interceptors as the layouts are, and otherwise, where the app provides the registry, from the app
+ * registry, after sign-in. The results are read through `NuxeoApiBase`, as every other REST call
+ * is, so they are the signed-in person's: the server returns only what they may read.
  */
 @Injectable({ providedIn: 'root' })
 export class HomeService {
   private readonly api = inject(NuxeoApiBase);
-  private readonly config = new HttpClient(inject(HttpBackend));
+  private readonly files = inject(APP_DEFINITION_FILES);
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
 
   /** The home file as served; `none` when nothing is served there (404). Never errors. */
   load(): Observable<HomeLoad> {
-    return this.read(homeFileUrl(this.bootstrapUrl));
+    return this.read('home.json', homeFileUrl(this.bootstrapUrl));
   }
 
   /** The menu file as served; `none` when nothing is served there (404). Never errors. */
   loadNavigation(): Observable<HomeLoad> {
-    return this.read(navigationFileUrl(this.bootstrapUrl));
+    return this.read('navigation.json', navigationFileUrl(this.bootstrapUrl));
   }
 
-  private read(url: string): Observable<HomeLoad> {
-    return this.config.get<unknown>(url).pipe(
+  private read(path: string, url: string): Observable<HomeLoad> {
+    return this.files.file(path, url).pipe(
       timeout(HOME_LOAD_TIMEOUT_MS),
       map((content): HomeLoad => ({ kind: 'file', content })),
       catchError((error: unknown) =>

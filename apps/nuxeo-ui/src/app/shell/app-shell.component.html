@@ -226,6 +226,17 @@
         }}
       </button>
       -->
+      @if (switchableApps().length > 0) {
+        <button
+          mat-menu-item
+          type="button"
+          class="switch-app-menu-item"
+          [matMenuTriggerFor]="switchAppMenu"
+        >
+          <mat-icon svgIcon="apps" />
+          {{ 'shell.menu.switch-app' | translate }}
+        </button>
+      }
       <button mat-menu-item type="button">
         <mat-icon svgIcon="help" />
         {{ 'shell.menu.help' | translate }}
@@ -234,6 +245,27 @@
         <mat-icon svgIcon="info" />
         {{ 'shell.menu.about' | translate }}
       </button>
+    </mat-menu>
+
+    <!-- "Switch app": the apps the registry lets the person see. The one open is checked. -->
+    <mat-menu #switchAppMenu="matMenu" class="switch-app-menu">
+      @for (app of switchableApps(); track app.id) {
+        <button
+          mat-menu-item
+          type="button"
+          role="menuitemradio"
+          class="switch-app-option"
+          [attr.aria-checked]="app.id === appRegistry.current()?.id"
+          (click)="appRegistry.choose(app.id)"
+        >
+          <mat-icon
+            svgIcon="circle_check"
+            aria-hidden="true"
+            [style.visibility]="app.id === appRegistry.current()?.id ? 'visible' : 'hidden'"
+          />
+          {{ appName(app) }}
+        </button>
+      }
     </mat-menu>
 
     <mat-sidenav-container class="shell-content">

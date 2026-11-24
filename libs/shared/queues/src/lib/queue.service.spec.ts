@@ -1,8 +1,9 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 
 import { QueueService, isQueueId, queueFileUrl, queueLink, type QueueLoad } from './queue.service';
 
@@ -103,5 +104,40 @@ describe('QueueService', () => {
   it('asks for nothing for an id that cannot name a queue', async () => {
     expect(await firstValueFrom(service.load('../home'))).toEqual<QueueLoad>({ kind: 'none' });
     http.expectNone(() => true);
+  });
+});
+
+/** Where the app provides the app registry, a queue is read through it, by its path there. */
+describe('QueueService, where the app provides the app registry', () => {
+  it('reads the queue through APP_DEFINITION_FILES, and asks nothing for an id that is not one', async () => {
+    const asked: [string, string | null][] = [];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: '/nuxeo/agentic-ui-config/bootstrap.json' },
+        {
+          provide: APP_DEFINITION_FILES,
+          useValue: {
+            file: (path: string, developmentUrl: string | null) => {
+              asked.push([path, developmentUrl]);
+              return of({ from: 'registry' });
+            },
+            labelLanguages: () => of([]),
+          },
+        },
+      ],
+    });
+    const service = TestBed.inject(QueueService);
+
+    expect(await firstValueFrom(service.load('unassigned-claims'))).toEqual<QueueLoad>({
+      kind: 'file',
+      content: { from: 'registry' },
+    });
+    expect(await firstValueFrom(service.load('../home'))).toEqual<QueueLoad>({ kind: 'none' });
+    expect(asked).toEqual([
+      ['queues/unassigned-claims.json', '/nuxeo/agentic-ui-config/queues/unassigned-claims.json'],
+    ]);
+    TestBed.inject(HttpTestingController).verify();
   });
 });

@@ -2452,6 +2452,7 @@
   "shell.menu.help": "Item in the account menu. A NOUN naming the destination.",
   "shell.menu.state-off": "The disabled state of a toggle, shown inside the AI Features menu item. An ADJECTIVE or short word, not a verb.",
   "shell.menu.state-on": "The enabled state of a toggle, shown inside the AI Features menu item. An ADJECTIVE or short word, not a verb.",
+  "shell.menu.switch-app": "Item in the settings menu opening the list of business apps the person may use, to open another one. A VERB phrase: switch to another app. 'app' is a business application such as Claims, not the product itself.",
   "shell.menu.themes": "Item in the account menu opening the theme picker. A NOUN, plural.",
   "shell.off": "Rendered from an Angular binding in app-shell.component.html — usually one branch of a two-state control, so its opposite is a sibling key. Keep it as short as the English.",
   "shell.overdue": "Rendered from an Angular binding in nav-drawer.component.html — usually one branch of a two-state control, so its opposite is a sibling key. Keep it as short as the English.",

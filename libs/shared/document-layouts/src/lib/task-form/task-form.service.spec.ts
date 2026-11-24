@@ -1,6 +1,7 @@
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
 import {
@@ -8,7 +9,7 @@ import {
   type NuxeoDocument,
   type NuxeoTask,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 
 import { DocumentLayoutService, taskFormUrl } from '../document-layout.service';
 import type { ResolvedFormLayout } from '../form-layout/resolve-form-layout';
@@ -232,5 +233,48 @@ describe('DocumentLayoutService: task forms', () => {
     const failed = firstValueFrom(service.taskDocument('c2'));
     http.expectOne('/nuxeo/api/v1/id/c2').flush('', { status: 403, statusText: 'Forbidden' });
     expect(await failed).toBeNull();
+  });
+});
+
+/** Where the app provides the app registry, a task form is read through it, by its path there. */
+describe('DocumentLayoutService: task forms, where the app provides the app registry', () => {
+  it('reads the form through APP_DEFINITION_FILES', async () => {
+    const asked: [string, string | null][] = [];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: '/nuxeo/agentic-ui-config/bootstrap.json' },
+        { provide: NUXEO_API_ORIGIN, useValue: '' },
+        {
+          provide: APP_DEFINITION_FILES,
+          useValue: {
+            file: (path: string, developmentUrl: string | null) => {
+              asked.push([path, developmentUrl]);
+              return of(FORM);
+            },
+            labelLanguages: () => of([]),
+          },
+        },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const service = TestBed.inject(DocumentLayoutService);
+    TestBed.inject(ExtensionRuleRegistry).registerRules({});
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const form = firstValueFrom(service.taskFormFor(TASK, CLAIM_DOCUMENT));
+    http.expectOne(CLAIM_TYPE).flush(CLAIM);
+    http
+      .expectOne(SCHEMA('var_determine'))
+      .flush(variables('var_determine', { decision: 'string' }));
+    http
+      .expectOne(SCHEMA('var_claimDetermination'))
+      .flush(variables('var_claimDetermination', { reviewer: 'string' }));
+
+    expect(await form).not.toBeNull();
+    expect(asked).toEqual([['tasks/claimDetermination.determine.layout.json', TASK_FILE]]);
+    http.verify();
+    vi.restoreAllMocks();
   });
 });

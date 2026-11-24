@@ -1,0 +1,21 @@
+{
+  "name": "shared-app-registry",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/app-registry/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:data-access"],
+  "$tagsComment": "The client of the app registry in nuxeo-agentic-core (docs/business-apps/architecture.md, section 7): which apps the person signed in may see, which one is open, and where each file of its definition is read from. Shared data access, as app-config and nuxeo-client are, so that the engines (home, queues, document-layouts) and the app can read through it.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/shared/app-registry"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

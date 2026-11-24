@@ -1,6 +1,7 @@
 import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { layoutsIndexUrl, readLayoutIndex } from '@agentic-ui/shared/document-layouts';
 import { TranslateLoader } from '@ngx-translate/core';
@@ -208,11 +209,13 @@ export function readPackageLabels(raw: unknown, source: string): Record<string, 
  * platform's catalogue, as app-definition-v2.md section 7 asks, and a customer's relabelling still
  * wins over all of them, which is the point of Layer 0.
  *
- * A package's labels file is served at `labels/<lang>.json` beside `bootstrap.json`, and asked for
- * only in a language the layouts index lists, so that nothing is asked for that cannot be there.
- * Nothing on a server serves or lists one until the app registry (decisions B and E);
- * `npm run config:dev -- --labels` does both for the dev server. A listed file that cannot be
- * read is said in the console, and its labels are absent.
+ * A package's labels file is asked for only in a language something lists, so that nothing is
+ * asked for that cannot be there: the layouts index of the development server, which
+ * `npm run config:dev -- --labels` writes, serving the file at `labels/<lang>.json` beside
+ * `bootstrap.json`, or the app registry, for the app open, which lists the app's files after sign-in
+ * (`APP_DEFINITION_FILES`). A language both list is read from the development server first, and
+ * from the registry when nothing is served there. A listed file that cannot be read is said in the
+ * console, and its labels are absent.
  *
  * The index is read here, once per session for every language, and only when the configuration
  * service answered for the bootstrap: where it did not, as under a bare `nx serve`, there is no
@@ -228,7 +231,9 @@ export class AppTranslateLoader implements TranslateLoader {
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
   /** The configuration's own address is read without the interceptors, as the layouts are. */
   private readonly configHttp = new HttpClient(inject(HttpBackend));
-  private labelLanguages$: Observable<readonly string[]> | null = null;
+  /** Where a labels file is read from: the development server's address, then the app registry's. */
+  private readonly files = inject(APP_DEFINITION_FILES);
+  private labelLanguages$: Observable<LabelLanguages> | null = null;
 
   getTranslation(lang: string): Observable<Record<string, string>> {
     // Only folders that ship this language. `catchError` stays on the ones that are asked: a
@@ -250,18 +255,20 @@ export class AppTranslateLoader implements TranslateLoader {
       .get<unknown>(translationUrl(lang, document.baseURI))
       .pipe(catchError(() => of(EN_FALLBACK_TRANSLATIONS)));
     const labelsUrl = packageLabelsUrl(this.bootstrapUrl, lang);
+    const labelsPath = `labels/${lang}.json`;
     const package$ = this.labelLanguages().pipe(
-      switchMap((languages) =>
-        languages.includes(lang)
-          ? this.configHttp.get<unknown>(labelsUrl).pipe(
-              map((raw) => readPackageLabels(raw, labelsUrl)),
-              catchError((error: unknown) => {
-                console.warn(`[agentic-ui-config] ${labelsUrl} not read: ${readFailure(error)}`);
-                return of({});
-              }),
-            )
-          : of({}),
-      ),
+      switchMap(({ development, registry }) => {
+        if (!development.includes(lang) && !registry.includes(lang)) return of({});
+        // Named as the development server serves it where that is where it is asked first.
+        const source = development.includes(lang) ? labelsUrl : `the app registry's ${labelsPath}`;
+        return this.files.file(labelsPath, development.includes(lang) ? labelsUrl : null).pipe(
+          map((raw) => readPackageLabels(raw, source)),
+          catchError((error: unknown) => {
+            console.warn(`[agentic-ui-config] ${source} not read: ${readFailure(error)}`);
+            return of({});
+          }),
+        );
+      }),
       // One limit for the index and the file together, so the start waits on one at most.
       timeout(LABELS_TIMEOUT_MS),
       catchError((error: unknown) => {
@@ -289,14 +296,26 @@ export class AppTranslateLoader implements TranslateLoader {
   }
 
   /**
-   * The languages the layouts index lists a business app's labels in, read once per session. None
-   * where the configuration service did not answer, or the index cannot be read, which the console
-   * is told.
+   * The languages a business app has labels in, read once per session: those the layouts index of
+   * the development server lists, and those the app registry lists for the app open.
    */
-  private labelLanguages(): Observable<readonly string[]> {
+  private labelLanguages(): Observable<LabelLanguages> {
+    this.labelLanguages$ ??= forkJoin({
+      development: this.developmentLabelLanguages(),
+      registry: this.files.labelLanguages().pipe(catchError(() => of<readonly string[]>([]))),
+    }).pipe(shareReplay({ bufferSize: 1, refCount: false }));
+    return this.labelLanguages$;
+  }
+
+  /**
+   * The languages the layouts index lists a business app's labels in. None where the configuration
+   * service did not answer, or the index cannot be read, which the console is told. Only the
+   * development server's index lists any: the configuration servlet's lists none.
+   */
+  private developmentLabelLanguages(): Observable<readonly string[]> {
     if (this.config.diagnostics().bootstrapSource !== 'configuration-service') return of([]);
     const url = layoutsIndexUrl(this.bootstrapUrl);
-    this.labelLanguages$ ??= this.configHttp.get<unknown>(url).pipe(
+    return this.configHttp.get<unknown>(url).pipe(
       map((raw) => {
         const index = readLayoutIndex(raw);
         if ('invalid' in index) {
@@ -311,8 +330,12 @@ export class AppTranslateLoader implements TranslateLoader {
         );
         return of([]);
       }),
-      shareReplay({ bufferSize: 1, refCount: false }),
     );
-    return this.labelLanguages$;
   }
+}
+
+/** Where each language's labels file is listed: by the development server, or by the registry. */
+interface LabelLanguages {
+  readonly development: readonly string[];
+  readonly registry: readonly string[];
 }
