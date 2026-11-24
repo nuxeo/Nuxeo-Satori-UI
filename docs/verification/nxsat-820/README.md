@@ -69,6 +69,10 @@ expanded search header and dropdown presentation informed the implementation.
   run also included unchanged configuration-generator tests, which fail locally on
   Windows stderr, line-ending and symlink expectations. That run is not an all-green test run.
   Remote CI results are recorded in the PR; existing build/lint warnings remain.
+- The final run against the committed diff passes all 53 lint/build/test tasks for 25 affected
+  projects, with 7,445 tests (6,758 Vitest and 687 app/Karma). Spec type checking and the
+  public API/reference checks also pass. The subsequent RTL adjustment replaces `left`
+  with `inset-inline-start`; its lint, stylesheet and build checks are rerun separately.
 
 ## Screenshots
 
