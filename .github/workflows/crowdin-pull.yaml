@@ -31,6 +31,15 @@ on:
         type: boolean
         default: false
 
+      review_corrections:
+        description: 'NXSAT-754 only: preview or submit 39 AI suggestions for localization review; never approve'
+        type: choice
+        default: none
+        options:
+          - none
+          - preview
+          - submit
+
 concurrency:
   group: crowdin-pull
   cancel-in-progress: false
@@ -40,7 +49,7 @@ jobs:
     # The off switch, not a "not yet" — see the note in crowdin-push.yaml. The project exists
     # and both halves have run; what this still guards is a fork or clone, which has none of
     # these secrets and would otherwise run this job on every push.
-    if: vars.CROWDIN_SYNC_ENABLED == 'true' && !inputs.verify_pending_languages
+    if: vars.CROWDIN_SYNC_ENABLED == 'true' && !inputs.verify_pending_languages && (inputs.review_corrections == '' || inputs.review_corrections == 'none')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -354,3 +363,31 @@ jobs:
           path: crowdin-readiness/
           if-no-files-found: error
           retention-days: 7
+
+  review-corrections:
+    if: github.event_name == 'workflow_dispatch' && (inputs.review_corrections == 'preview' || inputs.review_corrections == 'submit')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Preflight or submit exact review corrections without approval
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          SUBMIT_SUGGESTIONS: ${{ inputs.review_corrections == 'submit' }}
+        run: |
+          if [ "$SUBMIT_SUGGESTIONS" = "true" ]; then
+            node scripts/suggest-crowdin-corrections.mjs --manifest scripts/crowdin-review-corrections.json --output crowdin-review --apply
+          else
+            node scripts/suggest-crowdin-corrections.mjs --manifest scripts/crowdin-review-corrections.json --output crowdin-review
+          fi
+      - name: Save correction audit for localization review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nxsat-754-crowdin-review-corrections
+          path: crowdin-review/
+          if-no-files-found: error
+          retention-days: 14

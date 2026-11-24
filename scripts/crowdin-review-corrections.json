@@ -1,0 +1,320 @@
+{
+  "version": 1,
+  "projectId": 160,
+  "sourcePath": "apps/nuxeo-ui/public/i18n/en.json",
+  "purpose": "NXSAT-754 Copilot review corrections: AI-generated suggestions for linguistic review; no approvals or source changes.",
+  "corrections": [
+    {
+      "languageId": "it",
+      "identifier": "admin.admin-group-details-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "admin.admin-user-details-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "app.profile-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "browse.browse.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "collections.collection-detail.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "document-detail.document-detail.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "permissions.add-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "permissions.delete-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "permissions.share-external-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "permissions.update-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "satori-components.permission-dialogs.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "satori-components.admin-group-details-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "satori-components.admin-user-details-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "shared-ui.share-saved-search-add-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "shared-ui.share-saved-search-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "it",
+      "identifier": "shared-ui.share-saved-search-external-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Destra",
+      "text": "Autorizzazione",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "admin.admin-group-details-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "admin.admin-user-details-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "app.profile-page.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "browse.browse.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "collections.collection-detail.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "document-detail.document-detail.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "permissions.add-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "permissions.delete-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "permissions.share-external-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "permissions.update-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "satori-components.permission-dialogs.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "shared-ui.share-saved-search-add-permission-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "shared-ui.share-saved-search-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "es",
+      "identifier": "shared-ui.share-saved-search-external-dialog.right",
+      "expectedSource": "Right",
+      "expectedTranslation": "Derecha",
+      "text": "Permiso",
+      "reason": "Access-control permission, not the right-hand direction."
+    },
+    {
+      "languageId": "sv",
+      "identifier": "document-detail.document-detail.republish-confirm",
+      "expectedSource": "Are you sure you want to erase this publication with the most recent version of the document?",
+      "expectedTranslation": "Är du säker på att du vill radera denna publicering med dokumentets senaste version?",
+      "text": "Är du säker på att du vill ersätta denna publicering med dokumentets senaste version?",
+      "reason": "Republish replaces the existing publication with the latest document version; it does not delete it."
+    },
+    {
+      "languageId": "he",
+      "identifier": "document-detail.document-detail.republish-confirm",
+      "expectedSource": "Are you sure you want to erase this publication with the most recent version of the document?",
+      "expectedTranslation": "האם אתה בטוח שברצונך למחוק פרסום זה עם הגרסה העדכנית ביותר של המסמך?",
+      "text": "האם אתה בטוח שברצונך להחליף פרסום זה בגרסה העדכנית ביותר של המסמך?",
+      "reason": "Republish replaces the existing publication with the latest document version; it does not delete it."
+    },
+    {
+      "languageId": "es",
+      "identifier": "document-detail.document-detail.republish-confirm",
+      "expectedSource": "Are you sure you want to erase this publication with the most recent version of the document?",
+      "expectedTranslation": "¿Seguro que desea borrar esta publicación con la versión más reciente del documento?",
+      "text": "¿Seguro que desea reemplazar esta publicación por la versión más reciente del documento?",
+      "reason": "Republish replaces the existing publication with the latest document version; it does not delete it."
+    },
+    {
+      "languageId": "ar",
+      "identifier": "admin.admin-analytics-page.mirrors-nxql-search",
+      "expectedSource": "This metric mirrors a typical full-text search. Use {{ tool }} in the left menu for ad-hoc queries.",
+      "expectedTranslation": "يعكس هذا المقياس بحثًا نموذجيًا في النص الكامل. استخدم {{ tool }} في القائمة اليسرى للاستعلامات المخصصة.",
+      "text": "يعكس هذا المقياس بحثًا نموذجيًا في النص الكامل. استخدم {{ tool }} في قائمة الإدارة للاستعلامات المخصصة.",
+      "reason": "Use a side-neutral administration menu name because RTL reverses its side."
+    },
+    {
+      "languageId": "he",
+      "identifier": "admin.admin-analytics-page.mirrors-nxql-search",
+      "expectedSource": "This metric mirrors a typical full-text search. Use {{ tool }} in the left menu for ad-hoc queries.",
+      "expectedTranslation": "מדד זה משקף חיפוש טקסט מלא טיפוסי. השתמש ב-{{ tool }} בתפריט השמאלי לשאילתות אד-הוק.",
+      "text": "מדד זה משקף חיפוש טקסט מלא טיפוסי. השתמש ב-{{ tool }} בתפריט הניהול לשאילתות אד-הוק.",
+      "reason": "Use a side-neutral administration menu name because RTL reverses its side."
+    },
+    {
+      "languageId": "ar",
+      "identifier": "tasks.tasks-page.select-a-task",
+      "expectedSource": "Select a task from the Tasks panel on the left",
+      "expectedTranslation": "حدد مهمة من لوحة المهام على اليسار",
+      "text": "حدد مهمة من لوحة المهام",
+      "reason": "Use a side-neutral Tasks panel name because RTL reverses its side."
+    },
+    {
+      "languageId": "he",
+      "identifier": "tasks.tasks-page.select-a-task",
+      "expectedSource": "Select a task from the Tasks panel on the left",
+      "expectedTranslation": "בחר משימה מחלונית המשימות שמשמאל",
+      "text": "בחר משימה מחלונית המשימות",
+      "reason": "Use a side-neutral Tasks panel name because RTL reverses its side."
+    },
+    {
+      "languageId": "ar",
+      "identifier": "kd.knowledge-discovery.select-an-agent-on-the-right",
+      "expectedSource": "Select an agent on the right to start asking questions.",
+      "expectedTranslation": "حدد وكيلاً على اليمين للبدء في طرح الأسئلة.",
+      "text": "حدد وكيلاً من لوحة الوكلاء للبدء في طرح الأسئلة.",
+      "reason": "Use a side-neutral Agents panel name because RTL reverses its side."
+    },
+    {
+      "languageId": "he",
+      "identifier": "kd.knowledge-discovery.select-an-agent-on-the-right",
+      "expectedSource": "Select an agent on the right to start asking questions.",
+      "expectedTranslation": "בחר סוכן בצד ימין כדי להתחיל לשאול שאלות.",
+      "text": "בחר סוכן מחלונית הסוכנים כדי להתחיל לשאול שאלות.",
+      "reason": "Use a side-neutral Agents panel name because RTL reverses its side."
+    }
+  ]
+}
