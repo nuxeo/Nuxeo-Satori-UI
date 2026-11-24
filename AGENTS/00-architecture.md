@@ -331,8 +331,9 @@ branch or change history:
 the first commit rather than ratcheted, counted on distinct lines rather than statements. The
 floor also fails when the library was not measured, when its report is stale — older than its
 source, or counting a file since deleted — and when any of its files sits outside the
-measurement — only `noStatements` barrels are excused, never a dated allowlist entry. `npm run beta:coverage` runs at the end of the SonarCloud workflow,
-after its test-with-coverage step.
+measurement — only `noStatements` barrels are excused, never a dated allowlist entry. `npm run beta:coverage -- --expect-all` runs at the end of the SonarCloud workflow,
+after its test-with-coverage step, so a project whose tests fail there — and so wrote no report — fails
+the gate rather than passing as not measured.
 
 **`@nuxeo/satori-platform/nuxeo-client` and `@nuxeo/satori-platform/extensions` are importable**,
 because the dependency rule follows imports and neither barrel now reaches a banned package.
