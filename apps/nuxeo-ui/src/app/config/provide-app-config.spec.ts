@@ -179,7 +179,7 @@ describe('resolveStringLanguage', () => {
   });
 
   it('refuses every locale registered ahead of its catalogue', () => {
-    // The five mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
+    // The remaining mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
     // yet. Admitting them on registration alone would render English under their own `lang`.
     const registeredOnly = REGISTERED_LOCALES.filter(
       (locale) => !SHIPPED_CATALOGUE_LANGUAGES.includes(locale),
@@ -357,6 +357,16 @@ describe('the configured language at startup', () => {
     expect((await boot('en')).lang).toBe('en');
   });
 
+  it('boots Spanish, requests its catalogue and announces Spanish with LTR direction', async () => {
+    const { lang, urls, messages } = await boot('es');
+    expect(lang).toBe('es');
+    expect(urls.some((url) => url.endsWith('/i18n/es.json'))).toBeTrue();
+    expect(document.documentElement.lang).toBe('es');
+    expect(document.documentElement.dir).toBe('ltr');
+    expect(TestBed.inject(Directionality).value).toBe('ltr');
+    expect(messages.filter((message) => message.includes('defaultLanguage'))).toEqual([]);
+  });
+
   it('announces that language on <html lang> once startup has settled', async () => {
     await boot('fr');
     expect(document.documentElement.lang).toBe('fr');
@@ -437,16 +447,16 @@ describe('the configured language at startup', () => {
      * argument the #522 review made against the first version of `resolveFormattingLocale`, and
      * the reason this guard reads the shipped catalogues rather than the configuration.
      *
-     * `{ defaultLanguage: 'es', availableLanguages: ['en', 'es'] }` is valid Layer 0: it parses,
+     * `{ defaultLanguage: 'it', availableLanguages: ['en', 'it'] }` is valid Layer 0: it parses,
      * `mergeBootstrapConfig` accepts it, and `checkAdvertisedLocalesShip` never sees it because
-     * that gate reads the packaged config and not a customer's. No `es.json` is bundled, so the
-     * app's own strings render English and `<html lang="es">` would be the same false claim the
+     * that gate reads the packaged config and not a customer's. No `it.json` is bundled, so the
+     * app's own strings render English and `<html lang="it">` would be the same false claim the
      * ticket is about.
      */
     it('refuses a language a customer advertises but this build ships no catalogue for', async () => {
-      const { lang, urls } = await boot('es', ['en', 'es']);
+      const { lang, urls } = await boot('it', ['en', 'it']);
       expect(lang).toBe('en');
-      expect(catalogueRequests(urls, 'es')).toEqual([]);
+      expect(catalogueRequests(urls, 'it')).toEqual([]);
     });
 
     it('still honours a customer override naming a language this build does ship', async () => {
@@ -572,7 +582,7 @@ describe('LOCALE_ID provider', () => {
    * These assert from configuration, not from the constant: `injectLocaleFor` goes through the
    * real provider from `provideAppConfig()`.
    */
-  const REGISTERED_BUT_NOT_SHIPPED = ['ar', 'es', 'he', 'it', 'sv'] as const;
+  const REGISTERED_BUT_NOT_SHIPPED = ['ar', 'he', 'it', 'sv'] as const;
 
   it('does not admit a locale registered ahead of its catalogue', () => {
     // Guards the premise: if these ever stop being registered-but-unadvertised the test below
@@ -603,10 +613,10 @@ describe('LOCALE_ID provider', () => {
    * The second half of the #522 review, and the case `availableLanguages` alone cannot catch.
    *
    * Layer 0 is customer-editable, so a deployment can advertise a language this build cannot
-   * parse dates in. `{ defaultLanguage: 'es', availableLanguages: ['en', 'es'] }` is valid
+   * parse dates in. `{ defaultLanguage: 'it', availableLanguages: ['en', 'it'] }` is valid
    * configuration, passes `mergeBootstrapConfig`, and `checkAdvertisedLocalesShip` never sees it
    * — that gate reads the packaged config, not a customer's. Clamping to the config alone
-   * therefore honoured the override and handed `es` straight to `LOCALE_ID`.
+   * would honour the override and hand `it` straight to `LOCALE_ID`.
    *
    * Both keys are overridden here together, which is the shape the review asked for: overriding
    * `defaultLanguage` by itself cannot reach this path, because the packaged
@@ -614,7 +624,7 @@ describe('LOCALE_ID provider', () => {
    * exercising the capability check at all.
    */
   it('refuses a customer override advertising a language this build cannot parse dates in', () => {
-    expect(injectLocaleFor('es', ['en', 'es'])).toBe('en');
+    expect(injectLocaleFor('it', ['en', 'it'])).toBe('en');
   });
 
   it('refuses such an override for every language registered ahead of its catalogue', () => {
@@ -635,7 +645,7 @@ describe('LOCALE_ID provider', () => {
    * Configuration through to adapter resolution — the two mechanisms that disagreed.
    *
    * The first version of this test asked the adapter to parse what the adapter had just
-   * formatted, and **passed with the defect in place**: `dateFnsLocaleFor('es')` falls through
+   * formatted, and **passed with the defect in place**: `dateFnsLocaleFor('it')` falls through
    * to `enUS` for both halves, so the adapter is perfectly self-consistent while being wrong.
    * Round-tripping inside one mechanism cannot see a split between two.
    *

@@ -99,8 +99,8 @@ const FALLBACK_LANGUAGE = 'en';
  * The ticket suggests checking `availableLanguages`. That is necessary — a deployment that does
  * not offer a language should not boot into it — but it cannot be the whole test, for exactly the
  * reason the #522 review gave against the first version of {@link resolveFormattingLocale}:
- * Layer 0 is customer-editable, so `{ "defaultLanguage": "es", "availableLanguages":
- * ["en", "es"] }` is valid configuration that parses cleanly and still names a language this
+ * Layer 0 is customer-editable, so `{ "defaultLanguage": "it", "availableLanguages":
+ * ["en", "it"] }` is valid configuration that parses cleanly and still names a language this
  * build has no catalogue for. `checkAdvertisedLocalesShip` closes that hole for the **packaged**
  * config and cannot see a customer's.
  *
@@ -109,7 +109,7 @@ const FALLBACK_LANGUAGE = 'en';
  * this build *can* render, `availableLanguages` says what this deployment *will* offer.
  *
  * The configured-but-unshipped case is genuinely *partly* translated — upstream
- * `@hylandsoftware/satori-ui` ships `es`, so the shared navigation strings would be Spanish while
+ * `@hylandsoftware/satori-ui` ships Italian, so the shared navigation strings would be Italian while
  * the application's own strings are English. `en` is still the honest answer for the document as a
  * whole, because the app catalogue is the bulk of the text on every screen.
  *
@@ -224,7 +224,7 @@ export function initialiseAppConfigAndLanguage(
  * This checked `REGISTERED_LOCALES` alone, which was correct only while every registered locale
  * also shipped a catalogue. It stopped being true when `ar`, `es`, `he`, `it` and `sv` were
  * registered ahead of their translations (`D8e-webui`): registration made them admissible as
- * `LOCALE_ID`, and `DATE_FNS_LOCALES` does not carry them, so `defaultLanguage: 'es'` gave
+ * `LOCALE_ID`, and `DATE_FNS_LOCALES` did not carry them, so `defaultLanguage: 'es'` gave
  * Angular's pipes Spanish dates — `3/4/2026`, day-first — while `provideSatoriDateAdapter()`
  * fell through to `enUS` and read `03/04/2026` back as **4 March**.
  *
@@ -237,7 +237,7 @@ export function initialiseAppConfigAndLanguage(
  * The first fix for the above checked `availableLanguages`, which closed the hole for the
  * **packaged** config — `checkAdvertisedLocalesShip` fails a packaged language with no catalogue
  * — and left it open for every customer override, as the #522 review then pointed out. Layer 0
- * is customer-editable: `{ "defaultLanguage": "es", "availableLanguages": ["en", "es"] }` is
+ * is customer-editable: `{ "defaultLanguage": "it", "availableLanguages": ["en", "it"] }` is
  * valid, parses cleanly, and still names a locale the bundled date-fns map has no entry for. The
  * config cannot be the authority on a capability that is decided at build time.
  *

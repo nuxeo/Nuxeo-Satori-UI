@@ -8,6 +8,23 @@ Re-measure before quoting anything here. The 16 September edition of this page c
 **23 of 23 green** while `guardrails` was failing, and put the catalogue at **1653** keys when it
 held 1968 — both figures had a command printed beside them and neither had been re-run.
 
+## Spanish enabled independently — 24 November 2026
+
+NXSAT-754 imports only the unchanged Spanish catalogue from Crowdin PR #401 at
+commit 15795c5669393e14f4fd42a483b1680792f2b2a0. No French catalogue is imported or edited.
+Spanish is enabled in the shipped-catalogue list, both Layer 0 defaults and the date adapter;
+its existing ongoing Crowdin download remains requested. It renders left to right and uses
+day-first dates. Startup tests cover the real catalogue request and document/CDK language and
+direction; unsupported-language/customer-override tests continue to use unshipped Italian.
+
+The catalogue has 2,771 keys against 2,772 current English keys. The one newer message,
+browse.create-import-dialog.folder-allows-no-file-types, uses the normal English fallback.
+French validation errors still block the shared PR #401, but do not block this independent
+Spanish integration. Arabic/Hebrew and Italian/Swedish remain in separate PRs #696 and #656;
+retain all enabled language entries when reconciling the shared lists at merge time.
+
+This measured status supersedes the historical Spanish readiness claims below.
+
 ## Languages — the set is Nuxeo Web UI's, 30 October 2026
 
 The application's language set was aligned to the one Nuxeo Web UI supports. That **dropped Thai
