@@ -65,6 +65,7 @@ specs all passed, because none of them named the new IDs.
 ```bash
 npm run beta:coverage                     # check
 npm run beta:coverage -- --run            # run the tests first
+npm run beta:coverage -- --expect-all     # after a run of every project, as CI does
 npm run beta:coverage -- --update-baseline
 ```
 
