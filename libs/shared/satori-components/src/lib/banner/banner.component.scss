@@ -8,9 +8,17 @@
   color: var(--mat-sys-on-surface);
 }
 
+// Material 3 has no warning role, and here the tertiary colours are success's (`nxs-status-tag`'s
+// success tone), so a warning drawn with them read as a success. Satori's theme, loaded with the
+// app's, defines the warning family. Where a host lacks it, a warning falls back to the neutral
+// banner rather than to another tone's colours.
 :host([data-tone='warning']) {
-  background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  background: var(--sat-sys-warning-container, var(--mat-sys-surface-container-high));
+  color: var(--sat-sys-on-warning-container, var(--mat-sys-on-surface));
+}
+
+:host([data-tone='warning']) .nxs-banner__icon {
+  color: var(--sat-sys-warning-icon, currentColor);
 }
 
 :host([data-tone='error']) {
