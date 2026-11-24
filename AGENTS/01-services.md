@@ -277,7 +277,9 @@ bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 ```typescript
 notifyTasksChanged(): void
 getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>
-  // context reaches every request it makes, the task list and any target read for a title
+  // the newest `pageSize` open tasks, newest `created` first. Nuxeo orders the list by nt:dueDate and
+  // ignores sortBy, so when it has more than `pageSize` the rest is read with `offset`, up to 1000 more.
+  // context reaches every request it makes, both task-list reads and any target read for a title
 getTask(taskId: string): Observable<NuxeoTask>
 getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>
 ```

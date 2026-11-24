@@ -6,6 +6,21 @@ import { NuxeoTask, NuxeoTaskList } from '../models/task.model';
 import { NuxeoDocument } from '../models/document.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
 
+/**
+ * At most this many more open tasks are read, after the first page, to find a user's newest.
+ * It is the most one page of Nuxeo's task list holds: the endpoint reports `maxPageSize: 1000`.
+ */
+const USER_TASK_SCAN_LIMIT = 1000;
+
+/** Newest `created` first; an unreadable date sorts last, and the id breaks a tie. */
+function newestFirst(a: NuxeoTask, b: NuxeoTask): number {
+  const at = (task: NuxeoTask) => {
+    const time = Date.parse(task.created);
+    return Number.isNaN(time) ? -Infinity : time;
+  };
+  return at(b) - at(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
 @Injectable({ providedIn: 'root' })
 export class TaskService {
   private readonly api = inject(NuxeoApiBase);
@@ -24,41 +39,88 @@ export class TaskService {
   };
 
   /**
-   * The user's open tasks, with each target's title.
+   * The user's newest open tasks, at most `pageSize`, newest `created` first, with each target's
+   * title.
    *
+   * Nuxeo cannot be asked for them. Its task list (`RoutingTaskPageProvider`, Nuxeo 2025.10) is
+   * ordered `nt:dueDate` ascending in the query it builds, and ignores `sortBy` and `sortOrder`, so
+   * its first page holds the tasks due soonest and its last page those due latest, neither the
+   * newest. The first page is read, and when Nuxeo has more (`isNextPageAvailable`) the rest is
+   * read after it with `offset`, up to {@link USER_TASK_SCAN_LIMIT} more: one request while the
+   * tasks fit, two when they do not. Titles are read only for the tasks kept.
+   *
+   * A user with more than `pageSize` + {@link USER_TASK_SCAN_LIMIT} open tasks gets the newest of the
+   * ones due soonest, so a newer task due later than all of those is not among them.
+   *
+   * @param pageSize how many to return, and the size of the first read
    * @param context passed to every request this makes, the task list and any target it reads for
    *   a title: `backgroundRequestContext()` for a read the application sends on its own
    */
   getUserTasks(userId: string, pageSize = 10, context?: HttpContext): Observable<NuxeoTask[]> {
-    const params = new HttpParams().set('userId', userId).set('pageSize', pageSize);
+    return this.readUserTasks(userId, pageSize, 0, context).pipe(
+      switchMap((first) => {
+        const read = first.entries.length;
+        const remaining = Math.min(
+          first.resultsCount !== undefined ? first.resultsCount - read : USER_TASK_SCAN_LIMIT,
+          USER_TASK_SCAN_LIMIT,
+        );
+        if (first.isNextPageAvailable !== true || read === 0 || remaining <= 0) {
+          return of(first.entries);
+        }
+        return this.readUserTasks(userId, remaining, read, context).pipe(
+          map((rest) => [...first.entries, ...rest.entries]),
+        );
+      }),
+      map((tasks) => {
+        // A task created or ended between the two reads shifts the second by one, so the same task
+        // can arrive in both.
+        const byId = new Map(tasks.map((task) => [task.id, task]));
+        // `pageSize` 0 is Nuxeo's "every task": one read returns them all, and all are kept.
+        return [...byId.values()].sort(newestFirst).slice(0, pageSize > 0 ? pageSize : undefined);
+      }),
+      switchMap((tasks) => this.withTargetTitles(tasks, context)),
+    );
+  }
 
-    return this.api
-      .get<NuxeoTaskList>('/nuxeo/api/v1/task', params, this.taskFetchHeaders, context)
-      .pipe(
-        map((res) => res.entries),
-        switchMap((tasks) => {
-          if (tasks.length === 0) return of([] as NuxeoTask[]);
+  /** One read of the user's open tasks, in Nuxeo's order: `nt:dueDate` ascending. */
+  private readUserTasks(
+    userId: string,
+    pageSize: number,
+    offset: number,
+    context?: HttpContext,
+  ): Observable<NuxeoTaskList> {
+    let params = new HttpParams().set('userId', userId).set('pageSize', pageSize);
+    if (offset > 0) params = params.set('offset', offset);
+    return this.api.get<NuxeoTaskList>(
+      '/nuxeo/api/v1/task',
+      params,
+      this.taskFetchHeaders,
+      context,
+    );
+  }
 
-          const enriched$ = tasks.map((task) => {
-            const targetRef = task.targetDocumentIds?.[0];
-            // Enriched response has uid+title, plain response has id
-            if (targetRef?.title) {
-              return of({ ...task, targetDocTitle: targetRef.title });
-            }
-            const docId = targetRef?.uid || targetRef?.id;
-            if (!docId) return of(task);
+  /** Each task with its first target's title, read when the response did not carry it. */
+  private withTargetTitles(tasks: NuxeoTask[], context?: HttpContext): Observable<NuxeoTask[]> {
+    if (tasks.length === 0) return of([] as NuxeoTask[]);
 
-            return this.api
-              .get<NuxeoDocument>(`/nuxeo/api/v1/id/${docId}`, undefined, undefined, context)
-              .pipe(
-                map((doc) => ({ ...task, targetDocTitle: doc.title })),
-                catchError(() => of(task)),
-              );
-          });
+    const enriched$ = tasks.map((task) => {
+      const targetRef = task.targetDocumentIds?.[0];
+      // Enriched response has uid+title, plain response has id
+      if (targetRef?.title) {
+        return of({ ...task, targetDocTitle: targetRef.title });
+      }
+      const docId = targetRef?.uid || targetRef?.id;
+      if (!docId) return of(task);
 
-          return forkJoin(enriched$);
-        }),
-      );
+      return this.api
+        .get<NuxeoDocument>(`/nuxeo/api/v1/id/${docId}`, undefined, undefined, context)
+        .pipe(
+          map((doc) => ({ ...task, targetDocTitle: doc.title })),
+          catchError(() => of(task)),
+        );
+    });
+
+    return forkJoin(enriched$);
   }
 
   /** Get a specific task by ID (with enriched targets & actors). */
