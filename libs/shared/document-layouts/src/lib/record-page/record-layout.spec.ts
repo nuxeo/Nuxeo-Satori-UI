@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { DATE_RULE_MAX_DAYS, validateLayoutV2 } from '@agentic-ui/shared/app-definition';
 import {
+  DOCUMENT_RULE_EVALUATORS,
   EMPTY_EXTENSION_RULE_CONTEXT,
   ExtensionRuleRegistry,
   type ExtensionRule,
@@ -20,7 +22,7 @@ import {
 
 /**
  * The rules this build registers, in these tests: some of the platform's own, a customer's own
- * Layer 2 rule the validator's packaged list does not have, and none of version 2's three, which
+ * Layer 2 rule the validator's packaged list does not have, and none of version 2's five, which
  * stand here for any platform rule a build was made without.
  */
 const known = [
@@ -1059,12 +1061,158 @@ describe('entryOf', () => {
     ['tabs[1].cards[0].related.rowActions[2]', 'tabs[1].cards[0].related.rowActions[2]'],
     ['cards[0].related.sort[0].field', 'cards[0]'],
     ['cards[0].related.pageProvider', 'cards[0]'],
+    // A banner is an entry of its own, at the file's top level only.
+    ['banners[1].visibleWhen.parameters[0]', 'banners[1]'],
+    ['banners[0].tone', 'banners[0]'],
   ])('%s is about %s', (path, entry) => {
     expect(entryOf(path)).toBe(entry);
   });
 
   it.each(['', 'columns', '$schema'])('"%s" is about the file as a whole', (path) => {
     expect(entryOf(path)).toBeNull();
+  });
+});
+
+describe('banners, as the app reads them', () => {
+  const page = (banners: unknown[]) => ({
+    version: 2,
+    banners,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('reads each with its place, its message, its tone, info by default, and its rule', () => {
+    const file = read(
+      page([
+        { id: 'vip', label: 'VIP customer', tone: 'negative', visibleWhen: 'acme.rules.isVip' },
+        { id: 'new-asset', labelKey: 'acme.asset.new' },
+      ]),
+    );
+    expect(file.banners).toEqual([
+      {
+        id: 'vip',
+        place: 'banners[0]',
+        label: { literal: 'VIP customer', keys: [], fallback: 'Vip' },
+        tone: 'negative',
+        visibleWhen: 'acme.rules.isVip',
+      },
+      {
+        id: 'new-asset',
+        place: 'banners[1]',
+        label: { keys: ['acme.asset.new'], fallback: 'New asset' },
+        tone: 'info',
+        visibleWhen: null,
+      },
+    ]);
+    expect(file.problems).toEqual([]);
+  });
+
+  it('leaves out a banner whose rule this build does not register, and keeps the others', () => {
+    const file = read(
+      page([
+        {
+          id: 'ending',
+          label: 'Ending',
+          visibleWhen: { type: 'app.rules.dateWithin', parameters: [{ field: 'dc:expired' }, 30] },
+        },
+        { id: 'kept', label: 'Kept' },
+      ]),
+    );
+    expect(file.banners.map((banner) => banner.id)).toEqual(['kept']);
+    expect(file.problems).toEqual([
+      'banners[0] names the rule "app.rules.dateWithin", which this build does not register; left out',
+    ]);
+  });
+
+  it('refuses the file for a structural finding in a banner, as for a card', () => {
+    expect(
+      readRecordLayout(page([{ id: 'x', label: 'X', tone: 'loud' }]), { rules: known }),
+    ).toEqual({
+      invalid: 'banners[0].tone: tone is one of info, warning, negative',
+    });
+  });
+
+  it('has none for a file that names none', () => {
+    expect(read({ version: 2, cards: [{ id: 'c', fields: ['dc:title'] }] }).banners).toEqual([]);
+  });
+});
+
+describe('the date rules and the validator', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('agree on how far ahead dateWithin may look', () => {
+    const within = DOCUMENT_RULE_EVALUATORS['app.rules.dateWithin'];
+    // Only `Date` is faked. Today is the reader's own day, written as a stored day, so that the case
+    // holds in any zone: it is about the limit, not about reading a date in a zone.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const context = {
+      ...EMPTY_EXTENSION_RULE_CONTEXT,
+      document: {
+        uid: 'a',
+        title: 'A',
+        type: 'Picture',
+        path: '/a',
+        lastModified: '',
+        properties: { 'dc:expired': today },
+      },
+    };
+    const field = { field: 'dc:expired' };
+    expect(within(context, [field, DATE_RULE_MAX_DAYS], () => false)).toBe(true);
+    expect(within(context, [field, DATE_RULE_MAX_DAYS + 1], () => false)).toBe(false);
+  });
+
+  it('agree on what a literal date is: the validator accepts one exactly when the rule reads it', () => {
+    // The validator's date grammar (`isDateText`, app-definition) and the rules' (`date-rules.ts`,
+    // extensions) are two copies, as the two libraries cannot share code. Every literal here is
+    // before today, so `datePassed` passes on it exactly when it reads it as a date.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    const passed = DOCUMENT_RULE_EVALUATORS['app.rules.datePassed'];
+    const accepted = (date: string): boolean =>
+      validateLayoutV2(
+        {
+          version: 2,
+          banners: [
+            {
+              id: 'b',
+              label: 'B',
+              visibleWhen: { type: 'app.rules.datePassed', parameters: [date] },
+            },
+          ],
+          cards: [{ id: 'c', fields: ['dc:title'] }],
+        },
+        { mode: 'view' },
+      ).length === 0;
+    const literals = [
+      '2020-01-01',
+      '2020-02-29',
+      '2020-01-01T00:00:00Z',
+      '2020-01-01T09:30Z',
+      '2020-01-01T09:30:15.250+05:30',
+      '2020-01-01T09:30:00-11:00',
+      '2019-02-29',
+      '2020-13-01',
+      '2020-04-31',
+      '2020-01-01T24:00:00Z',
+      '2020-01-01T09:60:00Z',
+      '2020-01-01T09:30:60Z',
+      '2020-01-01T09:30:00+24:00',
+      '2020-01-01T09:30:00',
+      '2020-01-01 09:30:00Z',
+      '20200101',
+    ];
+    const readings = literals.map((date) => ({
+      date,
+      validator: accepted(date),
+      rule: passed(EMPTY_EXTENSION_RULE_CONTEXT, [date], () => false),
+    }));
+    expect(readings.filter((each) => each.validator !== each.rule)).toEqual([]);
+    expect(readings.filter((each) => each.validator).map((each) => each.date)).toEqual(
+      literals.slice(0, 6),
+    );
   });
 });
 

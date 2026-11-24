@@ -15,7 +15,9 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
 import {
   NXS_PRIMITIVE_IDS,
+  NxsBannerComponent,
   NxsCommentsComponent,
+  type NxsBannerTone,
   type NxsTagStatus,
 } from '@nuxeo/satori-platform/components';
 import {
@@ -55,12 +57,14 @@ import {
   sameLookups,
 } from './record-lookups';
 import {
+  type RecordBannerTone,
   type RecordCommentsEntry,
   type RecordListEntry,
   type RecordTimelineEntry,
   propertiesReadBy,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
+import { RecordPictureViewsComponent } from './record-picture-views';
 import { RecordTimelineComponent } from './record-timeline';
 import {
   type ResolvedPropertyField,
@@ -81,6 +85,23 @@ const TAG_STATUS: Readonly<Record<Tone, NxsTagStatus>> = {
   info: 'info',
   neutral: 'neutral',
 };
+
+/** The design system's banner tone for each of a banner's, in layout version 2's words. */
+const BANNER_TONE: Readonly<Record<RecordBannerTone, NxsBannerTone>> = {
+  info: 'info',
+  warning: 'warning',
+  negative: 'error',
+};
+
+/** A banner as the page shows it: what `nxs.primitives.banner` is given. */
+export interface RecordBannerShown {
+  readonly id: string;
+  readonly inputs: {
+    readonly message: string;
+    readonly tone: NxsBannerTone;
+    readonly announce: 'none';
+  };
+}
 
 /** One field as the page shows it. */
 export interface RecordFieldShown {
@@ -134,6 +155,8 @@ export interface RecordCardShown {
 export interface RecordPageShown {
   readonly type: string;
   readonly columns: number;
+  /** The banners whose rules pass, in the file's order, above everything else. */
+  readonly banners: readonly RecordBannerShown[];
   /** The tabs, each with its cards, or `null` when the page lists cards directly. */
   readonly tabs:
     | readonly {
@@ -168,8 +191,9 @@ function fieldShowing(
  * The record page: a document's main area drawn from its type's layout file, version 2, in
  * `view` mode (docs/business-apps/layout-v2.md). Cards fill one to three columns, or tabs hold
  * them; each field shows a property through a registered widget, or what a registered
- * computation works out from the record; a rule shows or hides a tab, a card or a field. A card
- * may list related records instead, or show the record's timeline or its comments.
+ * computation works out from the record; a rule shows or hides a banner, a tab, a card or a field.
+ * A card may list related records instead, or show the record's timeline or its comments. Banners
+ * come first, then, for a Picture, its views (`lib-record-picture-views`), then the cards.
  *
  * Its fields are read-only; the comments card is where a user writes, and the server decides what
  * it accepts. A hidden field is hidden from this page only: the REST API still returns it to
@@ -182,8 +206,10 @@ function fieldShowing(
     ExtensionOutletComponent,
     MatTabsModule,
     NgTemplateOutlet,
+    NxsBannerComponent,
     NxsCommentsComponent,
     RecordListComponent,
+    RecordPictureViewsComponent,
     RecordTimelineComponent,
     TranslatePipe,
   ],
@@ -196,6 +222,7 @@ export class RecordPageComponent {
   readonly layout = input.required<ResolvedRecordLayout>();
 
   protected readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
+  protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
 
   private readonly layouts = inject(DocumentLayoutService);
   private readonly translate = inject(TranslateService);
@@ -290,6 +317,17 @@ export class RecordPageComponent {
     const document = this.document();
     const context = this.valueContext(document, this.labels());
     const passes = context.rule;
+    // A banner is met in place, as the page draws, so it is not announced: `announce` is `none`.
+    const banners = layout.banners
+      .filter((banner) => passes(banner.visibleWhen))
+      .map((banner): RecordBannerShown => ({
+        id: banner.id,
+        inputs: {
+          message: this.text(banner.label) ?? humanize(banner.id),
+          tone: BANNER_TONE[banner.tone],
+          announce: 'none',
+        },
+      }));
     const cards = (list: readonly ResolvedRecordCard[]): RecordCardShown[] =>
       list
         .filter((card) => passes(card.visibleWhen))
@@ -327,9 +365,15 @@ export class RecordPageComponent {
           cards: cards(tab.cards),
         }))
         .filter((tab) => tab.cards.length > 0);
-      return { type: layout.type, columns: layout.columns, tabs, cards: [] };
+      return { type: layout.type, columns: layout.columns, banners, tabs, cards: [] };
     }
-    return { type: layout.type, columns: layout.columns, tabs: null, cards: cards(layout.cards) };
+    return {
+      type: layout.type,
+      columns: layout.columns,
+      banners,
+      tabs: null,
+      cards: cards(layout.cards),
+    };
   });
 
   /**

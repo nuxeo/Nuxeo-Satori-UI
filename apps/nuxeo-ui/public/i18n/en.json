@@ -1523,6 +1523,14 @@
     },
     "loading-form": "Loading the form",
     "no": "No",
+    "picture": {
+      "alt": "{{title}}, {{view}} view",
+      "failed": "This view of the picture could not be loaded",
+      "label": "Picture",
+      "loading": "Loading the picture",
+      "none": "The picture's views are not ready yet",
+      "views": "Views of the picture"
+    },
     "related": {
       "empty": "No records"
     },

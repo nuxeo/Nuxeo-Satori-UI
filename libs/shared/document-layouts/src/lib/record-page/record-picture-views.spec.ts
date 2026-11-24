@@ -1,0 +1,277 @@
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import { Subject, type Observable } from 'rxjs';
+
+import {
+  RecordPictureViewsComponent,
+  firstPictureView,
+  readPictureViews,
+} from './record-picture-views';
+
+/** A view as Nuxeo 2025 writes one in `picture:views`, its file's `data` the server's address. */
+function view(title: string, width: number, height: number, digest = `${title}-1`) {
+  return {
+    title,
+    width,
+    height,
+    description: `${title} size`,
+    content: {
+      name: `${title}_jacket.jpg`,
+      'mime-type': 'image/jpeg',
+      digest,
+      length: '12345',
+      data: `http://localhost:8080/nuxeo/nxfile/default/p1/picture:views/0/content/${title}_jacket.jpg`,
+    },
+  };
+}
+
+function picture(views: unknown, uid = 'p1'): NuxeoDocument {
+  return {
+    uid,
+    title: 'Trail jacket, front',
+    type: 'Picture',
+    path: `/assets/${uid}`,
+    lastModified: '2026-11-24T00:00:00.000Z',
+    properties: { 'picture:views': views },
+  };
+}
+
+const VIEWS = [
+  view('Thumbnail', 150, 100),
+  view('Small', 280, 187),
+  view('Medium', 1000, 667),
+  view('FullHD', 1920, 1280),
+];
+
+describe('readPictureViews', () => {
+  it('reads each view with its place, title, size and format, in the order Nuxeo lists them', () => {
+    expect(readPictureViews(picture(VIEWS.slice(0, 2)))).toEqual([
+      {
+        index: 0,
+        title: 'Thumbnail',
+        width: 150,
+        height: 100,
+        format: 'JPEG',
+        key: 'p1/0/Thumbnail-1',
+      },
+      { index: 1, title: 'Small', width: 280, height: 187, format: 'JPEG', key: 'p1/1/Small-1' },
+    ]);
+  });
+
+  it('leaves out a view with no file, and keeps the place of the others', () => {
+    const pending = { title: 'FullHD', width: 1920, height: 1280, content: null };
+    expect(readPictureViews(picture([pending, VIEWS[2]])).map((each) => each.index)).toEqual([1]);
+  });
+
+  it('names a view with no title by its place, and shows no size or format Nuxeo does not give', () => {
+    const odd = { width: '0', height: 'tall', content: { 'mime-type': 'text/html' } };
+    expect(readPictureViews(picture([odd]))).toEqual([
+      { index: 0, title: 'View 1', width: null, height: null, format: null, key: 'p1/0/' },
+    ]);
+  });
+
+  it('reads no views from a record without them', () => {
+    expect(readPictureViews(picture(undefined))).toEqual([]);
+    expect(readPictureViews(picture({ title: 'Medium' }))).toEqual([]);
+  });
+
+  it('shows Medium first, then Small, FullHD and OriginalJpeg, and else the first view', () => {
+    const first = (titles: string[]) =>
+      firstPictureView(readPictureViews(picture(titles.map((title) => view(title, 10, 10)))))
+        ?.title;
+    expect(first(['Thumbnail', 'Small', 'Medium', 'FullHD'])).toBe('Medium');
+    expect(first(['Thumbnail', 'FullHD', 'Small'])).toBe('Small');
+    expect(first(['Thumbnail', 'OriginalJpeg'])).toBe('OriginalJpeg');
+    expect(first(['Thumbnail', 'Square'])).toBe('Thumbnail');
+    expect(first([])).toBeUndefined();
+  });
+});
+
+describe('RecordPictureViewsComponent', () => {
+  let fixture: ComponentFixture<RecordPictureViewsComponent> | null;
+  let fetchBlobByXpath: ReturnType<typeof vi.fn>;
+  /** Each request's answer, by `<uid> <xpath>`, in the order asked. */
+  let requests: { key: string; answer: Subject<Blob> }[];
+  let created: string[];
+  let revoked: string[];
+
+  beforeEach(() => {
+    fixture = null;
+    requests = [];
+    created = [];
+    revoked = [];
+    let counter = 0;
+    // jsdom implements neither, so they are installed rather than spied on, and removed after.
+    Object.assign(URL, {
+      createObjectURL: vi.fn(() => {
+        const url = `blob:view-${++counter}`;
+        created.push(url);
+        return url;
+      }),
+      revokeObjectURL: vi.fn((url: string) => revoked.push(url)),
+    });
+    fetchBlobByXpath = vi.fn((uid: string, xpath: string): Observable<Blob> => {
+      const answer = new Subject<Blob>();
+      requests.push({ key: `${uid} ${xpath}`, answer });
+      return answer;
+    });
+    TestBed.configureTestingModule({
+      imports: [RecordPictureViewsComponent, MatIconTestingModule],
+      providers: [{ provide: DocumentDetailService, useValue: { fetchBlobByXpath } }],
+    });
+  });
+
+  afterEach(() => {
+    fixture?.destroy();
+    Object.assign(URL, { createObjectURL: undefined, revokeObjectURL: undefined });
+  });
+
+  async function render(document: NuxeoDocument): Promise<HTMLElement> {
+    fixture ??= TestBed.createComponent(RecordPictureViewsComponent);
+    fixture.componentRef.setInput('document', document);
+    return settle();
+  }
+
+  async function settle(): Promise<HTMLElement> {
+    const shown = fixture as ComponentFixture<RecordPictureViewsComponent>;
+    shown.detectChanges();
+    await shown.whenStable();
+    shown.detectChanges();
+    return shown.nativeElement as HTMLElement;
+  }
+
+  async function answer(index: number): Promise<void> {
+    requests[index].answer.next(new Blob(['jpeg'], { type: 'image/jpeg' }));
+    requests[index].answer.complete();
+    await settle();
+  }
+
+  const image = (root: HTMLElement) => root.querySelector<HTMLImageElement>('img');
+  const button = (root: HTMLElement, title: string) =>
+    root.querySelector<HTMLButtonElement>(`.record-picture__view[data-view="${title}"]`);
+
+  it('fetches the view shown first through the service, by its place, and shows it from a blob URL', async () => {
+    const root = await render(picture(VIEWS));
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(1);
+    expect(fetchBlobByXpath).toHaveBeenCalledWith('p1', 'picture:views/2/content');
+    expect(image(root)).toBeNull();
+    expect(root.querySelector('nxs-spinner')).not.toBeNull();
+
+    await answer(0);
+    expect(image(root)?.getAttribute('src')).toBe('blob:view-1');
+    expect(image(root)?.getAttribute('alt')).toBe('Trail jacket, front, Medium view');
+    expect(root.querySelector('figcaption')?.textContent?.trim()).toBe(
+      'Medium · 1000 × 667 · JPEG',
+    );
+  });
+
+  it('never binds a Nuxeo address to the image', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    for (const img of Array.from(root.querySelectorAll('img')))
+      expect(img.getAttribute('src')).toMatch(/^blob:/);
+    expect(root.innerHTML).not.toContain('nxfile');
+  });
+
+  it('offers a button per view, says which is shown, and fetches another when it is chosen', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    expect(
+      Array.from(root.querySelectorAll('.record-picture__view')).map((each) =>
+        each.getAttribute('aria-pressed'),
+      ),
+    ).toEqual(['false', 'false', 'true', 'false']);
+
+    button(root, 'FullHD')?.click();
+    await settle();
+    expect(fetchBlobByXpath).toHaveBeenLastCalledWith('p1', 'picture:views/3/content');
+    expect(button(root, 'FullHD')?.getAttribute('aria-pressed')).toBe('true');
+    // The Medium view is not shown while the FullHD one loads.
+    expect(image(root)).toBeNull();
+    await answer(1);
+    expect(image(root)?.getAttribute('src')).toBe('blob:view-2');
+  });
+
+  it('shows a view fetched before from its blob URL, without asking again', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    button(root, 'Small')?.click();
+    await settle();
+    await answer(1);
+    button(root, 'Medium')?.click();
+    await settle();
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(2);
+    expect(image(root)?.getAttribute('src')).toBe('blob:view-1');
+    expect(revoked).toEqual([]);
+  });
+
+  it('asks nothing again when the record is reloaded with the same views', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    await render({ ...picture(VIEWS), lastModified: '2026-11-24T10:00:00.000Z' });
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(1);
+    expect(image(root)?.getAttribute('src')).toBe('blob:view-1');
+  });
+
+  it("revokes the URLs of another record's views, and of a replaced picture's", async () => {
+    await render(picture(VIEWS));
+    await answer(0);
+    // The picture replaced: its views have new files, so new digests.
+    const replaced = VIEWS.map((each) => view(each.title, each.width, each.height, 'new'));
+    await render(picture(replaced));
+    expect(revoked).toEqual(['blob:view-1']);
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(2);
+    await answer(1);
+    await render(picture(VIEWS, 'p2'));
+    expect(revoked).toEqual(['blob:view-1', 'blob:view-2']);
+    expect(fetchBlobByXpath).toHaveBeenLastCalledWith('p2', 'picture:views/2/content');
+  });
+
+  it('revokes every URL it created when it is destroyed', async () => {
+    const root = await render(picture(VIEWS));
+    await answer(0);
+    button(root, 'Small')?.click();
+    await settle();
+    await answer(1);
+    fixture?.destroy();
+    expect(created).toEqual(['blob:view-1', 'blob:view-2']);
+    expect([...revoked].sort()).toEqual(['blob:view-1', 'blob:view-2']);
+  });
+
+  it('creates no URL for a view whose answer comes after another is chosen', async () => {
+    const root = await render(picture(VIEWS));
+    button(root, 'Small')?.click();
+    await settle();
+    expect(requests[0].answer.observed).toBe(false);
+    await answer(1);
+    expect(created).toEqual(['blob:view-1']);
+    expect(image(root)?.getAttribute('src')).toBe('blob:view-1');
+  });
+
+  it('says when a view cannot be loaded, and asks again on Retry', async () => {
+    const root = await render(picture(VIEWS));
+    requests[0].answer.error({ status: 503 });
+    await settle();
+    expect(root.querySelector('nxs-error-state')).not.toBeNull();
+    expect(image(root)).toBeNull();
+
+    root.querySelector<HTMLButtonElement>('nxs-error-state button')?.click();
+    await settle();
+    expect(fetchBlobByXpath).toHaveBeenCalledTimes(2);
+    await answer(1);
+    expect(image(root)?.getAttribute('src')).toBe('blob:view-1');
+  });
+
+  it('says the views are not ready on a picture that has none yet, and asks nothing', async () => {
+    const root = await render(picture([]));
+    expect(root.querySelector('nxs-empty-state')).not.toBeNull();
+    expect(fetchBlobByXpath).not.toHaveBeenCalled();
+  });
+
+  it('offers no buttons for a picture with one view', async () => {
+    const root = await render(picture([VIEWS[0]]));
+    expect(root.querySelector('.record-picture__views')).toBeNull();
+    expect(fetchBlobByXpath).toHaveBeenCalledWith('p1', 'picture:views/0/content');
+  });
+});

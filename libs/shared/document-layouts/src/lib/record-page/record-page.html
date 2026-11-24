@@ -4,6 +4,32 @@
   [attr.data-record-type]="page.type"
   [style.--record-page-columns]="page.columns"
 >
+  @if (page.banners.length > 0) {
+    <div class="record-page__banners">
+      @for (banner of page.banners; track banner.id) {
+        <div class="record-page__banner" [attr.data-banner-id]="banner.id">
+          <lib-extension-outlet
+            #bannerOutlet
+            [componentId]="bannerId"
+            [componentInputs]="banner.inputs"
+          />
+          @if (bannerOutlet.unresolved()) {
+            <nxs-banner [message]="banner.inputs.message" [tone]="banner.inputs.tone" />
+          }
+        </div>
+      }
+    </div>
+  }
+  <!-- A record whose file is its content shows it first, above the cards (layout-v2.md, section 11). -->
+  @if (layout().preview === 'picture') {
+    <section
+      class="record-page__card record-page__preview"
+      data-preview="picture"
+      [attr.aria-label]="'document-layouts.picture.label' | translate"
+    >
+      <lib-record-picture-views [document]="document()" [stateHeadingLevel]="3" />
+    </section>
+  }
   @if (page.tabs) {
     <mat-tab-group
       class="record-page__tabs"

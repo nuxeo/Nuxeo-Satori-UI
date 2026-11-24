@@ -1,0 +1,57 @@
+@let view = selected();
+@if (view === null) {
+  <nxs-empty-state
+    icon="image"
+    [heading]="'document-layouts.picture.none' | translate"
+    [headingLevel]="stateHeadingLevel()"
+  />
+} @else {
+  <figure class="record-picture__figure" [attr.data-view]="view.title">
+    <div class="record-picture__frame" [attr.aria-busy]="imageUrl() === null && failure() === null">
+      @if (imageUrl(); as url) {
+        <img
+          class="record-picture__image"
+          [src]="url"
+          [alt]="
+            'document-layouts.picture.alt'
+              | translate: { title: document().title, view: view.title }
+          "
+        />
+      } @else if (failure(); as status) {
+        <nxs-error-state
+          [status]="status"
+          [heading]="'document-layouts.picture.failed' | translate"
+          [headingLevel]="stateHeadingLevel()"
+          [retryable]="status === 500"
+          (retry)="retry()"
+        />
+      } @else {
+        <nxs-spinner diameter="32" [label]="'document-layouts.picture.loading' | translate" />
+      }
+    </div>
+    <figcaption class="record-picture__caption">{{ caption(view) }}</figcaption>
+  </figure>
+  @if (views().length > 1) {
+    <div
+      class="record-picture__views"
+      role="group"
+      [attr.aria-label]="'document-layouts.picture.views' | translate"
+    >
+      @for (each of views(); track each.key) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="record-picture__view"
+          [attr.data-view]="each.title"
+          [attr.aria-pressed]="each.key === view.key"
+          (click)="choose(each)"
+        >
+          {{ each.title }}
+          @if (size(each); as dimensions) {
+            <span class="record-picture__view-size">{{ dimensions }}</span>
+          }
+        </button>
+      }
+    </div>
+  }
+}

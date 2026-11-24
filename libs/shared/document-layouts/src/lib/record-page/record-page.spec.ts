@@ -1,12 +1,13 @@
-import { signal } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
-import { provideNxsComponents } from '@nuxeo/satori-platform/components';
+import { NXS_PRIMITIVE_IDS, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
   DOCUMENT_RULE_EVALUATORS,
+  ExtensionComponentRegistry,
   ExtensionRuleContextService,
   ExtensionRuleRegistry,
 } from '@nuxeo/satori-platform/extensions';
@@ -162,6 +163,18 @@ function layoutOf(content: Record<string, unknown>): ResolvedRecordLayout {
   return resolveRecordLayout(MEMBER_TYPE, read).layout;
 }
 
+/** What a customer's own banner might be: it says which inputs reached it. */
+@Component({
+  selector: 'lib-test-overridden-banner',
+  standalone: true,
+  template: '<p class="test-banner">{{ tone() }} {{ announce() }}: {{ message() }}</p>',
+})
+class OverriddenBannerComponent {
+  readonly message = input('');
+  readonly tone = input('');
+  readonly announce = input('');
+}
+
 describe('RecordPageComponent', () => {
   let fixture: ComponentFixture<RecordPageComponent>;
   let rules: { memberServices: boolean; canSeeService: boolean };
@@ -176,6 +189,8 @@ describe('RecordPageComponent', () => {
     getAuditLog: ReturnType<typeof vi.fn>;
     getAllComments: ReturnType<typeof vi.fn>;
     createComment: ReturnType<typeof vi.fn>;
+    /** A Picture's views, which a page with the picture's preview fetches. */
+    fetchBlobByXpath: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -184,6 +199,7 @@ describe('RecordPageComponent', () => {
       getAuditLog: vi.fn(() => new Subject()),
       getAllComments: vi.fn(() => new Subject()),
       createComment: vi.fn(),
+      fetchBlobByXpath: vi.fn(() => new Subject()),
     };
     rules = { memberServices: false, canSeeService: true };
     principal = (kind, id) =>
@@ -1077,6 +1093,154 @@ describe('RecordPageComponent', () => {
       expect(
         root.querySelector('[data-tab-id="activity"] .nxs-comments__text')?.textContent?.trim(),
       ).toBe('First');
+    });
+  });
+
+  describe('banners and a picture', () => {
+    const RIGHTS = {
+      version: 2,
+      banners: [
+        {
+          id: 'rights-ended',
+          tone: 'negative',
+          label: 'The rights to this picture have ended.',
+          visibleWhen: { type: 'app.rules.datePassed', parameters: [{ field: 'dc:expired' }] },
+        },
+        {
+          id: 'rights-ending',
+          tone: 'warning',
+          label: 'The rights to this picture end within 30 days.',
+          visibleWhen: {
+            type: 'app.rules.dateWithin',
+            parameters: [{ field: 'dc:expired' }, 30],
+          },
+        },
+        { id: 'service', label: 'Member services only.', visibleWhen: 'test.rules.memberServices' },
+      ],
+      cards: [{ id: 'member', label: 'Member', fields: ['member:phone'] }],
+    };
+
+    const bannersOf = (root: HTMLElement) =>
+      [...root.querySelectorAll<HTMLElement>('.record-page__banner')].map((banner) => ({
+        id: banner.dataset['bannerId'],
+        tone: banner.querySelector('.nxs-banner')?.getAttribute('data-tone'),
+        text: banner.querySelector('.nxs-banner__message')?.textContent?.trim(),
+      }));
+
+    /**
+     * The day `offset` days from the reader's today, stored as Nuxeo stores a day: its midnight UTC.
+     * Derived from the reader's own day on purpose: these cases are about each rule's window, and
+     * hold in any zone; how a stored day and an instant are read in a zone is `date-rules.spec.ts`'s,
+     * with literals in zones chosen either side of UTC.
+     */
+    const storedDay = (offset: number): string => {
+      const now = new Date();
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}T00:00:00.000Z`;
+    };
+
+    beforeEach(() => {
+      TestBed.inject(ExtensionRuleRegistry).registerRules(DOCUMENT_RULE_EVALUATORS);
+      // Only `Date` is faked, so the page's own timers still run.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it('draws a banner while its date rule passes, above the cards', async () => {
+      const root = await render(member({ 'dc:expired': storedDay(7) }), RIGHTS);
+      expect(bannersOf(root)).toEqual([
+        {
+          id: 'rights-ending',
+          tone: 'warning',
+          text: 'The rights to this picture end within 30 days.',
+        },
+      ]);
+      const page = root.querySelector('.record-page') as HTMLElement;
+      expect(page.firstElementChild?.classList.contains('record-page__banners')).toBe(true);
+    });
+
+    it('draws the other banner once the date has passed, in its own tone', async () => {
+      const root = await render(member({ 'dc:expired': storedDay(-1) }), RIGHTS);
+      expect(bannersOf(root)).toEqual([
+        {
+          id: 'rights-ended',
+          tone: 'error',
+          text: 'The rights to this picture have ended.',
+        },
+      ]);
+    });
+
+    it('draws neither with no date, or one a day past the window, and follows any rule', async () => {
+      expect(bannersOf(await render(member(), RIGHTS))).toEqual([]);
+      fixture.destroy();
+      expect(bannersOf(await render(member({ 'dc:expired': storedDay(31) }), RIGHTS))).toEqual([]);
+      fixture.destroy();
+      expect(
+        bannersOf(await render(member({ 'dc:expired': storedDay(30) }), RIGHTS)).map(
+          (banner) => banner.id,
+        ),
+      ).toEqual(['rights-ending']);
+      fixture.destroy();
+      rules.memberServices = true;
+      expect(bannersOf(await render(member(), RIGHTS)).map((banner) => banner.id)).toEqual([
+        'service',
+      ]);
+    });
+
+    it("draws a banner above a file's tabs too", async () => {
+      const root = await render(member({ 'dc:expired': storedDay(0) }), {
+        version: 2,
+        banners: RIGHTS.banners,
+        tabs: [{ id: 'summary', label: 'Summary', cards: RIGHTS.cards }],
+      });
+      expect(bannersOf(root).map((banner) => banner.id)).toEqual(['rights-ending']);
+      expect(
+        root.querySelector(
+          '.record-page__banners + .record-page__tabs, .record-page__banners ~ mat-tab-group',
+        ),
+      ).not.toBeNull();
+    });
+
+    it('draws them through the banner ID, so that an override of it reaches them', async () => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        [NXS_PRIMITIVE_IDS.banner]: OverriddenBannerComponent,
+      });
+      const root = await render(member({ 'dc:expired': storedDay(-1) }), RIGHTS);
+      expect(root.querySelector('.record-page__banner .nxs-banner')).toBeNull();
+      expect(
+        [...root.querySelectorAll('.record-page__banner .test-banner')].map((each) =>
+          each.textContent?.trim(),
+        ),
+      ).toEqual(['error none: The rights to this picture have ended.']);
+    });
+
+    it("draws a picture's views first when the layout says so, and nothing of the kind otherwise", async () => {
+      const plain = await render(member(), RIGHTS);
+      expect(plain.querySelector('lib-record-picture-views')).toBeNull();
+      fixture.destroy();
+
+      fixture = TestBed.createComponent(RecordPageComponent);
+      const views = [{ title: 'Medium', width: 10, height: 10, content: { digest: 'd' } }];
+      fixture.componentRef.setInput(
+        'document',
+        member({ 'picture:views': views, 'dc:expired': storedDay(3) }),
+      );
+      fixture.componentRef.setInput('layout', { ...layoutOf(RIGHTS), preview: 'picture' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const root = fixture.nativeElement as HTMLElement;
+      const preview = root.querySelector('[data-preview="picture"]');
+      expect(preview?.querySelector('lib-record-picture-views')).not.toBeNull();
+      expect(preview?.getAttribute('aria-label')).toBe('Picture');
+      // Under the banners, above the cards.
+      expect(preview?.previousElementSibling?.classList.contains('record-page__banners')).toBe(
+        true,
+      );
+      expect(preview?.nextElementSibling?.classList.contains('record-page__grid')).toBe(true);
+      expect(documents.fetchBlobByXpath).toHaveBeenCalledWith('m1', 'picture:views/0/content');
     });
   });
 });

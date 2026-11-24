@@ -62,6 +62,7 @@ import {
 } from './form-layout/resolve-form-layout';
 import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
 import {
+  RecordPreview,
   ResolvedRecordLayout,
   SkippedRecordField,
   propertyDefinitions,
@@ -162,6 +163,20 @@ function leafOf(id: string): string {
 /** The schemas whose records the View tab shows by their own content: a file, a note. */
 const OWN_VIEW_SCHEMAS: ReadonlySet<string> = new Set(['file', 'note']);
 
+/**
+ * The schema of a record whose record page shows its own file first: a Picture's, whose views the
+ * page draws above its cards. Its record holds a file too, so this is asked before
+ * {@link OWN_VIEW_SCHEMAS}: a record with it has a record page, one without keeps its own view.
+ */
+const PICTURE_SCHEMA = 'picture';
+
+/**
+ * A video's schema. Nuxeo's `Video` facet declares `picture` as well as `video` (measured on Nuxeo
+ * 2025: a Video's schemas are `file`, `video` and `picture`, among others), for its still frames,
+ * so a record with it is not a picture: it keeps its own view, its player.
+ */
+const VIDEO_SCHEMA = 'video';
+
 /** The name a user or group is shown by: first and last name, or the group's label. */
 export function principalName(kind: 'user' | 'group', raw: unknown): string | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -258,6 +273,10 @@ export class DocumentLayoutService {
    * `null` when the type has no `view` file, when its file is refused, or when the type's schemas
    * cannot be read. The View tab is then today's document page, as layout-v2.md, section 1, says.
    * A type with no `view` file costs no request but the index, which is read once per session.
+   *
+   * A record with the `picture` schema, through its type or a facet, has its record page with its
+   * views first (`preview: 'picture'`), unless it has the `video` schema too, as every Video does.
+   * Any other record with a file or a note keeps its own view.
    */
   recordLayoutFor(
     type: string,
@@ -272,10 +291,14 @@ export class DocumentLayoutService {
                 // The type's schemas and the document's own: a dynamic facet can add `file` or
                 // `note` to one record of a type that has neither, and its preview shows first too.
                 const schemas = [...definition.schemas, ...documentSchemas];
-                if (schemas.some((schema) => OWN_VIEW_SCHEMAS.has(schema.name))) {
+                const names = new Set(schemas.map((schema) => schema.name));
+                if (names.has(PICTURE_SCHEMA) && !names.has(VIDEO_SCHEMA)) {
+                  return this.resolveRecord(definition, file, documentSchemas, 'picture');
+                }
+                if ([...names].some((name) => OWN_VIEW_SCHEMAS.has(name))) {
                   return this.ownViewFirst(type);
                 }
-                return this.resolveRecord(definition, file, documentSchemas);
+                return this.resolveRecord(definition, file, documentSchemas, null);
               }),
             )
           : of(null),
@@ -351,8 +374,8 @@ export class DocumentLayoutService {
 
   /**
    * A file's preview and a note's editor show first (layout-v2.md, section 10), and a record
-   * page beside them comes later: until then the View tab of a record with either, through its
-   * type or through a facet, is today's, and the console says so once per type.
+   * page beside them comes later, but for a picture's: until then the View tab of a record with
+   * either, through its type or through a facet, is today's, and the console says so once per type.
    */
   private ownViewFirst(type: string): Observable<null> {
     if (!this.ownView.has(type)) {
@@ -368,6 +391,7 @@ export class DocumentLayoutService {
     definition: DocumentTypeDefinition,
     file: RecordLayoutFile,
     documentSchemas: readonly DocumentSchemaRef[],
+    preview: RecordPreview,
   ): Observable<ResolvedRecordLayout> {
     const wanted = recordFacetSchemasToRead(definition, documentSchemas, file);
     const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
@@ -379,7 +403,7 @@ export class DocumentLayoutService {
         const unread = new Map(
           wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
         );
-        const { layout, skipped, notes } = resolveRecordLayout(definition, file, facets);
+        const { layout, skipped, notes } = resolveRecordLayout(definition, file, facets, preview);
         for (const field of skipped) warn(skippedMessage(definition.name, field, unread));
         for (const note of notes) warn(`${definition.name}/view layout: ${note}`);
         return layout;
