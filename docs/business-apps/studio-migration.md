@@ -199,7 +199,7 @@ has been seen failing on purpose (section 7) before it is trusted.
 
 | #   | Check                    | Proves                                                                                                                | How                                                                                                                                                                                                                                                         |
 | --- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Nothing dropped          | Every file and construct in the package is converted, proposed, reported, or recognised as Studio's generated code    | Two independent counts of the package's constructs must agree with the report: 100%, or the run fails                                                                                                                                                       |
+| 1   | Nothing dropped          | Every file and construct in the package is converted, proposed, reported, or recognised as Studio's generated code    | The report must be of the package given, and two independent counts of the package's constructs must agree with it: 100%, or the run fails                                                                                                                  |
 | 2   | Fields                   | Each converted layout shows the same fields, in the same modes, with the same required flags and the expected widgets | Compares the fields bound in each Polymer layout with those of the converted layout, less the reported duplicates                                                                                                                                           |
 | 3   | Model                    | Every converted field, vocabulary and page provider exists on the server                                              | Checks the package against `/config/types`, `/config/schemas`, the directories and the page provider definitions                                                                                                                                            |
 | 4   | Labels                   | Every label survives, in every language the package had                                                               | Compares the translation keys and texts, language by language                                                                                                                                                                                               |
@@ -303,6 +303,14 @@ something to break fails its check too. The thirteen that do not say so: `widen-
 condition and no operation button to break there, and eight of M2's nine no task layout, tab or
 layout block.
 
+**For the report's decisions** (section 8), six more, which break a `decisions.json` filled in
+against its report: take a decided item's owner off, or its decision; change the reason the report
+gives for it, as a conversion made again would, with its decisions copied beside it; decide an
+item the report does not list, one it
+converts, or one item twice. No check fails then: readiness must name each among what stands in
+its way, and does, on the made-up package with and without M2's corpus. One more, for check 1,
+makes the report one of another version of the package, which check 1 fails.
+
 **In M0**, the controls for the checks that run are mutations in
 [`tools/studio-migration/src/mutations.ts`](../../tools/studio-migration/src/mutations.ts):
 
@@ -350,10 +358,33 @@ For the sample, M1's report lists:
 - 13 translations;
 - the model files, which need no conversion.
 
-The report is `report.json`, in the provisional format `studio-migration-report/m1` since M1. It
-takes Studio's branch, commit and build time from the bundle's manifest (`Studio-Git-Branch-Name`,
-`Studio-Git-Commit-Hash`, `Studio-Build-Time`). Each item carries an `owner` field, which no
-command sets yet.
+The report's data is `report.json`, in the provisional format `studio-migration-report/m1` since
+M1. It takes Studio's branch, commit and build time from the bundle's manifest
+(`Studio-Git-Branch-Name`, `Studio-Git-Commit-Hash`, `Studio-Build-Time`). The converter writes
+it, the same for the same package every time.
+
+**Owners and decisions** are people's, so they are kept beside it, in the conversion's
+`decisions.json` (provisional format `studio-migration-decisions/1`), which no conversion writes:
+converting the same package again, once the catalogue has learnt something, loses none of them.
+The `decisions` command writes the file, an entry for each reported item for a person to fill in
+with its owner and what they decided, and carries those of an earlier file of the same build that
+still hold. A file is for one build of the package, its version, Studio's commit and build time,
+and its bundle's SHA-256, and is taken only for that package, because a construct's id is its
+place in its file and another build can give it to another construct; check 1 holds the report
+to the package given too. Each decision copies what
+it was made on from the report, the item's label, property, outcome, where it was written, its
+reason and its rule; where the report no longer says the same, the decision is not taken, and is
+made again. Readiness needs a decision taken for every reported item, and nothing wrong in the
+file.
+
+**Printed,** with the `report` command: the header, the summary by kind and outcome with the
+coverage, what the harness found, every reported item with its owner and decision, every proposal,
+and each file with what it became. The screenshots wait for the migration server.
+
+**Not yet:** accepting or rejecting a proposal, which needs the converter to write what a person
+accepts; recording a reviewer's approval of the report; what the harness found, per file, since
+its findings name the conversion's files; and carrying decisions to a new build of the package,
+which needs constructs known by more than their place.
 
 Evidence (screenshots, request logs, truth tables) is kept outside the repository, like the Beta's
 phase evidence. The summary goes into the pull request that adds the migrated package.
@@ -378,6 +409,20 @@ These sit inside the [development plan](development-plan.md):
 | M2    | Phase 4                 | Conditions (structured, and the known JavaScript patterns) with truth tables; task forms, tabs and layout blocks                                                                   |
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
+
+**Where the report stands, 24 November 2026:**
+
+- **Built:** most of section 8's report, for step 5 of phase 4's demo. Every reported item takes
+  an owner and a decision in the conversion's `decisions.json`, which readiness holds to the
+  report, and `report` prints the header, the summary by kind and outcome with its coverage, the
+  harness's verdict, the decisions needed and what each file became. Six negative controls break
+  the decisions, one way each, and check 1 now holds the report to the package given, with a
+  control of its own.
+- **Not yet:** accepting or rejecting a proposal; a reviewer's approval, which no command records;
+  what the harness found, file by file, and the screenshots; carrying decisions to a new build of
+  the package.
+- **Not checked:** on a real package. The sample is not in this repository, and the report was
+  run on the made-up package only.
 
 **Where M2 stands, 23 November 2026:**
 

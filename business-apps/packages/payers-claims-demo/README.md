@@ -312,7 +312,8 @@ Phase 1's demo script, as a steps file of the beta harness
 
 1. an adjuster's home, with KPIs from the page providers' aggregates;
 2. a queue opened, its rows in the server's order, and narrowed by a facet on the server;
-3. a member, with age, combined address, and the claims and cases lists;
+3. a member, opened from the queue through its member column, a link named for the member, with
+   age, combined address, and the claims and cases lists;
 4. member services seeing the social security number, which the adjuster does not, anywhere on
    the Member page, the Properties panel included; nor may the adjuster change the member, whose
    Edit form would list it;
@@ -354,6 +355,17 @@ and, with its test widened on purpose, a claim another session had left on the s
 demo's figures do not count; and, with the seeded statuses it expects changed, the one that proves
 the properties it judges arrived.
 
+**Changed since that run, and not run since:** step 3 opened the member by its address then. It
+now clicks the member's link in a row of the narrowed queue, after a check that the link's text is
+the member's name and that it links to the member, and a precondition that one of the rows step 2
+leaves is the member's claim. The script runs as `dana.lee`, whose password was not to hand, so
+the whole of it has not been run with that change. What was checked, on 24 November 2026 in a
+headless browser against the same server, is what the new lines read, run as an administrator
+over a copy of `my-claims.json` that names `dana.lee` in place of `$currentUser` and drops its
+group rule, since an administrator is shown no queue: the queue narrowed to "paid", the row of
+CLAIM-000130 with one member link, reading "John Smith" and routed to the member, and the click
+opening the member's record page with its three cards. The other checks of step 3 are unchanged.
+
 ## What a server shows, and what the dev server does
 
 The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses, to everyone:
@@ -382,18 +394,16 @@ included, is shown no app. The demo itself still runs on a development server, a
 
 ## Not done yet
 
-- **The demo opens the member by its address, not by its link.** A reference now shows the record
-  it names, by its title, as a link that opens it
+- **A record the reader may not read was not seen live.** A reference shows the record it names, by
+  its title, as a link that opens it
   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11): a queue's member column,
-  the Provider page's claims, the Case page's member and claim, and the Claim page's member. A
-  reference to a record that no longer exists shows "Unavailable", and so does one the reader may
-  not read, which was not seen live: the check ran as an administrator, who may read every record.
-  The demo's step 3 still goes to the
-  member's address, and its note still says the column shows the stored id: opening the member
-  from the queue's link is the next change to the steps file, which needs a run as the demo's
-  people to check.
-- **The Properties panel beside a Case or a Claim lists a reference by its stored id:** it is
-  version 1's generated panel, which has no lookup, and only the Member has a `metadata` file.
+  the Provider page's claims, the Case page's member and claim, the Claim page's member, and the
+  Properties panel beside a Case or a Claim. The panel was checked live on 24 November 2026, as an
+  administrator in a headless browser: beside CASE-2042, the member shows as "John Smith" and the
+  claim as "CLAIM-000132", each a link to its record, the member's opening it when clicked, and
+  neither id is on the panel. A reference to a record that no longer exists shows "Unavailable",
+  and so does one the reader may not read, which was not seen: the checks ran as an administrator,
+  who may read every record.
 - **The approve button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
   and not served, and the queue leaves out an action the app does not register, saying so in the
   console.

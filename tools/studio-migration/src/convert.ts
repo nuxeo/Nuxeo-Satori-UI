@@ -28,6 +28,7 @@
  * Check 1 counts every outcome as accounted for. A migration with anything pending is not ready.
  * The format is provisional, `studio-migration-report/m1`.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { validateLabels } from '@agentic-ui/shared/app-definition';
@@ -40,6 +41,7 @@ import { convertLayouts } from './convert-layouts';
 import { convertDashboard, convertSearches } from './convert-lists';
 import { convertSlots } from './convert-slots';
 import { convertTasks } from './convert-tasks';
+import { DECISIONS_FILE } from './decisions';
 import type { FileKind, Inventory } from './inventory';
 import type { StudioPackage, StudioPackageDescriptor } from './studio-package';
 import { resolveThemeProperty } from './theme';
@@ -70,8 +72,6 @@ export interface ReportEntry {
   readonly to?: string;
   /** Why, for what is proposed, reported or pending. */
   readonly note?: string;
-  /** Who decides, for what is reported. Unset until someone takes it on. */
-  readonly owner?: string;
   /** For a condition: the registered rule it becomes, or is proposed to become. */
   readonly rule?: unknown;
 }
@@ -107,6 +107,11 @@ export interface Conversion {
   readonly themes: Readonly<Record<string, ConvertedTheme>>;
   /** Copied files, by their path in the conversion: `themes/<name>/<file>`. */
   readonly assets: Readonly<Record<string, Buffer>>;
+  /**
+   * `decisions.json` as read, which people write and no conversion does: who owns each reported
+   * item, and what they decided (`decisions.ts`). Absent when the directory holds none.
+   */
+  readonly decisions?: unknown;
 }
 
 export interface ConvertOptions {
@@ -312,18 +317,11 @@ export function convert(
     ...(decided.get(construct.id) ?? decide(construct, inventory, catalogue, context.carried)),
   }));
 
-  const manifest = readManifest(
-    pkg.bundleFiles.get('META-INF/MANIFEST.MF')?.toString('utf8') ?? '',
-  );
   return {
     report: {
       format: REPORT_FORMAT,
       package: { ...inventory.descriptor, bundle: pkg.bundlePath },
-      studio: {
-        branch: manifest.get('Studio-Git-Branch-Name') ?? null,
-        commit: manifest.get('Studio-Git-Commit-Hash') ?? null,
-        buildTime: manifest.get('Studio-Build-Time') ?? null,
-      },
+      studio: studioBuildOf(pkg),
       converter: converterIdentity(),
       allowList: [...allowList].sort(),
       constructs: entries,
@@ -425,6 +423,42 @@ export function labelsOf(
   return labels;
 }
 
+/** The Studio project's branch, commit and build time, from the bundle's manifest. */
+export function studioBuildOf(pkg: StudioPackage): MigrationReport['studio'] {
+  const manifest = readManifest(
+    pkg.bundleFiles.get('META-INF/MANIFEST.MF')?.toString('utf8') ?? '',
+  );
+  return {
+    branch: manifest.get('Studio-Git-Branch-Name') ?? null,
+    commit: manifest.get('Studio-Git-Commit-Hash') ?? null,
+    buildTime: manifest.get('Studio-Build-Time') ?? null,
+  };
+}
+
+/**
+ * One build of a package, as decisions are held to it: its name and version, Studio's commit and
+ * build time, and the SHA-256 of its bundle, which tells two builds apart where the manifest
+ * records neither, as when a project keeps its version from one build to the next.
+ */
+export function packageBuildOf(pkg: StudioPackage): {
+  readonly name: string;
+  readonly version: string;
+  readonly commit: string | null;
+  readonly buildTime: string | null;
+  readonly bundle: string;
+} {
+  const { commit, buildTime } = studioBuildOf(pkg);
+  return {
+    name: pkg.descriptor.name,
+    version: pkg.descriptor.version,
+    commit,
+    buildTime,
+    bundle: createHash('sha256')
+      .update(pkg.packageFiles.get(pkg.bundlePath) ?? Buffer.alloc(0))
+      .digest('hex'),
+  };
+}
+
 /** A JAR manifest's main attributes. A line that starts with a space carries on the one before. */
 function readManifest(text: string): Map<string, string> {
   const attributes = new Map<string, string>();
@@ -498,6 +532,8 @@ export function writeConversion(directory: string, conversion: Conversion): void
     writeFileSync(full, content);
   };
   write('report.json', `${JSON.stringify(conversion.report, null, 2)}\n`);
+  if (conversion.decisions !== undefined)
+    write(DECISIONS_FILE, `${JSON.stringify(conversion.decisions, null, 2)}\n`);
   for (const [path, content] of Object.entries(conversion.app))
     write(`app/${path}`, `${JSON.stringify(content, null, 2)}\n`);
   for (const [path, content] of Object.entries(conversion.appAssets)) write(`app/${path}`, content);
@@ -550,5 +586,9 @@ export function readConversion(directory: string): Conversion {
         assets[`themes/${file}/${asset}`] = readFileSync(join(path, asset));
     }
   }
-  return { report, app, appAssets, themes, assets };
+  // People write it, beside the report, and no conversion does.
+  const decisions = existsSync(join(directory, DECISIONS_FILE))
+    ? { decisions: json(DECISIONS_FILE) }
+    : {};
+  return { report, app, appAssets, themes, assets, ...decisions };
 }

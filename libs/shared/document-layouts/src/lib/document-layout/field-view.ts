@@ -1,11 +1,17 @@
 import { formatDate, formatNumber } from '@angular/common';
 
 import { LayoutFieldType } from '../layout.model';
+import { isDocumentId } from '../record-page/linked-record';
+import type { RecordLink } from '../record-page/record-field-view';
 import { humanize } from '../resolve-layout';
 import { isStoredCalendarDay } from './stored-calendar-day';
 
-/** One rendered value: text, or a boolean the template translates. */
-export type ValueView = { readonly text: string } | { readonly flag: boolean };
+/**
+ * One rendered value: text, a boolean the template translates, or the record a document reference
+ * names, as a link that opens it or the unavailable text. Never a reference's stored id.
+ */
+export type ValueView =
+  { readonly text: string } | { readonly flag: boolean } | { readonly record: RecordLink };
 
 export interface FieldView {
   /** The xpath at the top level, the bare sub-field name inside a complex value. */
@@ -33,6 +39,12 @@ export interface ValueContext {
    * such as `+0530`, so that a test controls it. A stored day is shown in UTC whatever this is.
    */
   readonly timeZone?: string;
+  /**
+   * The record a document reference names ({@link LayoutFieldType.documentReference}): its title
+   * and route, the unavailable text where it cannot be shown, or `null` while it is read. The
+   * Properties panel gives it. Absent, as on the record page, a reference shows its stored value.
+   */
+  readonly record?: (id: string) => RecordLink | null;
 }
 
 /** Complex values nest arbitrarily in Nuxeo; past this depth the rest is shown as JSON. */
@@ -159,6 +171,15 @@ function scalar(
   return { text: textOf(value) };
 }
 
+/** How the context reads the record a value of `definition` names, if it is a reference. */
+function referenceLookup(
+  definition: LayoutFieldType,
+  type: string,
+  context: ValueContext,
+): ValueContext['record'] {
+  return definition.documentReference && type === 'string' ? context.record : undefined;
+}
+
 function subFields(
   definition: LayoutFieldType,
   value: Record<string, unknown>,
@@ -217,6 +238,14 @@ function listView(
 ): FieldView {
   const items = (Array.isArray(value) ? value : [value]).filter((item) => !isEmpty(item));
   if (items.length === 0) return { key, label, kind: 'empty' };
+  const record = referenceLookup(definition, type, context);
+  if (record) {
+    // A record still being read is not listed yet: the field shows nothing of it, never its id.
+    const records = items
+      .map((item) => record(textOf(item)))
+      .filter((link): link is RecordLink => link !== null);
+    return { key, label, kind: 'chips', chips: records.map((link) => ({ record: link })) };
+  }
   return {
     key,
     label,
@@ -241,6 +270,12 @@ export function describeField(
     return complexView(key, label, definition, value, list, context, depth);
   }
   if (list) return listView(key, label, type, definition, value, context);
+  const record = referenceLookup(definition, type, context);
+  if (record) {
+    // While the record is read the field shows nothing, never its id.
+    const link = record(textOf(value));
+    return { key, label, kind: 'value', value: link === null ? { text: '' } : { record: link } };
+  }
   return { key, label, kind: 'value', value: scalar(type, definition.directory, value, context) };
 }
 
@@ -250,39 +285,33 @@ export interface VocabularyValue {
   readonly id: string;
 }
 
-type FoundValues = Map<string, VocabularyValue>;
+type ShownValues = readonly { readonly definition: LayoutFieldType; readonly value: unknown }[];
 
-function collectSubFieldValues(
-  definition: LayoutFieldType,
-  items: readonly Record<string, unknown>[],
-  depth: number,
-  found: FoundValues,
-): void {
-  const subs = Object.entries(definition.fields ?? {});
-  for (const item of items) {
-    for (const [name, sub] of subs) collectValues(sub, item[name], depth + 1, found);
-  }
-}
-
-function collectValues(
+/**
+ * Calls `visit` with the scalar values one value holds, its sub-fields' included, each with its
+ * definition and its type without `[]`: the values `describeField` shows, to the same depth.
+ */
+function visitScalars(
   definition: LayoutFieldType,
   value: unknown,
   depth: number,
-  found: FoundValues,
+  visit: (definition: LayoutFieldType, type: string, values: readonly unknown[]) => void,
 ): void {
   if (isEmpty(value)) return;
   const list = definition.type.endsWith('[]');
   const type = list ? definition.type.slice(0, -2) : definition.type;
   const values: unknown[] = list && Array.isArray(value) ? value : [value];
   if (type === 'complex' && depth < MAX_DEPTH) {
-    collectSubFieldValues(definition, values.filter(isRecord), depth, found);
+    const subs = Object.entries(definition.fields ?? {});
+    for (const item of values.filter(isRecord)) {
+      // Own keys only, as `subFields` reads them.
+      for (const [name, sub] of subs) {
+        visitScalars(sub, Object.hasOwn(item, name) ? item[name] : undefined, depth + 1, visit);
+      }
+    }
     return;
   }
-  const directory = definition.directory;
-  if (!directory || VIEWS[type]) return;
-  for (const id of values) {
-    if (typeof id === 'string' && id !== '') found.set(`${directory}\n${id}`, { directory, id });
-  }
+  visit(definition, type, values);
 }
 
 /**
@@ -290,12 +319,35 @@ function collectValues(
  * entries `describeField` will ask a label for, so only those need reading, however large the
  * vocabulary is. Sorted, so an unchanged document gives an equal list.
  */
-export function vocabularyValues(
-  fields: readonly { readonly definition: LayoutFieldType; readonly value: unknown }[],
-): VocabularyValue[] {
-  const found: FoundValues = new Map();
-  for (const { definition, value } of fields) collectValues(definition, value, 0, found);
+export function vocabularyValues(fields: ShownValues): VocabularyValue[] {
+  const found = new Map<string, VocabularyValue>();
+  for (const { definition, value } of fields) {
+    visitScalars(definition, value, 0, ({ directory }, type, values) => {
+      if (!directory || VIEWS[type]) return;
+      for (const id of values) {
+        if (typeof id === 'string' && id !== '')
+          found.set(`${directory}\n${id}`, { directory, id });
+      }
+    });
+  }
   return [...found.values()].sort(
     (a, b) => a.directory.localeCompare(b.directory) || a.id.localeCompare(b.id),
   );
+}
+
+/**
+ * The ids a document's references hold ({@link LayoutFieldType.documentReference}), in its fields
+ * and their sub-fields: the records `describeField` asks its context's `record` for. Each once and
+ * sorted, so an unchanged document gives an equal list; and only a document's id, as
+ * `isDocumentId` accepts one, so a value that is not one is never asked for.
+ */
+export function linkedRecordIds(fields: ShownValues): string[] {
+  const found = new Set<string>();
+  for (const { definition, value } of fields) {
+    visitScalars(definition, value, 0, ({ documentReference }, type, values) => {
+      if (!documentReference || type !== 'string') return;
+      for (const id of values) if (isDocumentId(id)) found.add(id);
+    });
+  }
+  return [...found].sort();
 }

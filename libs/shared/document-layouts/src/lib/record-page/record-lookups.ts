@@ -54,7 +54,8 @@ function sameNames(a: NameLookups, b: NameLookups): boolean {
   return key(a) === key(b);
 }
 
-const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
+/** Whether two sorted lists of ids are the same: a signal's `equal`, so an equal set asks nothing. */
+export const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((id, index) => id === b[index]);
 
 /**
@@ -193,7 +194,9 @@ export const NO_RECORDS: LinkedRecords = new Map();
  * by the next set that names them; until then they show as unavailable.
  *
  * Provided by the record page, whose lists share it, so a record a field and a list both name is
- * read once; and by a form. A list drawn elsewhere, as a queue's, has one of its own
+ * read once; by a form; and by the Properties panel, for the references its schemas name, so a
+ * document page showing both the panel and a record page asks once for each. A list drawn
+ * elsewhere, as a queue's, has one of its own
  * ({@link linkedRecordLookup}). Per page, not per session as a label is: a record's title changes
  * more often than a user's name, and a record the reader may not read today may be shared with
  * them tomorrow.
@@ -251,7 +254,8 @@ export function linkedRecordLookup(): LinkedRecordLookup {
 }
 
 /**
- * The `document-link` lookup a widget's context answers from `records`: the record's title and
+ * The `document-link` lookup a widget's context answers from `records`, and the Properties panel's
+ * for a reference (`ValueContext.record`, in `field-view.ts`): the record's title and
  * its route, `unavailable` without a route where it cannot be shown, or `null` while it is read.
  * A value that is not a document's id is unavailable at once, and was never asked for.
  */

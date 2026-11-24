@@ -311,6 +311,67 @@ describe('check 1, nothing dropped', () => {
   it('agrees with the second count on the whole synthetic package', () => {
     expect(check(prepare(), 1)?.findings).toEqual([]);
   });
+
+  it('reads an id the report lists twice by its first entry for what stands in the way', () => {
+    const input = prepare();
+    const { constructs } = input.conversion.report;
+    const converted = constructs.find((entry) => entry.outcome === 'converted');
+    if (!converted) throw new Error('the made-up package converts');
+    const twice = {
+      ...input,
+      conversion: {
+        ...input.conversion,
+        report: {
+          ...input.conversion.report,
+          constructs: [
+            ...constructs,
+            { ...converted, outcome: 'pending' as const, note: 'Later' },
+            { ...converted, outcome: 'proposed' as const, note: 'Later' },
+          ],
+        },
+      },
+    };
+    const count = (blockers: readonly string[], pattern: RegExp) =>
+      blockers.find((line) => pattern.test(line));
+    const sound = runHarness(input).blockers;
+    const listed = runHarness(twice).blockers;
+    expect(count(listed, /constructs are pending/)).toBe(count(sound, /constructs are pending/));
+    expect(count(listed, /proposals wait/)).toBe(count(sound, /proposals wait/));
+  });
+
+  it('stands in the way of a conversion made with another allow-list than the deployment gives', () => {
+    const input = prepare();
+    const line =
+      "the conversion was made with the allow-list Claim.Approve, not the deployment's, Claim.Approve, Claim.Close: convert it again with the deployment's";
+    expect(
+      runHarness({ ...input, allowList: new Set(['Claim.Close', 'Claim.Approve']) }).blockers,
+    ).toContain(line);
+    expect(runHarness(input).blockers).not.toContain(line);
+    // With no list given, the conversion's is all there is: check 10 says it ran in part.
+    const { allowList: _given, ...recorded } = input;
+    expect(
+      runHarness(recorded).blockers.filter((blocker) =>
+        blocker.startsWith('the conversion was made'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('fails a report of another version of the package, or of another Studio build of it', () => {
+    const input = prepare();
+    const { report } = input.conversion;
+    const of = (change: Partial<typeof report>) =>
+      check({ ...input, conversion: { ...input.conversion, report: { ...report, ...change } } }, 1)
+        ?.findings;
+    expect(of({ package: { ...report.package, name: 'Other-Project' } })).toEqual([
+      'the report is of Other-Project 1.0.0, not of the package given, Acme-Claims 1.0.0',
+    ]);
+    expect(of({ studio: { ...report.studio, commit: 'abc123' } })).toEqual([
+      "the report records Studio's commit abc123 and no build time, and the package's manifest no commit and no build time",
+    ]);
+    expect(of({ studio: { ...report.studio, buildTime: '2026-11-20T10:00:00Z' } })).toEqual([
+      "the report records Studio's no commit and build time 2026-11-20T10:00:00Z, and the package's manifest no commit and no build time",
+    ]);
+  });
 });
 
 describe('check 8, theme', () => {

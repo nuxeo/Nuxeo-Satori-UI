@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatTabsModule } from '@angular/material/tabs';
+import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   AppExtensionsService,
@@ -27,8 +28,20 @@ import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
 import { layoutSlotEntry } from '../layout-slot';
 import { DocumentSchemaRef, LayoutLabel, LayoutMode, ResolvedLayout } from '../layout.model';
+import {
+  LinkedRecordLookup,
+  NO_RECORDS,
+  recordLookups,
+  sameIds,
+} from '../record-page/record-lookups';
 import { humanize, readDocumentSchemas } from '../resolve-layout';
-import { FieldView, VocabularyValue, describeField, vocabularyValues } from './field-view';
+import {
+  FieldView,
+  VocabularyValue,
+  describeField,
+  linkedRecordIds,
+  vocabularyValues,
+} from './field-view';
 
 type Vocabularies = ReadonlyMap<string, ReadonlyMap<string, string>>;
 
@@ -107,13 +120,17 @@ const NO_VOCABULARIES: Vocabularies = new Map();
  * dynamic facets add. A `documentMetadata` entry whose rule admits the document renders its
  * component in place of either, and the layout comes back if that component cannot be loaded.
  *
- * Read-only. Each value is shown by its schema type, and a vocabulary-bound value by its entry's
- * label. Hiding a field here hides it from this panel only — the REST API still returns it.
+ * Read-only. Each value is shown by its schema type, a vocabulary-bound value by its entry's
+ * label, and a reference to a document by the record's title, as a link that opens it, through
+ * the record page's lookup (layout-v2.md, section 11). Hiding a field here hides it from this
+ * panel only — the REST API still returns it.
  */
 @Component({
   selector: 'lib-document-layout',
   standalone: true,
-  imports: [ExtensionOutletComponent, MatTabsModule, NgTemplateOutlet, TranslatePipe],
+  imports: [ExtensionOutletComponent, MatTabsModule, NgTemplateOutlet, RouterLink, TranslatePipe],
+  // The records the panel's references name, read for as long as the panel is drawn.
+  providers: [LinkedRecordLookup],
   templateUrl: './document-layout.html',
   styleUrl: './document-layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -123,6 +140,7 @@ export class DocumentLayoutComponent {
   readonly mode = input<LayoutMode>('metadata');
 
   private readonly layouts = inject(DocumentLayoutService);
+  private readonly linkedRecords = inject(LinkedRecordLookup);
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly timeZone = inject(DOCUMENT_LAYOUT_TIME_ZONE);
@@ -194,23 +212,28 @@ export class DocumentLayoutComponent {
     return resolved?.target === this.target() ? resolved.layout : null;
   });
 
+  /** The values the layout shows of this document, with their definitions. */
+  private shownValues() {
+    const layout = this.layout();
+    const document = this.document();
+    if (!layout || !document || layout.type !== document.type) return [];
+    return layout.sections.flatMap((section) =>
+      section.fields.map((field) => ({
+        definition: field.definition,
+        value: document.properties[field.xpath],
+      })),
+    );
+  }
+
   /** The vocabulary entries this document's values name: only those are read. */
-  private readonly vocabularyValues = computed(
-    () => {
-      const layout = this.layout();
-      const document = this.document();
-      if (!layout || !document || layout.type !== document.type) return [];
-      return vocabularyValues(
-        layout.sections.flatMap((section) =>
-          section.fields.map((field) => ({
-            definition: field.definition,
-            value: document.properties[field.xpath],
-          })),
-        ),
-      );
-    },
-    { equal: sameValues },
-  );
+  private readonly vocabularyValues = computed(() => vocabularyValues(this.shownValues()), {
+    equal: sameValues,
+  });
+
+  /** The ids this document's references hold: only those are asked for, each once. */
+  private readonly recordIds = computed(() => linkedRecordIds(this.shownValues()), {
+    equal: sameIds,
+  });
 
   /** Shown as the stored ids until the labels arrive, and as the id wherever one cannot be read. */
   private readonly vocabularies = toSignal(
@@ -230,6 +253,16 @@ export class DocumentLayoutComponent {
     { initialValue: NO_VOCABULARIES },
   );
 
+  /**
+   * The records the references name, in one search for every id a new set adds, as the record
+   * page reads them. Those read stay shown while another set is read; one not read yet shows
+   * nothing, never its id.
+   */
+  private readonly records = toSignal(
+    toObservable(this.recordIds).pipe(switchMap((ids) => this.linkedRecords.records(ids))),
+    { initialValue: NO_RECORDS },
+  );
+
   /** Bumped when the language or a catalogue changes, so labels resolved with `instant` follow. */
   private readonly translations = signal(0);
 
@@ -244,12 +277,14 @@ export class DocumentLayoutComponent {
     const document = this.document();
     const layout = this.layout();
     const vocabularies = this.vocabularies();
+    const records = this.records();
     // A layout still resolving for the previous document's type must not show this one's values.
     if (!document || !layout || layout.type !== document.type) return null;
     const context = {
       locale: this.locale,
       vocabulary: (directory: string, id: string) => vocabularies.get(directory)?.get(id) ?? id,
       timeZone: this.timeZone,
+      ...recordLookups(records, this.translate.instant('document-layouts.record.unavailable')),
     };
     const sections = layout.sections.map((section) => ({
       id: section.id,

@@ -1,0 +1,438 @@
+{
+  "doctypes": {
+    "Contract": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "contract"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "entity-type": "schema",
+      "name": "common",
+      "fields": {
+        "icon-expanded": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "description": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "LengthConstraint",
+              "parameters": {
+                "Maximum": "2000"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "language": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "coverage": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "l10ncoverage",
+                "validation": "true"
+              }
+            }
+          ]
+        },
+        "valid": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "creator": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "validation": "false",
+                "includeGroups": "false"
+              }
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "modified": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "lastContributor": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "validation": "false",
+                "includeGroups": "false"
+              }
+            }
+          ]
+        },
+        "rights": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "expired": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "format": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "created": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "issued": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "nature": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "nature",
+                "validation": "true"
+              }
+            }
+          ]
+        },
+        "subjects": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "directoryResolver",
+              "parameters": {
+                "directory": "l10nsubjects",
+                "validation": "true"
+              }
+            }
+          ]
+        },
+        "contributors": {
+          "type": "string[]",
+          "constraints": [],
+          "itemConstraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "userManagerResolver",
+              "parameters": {
+                "includeUsers": "true",
+                "validation": "false",
+                "includeGroups": "false"
+              }
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "publisher": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entity-type": "schema",
+      "name": "contract",
+      "prefix": "contract",
+      "@prefix": "contract",
+      "fields": {
+        "number": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "counterparty": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "category": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "EnumConstraint",
+              "parameters": {
+                "Values": "[Services, Supply, Licence, Lease, NDA]"
+              }
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "EnumConstraint",
+              "parameters": {
+                "Values": "[Draft, Active, Terminated, Expired]"
+              }
+            }
+          ]
+        },
+        "value": {
+          "type": "double",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "double",
+              "parameters": {}
+            }
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "start": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "end": {
+          "type": "date",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "date",
+              "parameters": {}
+            }
+          ]
+        },
+        "noticeDays": {
+          "type": "long",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "long",
+              "parameters": {}
+            }
+          ]
+        },
+        "autoRenew": {
+          "type": "boolean",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "boolean",
+              "parameters": {}
+            }
+          ]
+        },
+        "owner": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "terminationReason": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        },
+        "notes": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

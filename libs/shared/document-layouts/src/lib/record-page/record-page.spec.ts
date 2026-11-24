@@ -229,7 +229,11 @@ describe('RecordPageComponent', () => {
   >;
   /** The zone the page shows an instant in: the process's own, unless a test chooses one. */
   let timeZone: string | undefined;
-  /** The page's today, `RECORD_PAGE_TODAY`: 23 November, unless a test chooses another. */
+  /**
+   * The page's today, `RECORD_PAGE_TODAY`: noon UTC on 23 November, unless a test chooses another.
+   * That instant is the 23rd only west of UTC+12, and a computation reads today as the reader's day
+   * (`libs/shared/computations`, `dates.ts`), so a case about a day gives a time where the reader is.
+   */
   let pageToday: Date;
   let warnings: string[];
   let execute: ReturnType<typeof vi.fn>;
@@ -345,10 +349,24 @@ describe('RecordPageComponent', () => {
   });
 
   it('shows what the registered computations work out from the record', async () => {
+    // Born 24 November 1980: 45 on 23 November 2026, the day before the birthday. Noon on the
+    // 23rd where the reader is, not an instant: noon UTC is already the 24th at UTC+12 and east of
+    // it, where the reader has turned 46 (AGENTS/08-bug-patterns.md, pattern 29).
+    pageToday = new Date(2026, 10, 23, 12);
     const root = await render();
     expect(valueOf(root, 'name')).toBe('Jane Roe');
-    // Born 24 November 1980: 45 on 23 November 2026, the day before the birthday.
     expect(valueOf(root, 'age')).toBe('45');
+  });
+
+  it("turns an age over at the reader's midnight, which only a zone off UTC tells from UTC's", async () => {
+    // The stored birth date is midnight UTC, 24 November 1980: that day in any zone. A page that
+    // read today in UTC fails this case in any zone east of UTC (the second age) or west of it
+    // (the first), and cannot fail it in a zone at UTC's own offset, where both midnights agree.
+    // This suite pins no zone, so on a UTC runner, as CI's are, it asserts only the ages.
+    pageToday = new Date(2026, 10, 23, 23, 59);
+    expect(valueOf(await render(), 'age')).toBe('45');
+    pageToday = new Date(2026, 10, 24, 0, 1);
+    expect(valueOf(await render(), 'age')).toBe('46');
   });
 
   it('shows each property through its widget', async () => {
