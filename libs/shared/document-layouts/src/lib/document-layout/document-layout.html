@@ -98,7 +98,14 @@
 </ng-template>
 
 <ng-template #value let-value>
-  @if (value.flag === undefined) {
+  @if (value.record; as record) {
+    <!-- A linked record opens through the app's router, as on the record page. -->
+    @if (record.url !== null) {
+      <a class="document-layout__link" [routerLink]="record.url">{{ record.text }}</a>
+    } @else {
+      <span class="document-layout__unavailable">{{ record.text }}</span>
+    }
+  } @else if (value.flag === undefined) {
     {{ value.text }}
   } @else {
     {{ (value.flag ? 'document-layouts.yes' : 'document-layouts.no') | translate }}

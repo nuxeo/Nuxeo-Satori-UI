@@ -41,6 +41,12 @@ export interface LayoutFieldType {
   readonly type: string;
   /** The vocabulary a `directoryResolver` binds the value — or each item of a list — to. */
   readonly directory?: string;
+  /**
+   * The value, or each item of a list, names a document by its id: a `documentResolver` that
+   * stores one, `store` `id` or `idOnly` as Nuxeo reports it. One that stores a path does not set
+   * it. The Properties panel shows such a value as the linked record's title.
+   */
+  readonly documentReference?: true;
   /** A complex field's sub-fields, by their bare names. */
   readonly fields?: Readonly<Record<string, LayoutFieldType>>;
   /** The schema declares it not nullable (`NotNullConstraint`), or a layout file marks it required. */
