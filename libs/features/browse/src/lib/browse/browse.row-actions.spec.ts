@@ -524,6 +524,36 @@ describe('BrowseComponent — row actions', () => {
       expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(2);
     });
 
+    it('turns away a drop whose types arrive while a retry of an earlier one uploads', () => {
+      const report = new File(['d'], 'report.pdf', { type: 'application/pdf' });
+      browse.getFolderContext.mockReturnValue(of(allowing(['RentalContract', 'Folder'])));
+      importService.importFilesWithProperties.mockReturnValueOnce(
+        throwError(() => ({ status: 500 })),
+      );
+      component.uploadDropped([scan]);
+      expect(component.droppedUploads.items().map((item) => item.state)).toEqual(['failed']);
+
+      // A second drop, whose folder's types are still being read when the first is retried.
+      const context = new Subject<NuxeoDocument>();
+      browse.getFolderContext.mockReturnValue(context.asObservable());
+      component.uploadDropped([report]);
+      importService.importFilesWithProperties.mockReturnValueOnce(EMPTY);
+      component.runDroppedUploads();
+      expect(component.droppedUploads.busy()).toBe(true);
+      toast.show.mockClear();
+
+      context.next(allowing(['File']));
+      context.complete();
+
+      expect(toast.show).toHaveBeenCalledWith(
+        'Wait for the files being uploaded to finish before dropping more.',
+      );
+      // Nothing of the second drop is queued, and the retry keeps its own folder's types.
+      expect(component.droppedUploads.items().map((item) => item.file)).toEqual([scan]);
+      expect(importService.importFilesWithProperties).toHaveBeenCalledTimes(2);
+      expect(sentTypes()).toEqual(['RentalContract']);
+    });
+
     it('uploads nothing where the user may not create content', () => {
       component.currentDoc.set({
         ...folder,

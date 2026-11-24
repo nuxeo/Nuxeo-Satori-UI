@@ -1442,6 +1442,13 @@ export class BrowseComponent {
             );
             return;
           }
+          // A retry of an earlier upload can start while these types are read. Staging now would
+          // leave the files waiting with no run to start them and no Retry control, and would
+          // retarget that retry. Turn the drop away, as one made during an upload is.
+          if (this.droppedUploads.busy()) {
+            this.toast.show(this.translate.instant('browse.message.upload-in-progress'));
+            return;
+          }
           this.droppedUploads.clearDone();
           this.droppedUploads.stage(files);
           this.droppedUploadPath = path;
