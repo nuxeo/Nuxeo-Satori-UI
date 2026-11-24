@@ -24,9 +24,9 @@
   <extension-point name="connectors">
     <documentation>
       One connector per element. Only id, at least one type, address, path, key and at least one
-      field are required. The server properties it names are its own, under
-      nuxeo.agentic.connectors. then its id and a dot, and an environment variable starts
-      NUXEO_CONNECTOR_.
+      field are required. The server properties it names are its own: nuxeo.agentic.connectors.,
+      its id, a dot and one name; an environment variable is NUXEO_CONNECTOR_, its id in capitals
+      with dots and dashes as underscores, an underscore and one name of capitals and digits.
 
       <code>
         <connector id="payers.claimPayments">
@@ -36,7 +36,7 @@
           <key xpath="claim:number" />
           <permission>Read</permission>
           <credential header="Authorization" prefix="Bearer " property="nuxeo.agentic.connectors.payers.claimPayments.token"
-                      env="NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN" />
+                      env="NUXEO_CONNECTOR_PAYERS_CLAIMPAYMENTS_TOKEN" />
           <connectTimeout>2000</connectTimeout>
           <timeout>5000</timeout>
           <maxBytes>262144</maxBytes>

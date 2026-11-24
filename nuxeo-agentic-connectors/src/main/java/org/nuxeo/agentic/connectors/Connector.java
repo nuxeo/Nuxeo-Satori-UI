@@ -25,7 +25,7 @@ import com.fasterxml.jackson.core.JsonPointer;
  * <li>{@code permission} is what the reader must hold on the document before the system is
  * called, {@code Read} unless the contribution asks for more;</li>
  * <li>{@code credential}, if any, names where its value is read: a server property under the same
- * prefix, else an environment variable starting {@code NUXEO_CONNECTOR_}, and the header it is
+ * prefix, else an environment variable {@code NUXEO_CONNECTOR_<ID>_<NAME>}, and the header it is
  * sent in;</li>
  * <li>the two timeouts, {@code maxBytes} and {@code maxConcurrent} bound each call, and how many
  * run at once;</li>
@@ -121,8 +121,10 @@ public record Connector(String id, List<String> types, String addressProperty, S
     public static Connector of(ConnectorDescriptor d) {
         List<String> problems = new ArrayList<>();
         String id = d.getId();
-        if (id == null || !ID.matcher(id).matches()) {
-            problems.add("its id must be 1 to 64 letters, digits, '.', '_' or '-', starting with a letter");
+        // Not ending ".http": that connector's names would hold the server's http switch of another.
+        if (id == null || !ID.matcher(id).matches() || id.endsWith(".http")) {
+            problems.add("its id must be 1 to 64 letters, digits, '.', '_' or '-', starting with a letter, and not"
+                    + " end in .http");
         }
         String own = PROPERTY_PREFIX + id + ".";
         List<String> types = d.getTypes() == null ? List.of() : List.copyOf(d.getTypes());
@@ -176,9 +178,35 @@ public record Connector(String id, List<String> types, String addressProperty, S
         return PROPERTY_PREFIX + id + ".http.allowed";
     }
 
-    /** A property of the connector's own: under its prefix, with a name after it. */
+    /** One name after a connector's own prefix: never a dot, so never another connector's setting. */
+    private static final Pattern OWN_NAME = Pattern.compile("[A-Za-z0-9_-]{1,64}");
+
+    private static final Pattern OWN_ENV_NAME = Pattern.compile("[A-Z0-9]{1,64}");
+
+    /**
+     * A property of the connector's own: its prefix, then one name. Ids may hold dots, so a prefix
+     * alone would let {@code payers} name {@code payers.claimPayments}'s token; one name after it
+     * cannot reach another connector's, whose names are a segment further down.
+     */
     private static boolean ownProperty(String name, String own) {
-        return PROPERTY.matcher(name).matches() && name.startsWith(own) && name.length() > own.length();
+        return PROPERTY.matcher(name).matches() && name.startsWith(own)
+                && OWN_NAME.matcher(name.substring(own.length())).matches();
+    }
+
+    /**
+     * Where this connector's environment variables start: {@code NUXEO_CONNECTOR_}, its id in capitals
+     * with {@code .} and {@code -} as {@code _}, and {@code _}. Two ids that map to one prefix,
+     * {@code a.b} and {@code a_b}, are refused together when registered.
+     */
+    public static String envPrefix(String id) {
+        return ENV_PREFIX + id.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_') + "_";
+    }
+
+    /** A variable of the connector's own: its prefix, then one name of capitals and digits, no {@code _}. */
+    private static boolean ownEnv(String name, String id) {
+        String prefix = envPrefix(id);
+        return ENV.matcher(name).matches() && name.startsWith(prefix)
+                && OWN_ENV_NAME.matcher(name.substring(prefix.length())).matches();
     }
 
     static boolean soundPath(String path) {
@@ -230,10 +258,10 @@ public record Connector(String id, List<String> types, String addressProperty, S
             problems.add("<credential property> must be the name of a server property of the connector's own, " + own
                     + "<name>");
         }
-        if (env != null && !(ENV.matcher(env).matches() && env.startsWith(ENV_PREFIX)
-                && env.length() > ENV_PREFIX.length())) {
-            problems.add("<credential env> must be the name of an environment variable, in capitals, starting "
-                    + ENV_PREFIX);
+        String id = d.getId();
+        if (env != null && (id == null || !ownEnv(env, id))) {
+            problems.add("<credential env> must be an environment variable of the connector's own: "
+                    + (id == null ? ENV_PREFIX + "<ID>_" : envPrefix(id)) + "<NAME>, in capitals and digits");
         }
         return new Credential(header, prefix, property, env);
     }

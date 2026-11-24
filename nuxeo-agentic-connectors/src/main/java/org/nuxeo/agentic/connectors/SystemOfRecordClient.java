@@ -206,6 +206,11 @@ final class SystemOfRecordClient implements AutoCloseable {
                                      .followRedirects(HttpClient.Redirect.NEVER)
                                      .version(HttpClient.Version.HTTP_1_1)
                                      .build());
+        if (closed) {
+            // Closed while this call was on its way: the client it may just have built is closed too.
+            client.close();
+            throw new ConnectorException(Kind.NOT_CONFIGURED);
+        }
         CompletableFuture<HttpResponse<Body>> call = client.sendAsync(request.build(), body(connector.maxBytes()));
         HttpResponse<Body> response;
         try {

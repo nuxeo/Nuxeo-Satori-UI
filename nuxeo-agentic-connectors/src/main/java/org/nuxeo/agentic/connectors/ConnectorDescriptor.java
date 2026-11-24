@@ -19,7 +19,7 @@ import org.nuxeo.common.xmap.annotation.XObject;
  *   &lt;permission&gt;Read&lt;/permission&gt;
  *   &lt;credential header="Authorization" prefix="Bearer "
  *               property="nuxeo.agentic.connectors.payers.claimPayments.token"
- *               env="NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN" /&gt;
+ *               env="NUXEO_CONNECTOR_PAYERS_CLAIMPAYMENTS_TOKEN" /&gt;
  *   &lt;connectTimeout&gt;2000&lt;/connectTimeout&gt;
  *   &lt;timeout&gt;5000&lt;/timeout&gt;
  *   &lt;maxBytes&gt;262144&lt;/maxBytes&gt;
@@ -33,7 +33,7 @@ import org.nuxeo.common.xmap.annotation.XObject;
  * server property, not written here, so that each server points the kit's connector at its own
  * system, and the credential is named by a server property or an environment variable, read when
  * the connector is called. Both names are the connector's own, under
- * {@code nuxeo.agentic.connectors.<id>.} and {@code NUXEO_CONNECTOR_}, so a contribution cannot
+ * {@code nuxeo.agentic.connectors.<id>.<name>} and {@code NUXEO_CONNECTOR_<ID>_<NAME>}, so a contribution cannot
  * have another setting of the server's, a database password say, sent to its address.
  * {@link Connector#of} checks every element, and a connector that fails a check is not
  * registered.

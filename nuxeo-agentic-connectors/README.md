@@ -104,7 +104,7 @@ class of the cause, and never the key, which may be personal data.
       <permission>Read</permission>
       <credential header="Authorization" prefix="Bearer "
                   property="nuxeo.agentic.connectors.payers.claimPayments.token"
-                  env="NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN" />
+                  env="NUXEO_CONNECTOR_PAYERS_CLAIMPAYMENTS_TOKEN" />
       <connectTimeout>2000</connectTimeout>
       <timeout>5000</timeout>
       <maxBytes>65536</maxBytes>
@@ -132,7 +132,10 @@ class of the cause, and never the key, which may be personal data.
 | `maxConcurrent`  | No       | The calls running at once, 1 to 64. Default 8                                                                                                                                       |
 
 The settings a connector names are its own: a credential's `property` is under
-`nuxeo.agentic.connectors.<id>.` too, and its `env` starts `NUXEO_CONNECTOR_`. So a contribution
+`nuxeo.agentic.connectors.<id>.` too, and its `env` is `NUXEO_CONNECTOR_<ID>_<NAME>`, the id in
+capitals with `.` and `-` as `_`. Each is one name after the connector's own prefix, so a connector
+`payers` cannot name `payers.claimPayments`'s token, and two ids that share an environment prefix,
+`a.b` and `a_b`, are not both registered. An id may not end in `.http`. So a contribution
 cannot have another of the server's settings, a database password say, sent to its address.
 
 A connector that breaks a rule is not registered, and the log names every problem; one registered
@@ -237,7 +240,7 @@ This calls out of the server. The plan's phase 7 is not done until its security 
   choice, not a control, and so is the validator's address check on a layout. Check the
   contribution of every connector a kit ships.
 - **Credentials.** From a server property or the environment only, named by the contribution and
-  held to the connector's own names (`nuxeo.agentic.connectors.<id>.`, `NUXEO_CONNECTOR_`), read
+  held to the connector's own names (`nuxeo.agentic.connectors.<id>.<name>`, `NUXEO_CONNECTOR_<ID>_<NAME>`), read
   per call, sent in one header, never logged, never in an answer or an error. Check: where each
   server keeps them (`conf.d` files readable by the Nuxeo user only), their rotation, and that the
   other system's account is read-only and scoped to what the connector needs.
@@ -246,7 +249,9 @@ This calls out of the server. The plan's phase 7 is not done until its security 
   the defaults (2 s, 5 s, 256 KiB, 8) against the other system and the server's pools: a call
   blocks its request thread, inside the request's transaction, for up to its deadline, so 8 slow
   calls of each connector hold 8 threads and, on a database repository, their connections. There
-  is **no per-user rate limit and no cache**: every card drawn is one call. That cancelling a call
+  is **no per-user rate limit and no cache**: every card drawn is one call. The body of a 404 or
+  another answer not read is cancelled, which closes its connection: the next call opens a new
+  one, a new TLS handshake for an https system. That cancelling a call
   at its deadline closes its connection is the JDK's behaviour, not asserted by a test here.
 - **The permission check.** `Read` on the document first, then the connector's stronger permission
   if it names one, before anything is sent (`ConnectorReader`); the key is read from the document

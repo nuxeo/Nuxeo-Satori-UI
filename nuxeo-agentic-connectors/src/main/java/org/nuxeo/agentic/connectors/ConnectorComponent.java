@@ -62,6 +62,14 @@ public class ConnectorComponent extends DefaultComponent implements ConnectorSer
             log.error("A connector contributed by {} is not registered: {}", component, e.getMessage());
             return;
         }
+        String envPrefix = Connector.envPrefix(connector.id());
+        for (Connector other : connectors.values()) {
+            if (!other.id().equals(connector.id()) && Connector.envPrefix(other.id()).equals(envPrefix)) {
+                log.error("A connector contributed by {} is not registered: its id {} and the registered {} share "
+                        + "the environment variables {}*", component, connector.id(), other.id(), envPrefix);
+                return;
+            }
+        }
         connectors.put(connector.id(), connector);
         sources.put(connector.id(), descriptor);
     }

@@ -125,19 +125,38 @@ class ConnectorTest {
             d.credentialPrefix = "Bearer\r\nX-Injected: ";
         }).contains("<credential prefix>"));
         // Only the connector's own settings: a contribution cannot have another secret sent.
-        for (String env : List.of("lower_case", "AWS_SECRET_ACCESS_KEY", "NUXEO_CONNECTOR_")) {
+        for (String env : List.of("lower_case", "AWS_SECRET_ACCESS_KEY", "NUXEO_CONNECTOR_",
+                "NUXEO_CONNECTOR_TEST_CLAIMPAYMENTS_", "NUXEO_CONNECTOR_OTHER_TOKEN",
+                "NUXEO_CONNECTOR_TEST_CLAIMPAYMENTS_OTHER_TOKEN")) {
             assertTrue(refusal(d -> {
                 Fixtures.withCredential(d);
                 d.credentialEnv = env;
             }).contains("<credential env>"), env);
         }
         for (String property : List.of("nuxeo.db.password", "nuxeo.agentic.connectors.other.token",
-                "payers.claimPayments.token")) {
+                "payers.claimPayments.token", "nuxeo.agentic.connectors.test.claimPayments.sub.token")) {
             assertTrue(refusal(d -> {
                 Fixtures.withCredential(d);
                 d.credentialProperty = property;
             }).contains("<credential property>"), property);
         }
+    }
+
+    /** Ids hold dots: a connector named by the start of another's id must not reach its settings. */
+    @Test
+    void aConnectorCannotNameAnotherConnectorsSettings() {
+        String refused = refusal(d -> {
+            Fixtures.withCredential(d);
+            d.id = "test";
+            d.addressProperty = "nuxeo.agentic.connectors.test.claimPayments.address";
+            d.credentialProperty = "nuxeo.agentic.connectors.test.claimPayments.token";
+            d.credentialEnv = "NUXEO_CONNECTOR_TEST_CLAIMPAYMENTS_TOKEN";
+        });
+        assertTrue(refused.contains("<address property"), refused);
+        assertTrue(refused.contains("<credential property>"), refused);
+        assertTrue(refused.contains("<credential env>"), refused);
+        assertTrue(refusal(d -> d.id = "test.http").contains("its id"));
+        assertEquals("NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_", Connector.envPrefix("payers.claim-payments"));
     }
 
     @Test

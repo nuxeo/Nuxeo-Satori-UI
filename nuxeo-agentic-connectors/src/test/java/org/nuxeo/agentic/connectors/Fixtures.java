@@ -21,7 +21,7 @@ final class Fixtures {
 
     static final String TOKEN_PROPERTY = "nuxeo.agentic.connectors.test.claimPayments.token";
 
-    static final String TOKEN_ENV = "NUXEO_CONNECTOR_TEST_CLAIMS_TOKEN";
+    static final String TOKEN_ENV = "NUXEO_CONNECTOR_TEST_CLAIMPAYMENTS_TOKEN";
 
     static final String HTTP_ALLOWED = "nuxeo.agentic.connectors.test.claimPayments.http.allowed";
 

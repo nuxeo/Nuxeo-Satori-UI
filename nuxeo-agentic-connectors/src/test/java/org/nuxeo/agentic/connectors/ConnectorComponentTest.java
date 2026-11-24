@@ -70,6 +70,18 @@ class ConnectorComponentTest {
     }
 
     @Test
+    void twoIdsThatShareAnEnvironmentPrefixAreNotBothRegistered() {
+        ConnectorComponent component = new ConnectorComponent();
+        component.register(Fixtures.descriptor(), "kit");
+        ConnectorDescriptor clash = Fixtures.descriptor();
+        clash.id = "test_claimPayments";
+        clash.addressProperty = "nuxeo.agentic.connectors.test_claimPayments.address";
+        component.register(clash, "other-kit");
+        assertNotNull(component.getConnector("test.claimPayments"));
+        assertNull(component.getConnector("test_claimPayments"));
+    }
+
+    @Test
     void beforeItStartsNothingIsRead() {
         ConnectorComponent component = new ConnectorComponent();
         component.register(Fixtures.descriptor(), "kit");
