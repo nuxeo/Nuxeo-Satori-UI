@@ -12,7 +12,7 @@
   "sort": [{ "field": "claim:received", "order": "asc" }],
   "pageSize": 50,
   "facets": [{ "aggregate": "claim_status_agg", "labelKey": "payers.facet.status" }],
-  "rowActions": ["payers.claim.approve", "app.rowActions.download"],
+  "rowActions": ["app.rowActions.download"],
   "bulkActions": ["app.bulkActions.downloadZip"],
   "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
 }

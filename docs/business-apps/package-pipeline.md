@@ -45,9 +45,12 @@ root: `app.json`, and the other files of [app-definition-v2.md](app-definition-v
 The demo is [`business-apps/packages/payers-claims-demo`](../../business-apps/packages/payers-claims-demo/README.md),
 with fictional data. It is also phase 1's Payers kit, version 0, so its bundle carries a second
 component: a stand-in content model, with its document types, schemas and page providers, until
-the presales Payers model replaces it. The builder holds its XML to what Nuxeo can load, as it
-does every component's; nothing in the pipeline checks the schemas, types or page providers
-themselves, nor that a layout's page provider exists.
+the presales Payers model replaces it. Since 0.4.0 a third contributes phase 2's claims review
+workflow: a route model, as a zip the bundle carries, with its variable schemas and chains. The
+builder holds its XML to what Nuxeo can load, as it does every component's; nothing in the pipeline
+checks the schemas, types, page providers or route model themselves, nor that a layout's page
+provider exists. The kit's own controls check its route model
+([its README](../../business-apps/packages/payers-claims-demo/README.md)).
 
 ## 2. The steps
 
@@ -118,7 +121,7 @@ it must not be a link either.
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.3.0.zip` and its `.sha256` in the package. `--out` puts them
+It writes `dist/payers-claims-demo-0.4.0.zip` and its `.sha256` in the package. `--out` puts them
 elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
 `--platform` its platform version; the workflow passes the version of `libs/platform`. `--model`
 and `--model-server` give it the server's content model (section 4). `--previous` gives it the

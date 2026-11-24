@@ -1,0 +1,342 @@
+import java.io.File;
+import java.net.URL;
+import java.nio.file.Files;
+import java.util.*;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.dom4j.Element;
+import org.nuxeo.common.xmap.Context;
+import org.nuxeo.common.xmap.XMap;
+import org.nuxeo.ecm.core.io.ExportedDocument;
+import org.nuxeo.ecm.core.io.impl.plugins.NuxeoArchiveReader;
+import org.nuxeo.ecm.core.lifecycle.LifeCycleState;
+import org.nuxeo.ecm.core.lifecycle.extensions.LifeCycleDescriptor;
+import org.nuxeo.ecm.core.lifecycle.impl.LifeCycleImpl;
+import org.nuxeo.ecm.core.schema.SchemaManagerImpl;
+import org.nuxeo.ecm.core.schema.XSDLoader;
+import org.nuxeo.ecm.core.schema.types.Field;
+import org.nuxeo.ecm.core.schema.types.Schema;
+
+/**
+ * Reads the Payers kit's route model zip and components with a Nuxeo server's own classes, outside
+ * the server, which nothing here deploys to or changes:
+ *
+ * <ul>
+ *   <li>NuxeoArchiveReader reads the zip as RouteModelsZipImporter does, the platform's
+ *       SerialDocumentReview.zip first, as a control;
+ *   <li>XMap loads each extension of the kit's model and workflow components with the descriptor
+ *       class its extension point declares, and the template-resource resolves to the zip;
+ *   <li>XSDLoader loads the workflow's variable schemas, as the type service does;
+ *   <li>LifeCycleImpl answers the payersClaim lifecycle's transitions from each state;
+ *   <li>MVEL, the server's own version, evaluates each route node's transition conditions, in
+ *       order, for the cases below, and its task assignees.
+ * </ul>
+ *
+ * Run by platform-check.mjs, which copies the jars out of the container first:
+ * {@code java -cp <jars> PlatformCheck.java <kit> <SerialDocumentReview.zip>}. Java 21. Exit 0 when
+ * every check passes, 1 otherwise.
+ *
+ * <p>What it does not show: that the server imports the model, starts it, or runs its chains. The
+ * documents a condition reads are stand-ins for DocumentWrapper, maps of the same keys.
+ */
+public class PlatformCheck {
+  static int failures = 0;
+
+  static void check(boolean ok, String what) {
+    System.out.println((ok ? "  ok    " : "  FAIL  ") + what);
+    if (!ok) failures++;
+  }
+
+  public static void main(String[] args) throws Exception {
+    File home = Files.createTempDirectory("nuxeo-env").toFile();
+    org.nuxeo.common.Environment.setDefault(new org.nuxeo.common.Environment(home));
+    File kit = new File(args[0]);
+    File bundle = new File(kit, "bundle");
+    File platformZip = new File(args[1]);
+
+    System.out.println("== NuxeoArchiveReader on the platform's SerialDocumentReview.zip (control)");
+    List<ExportedDocument> platform = read(platformZip);
+    check(platform.size() == 6 && "DocumentRoute".equals(platform.get(0).getType()),
+        "platform zip: 6 documents, the first a DocumentRoute");
+
+    System.out.println("== NuxeoArchiveReader on bundle/data/PayersClaimReview.zip");
+    List<ExportedDocument> mine = read(new File(bundle, "data/PayersClaimReview.zip"));
+    check(mine.size() == 5, "5 documents: the model and its 4 nodes");
+    ExportedDocument root = mine.get(0);
+    check("DocumentRoute".equals(root.getType()), "the first is a DocumentRoute, as RouteModelsZipImporter requires");
+    check("PayersClaimReview".equals(root.getPath().lastSegment()),
+        "the model is named PayersClaimReview, by its folder");
+    Set<String> nodes = new TreeSet<>();
+    for (ExportedDocument d : mine.subList(1, mine.size())) {
+      check("RouteNode".equals(d.getType()), d.getPath() + " is a RouteNode");
+      check(d.getPath().segmentCount() == 2 && d.getPath().segment(0).equals("PayersClaimReview"),
+          d.getPath() + " is a child of the model");
+      Element rnode = schema(d, "route_node");
+      String nodeId = rnode == null ? null : rnode.elementText("nodeId");
+      check(d.getPath().lastSegment().equals(nodeId), d.getPath() + " has rnode:nodeId " + nodeId);
+      nodes.add(nodeId);
+    }
+    check(nodes.equals(new TreeSet<>(List.of("start", "determine", "supervisorApproval", "end"))),
+        "the nodes are " + nodes);
+    Element docri = schema(root, "document_route_instance");
+    check("facet-var_PayersClaimReview".equals(docri.elementText("variablesFacet")),
+        "docri:variablesFacet is facet-var_PayersClaimReview");
+    check(facets(root).containsAll(List.of("DocumentRoute", "Orderable", "facet-var_PayersClaimReview")),
+        "the model carries the DocumentRoute, Orderable and variables facets: " + facets(root));
+    check("validated".equals(system(root, "lifecycle-state")),
+        "the model is validated, which getRouteModelDocIdWithId looks for");
+
+    System.out.println("== XMap, with each extension point's descriptor class");
+    Map<String, Class<?>> descriptors = new HashMap<>();
+    descriptors.put("org.nuxeo.ecm.platform.routing.service#routeModelImporter",
+        Class.forName("org.nuxeo.ecm.platform.routing.api.RouteModelResourceType"));
+    descriptors.put("org.nuxeo.ecm.core.lifecycle.LifeCycleService#lifecycle", LifeCycleDescriptor.class);
+    descriptors.put("org.nuxeo.ecm.core.lifecycle.LifeCycleService#types",
+        Class.forName("org.nuxeo.ecm.core.lifecycle.extensions.LifeCycleTypesDescriptor"));
+    descriptors.put("org.nuxeo.ecm.core.operation.OperationServiceComponent#chains",
+        Class.forName("org.nuxeo.ecm.automation.core.OperationChainContribution"));
+    descriptors.put("org.nuxeo.ecm.core.operation.OperationServiceComponent#event-handlers",
+        Class.forName("org.nuxeo.ecm.automation.core.events.EventHandler"));
+    descriptors.put("org.nuxeo.ecm.core.schema.TypeService#schema",
+        Class.forName("org.nuxeo.ecm.core.schema.SchemaBindingDescriptor"));
+    descriptors.put("org.nuxeo.ecm.platform.actions.ActionService#filters",
+        Class.forName("org.nuxeo.ecm.platform.actions.DefaultActionFilter"));
+    descriptors.put("org.nuxeo.ecm.directory.GenericDirectory#directories",
+        Class.forName("org.nuxeo.ecm.directory.BaseDirectoryDescriptor"));
+
+    Context context = new Context() {
+      @Override
+      public URL getResource(String name) {
+        File file = new File(bundle, name);
+        try {
+          return file.exists() ? file.toURI().toURL() : null;
+        } catch (Exception e) {
+          return null;
+        }
+      }
+    };
+    LifeCycleDescriptor payersClaim = null;
+    Set<String> chains = new TreeSet<>();
+    List<Object> handlers = new ArrayList<>();
+    Map<String, String> lifeCycleOfType = new HashMap<>();
+    Set<String> filterIds = new TreeSet<>();
+    for (String component : List.of("payers-claims-demo-model.xml", "payers-claims-demo-workflow.xml")) {
+      org.w3c.dom.Document xml = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+          .parse(new File(bundle, "OSGI-INF/" + component));
+      org.w3c.dom.NodeList extensions = xml.getDocumentElement().getElementsByTagName("extension");
+      for (int i = 0; i < extensions.getLength(); i++) {
+        org.w3c.dom.Element extension = (org.w3c.dom.Element) extensions.item(i);
+        String key = extension.getAttribute("target") + "#" + extension.getAttribute("point");
+        Class<?> type = descriptors.get(key);
+        if (type == null) {
+          // Facets and document types, and page providers, are not loaded here: the route model's
+          // facets are held to the documents by route-model.selftest.mjs.
+          if (key.endsWith("#doctype") || key.endsWith("#providers")) continue;
+          check(false, component + ": no descriptor class known for " + key);
+          continue;
+        }
+        XMap xmap = new XMap();
+        xmap.register(type);
+        Object[] loaded = xmap.loadAll(context, extension);
+        check(loaded.length > 0, component + " " + key + ": " + loaded.length + " " + type.getSimpleName());
+        for (Object o : loaded) {
+          if (o instanceof LifeCycleDescriptor d && "payersClaim".equals(d.getName())) payersClaim = d;
+          if (type.getSimpleName().equals("RouteModelResourceType")) {
+            URL url = (URL) type.getMethod("getURL").invoke(o);
+            check(url != null && new File(url.toURI()).isFile(),
+                "template-resource " + type.getMethod("getId").invoke(o) + " resolves to " + url);
+          }
+          if (type.getSimpleName().equals("OperationChainContribution")) {
+            String id = (String) type.getMethod("getId").invoke(o);
+            Object[] ops = (Object[]) type.getMethod("getOps").invoke(o);
+            chains.add(id);
+            check(ops.length > 0, "chain " + id + ": " + ops.length + " operations");
+          }
+          if (type.getSimpleName().equals("EventHandler")) handlers.add(o);
+          if (type.getSimpleName().equals("LifeCycleTypesDescriptor"))
+            lifeCycleOfType.put((String) type.getMethod("getDocumentType").invoke(o),
+                (String) type.getMethod("getLifeCycleName").invoke(o));
+          if (type.getSimpleName().equals("DefaultActionFilter"))
+            filterIds.add((String) type.getMethod("getId").invoke(o));
+          if (type.getSimpleName().equals("BaseDirectoryDescriptor")) {
+            String name = (String) type.getField("name").get(o);
+            String dataFile = (String) type.getField("dataFileName").get(o);
+            check("PayersClaimDecision".equals(name) && dataFile != null && new File(bundle, dataFile).isFile(),
+                "directory " + name + " reads its entries from " + dataFile + ", a file of the bundle");
+          }
+          if (type.getSimpleName().equals("SchemaBindingDescriptor")) {
+            Object src = type.getField("src").get(o);
+            String name = (String) type.getField("name").get(o);
+            File file = new File(bundle, String.valueOf(src));
+            check(file.isFile(), "schema " + name + " from " + src);
+            // The kit's earlier schemas use the document resolver, which needs a running server.
+            if (!name.startsWith("var_")) continue;
+            Schema schema = new XSDLoader(new SchemaManagerImpl()).loadSchema(name, name, file);
+            List<String> fields = new ArrayList<>();
+            for (Field f : schema.getFields()) fields.add(f.getName().getLocalName() + ":" + f.getType().getName());
+            check(!fields.isEmpty(), "XSDLoader loads " + name + ": " + fields);
+          }
+        }
+      }
+    }
+
+    System.out.println("== What the descriptors say");
+    check("payersClaim".equals(lifeCycleOfType.get("Claim")), "a Claim follows payersClaim: " + lifeCycleOfType);
+    check(filterIds.contains("filter@PayersClaimReview"), "the availability filter is contributed: " + filterIds);
+    Class<?> eventHandler = Class.forName("org.nuxeo.ecm.automation.core.events.EventHandler");
+    boolean keepsStatus = false;
+    for (Object handler : handlers) {
+      String chainId = (String) eventHandler.getMethod("getChainId").invoke(handler);
+      Set<?> events = (Set<?>) eventHandler.getMethod("getEvents").invoke(handler);
+      Set<?> doctypes = (Set<?>) eventHandler.getMethod("getDoctypes").invoke(handler);
+      keepsStatus |= "PayersClaim.KeepStatus".equals(chainId) && chains.contains(chainId)
+          && events.contains("lifecycle_transition_event") && doctypes != null && doctypes.contains("Claim");
+    }
+    check(keepsStatus, "a contributed chain, PayersClaim.KeepStatus, handles lifecycle_transition_event on a Claim");
+
+    System.out.println("== The payersClaim lifecycle, as LifeCycleImpl answers it");
+    check(payersClaim != null, "payersClaim is contributed");
+    if (payersClaim != null) {
+      List<String> initial = new ArrayList<>();
+      for (LifeCycleState s : payersClaim.getStates()) if (s.isInitial()) initial.add(s.getName());
+      LifeCycleImpl lifeCycle = new LifeCycleImpl(payersClaim.getName(), payersClaim.getDefaultInitialStateName(),
+          initial, payersClaim.getStates(), payersClaim.getTransitions());
+      check("submitted".equals(lifeCycle.getDefaultInitialStateName()), "a claim starts submitted");
+      for (LifeCycleState s : lifeCycle.getStates()) {
+        List<String> out = new ArrayList<>();
+        for (String t : lifeCycle.getAllowedStateTransitionsFrom(s.getName()))
+          out.add(t + "->" + lifeCycle.getTransitionByName(t).getDestinationStateName());
+        System.out.println("        " + s.getName() + ": " + out);
+      }
+      check(lifeCycle.getAllowedStateTransitionsFrom("submitted").contains("review"), "submitted -> review");
+      check(lifeCycle.getAllowedStateTransitionsFrom("inReview").containsAll(List.of("approve", "deny")),
+          "inReview -> approve, deny");
+      check(lifeCycle.getAllowedStateTransitionsFrom("pended").containsAll(List.of("approve", "deny")),
+          "pended -> approve, deny");
+      check(lifeCycle.getAllowedStateTransitionsFrom("project").contains("submit"), "project -> submit");
+    }
+
+    System.out.println("== Every chain the nodes name is contributed");
+    for (ExportedDocument d : mine.subList(1, mine.size())) {
+      Element rnode = schema(d, "route_node");
+      for (Element t : rnode.element("transitions").elements("transition")) {
+        String chain = t.elementText("chain");
+        if (chain != null && !chain.isBlank())
+          check(chains.contains(chain), d.getPath().lastSegment() + "." + t.elementText("name") + " runs " + chain);
+      }
+    }
+
+    System.out.println("== The nodes' conditions and assignees, with the server's MVEL (mvel2 2.5.2)");
+    Map<String, ExportedDocument> byNode = new HashMap<>();
+    for (ExportedDocument d : mine.subList(1, mine.size())) byNode.put(d.getPath().lastSegment(), d);
+    // Each case: the node, its NodeVariables, the claim's properties, and the transition expected.
+    Object[][] cases = {
+      {"start", vars(), claim(null, "submitted"), "review"},
+      {"start", vars(), claim(null, "inReview"), "notSubmitted"},
+      {"start", vars(), claim(null, "approved"), "notSubmitted"},
+      {"determine", vars("decision", "deny"), claim(2310.0, "inReview"), "denialWithoutReason"},
+      {"determine", vars("decision", "deny", "denialReason", "   "), claim(2310.0, "inReview"), "denialWithoutReason"},
+      {"determine", vars("decision", "deny", "denialReason", "Not covered"), claim(2310.0, "inReview"), "deny"},
+      {"determine", vars("decision", "approve", "allowedAmount", 7000.0), claim(7250.0, "inReview"), "toSupervisor"},
+      {"determine", vars("decision", "approve", "allowedAmount", 100.0), claim(5000.01, "inReview"), "toSupervisor"},
+      {"determine", vars("decision", "approve", "allowedAmount", 5000.0), claim(5000.0, "inReview"), "approve"},
+      {"determine", vars("decision", "approve", "allowedAmount", 0.0), claim(4980.0, "pended"), "approve"},
+      {"determine", vars("decision", "approve"), claim(4980.0, "inReview"), "approvalWithoutAmount"},
+      {"determine", vars("decision", "approve", "allowedAmount", 5000.5), claim(5000.0, "inReview"), "approvalWithoutAmount"},
+      {"determine", vars("decision", "approve", "allowedAmount", -1.0), claim(4980.0, "inReview"), "approvalWithoutAmount"},
+      {"determine", vars("decision", "approve", "allowedAmount", 10.0), claim(null, "inReview"), "approvalWithoutAmount"},
+      {"determine", vars(), claim(4980.0, "inReview"), "undecided"},
+      {"determine", vars("decision", "maybe"), claim(4980.0, "inReview"), "undecided"},
+      {"supervisorApproval", vars("button", "approve"), claim(7250.0, "inReview"), "approve"},
+      {"supervisorApproval", vars("button", "reject"), claim(7250.0, "inReview"), "sendBack"},
+      {"supervisorApproval", vars("button", "other"), claim(7250.0, "inReview"), "unknownAction"},
+    };
+    for (Object[] c : cases) {
+      String node = (String) c[0];
+      Element rnode = schema(byNode.get(node), "route_node");
+      boolean firstOnly = "true".equals(rnode.elementText("executeOnlyFirstTransition"));
+      Map<String, Object> bindings = new HashMap<>();
+      bindings.put("NodeVariables", c[1]);
+      bindings.put("Document", c[2]);
+      List<String> taken = new ArrayList<>();
+      for (Element t : rnode.element("transitions").elements("transition")) {
+        Object result = org.mvel2.MVEL.eval(t.elementText("condition"), new HashMap<>(bindings));
+        if (!(result instanceof Boolean)) {
+          check(false, node + "." + t.elementText("name") + " evaluates to a Boolean, as GraphNodeImpl requires");
+          continue;
+        }
+        if ((Boolean) result) {
+          taken.add(t.elementText("name"));
+          if (firstOnly) break;
+        }
+      }
+      check(taken.equals(List.of(c[3])), node + " with " + c[1] + " on " + c[2] + " follows " + taken);
+    }
+    Element determine = schema(byNode.get("determine"), "route_node");
+    String assignees = determine.elementText("taskAssigneesExpr");
+    check("user:alex.rivera".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("claim:adjuster", "alex.rivera")))),
+        "determine's task goes to the claim's adjuster");
+    Map<String, Object> unassigned = new HashMap<>();
+    unassigned.put("claim:adjuster", null);
+    check("group:claims-adjusters".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", unassigned))),
+        "and to any adjuster when the claim has none");
+    check("group:claims-adjusters".equals(org.mvel2.MVEL.eval(assignees, Map.of("Document", Map.of("claim:adjuster", "")))),
+        "or an empty one");
+    check("group:claims-supervisors".equals(org.mvel2.MVEL.eval(
+            schema(byNode.get("supervisorApproval"), "route_node").elementText("taskAssigneesExpr"), new HashMap<>())),
+        "supervisorApproval's task goes to claims-supervisors");
+
+    System.out.println(failures == 0 ? "\nAll checks passed." : "\n" + failures + " check(s) failed.");
+    System.exit(failures == 0 ? 0 : 1);
+  }
+
+  /** NodeVariables, as the route node holds them: every variable of its schema, null when unset. */
+  static Map<String, Object> vars(Object... pairs) {
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("decision", null);
+    m.put("allowedAmount", null);
+    m.put("denialReason", null);
+    m.put("button", null);
+    for (int i = 0; i < pairs.length; i += 2) m.put((String) pairs[i], pairs[i + 1]);
+    return m;
+  }
+
+  /** The claim, as DocumentWrapper answers it: properties by xpath, and its lifeCycle. */
+  static Map<String, Object> claim(Double billed, String state) {
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("claim:billedAmount", billed);
+    m.put("lifeCycle", state);
+    return m;
+  }
+
+  static List<ExportedDocument> read(File zip) throws Exception {
+    List<ExportedDocument> documents = new ArrayList<>();
+    NuxeoArchiveReader reader = new NuxeoArchiveReader(zip);
+    try {
+      for (ExportedDocument d = reader.read(); d != null; d = reader.read()) {
+        documents.add(d);
+        System.out.println("        " + d.getPath() + "  " + d.getType() + "  id=" + d.getId());
+      }
+    } finally {
+      reader.close();
+    }
+    return documents;
+  }
+
+  static Element schema(ExportedDocument d, String name) {
+    for (Element e : d.getDocument().getRootElement().elements("schema"))
+      if (name.equals(e.attributeValue("name"))) return e;
+    return null;
+  }
+
+  static String system(ExportedDocument d, String name) {
+    return d.getDocument().getRootElement().element("system").elementText(name);
+  }
+
+  static List<String> facets(ExportedDocument d) {
+    List<String> out = new ArrayList<>();
+    for (Element e : d.getDocument().getRootElement().element("system").elements("facet")) out.add(e.getText());
+    return out;
+  }
+}

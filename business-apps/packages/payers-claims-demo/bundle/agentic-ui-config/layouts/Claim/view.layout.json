@@ -14,7 +14,26 @@
           "widget": "currency",
           "parameters": { "currency": "USD" }
         },
-        { "field": "claim:received", "widget": "date", "parameters": { "format": "long" } }
+        { "field": "claim:received", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "field": "claim:allowedAmount",
+          "widget": "currency",
+          "parameters": { "currency": "USD" }
+        },
+        {
+          "field": "claim:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "submitted": "info",
+              "inReview": "info",
+              "pended": "warning",
+              "approved": "positive",
+              "paid": "positive",
+              "denied": "negative"
+            }
+          }
+        }
       ]
     },
     {

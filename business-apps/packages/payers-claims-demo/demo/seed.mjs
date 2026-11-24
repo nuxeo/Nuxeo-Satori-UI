@@ -2,8 +2,8 @@
 /**
  * Seed a Nuxeo server with the Payers kit's fictional records and people, so that its record pages,
  * queues and home have something to show: four members, three providers, eight claims, three cases
- * and four claim documents, and the four people who work them, in the three groups the kit's rules
- * name, from `data.mjs`.
+ * and four claim documents, and the six people who work them, in the three groups the kit's rules
+ * name, from `data.mjs`. Each claim's lifecycle state is brought to its status, so the two are one.
  *
  *   node business-apps/packages/payers-claims-demo/demo/seed.mjs
  *
@@ -29,12 +29,20 @@
  * it knows by its marker (`MARKER`), is found before anything is written, and stops the run with
  * exit 2.
  *
+ * **The claims' lifecycle.** A claim's lifecycle, `payersClaim`, has claim:status's values as its
+ * states (`lifecycle.mjs` reads it from the stand-in model). After a claim is written, it follows
+ * the fewest transitions from the state it is in to its status: a new claim starts `submitted`, and
+ * one created before version 0.4.0 is in `project`, whose one way out is `submit`. A claim that no
+ * transition can bring to its status, such as one reviewed since that `data.mjs` has as submitted,
+ * stops the run (exit 1), naming it; restoring it from the trash restores its state too.
+ *
  * **The people.** Each user is created, or put back to `data.mjs`'s values: name, e-mail, groups
  * and password. The seeded workspace and its folders give the demo's groups the permissions
  * `data.mjs` names, and only those: one of theirs it does not name is removed. Anyone else's stays.
  *
  * **It checks what it seeded.** Last, as `check` says: each user signs in, in their groups, with
- * the rights `GRANTS` implies on a claim and none to change a member; then the kit's seven page
+ * the rights `GRANTS` implies on a claim and none to change a member; each claim is in the state
+ * its status names; then the kit's seven page
  * providers return what it wrote, the three queues' aggregates count it, and each adjuster's
  * claims are what `payers_my_claims` returns to them, asked as they are, through `$currentUser`.
  * So a run that passes has run each of them on the server.
@@ -45,7 +53,7 @@
  * Exit codes: 0, seeded and checked; 1, the server refused a write, stopped answering part way, or
  * a check failed; 2, a precondition, found before anything is written: no credentials, no demo
  * password, no server, credentials refused or not an administrator's, the package not installed
- * or older than 0.3.0, no /default-domain/workspaces, or a user or a group of the demo's names
+ * or older than 0.4.0, no /default-domain/workspaces, or a user or a group of the demo's names
  * that the seed did not create.
  */
 import {
@@ -58,6 +66,7 @@ import {
   PROVIDERS,
   USERS,
 } from './data.mjs';
+import { pathBetween, readLifecycle } from './lifecycle.mjs';
 
 const EXIT_PRECONDITION = 2;
 const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/+$/, '');
@@ -79,6 +88,12 @@ const FOLDERS = {
 };
 /** The stand-in model's types; `PayersClaimSearch` is version 0.3.0's, which the queues need. */
 const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersClaimSearch'];
+/**
+ * Version 0.4.0's claims review workflow, which comes with the claim lifecycle the seed follows: a
+ * server without it has the platform's default lifecycle on claims.
+ */
+const WORKFLOW_MODEL = 'PayersClaimReview';
+const LIFECYCLE = readLifecycle();
 const PAGE_PROVIDERS = [
   'member_claims',
   'member_cases',
@@ -107,7 +122,7 @@ class HttpError extends Error {
   }
 }
 
-const tally = { created: 0, updated: 0, restored: 0, uploaded: 0 };
+const tally = { created: 0, updated: 0, restored: 0, uploaded: 0, transitions: 0 };
 const people = { created: 0, updated: 0, granted: 0, removed: 0 };
 /** Whether the run is still in its preflight, where no answer at all means no server. */
 let preflighting = true;
@@ -214,6 +229,7 @@ async function seed() {
       'claim:adjuster': claim.adjuster,
       'claim:diagnosis': claim.diagnosis,
     });
+    await settle(document, claim);
     claims.set(claim.number, document.uid);
   }
 
@@ -257,10 +273,11 @@ async function seed() {
 
   await check({ members, providers, claims, cases, documents });
 
-  const { created, updated, restored, uploaded } = tally;
+  const { created, updated, restored, uploaded, transitions } = tally;
   console.log(
     `\nDone: ${created} created, ${updated} updated, ${restored} restored from the trash, ` +
-      `${uploaded} file(s) uploaded. The page providers return what was seeded.`,
+      `${uploaded} file(s) uploaded, ${transitions} lifecycle transition(s) followed. The page ` +
+      'providers return what was seeded.',
   );
   console.log(
     `People: ${people.created} created, ${people.updated} updated, ${people.granted} ` +
@@ -274,8 +291,8 @@ async function seed() {
 
 /**
  * The server answers, the credentials are accepted and are an administrator's, the package's
- * types are installed, version 0.3.0's search type among them, and no user or group of the demo's
- * names is someone else's.
+ * types are installed, version 0.3.0's search type among them, and version 0.4.0's claims review
+ * workflow, and no user or group of the demo's names is someone else's.
  */
 async function preflight() {
   let me;
@@ -299,10 +316,16 @@ async function preflight() {
     throw new Precondition(
       missing.length === 1 && missing[0] === 'PayersClaimSearch'
         ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
-            'PayersClaimSearch type for its queues: upgrade it to 0.3.0 ' +
+            'PayersClaimSearch type for its queues: upgrade it to 0.4.0 ' +
             '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
         : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
             'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+    );
+  if ((await find(`/workflowModel/${WORKFLOW_MODEL}`)) === null)
+    throw new Precondition(
+      `${SERVER} has version 0.3.0 or older of the payers-claims-demo package, with no ` +
+        `${WORKFLOW_MODEL} workflow and the platform's default lifecycle on claims: upgrade it to ` +
+        '0.4.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
@@ -464,6 +487,31 @@ async function ensure(parent, name, type, properties, file) {
 }
 
 /**
+ * The claim brought to the lifecycle state its status names, along the fewest transitions from the
+ * state it is in. The server keeps claim:status in step with each one (the stand-in model's
+ * `PayersClaim.KeepStatus`), so it ends as `data.mjs` has it. No path there stops the run before
+ * any transition: the claim's status is written already, and its state is left as it was.
+ */
+async function settle(document, claim) {
+  const from = document.state;
+  const path = pathBetween(LIFECYCLE, from, claim.status);
+  if (path === null)
+    throw new Error(
+      `${claim.number} is ${from}, and the claim lifecycle has no way from there to ` +
+        `${claim.status}, its seeded status. Delete it, and empty it from the trash, then run ` +
+        'this again.',
+    );
+  for (const transition of path) {
+    await call('POST', '/automation/Document.FollowLifecycleTransition', {
+      json: { input: `doc:${document.uid}`, params: { value: transition } },
+    });
+    tally.transitions++;
+  }
+  if (path.length > 0)
+    console.log(`  moved    ${claim.number} from ${from} to ${claim.status}: ${path.join(', ')}`);
+}
+
+/**
  * The document trashed from `parent/name`, or `null`, found in the repository itself. Nuxeo
  * renames what it trashes, to `<name>._<time>_.trashed`, unless it is configured not to, so the
  * record's place no longer finds it. Restoring it gives the name back.
@@ -533,6 +581,9 @@ async function check(seeded) {
   const refused = await staff(seeded);
   if (refused.length > 0)
     throw new Error(`The demo's people are not as seeded:\n  ${refused.join('\n  ')}`);
+  const unsettled = await lifecycles(seeded);
+  if (unsettled.length > 0)
+    throw new Error(`The claims are not in their statuses' states:\n  ${unsettled.join('\n  ')}`);
   const deadline = Date.now() + INDEX_WAIT_MS;
   for (;;) {
     const problems = await disagreements(seeded);
@@ -610,6 +661,24 @@ async function staff({ members, claims }) {
         );
     if (onMember.includes('WriteProperties'))
       problems.push(`${user.username} may change a member, and would see its Edit form`);
+  }
+  return problems;
+}
+
+/**
+ * Each seeded claim, read again from the repository, in the lifecycle state its status names, with
+ * that status: the two are one, which the queues, read by status, and the lifecycle's buttons and
+ * the workflow, read by state, rely on.
+ */
+async function lifecycles({ claims }) {
+  const problems = [];
+  for (const claim of CLAIMS) {
+    const document = await call('GET', `/id/${claims.get(claim.number)}`);
+    const status = document?.properties?.['claim:status'];
+    if (document?.state !== claim.status || status !== claim.status)
+      problems.push(
+        `${claim.number} is ${document?.state} with status ${status}, not ${claim.status}`,
+      );
   }
   return problems;
 }

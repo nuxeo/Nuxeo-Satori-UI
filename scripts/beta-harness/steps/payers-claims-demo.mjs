@@ -52,15 +52,18 @@
  * yet, so the approve button is left out of the queue's rows).
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, extname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
+import { codeIn } from './payers-claims-demo/bundle-data.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { CASES, CLAIMS, MEMBERS, USERS } = await import(join(KIT, 'demo', 'data.mjs'));
+/** The route model's zip, relative to the bundle, as the kit's workflow component names it. */
+const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
 
 /** The session `AuthService` keeps, which the app's interceptor reads: helpers.mjs's key. */
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -819,17 +822,11 @@ export default async function run(page, h) {
     JSON.stringify(drawn) === JSON.stringify(fileFields),
     `drawn ${JSON.stringify(drawn)}, file ${JSON.stringify(fileFields)}`,
   );
-  const code = [];
-  (function walk(directory) {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else if (!['.json', '.xml', '.xsd', '.MF'].includes(extname(entry.name)))
-        code.push(relative(KIT, path));
-    }
-  })(join(KIT, 'bundle'));
+  // Data only, by place: what counts is bundle-data.mjs's, and its selftest sees code refused.
+  const code = codeIn(join(KIT, 'bundle'), ROUTE_MODEL_ZIP, KIT);
   h.check(
-    "the kit's bundle holds no code: JSON, XML, XSD and its manifest only",
+    "the kit's bundle holds no code: JSON, XML, XSD, its manifest, vocabularies' CSV and the " +
+      "route model's zip of XML documents only",
     code.length === 0,
     `code in the bundle: ${code.join(', ')}`,
   );

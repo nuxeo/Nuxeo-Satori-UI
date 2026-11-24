@@ -186,6 +186,8 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           'queues/my-claims.json',
           'queues/pending-determination.json',
           'queues/unassigned-claims.json',
+          'tasks/PayersClaimReview.determine.layout.json',
+          'tasks/PayersClaimReview.supervisorApproval.layout.json',
           'tasks/claimReview.check.layout.json',
         ]);
         expect(preview.notServed.map((file) => file.file)).toEqual([
