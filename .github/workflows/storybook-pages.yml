@@ -194,6 +194,29 @@ jobs:
           mkdir -p "$dest"
           cp "$page" "$dest/index.html"
 
+      # `/dev-analytics/`: the dashboard dev-analytics.yml generates nightly. That workflow owns the
+      # page; this step only copies the latest one in, because a Pages deployment replaces the
+      # whole site and anything not copied here would vanish on the next Storybook publish.
+      #
+      # Deliberately fail-soft, unlike the steps around it: an absent branch (before the first
+      # nightly run), an unreachable remote or an empty page costs the dashboard, never the
+      # Storybook. It says so as a warning rather than passing silently. The page is a single
+      # self-contained HTML file with its own CSP, so it needs no assets from the rest of the site.
+      - name: Add the dev-analytics dashboard to the site
+        shell: bash
+        run: |
+          set -uo pipefail
+          dest="$SITE_DIR/dev-analytics"
+          skip() { echo "::warning::dev-analytics dashboard not published: $1"; exit 0; }
+          if [ -e "$dest" ]; then echo "::error::$dest already exists in the assembled site"; exit 1; fi
+          git fetch --quiet --depth=1 "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" dev-analytics-data \
+            || skip "branch dev-analytics-data could not be fetched"
+          git show FETCH_HEAD:site/index.html > "$RUNNER_TEMP/dev-analytics.html" 2>/dev/null \
+            || skip "site/index.html is not on dev-analytics-data"
+          [ -s "$RUNNER_TEMP/dev-analytics.html" ] || skip "site/index.html is empty"
+          mkdir -p "$dest"
+          cp "$RUNNER_TEMP/dev-analytics.html" "$dest/index.html"
+
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ${{ env.SITE_DIR }}

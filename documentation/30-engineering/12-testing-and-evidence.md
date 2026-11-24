@@ -314,10 +314,21 @@ away. If `@axe-core/playwright` is missing it is a **failed check**, never a sil
 
 **As of 2026-11-23, AA is not met.** `phase-6-a11y/2026-11-23T08-09-11`, captured on `main` at
 e27deeaa0, fails 15 of 35 checks. Fourteen are `label-content-name-mismatch` (2.5.3 Label in
-Name, Level A) on the navigation's user-profile control, which is in the shell and so fails on
+Name, Level A) on the navigation's user-profile control, which is in the shell and so failed on
 every surface. With the rail collapsed it shows only the avatar initials NXSAT-673 added on
-2026-10-26, and they are not a word of its accessible name. The fifteenth is a Health 404 on an
+2026-10-26, and they were not a word of its accessible name. The fifteenth is a Health 404 on an
 optional configuration file the local server does not serve, which is an environment condition.
+
+**Fixed the same day, and AA is still not met.** The shell now names the control with
+`aria-labelledby`: the initials, then the display name. `phase-6-a11y/2026-11-23T18-53-44`,
+with axe-core 4.14.1, passes all 14 axe checks. It is 34 of 35 because Health still fails, on
+404s that are not accessibility findings, most of them from the local environment and its test
+data. Clearing the capture is not conformance:
+failures are recorded in states the capture does not reach, and the capture scans only the
+collapsed rail. `platform-nav-user-profile-label-in-name.spec.ts` holds the control's name to
+the text it paints on both rails, and fails on the old markup. The case it replaces passed on the
+defect because it ignored `aria-hidden` text, which is hidden from a screen reader but not from
+sight.
 
 The rule only now counts because the engine changed. The capture's `--no-save` install pins no
 version, and resolved axe-core 4.14.1; the 35/35 of 2026-10-22 ran on 4.13.0, which tags the
