@@ -17,11 +17,13 @@ import org.nuxeo.ecm.core.api.model.PropertyNotFoundException;
 /** Connectors, settings, a document and a session for the tests, with no Nuxeo runtime. */
 final class Fixtures {
 
-    static final String ADDRESS_PROPERTY = "test.claims.address";
+    static final String ADDRESS_PROPERTY = "nuxeo.agentic.connectors.test.claimPayments.address";
 
-    static final String TOKEN_PROPERTY = "test.claims.token";
+    static final String TOKEN_PROPERTY = "nuxeo.agentic.connectors.test.claimPayments.token";
 
-    static final String TOKEN_ENV = "TEST_CLAIMS_TOKEN";
+    static final String TOKEN_ENV = "NUXEO_CONNECTOR_TEST_CLAIMS_TOKEN";
+
+    static final String HTTP_ALLOWED = "nuxeo.agentic.connectors.test.claimPayments.http.allowed";
 
     private Fixtures() {
     }
@@ -33,6 +35,7 @@ final class Fixtures {
         d.addressProperty = ADDRESS_PROPERTY;
         d.path = "/claims/{key}";
         d.keyXpath = "claim:number";
+        d.types = new ArrayList<>(List.of("Claim"));
         d.fields = new ArrayList<>(List.of(field("paymentStatus", null), field("paidAmount", "/payment/amount"),
                 field("paid", "/payment/paid")));
         return d;
@@ -70,18 +73,23 @@ final class Fixtures {
         }
 
         Settings allowHttp() {
-            properties.put(ConnectorSettings.ALLOW_HTTP, "true");
+            properties.put(HTTP_ALLOWED, "true");
             return this;
         }
     }
 
-    /** A document holding {@code claim:number} as given, or no such property at all. */
+    /** A Claim holding {@code claim:number} as given, or no such property at all. */
     static DocumentModel claim(Serializable number, boolean hasProperty) {
-        DocumentRef ref = new IdRef("4c6e9f1a-claim");
+        return document("Claim", number, hasProperty, new IdRef("4c6e9f1a-claim"));
+    }
+
+    /** A document of {@code type}, with {@code ref}, holding {@code claim:number} as given. */
+    static DocumentModel document(String type, Serializable number, boolean hasProperty, DocumentRef ref) {
         return (DocumentModel) Proxy.newProxyInstance(Fixtures.class.getClassLoader(),
                 new Class<?>[] { DocumentModel.class }, (proxy, method, args) -> switch (method.getName()) {
                 case "getRef" -> ref;
                 case "getId" -> "4c6e9f1a-claim";
+                case "getType" -> type;
                 case "getPropertyValue" -> {
                     if (!hasProperty || !"claim:number".equals(args[0])) {
                         throw new PropertyNotFoundException((String) args[0]);
@@ -102,8 +110,16 @@ final class Fixtures {
 
         final List<String> asked = new ArrayList<>();
 
+        /** What {@code getDocument} answers: the document as the repository stores it. */
+        DocumentModel stored = claim("CLAIM-000130", true);
+
         Session(String... granted) {
             this.granted = Set.of(granted);
+        }
+
+        Session storing(DocumentModel document) {
+            stored = document;
+            return this;
         }
 
         CoreSession session() {
@@ -115,6 +131,10 @@ final class Fixtures {
                         }
                         asked.add(args[0] + " " + args[1]);
                         yield granted.contains((String) args[1]);
+                    }
+                    case "getDocument" -> {
+                        asked.add("getDocument " + args[0]);
+                        yield stored;
                     }
                     case "toString" -> "session";
                     case "hashCode" -> System.identityHashCode(proxy);

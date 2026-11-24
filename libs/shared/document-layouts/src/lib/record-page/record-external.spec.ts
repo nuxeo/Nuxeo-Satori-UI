@@ -136,6 +136,26 @@ describe('RecordExternalComponent', () => {
     expect(badge).not.toBeNull();
   });
 
+  it("shows another system's markup as text, never as HTML or a link", async () => {
+    const markup = '<img src=x onerror="alert(1)"><a href="javascript:alert(2)">pay</a>';
+    read.mockReturnValue(of(found({ policyNumber: markup, paymentStatus: markup })));
+    const element = await render({
+      connector: 'payers.claimPayments',
+      fields: [
+        field('policyNumber', { widget: 'long-text' }),
+        field('paymentStatus', {
+          widget: 'status-badge',
+          parameters: { tones: { Paid: 'positive' } },
+        }),
+      ],
+    });
+    expect(element.querySelector('.record-external__fields img')).toBeNull();
+    expect(element.querySelector('.record-external__fields a')).toBeNull();
+    expect(element.querySelector('[data-field="policyNumber"] dd')?.textContent?.trim()).toBe(
+      markup,
+    );
+  });
+
   it('shows the loading state until the server answers', async () => {
     const answer = new Subject<ConnectorAnswer>();
     read.mockReturnValue(answer);

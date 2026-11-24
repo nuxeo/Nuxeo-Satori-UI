@@ -19,12 +19,15 @@ public interface ConnectorService {
      * The record the connector reads for the document's key, as the session's user.
      *
      * <ol>
+     * <li>The user must hold {@code Read} on the document, and then the connector's own permission
+     * if it asks for more: without either, a {@code DocumentSecurityException}, and nothing is
+     * sent.</li>
      * <li>An unknown connector is a {@link ConnectorException} with status 404.</li>
-     * <li>The user must hold the connector's permission on the document, {@code Read} unless the
-     * connector asks for more: without it, a {@code DocumentSecurityException}, and nothing is
-     * sent.</li>
-     * <li>A document with no key the connector can send answers {@code no-key}, and nothing is
-     * sent.</li>
+     * <li>The document is read again as the repository stores it, and its key is read from that,
+     * never from the model given: a request can hand Automation a document with properties of its
+     * own choosing.</li>
+     * <li>A document of a type the connector does not read, or with no key it can send, answers
+     * {@code no-key}, and nothing is sent.</li>
      * <li>Then the system is called, within the connector's bounds.</li>
      * </ol>
      */

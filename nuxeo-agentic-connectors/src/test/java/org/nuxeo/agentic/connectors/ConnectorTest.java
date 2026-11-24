@@ -46,9 +46,28 @@ class ConnectorTest {
     }
 
     @Test
-    void theAddressIsAServerPropertysNameNeverAnAddress() {
-        assertTrue(refusal(d -> d.addressProperty = null).contains("<address property"));
-        assertTrue(refusal(d -> d.addressProperty = "https://core.example.invalid").contains("<address property"));
+    void theAddressIsAServerPropertyOfTheConnectorsOwnNeverAnAddress() {
+        for (String name : new String[] { null, "https://core.example.invalid", "payers.claimPayments.address",
+                "nuxeo.db.password", "nuxeo.agentic.connectors.other.address", "nuxeo.agentic.connectors.test.claimPayments.",
+                "nuxeo.agentic.connectors.test.claimPaymentsX.address" }) {
+            assertTrue(refusal(d -> d.addressProperty = name).contains("<address property"), String.valueOf(name));
+        }
+    }
+
+    @Test
+    void itReadsOnlyTheDocumentTypesItNames() {
+        assertEquals(List.of("Claim"), Connector.of(Fixtures.descriptor()).types());
+        assertTrue(refusal(d -> d.types = new ArrayList<>()).contains("<type>"));
+        assertTrue(refusal(d -> d.types = new ArrayList<>(List.of("Claim", "not a type"))).contains("<type>"));
+        assertTrue(refusal(d -> d.types = new ArrayList<>(IntStream.range(0, 21).mapToObj(i -> "T" + i).toList()))
+                                                                                                            .contains("<type>"));
+    }
+
+    @Test
+    void itRunsAtMostSoManyCallsAtOnce() {
+        assertEquals(8, Connector.of(Fixtures.descriptor()).maxConcurrent());
+        assertTrue(refusal(d -> d.maxConcurrent = 0).contains("<maxConcurrent>"));
+        assertTrue(refusal(d -> d.maxConcurrent = 65).contains("<maxConcurrent>"));
     }
 
     @Test
@@ -105,10 +124,20 @@ class ConnectorTest {
             Fixtures.withCredential(d);
             d.credentialPrefix = "Bearer\r\nX-Injected: ";
         }).contains("<credential prefix>"));
-        assertTrue(refusal(d -> {
-            Fixtures.withCredential(d);
-            d.credentialEnv = "lower_case";
-        }).contains("<credential env>"));
+        // Only the connector's own settings: a contribution cannot have another secret sent.
+        for (String env : List.of("lower_case", "AWS_SECRET_ACCESS_KEY", "NUXEO_CONNECTOR_")) {
+            assertTrue(refusal(d -> {
+                Fixtures.withCredential(d);
+                d.credentialEnv = env;
+            }).contains("<credential env>"), env);
+        }
+        for (String property : List.of("nuxeo.db.password", "nuxeo.agentic.connectors.other.token",
+                "payers.claimPayments.token")) {
+            assertTrue(refusal(d -> {
+                Fixtures.withCredential(d);
+                d.credentialProperty = property;
+            }).contains("<credential property>"), property);
+        }
     }
 
     @Test

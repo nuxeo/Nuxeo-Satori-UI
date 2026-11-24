@@ -265,6 +265,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.note-image-picker-dialog.loading': 'Loading pictures',
   'document-detail.note-image-picker-dialog.picture-documents': 'Picture documents',
   'document-detail.note-image-picker-dialog.select-all': 'Select all',
+  'document-layouts.external.loading': 'Loading from the other system',
   'document-layouts.loading-form': 'Loading the form',
   'document-layouts.picture.alt': '{{title}}, {{view}} view',
   'document-layouts.picture.label': 'Picture',

@@ -15,22 +15,26 @@ import com.fasterxml.jackson.core.JsonPointer;
  *
  * <ul>
  * <li>{@code id} names it, for a layout's {@code external} card and the operation;</li>
+ * <li>{@code types} are the document types it reads a key from, and the only ones;</li>
  * <li>{@code addressProperty} names the server property that holds the system's address, read
  * when the connector is called: the address itself is never in a contribution, a document, a
- * layout or a request;</li>
+ * layout or a request. The name is under {@code nuxeo.agentic.connectors.<id>.};</li>
  * <li>{@code path} is appended to the address, its {@code {key}} replaced by the record's key, one
  * path segment;</li>
  * <li>{@code keyXpath} is the document property that holds the key;</li>
  * <li>{@code permission} is what the reader must hold on the document before the system is
  * called, {@code Read} unless the contribution asks for more;</li>
- * <li>{@code credential}, if any, names where its value is read: a server property, else an
- * environment variable, and the header it is sent in;</li>
- * <li>the two timeouts and {@code maxBytes} bound each call;</li>
+ * <li>{@code credential}, if any, names where its value is read: a server property under the same
+ * prefix, else an environment variable starting {@code NUXEO_CONNECTOR_}, and the header it is
+ * sent in;</li>
+ * <li>the two timeouts, {@code maxBytes} and {@code maxConcurrent} bound each call, and how many
+ * run at once;</li>
  * <li>{@code fields} is the allow-list: the only fields the operation returns.</li>
  * </ul>
  */
-public record Connector(String id, String addressProperty, String path, String keyXpath, String permission,
-        Credential credential, Duration connectTimeout, Duration timeout, int maxBytes, List<Field> fields) {
+public record Connector(String id, List<String> types, String addressProperty, String path, String keyXpath,
+        String permission, Credential credential, Duration connectTimeout, Duration timeout, int maxBytes,
+        int maxConcurrent, List<Field> fields) {
 
     /** One field the operation may return, and where it is read in the system's answer. */
     public record Field(String name, JsonPointer pointer) {
@@ -64,6 +68,21 @@ public record Connector(String id, String addressProperty, String path, String k
     public static final int MAX_MAX_BYTES = 1024 * 1024;
 
     public static final int MAX_FIELDS = 50;
+
+    public static final int DEFAULT_MAX_CONCURRENT = 8;
+
+    public static final int MAX_MAX_CONCURRENT = 64;
+
+    public static final int MAX_TYPES = 20;
+
+    /** What every server property a connector reads starts with, before its id and a dot. */
+    public static final String PROPERTY_PREFIX = "nuxeo.agentic.connectors.";
+
+    /** What every environment variable a connector reads starts with. */
+    public static final String ENV_PREFIX = "NUXEO_CONNECTOR_";
+
+    /** A document type's name. */
+    static final Pattern TYPE = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,127}");
 
     /** A connector's id, as a layout's {@code external.connector} names it. */
     public static final Pattern ID = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,63}");
@@ -105,9 +124,15 @@ public record Connector(String id, String addressProperty, String path, String k
         if (id == null || !ID.matcher(id).matches()) {
             problems.add("its id must be 1 to 64 letters, digits, '.', '_' or '-', starting with a letter");
         }
+        String own = PROPERTY_PREFIX + id + ".";
+        List<String> types = d.getTypes() == null ? List.of() : List.copyOf(d.getTypes());
+        if (types.isEmpty() || types.size() > MAX_TYPES || !types.stream().allMatch(t -> TYPE.matcher(t).matches())) {
+            problems.add("it needs 1 to " + MAX_TYPES + " <type> elements: the document types it reads a key from");
+        }
         String addressProperty = d.getAddressProperty();
-        if (addressProperty == null || !PROPERTY.matcher(addressProperty).matches()) {
-            problems.add("<address property=\"...\"/> must name the server property that holds the system's address");
+        if (addressProperty == null || !ownProperty(addressProperty, own)) {
+            problems.add("<address property=\"...\"/> must name the server property that holds the system's address, "
+                    + own + "<name>");
         }
         String path = d.getPath();
         if (!soundPath(path)) {
@@ -124,7 +149,7 @@ public record Connector(String id, String addressProperty, String path, String k
         if (!PERMISSION.matcher(permission).matches()) {
             problems.add("<permission> must be the name of a Nuxeo permission, such as Read");
         }
-        Credential credential = credential(d, problems);
+        Credential credential = credential(d, own, problems);
         Duration connectTimeout = millis("connectTimeout", d.getConnectTimeout(), DEFAULT_CONNECT_TIMEOUT_MS,
                 MIN_TIMEOUT_MS, MAX_CONNECT_TIMEOUT_MS, problems);
         Duration timeout = millis("timeout", d.getTimeout(), DEFAULT_TIMEOUT_MS, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS,
@@ -133,13 +158,27 @@ public record Connector(String id, String addressProperty, String path, String k
         if (maxBytes < MIN_MAX_BYTES || maxBytes > MAX_MAX_BYTES) {
             problems.add("<maxBytes> must be from " + MIN_MAX_BYTES + " to " + MAX_MAX_BYTES);
         }
+        int maxConcurrent = d.getMaxConcurrent() == null ? DEFAULT_MAX_CONCURRENT : d.getMaxConcurrent();
+        if (maxConcurrent < 1 || maxConcurrent > MAX_MAX_CONCURRENT) {
+            problems.add("<maxConcurrent> must be from 1 to " + MAX_MAX_CONCURRENT);
+        }
         List<Field> fields = fields(d.getFields(), problems);
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException(
                     "connector " + (id == null ? "with no id" : '"' + id + '"') + ": " + String.join("; ", problems));
         }
-        return new Connector(id, addressProperty, path, keyXpath, permission, credential, connectTimeout, timeout,
-                maxBytes, List.copyOf(fields));
+        return new Connector(id, types, addressProperty, path, keyXpath, permission, credential, connectTimeout,
+                timeout, maxBytes, maxConcurrent, List.copyOf(fields));
+    }
+
+    /** The server property that, set to {@code true}, lets this connector call a plain http address. */
+    public String httpAllowedProperty() {
+        return PROPERTY_PREFIX + id + ".http.allowed";
+    }
+
+    /** A property of the connector's own: under its prefix, with a name after it. */
+    private static boolean ownProperty(String name, String own) {
+        return PROPERTY.matcher(name).matches() && name.startsWith(own) && name.length() > own.length();
     }
 
     static boolean soundPath(String path) {
@@ -164,7 +203,7 @@ public record Connector(String id, String addressProperty, String path, String k
         return true;
     }
 
-    private static Credential credential(ConnectorDescriptor d, List<String> problems) {
+    private static Credential credential(ConnectorDescriptor d, String own, List<String> problems) {
         String header = d.getCredentialHeader();
         boolean named = d.getCredentialProperty() != null || d.getCredentialEnv() != null
                 || d.getCredentialPrefix() != null;
@@ -187,11 +226,14 @@ public record Connector(String id, String addressProperty, String path, String k
         if (property == null && env == null) {
             problems.add("<credential> must name a server property or an environment variable that holds it");
         }
-        if (property != null && !PROPERTY.matcher(property).matches()) {
-            problems.add("<credential property> must be the name of a server property");
+        if (property != null && !ownProperty(property, own)) {
+            problems.add("<credential property> must be the name of a server property of the connector's own, " + own
+                    + "<name>");
         }
-        if (env != null && !ENV.matcher(env).matches()) {
-            problems.add("<credential env> must be the name of an environment variable, in capitals");
+        if (env != null && !(ENV.matcher(env).matches() && env.startsWith(ENV_PREFIX)
+                && env.length() > ENV_PREFIX.length())) {
+            problems.add("<credential env> must be the name of an environment variable, in capitals, starting "
+                    + ENV_PREFIX);
         }
         return new Credential(header, prefix, property, env);
     }

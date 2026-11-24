@@ -46,26 +46,37 @@ POST /nuxeo/api/v1/automation/Connector.Read
 { "input": "doc:<the claim's id>", "params": { "connector": "payers.claimPayments" }, "context": {} }
 ```
 
-1. **Automation reads the input document as the user.** One they may not see is refused there.
-2. **The connector:** an id that is not a registered connector's is 404, before anything else.
-3. **The permission:** `session.hasPermission(document, connector.permission)`, `Read` unless the
-   connector asks for more. Without it, `DocumentSecurityException` (403), and nothing is sent.
-4. **The key:** the document's `<key xpath>` property, a text or a whole number, trimmed. It is sent
-   only when it is one path segment of letters, digits, `.`, `_` or `-`, starting with a letter or a
-   digit. Anything else, or none, answers `no-key`, and nothing is sent.
-5. **The address:** the server property `<address property>` names: `https` with a host and no
+1. **The reader's `Read`:** `session.hasPermission(document, "Read")`, first, so that no one learns
+   which connectors exist from a record they may not read. Without it, `DocumentSecurityException`
+   (403), and nothing is sent.
+2. **The connector:** an id that is not a registered connector's is 404.
+3. **Its own permission,** if it asks for more than `Read`: 403 without it.
+4. **The stored document:** `session.getDocument(ref)`. The key is read from it, never from the
+   document the request gave: Automation builds an input document from a JSON entity and applies
+   the entity's properties to it in memory, so a reader could otherwise send any key.
+5. **Its type** must be one of the connector's `<type>`s; another answers `no-key`, and nothing is
+   sent.
+6. **The key:** the `<key xpath>` property, a text or a whole number, trimmed. It is sent only when
+   it is one path segment of letters, digits, `.`, `_` or `-`, starting with a letter or a digit.
+   Anything else, or none, answers `no-key`, and nothing is sent.
+7. **The address:** the server property `<address property>` names: `https` with a host and no
    user, query or fragment; plain `http` only where the server sets
-   `nuxeo.agentic.connectors.http.allowed=true`. Missing or unusable: 503, and nothing is sent.
-6. **The credential**, if the connector has one: the server property it names, else the environment
+   `nuxeo.agentic.connectors.<id>.http.allowed=true` for this connector. Missing or unusable: 503,
+   and nothing is sent. A host name Java's `URI` does not read, such as a Docker Compose service
+   with an `_`, is unusable.
+8. **The credential**, if the connector has one: the server property it names, else the environment
    variable. Missing, or holding a character a header may not carry: 503, and nothing is sent.
-7. **One `GET`** to the address plus the path, `{key}` replaced, over HTTP/1.1, with
-   `Accept: application/json` and the credential's header. **No redirect is followed.**
-8. **Bounds:** a connect timeout, and one deadline for the whole call, headers and body; a body over
-   `maxBytes`, by its `Content-Length` or as it arrives, is refused, and the rest is not read.
-9. **The answer:** a 200 with a JSON object is `found`, and only the connector's fields are read
-   from it, each at its JSON pointer, each kept only when it is a text, a number or a boolean. A
-   404 is `not-found`. A redirect, any other status, another content type or anything that is not
-   a JSON object is 502; a timeout is 504.
+9. **At most `maxConcurrent` calls** of the connector at once: one past it is refused at once, 503,
+   rather than queued, so that a slow system holds no more of the server's request threads.
+10. **One `GET`** to the address plus the path, `{key}` replaced, over HTTP/1.1, with
+    `Accept: application/json` and the credential's header. **No redirect is followed.**
+11. **Bounds:** a connect timeout, and one deadline for the whole call, headers and body; a body over
+    `maxBytes`, by its `Content-Length` or as it arrives, is refused, and the rest is not read. The
+    body of any other answer than a 200 with a JSON type is cancelled unread.
+12. **The answer:** a 200 with one JSON object is `found`, and only the connector's fields are read
+    from it, each at its JSON pointer, each kept only when it is a text, a number or a boolean. A
+    404 is `not-found`. A redirect, any other status, another content type, or anything that is
+    not one JSON object is 502; a timeout is 504.
 
 ```json
 {
@@ -86,15 +97,18 @@ class of the cause, and never the key, which may be personal data.
   <require>org.nuxeo.agentic.connectors</require>
   <extension target="org.nuxeo.agentic.connectors" point="connectors">
     <connector id="payers.claimPayments">
-      <address property="payers.claimPayments.address" />
+      <type>Claim</type>
+      <address property="nuxeo.agentic.connectors.payers.claimPayments.address" />
       <path>/claims/{key}</path>
       <key xpath="claim:number" />
       <permission>Read</permission>
-      <credential header="Authorization" prefix="Bearer " property="payers.claimPayments.token"
-                  env="PAYERS_CLAIM_PAYMENTS_TOKEN" />
+      <credential header="Authorization" prefix="Bearer "
+                  property="nuxeo.agentic.connectors.payers.claimPayments.token"
+                  env="NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN" />
       <connectTimeout>2000</connectTimeout>
       <timeout>5000</timeout>
       <maxBytes>65536</maxBytes>
+      <maxConcurrent>8</maxConcurrent>
       <field name="paymentStatus" pointer="/payment/status" />
       <field name="paidAmount" pointer="/payment/amount" />
     </connector>
@@ -105,7 +119,8 @@ class of the cause, and never the key, which may be personal data.
 | Element          | Required | Rule                                                                                                                                                                                |
 | ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`             | Yes      | 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter: what a layout's `external.connector` names                                                                        |
-| `address`        | Yes      | `property`: the name of the server property that holds the address. Never the address itself                                                                                        |
+| `type`           | 1 to 20  | The document types it reads a key from, and the only ones                                                                                                                           |
+| `address`        | Yes      | `property`: the server property that holds the address, `nuxeo.agentic.connectors.<id>.<name>`. Never the address itself                                                            |
 | `path`           | Yes      | Starts with `/`, holds `{key}` once, otherwise only letters, digits, `/`, `.`, `_`, `~`, `-`; no empty, `.` or `..` segment, no query                                               |
 | `key`            | Yes      | `xpath`: the document property that holds the key, `prefix:name`                                                                                                                    |
 | `field`          | 1 to 50  | `name`: letters, digits and `_`, starting with a letter. `pointer`: a JSON pointer into the answer, `/<name>` by default                                                            |
@@ -114,6 +129,11 @@ class of the cause, and never the key, which may be personal data.
 | `connectTimeout` | No       | 100 to 10000 ms. Default 2000                                                                                                                                                       |
 | `timeout`        | No       | The whole call: 100 to 30000 ms. Default 5000                                                                                                                                       |
 | `maxBytes`       | No       | 1024 to 1048576. Default 262144                                                                                                                                                     |
+| `maxConcurrent`  | No       | The calls running at once, 1 to 64. Default 8                                                                                                                                       |
+
+The settings a connector names are its own: a credential's `property` is under
+`nuxeo.agentic.connectors.<id>.` too, and its `env` starts `NUXEO_CONNECTOR_`. So a contribution
+cannot have another of the server's settings, a database password say, sent to its address.
 
 A connector that breaks a rule is not registered, and the log names every problem; one registered
 earlier under its id stays. A later contribution with the same id replaces it whole, and
@@ -133,7 +153,7 @@ would:
 4. **List the connector for the pipeline**, so that the card's fields are held to the allow-list:
    `npm run app-package -- business-apps/packages/payers-claims-demo --registered <a file like demo/registered.json>`.
 5. **Say in its README** which server properties each server sets: the address, the credential,
-   and, on a demo server only, `nuxeo.agentic.connectors.http.allowed`.
+   and, on a demo server only, `nuxeo.agentic.connectors.payers.claimPayments.http.allowed`.
 
 ## Building it
 
@@ -142,7 +162,7 @@ Java 21 and Maven, with the Nuxeo public repository the parent POM names.
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)   # or any JDK 21
 mvn -B -f nuxeo-agentic-connectors/pom.xml package
-# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 45 tests
+# target/nuxeo-agentic-connectors-2026.0.2-SNAPSHOT.jar, after 54 tests
 node nuxeo-agentic-connectors/demo/core-system.selftest.mjs   # 10 of 10
 ```
 
@@ -164,8 +184,9 @@ docker cp nuxeo-agentic-connectors/demo/payers-claim-payments-config.xml \
 # 2. The server's settings: the address, plain http for the stub, and a made-up demo token.
 export CORE_SYSTEM_TOKEN=$(openssl rand -hex 16)
 umask 077
-printf 'payers.claimPayments.address=http://host.docker.internal:8091\nnuxeo.agentic.connectors.http.allowed=true\npayers.claimPayments.token=%s\n' \
-  "$CORE_SYSTEM_TOKEN" > /tmp/70-connectors-demo.conf
+P=nuxeo.agentic.connectors.payers.claimPayments
+printf '%s.address=http://host.docker.internal:8091\n%s.http.allowed=true\n%s.token=%s\n' \
+  "$P" "$P" "$P" "$CORE_SYSTEM_TOKEN" > /tmp/70-connectors-demo.conf
 docker cp /tmp/70-connectors-demo.conf nuxeo:/etc/nuxeo/conf.d/70-connectors-demo.conf
 rm /tmp/70-connectors-demo.conf
 
@@ -206,29 +227,40 @@ This calls out of the server. The plan's phase 7 is not done until its security 
 - **Server-side request forgery.** The address is a server property, read on the server; the
   request names only a connector id and a document. The document's key is the one value from data,
   sent only as one path segment of unreserved characters (`SystemOfRecordClient.KEY`), and the
-  joined address is held to the configured host and path. No redirect is followed. Check: that no
-  other value reaches the URL; that the base address check (`https`, host, no user, query or
-  fragment) is enough for your network; and that `nuxeo.agentic.connectors.http.allowed` stays off
-  outside demos. Internal addresses are allowed on purpose: a core system usually is one.
+  joined address is held to the configured host and path (a check no input can reach today, kept
+  as a second wall). No redirect is followed. Check: that no other value reaches the URL; that the
+  base address check (`https`, host, no user, query or fragment) is enough for your network; and
+  that each connector's `http.allowed` stays off outside demos. Internal addresses are allowed on
+  purpose: a core system usually is one.
 - **The allow-list.** Only `<field>` pointers are read, only scalars are returned, and the rest of
   the answer never leaves the server (`ConnectorAnswer.found`). The card's own list is a display
-  choice, not a control. Check the contribution of every connector a kit ships.
-- **Credentials.** From a server property or the environment only, named by the contribution,
-  read per call, sent in one header, never logged, never in an answer or an error. Check: where
-  each server keeps them (`conf.d` files readable by the Nuxeo user only), their rotation, and that
-  the other system's account is read-only and scoped to what the connector needs.
+  choice, not a control, and so is the validator's address check on a layout. Check the
+  contribution of every connector a kit ships.
+- **Credentials.** From a server property or the environment only, named by the contribution and
+  held to the connector's own names (`nuxeo.agentic.connectors.<id>.`, `NUXEO_CONNECTOR_`), read
+  per call, sent in one header, never logged, never in an answer or an error. Check: where each
+  server keeps them (`conf.d` files readable by the Nuxeo user only), their rotation, and that the
+  other system's account is read-only and scoped to what the connector needs.
 - **Timeouts and size limits.** Connect timeout up to 10 s, a whole-call deadline up to 30 s, a
-  body up to 1 MiB, each bounded in `Connector.of`. Check the defaults (2 s, 5 s, 256 KiB) against
-  the other system, and that a slow system cannot hold Nuxeo's request threads: there is **no
-  rate limit and no cache**, so every card drawn is one call.
-- **The permission check.** `Read` on the document, or the connector's stronger permission, before
-  anything is sent (`ConnectorReader`). Check two consequences:
+  body up to 1 MiB, at most 64 calls of a connector at once, each bounded in `Connector.of`. Check
+  the defaults (2 s, 5 s, 256 KiB, 8) against the other system and the server's pools: a call
+  blocks its request thread, inside the request's transaction, for up to its deadline, so 8 slow
+  calls of each connector hold 8 threads and, on a database repository, their connections. There
+  is **no per-user rate limit and no cache**: every card drawn is one call. That cancelling a call
+  at its deadline closes its connection is the JDK's behaviour, not asserted by a test here.
+- **The permission check.** `Read` on the document first, then the connector's stronger permission
+  if it names one, before anything is sent (`ConnectorReader`); the key is read from the document
+  as stored, not as the request sent it. Check three consequences:
   - **the other system's own access rules do not apply reader by reader**: the connector calls it
     with one service credential, and whoever may read the record sees its connector's fields.
     Passing the reader's identity on is decision F's token exchange;
-  - **whoever may edit the key property chooses which outside record is read**: a user who may
-    write `claim:number` on any claim can read the payment of any claim number. A kit should key a
-    connector on a property its users cannot edit, or ask for a stronger permission.
+  - **whoever can write the key on a document of the connector's types chooses which outside
+    record is read.** That includes a user who may create such a document anywhere, a personal
+    workspace say, where they hold every permission, so a stronger permission does not close it.
+    A kit should key a connector on a property its users cannot set, such as one a workflow or an
+    import writes, and limit where its types may be created;
+  - **calls are not audited:** the log has one debug line per call, naming the connector and the
+    document. Nuxeo's audit of who read which outside record is not written.
 
 ## Not done, and not checked
 
@@ -239,5 +271,8 @@ This calls out of the server. The plan's phase 7 is not done until its security 
   `Framework.getService`), not by a run.
 - **A Marketplace package** for the add-on, and the pipeline reading a kit's own connector
   contributions instead of a `--registered` file.
+- **Hot reload:** unregistering a contribution that replaced another removes the connector rather
+  than bringing the earlier one back, and an `enabled="false"` removal is not undone. Only a
+  development server's hot reload unregisters.
 - **The rest of the plan's connectors add-on:** caching, events and webhooks, fields synced in, a
   real connector chosen with presales, a query parameter for the key, embedded panels.

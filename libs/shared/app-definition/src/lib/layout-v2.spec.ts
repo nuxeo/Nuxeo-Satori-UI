@@ -726,6 +726,9 @@ describe('a card from another system', () => {
       'See https://core.example.invalid',
       'javascript:alert(1)',
       'FILE:/etc',
+      'ldap:core.internal',
+      'Paid at core.internal:8443/claims',
+      '\\\\core\\share',
     ]) {
       expect(messages(payments([{ name: 'paymentStatus', label }])), label).toEqual([
         `cards[0].external.fields[0].label: ${refusal} [structure]`,
@@ -742,8 +745,30 @@ describe('a card from another system', () => {
         ]),
       ),
     ).toEqual([`cards[0].external.fields[0].parameters.tones.https://x: ${refusal} [structure]`]);
-    // A label with a colon is not an address.
-    expect(messages(payments([{ name: 'paymentStatus', label: 'Status: as paid' }]))).toEqual([]);
+    // A label with a colon and a space is not an address, nor is a property a parameter names.
+    for (const label of [
+      'Status: as paid',
+      'Data: synced nightly',
+      'File: on the claim',
+      'Paid 10:30',
+    ]) {
+      expect(messages(payments([{ name: 'paymentStatus', label }])), label).toEqual([]);
+    }
+    expect(
+      messages(
+        payments([
+          {
+            name: 'paidAmount',
+            widget: 'currency',
+            parameters: { currency: { field: 'claim:currency' } },
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'claim:status' }, 'approved'],
+            },
+          },
+        ]),
+      ),
+    ).toEqual([]);
   });
 
   it('names its connector and fields as the server does, never as properties', () => {

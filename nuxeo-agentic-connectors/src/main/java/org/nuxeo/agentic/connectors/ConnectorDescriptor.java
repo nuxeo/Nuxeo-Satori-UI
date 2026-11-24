@@ -12,15 +12,18 @@ import org.nuxeo.common.xmap.annotation.XObject;
  *
  * <pre>
  * &lt;connector id="payers.claimPayments"&gt;
- *   &lt;address property="payers.claimPayments.address" /&gt;
+ *   &lt;type&gt;Claim&lt;/type&gt;
+ *   &lt;address property="nuxeo.agentic.connectors.payers.claimPayments.address" /&gt;
  *   &lt;path&gt;/claims/{key}&lt;/path&gt;
  *   &lt;key xpath="claim:number" /&gt;
  *   &lt;permission&gt;Read&lt;/permission&gt;
- *   &lt;credential header="Authorization" prefix="Bearer " property="payers.claimPayments.token"
- *               env="PAYERS_CLAIM_PAYMENTS_TOKEN" /&gt;
+ *   &lt;credential header="Authorization" prefix="Bearer "
+ *               property="nuxeo.agentic.connectors.payers.claimPayments.token"
+ *               env="NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN" /&gt;
  *   &lt;connectTimeout&gt;2000&lt;/connectTimeout&gt;
  *   &lt;timeout&gt;5000&lt;/timeout&gt;
  *   &lt;maxBytes&gt;262144&lt;/maxBytes&gt;
+ *   &lt;maxConcurrent&gt;8&lt;/maxConcurrent&gt;
  *   &lt;field name="paymentStatus" /&gt;
  *   &lt;field name="paidAmount" pointer="/payment/amount" /&gt;
  * &lt;/connector&gt;
@@ -29,8 +32,11 @@ import org.nuxeo.common.xmap.annotation.XObject;
  * Nothing here is a secret, and nothing here comes from a client: the address is named by a
  * server property, not written here, so that each server points the kit's connector at its own
  * system, and the credential is named by a server property or an environment variable, read when
- * the connector is called. {@link Connector#of} checks every element, and a connector that fails
- * a check is not registered.
+ * the connector is called. Both names are the connector's own, under
+ * {@code nuxeo.agentic.connectors.<id>.} and {@code NUXEO_CONNECTOR_}, so a contribution cannot
+ * have another setting of the server's, a database password say, sent to its address.
+ * {@link Connector#of} checks every element, and a connector that fails a check is not
+ * registered.
  *
  * A later contribution with the same id replaces the connector whole, and {@code enabled="false"}
  * removes it.
@@ -97,6 +103,12 @@ public class ConnectorDescriptor {
     @XNode("maxBytes")
     protected Integer maxBytes;
 
+    @XNode("maxConcurrent")
+    protected Integer maxConcurrent;
+
+    @XNodeList(value = "type", type = ArrayList.class, componentType = String.class)
+    protected List<String> types = new ArrayList<>();
+
     @XNodeList(value = "field", type = ArrayList.class, componentType = FieldDescriptor.class)
     protected List<FieldDescriptor> fields = new ArrayList<>();
 
@@ -150,6 +162,14 @@ public class ConnectorDescriptor {
 
     public Integer getMaxBytes() {
         return maxBytes;
+    }
+
+    public Integer getMaxConcurrent() {
+        return maxConcurrent;
+    }
+
+    public List<String> getTypes() {
+        return types;
     }
 
     public List<FieldDescriptor> getFields() {

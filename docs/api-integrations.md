@@ -2331,9 +2331,10 @@ connector's allowed fields that have a text, number or boolean value:
 }
 ```
 
-**Errors:** the operation throws `403` without the connector's permission on the record (`Read` by
-default), `404` for an unknown connector, `503` when the server's address or credential for it is
-missing, `502` when the other system refuses, redirects, answers too much or not JSON, and `504`
+**Errors:** the operation throws `403` without `Read` on the record, or the stronger permission its
+connector names, `404` for an unknown connector, `503` when the server's address or credential for
+it is missing or as many of its calls as it allows are running, `502` when the other system
+refuses, redirects, answers too much or not JSON, and `504`
 when it does not answer in time. The card shows the error state, with Retry for all but `401`,
 `403` and `404`. That Automation answers with these statuses is not checked on a server yet; an
 answer of another shape is treated as a `500`.

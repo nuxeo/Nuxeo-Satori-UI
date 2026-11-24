@@ -28,7 +28,13 @@ import {
 } from './checker';
 import type { ContentModel } from './content-model';
 import { againstModel } from './layout-model';
-import { EXTERNAL_WIDGETS, isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
+import {
+  EXTERNAL_WIDGETS,
+  isRecord,
+  PACKAGED_REGISTRIES,
+  XPATH,
+  type Registries,
+} from './registries';
 
 export type { Finding } from './checker';
 
@@ -65,8 +71,14 @@ const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters'
 export const CONNECTOR_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
 /** A field of a connector's answer, as its allow-list names it: never a property's `<prefix>:<name>`. */
 export const CONNECTOR_FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
-/** What an address looks like in a text: `//` anywhere, or a scheme at its start. */
-const ADDRESS = /\/\/|^\s*(?:https?|ftp|file|wss?|data|javascript|mailto|jar):/i;
+/**
+ * What an address looks like in a text: `//` or `\\` anywhere; a scheme at its start, a word and a
+ * colon with no space after it, as `https:` or `ldap:`; or a host with a port, as
+ * `core.internal:8443`. "Status: paid" is not one. Only the connector's id leaves the browser, and
+ * both ends hold it to a name, so this keeps layouts honest rather than guarding the server.
+ */
+const ADDRESS =
+  /\/\/|\\\\|^\s*[A-Za-z][A-Za-z0-9+.-]*:(?!\s|$)|(?:^|[\s(])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+:\d{1,5}(?:[/\s)]|$)/;
 
 /** The keys each part of a file may hold, which the JSON Schema must list too (its own test checks). */
 export const LAYOUT_V2_KEYS = {
@@ -396,7 +408,8 @@ function addresses(c: Checker, item: Record<string, unknown>, path: string): voi
   for (let next = 0; next < queue.length; next++) {
     const [value, at, depth] = queue[next];
     if (typeof value === 'string') {
-      if (ADDRESS.test(value)) found(at);
+      // A property, `claim:currency`, is a name, not an address.
+      if (ADDRESS.test(value) && !XPATH.test(value)) found(at);
       continue;
     }
     if (depth >= MAX_NESTING) continue;

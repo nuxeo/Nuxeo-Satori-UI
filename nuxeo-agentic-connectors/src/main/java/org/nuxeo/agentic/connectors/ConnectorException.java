@@ -18,6 +18,8 @@ public class ConnectorException extends NuxeoException {
         UNKNOWN_CONNECTOR(404, "No connector has this id on this server"),
         /** Its address or credential is missing or unusable on this server. */
         NOT_CONFIGURED(503, "This connector is not configured on this server"),
+        /** As many calls of the connector as it allows are already running. */
+        BUSY(503, "This connector is answering as many requests as it allows; try again"),
         /** The system did not answer in time. */
         TIMEOUT(504, "The system of record did not answer in time"),
         /** The system could not be reached. */

@@ -434,9 +434,12 @@ package contributes, by a key the open record holds, such as a claim's number
 
 - **The file names the connector and its fields, and nothing else.** The other system's address,
   the record's key, the credential and the fields the server may return are the connector's, in
-  the server's configuration. A text anywhere in the card, or a key, that looks like an address, `//`
-  anywhere or a scheme such as `https:` at its start, is a structural error, and the file is
-  refused.
+  the server's configuration. A text anywhere in the card, or a key, that looks like an address is
+  a structural error, and the file is refused: `//` or `\\` anywhere, a scheme at its start, a word
+  and a colon with no space after it such as `https:` or `ldap:`, or a host with a port such as
+  `core.internal:8443`. A property, `claim:currency`, is not one, nor is "Status: paid". This keeps
+  layouts honest; it is not what guards the server, since only the connector's id leaves the
+  browser, held to a name at both ends.
 - **The server's allow-list decides what leaves it.** The connector returns only the fields it
   lists. A field the file names and the connector does not return shows nothing. Given the
   connectors a server registers, through `--registered`, the validator refuses such a field and an
@@ -448,8 +451,9 @@ package contributes, by a key the open record holds, such as a claim's number
   shows it, a boolean as `boolean`, and a text as it is. A widget that does not show the value the
   system answered, `date` given a number, leaves that field out, and the console says why.
 - **The reader's permission comes first.** The server checks that the reader may read the open
-  record, or holds the stronger permission the connector names, before it calls the other system.
-  A record with no key the connector can send is answered "nothing to look up", and nothing is sent.
+  record, and holds the stronger permission the connector names if it names one, before it calls
+  the other system, and reads the key from the record as stored. A record of a type the connector
+  does not read, or with no key it can send, is answered "nothing to look up", and nothing is sent.
 - **Its states:** loading; the fields; "nothing found" when the other system has no such record,
   or none of the fields has a value; "nothing to look up" when the record holds no key; and an
   error, with Retry for a server error, a timeout or an unreachable system.

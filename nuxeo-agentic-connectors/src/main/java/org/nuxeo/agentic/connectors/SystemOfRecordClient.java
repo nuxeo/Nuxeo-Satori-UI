@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,26 +28,32 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.nuxeo.agentic.connectors.ConnectorException.Kind;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectReader;
 
 /**
  * Calls a system of record for one record, and holds the call to its connector's bounds.
  *
  * <ul>
  * <li><b>Where:</b> the address is the server property the connector names, an {@code https}
- * address with a host and no user, query or fragment ({@code http} too where the server sets
- * {@link ConnectorSettings#ALLOW_HTTP}). The connector's path is appended, with the key in place of
- * {@code {key}}. The key is the only part of the request that comes from a document, and it is sent
- * only when it is one path segment of letters, digits, {@code .}, {@code _} or {@code -}, starting
- * with a letter or a digit, so it cannot leave the path, add a query or climb with {@code ..}.</li>
+ * address with a host and no user, query or fragment ({@code http} too where the server sets the
+ * connector's {@link Connector#httpAllowedProperty}). The connector's path is appended, with the key
+ * in place of {@code {key}}. The key is the only part of the request that comes from a document, and
+ * it is sent only when it is one path segment of letters, digits, {@code .}, {@code _} or
+ * {@code -}, starting with a letter or a digit, so it cannot leave the path, add a query or climb
+ * with {@code ..}. A host name {@link URI} does not read, such as one with an {@code _}, is not
+ * configured.</li>
  * <li><b>How:</b> one {@code GET}, over HTTP/1.1, with {@code Accept: application/json} and the
  * connector's credential if it has one. A redirect is never followed: it could send the credential
  * elsewhere.</li>
- * <li><b>Bounds:</b> the connect timeout, and one deadline for the whole call, headers and body; a
- * body larger than {@code maxBytes}, by its {@code Content-Length} or as it arrives, is refused and
- * the rest of it is not read.</li>
- * <li><b>The answer:</b> a 200 with a JSON object is found, a 404 is not found, and anything else is
- * a {@link ConnectorException}.</li>
+ * <li><b>Bounds:</b> at most {@code maxConcurrent} calls of a connector at once, the others refused
+ * at once rather than queued; the connect timeout, and one deadline for the whole call, headers
+ * and body; a body larger than {@code maxBytes}, by its {@code Content-Length} or as it arrives, is
+ * refused and the rest of it is not read. The body of any answer but a 200 with a JSON type is not
+ * read at all.</li>
+ * <li><b>The answer:</b> a 200 with one JSON object is found, a 404 is not found, and anything else
+ * is a {@link ConnectorException}.</li>
  * </ul>
  */
 final class SystemOfRecordClient implements AutoCloseable {
@@ -62,6 +69,16 @@ final class SystemOfRecordClient implements AutoCloseable {
 
     /** One client per connect timeout: a client holds a selector thread, so one per call would be wasteful. */
     private final Map<Duration, HttpClient> clients = new ConcurrentHashMap<>();
+
+    /** The calls each connector may have running at once, by its id and its limit. */
+    private final Map<String, Semaphore> running = new ConcurrentHashMap<>();
+
+    /** Set by {@link #close}: a call that arrives after it is refused rather than building a client. */
+    private volatile boolean closed;
+
+    /** Reads one JSON value, and refuses anything after it. */
+    private static final ObjectReader ONE_VALUE = ConnectorAnswer.JSON.reader()
+                                                                      .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
     SystemOfRecordClient(ConnectorSettings settings) {
         this.settings = settings;
@@ -92,9 +109,9 @@ final class SystemOfRecordClient implements AutoCloseable {
             throw notConfigured(connector, "is not an address");
         }
         String scheme = base.getScheme() == null ? "" : base.getScheme().toLowerCase(Locale.ROOT);
-        if (!scheme.equals("https") && !(scheme.equals("http") && settings.httpAllowed())) {
+        if (!scheme.equals("https") && !(scheme.equals("http") && settings.httpAllowed(connector))) {
             throw notConfigured(connector,
-                    "is not https (plain http needs " + ConnectorSettings.ALLOW_HTTP + "=true on the server)");
+                    "is not https (plain http needs " + connector.httpAllowedProperty() + "=true on the server)");
         }
         if (base.isOpaque() || base.getHost() == null || base.getRawUserInfo() != null || base.getRawQuery() != null
                 || base.getRawFragment() != null) {
@@ -143,8 +160,30 @@ final class SystemOfRecordClient implements AutoCloseable {
         return header;
     }
 
-    /** The record for {@code key}: found, or not found. Every other outcome throws. */
+    /**
+     * The record for {@code key}: found, or not found. Every other outcome throws. A call past the
+     * connector's {@code maxConcurrent} is refused at once, so that a slow system holds no more of
+     * the server's request threads than that.
+     */
     ConnectorAnswer fetch(Connector connector, String key) {
+        if (closed) {
+            throw new ConnectorException(Kind.NOT_CONFIGURED);
+        }
+        Semaphore slots = running.computeIfAbsent(connector.id() + "#" + connector.maxConcurrent(),
+                ignored -> new Semaphore(connector.maxConcurrent()));
+        if (!slots.tryAcquire()) {
+            log.warn("Connector {}: {} calls already running, the most it allows", connector.id(),
+                    connector.maxConcurrent());
+            throw new ConnectorException(Kind.BUSY);
+        }
+        try {
+            return call(connector, key);
+        } finally {
+            slots.release();
+        }
+    }
+
+    private ConnectorAnswer call(Connector connector, String key) {
         URI uri = target(connector, key);
         String credential = credential(connector);
         HttpRequest.Builder request = HttpRequest.newBuilder(uri)
@@ -199,7 +238,7 @@ final class SystemOfRecordClient implements AutoCloseable {
         }
         JsonNode record;
         try {
-            record = ConnectorAnswer.JSON.readTree(body.bytes());
+            record = ONE_VALUE.readTree(body.bytes());
         } catch (IOException e) {
             throw failed(connector, Kind.UNREADABLE, e);
         }
@@ -233,6 +272,7 @@ final class SystemOfRecordClient implements AutoCloseable {
 
     @Override
     public void close() {
+        closed = true;
         clients.values().forEach(HttpClient::close);
         clients.clear();
     }
@@ -252,21 +292,49 @@ final class SystemOfRecordClient implements AutoCloseable {
 
     /**
      * Reads a 200's JSON body up to {@code maxBytes}, and nothing of any other answer, whose status
-     * is all that is used.
+     * is all that is used: its body is cancelled unread, so a 404 that trickles on is still a 404.
      */
     static HttpResponse.BodyHandler<Body> body(int maxBytes) {
         return info -> {
-            Body nothing = new Body(new byte[0], false);
-            if (info.statusCode() != 200) {
-                return HttpResponse.BodySubscribers.replacing(nothing);
-            }
-            if (!isJson(info.headers().firstValue("Content-Type").orElse(null))) {
-                return HttpResponse.BodySubscribers.replacing(nothing);
+            if (info.statusCode() != 200 || !isJson(info.headers().firstValue("Content-Type").orElse(null))) {
+                return new Unread();
             }
             boolean declaredTooLarge = info.headers().firstValueAsLong("Content-Length").orElse(-1) > maxBytes;
             return HttpResponse.BodySubscribers.mapping(new Limited(maxBytes, declaredTooLarge),
                     bytes -> new Body(bytes, true));
         };
+    }
+
+    /** A body that is not read: cancelled as soon as it is offered, and answered with nothing. */
+    static final class Unread implements HttpResponse.BodySubscriber<Body> {
+
+        private final CompletableFuture<Body> result = CompletableFuture.completedFuture(
+                new Body(new byte[0], false));
+
+        @Override
+        public CompletionStage<Body> getBody() {
+            return result;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            subscription.cancel();
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> items) {
+            // Cancelled: nothing more is asked for.
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            // The answer is already its status.
+        }
+
+        @Override
+        public void onComplete() {
+            // The answer is already its status.
+        }
     }
 
     /** A body past the connector's {@code maxBytes}. */

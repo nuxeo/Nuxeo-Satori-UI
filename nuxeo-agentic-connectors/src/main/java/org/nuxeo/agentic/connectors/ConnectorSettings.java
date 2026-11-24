@@ -12,12 +12,6 @@ import java.util.function.UnaryOperator;
  */
 public record ConnectorSettings(UnaryOperator<String> property, UnaryOperator<String> env) {
 
-    /**
-     * {@code true} on a server that accepts a system of record over plain HTTP. Unset, only HTTPS is
-     * called. It is the server's to set, not a kit's: a contribution cannot lower it.
-     */
-    public static final String ALLOW_HTTP = "nuxeo.agentic.connectors.http.allowed";
-
     /** The value, or {@code null} for one that is unset or blank. */
     String property(String name) {
         return blankToNull(property.apply(name));
@@ -27,8 +21,13 @@ public record ConnectorSettings(UnaryOperator<String> property, UnaryOperator<St
         return blankToNull(env.apply(name));
     }
 
-    boolean httpAllowed() {
-        return "true".equals(property(ALLOW_HTTP));
+    /**
+     * {@code true} where the server lets this connector call a plain http address, by setting
+     * {@code nuxeo.agentic.connectors.<id>.http.allowed=true}. Unset, only https is called. It is the
+     * server's to set, connector by connector, not a kit's: a contribution cannot lower it.
+     */
+    boolean httpAllowed(Connector connector) {
+        return "true".equals(property(connector.httpAllowedProperty()));
     }
 
     private static String blankToNull(String value) {

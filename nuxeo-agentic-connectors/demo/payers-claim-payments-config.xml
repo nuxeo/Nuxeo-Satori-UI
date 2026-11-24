@@ -4,25 +4,28 @@
   (core-system.mjs, beside this file), by the claim's number. Fictional data only.
 
   Dropped into the server's nxserver/config/ for the demo, or carried by a kit's bundle, as
-  README.md, "How a kit opts in", shows for Payers. The address is not written here: it is the
-  server property payers.claimPayments.address, in nuxeo.conf. Nor is the credential: it is the
-  server property payers.claimPayments.token, else the environment variable
-  PAYERS_CLAIM_PAYMENTS_TOKEN. Without it the connector sends nothing.
+  README.md, "How a kit opts in", shows for Payers. It reads Claim documents only. The address is
+  not written here: it is the server property
+  nuxeo.agentic.connectors.payers.claimPayments.address, in nuxeo.conf. Nor is the credential: it
+  is the server property nuxeo.agentic.connectors.payers.claimPayments.token, else the environment
+  variable NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN. Without it the connector sends nothing.
 -->
 <component name="nuxeo.config.payers-claim-payments-demo" version="1.0">
   <require>org.nuxeo.agentic.connectors</require>
 
   <extension target="org.nuxeo.agentic.connectors" point="connectors">
     <connector id="payers.claimPayments">
-      <address property="payers.claimPayments.address" />
+      <type>Claim</type>
+      <address property="nuxeo.agentic.connectors.payers.claimPayments.address" />
       <path>/claims/{key}</path>
       <key xpath="claim:number" />
       <permission>Read</permission>
-      <credential header="Authorization" prefix="Bearer " property="payers.claimPayments.token"
-                  env="PAYERS_CLAIM_PAYMENTS_TOKEN" />
+      <credential header="Authorization" prefix="Bearer " property="nuxeo.agentic.connectors.payers.claimPayments.token"
+                  env="NUXEO_CONNECTOR_PAYERS_CLAIM_PAYMENTS_TOKEN" />
       <connectTimeout>2000</connectTimeout>
       <timeout>5000</timeout>
       <maxBytes>65536</maxBytes>
+      <maxConcurrent>8</maxConcurrent>
       <field name="paymentStatus" pointer="/payment/status" />
       <field name="paidAmount" pointer="/payment/amount" />
       <field name="paidOn" pointer="/payment/paidOn" />

@@ -141,10 +141,15 @@ class SystemOfRecordClientTest {
     }
 
     @Test
-    void plainHttpIsRefusedUnlessTheServerAllowsIt() {
-        settings.properties.remove(ConnectorSettings.ALLOW_HTTP);
+    void plainHttpIsRefusedUnlessTheServerAllowsItForThisConnector() {
+        settings.properties.remove(Fixtures.HTTP_ALLOWED);
         assertEquals(Kind.NOT_CONFIGURED, refused(connector(), "K1").getKind());
-        settings.properties.put(ConnectorSettings.ALLOW_HTTP, "yes");
+        settings.properties.put(Fixtures.HTTP_ALLOWED, "yes");
+        assertEquals(Kind.NOT_CONFIGURED, refused(connector(), "K1").getKind());
+        // Another connector's setting, or one for every connector, does not allow it.
+        settings.properties.put(Fixtures.HTTP_ALLOWED, "false");
+        settings.properties.put("nuxeo.agentic.connectors.other.http.allowed", "true");
+        settings.properties.put("nuxeo.agentic.connectors.http.allowed", "true");
         assertEquals(Kind.NOT_CONFIGURED, refused(connector(), "K1").getKind());
         assertTrue(stub.received.isEmpty());
 
@@ -316,6 +321,57 @@ class SystemOfRecordClientTest {
         }
         stub.answer("/core/claims/VENDOR", Answer.json(RECORD).contentType("application/vnd.core+json; charset=utf-8"));
         assertEquals(ConnectorAnswer.Status.FOUND, client.fetch(connector(), "VENDOR").status());
+    }
+
+    @Test
+    void anAnswerThatIsNotA200WithJsonIsNotReadPastItsHeaders() {
+        Connector connector = connector(d -> d.timeout = 1_000);
+        stub.answer("/core/claims/GONE", Answer.json(RECORD).status(404).stallMidBody(4_000));
+        stub.answer("/core/claims/PAGE", Answer.json(RECORD).contentType("text/html").stallMidBody(4_000));
+
+        long started = System.nanoTime();
+        assertEquals(ConnectorAnswer.Status.NOT_FOUND, client.fetch(connector, "GONE").status());
+        assertEquals(Kind.UNREADABLE, refused(connector, "PAGE").getKind());
+        long millis = (System.nanoTime() - started) / 1_000_000;
+        assertTrue(millis < 1_000, "a body nobody reads was waited for: " + millis + " ms");
+    }
+
+    @Test
+    void anAnswerWithMoreThanOneJsonValueIsUnreadable() {
+        stub.answer("/core/claims/TRAILING", Answer.json(RECORD + " { \"paymentStatus\": \"Forged\" }"));
+        assertEquals(Kind.UNREADABLE, refused(connector(), "TRAILING").getKind());
+    }
+
+    @Test
+    void callsPastTheConnectorsLimitAreRefusedAtOnce() throws Exception {
+        Connector connector = connector(d -> d.maxConcurrent = 1);
+        stub.answer("/core/claims/SLOW", Answer.json(RECORD).delay(1_500));
+        stub.answer("/core/claims/FAST", Answer.json(RECORD));
+        java.util.concurrent.CompletableFuture<ConnectorAnswer> first = java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> client.fetch(connector, "SLOW"));
+        long waitUntil = System.nanoTime() + 2_000_000_000L;
+        while (stub.received.isEmpty() && System.nanoTime() < waitUntil) {
+            Thread.onSpinWait();
+        }
+        assertEquals(1, stub.received.size(), "the first call never reached the system");
+
+        long started = System.nanoTime();
+        ConnectorException busy = refused(connector, "FAST");
+        assertEquals(Kind.BUSY, busy.getKind());
+        assertEquals(503, busy.getStatusCode());
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 500, "a call over the limit waited");
+        assertEquals(1, stub.received.size(), "the refused call reached the system");
+
+        assertEquals(ConnectorAnswer.Status.FOUND, first.get().status());
+        assertEquals(ConnectorAnswer.Status.FOUND, client.fetch(connector, "FAST").status());
+    }
+
+    @Test
+    void aClosedClientSendsNothing() {
+        stub.answer("/core/claims/K1", Answer.json(RECORD));
+        client.close();
+        assertEquals(Kind.NOT_CONFIGURED, refused(connector(), "K1").getKind());
+        assertTrue(stub.received.isEmpty());
     }
 
     @Test
