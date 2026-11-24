@@ -60,6 +60,8 @@ expanded search header and dropdown presentation informed the implementation.
 
 - Resolved source conflicts with main and regenerated the English fallback and public API snapshot.
 - Corrected the extension reference for the new sidebar and retained search queue descriptor.
+- Explicitly typed the expanded-filter signal so Windows and Linux builds emit the same API
+  declaration; this resolves the remote snapshot mismatch without changing runtime behavior.
 - Preserved main's external-recipient navigation rules, drawer behavior, saved-search clearing,
   and registered chip-set replacement in both filter layouts.
 - Fixed unstable chip inputs causing repeated change detection in a horizontal overlay.

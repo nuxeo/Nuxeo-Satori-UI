@@ -14,6 +14,7 @@ import {
   output,
   signal,
   untracked,
+  type WritableSignal,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { A11yModule } from '@angular/cdk/a11y';
@@ -279,9 +280,9 @@ export class NxsSearchFiltersComponent {
 
   /** Which collapsible groups are open. Modification date starts open, as in Web UI. */
   private readonly expanded = signal<ReadonlySet<CheckboxField>>(new Set(['modified']));
-  protected readonly horizontalExpanded = signal<CheckboxField | ChoiceField | 'properties' | null>(
-    null,
-  );
+  protected readonly horizontalExpanded: WritableSignal<
+    CheckboxField | ChoiceField | 'properties' | null
+  > = signal(null);
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   protected readonly propertiesOpen = computed(() =>

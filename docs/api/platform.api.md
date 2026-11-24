@@ -2618,9 +2618,9 @@ interface NxsSearchFilters {
 }
 class NxsSearchFiltersComponent {
     protected readonly horizontalMenus: readonly FilterMenu[];
-    protected readonly activeMenu: import("@angular/core").WritableSignal<FilterMenu | null>;
-    protected readonly panelOrigin: import("@angular/core").WritableSignal<CdkOverlayOrigin | null>;
-    protected readonly scopeDraft: import("@angular/core").WritableSignal<boolean>;
+    protected readonly activeMenu: WritableSignal<FilterMenu | null>;
+    protected readonly panelOrigin: WritableSignal<CdkOverlayOrigin | null>;
+    protected readonly scopeDraft: WritableSignal<boolean>;
     protected readonly panelPositions: ConnectedPosition[];
     protected readonly propertyGroups: import("@angular/core").Signal<CheckboxGroup[]>;
     protected readonly activeGroup: import("@angular/core").Signal<CheckboxGroup | undefined>;
@@ -2647,11 +2647,11 @@ class NxsSearchFiltersComponent {
     group: (field: string) => string;
     };
     protected readonly hasFilters: import("@angular/core").Signal<boolean>;
-    protected readonly fulltextDraft: import("@angular/core").WritableSignal<string>;
-    protected readonly authorText: import("@angular/core").WritableSignal<string>;
-    protected readonly collectionText: import("@angular/core").WritableSignal<string>;
-    protected readonly tagText: import("@angular/core").WritableSignal<string>;
-    protected readonly horizontalExpanded: import("@angular/core").WritableSignal<CheckboxField | ChoiceField | "properties" | null>;
+    protected readonly fulltextDraft: WritableSignal<string>;
+    protected readonly authorText: WritableSignal<string>;
+    protected readonly collectionText: WritableSignal<string>;
+    protected readonly tagText: WritableSignal<string>;
+    protected readonly horizontalExpanded: WritableSignal<CheckboxField | ChoiceField | 'properties' | null>;
     protected readonly propertiesOpen: import("@angular/core").Signal<boolean>;
     protected toggleChoice(field: ChoiceField | 'properties', event: Event): void;
     protected closeOutside(event: Event): void;
@@ -2661,8 +2661,8 @@ class NxsSearchFiltersComponent {
     after: CheckboxGroup[];
     }>;
     protected readonly authorOptions: import("@angular/core").Signal<NxsFacetOption[]>;
-    protected readonly collections: import("@angular/core").WritableSignal<readonly SearchCollectionOption[]>;
-    protected readonly collectionsState: import("@angular/core").WritableSignal<"failed" | "idle" | "loaded" | "loading">;
+    protected readonly collections: WritableSignal<readonly SearchCollectionOption[]>;
+    protected readonly collectionsState: WritableSignal<"failed" | "idle" | "loaded" | "loading">;
     protected readonly collectionOptions: import("@angular/core").Signal<SearchCollectionOption[]>;
     protected readonly emptyDisplay: () => string;
     protected readonly tagOptions: import("@angular/core").Signal<string[]>;
