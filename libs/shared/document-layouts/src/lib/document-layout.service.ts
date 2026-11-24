@@ -184,6 +184,49 @@ const PICTURE_SCHEMA = 'picture';
  */
 const VIDEO_SCHEMA = 'video';
 
+/** What {@link recordPreviewOf} answers for a record whose View tab shows its own file first. */
+const OWN_VIEW = 'own-view';
+
+/**
+ * What a record page shows of the record's own file, from the type's schemas and the document's
+ * own: a dynamic facet can add `file` or `note` to one record of a type that has neither, and its
+ * preview shows first too. A record with the `picture` schema, and not a video's, shows its views
+ * first; any other record with a file or a note keeps its own View tab.
+ */
+function recordPreviewOf(
+  definition: DocumentTypeDefinition,
+  documentSchemas: readonly DocumentSchemaRef[],
+): RecordPreview | typeof OWN_VIEW {
+  const names = new Set([...definition.schemas, ...documentSchemas].map((schema) => schema.name));
+  if (names.has(PICTURE_SCHEMA) && !names.has(VIDEO_SCHEMA)) return 'picture';
+  return [...names].some((name) => OWN_VIEW_SCHEMAS.has(name)) ? OWN_VIEW : null;
+}
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The live records of one type, the last changed first: what {@link
+ * DocumentLayoutService.previewRecords} asks for. Its one parameter is the type.
+ */
+export const PREVIEW_RECORDS_QUERY =
+  'SELECT * FROM Document WHERE ecm:primaryType = ? AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0 ORDER BY dc:modified DESC';
+
+/** A type's `view` file as it is served, or why there is none to open. */
+export type RecordLayoutSource =
+  | { readonly url: string; readonly content: Record<string, unknown>; readonly problem?: never }
+  | { readonly url: string; readonly problem: string; readonly content?: never };
+
+/**
+ * The record page a `view` file draws for one record, or why it draws none. `notes` are what the
+ * console would be told of the file: what the page leaves out, and why.
+ */
+export type RecordLayoutPreview = { readonly notes: readonly string[] } & (
+  | { readonly layout: ResolvedRecordLayout; readonly refused?: never; readonly notDrawn?: never }
+  | { readonly refused: string; readonly layout?: never; readonly notDrawn?: never }
+  | { readonly notDrawn: string; readonly layout?: never; readonly refused?: never }
+);
+
 /** The name a user or group is shown by: first and last name, or the group's label. */
 export function principalName(kind: 'user' | 'group', raw: unknown): string | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -295,21 +338,134 @@ export class DocumentLayoutService {
           ? this.documentType(type).pipe(
               switchMap((definition) => {
                 if (!definition) return of(null);
-                // The type's schemas and the document's own: a dynamic facet can add `file` or
-                // `note` to one record of a type that has neither, and its preview shows first too.
-                const schemas = [...definition.schemas, ...documentSchemas];
-                const names = new Set(schemas.map((schema) => schema.name));
-                if (names.has(PICTURE_SCHEMA) && !names.has(VIDEO_SCHEMA)) {
-                  return this.resolveRecord(definition, file, documentSchemas, 'picture');
-                }
-                if ([...names].some((name) => OWN_VIEW_SCHEMAS.has(name))) {
-                  return this.ownViewFirst(type);
-                }
-                return this.resolveRecord(definition, file, documentSchemas, null);
+                const preview = recordPreviewOf(definition, documentSchemas);
+                if (preview === OWN_VIEW) return this.ownViewFirst(type);
+                return this.resolveRecord(definition, file, documentSchemas, preview).pipe(
+                  map(({ layout, notes }) => {
+                    for (const note of notes) warn(note);
+                    return layout;
+                  }),
+                );
               }),
             )
           : of(null),
       ),
+    );
+  }
+
+  /**
+   * The types whose record page is served: those `layouts.json` lists a `view` file for, each once,
+   * in its order. What the layout designer offers to open. Read anew on every call, never from the
+   * session's cache, which keeps an index it could not read as an empty one. Errors when the index
+   * cannot be read or is not one, so that the caller can tell that from a server serving none.
+   */
+  recordLayoutTypes(): Observable<readonly string[]> {
+    return this.http.get<unknown>(layoutsIndexUrl(this.bootstrapUrl)).pipe(
+      timeout(LAYOUT_LOAD_TIMEOUT_MS),
+      map((raw) => {
+        const index = readLayoutIndex(raw);
+        if ('invalid' in index) throw new Error(index.invalid);
+        return [
+          ...new Set(
+            index.entries.filter((entry) => entry.mode === 'view').map((entry) => entry.type),
+          ),
+        ];
+      }),
+    );
+  }
+
+  /**
+   * A type's `view` file as it is served, its `content` unread: what the layout designer opens.
+   * Read anew on every call, never from the session's cache, so the designer opens the file the
+   * server answers now. `problem` says why there is none to open. Never errors.
+   */
+  recordLayoutSource(type: string): Observable<RecordLayoutSource> {
+    const url = layoutFileUrl(this.bootstrapUrl, type, 'view');
+    return this.http.get<unknown>(url).pipe(
+      timeout(LAYOUT_LOAD_TIMEOUT_MS),
+      map((raw): RecordLayoutSource => {
+        const envelope = readLayoutEnvelope(raw, type, 'view');
+        return 'invalid' in envelope
+          ? { url, problem: envelope.invalid }
+          : { url, content: envelope.content };
+      }),
+      catchError((error: unknown) => of({ url, problem: describe(error) })),
+    );
+  }
+
+  /**
+   * Up to `pageSize` live records of `type`, the last changed first, with their Dublin Core
+   * properties: those the layout designer offers to preview a record page with. One search,
+   * through the REST API as the reader, so only records they may read come back; versions,
+   * proxies and trashed records are left out. The type is sent as a `queryParams` value, never in
+   * the query's text ({@link PREVIEW_RECORDS_QUERY}). Not cached. Errors when the search fails,
+   * so that the caller can say why.
+   */
+  previewRecords(type: string, pageSize: number): Observable<readonly NuxeoDocument[]> {
+    const params = new HttpParams()
+      .set('query', PREVIEW_RECORDS_QUERY)
+      .set('pageSize', pageSize)
+      .set('currentPageIndex', 0)
+      .append('queryParams', type);
+    return this.api
+      .get<unknown>('/nuxeo/api/v1/search/lang/NXQL/execute', params, { properties: 'dublincore' })
+      .pipe(
+        timeout(LAYOUT_LOAD_TIMEOUT_MS),
+        map((raw) => {
+          const entries = isJsonObject(raw) ? raw['entries'] : undefined;
+          return (Array.isArray(entries) ? entries : []).filter(
+            (entry): entry is NuxeoDocument =>
+              isJsonObject(entry) && typeof entry['uid'] === 'string' && entry['uid'] !== '',
+          );
+        }),
+      );
+  }
+
+  /**
+   * The record page `content`, a `view` file that need not be served, draws for `document`: what
+   * the layout designer previews. It is read, held to the document's type and resolved exactly as
+   * a served file is for the View tab. What the console would be told of the file is in `notes`,
+   * and the console is not told it; a read of the type or a schema that fails is still told, as on
+   * any page.
+   *
+   * The page it draws is the View tab's for the same rule context. Where the document page is not
+   * open, nothing publishes its state about the record, such as whether it is locked or a favourite,
+   * so a rule on that state answers as for a record with none of it.
+   *
+   * `refused` when the record page refuses the file, `notDrawn` when the page draws none for this
+   * record: the type's schemas cannot be read, or the record has a file or a note, which its View
+   * tab shows first. Nothing is cached for the file. Never errors.
+   */
+  previewRecordLayout(content: unknown, document: NuxeoDocument): Observable<RecordLayoutPreview> {
+    const type = document.type;
+    if (!isJsonObject(content)) {
+      return of({ refused: 'a layout file is a JSON object', notes: [] });
+    }
+    const file = readRecordLayout(content, {
+      rules: this.rules.registeredRuleIds(),
+      rowActions: this.slots.registeredIds(EXTENSION_SLOTS.rowActions),
+    });
+    if ('invalid' in file) return of({ refused: file.invalid, notes: [] });
+    const problems = file.problems.map((problem) => `${type}/view layout: ${problem}`);
+    const documentSchemas = readDocumentSchemas(
+      'schemas' in document ? document.schemas : undefined,
+    );
+    return this.documentType(type).pipe(
+      switchMap((definition): Observable<RecordLayoutPreview> => {
+        if (!definition) {
+          return of({ notDrawn: `the schemas of ${type} could not be read`, notes: problems });
+        }
+        const preview = recordPreviewOf(definition, documentSchemas);
+        if (preview === OWN_VIEW) {
+          return of({
+            notDrawn: `a ${type} with a file or a note keeps its own View tab, which shows it first`,
+            notes: problems,
+          });
+        }
+        return this.resolveRecord(definition, file, documentSchemas, preview).pipe(
+          map(({ layout, notes }) => ({ layout, notes: [...problems, ...notes] })),
+        );
+      }),
     );
   }
 
@@ -431,12 +587,13 @@ export class DocumentLayoutService {
     return of(null);
   }
 
+  /** The file resolved for a document, and what the console is to be told of it, each note whole. */
   private resolveRecord(
     definition: DocumentTypeDefinition,
     file: RecordLayoutFile,
     documentSchemas: readonly DocumentSchemaRef[],
     preview: RecordPreview,
-  ): Observable<ResolvedRecordLayout> {
+  ): Observable<{ readonly layout: ResolvedRecordLayout; readonly notes: readonly string[] }> {
     const wanted = recordFacetSchemasToRead(definition, documentSchemas, file);
     const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
       ? forkJoin(wanted.map(({ name }) => this.schema(name)))
@@ -448,9 +605,13 @@ export class DocumentLayoutService {
           wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
         );
         const { layout, skipped, notes } = resolveRecordLayout(definition, file, facets, preview);
-        for (const field of skipped) warn(skippedMessage(definition.name, field, unread));
-        for (const note of notes) warn(`${definition.name}/view layout: ${note}`);
-        return layout;
+        return {
+          layout,
+          notes: [
+            ...skipped.map((field) => skippedMessage(definition.name, field, unread)),
+            ...notes.map((note) => `${definition.name}/view layout: ${note}`),
+          ],
+        };
       }),
     );
   }

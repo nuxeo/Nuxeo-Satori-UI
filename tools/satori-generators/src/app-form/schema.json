@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppForm",
+  "title": "Satori business app form",
+  "description": "Writes a version 2 form for a document type, its Edit or Create form, one card per schema, from the server's content model, and has the package's component contribute it.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "type": {
+      "type": "string",
+      "description": "The document type the form is for, as the content model names it.",
+      "x-prompt": "Which document type (e.g. Contract)?",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$"
+    },
+    "mode": {
+      "type": "string",
+      "description": "edit, the Edit form, or create, the Create form for a new record of the type.",
+      "enum": ["edit", "create"],
+      "default": "edit"
+    },
+    "model": {
+      "type": "string",
+      "description": "The content model, a file `npm run app-package:model` exported: { doctypes, facets, schemas }. Give this or modelServer."
+    },
+    "modelServer": {
+      "type": "string",
+      "description": "Read the content model live instead, from this Nuxeo, such as http://localhost:8080/nuxeo, with NUXEO_USER and NUXEO_PASS from the environment. HTTPS, or HTTP to this machine only."
+    },
+    "schemas": {
+      "type": "string",
+      "description": "The schemas to edit, one card each, in order, separated by commas. Defaults to the type's schemas but Nuxeo's own (common, dublincore, uid, file, files, facetedTag, relatedtext)."
+    },
+    "required": {
+      "type": "string",
+      "description": "The fields required whenever they are editable, <prefix>:<name> each, separated by commas. Each must be one the form lists."
+    },
+    "title": {
+      "type": "boolean",
+      "description": "Open the first card with dc:title, the record's name, when the type has Dublin Core and schemas does not name it: a form draws only the fields it lists.",
+      "default": true
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Write the form again from the model if the type already has one in this mode: edits made to it by hand are lost. Its labels keep the text labels/en.json has.",
+      "default": false
+    }
+  },
+  "required": ["package", "type"]
+}

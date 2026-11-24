@@ -108,11 +108,22 @@ demo/                                starter kits only; not checked
 | `label`, `labelKey` | One of them | The app's name, as "Switch app" lists it                                                                                                 |
 | `packageVersion`    | Yes         | The package's semantic version, such as `1.0.1`                                                                                          |
 | `platform`          | Yes         | The platform versions it runs on, as a range: `>=0.3.0 <1.0.0`, `^1.2.0` or `~1.2.0`                                                     |
-| `address`           | No          | Where the shell opens it, under the shell's own address. The same form as `id`, which it is when left out                                |
+| `address`           | No          | Where the shell opens it, under the shell's own address. The same form as `id`, which it is when left out, and not a platform route      |
 | `groups`            | Yes         | The groups it is for. `members` is everyone                                                                                              |
 | `modules`           | No          | The domain modules it turns on ([architecture](architecture.md#6-the-modules), section 6)                                                |
 | `branding`          | No          | `applicationTitle`, `documentTitle`, `logo` and `favicon`, as version 1's bootstrap writes them, and `theme`: one of the server's themes |
 
+- **The address is not the platform's.** An address that is the first segment of one of the
+  platform's own pages is refused, so that the shell can open the app there: an app with the id
+  `contracts` would take `/contracts`, the component showcase, so it needs an `address` of its
+  own, such as `contract-desk`. With no `address`, the id is the address, and an id that is one of
+  them is said by the pipeline and the command line, not refused yet: the contracts kit was built
+  so, before the rule. The `app-package` generator writes every new app's address, and refuses one
+  that is a route. The shell refuses an app with a refused address too, as it refuses any finding
+  in `app.json` (section 10): "Switch app" does not list it. The platform's routes are listed in one place, `PLATFORM_ROUTES` in
+  [`libs/shared/app-definition/src/lib/platform-routes.ts`](../../libs/shared/app-definition/src/lib/platform-routes.ts),
+  which a test in `apps/nuxeo-ui` holds to `app.routes.ts` both ways. A queue's id needs no such
+  check: a queue opens under `/queues/`.
 - **The platform range.** The shell is to refuse an app whose range leaves out its own version,
   and say both; it does not yet, since it does not know its version at run time (section 13).
   The pipeline checks the range against the version of the server it publishes for.
@@ -677,7 +688,9 @@ and E, which are still open ([decisions.md](decisions.md), notes):
   holds it, at one of section 1's places: `home.json`, `navigation.json`, `actions.json`,
   `queues/<id>.json`, `labels/<lang>.json` and `tasks/<workflow>.<step>.layout.json`. Each file
   is named, as a layout is, and the pipeline's step 2 holds the list to the package's files
-  ([package-pipeline.md](package-pipeline.md)). A later app with the same id replaces it whole, and
+  ([package-pipeline.md](package-pipeline.md)). The `app-package` generator writes the element,
+  the generators that add a file keep it in step, and `app-registry` writes it for a package
+  without one, or after a file is written by hand. A later app with the same id replaces it whole, and
   `enabled="false"` removes it. Layouts are still contributed as `<layout>`, and served to
   everyone (section 13).
 

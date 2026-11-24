@@ -1,6 +1,7 @@
-import { posix } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, posix } from 'node:path';
 
-import type { Tree } from '@nx/devkit';
+import { workspaceRoot, type Tree } from '@nx/devkit';
 
 /**
  * What the business-app generators share: finding the app definition package they add to, and the
@@ -185,7 +186,7 @@ const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
  * server would register, and an index into it is an index into `xml`. One left unterminated is
  * blanked to the end, as the pipeline drops it; `build.mjs` refuses it.
  */
-function markupOnly(xml: string): string {
+export function markupOnly(xml: string): string {
   const next = /<!--|<\?|<!\[CDATA\[/g;
   let out = '';
   let at = 0;
@@ -256,10 +257,18 @@ export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode
   if (xml === null) throw new Error(`Cannot read ${pkg.component}.`);
   const markup = markupOnly(xml);
   const src = `agentic-ui-config/layouts/${type}/${mode}.layout.json`;
-  const existing = [...markup.matchAll(/<layout\b[^>]*>/g)]
-    .map(([tag]) => tag)
-    .filter((tag) => attribute(tag, 'type') === type && attribute(tag, 'mode') === mode);
-  for (const tag of existing) {
+  const extensions = configurationExtensions(pkg, markup);
+  const existing = [...markup.matchAll(/<layout\b[^>]*>/g)].filter(
+    ([tag]) => attribute(tag, 'type') === type && attribute(tag, 'mode') === mode,
+  );
+  for (const [tag, at = 0] of existing.map((match) => [match[0], match.index] as const)) {
+    // One outside the configuration's point is registered by nothing: the pipeline refuses it,
+    // and an entry added beside it would leave two to read.
+    if (!extensions.some(({ start, close }) => at > start && at < close)) {
+      throw new Error(
+        `${pkg.component} has the ${type}/${mode} layout outside an extension of org.nuxeo.agentic.ui.config's "configuration" point, where nothing registers it. Move it into one, or remove it.`,
+      );
+    }
     const enabled = attribute(tag, 'enabled');
     if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
       throw new Error(
@@ -275,29 +284,261 @@ export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode
   }
   if (existing.length > 0) return;
   const entry = `<layout type="${type}" mode="${mode}" src="${src}" />`;
-  const opening = [...markup.matchAll(/<extension\b[^>]*>/g)].find(
-    ([tag]) =>
-      !tag.endsWith('/>') &&
-      attribute(tag, 'target') === 'org.nuxeo.agentic.ui.config' &&
-      attribute(tag, 'point') === 'configuration',
-  );
+  // The layouts go in a configuration extension of their own, not in the one that holds the app,
+  // as the kits write them: the app's element stays whole, and is the last thing in its extension.
+  const opening = extensions.find(({ body }) => !APP_TAG().test(body));
   if (opening) {
-    const close = markup.indexOf('</extension>', opening.index);
-    if (close < 0)
-      throw new Error(`${pkg.component}: its configuration extension is never closed.`);
-    const lineStart = markup.lastIndexOf('\n', close) + 1;
-    const before = markup.slice(lineStart, close).trim() === '' ? lineStart : close;
+    const lineStart = markup.lastIndexOf('\n', opening.close) + 1;
+    const before = markup.slice(lineStart, opening.close).trim() === '' ? lineStart : opening.close;
     tree.write(pkg.component, `${xml.slice(0, before)}    ${entry}\n${xml.slice(before)}`);
     return;
   }
-  const end = markup.lastIndexOf('</component>');
-  if (end < 0) throw new Error(`${pkg.component} has no </component>.`);
   const extension =
     '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
     `    ${entry}\n` +
     '  </extension>\n';
+  // Before the app's extension when there is one, so the app stays the component's last word.
+  const app = extensions.find(({ body }) => APP_TAG().test(body));
+  if (app) {
+    const lineStart = markup.lastIndexOf('\n', app.start) + 1;
+    tree.write(pkg.component, `${xml.slice(0, lineStart)}${extension}\n${xml.slice(lineStart)}`);
+    return;
+  }
+  const end = markup.lastIndexOf('</component>');
+  if (end < 0) throw new Error(`${pkg.component} has no </component>.`);
   const lineStart = markup.lastIndexOf('\n', end) + 1;
   tree.write(pkg.component, `${xml.slice(0, lineStart)}\n${extension}${xml.slice(lineStart)}`);
+}
+
+/** An element's start tag, as the pipeline's `TAG` reads one: its attributes, quoted either way. */
+const startTag = (name: string): RegExp =>
+  new RegExp(`<${name}(?=[ \\t\\r\\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>`, 'g');
+/** A fresh `<app>` start tag pattern: a global pattern keeps its place between searches. */
+const APP_TAG = (): RegExp => startTag('app');
+
+interface Extension {
+  /** Where its start tag begins, and where its `</extension>` does. */
+  readonly start: number;
+  readonly close: number;
+  /** What it holds, blanked as `markupOnly` blanks it. */
+  readonly body: string;
+}
+
+/**
+ * The component's extensions to `org.nuxeo.agentic.ui.config`'s "configuration" point, in order,
+ * read from `markup`: where the server registers a layout and an app. One never closed is refused.
+ */
+function configurationExtensions(pkg: AppPackage, markup: string): Extension[] {
+  const found: Extension[] = [];
+  for (const match of markup.matchAll(startTag('extension'))) {
+    const [tag] = match;
+    if (
+      tag.endsWith('/>') ||
+      attribute(tag, 'target') !== 'org.nuxeo.agentic.ui.config' ||
+      attribute(tag, 'point') !== 'configuration'
+    )
+      continue;
+    const start = match.index ?? 0;
+    // `</extension >` closes it too, as the pipeline reads an end tag.
+    const end = /<\/extension[ \t\r\n]*>/.exec(markup.slice(start));
+    const close = end === null ? -1 : start + end.index;
+    if (close < 0)
+      throw new Error(`${pkg.component}: its configuration extension is never closed.`);
+    found.push({ start, close, body: markup.slice(start + tag.length, close) });
+  }
+  return found;
+}
+
+/**
+ * The files of an app definition the app registry serves besides `app.json`, each at its place,
+ * in the order the generators name them: app-definition-v2.md, section 10's example. They are the
+ * package pipeline's `REGISTRY_FILES` (`scripts/app-package.mjs`), which judges what is written
+ * with them, as `app-package/pipeline.spec.ts` checks.
+ */
+const REGISTRY_FILES: readonly RegExp[] = [
+  /^home\.json$/,
+  /^navigation\.json$/,
+  /^queues\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json$/,
+  /^labels\/[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\.json$/,
+  /^tasks\/[A-Za-z][A-Za-z0-9_-]{0,127}\.[A-Za-z][A-Za-z0-9_-]{0,127}\.layout\.json$/,
+  /^actions\.json$/,
+];
+
+/** More files than this, and the server refuses the app: `ContributionRegistry.MAX_APP_FILES`. */
+export const MAX_APP_FILES = 256;
+
+/** Every file under `directory` in the tree, relative to it, with `/` between its parts. */
+function filesIn(tree: Tree, directory: string, prefix = ''): string[] {
+  return tree.children(directory).flatMap((name) => {
+    const path = `${directory}/${name}`;
+    return tree.isFile(path) ? [`${prefix}${name}`] : filesIn(tree, path, `${prefix}${name}/`);
+  });
+}
+
+/** The files of the package's app definition the registry serves, in the order they are named. */
+export function registryFiles(tree: Tree, pkg: AppPackage): string[] {
+  const rank = (path: string): number => REGISTRY_FILES.findIndex((place) => place.test(path));
+  return filesIn(tree, pkg.config)
+    .filter((path) => rank(path) >= 0)
+    .sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
+}
+
+/** What `contributeApp` did to the component's `<app>`. */
+export interface AppContribution {
+  /** `absent`: there is no app to keep in step, and none was asked for. */
+  readonly status: 'written' | 'refreshed' | 'unchanged' | 'absent';
+  /** The files it names now, and those it named and no longer does. */
+  readonly files: readonly string[];
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+}
+
+const APP_SRC = 'agentic-ui-config/app.json';
+
+/**
+ * Has the package's component contribute its app to the app registry (app-definition-v2.md,
+ * section 10): `<app id src>`, from `agentic-ui-config/app.json`, under `app.json`'s id, naming
+ * every file of the app definition the registry serves (`registryFiles`), as the pipeline's step 2
+ * requires. A file the package holds and the element does not name would never be served; one it
+ * names and the package does not hold, the pipeline refuses.
+ *
+ * With `create`, an element is written in a configuration extension of its own, before
+ * `</component>`, when there is none. Without it, only an element already there is kept in step:
+ * the generators that add a file call it so, and `app-registry` and `app-package` create one.
+ *
+ * The component is read as the pipeline reads it (`markupOnly`): an `<app>` in a comment is not
+ * one. An element there is kept, its `<file>` lines in their order: those for a file the package
+ * no longer holds are removed, and those for a file it does not name yet are added before
+ * `</app>`. Refused rather than guessed: two enabled apps, one disabled only (when `create`), and
+ * one with another id or `src`, which the pipeline refuses too.
+ */
+export function contributeApp(
+  tree: Tree,
+  pkg: AppPackage,
+  { create }: { readonly create: boolean },
+): AppContribution {
+  const xml = tree.read(pkg.component, 'utf-8');
+  if (xml === null) throw new Error(`Cannot read ${pkg.component}.`);
+  const markup = markupOnly(xml);
+  const files = registryFiles(tree, pkg);
+  if (files.length > MAX_APP_FILES) {
+    throw new Error(
+      `${pkg.config} has ${files.length} files the app registry would serve; it serves at most ${MAX_APP_FILES} (ContributionRegistry.MAX_APP_FILES).`,
+    );
+  }
+  const element = `<app id="${pkg.appId}" src="${APP_SRC}">`;
+  const apps = [...markup.matchAll(APP_TAG())];
+  const enabled = apps.filter(([tag]) => {
+    const value = attribute(tag, 'enabled');
+    return value === undefined || value.toLowerCase() === 'true';
+  });
+  if (enabled.length > 1) {
+    throw new Error(
+      `${pkg.component} contributes ${enabled.length} apps; a package is one app. Remove all but one.`,
+    );
+  }
+  const fileLine = (indent: string, path: string) => `${indent}<file path="${path}" />\n`;
+
+  if (enabled.length === 0) {
+    if (!create) return { status: 'absent', files: [], added: [], removed: [] };
+    if (apps.length > 0) {
+      throw new Error(
+        `${pkg.component} has the app disabled (enabled="${attribute(apps[0][0], 'enabled')}"), so the registry serves none. Remove that entry, or enable it.`,
+      );
+    }
+    const end = markup.lastIndexOf('</component>');
+    if (end < 0) throw new Error(`${pkg.component} has no </component>.`);
+    const extension =
+      '  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n' +
+      `    ${element}\n` +
+      files.map((path) => fileLine('      ', path)).join('') +
+      '    </app>\n' +
+      '  </extension>\n';
+    const lineStart = markup.lastIndexOf('\n', end) + 1;
+    tree.write(pkg.component, `${xml.slice(0, lineStart)}\n${extension}${xml.slice(lineStart)}`);
+    return { status: 'written', files, added: files, removed: [] };
+  }
+
+  const [match] = enabled;
+  const [tag, inside] = match;
+  const at = match.index ?? 0;
+  const id = attribute(tag, 'id');
+  if (id !== pkg.appId) {
+    throw new Error(
+      `${pkg.component} contributes the app "${id ?? ''}", and app.json's id is "${pkg.appId}". Contribute it as ${element}.`,
+    );
+  }
+  const src = attribute(tag, 'src');
+  if (src !== APP_SRC) {
+    throw new Error(
+      `${pkg.component} contributes the app ${id} from ${src ?? 'no src'}. Contribute it from ${APP_SRC}, which the validator reads.`,
+    );
+  }
+  const appLine = markup.lastIndexOf('\n', at) + 1;
+  const indent = /^[ \t]*$/.test(markup.slice(appLine, at)) ? markup.slice(appLine, at) : '    ';
+  if (inside.trimEnd().endsWith('/')) {
+    // `<app ... />`, which names no file: written whole, with them.
+    const written =
+      `${tag.replace(/\s*\/>$/, '>')}\n` +
+      files.map((path) => fileLine(`${indent}  `, path)).join('') +
+      `${indent}</app>`;
+    tree.write(pkg.component, `${xml.slice(0, at)}${written}${xml.slice(at + tag.length)}`);
+    return { status: 'refreshed', files, added: files, removed: [] };
+  }
+  const bodyStart = at + tag.length;
+  const close = markup.indexOf('</app', bodyStart);
+  if (close < 0) throw new Error(`${pkg.component}: its <app> is never closed.`);
+  const entries = [...markup.slice(bodyStart, close).matchAll(startTag('file'))].map((entry) => ({
+    path: attribute(entry[0], 'path') ?? '',
+    start: bodyStart + (entry.index ?? 0),
+    end: bodyStart + (entry.index ?? 0) + entry[0].length,
+  }));
+  const kept = new Set<string>();
+  const stale = entries.filter((entry) => {
+    if (!files.includes(entry.path) || kept.has(entry.path)) return true;
+    kept.add(entry.path);
+    return false;
+  });
+  const missing = files.filter((path) => !kept.has(path));
+  if (stale.length === 0 && missing.length === 0) {
+    return { status: 'unchanged', files, added: [], removed: [] };
+  }
+  // From the end, so each offset still holds: the new lines before `</app>`, then each stale entry
+  // taken out, its line with it when it is alone on the line.
+  let out = xml;
+  const fileIndent = (() => {
+    const first = entries[0];
+    if (!first) return `${indent}  `;
+    const line = markup.lastIndexOf('\n', first.start) + 1;
+    const before = markup.slice(line, first.start);
+    return /^[ \t]*$/.test(before) ? before : `${indent}  `;
+  })();
+  const closeLine = markup.lastIndexOf('\n', close) + 1;
+  if (missing.length > 0) {
+    const lines = missing.map((path) => fileLine(fileIndent, path)).join('');
+    out =
+      markup.slice(closeLine, close).trim() === '' && closeLine > bodyStart
+        ? `${out.slice(0, closeLine)}${lines}${out.slice(closeLine)}`
+        : `${out.slice(0, close)}\n${lines}${indent}${out.slice(close)}`;
+  }
+  for (const entry of [...stale].reverse()) {
+    const line = markup.lastIndexOf('\n', entry.start - 1) + 1;
+    const next = markup.indexOf('\n', entry.end);
+    const lineEnd = next < 0 ? markup.length : next + 1;
+    const alone =
+      markup.slice(line, entry.start).trim() === '' &&
+      markup.slice(entry.end, lineEnd).trim() === '';
+    out = alone
+      ? `${out.slice(0, line)}${out.slice(lineEnd)}`
+      : `${out.slice(0, entry.start)}${out.slice(entry.end)}`;
+  }
+  tree.write(pkg.component, out);
+  return {
+    status: 'refreshed',
+    files,
+    added: missing,
+    removed: stale.map((entry) => entry.path),
+  };
 }
 
 const ENTITIES: Readonly<Record<string, string>> = {
@@ -312,7 +553,7 @@ const ENTITIES: Readonly<Record<string, string>> = {
  * An attribute's value as the pipeline's `attributesOf` reads it: quoted either way, its character
  * and predefined entity references resolved, and trimmed.
  */
-function attribute(tag: string, name: string): string | undefined {
+export function attribute(tag: string, name: string): string | undefined {
   const match = new RegExp(`\\s${name}[ \\t\\r\\n]*=[ \\t\\r\\n]*(?:"([^"]*)"|'([^']*)')`).exec(
     tag,
   );
@@ -327,6 +568,64 @@ function attribute(tag: string, name: string): string | undefined {
       },
     )
     .trim();
+}
+
+/**
+ * What a generator that added a file says of the app's contribution, `contributeApp`'s `result`:
+ * the files it now names or no longer does, or, when the component contributes no app and `absent`
+ * is not false, how to add it. Empty when nothing changed.
+ */
+export function appContributionSaid(
+  pkg: AppPackage,
+  result: AppContribution,
+  { absent = true }: { readonly absent?: boolean } = {},
+): string {
+  if (result.status === 'absent') {
+    if (!absent) return '';
+    return (
+      `\n  ${pkg.component} contributes no app, so the app registry will not serve these files ` +
+      `on a server. Add it with:\n\n    npx nx g ./tools/satori-generators:app-registry --package=${pkg.root}\n`
+    );
+  }
+  const lines = [
+    ...(result.added.length > 0 ? [`now names ${result.added.join(', ')}`] : []),
+    ...(result.removed.length > 0 ? [`no longer names ${result.removed.join(', ')}`] : []),
+  ];
+  return lines.length === 0
+    ? ''
+    : `\n  The app's <app> in ${pkg.component} ${lines.join(', and ')}.\n`;
+}
+
+/** Where the platform's own routes are listed, once: the validator's `PLATFORM_ROUTES`. */
+export const PLATFORM_ROUTES_FILE = 'libs/shared/app-definition/src/lib/platform-routes.ts';
+
+/**
+ * The platform's own routes, which no app's address may be, read from the one place they are
+ * listed (`PLATFORM_ROUTES_FILE`), which these sources cannot import (the top of this file says
+ * why). Read strictly: the list must hold quoted names and nothing else, so that a change of its
+ * form is refused rather than read in part. `app-package/generator.spec.ts` holds what this reads
+ * to the validator, run as a command.
+ */
+export function platformRoutes(root: string = workspaceRoot): readonly string[] {
+  let text: string;
+  try {
+    text = readFileSync(join(root, PLATFORM_ROUTES_FILE), 'utf-8');
+  } catch (error) {
+    throw new Error(
+      `Cannot read the platform's routes from ${PLATFORM_ROUTES_FILE}: ${(error as NodeJS.ErrnoException).code ?? (error as Error).message}.`,
+    );
+  }
+  const body = /export const PLATFORM_ROUTES: readonly string\[\] = \[([^\]]*)\];/.exec(text)?.[1];
+  const items = (body ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+  if (items.length === 0 || !items.every((item) => /^'[a-z][a-z0-9-]*'$/.test(item))) {
+    throw new Error(
+      `Cannot read the platform's routes from ${PLATFORM_ROUTES_FILE}: PLATFORM_ROUTES is not a list of quoted names there.`,
+    );
+  }
+  return items.map((item) => item.slice(1, -1));
 }
 
 /** A comma-separated option as a list, or a list as given; empty items dropped. */

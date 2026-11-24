@@ -1,0 +1,182 @@
+:host {
+  display: block;
+}
+
+.layout-designer {
+  /* The page's own width decides the columns, not the window's: the navigation rail and the
+     administration menu beside it take a width of their own. */
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+}
+
+/* Each class twice: the shell's `.mat-typography h1`, `h2`, `h3` and `p` rules are more specific
+   than one class, and drew the headings as display titles, as they did the record page's. The
+   whole `font` is set again, so that no line height or letter spacing of theirs is left. */
+.layout-designer__title.layout-designer__title {
+  margin: 0;
+  font: var(--mat-sys-headline-small);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.layout-designer__intro.layout-designer__intro,
+.layout-designer__note.layout-designer__note,
+.layout-designer__message.layout-designer__message {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+  letter-spacing: normal;
+}
+
+.layout-designer__pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.layout-designer__picker {
+  min-inline-size: 16rem;
+}
+
+/* One column, the preview under the editor, until the page is wide enough for both side by side. */
+.layout-designer__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@container (min-width: 56rem) {
+  .layout-designer__body {
+    grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr);
+  }
+
+  /* Side by side, the preview stays in view while the editor scrolls, so a change is seen as it is made. */
+  .layout-designer__preview {
+    position: sticky;
+    inset-block-start: 0;
+  }
+}
+
+.layout-designer__editor,
+.layout-designer__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-inline-size: 0;
+}
+
+.layout-designer__heading.layout-designer__heading {
+  margin: 0;
+  font: var(--mat-sys-title-large);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.layout-designer__card,
+.layout-designer__hidden,
+.layout-designer__validation,
+.layout-designer__save {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.layout-designer__card-heading.layout-designer__card-heading {
+  margin: 0;
+  font: var(--mat-sys-title-small);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.layout-designer__tab {
+  margin-inline-end: 8px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.layout-designer__card-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.layout-designer__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layout-designer__field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: 40px;
+}
+
+.layout-designer__field-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.layout-designer__field-note,
+.layout-designer__kind {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+.layout-designer__field-actions {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.layout-designer__add,
+.layout-designer__save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.layout-designer__verdict.layout-designer__verdict {
+  margin: 0;
+  font: var(--mat-sys-body-large);
+}
+
+.layout-designer__findings {
+  margin: 0;
+  padding-inline-start: 20px;
+  overflow-wrap: anywhere;
+}
+
+.layout-designer__json-text {
+  max-block-size: 24rem;
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  background: var(--mat-sys-surface-container);
+  font: var(--mat-sys-body-small);
+  font-family: monospace;
+  white-space: pre;
+}
+
+.layout-designer__notes ul {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+  color: var(--mat-sys-on-surface-variant);
+  overflow-wrap: anywhere;
+}

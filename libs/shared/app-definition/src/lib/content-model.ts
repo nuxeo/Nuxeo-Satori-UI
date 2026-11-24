@@ -1,7 +1,7 @@
 /**
  * The model reader: a server's content model, its document types, schemas and facets, as the
  * checks of a layout file need it (docs/business-apps/layout-v2.md, section 3). The package
- * pipeline holds a layout to it; the designer and the Studio migration are to.
+ * pipeline and the layout designer hold a layout to it; the Studio migration is to.
  *
  * It reads `{ doctypes, facets, schemas }`: the pipeline's model file, and the shape of
  * `NuxeoContentModel`, which `ContentModelService` in `libs/shared/nuxeo-client` resolves, though

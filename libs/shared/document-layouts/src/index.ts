@@ -4,7 +4,12 @@ export {
   type LayoutFormMode,
 } from './lib/document-layout-form/document-layout-form';
 export type { LayoutMode } from './lib/layout.model';
-export { DocumentLayoutService, layoutsIndexUrl } from './lib/document-layout.service';
+export {
+  DocumentLayoutService,
+  layoutsIndexUrl,
+  type RecordLayoutPreview,
+  type RecordLayoutSource,
+} from './lib/document-layout.service';
 export { readLayoutIndex } from './lib/layout-file';
 export { RECORD_PAGE_TODAY, RecordPageComponent } from './lib/record-page/record-page';
 export { RecordListComponent } from './lib/record-page/record-list';

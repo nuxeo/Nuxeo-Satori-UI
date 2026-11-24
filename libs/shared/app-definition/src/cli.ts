@@ -45,6 +45,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
+import { addressTakenById } from './lib/app';
 import { changesBetween, DEFINITION_ROOT, judgeVersion, type PackageFiles } from './lib/changes';
 import { readContentModel, type ContentModel } from './lib/content-model';
 import { heldToModel, LAYOUT_MODES, type LayoutMode } from './lib/layout-v2';
@@ -205,6 +206,9 @@ export function main(argv: readonly string[], io: CliIo): number {
       heldToModel(content, { mode: mode ?? placed.file.mode, type: placed.file.type })
     )
       held++;
+    // Said, not refused: an app whose id, with no address, is a platform route.
+    const taken = placed.file.kind === 'app' ? addressTakenById(content) : undefined;
+    if (taken !== undefined) io.out(`${path}: note: ${taken}\n`);
     const findings = validateFile(
       placed.file,
       content,

@@ -7,8 +7,10 @@ description: Build or change a Nuxeo Satori business app, an app definition pack
 
 Phase 3 of `docs/business-apps/development-plan.md`, the Builder kit: a presales engineer asks
 for an app in plain words, and the agent writes the package, checks it, and shows it. The agent
-writes configuration only. It never writes the data model or code: the types, schemas, page
-providers and lifecycles come from Studio or a model package, and are already on the server.
+writes configuration only. It never writes the data model of a customer's server, or code: the
+types, schemas, page providers and lifecycles come from Studio or a model package, and are already
+on the server. The one exception is a demo kit the person asks to carry a stand-in model, as the
+Payers kit does: `app-model` writes it (step 2), fictional and kept in a component of its own.
 
 What a package may hold: `docs/business-apps/package-pipeline.md`, section 1, and
 `docs/business-apps/app-definition-v2.md`, section 1. What a record page may say:
@@ -17,13 +19,13 @@ is the worked example.
 
 ## What exists today, and what does not
 
-| Step                         | How                                                                   | State                                                       |
-| ---------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                           | Built: 11 read-only tools                                   |
-| 2. Write the files           | The generators `app-package`, `app-layout`, `app-queue`, `app-action` | Built, in `tools/satori-generators`                         |
-| 3. Check them                | `validate_package`, or `npm run app-package`                          | Built: the pipeline's steps 1 to 6                          |
-| 4. Preview in dev mode       | `preview_package`, with `npx nx serve nuxeo-ui` running               | Built, on the local dev server. Not `app.json` or actions   |
-| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes               | **Not built in the MCP server.** The tag path has never run |
+| Step                         | How                                                             | State                                                       |
+| ---------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1. Read the server           | The Builder MCP server, `tools/builder-mcp`                     | Built: 11 read-only tools                                   |
+| 2. Write the files           | The `app-*` generators, `app-model` for a demo's stand-in model | Built, in `tools/satori-generators`                         |
+| 3. Check them                | `validate_package`, or `npm run app-package`                    | Built: the pipeline's steps 1 to 6                          |
+| 4. Preview in dev mode       | `preview_package`, with `npx nx serve nuxeo-ui` running         | Built, on the local dev server. Not `app.json` or actions   |
+| 5. Publish to pre-production | A person tags the merged commit; CI signs and publishes         | **Not built in the MCP server.** The tag path has never run |
 
 Say this to the person at the start, and again when you reach steps 4 and 5. Do not describe a
 step as done that this table says is not built.
@@ -50,19 +52,20 @@ Find out what is there before writing anything. Every name a package writes must
 server or be registered in the platform; a guess is refused by the pipeline, or worse, passes and
 shows nothing.
 
-| To know                                           | Ask the MCP server                      |
-| ------------------------------------------------- | --------------------------------------- |
-| which document types exist, and their schemas     | `get_content_model`                     |
-| a type's fields, with their types, by schema      | `describe_document_type`                |
-| a schema's fields, and who uses it                | `describe_schema`                       |
-| which page providers exist, and which are indexed | `list_page_providers`                   |
-| a page provider's parameters, sorts, aggregates   | `describe_page_provider`                |
-| the vocabularies, and one's entries               | `list_vocabularies`, `get_vocabulary`   |
-| the workflows, a step's buttons and variables     | `list_workflows`, `describe_workflow`   |
-| an operation's parameters                         | `list_operations`, `describe_operation` |
+| To know                                           | Ask the MCP server, with its arguments             |
+| ------------------------------------------------- | -------------------------------------------------- |
+| which document types exist, and their schemas     | `get_content_model`                                |
+| a type's fields, with their types, by schema      | `describe_document_type`, `{ "type": "Contract" }` |
+| a schema's fields, and who uses it                | `describe_schema`, `{ "schema": "contract" }`      |
+| which page providers exist, and which are indexed | `list_page_providers`, `{ "query"? }`              |
+| a page provider's parameters, sorts, aggregates   | `describe_page_provider`, `{ "name" }`             |
+| the vocabularies, and one's entries               | `list_vocabularies`, `get_vocabulary` `{ "name" }` |
+| the workflows, a step's buttons and variables     | `list_workflows`, `describe_workflow` `{ "name" }` |
+| an operation's parameters                         | `list_operations`, `describe_operation` `{ "id" }` |
 
 - **The type the person names must exist.** If it does not, stop: creating it is Studio's, not
-  yours. Say which types are there.
+  yours. Say which types are there. Only when the person asks for a demo kit with a stand-in model
+  of its own, write one with `app-model` (step 2), never on a server that holds a customer's model.
 - **A page provider's `?` parameters are filled in order.** A queue has no open record, so a page
   provider that needs a parameter takes a literal; one for "my work" names the person on the
   server.
@@ -85,13 +88,17 @@ component by hand: the generators write what the pipeline requires, byte for byt
 requires that.
 
 ```bash
-# The package, with its first record page from the model
+# The package, with its first record page from the model, and its app for the app registry
 npx nx g ./tools/satori-generators:app-package acme-contracts --owner=acme --title="Acme Contracts" \
   --groups=contract-managers --type=Contract --model=/tmp/content-model.json
 
 # Another record page; --modelServer=http://localhost:8080/nuxeo reads the model live instead
 npx nx g ./tools/satori-generators:app-layout --package=business-apps/packages/acme-contracts \
   --type=Counterparty --model=/tmp/content-model.json
+
+# The Edit form (--mode=create for the Create form), the fields it must have required
+npx nx g ./tools/satori-generators:app-form --package=business-apps/packages/acme-contracts \
+  --type=Contract --mode=edit --required=dc:title,contract:number --model=/tmp/content-model.json
 
 # A queue, on a page provider describe_page_provider showed
 npx nx g ./tools/satori-generators:app-queue --package=business-apps/packages/acme-contracts \
@@ -102,24 +109,57 @@ npx nx g ./tools/satori-generators:app-queue --package=business-apps/packages/ac
 npx nx g ./tools/satori-generators:app-action --package=business-apps/packages/acme-contracts \
   --id=acme-contracts.approve --transition=approve --on=record,row --type=Contract \
   --confirm="Approve this contract?" --queue=open-contracts
+
+# After writing the home, the menu or a task form by hand: the app names every file it serves
+npx nx g ./tools/satori-generators:app-registry --package=business-apps/packages/acme-contracts
 ```
 
 What each writes, and what it leaves to you:
 
 - **`app-package`:** `app.json`, `labels/en.json`, the component, `package/`, the manifest and the
   reviewed `build.mjs`, under `business-apps/packages/<name>/`, which CI checks on every pull
-  request. A package with no record page is refused by the pipeline's step 5, so give it `--type`.
+  request. The component contributes the app to the app registry, so "Switch app" can list it on
+  a server. A package with no record page is refused by the pipeline's step 5, so give it
+  `--type`.
+- **The app's id and address.** `app-package` writes the address, where the shell is to open the
+  app: its id unless `--address` gives another. It refuses one that is a platform route, as the
+  pipeline refuses one written in `app.json`: `contracts`, `search`, `tasks` and the rest of
+  `PLATFORM_ROUTES` in `libs/shared/app-definition`. For such an id, give `--address`, such as
+  `--appId=contracts --address=contract-desk`. A package whose `app.json` has no address and whose
+  id is one is only noted by the pipeline: fix it all the same.
 - **`app-layout`:** one card per schema of the type, leaving out Nuxeo's own (`common`,
   `dublincore`, `uid`, `file`, `files`, `facetedTag`, `relatedtext`) unless `--schemas` names
   them. A widget only where the model says more than the type: `vocabulary` for a property bound to
   a directory, `document-link` for a document's id, `table` for a list of complex values,
   `address` for a complex value with a street and a city. Files are left out, and it says so. It
   has the component contribute the layout, from the one path the pipeline accepts.
+- **`app-form`:** the Edit or Create form, as `app-layout` chooses its cards, `dc:title` first,
+  and `"required": true` on the fields `--required` names. A widget only where it changes the
+  input: `vocabulary`, a picker. A file, or a value holding one, is left out: files are changed in
+  Attachments. The component contributes it, as it does the record page. A field rule in plain
+  words is the next edit (below).
 - **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
   against the model yet.
 - **`app-action`:** a transition or an operation (`--operation`, with `--parameters` as JSON), on
   `record`, `row` or `bulk`, and `--queue` to offer it there. An id starting `app.` or `core.` is
   the platform's, and refused.
+- **`app-registry`:** the component's `<app>`, naming every file of the app definition the
+  registry serves. `app-package` writes it, and `app-layout`, `app-form`, `app-queue` and
+  `app-action` keep it in step; run it after writing a file by hand, or for a package that has
+  none. It takes out a file the package no longer holds.
+- **`app-model`, for a demo kit only:** a stand-in type with its schema, `--properties` such as
+  `number,status=Draft|Active,value:double,end:date`, and page providers over it, `--pageProvider`
+  with `--where` and `--sort`, in a model component of its own that the manifest lists first. It
+  writes `content-model.json` beside `bundle/`: give that to the other generators and the pipeline
+  until a server has the package.
+
+  ```bash
+  npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/acme-contracts \
+    --type=Contract --properties="number,status=Draft|Active|Terminated,value:double,end:date"
+  npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/acme-contracts \
+    --type=Contract --pageProvider=acme_active_contracts --where="contract:status = 'Active'" \
+    --sort=contract:end
+  ```
 
 Then edit what the generators wrote, as the person asks, following `layout-v2.md`:
 
@@ -129,13 +169,15 @@ Then edit what the generators wrote, as the person asks, following `layout-v2.md
   one that does not, given the model.
 - **Rules, computations and related records** are registered ids only (decision 4): no expression
   and no code. A field rule "in plain words" becomes `visibleWhen`, `required` or `readOnlyWhen`
-  with a rule from `PACKAGED_REGISTRIES` in `libs/shared/app-definition`. If none says it, tell the
+  with a rule from `PACKAGED_REGISTRIES` in `libs/shared/app-definition`. `required` and
+  `readOnlyWhen` are for forms: write the form with `app-form` first. If no rule says it, tell the
   person; do not invent one.
 - **Sensitive fields.** Ask before showing an identifier such as a social security number. Hiding a
   field with a rule is a convenience, not a control: the server still returns it to anyone who may
   read the record.
 - **The menu and the home** (`navigation.json`, `home.json`) have no generator: write them by hand,
-  from `app-definition-v2.md`, sections 9 and 10.
+  from `app-definition-v2.md`, sections 9 and 10, then run `app-registry`, so that the app names
+  them.
 
 ## 3. Check them, after every write
 
@@ -190,11 +232,10 @@ to. A server in dev mode could preview the layouts only, by hand (`tools/builder
 - **Drawn:** a record page from each `view` layout, its related lists included, and the home.
   What the record page leaves out is in `layout-v2.md`, section 11, and said in the browser's
   console. The ones a scaffold meets:
-  - **No card headings.** The generators name each card with a `labelKey`, and a key shows only
-    where a labels file the app reads has a text for it: the preview serves the package's labels,
-    and on a server the app registry does, once the package contributes its app, which the
-    generators do not write yet. For a demo that needs headings today, add a literal `label`,
-    which wins.
+  - **Card headings from the labels.** The generators name each card with a `labelKey`, and a key
+    shows only where a labels file the app reads has a text for it: the preview serves the
+    package's labels, and on a server the app registry does, since the package contributes its
+    app. A literal `label` wins over the key.
   - **`document-link` shows the stored id,** and `image` and `file-list` a file's name, until each
     has its lookup.
   - **A record with a file or a note** (a `File`, a `Note`, or any type given the `file` or `note`

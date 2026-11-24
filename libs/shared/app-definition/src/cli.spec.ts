@@ -182,6 +182,25 @@ describe('app-definition validate', () => {
       );
     });
 
+    it('says an id that is a platform route, with no address, and passes it', () => {
+      const root = packageWith({ 'app.json': { ...app, id: 'contracts' } });
+      const { code, out } = run(['validate', root]);
+      expect(out).toContain(
+        `app.json: note: with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts`,
+      );
+      expect(out).toContain('1 file: 1 passed, 0 refused.');
+      expect(code).toBe(0);
+      const written = packageWith({
+        'app.json': { ...app, id: 'contracts', address: 'contracts' },
+      });
+      const refused = run(['validate', written]);
+      expect(refused.out).not.toContain('note:');
+      expect(refused.out).toContain(
+        `address: the address "contracts" is the platform's own page, /contracts: choose one no platform route has [structure]`,
+      );
+      expect(refused.code).toBe(1);
+    });
+
     it("holds app.json's range to --platform", () => {
       const root = packageWith({ 'app.json': app });
       expect(run(['validate', root, '--platform', '0.5.0']).code).toBe(0);
