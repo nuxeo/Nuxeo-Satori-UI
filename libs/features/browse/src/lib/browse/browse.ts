@@ -1382,7 +1382,11 @@ export class BrowseComponent {
 
   // ── Files dropped on the list ──
 
-  /** Uploads files dropped on the list into the folder on screen, as Create / Import's do. */
+  /**
+   * Uploads files dropped on the list into the folder on screen, each as a `File`
+   * (`importFiles`). Create / Import's plain Create now starts each file as a type the folder
+   * allows; this path does not yet.
+   */
   uploadDropped(files: readonly File[]): void {
     const folder = this.currentDoc();
     if (!folder || !this.canCreateContentHere()) return;

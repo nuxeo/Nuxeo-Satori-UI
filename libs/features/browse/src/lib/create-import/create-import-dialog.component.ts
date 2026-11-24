@@ -282,9 +282,10 @@ export class CreateImportDialogComponent implements OnInit {
   });
 
   /**
-   * Import's properties step cannot yet choose each file's starting type: this folder allows none
-   * of the stock four, and the content model that names the types extending them has not
-   * answered. Where a stock type is allowed, files start as one and do not wait.
+   * The Import tab cannot yet choose each file's starting type, for plain Create or Add
+   * properties: this folder allows none of the stock four, and the content model that names the
+   * types extending them has not answered. Where a stock type is allowed, files start as one and
+   * do not wait.
    */
   readonly importTypesUnsettled = computed(
     () =>
@@ -423,12 +424,59 @@ export class CreateImportDialogComponent implements OnInit {
   readonly importBlobTypeNames = computed(() => this.importBlobTypeOptions().map((dt) => dt.type));
 
   /**
-   * Import's properties step has no type to start the files as: this folder allows none that
-   * keeps a main file — one that takes only Workspace and Folder, say. Each file would otherwise
-   * start as `File`, `resolveImportBlobDocType`'s fallback, which the folder does not allow, so
-   * Add properties stays disabled and `startImportProperties` does nothing.
+   * The Import tab has no type to start the files as: this folder allows none that keeps a main
+   * file — a Section, or one that takes only Workspace and Folder. Each file would otherwise start
+   * as `File`, `resolveImportBlobDocType`'s fallback, which the folder does not allow. Nuxeo does
+   * not refuse it either: measured on the local server, a `File` posted into a Section or into
+   * WorkspaceRoot is created. So `importTypesUnavailable` disables plain Create and Add properties.
+   * The properties step's own Create does not yet recheck its files' types against a location
+   * changed on that step.
    */
   readonly noImportBlobTypes = computed(() => this.importBlobTypeNames().length === 0);
+
+  /**
+   * Plain Create and Add properties both wait while the staged files cannot be given a type the
+   * folder allows: its allowed types are loading (after a location change, the previous folder's
+   * are still held), the content model has not answered (`importTypesUnsettled`), or it allows
+   * none that keeps a main file (`noImportBlobTypes`).
+   */
+  readonly importTypesUnavailable = computed(
+    () => this.loadingContext() || this.importTypesUnsettled() || this.noImportBlobTypes(),
+  );
+
+  /**
+   * The Import tab says why Create is disabled: this folder allows no type that keeps a main file.
+   * Not while its types or the content model are still loading, and not when the folder's types
+   * could not be read, which `typesLoadError` says instead.
+   */
+  readonly importAllowsNoFiles = computed(
+    () =>
+      this.noImportBlobTypes() &&
+      !this.loadingContext() &&
+      !this.importTypesUnsettled() &&
+      !this.typesLoadError() &&
+      !this.contentModelRefused(),
+  );
+
+  /**
+   * The server refused the content model, so only the four stock names count, and a folder that
+   * allows only a type extending one looks as if it allowed none. The dialog cannot tell which,
+   * so the Import tab says the types could not be read rather than that the folder takes no file.
+   * Reopening the dialog reads the content model again: `ContentModelService` does not keep a
+   * refusal.
+   */
+  readonly importTypesUnreadable = computed(
+    () =>
+      this.noImportBlobTypes() &&
+      !this.loadingContext() &&
+      !this.typesLoadError() &&
+      this.contentModelRefused(),
+  );
+
+  /** The content model's read failed: `answeredContentModel` fell back to `NO_CONTENT_MODEL`. */
+  private readonly contentModelRefused = computed(
+    () => this.answeredContentModel() === NO_CONTENT_MODEL,
+  );
 
   /**
    * Dublin Core metadata fields for blob-holding import types: File, Picture, Audio, Video and
@@ -614,6 +662,13 @@ export class CreateImportDialogComponent implements OnInit {
     const raw = this.locationInput.trim();
     if (!raw) return;
     const normalized = this.normalizePath(raw);
+    // The same location again, after its types could not be read: read them again. Setting the
+    // path to the value it already holds changes nothing, so the effect that reads them would not
+    // run, and the Import tab's Create, which waits for them, would stay disabled until the dialog
+    // was reopened.
+    if (normalized === this.parentPath() && this.typesLoadError()) {
+      this.loadFolderContext(normalized);
+    }
     this.parentPath.set(normalized);
     this.locationInput = normalized;
     this.locationDropdownOpen.set(false);
@@ -1065,11 +1120,12 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   /**
-   * The type a staged file starts as. `resolveImportBlobDocType` infers one of the stock types
-   * from the MIME type and falls back to `File`, which is right whenever this folder allows a
-   * stock type. Where it allows only a type that extends one — a folder that takes
-   * `RentalContract` and not `File` — that fallback names a type the server would refuse, so
-   * the first allowed blob type is used instead.
+   * The type a staged file starts as, for plain Create and Add properties alike.
+   * `resolveImportBlobDocType` infers one of the stock types from the MIME type and falls back to
+   * `File`, which is right whenever this folder allows a stock type. Where it allows only a type
+   * that extends one — a folder that takes `RentalContract` and not `File` — that fallback names
+   * a type the folder does not allow, so the first allowed blob type is used instead. The caller
+   * never reaches here with no allowed type: `importTypesUnavailable` stops it first.
    */
   private importDocTypeFor(file: File, allowedTypes: readonly string[]): string {
     const resolved = resolveImportBlobDocType(file, allowedTypes);
@@ -1079,7 +1135,7 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   startImportProperties(): void {
-    if (this.importRestricted() || this.importTypesUnsettled() || this.noImportBlobTypes()) return;
+    if (this.importRestricted() || this.importTypesUnavailable()) return;
     const files = this.uploads.pending();
     if (files.length === 0) return;
 
@@ -1559,20 +1615,36 @@ export class CreateImportDialogComponent implements OnInit {
   /**
    * Uploads the pending files in one batch, each file followed in the queue. A failure keeps the
    * files already created, says which one was refused, and leaves it and the rest for another try.
+   *
+   * Each file starts as Add properties would start it (`importDocTypeFor`): the stock type its
+   * MIME type suggests if the folder allows it, else the first allowed type that keeps a main
+   * file. `DocumentImportService.importFiles` would send `File` whatever the folder allows, and
+   * Nuxeo creates it anyway, so this resolves the type here and calls `importFilesWithProperties`.
    */
   runUpload(): void {
+    const folderBeforeCommit = this.parentPath();
     this.commitLocationInput();
-    if (this.importRestricted()) return;
+    if (this.importRestricted() || this.importTypesUnavailable()) return;
+    // A location typed and not yet committed — the blur commits it only after a delay. Its
+    // folder's types have not been read, so the files would start as types the previous folder
+    // allows. Stop here; Create is offered again once the new folder's types load.
+    if (this.parentPath() !== folderBeforeCommit) return;
     const path = this.parentPath();
     const files = this.uploads.pending();
     if (!path || files.length === 0) return;
+    const allowedTypes = this.importBlobTypeNames();
+    const entries: ImportFileEntry[] = files.map((file) => ({
+      file,
+      docType: this.importDocTypeFor(file, allowedTypes),
+      properties: { 'dc:title': titleFromFileName(file.name) },
+    }));
     this.busy.set(true);
     this.error.set(null);
     this.importError.set(null);
     this.uploadProgress.set(null);
     this.uploads.start();
     this.importService
-      .importFiles(path, files, {
+      .importFilesWithProperties(path, entries, {
         onProgress: (progress) => {
           this.uploadProgress.set(progress);
           this.uploads.progress(progress);

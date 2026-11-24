@@ -765,6 +765,7 @@
       "expires": "Expires",
       "file-import-is-not-available-at": "File import is not available at the repository root. Create a domain first, or",
       "files-to-import": "Files to import",
+      "folder-allows-no-file-types": "Files cannot be imported here, because this location allows no document type that holds a file. Choose another location.",
       "format": "Format",
       "import": "Import",
       "loading": "Loading",

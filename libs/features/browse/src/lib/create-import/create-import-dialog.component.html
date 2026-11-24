@@ -187,6 +187,17 @@
               </p>
             } @else {
               <div class="import-tab-panel">
+                @if (importAllowsNoFiles()) {
+                  <p class="empty-hint import-no-file-types">
+                    {{ 'browse.create-import-dialog.folder-allows-no-file-types' | translate }}
+                  </p>
+                } @else if (typesLoadError()) {
+                  <p class="error-text types-error">{{ typesLoadError() }}</p>
+                } @else if (importTypesUnreadable()) {
+                  <p class="error-text types-error import-types-unreadable">
+                    {{ 'browse.create-import.types-load-failed' | translate }}
+                  </p>
+                }
                 <nxs-dropzone
                   class="import-dropzone"
                   multiple
@@ -774,7 +785,7 @@
           mat-stroked-button
           type="button"
           class="btn-add-properties"
-          [disabled]="busy() || importRestricted() || importTypesUnsettled() || noImportBlobTypes()"
+          [disabled]="busy() || importRestricted() || importTypesUnavailable()"
           (click)="startImportProperties()"
         >
           {{ 'browse.create-import-dialog.add-properties' | translate }}
@@ -783,7 +794,7 @@
           mat-flat-button
           color="primary"
           type="button"
-          [disabled]="busy() || importRestricted()"
+          [disabled]="busy() || importRestricted() || importTypesUnavailable()"
           (click)="runUpload()"
         >
           {{ 'browse.create-import-dialog.create' | translate }}
