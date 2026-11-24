@@ -1,7 +1,10 @@
+import { MAX_NESTING } from '@agentic-ui/shared/app-definition';
+
 import {
   chainTable,
   decideCondition,
   parseExpression,
+  readsPermissions,
   rulePasses,
   truthTable,
   webUiPasses,
@@ -409,5 +412,40 @@ describe('the truth tables', () => {
     expect(
       rulePasses({ type: 'core.not', parameters: ['core.false', 'core.true'] }, situationOf),
     ).toBe(false);
+  });
+
+  describe('a rule nested deeper than the validator reads', () => {
+    // A conversion `check` reads may have been edited by hand, and JSON can nest further than a
+    // recursive walk has stack for. Each walk of a rule stops at MAX_NESTING levels, as the
+    // validator's do, and the table says it cannot read the rule rather than overflowing.
+    const isFile = { type: 'app.rules.isType', parameters: ['File'] };
+    const nested = (levels: number, inner: unknown = isFile): unknown => {
+      let rule: unknown = inner;
+      // Each core.every is one level, and the innermost rule one more.
+      for (let index = 0; index < levels - 1; index++)
+        rule = { type: 'core.every', parameters: [rule] };
+      return rule;
+    };
+    const condition = filter({ type: 'File' });
+    const file = situation({ type: 'File' });
+
+    it('is unreadable, rather than overflowing the stack', () => {
+      const deep = nested(6000);
+      expect(truthTable(condition, deep).unreadable).toBe(true);
+      expect(chainTable([condition, filter({ state: 'project' }, 1)], deep).unreadable).toBe(true);
+      expect(rulePasses(deep, file)).toBeNull();
+      expect(readsPermissions(nested(6000, 'app.rules.canWrite'))).toBe(false);
+    });
+
+    it('is read as deep as the limit, and not one level deeper', () => {
+      const atLimit = nested(MAX_NESTING);
+      expect(truthTable(condition, atLimit)).toMatchObject({ unreadable: false, disagree: [] });
+      expect(rulePasses(atLimit, file)).toBe(true);
+      expect(readsPermissions(nested(MAX_NESTING, 'app.rules.canWrite'))).toBe(true);
+      const past = nested(MAX_NESTING + 1);
+      expect(truthTable(condition, past).unreadable).toBe(true);
+      expect(rulePasses(past, file)).toBeNull();
+      expect(readsPermissions(nested(MAX_NESTING + 1, 'app.rules.canWrite'))).toBe(false);
+    });
   });
 });

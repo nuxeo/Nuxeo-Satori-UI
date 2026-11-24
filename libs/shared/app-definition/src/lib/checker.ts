@@ -20,7 +20,8 @@ export interface Finding {
    * `structure`: not version 2's shape.
    * `unknown`: it names a widget, computation, check, rule, action, module or key nobody
    * registered, or something the package, or the content model it was given, does not have.
-   * `parameter`: a registered ID with parameters it does not take.
+   * `parameter`: a registered ID with parameters it does not take, a property where no record is
+   * open, or rules, computations or fields nested deeper than {@link MAX_NESTING}.
    *
    * What the app does with each, file by file, is in app-definition-v2.md, section 12.
    */
@@ -59,6 +60,16 @@ export function isLiteral(value: unknown): value is string | number | boolean {
 }
 
 /**
+ * A value as a message shows it: a literal or `null` as JSON, a list as `[…]` and an object as
+ * `{…}`. Writing either out whole would be a second walk of it, as deep as the file nests it, and a
+ * message as long as the file.
+ */
+export function shown(value: unknown): string {
+  if (value === null || isLiteral(value)) return JSON.stringify(value);
+  return Array.isArray(value) ? '[…]' : '{…}';
+}
+
+/**
  * The checks every file starts with: an object, in version 2. Returns the findings that stop the
  * file being read further, or `null` when it may be.
  */
@@ -70,7 +81,7 @@ export function unreadable(content: unknown, what: string): Finding[] | null {
       {
         path: 'version',
         kind: 'structure',
-        message: `version must be 2, not ${JSON.stringify(content['version'] ?? null)}`,
+        message: `version must be 2, not ${shown(content['version'] ?? null)}`,
       },
     ];
   }
@@ -90,6 +101,16 @@ export interface CheckerOptions {
 /** The name of a Material Symbols icon, such as `check`. */
 export const ICON = /^[a-z0-9_]{1,64}$/;
 
+/**
+ * How many levels of rules, computations, a customer's rule's parameters and fields (a table's
+ * columns are fields, which may be tables) the validator reads, the outermost being the first.
+ * JSON can nest further than a recursive walk has stack for, so past this a walk stops with a
+ * `parameter` finding: the entry it is in is left out, or the package refused, rather than the
+ * check overflowing its stack. Far above what any file needs, and
+ * above the 32 levels the rule registry answers, which the engines enforce on their own.
+ */
+export const MAX_NESTING = 256;
+
 export type Checker = ReturnType<typeof createChecker>;
 
 /** One file's findings, and the checks that add to them. */
@@ -99,6 +120,29 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   const findings: Finding[] = [];
   const add = (path: string, kind: Finding['kind'], message: string): void => {
     findings.push({ path, kind, message });
+  };
+
+  /** How deep the walk is in rules, computations, a customer's rule's parameters and fields. */
+  let depth = 0;
+  /**
+   * `walk` one level deeper, or, past {@link MAX_NESTING}, a finding instead. The level is given
+   * back however `walk` ends.
+   */
+  const nested = (path: string, walk: () => void): void => {
+    if (depth >= MAX_NESTING) {
+      add(
+        path,
+        'parameter',
+        `nests more than ${MAX_NESTING} levels deep, deeper than the validator reads`,
+      );
+      return;
+    }
+    depth++;
+    try {
+      walk();
+    } finally {
+      depth--;
+    }
   };
 
   const ids = new Map<string, string>();
@@ -155,7 +199,9 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   };
 
   /** A rule, as the manifest writes it: an ID, or `{ "type", "parameters" }`. */
-  const rule = (item: unknown, path: string): void => {
+  const rule = (item: unknown, path: string): void => nested(path, () => ruleAt(item, path));
+
+  const ruleAt = (item: unknown, path: string): void => {
     const [type, parameters] =
       typeof item === 'string'
         ? [item, []]
@@ -182,13 +228,17 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
   };
 
   /**
-   * The parameters of a customer's own rule, at any depth, which this library cannot type. A
+   * The parameters of a customer's own rule, as deep as {@link MAX_NESTING}, which this library
+   * cannot type. A
    * customer's composite may resolve a rule among them, as `core.every` does, so a `{ "type" }`
    * naming a registered rule is checked as one, its signature included. Where no record is open,
    * a `{ "field" }` is refused. Anything else is the customer's to read: a text is a value, such
    * as a group, not a rule's id.
    */
-  const inCustomerRule = (item: unknown, path: string): void => {
+  const inCustomerRule = (item: unknown, path: string): void =>
+    nested(path, () => inCustomerRuleAt(item, path));
+
+  const inCustomerRuleAt = (item: unknown, path: string): void => {
     if (isFieldReference(item)) {
       if (!record)
         add(
@@ -301,7 +351,10 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     });
   };
 
-  const computation = (item: unknown, path: string): void => {
+  const computation = (item: unknown, path: string): void =>
+    nested(path, () => computationAt(item, path));
+
+  const computationAt = (item: unknown, path: string): void => {
     if (!isRecord(item) || typeof item['type'] !== 'string') {
       add(path, 'structure', 'a computation is { "type": <ID>, "parameters": [...] }');
       return;
@@ -399,7 +452,10 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
    * A field entry: a property as `<prefix>:<name>`, or an object. `form` is a form's field, where
    * `inForm` says whether the form keys may be used: a table's columns in a form may not.
    */
-  const field = (entry: unknown, path: string, form: boolean, inForm = form): void => {
+  const field = (entry: unknown, path: string, form: boolean, inForm = form): void =>
+    nested(path, () => fieldAt(entry, path, form, inForm));
+
+  const fieldAt = (entry: unknown, path: string, form: boolean, inForm: boolean): void => {
     if (typeof entry === 'string') {
       if (!XPATH.test(entry))
         add(path, 'structure', `"${entry}" is not a property, <prefix>:<name>`);
@@ -484,11 +540,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     }
     item.forEach((action, index) => {
       if (typeof action !== 'string' || !known.has(action)) {
-        add(
-          join(path, index),
-          'unknown',
-          `the ${what} ${JSON.stringify(action)} is not registered`,
-        );
+        add(join(path, index), 'unknown', `the ${what} ${shown(action)} is not registered`);
       }
     });
   };

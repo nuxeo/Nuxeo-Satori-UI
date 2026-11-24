@@ -8,6 +8,7 @@
  * here: the pipeline checks them when the package is built.
  */
 import {
+  MAX_NESTING,
   PACKAGED_REGISTRIES,
   validateHome,
   withRegistered,
@@ -96,6 +97,8 @@ export function refusedRule(
     return `nests its rule more than ${MAX_RULE_LEVELS} levels deep, deeper than this build answers`;
   if (!isRecord(rule) || !Array.isArray(rule['parameters'])) return null;
   const nested = COMPOSITES.has(id) ? rule['parameters'] : rulesIn(rule['parameters']);
+  if (nested === null)
+    return `nests its parameters more than ${MAX_NESTING} levels deep, deeper than this build reads`;
   for (const inner of nested) {
     const refused = refusedRule(inner, isRegistered, level + 1);
     if (refused) return refused;
@@ -103,12 +106,26 @@ export function refusedRule(
   return null;
 }
 
-/** Every `{ "type" }` in `value`, at any depth, not looking inside one it finds. */
-function rulesIn(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value.flatMap(rulesIn);
-  if (!isRecord(value)) return [];
-  if (typeof value['type'] === 'string') return [value];
-  return Object.values(value).flatMap(rulesIn);
+/**
+ * Every `{ "type" }` in `value`, not looking inside one it finds; `null` when `value` nests deeper
+ * than {@link MAX_NESTING}. The validator refuses such a card first, so through `readHome` none
+ * gets here; the bound keeps this function safe on its own.
+ */
+function rulesIn(value: unknown, depth = 1): unknown[] | null {
+  if (depth > MAX_NESTING) return null;
+  const inner = Array.isArray(value)
+    ? value
+    : isRecord(value) && typeof value['type'] !== 'string'
+      ? Object.values(value)
+      : null;
+  if (inner === null) return isRecord(value) ? [value] : [];
+  const found: unknown[] = [];
+  for (const item of inner) {
+    const rules = rulesIn(item, depth + 1);
+    if (rules === null) return null;
+    found.push(...rules);
+  }
+  return found;
 }
 
 /**

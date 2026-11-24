@@ -703,6 +703,10 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 - **A settings file for a module the app does not turn on** is never read, so it refuses nothing
   when the app loads.
 - **The menu's row** is what the app does: a refused file leaves the platform's menu alone.
+- **Nesting.** The validator reads rules, computations, a customer's rule's parameters and fields
+  (a table's columns are fields, and may be tables) 256 levels deep, in every file, layouts
+  included. Deeper is a `parameter` finding, so that a file
+  nested further than a check has stack for is refused or left out rather than crashing the check.
 
 ## 13. Not settled here
 

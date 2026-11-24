@@ -46,6 +46,8 @@
  * proves the mapping against the two sources as written. The other half evaluates the original
  * in Web UI itself, on the migration server, and has not run.
  */
+import { MAX_NESTING } from '@agentic-ui/shared/app-definition';
+
 import type { Condition } from './inventory';
 import { own } from './catalogue';
 
@@ -85,14 +87,19 @@ export const TASK_PERMISSIONS =
 /** The registered rules that read the record's permissions. */
 const PERMISSION_RULE_IDS = new Set(PERMISSION_RULES.map(([, rule]) => rule));
 
-/** True when a rule, or one it joins, reads the record's permissions. */
-export function readsPermissions(rule: unknown): boolean {
+/**
+ * True when a rule, or one it joins, reads the record's permissions. A rule is read as deep as
+ * {@link MAX_NESTING} levels, the rule itself being the first, as the validator reads it: one
+ * nested further reads none here, and its truth table cannot be read (`rulePasses`).
+ */
+export function readsPermissions(rule: unknown, level = 1): boolean {
+  if (level > MAX_NESTING) return false;
   if (typeof rule === 'string') return PERMISSION_RULE_IDS.has(rule);
   if (typeof rule !== 'object' || rule === null) return false;
   const { type, parameters } = rule as { type?: unknown; parameters?: unknown };
   return (
     (typeof type === 'string' && PERMISSION_RULE_IDS.has(type)) ||
-    (Array.isArray(parameters) && parameters.some(readsPermissions))
+    (Array.isArray(parameters) && parameters.some((inner) => readsPermissions(inner, level + 1)))
   );
 }
 
@@ -461,8 +468,13 @@ function webUiExpression(source: string, situation: Situation, bare: boolean): b
   return or ? results.some(Boolean) : results.every(Boolean);
 }
 
-/** The app's reading of a rule: the registered rules' evaluators, for the rules M2 writes. */
-export function rulePasses(rule: unknown, situation: Situation): boolean | null {
+/**
+ * The app's reading of a rule: the registered rules' evaluators, for the rules M2 writes. `null`,
+ * as for a rule it does not know, for one nested deeper than {@link MAX_NESTING} levels, the rule
+ * itself being the first: JSON can nest further than this walk has stack for.
+ */
+export function rulePasses(rule: unknown, situation: Situation, level = 1): boolean | null {
+  if (level > MAX_NESTING) return null;
   if (typeof rule === 'string') {
     switch (rule) {
       case 'core.true':
@@ -503,7 +515,7 @@ export function rulePasses(rule: unknown, situation: Situation): boolean | null 
     case 'core.every':
     case 'core.some':
     case 'core.not': {
-      const results = list.map((inner) => rulePasses(inner, situation));
+      const results = list.map((inner) => rulePasses(inner, situation, level + 1));
       if (results.includes(null)) return null;
       if (type === 'core.every') return results.every(Boolean);
       if (type === 'core.some') return results.some(Boolean);
@@ -511,7 +523,7 @@ export function rulePasses(rule: unknown, situation: Situation): boolean | null 
       return results.every((result) => !result);
     }
     default:
-      return rulePasses(type, situation);
+      return rulePasses(type, situation, level);
   }
 }
 
@@ -661,7 +673,11 @@ interface RuleValues {
 
 const NO_VALUES: RuleValues = { types: [], facets: [], states: [], groups: [], permissions: [] };
 
-/** The values a rule names, at any depth, each in the dimension its rule tests. */
+/**
+ * The values a rule names, as deep as {@link MAX_NESTING} levels, each in the dimension its rule
+ * tests. A rule nested further is one `rulePasses` cannot read, so its table is unreadable whatever
+ * values are found here.
+ */
 function literalsOf(rule: unknown): RuleValues {
   const found = {
     types: [] as string[],
@@ -670,7 +686,8 @@ function literalsOf(rule: unknown): RuleValues {
     groups: [] as string[],
     permissions: [] as string[],
   };
-  const visit = (value: unknown): void => {
+  const visit = (value: unknown, level: number): void => {
+    if (level > MAX_NESTING) return;
     // A permission rule, by its id: its permissions are rows of the table too.
     if (typeof value === 'string') {
       for (const [permissions, id] of PERMISSION_RULES)
@@ -682,14 +699,14 @@ function literalsOf(rule: unknown): RuleValues {
     const list = Array.isArray(parameters) ? parameters : [];
     const texts = list.filter((item): item is string => typeof item === 'string');
     // A permission rule written as an object, `{ "type": "app.rules.canWrite" }`, is the same rule.
-    if (typeof type === 'string') visit(type);
+    if (typeof type === 'string') visit(type, level);
     if (type === 'app.rules.isType') found.types.push(...texts);
     else if (type === 'app.rules.hasFacet') found.facets.push(...texts);
     else if (type === 'app.rules.inState') found.states.push(...texts);
     else if (type === 'app.rules.inGroup') found.groups.push(...texts);
-    else list.forEach(visit);
+    else list.forEach((inner) => visit(inner, level + 1));
   };
-  visit(rule);
+  visit(rule, 1);
   return found;
 }
 
