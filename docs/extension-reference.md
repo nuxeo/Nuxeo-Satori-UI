@@ -1589,9 +1589,12 @@ modes:
   any of its sub-fields is filled in, so its untouched sub-fields go empty — `false` for a
   checkbox — rather than to their server defaults. The dialog keeps what is not a property field:
   the location, the main file of a File, Picture, Audio or Video, and a Note's format. A type that
-  extends File, Picture, Audio or Video, or carries the `file` schema itself, gets the same
-  main-file field, and Import offers it for files; the dialog reads the type's ancestry from
-  Nuxeo's content model (`/config/types`). The import wizard's properties step is not this form.
+  extends File, Picture, Audio or Video, or carries the `file` schema itself or through a facet it
+  or an ancestor declares, gets the same main-file field, and Import offers it for files — unless
+  it is folderish (`Folderish`, its own or an ancestor's) and extends none of the four: Workspace
+  and Section carry `file` for their own use, and get no main-file field. The dialog reads the
+  type's ancestry and facets from Nuxeo's content model (`/config/types`), and what each facet
+  contributes from `/config/facets`. The import wizard's properties step is not this form.
 
 To replace the whole Properties section or form with a component of your own rather than a list
 of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
@@ -1715,26 +1718,47 @@ In an `edit` or `create` form, the schema type picks the control:
 | `complex[]`                        | one group per item, with Add and Remove                                                     |
 | `blob`, or `complex` nested deeper | shown, not editable                                                                         |
 
-**A `date` field edits a calendar day, and that day is anchored in UTC.** A day picked or typed is
-sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever zone
-the user is in — and a stored value is read back as the day it names in UTC, so the form opens on
-the day that was saved everywhere. This is the same anchoring the view uses for a stored day
-(above) and the same one Nuxeo itself applies to a day-only write, so one picked day is one stored
-value and every surface showing it agrees.
+**A `date` field edits a calendar day, and opens on the day the view shows.** A day picked or typed
+is sent as that day at UTC midnight — 6 March 2024 is always `2024-03-06T00:00:00.000Z`, whatever
+zone the user is in — which is the same anchoring Nuxeo itself applies to a day-only write, so one
+picked day is one stored value. A value is opened by the rule the view formats it by (above): a
+stored day on the day it names in UTC, so the form opens on the day that was saved everywhere, and
+any other instant on the reader's own day. The form and the view therefore name the same day for
+every value, including the one the view misreads: an instant at exactly midnight UTC opens, as it
+is shown, on its UTC day. Until 2026-11-23 the form opened every value on its UTC day, so at +05:30
+`2026-11-23T20:00:00Z` was shown as 24 November and opened in the form as 23 November.
 
-Two consequences worth designing around:
+Three consequences worth designing around:
 
 - A `date` property that carries a meaningful time of day is **not** a calendar day, and the form
-  does not treat it as one beyond its day: it is edited by day, and written back unchanged — time
-  of day included — as long as the day is not altered. Alter the day and the time is replaced by
-  UTC midnight. The form opens such a value on its UTC day while the view shows it on the reader's
-  day, so where those differ the two name different days: at +05:30, `2026-11-23T20:00:00Z` is
-  shown as 24 November and opens in the form as 23 November.
+  does not treat it as one beyond its day: it opens on the reader's day, and is written back
+  unchanged — time of day included — as long as that day is not altered. Alter the day and the
+  time is replaced by UTC midnight, so the value is a stored day from then on.
 - A value written by another client at midnight in a local zone (Nuxeo Web UI does this) is not at
-  midnight UTC, so it is shown as an instant: on the day that was picked to a reader in the
-  writer's zone, and, when that zone is ahead of UTC, on the previous day to a reader in UTC or
-  west of it. The form opens it on its UTC day, which for a zone ahead of UTC is the previous day.
-  Nothing records the zone it was written in, so it cannot be recovered.
+  midnight UTC, so it is shown and opened as an instant: on the day that was picked by a reader in
+  the writer's zone, and, when that zone is ahead of UTC, on the previous day by a reader in UTC or
+  west of it. Nothing records the zone it was written in, so it cannot be recovered.
+- **`dc:expired` is read two ways, and they can name different days.** The Edit dialog's Expires
+  field follows the rule above, as does the row of a `metadata` layout that lists `dc:expired`.
+  Every other reader of `dc:expired` opens or formats it on its UTC
+  day, whatever it holds:
+  - the Properties panel's packaged Expires row (`properties-panel.component.html`);
+  - the edit dialogs of a collection and of Browse (`calendarDayOf` in `shared/ui/…/calendar-day.ts`
+    and `browse/…/calendar-day.ts`);
+  - the navigation drawer's Expired queue label (`drawerExpiredLabel`, `apps/nuxeo-ui`);
+  - the version comparison (`formatCompareDate`, `nuxeo-client`).
+
+  The Expired queue's NXQL compares the stored instant with the current time, so it names no day.
+  For a stored day every reader agrees: `2024-03-06T00:00:00.000Z` is 6 March on all of them, in
+  every zone. For a `dc:expired` that is not one, they disagree. 6 March picked in Web UI at +05:30
+  is stored as its local midnight, `2024-03-05T18:30:00.000Z`. To a reader at +05:30, the Edit
+  dialog opens it as 6 March, while the Expires row, both edit dialogs, the Expired queue and the
+  comparison show 5 March. Every day picked in this application is written as a stored day, so the
+  difference is confined to values another client wrote and to values this application anchored
+  locally before NXSAT-727. Closing it means one rule for every reader: a single
+  `isStoredCalendarDay` exported from `@nuxeo/satori-platform/components` for all of them to use.
+  That is a published-API decision, deferred rather than rejected, and until it is taken these
+  readers stay as they are.
 
 **Validation before saving.** Save checks the schema's constraints in the browser first: a
 required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`

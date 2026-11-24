@@ -187,6 +187,7 @@
               </p>
             } @else {
               <div class="import-tab-panel">
+                <ng-container *ngTemplateOutlet="importTypesReason" />
                 <nxs-dropzone
                   class="import-dropzone"
                   multiple
@@ -497,6 +498,15 @@
                 </div>
               </div>
 
+              <!-- Why Create is disabled after the Location above moved the files, as on the Import tab. -->
+              @if (importRestricted()) {
+                <p class="empty-hint import-location-restricted">
+                  {{ importLocationHint() | translate }}
+                </p>
+              } @else {
+                <ng-container *ngTemplateOutlet="importTypesReason" />
+              }
+
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
                 <mat-label>{{ 'browse.create-import-dialog.type' | translate }}</mat-label>
                 <mat-select
@@ -774,7 +784,7 @@
           mat-stroked-button
           type="button"
           class="btn-add-properties"
-          [disabled]="busy() || importRestricted() || importTypesUnsettled()"
+          [disabled]="busy() || importRestricted() || importTypesUnavailable()"
           (click)="startImportProperties()"
         >
           {{ 'browse.create-import-dialog.add-properties' | translate }}
@@ -783,7 +793,7 @@
           mat-flat-button
           color="primary"
           type="button"
-          [disabled]="busy() || importRestricted()"
+          [disabled]="busy() || importRestricted() || importTypesUnavailable()"
           (click)="runUpload()"
         >
           {{ 'browse.create-import-dialog.create' | translate }}
@@ -825,7 +835,7 @@
           mat-flat-button
           color="primary"
           type="button"
-          [disabled]="busy() || !canCreateImportWithProperties()"
+          [disabled]="busy() || importPropertiesTypesBlocked() || !canCreateImportWithProperties()"
           (click)="runImportWithProperties()"
         >
           {{ 'browse.create-import-dialog.create' | translate }}
@@ -844,6 +854,25 @@
     </mat-dialog-actions>
   }
 </div>
+
+<!--
+  Why the Import tab's Create and Add properties, and the properties step's Create, are disabled:
+  this location allows no type that keeps a main file, its types could not be read, or the content
+  model was refused. Nothing while they load.
+-->
+<ng-template #importTypesReason>
+  @if (importAllowsNoFiles()) {
+    <p class="empty-hint import-no-file-types">
+      {{ 'browse.create-import-dialog.folder-allows-no-file-types' | translate }}
+    </p>
+  } @else if (typesLoadError()) {
+    <p class="error-text types-error">{{ typesLoadError() }}</p>
+  } @else if (importTypesUnreadable()) {
+    <p class="error-text types-error import-types-unreadable">
+      {{ 'browse.create-import.types-load-failed' | translate }}
+    </p>
+  }
+</ng-template>
 
 <ng-template #natureChip>
   @if (nature) {

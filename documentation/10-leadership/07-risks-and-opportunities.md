@@ -43,12 +43,17 @@ benefit claim in the product documentation is mechanical rather than observed.
 ### C3 · Accessibility — NOT MET as of 2026-11-23
 
 **It was closed on 2026-08-24, reopened on 2026-09-23, and is not met as of 2026-11-23.**
-`phase-6-a11y/2026-11-23T08-09-11`, captured on `main`, fails 15 of 35 checks. Fourteen are one
-WCAG 2.5.3 (Label in Name, Level A) defect that fails on every screen. With the navigation rail
-collapsed, the user-profile control shows only the signed-in user's avatar initials, while its
-accessible name is the full display name, which does not contain them. A speech-input user who
-says what they see does not reach the control. The fifteenth is a 404 from the local environment,
+`phase-6-a11y/2026-11-23T08-09-11`, captured on `main`, failed 15 of 35 checks. Fourteen were one
+WCAG 2.5.3 (Label in Name, Level A) defect that failed on every screen. With the navigation rail
+collapsed, the user-profile control showed only the signed-in user's avatar initials, while its
+accessible name was the full display name, which did not contain them. A speech-input user who
+said what they saw did not reach the control. The fifteenth was a 404 from the local environment,
 not an accessibility finding. The September `button-name` failures do not reproduce.
+
+**The defect was fixed the same day, and the risk stays open.** The control's accessible name now
+starts with the initials it shows. The re-run, `phase-6-a11y/2026-11-23T18-53-44`, passes all 14
+axe checks. Its one failure is the Health check, on 404s that are not accessibility findings. That clears the capture, not the risk: `docs/accessibility.md` records failures in states
+the capture does not reach.
 
 **Where it comes from:** the control's content is ours. The shell projects the avatar into the
 upstream navigation component's profile button, which takes its accessible name from a label
