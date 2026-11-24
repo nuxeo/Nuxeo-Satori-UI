@@ -141,8 +141,12 @@ class DeploymentFragmentTest {
             names.add(plugins.item(i).getTextContent().trim());
         }
         // nuxeo-rest-api-server 2025.10.18, OSGI-INF/auth-contrib.xml, the RestAPI chain, as read
-        // from the server's jar. No form and no anonymous plugin: Nuxeo applies anonymous access,
-        // where a server switches it on, outside the chain, as it does for the REST API.
-        assertEquals(java.util.List.of("AUTOMATION_BASIC_AUTH", "TOKEN_AUTH", "OAUTH2_AUTH", "JWT_AUTH"), names);
+        // from the server's jar, then the default chain's anonymous plugin, last. No form: that
+        // would answer the application with a login page. Measured on the local server without
+        // ANONYMOUS_AUTH: a request with no credentials was 401 where the server's own
+        // anonymous-config.xml lets /api/v1/me answer Anonymous, and a 401 signs the app out.
+        assertEquals(java.util.List.of("AUTOMATION_BASIC_AUTH", "TOKEN_AUTH", "OAUTH2_AUTH", "JWT_AUTH",
+                "ANONYMOUS_AUTH"), names);
+        assertFalse(names.contains("FORM_AUTH"));
     }
 }

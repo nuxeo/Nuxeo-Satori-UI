@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 22 November 2026.
+Updated 24 November 2026.
 
 ## Open: from the plan
 
@@ -35,6 +35,32 @@ The letters of the [architecture's section 15](architecture.md).
 | G   | Tenancy for providers serving many client organisations               | Designed with the platform team                                               | Platform, engineering       | Phase 9        |
 | H   | The e-signature service, and the CAD and BIM viewer                   | Chosen with procurement and presales                                          | Procurement, presales       | Phases 7 and 8 |
 | I   | Protecting fields such as an insurance number                         | A platform decision, from the feasibility report                              | Platform                    | Phase 7        |
+
+### Notes: work built against an open decision's recommendation
+
+Each note records work that assumes a recommendation above before the decision is taken. A note
+changes no decision's status: the decision stays open, and its owner may still take it another
+way.
+
+- **B and E, the app registry's first version (24 November 2026).** Built against the
+  recommendations: `nuxeo-agentic-core` carries the registry, as a runtime essential (B), and it
+  serves app definitions after sign-in, to the groups each app's `app.json` names (E). Tenants are
+  phase 9's, so groups only. Seeing an app is not a security control: Nuxeo's permissions still
+  decide which records anyone reads. What changes if either goes another way:
+  - **B, the registry in an add-on of its own or a separate service:** the `<app>` element,
+    `AppRegistryEndpoint` and `AgenticUiAppsServlet` move together, out of
+    `nuxeo-agentic-core`. Every package's `<app>` then targets the new component and `<require>`s
+    it, and the pipeline's step 2 checks that target. A separate service needs
+    `/nuxeo/agentic-ui-apps/` routed to it, or the client's `APP_REGISTRY_PATH` changed. The
+    client's reads, `APP_DEFINITION_FILES`, stay as they are.
+  - **E, app definitions served before sign-in, to everyone:** the registry's path loses its
+    authentication filter and chain, and the group filter goes, so `groups` only decides what
+    "Switch app" offers, in the browser. The client could then read the registry with the
+    configuration, before sign-in, and the page would no longer reload when a sign-in changes the
+    app open. If tenants come with their own overlays (decision G), the registry's `Viewer` gains
+    the tenant and the listing filters by it too; the contribution and the client do not change.
+  - **Parity decision P4,** one global configuration, still conflicts with E as recommended:
+    the registry serves a configuration per app and group.
 
 ## From the Studio parity plan
 

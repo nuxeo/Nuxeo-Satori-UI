@@ -19,10 +19,16 @@
 
   <!--
     The app registry, /agentic-ui-apps/, is read by the application after sign-in, as the REST API
-    is, so it authenticates as the REST API does: the same replacement chain as its RestAPI chain
-    (nuxeo-rest-api-server, OSGI-INF/auth-contrib.xml), whose basic authenticator answers 401 when
-    a request does not authenticate, rather than the default chain's form, which would send the
-    application a login page. A session cookie still authenticates, as it does on the REST API.
+    is, so it authenticates as the REST API does: the RestAPI chain's plugins (nuxeo-rest-api-server,
+    OSGI-INF/auth-contrib.xml), whose basic authenticator answers 401 when a request does not
+    authenticate, rather than the default chain's form, which would send the application a login
+    page. A session cookie still authenticates, as it does on the REST API.
+
+    Then ANONYMOUS_AUTH, last, as the default chain has it. It does nothing on a server that defines
+    no anonymous user, where a request with no credentials stays 401. On one that defines one, such
+    a request is Anonymous, who is in no app's group, and gets an empty list rather than a 401: the
+    application's interceptor signs a session out on a 401, so a deployment that lets anonymous
+    visitors use the application would otherwise see them signed out by the registry.
   -->
   <extension point="specificChains"
              target="org.nuxeo.ecm.platform.ui.web.auth.service.PluggableAuthenticationService">
@@ -35,6 +41,7 @@
         <plugin>TOKEN_AUTH</plugin>
         <plugin>OAUTH2_AUTH</plugin>
         <plugin>JWT_AUTH</plugin>
+        <plugin>ANONYMOUS_AUTH</plugin>
       </replacementChain>
     </specificAuthenticationChain>
   </extension>

@@ -1,5 +1,12 @@
 import { DOCUMENT } from '@angular/common';
-import { HttpBackend, HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import {
+  HttpBackend,
+  HttpClient,
+  HttpContext,
+  HttpContextToken,
+  HttpErrorResponse,
+  HttpHeaders,
+} from '@angular/common/http';
 import { Injectable, InjectionToken, Injector, computed, inject, signal } from '@angular/core';
 import { APP_BOOTSTRAP_CONFIG_URL, AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
@@ -38,6 +45,17 @@ export const APP_REGISTRY_CHOICE_KEY = 'agentic-ui.app-registry.app';
  * that has expired is said by the app, not by the browser's own sign-in prompt.
  */
 const NO_PROMPT = new HttpHeaders({ 'X-No-Basic-Header': 'true' });
+
+/**
+ * Marks a request to the app registry, for the app's interceptor: a 401 from the registry must not
+ * sign the person out. The registry adds to what the app shows; it is not what decides whether a
+ * session is alive, and a server whose registry authenticates differently from its REST API, one
+ * that lets `Anonymous` use the REST API and not the registry, would otherwise end every anonymous
+ * session at startup. A session that has really expired is said by the next REST call.
+ */
+export const APP_REGISTRY_REQUEST = new HttpContextToken<boolean>(() => false);
+
+const REGISTRY_CONTEXT = (): HttpContext => new HttpContext().set(APP_REGISTRY_REQUEST, true);
 
 /**
  * The files of an app definition, as the engines read them: the home, the menu, a queue, a labels
@@ -240,7 +258,10 @@ export class AppRegistryService implements AppDefinitionFiles {
           app && app.files.includes(path)
             ? defer(() =>
                 this.http
-                  .get<unknown>(this.fileUrl(app, path), { headers: NO_PROMPT })
+                  .get<unknown>(this.fileUrl(app, path), {
+                    headers: NO_PROMPT,
+                    context: REGISTRY_CONTEXT(),
+                  })
                   .pipe(timeout(APP_REGISTRY_TIMEOUT_MS)),
               )
             : null;
@@ -273,7 +294,10 @@ export class AppRegistryService implements AppDefinitionFiles {
       await this.injector.get(AppConfigService).load();
       const raw = await firstValueFrom(
         this.http
-          .get<unknown>(`${this.origin()}${APP_REGISTRY_PATH}apps.json`, { headers: NO_PROMPT })
+          .get<unknown>(`${this.origin()}${APP_REGISTRY_PATH}apps.json`, {
+            headers: NO_PROMPT,
+            context: REGISTRY_CONTEXT(),
+          })
           .pipe(
             timeout(APP_REGISTRY_TIMEOUT_MS),
             catchError((error: unknown) => throwError(() => new Error(describe(error)))),

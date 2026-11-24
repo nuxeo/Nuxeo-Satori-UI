@@ -112,8 +112,8 @@ as dev mode would on a server:
    `--queue` for each queue, `--labels` for each language and `--task` for each task form. The
    script writes them into `apps/nuxeo-ui/public/agentic-ui-config/`, which git ignores, and
    **replaces what was served before**: one package is previewed at a time.
-3. **It says what it could not serve,** and why: `app.json`, which the app registry will read and
-   which waits on decisions B and E; `actions.json` and `modules/`, which nothing in the app reads
+3. **It says what it could not serve,** and why: `app.json`, which the app registry serves on a
+   server, not the development server; `actions.json` and `modules/`, which nothing in the app reads
    yet; `assets/`, which `config:dev` does not serve; version 1's fragments; and a file whose name
    the validator accepts and `config:dev` does not, such as labels for `es-419`, which would stop
    the script whole.

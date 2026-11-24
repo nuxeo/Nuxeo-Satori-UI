@@ -14,6 +14,7 @@ import {
   APP_DEFINITION_FILES,
   APP_REGISTRY_CHOICE_KEY,
   APP_REGISTRY_RELOAD,
+  APP_REGISTRY_REQUEST,
   APP_REGISTRY_STORAGE,
   AppRegistryService,
   chooseApp,
@@ -309,6 +310,35 @@ describe('APP_DEFINITION_FILES, where the app provides no registry', () => {
       status: 404,
     });
     expect(await firstValueFrom(files.labelLanguages())).toEqual([]);
+    http.verify();
+  });
+});
+
+describe('the app registry’s requests', () => {
+  it('are marked, so that the app’s interceptor does not end a session on their 401', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: `${DEV}bootstrap.json` },
+        { provide: NUXEO_API_ORIGIN, useValue: ORIGIN },
+        { provide: AppConfigService, useValue: { load: () => Promise.resolve() } },
+        { provide: APP_REGISTRY_STORAGE, useValue: null },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const registry = TestBed.inject(AppRegistryService);
+
+    const read = firstValueFrom(registry.file('home.json', null));
+    for (let i = 0; i < 5; i++) await turn();
+    const listing = http.expectOne(LISTING);
+    expect(listing.request.context.get(APP_REGISTRY_REQUEST)).toBe(true);
+    listing.flush(listed(['payers-claims', ['home.json']]));
+    await turn();
+    const file = http.expectOne(`${ORIGIN}/nuxeo/agentic-ui-apps/apps/payers-claims/home.json`);
+    expect(file.request.context.get(APP_REGISTRY_REQUEST)).toBe(true);
+    file.flush({});
+    await read;
     http.verify();
   });
 });

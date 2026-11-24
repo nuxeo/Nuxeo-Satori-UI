@@ -13,7 +13,7 @@
 
     Business apps are contributed here too, as app elements, and served by the app registry at
     /nuxeo/agentic-ui-apps/ after sign-in: apps.json lists the apps whose app.json names a group
-    the person is in, and apps/<id>/<path> serves each one's files. Seeing an app is not a
+    the person is in, and apps/{id}/{path} serves each one's files. Seeing an app is not a
     security control: Nuxeo's permissions still decide which records anyone reads.
   </documentation>
 
@@ -52,8 +52,8 @@
 
       An app's src is its app.json, whose id must be the app's and whose groups say who sees it.
       Each file is a path below the directory that holds app.json, at one of an app definition's
-      places: home.json, navigation.json, actions.json, queues/<id>.json, labels/<language>.json
-      and tasks/<workflow>.<step>.layout.json. A later app with the same id replaces it whole, and
+      places: home.json, navigation.json, actions.json, queues/{id}.json, labels/{language}.json
+      and tasks/{workflow}.{step}.layout.json. A later app with the same id replaces it whole, and
       enabled="false" removes it. An app.json that cannot be used refuses the app; any other file
       that cannot be read, is over 1 MiB or does not parse is left out on its own.
     </documentation>

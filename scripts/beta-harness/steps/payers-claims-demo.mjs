@@ -25,8 +25,8 @@
  * - The kit installed on the local Nuxeo, version 0.3.0 or later (its queue page providers), and
  *   seeded with `demo/seed.mjs`, which creates the demo's people.
  * - The dev server with `npm run config:dev` serving the kit's files (the kit's README, "Seeing
- *   it under nx serve"). The home, the menu, the queues and the labels are served in dev mode
- *   only, until the app registry.
+ *   it under nx serve"). A server's app registry serves the home, the menu, the queues and the
+ *   labels too, after sign-in, and the files `config:dev` serves win over it.
  * - **The run's own user is an adjuster, and only that:** `NUXEO_USER` one of `data.mjs`'s users
  *   whose one group is `claims-adjusters`, such as `dana.lee`, and `NUXEO_PASS` the demo password.
  *   Step 1 signs in as them. A supervisor's home has member services' cards too.

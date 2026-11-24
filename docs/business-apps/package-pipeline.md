@@ -30,11 +30,14 @@ It is a configuration package, as version 1 builds them
 generator's `build.mjs`. What is new is in `bundle/agentic-ui-config/`, the app definition's
 root: `app.json`, and the other files of [app-definition-v2.md](app-definition-v2.md), section 1.
 
-- **What a server reads from it today:** its layouts, which the component XML contributes as
-  version 1's are. A version 2 layout sits where version 1's does, and its view mode is new, so an
-  app that reads only version 1 never asks for it.
-- **What it carries for later:** `app.json`, the queues, actions and labels. Nothing contributes
-  them yet; the app registry in `nuxeo-agentic-core`, also phase 0's, will.
+- **What a server reads from it:** its layouts, which the component XML contributes as version 1's
+  are, and its app, which the component contributes to the app registry in `nuxeo-agentic-core`,
+  phase 0's: an `<app id src>` element naming its `app.json`, with a `<file path>` for each other
+  file of the app definition the registry serves (app-definition-v2.md, section 10). A version 2
+  layout sits where version 1's does, and its view mode is new, so an app that reads only version 1
+  never asks for it. The registry serves the app after sign-in, to the groups its `app.json` names.
+- **What it carries for later:** `modules/`, which the registry does not serve until a domain
+  module exists, and `actions.json`, which the registry serves and nothing in the app reads yet.
 - **No bootstrap fragment.** On a server that runs several apps, a bootstrap fragment would
   rebrand every one of them. An app's branding is in its `app.json`. The pipeline does not check
   this yet.
@@ -55,16 +58,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                                                       |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4)                                                    |
-| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8) |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                   |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                             |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`                                                 |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                           |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                         |
+| Step              | What is checked or done                                                                                                                                                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                                                                                 |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4); the component contributes the layouts and the app it read, and nothing else |
+| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8)                           |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                             |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                       |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`                                                                           |
+| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                     |
+| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                   |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -83,6 +86,16 @@ component path must also stay in `bundle/`: one that climbs out with `..`, is ab
 folder or a hard link is refused before it is read. Read, a component outside the package would
 have its layout attributes quoted back from wherever it is. A component that is missing is the
 builder's to refuse.
+
+Step 2 holds the app the component contributes to the same files. The package contributes its app
+once, under the id its `app.json` gives, from `agentic-ui-config/app.json`, the file the validator
+read, and names exactly the files of the app definition that the registry serves: `home.json`,
+`navigation.json`, `actions.json`, `queues/<id>.json`, `labels/<lang>.json` and
+`tasks/<workflow>.<step>.layout.json`. A file the package holds and does not name would never be
+served; one it names and does not hold would be missing on the server; one at another place, such
+as a layout, is not the registry's to serve. Each is refused, and so is a second app, a package
+being one app, and a package that contributes none. A disabled `<app>` contributes nothing. The
+selftest breaks the demo's contribution in each of these ways.
 
 Nothing in a package is read through a symbolic link. Step 1 searches the package for one before
 any step reads a file, and refuses it: a link can point anywhere, a linked `build.mjs` would have

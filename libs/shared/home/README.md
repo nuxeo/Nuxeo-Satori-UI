@@ -23,8 +23,10 @@ It is an engine (tier 3 of [architecture.md](../../../docs/business-apps/archite
 
 ## What the page does
 
-- **Reads `agentic-ui-config/home.json`,** beside the layouts, past the interceptors, as the layouts
-  are read. Nothing is served there on a server today, so the page says that no home is configured
+- **Reads `home.json` through `APP_DEFINITION_FILES`** (`libs/shared/app-registry`): at
+  `agentic-ui-config/home.json`, beside the layouts, past the interceptors, where the development
+  server serves it, and otherwise, where the app provides the registry, from the app registry, for
+  the app open. Where neither serves one, the page says that no home is configured
   (app-definition-v2.md, section 10, "Where the app reads it").
 - **Checks it** with the validator and the rules this build registers:
   - a `structure` finding draws no home, and the console names it;
@@ -84,7 +86,6 @@ npx ngc -p libs/shared/home/tsconfig.lib.json
 
 ## Not done yet
 
-- **Serving `home.json` on a server.** The app registry serves it, once decisions B and E are taken.
 - **The home as the app's first page.** `/` still opens the dashboard.
 - **A bucket's label.** A bucket shows its key, as the server returns it.
 - **Replacing the platform's menu.** `navigation.json`'s entries for queues and the home are joined

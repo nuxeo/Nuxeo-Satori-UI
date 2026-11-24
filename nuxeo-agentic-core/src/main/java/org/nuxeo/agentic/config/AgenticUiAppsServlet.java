@@ -21,11 +21,11 @@ import org.nuxeo.runtime.api.Framework;
  *
  * After sign-in, unlike the configuration servlet: the deployment fragment maps Nuxeo's
  * authentication filter on this path, and {@code auth-config-agentic.xml} gives it the REST API's
- * chain, so a request that does not authenticate is answered 401 rather than sent to the login
- * page. A server with anonymous access switched on authenticates every request, as its REST API
- * does, as {@code Anonymous}, who is in none of an app's groups unless an app names one of theirs.
- * A request that reaches this servlet with no Nuxeo principal at all, which the filter mapping
- * rules out, is 401 too, and reads nothing.
+ * chain's plugins, so a request that does not authenticate is answered 401 rather than sent to the
+ * login page. On a server that defines an anonymous user, the chain's last plugin makes a request
+ * with no credentials {@code Anonymous}, who is in none of an app's groups unless an app names one
+ * of theirs, and gets an empty list. A request that reaches this servlet with no Nuxeo principal at
+ * all, which the filter mapping rules out, is 401 too, and reads nothing.
  *
  * Which apps a person sees is not a security control ({@link AppRegistryEndpoint}). The servlet
  * reads only what packages contributed; it touches neither the repository nor the filesystem.
