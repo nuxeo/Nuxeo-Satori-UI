@@ -510,7 +510,8 @@ expectRefused(
   [],
   { staleStays: true },
 );
-// No step reads install.xml before the builder, which refused a folder there only at step 4.
+// Nothing else before the builder looks at install.xml, so without step 1's check a folder there
+// was refused only at step 4.
 expectRefused(
   'an install.xml that is a folder',
   ({ directory }) => {

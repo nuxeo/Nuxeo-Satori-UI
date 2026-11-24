@@ -253,7 +253,8 @@ function run({
       `build.mjs is not the generator's, byte for byte. Copy ${relative(REPO, TEMPLATE)} over it,` +
         ' so that what builds the package is code this repository reviewed.',
     );
-  // No step before the builder reads install.xml, so a folder there was refused only at step 4.
+  // No other step before the builder reads install.xml, so without this a folder there would be
+  // refused only at step 4.
   const installXml = join(directory, 'package', 'install.xml');
   if (existsSync(installXml) && !lstatSync(installXml).isFile())
     return refuse(
