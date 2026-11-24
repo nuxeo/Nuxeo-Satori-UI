@@ -516,6 +516,15 @@ expectRefused(
   'names the component OSGI-INF, which is a folder, not a file',
 );
 expectRefused(
+  'a MANIFEST.MF that is a folder, which step 2 once crashed on',
+  ({ directory }) => {
+    rmSync(join(directory, MANIFEST));
+    mkdirSync(join(directory, MANIFEST));
+  },
+  2,
+  'bundle/META-INF/MANIFEST.MF is not a file',
+);
+expectRefused(
   'a bundle/ that is itself a link, which the validator would read through',
   ({ directory }) => {
     const elsewhere = join(directory, '..', 'elsewhere');
@@ -572,6 +581,29 @@ expectRefused(
   'package/package.xml is a symbolic link, which is not followed',
   [],
   { staleStays: true },
+);
+// Nothing else before the builder looks at install.xml, so without step 1's check a folder there
+// was refused only at step 4.
+expectRefused(
+  'an install.xml that is a folder',
+  ({ directory }) => {
+    rmSync(join(directory, 'package', 'install.xml'));
+    mkdirSync(join(directory, 'package', 'install.xml'));
+  },
+  1,
+  'package/install.xml is not a file',
+);
+// Its name cannot be read, so no earlier zip is planted, as for a package.xml that is missing.
+expectRefused(
+  'a package.xml that is a folder',
+  ({ directory }) => {
+    rmSync(join(directory, 'package', 'package.xml'));
+    mkdirSync(join(directory, 'package', 'package.xml'));
+  },
+  3,
+  'package/package.xml cannot be read (EISDIR)',
+  [],
+  { stale: false },
 );
 // Step 2 names nothing here and leaves it to the builder, which refuses the package at step 4.
 expectRefused(

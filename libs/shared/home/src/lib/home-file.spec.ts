@@ -8,6 +8,8 @@ import {
   ExtensionRuleRegistry,
 } from '@nuxeo/satori-platform/extensions';
 
+import { MAX_NESTING } from '@agentic-ui/shared/app-definition';
+
 import { MAX_RULE_LEVELS, readHome, refusedRule, type ReadHome } from './home-file';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', '..', '..');
@@ -186,6 +188,16 @@ describe("a customer's own composite", () => {
     // However deep the customer's own parameters hold it.
     expect(ids(readHome(card({ any: [[{ type: 'acme.rules.unknown' }]] }), registered))).toEqual(
       [],
+    );
+  });
+});
+
+describe('parameters nested deeper than the validator reads', () => {
+  it('are refused by refusedRule on its own, rather than overflowing the stack', () => {
+    let deep: unknown = { type: 'acme.rules.unknown' };
+    for (let index = 0; index < 50_000; index++) deep = { a: deep };
+    expect(refusedRule({ type: 'acme.rules.anyOf', parameters: [deep] }, () => true)).toBe(
+      `nests its parameters more than ${MAX_NESTING} levels deep, deeper than this build reads`,
     );
   });
 });

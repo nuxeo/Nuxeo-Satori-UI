@@ -1,6 +1,8 @@
-import type { Finding } from './checker';
+import { MAX_NESTING, type Finding } from './checker';
 import { validateHome, validateNavigation } from './home';
+import { validateActions } from './actions';
 import { validateLayoutV2 } from './layout-v2';
+import { validateQueue } from './queue';
 import { PACKAGED_REGISTRIES, withRegistered } from './registries';
 
 // The validators of the menu and the home (docs/business-apps/app-definition-v2.md, sections 9
@@ -444,5 +446,116 @@ describe('a record-free checker leaves the rest alone', () => {
       ],
     };
     expect(show(validateLayoutV2(layout, { mode: 'view' }))).toEqual([]);
+  });
+});
+
+describe('nesting deeper than the validator reads', () => {
+  // JSON can nest further than a recursive walk has stack for. Each walk stops at MAX_NESTING
+  // levels with a finding, so a file is refused or left out rather than crashing the check.
+  const levels = 6000;
+  const nestedValue = (): unknown => {
+    let value: unknown = 'x';
+    for (let index = 0; index < levels; index++) value = { a: value };
+    return value;
+  };
+  const nestedRule = (): unknown => {
+    let rule: unknown = 'core.true';
+    for (let index = 0; index < levels; index++) rule = { type: 'core.not', parameters: [rule] };
+    return rule;
+  };
+  const deepest = (findings: Finding[]): string[] =>
+    findings.map((finding) => `${finding.message} [${finding.kind}]`);
+  const tooDeep = `nests more than ${MAX_NESTING} levels deep, deeper than the validator reads [parameter]`;
+
+  it("finds it in a customer's own rule, rather than overflowing the stack", () => {
+    const registries = withRegistered(PACKAGED_REGISTRIES, { rules: ['acme.rules.anyOf'] });
+    const input = {
+      version: 2,
+      cards: [
+        {
+          id: 'a',
+          label: 'A',
+          kpi: { pageProvider: 'p' },
+          visibleWhen: { type: 'acme.rules.anyOf', parameters: [nestedValue()] },
+        },
+      ],
+    };
+    expect(deepest(validateHome(input, { registries }))).toEqual([tooDeep]);
+  });
+
+  it('finds it in rules nested in rules, on the home and in a layout', () => {
+    const input = {
+      version: 2,
+      cards: [{ id: 'a', label: 'A', kpi: { pageProvider: 'p' }, visibleWhen: nestedRule() }],
+    };
+    expect(deepest(validateHome(input))).toEqual([tooDeep]);
+    const layout = {
+      version: 2,
+      cards: [{ id: 'c', fields: [{ field: 'dc:title', visibleWhen: nestedRule() }] }],
+    };
+    expect(deepest(validateLayoutV2(layout, { mode: 'view' }))).toEqual([tooDeep]);
+  });
+
+  it('finds it in computations nested in computations', () => {
+    let computed: unknown = { type: 'core.count', parameters: [{ field: 'dc:title' }] };
+    for (let index = 0; index < levels; index++)
+      computed = { type: 'core.choose', parameters: ['core.true', { computed }, 1] };
+    const layout = { version: 2, cards: [{ id: 'c', fields: [{ id: 'k', computed }] }] };
+    // At the limit a `core.choose` has a rule and a computation, each one level too deep.
+    expect(deepest(validateLayoutV2(layout, { mode: 'view' }))).toEqual([tooDeep, tooDeep]);
+  });
+
+  it('finds it in tables nested in tables', () => {
+    let column: unknown = 'dc:title';
+    for (let index = 0; index < levels; index++)
+      column = { field: 'dc:contributors', widget: 'table', parameters: { columns: [column] } };
+    const layout = { version: 2, cards: [{ id: 'c', fields: [column] }] };
+    expect(deepest(validateLayoutV2(layout, { mode: 'view' }))).toEqual([tooDeep]);
+  });
+
+  it('names a value it refuses by its kind, rather than writing it out as deep as it nests', () => {
+    expect(deepest(validateHome({ version: nestedValue(), cards: [] }))).toEqual([
+      'version must be 2, not {…} [structure]',
+    ]);
+    expect(deepest(validateHome({ version: [[2]], cards: [] }))).toEqual([
+      'version must be 2, not […] [structure]',
+    ]);
+    const queue = {
+      version: 2,
+      label: 'Open',
+      pageProvider: 'payers_open',
+      columns: ['dc:title'],
+      rowActions: [nestedValue()],
+    };
+    expect(deepest(validateQueue(queue))).toEqual([
+      'the row action {…} is not registered [unknown]',
+    ]);
+    const actions = {
+      version: 2,
+      actions: [{ id: 'a', label: 'A', transition: 'go', on: [nestedValue()] }],
+    };
+    expect(deepest(validateActions(actions))).toEqual([
+      '{…} is not "record", "row" or "bulk" [structure]',
+    ]);
+  });
+
+  it('reads as deep as the limit', () => {
+    let rule: unknown = 'core.true';
+    // Each core.not is one level, and the innermost rule one more.
+    for (let index = 0; index < MAX_NESTING - 1; index++)
+      rule = { type: 'core.not', parameters: [rule] };
+    const input = {
+      version: 2,
+      cards: [{ id: 'a', label: 'A', kpi: { pageProvider: 'p' }, visibleWhen: rule }],
+    };
+    expect(deepest(validateHome(input))).toEqual([]);
+    expect(
+      deepest(
+        validateHome({
+          ...input,
+          cards: [{ ...input.cards[0], visibleWhen: { type: 'core.not', parameters: [rule] } }],
+        }),
+      ),
+    ).toEqual([tooDeep]);
   });
 });

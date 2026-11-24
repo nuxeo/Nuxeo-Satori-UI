@@ -1014,6 +1014,9 @@ describe('the generated build.mjs', () => {
   it.each([
     ['outside bundle/', '../outside.xml'],
     ['a Markdown file, which is not packaged', 'agentic-ui-config/assets/README.md'],
+    // The file system answers a path under a file with ENOTDIR, not as missing.
+    ['a path through a file, which names nothing', 'OSGI-INF/acme-config-config.xml/x.xml'],
+    ['a path holding a NUL byte, which names nothing', 'OSGI-INF/acme\u0000config.xml'],
   ])('refuses a Nuxeo-Component naming %s', async (_case, path) => {
     await generate();
     write('outside.xml', '<component name="outside"/>');
@@ -1023,7 +1026,79 @@ describe('the generated build.mjs', () => {
     expect(output).toContain(
       `Nuxeo-Component names ${path}, which is not a packaged file in bundle/`,
     );
+    expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
   });
+
+  // A standalone build. The package pipeline (`scripts/app-package.mjs`) refuses each before its
+  // step 4 runs this builder: a folder as package.xml at step 3, as one that cannot be read; as
+  // install.xml at step 1; and as MANIFEST.MF at step 2. `app-package.selftest.mjs` holds each.
+  it.each([
+    ['package/package.xml', 'is not a file'],
+    ['package/install.xml', 'is not a file'],
+    ['bundle/META-INF/MANIFEST.MF', 'is not a file'],
+  ])('refuses a folder where %s belongs, rather than crashing', async (file, why) => {
+    await generate();
+    rmSync(join(dir, file));
+    mkdirSync(join(dir, file));
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain(`${file}: ${why}`);
+    expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+  });
+
+  it('refuses a bundle/ that is a file, rather than crashing', async () => {
+    await generate();
+    rmSync(join(dir, 'bundle'), { recursive: true });
+    writeFileSync(join(dir, 'bundle'), 'not a folder');
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain('bundle: is not a folder');
+    expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+  });
+
+  // Names the file system answers with an error rather than as missing.
+  it.each([
+    ['through a file', 'agentic-ui-config/bootstrap.json/x.json'],
+    ['with a part longer than a file name can be', `agentic-ui-config/${'a'.repeat(300)}.json`],
+  ])('refuses a src %s, which names nothing, rather than crashing', async (_case, path) => {
+    await generate();
+    const xml = readFileSync(join(dir, componentXml), 'utf8');
+    const src = 'src="agentic-ui-config/bootstrap.json"';
+    if (!xml.includes(src)) throw new Error(`the component has no ${src}`);
+    write(componentXml, xml.replace(src, `src="${path}"`));
+    const { status, output } = build();
+    expect(status).toBe(1);
+    expect(output).toContain(`src="${path}" names no file in bundle/`);
+    expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+  });
+
+  // A path through a symbolic link that leads back to itself names nothing: the file system
+  // answers ELOOP. The link is refused as a link, and the path as naming no file.
+  it.each([
+    [
+      'a Nuxeo-Component',
+      () =>
+        write('bundle/META-INF/MANIFEST.MF', 'Manifest-Version: 1.0\nNuxeo-Component: x/c.xml\n'),
+      'Nuxeo-Component names x/c.xml, which is not a packaged file in bundle/',
+    ],
+    [
+      'a layout src',
+      () => contribute('<layout type="Claim" mode="view" src="x/a.json" />'),
+      'src="x/a.json" names no file in bundle/',
+    ],
+  ])(
+    'refuses %s through a link that loops, rather than crashing',
+    async (_case, change, message) => {
+      await generate();
+      symlinkSync('x', join(dir, 'bundle/x'));
+      change();
+      const { status, output } = build();
+      expect(status).toBe(1);
+      expect(output).toContain(message);
+      expect(output).toContain('bundle/x: is a symbolic link');
+      expect(output).not.toMatch(/^\s+at .*build\.mjs/m);
+    },
+  );
 
   it('reads a Nuxeo-Component line continued as a JAR manifest continues it', async () => {
     await generate();

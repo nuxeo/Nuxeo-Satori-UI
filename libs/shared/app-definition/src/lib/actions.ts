@@ -11,6 +11,7 @@ import {
   createChecker,
   ICON,
   isLiteral,
+  shown,
   join,
   NAME,
   unreadable,
@@ -167,7 +168,7 @@ function placements(c: Checker, item: Record<string, unknown>, path: string): Pl
   on.forEach((place, index) => {
     const at = join(join(path, 'on'), index);
     if (!PLACEMENTS.includes(place as Placement))
-      c.add(at, 'structure', `${JSON.stringify(place)} is not "record", "row" or "bulk"`);
+      c.add(at, 'structure', `${shown(place)} is not "record", "row" or "bulk"`);
     else if (seen.includes(place as Placement))
       c.add(at, 'structure', `"${place as string}" is listed twice`);
     else seen.push(place as Placement);

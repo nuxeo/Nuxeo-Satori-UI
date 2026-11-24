@@ -19,7 +19,7 @@ import {
 import { merge } from 'rxjs';
 
 import { figureOf, requestKey, type Figure } from '../figures';
-import { readHome, type HomeCard, type HomeFile } from '../home-file';
+import { readHome, type HomeCard, type HomeFile, type ReadHome } from '../home-file';
 import { HOME_QUEUE_LINK, HomeService } from '../home.service';
 
 type State =
@@ -176,7 +176,17 @@ export class HomePageComponent {
           this.state.set({ kind: 'refused' });
           return;
         }
-        const read = readHome(load.content, this.rules.registeredRuleIds());
+        let read: ReadHome;
+        try {
+          read = readHome(load.content, this.rules.registeredRuleIds());
+        } catch (error) {
+          // Whatever a file does to the reader, the page says it could not be read, rather than
+          // stay loading.
+          const reason = error instanceof Error ? error.message : String(error);
+          warn(`home.json refused: it could not be read: ${reason}`);
+          this.state.set({ kind: 'refused' });
+          return;
+        }
         if ('refused' in read) {
           for (const problem of read.refused) warn(`home.json refused: ${problem}`);
           this.state.set({ kind: 'refused' });

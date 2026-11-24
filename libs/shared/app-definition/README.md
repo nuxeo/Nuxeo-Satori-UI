@@ -117,7 +117,8 @@ install and no transpiler.
   - the allow-list;
   - everything across files.
 - **`checker.ts`** holds what every file shares: ids, names, rules, values, computations and field
-  entries.
+  entries. It reads rules, computations, a customer's rule's parameters and fields `MAX_NESTING`
+  (256) levels deep, and finds a `parameter` problem past that rather than overflowing its stack.
 - **`content-model.ts`** is the model reader. `readContentModel` reads a server's document types,
   facets and schemas, `{ doctypes, facets, schemas }`, which is `NuxeoContentModel`'s shape: each
   property's type, whether it is a list, its subfields and, when the schema was read with
@@ -166,7 +167,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 122 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 127 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -220,6 +221,10 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
       rule, which has no signature, at the top of its parameters or in a list;
     - leaving a registered rule nested in a customer's own unchecked;
     - a home schema that lets a card with a figure and a queue go unnamed;
+    - no nesting limit, a limit one level short, a level never given back, or fields left unbounded
+      (`MAX_NESTING`, 256 levels of rules, computations, a customer's rule's parameters, and
+      fields, so tables in tables, in every file);
+    - a refused value written out whole in its message, rather than as `{…}` or `[…]`;
     - a bucket with no aggregate;
     - a KPI's parameter from a record;
     - a figure with no name, a page with no name;
