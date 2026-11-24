@@ -16,6 +16,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsDocumentListComponent,
   type NxsDocumentListColumn,
+  type NxsDocumentListLink,
   type NxsDocumentListRowAction,
   type NxsDocumentListSort,
   type NxsErrorStatus,
@@ -47,14 +48,24 @@ import { catchError, forkJoin, map, merge, of, startWith, switchMap, tap } from 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
 import type { LayoutFieldType } from '../layout.model';
-import { type RecordValueContext, showValue, viewText } from './record-field-view';
+import {
+  type RecordValueContext,
+  type RecordValueView,
+  showValue,
+  viewText,
+} from './record-field-view';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import { type RecordListEntry, type RecordPropertyField, ruleRefusal } from './record-layout';
 import {
   LookupCollector,
   NO_LABELS,
+  NO_RECORDS,
   labelLookups,
+  linkedRecordLookup,
+  namesOf,
   readLabels,
+  recordIdsOf,
+  recordLookups,
   sameLookups,
 } from './record-lookups';
 import { WIDGETS_SHOWN_AS_VERSION_1, widgetAccepts, widgetPropertyType } from './widget-support';
@@ -151,7 +162,8 @@ const rowContext = (base: ExtensionRuleContext, row: NuxeoDocument): ExtensionRu
  * column a property shown through its widget (layout-v2.md, section 7). A related-records card
  * shows one, and so does a queue (app-definition-v2.md, section 4).
  *
- * A row opens its record. The headers sort, on the server; the list opens in the file's order.
+ * A row opens its record, and a `document-link` cell opens the record it names, by its title. The
+ * headers sort, on the server; the list opens in the file's order.
  * A row offers the row actions the file lists that are registered here, while their rules pass.
  * A queue also filters the list by the buckets chosen in its facets, and lets rows be selected.
  * The page provider returns only what the user may read: nothing here is a security control.
@@ -194,6 +206,8 @@ export class RecordListComponent {
   private readonly pages = inject(PageProviderService);
   private readonly documentChanges = inject(DocumentChangesService);
   private readonly layouts = inject(DocumentLayoutService);
+  /** The record page's, for one of its cards, so the page and its lists read a record once. */
+  private readonly linkedRecords = linkedRecordLookup();
   private readonly extensions = inject(AppExtensionsService);
   private readonly actions = inject(ExtensionActionRegistry);
   private readonly ruleContext = inject(ExtensionRuleContextService);
@@ -296,7 +310,10 @@ export class RecordListComponent {
     { initialValue: LOADING },
   );
 
-  /** The vocabulary entries and the users and groups the cells name: only those are read. */
+  /**
+   * The vocabulary entries, the users and groups, and the linked records the cells name: only
+   * those are read, for the whole page at once, never cell by cell.
+   */
   private readonly lookups = computed(
     () => {
       const state = this.state();
@@ -320,8 +337,21 @@ export class RecordListComponent {
   );
 
   private readonly labels = toSignal(
-    toObservable(this.lookups).pipe(switchMap((lookups) => readLabels(this.layouts, lookups))),
+    toObservable(namesOf(this.lookups)).pipe(
+      switchMap((lookups) => readLabels(this.layouts, lookups)),
+    ),
     { initialValue: NO_LABELS },
+  );
+
+  /**
+   * The records the page's `document-link` cells name: one request for the ids each page adds, so
+   * a page read before, or another order of the same rows, asks for nothing.
+   */
+  private readonly records = toSignal(
+    toObservable(recordIdsOf(this.lookups)).pipe(
+      switchMap((ids) => this.linkedRecords.records(ids)),
+    ),
+    { initialValue: NO_RECORDS },
   );
 
   /** Bumped when the language or a catalogue changes, so labels resolved with `instant` follow. */
@@ -390,7 +420,21 @@ export class RecordListComponent {
       label: layoutLabelText(this.translate, column.label) ?? column.xpath,
       sortable: state.status === 'loaded' && this.sortable(state, column),
       text: (row: NuxeoDocument) =>
-        state.status === 'loaded' ? this.cellText(state, row, column, context) : '',
+        state.status === 'loaded'
+          ? viewText(this.cell(state, row, column, context), context.flagText)
+          : '',
+      // A record the cell names opens through the router, as the row does.
+      ...(column.widget === 'document-link'
+        ? {
+            links: (row: NuxeoDocument): readonly NxsDocumentListLink[] | null => {
+              if (state.status !== 'loaded') return null;
+              const view = this.cell(state, row, column, context);
+              return view.kind === 'records'
+                ? view.records.map((record) => ({ text: record.text, routerLink: record.url }))
+                : null;
+            },
+          }
+        : {}),
     }));
   });
 
@@ -498,6 +542,10 @@ export class RecordListComponent {
       locale: this.locale,
       today: this.today(),
       ...labelLookups(labels),
+      ...recordLookups(
+        this.records(),
+        this.translate.instant('document-layouts.record.unavailable'),
+      ),
       // Set for each cell to the row's own: `currency`'s code may name a property.
       property: () => undefined,
       label: (label) => layoutLabelText(this.translate, label),
@@ -510,17 +558,17 @@ export class RecordListComponent {
     };
   }
 
-  /** One cell: the row's value through the column's widget, as one line of text. */
-  private cellText(
+  /** One cell: the row's value through the column's widget. */
+  private cell(
     state: LoadedPage,
     row: NuxeoDocument,
     column: RecordPropertyField,
     context: RecordValueContext,
-  ): string {
+  ): RecordValueView {
     const definition = this.definitionOf(state, row, column);
-    if (!definition) return '';
+    if (!definition) return { kind: 'empty' };
     const label = layoutLabelText(this.translate, column.label) ?? column.xpath;
-    const view = showValue(
+    return showValue(
       {
         key: column.xpath,
         label,
@@ -531,7 +579,6 @@ export class RecordListComponent {
       this.widgetFor(column, definition),
       { ...context, property: (xpath) => row.properties[xpath] },
     );
-    return viewText(view, context.flagText);
   }
 
   /**

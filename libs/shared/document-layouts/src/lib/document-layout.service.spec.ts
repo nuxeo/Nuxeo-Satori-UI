@@ -717,4 +717,116 @@ describe('DocumentLayoutService', () => {
       );
     });
   });
+
+  describe('linkedRecords', () => {
+    const SEARCH = '/nuxeo/api/v1/search/lang/NXQL/execute';
+    const MEMBER = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+    const OTHER = '9cd9b1cf-6f0b-442f-afa0-c2539996ba30';
+    /** A record the reader may not read, or that no longer exists: the search does not return it. */
+    const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
+    const record = (uid: string, title: string) => ({
+      'entity-type': 'document',
+      uid,
+      title,
+      type: 'Member',
+      path: `/default-domain/workspaces/payers-demo/members/${title}`,
+      facets: [],
+    });
+    const read = (ids: readonly string[]) => firstValueFrom(service.linkedRecords(ids));
+
+    it('asks one search for every id, each as a query parameter of its own, never in the query', async () => {
+      const answer = read([MEMBER, OTHER, GONE]);
+      const request = http.expectOne((r) => r.url === SEARCH);
+      expect(request.request.method).toBe('GET');
+      const query = request.request.params.get('query') ?? '';
+      expect(query).toBe('SELECT * FROM Document WHERE ecm:uuid IN (?, ?, ?)');
+      expect(request.request.params.getAll('queryParams')).toEqual([MEMBER, OTHER, GONE]);
+      expect(request.request.params.get('pageSize')).toBe('3');
+      // No schema is asked for: the title, type, path and facets come with every record.
+      expect(request.request.headers.has('properties')).toBe(false);
+      request.flush({ entries: [record(OTHER, 'John Smith'), record(MEMBER, 'Wei Chen')] });
+      const found = await answer;
+      expect(found?.get(MEMBER)).toEqual({ title: 'Wei Chen', url: `/doc/${MEMBER}` });
+      expect(found?.get(OTHER)).toEqual({ title: 'John Smith', url: `/doc/${OTHER}` });
+      expect(found?.has(GONE)).toBe(false);
+      expect(intercepted).toContain(SEARCH);
+    });
+
+    it('never sends a value that is not a document id, whatever it holds', async () => {
+      const values = [
+        `${MEMBER}' OR ecm:uuid IS NOT NULL OR ecm:uuid = '`,
+        `x') OR (ecm:uuid IS NOT NULL`,
+        MEMBER.toUpperCase(),
+        `default:${MEMBER}`,
+        '/default-domain/workspaces/payers-demo/members/member-100051',
+        `${MEMBER}\n`,
+        '',
+      ];
+      const answer = read([...values, OTHER]);
+      const request = http.expectOne((r) => r.url === SEARCH);
+      expect(request.request.params.getAll('queryParams')).toEqual([OTHER]);
+      expect(request.request.params.get('query')).toBe(
+        'SELECT * FROM Document WHERE ecm:uuid IN (?)',
+      );
+      // Nothing a value holds reaches the request: not its parameters, not its address, read back
+      // as the server reads it.
+      const sent = decodeURIComponent(request.request.urlWithParams);
+      const params = request.request.params
+        .keys()
+        .flatMap((key) => request.request.params.getAll(key) ?? []);
+      for (const value of values.filter(Boolean)) {
+        expect(sent).not.toContain(value);
+        expect(params).not.toContain(value);
+      }
+      request.flush({ entries: [record(OTHER, 'John Smith')] });
+      expect([...((await answer) ?? new Map()).keys()]).toEqual([OTHER]);
+    });
+
+    it('asks nothing when no value is a document id', async () => {
+      expect(await read(["x' OR '1'='1", 'member-100051'])).toEqual(new Map());
+      http.expectNone((r) => r.url === SEARCH);
+    });
+
+    it('keeps only the records it asked for, routed from what the server returned', async () => {
+      const answer = read([MEMBER]);
+      http
+        .expectOne((r) => r.url === SEARCH)
+        .flush({
+          entries: [
+            record(OTHER, 'Not asked for'),
+            { ...record('not-a-uuid', 'Odd'), uid: 'not-a-uuid' },
+            {
+              ...record(MEMBER, 'member-100051'),
+              title: '  ',
+              type: 'Folder',
+              facets: ['Folderish'],
+            },
+          ],
+        });
+      const found = await answer;
+      expect([...(found ?? new Map()).keys()]).toEqual([MEMBER]);
+      // A folder opens in browse, as a row of a list does; a blank title shows the record's name.
+      expect(found?.get(MEMBER)).toEqual({
+        title: 'member-100051',
+        url: '/browse/default-domain/workspaces/payers-demo/members/member-100051',
+      });
+    });
+
+    it('answers null when the search fails, and says why', async () => {
+      const answer = read([MEMBER]);
+      http.expectOne((r) => r.url === SEARCH).flush('', { status: 500, statusText: 'Error' });
+      expect(await answer).toBeNull();
+      expect(warnings).toContain('[agentic-ui-layouts] 1 linked records not read: HTTP 500');
+    });
+
+    it('refuses more ids than one search asks for, without asking', async () => {
+      const many = Array.from(
+        { length: 101 },
+        (_, n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+      );
+      expect(await read(many)).toBeNull();
+      http.expectNone((r) => r.url === SEARCH);
+      expect(warnings.some((w) => w.includes('one search asks for 100 at most'))).toBe(true);
+    });
+  });
 });

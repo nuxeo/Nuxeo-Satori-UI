@@ -141,6 +141,21 @@
         }
       </ul>
     }
+    @case ('records') {
+      <!-- A linked record opens through the app's router, as a row of a list does. -->
+      @for (record of field.value.records; track $index) {
+        @if (!$first) {
+          <span class="record-page__separator">, </span>
+        }
+        @if (record.url !== null) {
+          <a class="record-page__link record-page__record" [routerLink]="record.url">{{
+            record.text
+          }}</a>
+        } @else {
+          <span class="record-page__unavailable">{{ record.text }}</span>
+        }
+      }
+    }
     @case ('lines') {
       <span class="record-page__lines">
         @for (line of field.value.lines; track $index) {

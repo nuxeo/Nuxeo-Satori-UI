@@ -196,7 +196,11 @@ designer and the migration server are to refuse it too (section 11).
   and keeps formatting, lists, quotes, code and links only: no image, form, style or frame. It is
   the only widget that renders HTML.
 - **A widget's text is the property's display value.** For a vocabulary, that is its label; for a
-  user, their name.
+  user, their name; for a `document-link`, the linked record's title.
+- **A `document-link` shows the record it names,** by its title, as a link that opens it, and a
+  list of them one after another. A record the reader may not read, or that no longer exists,
+  shows "Unavailable", never its id and never an error. `types` is the picker's: the record page
+  shows whatever record the id names (section 11).
 
 ## 4. Computations
 
@@ -629,6 +633,49 @@ becomes. In version 2's terms:
   - the rest of the page stays too. The History tab reads the audit when it is drawn, and is put
     away on such a reload, so that it reads the reloaded record's history when it is next opened.
     A tab that a customer's code contributes is not drawn anew by it either.
+- **A `document-link`** shows each record its value names by the record's title, as a link that
+  opens it, on the record page and in every cell of a list, a related card's or a queue's.
+  `LinkedRecordLookup`, in the same library, reads them:
+  - **one search for a page or a list,** never one per field or cell: the record page asks once
+    for every record its fields name, and a list once for every record its page of rows names, each
+    id once. A set whose ids are all read asks for nothing, so a record reloaded with the same
+    links, another order of the same rows, or a page shown before asks nothing again. The record
+    page keeps what it and its lists read for as long as it is drawn, not for the session: its lists
+    share its lookup, so a record a field and a list both name is asked for once, and a list in a
+    tab drawn again asks nothing again. A queue's list keeps its own, for as long as it is drawn.
+    The records and the labels are asked for apart: a change to the records a page names reads no
+    label again, and a change to its labels asks for no record again. One search asks for 100 ids
+    at most, and more ids are asked for in as many searches;
+  - **the search runs through the REST API as the reader,**
+    `SELECT * FROM Document WHERE ecm:uuid IN (?, …)` with one placeholder per id, each id sent as a
+    `queryParams` value of its own, which Nuxeo quotes as a literal before the query runs. An id is
+    never written into the query's text, so no value can change what it means. Only a value that
+    is a document's id as Nuxeo writes `ecm:uuid`, a UUID in lower case, is sent at all. Measured on
+    Nuxeo 2025.10.18: two members asked this way are both returned, and a value written to close the
+    literal, `x' OR ecm:uuid IS NOT NULL OR ecm:uuid = 'y`, is answered HTTP 200 with no record, the
+    value read as one quoted id that names none;
+  - **a record the reader may not read, or that no longer exists, is not returned,** and shows
+    "Unavailable": neutral text in the reader's language, never the stored id and never an error.
+    So does a value that is not a document's id, such as a path or an id written with its
+    repository's name, which is never asked for, and a record whose search failed, which the
+    console reports and the next set of ids naming it asks for again. Nuxeo's search applies the
+    reader's own permissions; the checks here ran as an administrator, who may read every record,
+    so "may not read" was not seen live, only "no longer exists";
+  - **a record in the trash is shown,** as a link, like any other the reader may read, as Nuxeo's
+    document resolver reads a reference: the search names no `ecm:isTrashed`, and returned a record
+    of the check's own moved to the trash. It leaves out no version or proxy either, which was not
+    measured;
+  - **the link opens the record through the app's router,** as a row does: the document page for a
+    record, browse for a folder and the collection page for a collection, with the route built from
+    what the search returned, never from the stored value. In a list's cell it is reached from its
+    row with the arrow keys, as a row's other controls are, and opens the record it names, not the
+    row's;
+  - **while a record is read its field shows nothing,** not its id: the title replaces it when the
+    search answers;
+  - **elsewhere it shows the title as text:** in a table's cell, which is one line of text, and the
+    console says so; in a template's placeholder, `{case:member}`, through the field that shows the
+    property; and in a form's read-only field. A form's input still edits the stored id (the limits
+    below).
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
 - **The date rules read the browser's clock**, as the rules' library does everywhere, not the
@@ -694,9 +741,9 @@ becomes. In version 2's terms:
     record with the `video` schema keeps its player, whatever else it has;
   - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
     that column is left out, and the rest of the table shows;
-  - **`image`, `file-list` and `document-link`** show the property's own value, a file's name or
-    the stored id, until each has its lookup. Section 12 proposes how `document-link` reads the
-    linked record, and shows another of its properties;
+  - **`image` and `file-list`** show the property's own value, a file's name, until each has its
+    lookup. Section 12 proposes how a `document-link` would show another of the linked record's
+    properties than its title;
   - **a rule nested more than 32 levels deep** leaves its tab, card, field or row action out: the rule
     registry answers no deeper, and past that it passes any rule not declared security-relevant,
     whatever the rule says;
@@ -765,8 +812,7 @@ nothing here said how to write it.
 
 `document-link` takes one more parameter, `show`: a property of the linked record,
 `"<prefix>:<name>"`, which the widget shows in place of the record's title. Without `show`, the
-widget shows the linked record's title once its lookup is built (section 11); today it shows the
-stored id.
+widget shows the linked record's title, through the lookup section 11 describes.
 
 ```json proposed document-link.show
 {
@@ -862,7 +908,8 @@ record itself is: one request per distinct value.
   a reference from a string. To show the value by its schema type, it reads the schema of each
   type `types` lists, as it reads the open record's; without `types`, the value is shown as text.
 - **A linked record that lacks the property** shows no value, and says "Not available" to a screen
-  reader, as an unreadable one does.
+  reader, as an unreadable one would under this proposal. The lookup that is built, section 11's,
+  shows one the reader may not read as "Unavailable".
 
 ### What the reader may see
 
@@ -902,7 +949,10 @@ A Web UI column that shows a property of a referenced document, in a list whose
 
 ### Recommendation
 
-Adopt `show` on `document-link`, and build it with the `document-link` lookup that section 11 lists
-as missing. Both read the same inlined record: the lookup shows its title, `show` another of its
-properties, so building one builds most of the other. Before building either, measure what the
-server sends for a linked record the reader may not read. Its name, `show`, is open to review.
+Adopt `show` on `document-link`. The `document-link` lookup it builds on is built (section 11), as a
+search of its own, one per page or list, rather than from an inlined record, and a record the reader
+may not read is absent from it. The lookup shows the linked record's title; `show` would show
+another of its properties. Whether `show` reads it from that search, by naming its schema in
+`properties`, or from `fetch-document` as above, is part of this review. Before building it, measure
+what the server sends for a linked record the reader may not read. Its name, `show`, is open to
+review. `show` is not built, and the validator still refuses it.

@@ -11,6 +11,7 @@ import {
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatTabsModule } from '@angular/material/tabs';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
+import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { compute, type ComputationContext } from '@agentic-ui/shared/computations';
 import {
@@ -49,11 +50,17 @@ import { listParameters } from './list-parameters';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import {
   type Labels,
+  type LinkedRecords,
+  LinkedRecordLookup,
   LookupCollector,
   type Lookups,
   NO_LABELS,
+  NO_RECORDS,
   labelLookups,
+  namesOf,
   readLabels,
+  recordIdsOf,
+  recordLookups,
   sameLookups,
 } from './record-lookups';
 import {
@@ -211,8 +218,12 @@ function fieldShowing(
     RecordListComponent,
     RecordPictureViewsComponent,
     RecordTimelineComponent,
+    RouterLink,
     TranslatePipe,
   ],
+  // The records the page's `document-link` fields and its lists' cells name, read for the page's
+  // life: its lists share it.
+  providers: [LinkedRecordLookup],
   templateUrl: './record-page.html',
   styleUrl: './record-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -225,6 +236,7 @@ export class RecordPageComponent {
   protected readonly bannerId = NXS_PRIMITIVE_IDS.banner;
 
   private readonly layouts = inject(DocumentLayoutService);
+  private readonly linkedRecords = inject(LinkedRecordLookup);
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly rules = inject(ExtensionRuleRegistry);
@@ -237,9 +249,9 @@ export class RecordPageComponent {
   private readonly told = new Set<string>();
 
   /**
-   * The vocabulary entries and the users and groups the page's values name: only those are read.
-   * Each value is read through the widget that shows it: a field's, a table column's, or, for a
-   * template's placeholder, that of the field showing the property.
+   * The vocabulary entries, the users and groups, and the linked records the page's values name:
+   * only those are read. Each value is read through the widget that shows it: a field's, a table
+   * column's, or, for a template's placeholder, that of the field showing the property.
    */
   private readonly lookups = computed<Lookups>(
     () => {
@@ -250,10 +262,11 @@ export class RecordPageComponent {
       /** What a value shown through `widget` names. */
       const named = collector.value.bind(collector);
       // A computation is worked out here with no labels, so the labels never wait on themselves.
-      // An id it gives a `user`, `group` or `vocabulary` widget is a stored value or a literal it
-      // chose, which no label changes. A template's text can change with its placeholders' labels;
-      // it is a name already, not an id, and only its unlabelled text is asked for, to no effect.
-      const unlabelled = this.valueContext(document, NO_LABELS);
+      // An id it gives a `user`, `group`, `vocabulary` or `document-link` widget is a stored value
+      // or a literal it chose, which no label changes. A template's text can change with its
+      // placeholders' labels; it is a name already, not an id, and only its unlabelled text is
+      // asked for, to no effect.
+      const unlabelled = this.valueContext(document, NO_LABELS, NO_RECORDS);
       const read = new Set<string>();
       for (const field of fieldsOf(layout)) {
         if (field.kind === 'computed') {
@@ -261,7 +274,8 @@ export class RecordPageComponent {
           if (
             field.widget === 'user' ||
             field.widget === 'group' ||
-            field.widget === 'vocabulary'
+            field.widget === 'vocabulary' ||
+            field.widget === 'document-link'
           ) {
             const result = compute(
               field.computed,
@@ -298,8 +312,21 @@ export class RecordPageComponent {
 
   /** Shown as the stored ids until the labels arrive, and as the id wherever one cannot be read. */
   private readonly labels = toSignal(
-    toObservable(this.lookups).pipe(switchMap((lookups) => readLabels(this.layouts, lookups))),
+    toObservable(namesOf(this.lookups)).pipe(
+      switchMap((lookups) => readLabels(this.layouts, lookups)),
+    ),
     { initialValue: NO_LABELS },
+  );
+
+  /**
+   * The linked records, read once per page in one request for the ids each new set adds. Those
+   * read stay shown while another set is read; one not read yet shows nothing, never its id.
+   */
+  private readonly records = toSignal(
+    toObservable(recordIdsOf(this.lookups)).pipe(
+      switchMap((ids) => this.linkedRecords.records(ids)),
+    ),
+    { initialValue: NO_RECORDS },
   );
 
   /** Bumped when the language or a catalogue changes, so labels resolved with `instant` follow. */
@@ -315,7 +342,7 @@ export class RecordPageComponent {
     this.translations();
     const layout = this.layout();
     const document = this.document();
-    const context = this.valueContext(document, this.labels());
+    const context = this.valueContext(document, this.labels(), this.records());
     const passes = context.rule;
     // A banner is met in place, as the page draws, so it is not announced: `announce` is `none`.
     const banners = layout.banners
@@ -405,14 +432,19 @@ export class RecordPageComponent {
     };
   }
 
-  /** What a widget reads besides its value, with the labels read so far. */
-  private valueContext(document: NuxeoDocument, labels: Labels): RecordValueContext {
+  /** What a widget reads besides its value, with the labels and the linked records read so far. */
+  private valueContext(
+    document: NuxeoDocument,
+    labels: Labels,
+    records: LinkedRecords,
+  ): RecordValueContext {
     const ruleContext = { ...this.ruleContext.context(), document };
     return {
       locale: this.locale,
       today: this.today(),
       timeZone: this.timeZone,
       ...labelLookups(labels),
+      ...recordLookups(records, this.translate.instant('document-layouts.record.unavailable')),
       property: (xpath) => document.properties[xpath],
       label: (label) => this.text(label),
       flagText: (flag) =>

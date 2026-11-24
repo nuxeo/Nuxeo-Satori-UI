@@ -7,12 +7,13 @@ import {
   ExtensionRuleRegistry,
 } from '@nuxeo/satori-platform/extensions';
 import { DirectoryService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
-import { of } from 'rxjs';
+import { type Observable, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { readFormLayout } from '../form-layout/form-layout';
 import { resolveFormLayout, type ResolvedFormLayout } from '../form-layout/resolve-form-layout';
 import type { DocumentTypeDefinition } from '../layout.model';
+import type { LinkedRecord } from '../record-page/linked-record';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from '../record-page/record-clock';
 import { DocumentLayoutFormComponent } from './document-layout-form';
 
@@ -33,6 +34,7 @@ const CLAIM_TYPE: DocumentTypeDefinition = {
         allowed: { type: 'double' },
         denial: { type: 'string' },
         notes: { type: 'string' },
+        member: { type: 'string' },
       },
     },
     { name: 'dublincore', prefix: 'dc', fields: { title: { type: 'string' } } },
@@ -105,10 +107,15 @@ const CLAIM: NuxeoDocument = Object.assign(
   { schemas: [{ name: 'claim', prefix: 'claim' }] },
 );
 
+const MEMBER = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+
 describe('DocumentLayoutFormComponent, with a version 2 file', () => {
   let fixture: ComponentFixture<DocumentLayoutFormComponent>;
   let form: DocumentLayoutFormComponent;
   let formLayoutFor: ReturnType<typeof vi.fn>;
+  let linkedRecords: ReturnType<
+    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>>
+  >;
   let warnings: string[];
 
   const settle = async () => {
@@ -158,6 +165,15 @@ describe('DocumentLayoutFormComponent, with a version 2 file', () => {
 
   beforeEach(() => {
     formLayoutFor = vi.fn();
+    linkedRecords = vi.fn((ids: readonly string[]) =>
+      of(
+        new Map(
+          ids
+            .filter((id) => id === MEMBER)
+            .map((id): [string, LinkedRecord] => [id, { title: 'Wei Chen', url: `/doc/${id}` }]),
+        ),
+      ),
+    );
     warnings = [];
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) => {
       warnings.push(String(message));
@@ -173,6 +189,7 @@ describe('DocumentLayoutFormComponent, with a version 2 file', () => {
             formLayoutFor,
             vocabularyLabel: () => of(null),
             principalLabel: () => of(null),
+            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
           },
         },
         { provide: AppExtensionsService, useValue: { resolve: () => [] } },
@@ -248,6 +265,41 @@ describe('DocumentLayoutFormComponent, with a version 2 file', () => {
     const notes = host().querySelector('.nxs-metadata-editor__read-only[data-xpath="claim:notes"]');
     expect(notes?.textContent).toContain('First look');
     expect(form.changedProperties()).toEqual({ 'claim:status': 'closed' });
+  });
+
+  it("shows a read-only document-link as the linked record's title, never its id", async () => {
+    const content = {
+      version: 2,
+      cards: [
+        {
+          id: 'claim',
+          fields: [
+            'claim:status',
+            {
+              field: 'claim:member',
+              label: 'Member',
+              widget: 'document-link',
+              readOnlyWhen: status('closed'),
+            },
+          ],
+        },
+      ],
+    };
+    const closed = { ...CLAIM, properties: { ...CLAIM.properties, 'claim:status': 'closed' } };
+    await render(
+      {
+        mode: 'edit',
+        document: { ...closed, properties: { ...closed.properties, 'claim:member': MEMBER } },
+      },
+      content,
+    );
+    const member = host().querySelector(
+      '.nxs-metadata-editor__read-only[data-xpath="claim:member"]',
+    );
+    expect(member?.textContent).toContain('Wei Chen');
+    expect(member?.textContent).not.toContain(MEMBER);
+    expect(linkedRecords).toHaveBeenCalledTimes(1);
+    expect(linkedRecords.mock.calls[0][0]).toEqual([MEMBER]);
   });
 
   it('puts Nuxeo’s messages on their fields, as a version 1 form does', async () => {

@@ -212,6 +212,14 @@ describe("a table's columns", () => {
     ]);
   });
 
+  it("says that a document-link column shows the record's title without its link, a cell being text", () => {
+    const { layout, notes } = table([{ field: 'line:code', widget: 'document-link' }]);
+    expect(layout.cards[0].fields[0].parameters['columns']).toHaveLength(1);
+    expect(notes).toEqual([
+      "cards[0].fields[0].parameters.columns[0]: a table's cell shows the linked record's title, without its link",
+    ]);
+  });
+
   it('takes the columns as written when the schema lists no subfields, as version 1 does', () => {
     const { layout, notes } = table(['bag:anything'], 'member:bag');
     expect(layout.cards[0].fields[0].parameters['columns']).toEqual(['bag:anything']);

@@ -1,0 +1,99 @@
+import { documentNavigationUrl } from '@nuxeo/satori-platform/nuxeo-client';
+
+/**
+ * What a `document-link` reads of the record it names (layout-v2.md, section 11): the record's
+ * title, and the app's own route to it. Read by id, in one search for every id a page or a list
+ * names, so that a list of fifty claims asks once for their members, not fifty times.
+ */
+
+/** A linked record as a `document-link` shows it. */
+export interface LinkedRecord {
+  /** Its title, as Nuxeo returns it: `dc:title`, or its name when that is empty. */
+  readonly title: string;
+  /**
+   * The app's route to it, as a row of a list opens it (`documentNavigationUrl`): `/doc/<uid>` for
+   * a record, browse for a folder, the collection page for a collection.
+   */
+  readonly url: string;
+}
+
+/**
+ * A document's id as Nuxeo writes `ecm:uuid`: a UUID, in lower case. Only such a value is ever
+ * sent to the server to be looked up. Anything else a `document-link` holds, such as a path, an id
+ * prefixed with its repository's name, or a text that would change a query, is shown as
+ * unavailable and never asked for.
+ */
+const DOCUMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Whether `value` is a document's id, which a `document-link` may be looked up by. */
+export function isDocumentId(value: unknown): value is string {
+  return typeof value === 'string' && DOCUMENT_ID.test(value);
+}
+
+/** How many ids one search asks for. A page of a list names fewer, at 100 rows or less. */
+export const LINKED_RECORDS_PER_REQUEST = 100;
+
+/**
+ * The search for `count` records by id. Its text never holds an id: each `?` is given one as a
+ * `queryParams` value of its own, which Nuxeo quotes as a literal before the query runs, so no
+ * value can change what the query means. The ids are checked by {@link isDocumentId} as well.
+ *
+ * Every record the reader may read, wherever it is, in the trash too, as Nuxeo's own document
+ * resolver reads a reference: the query leaves out no trashed record, version or proxy. A record
+ * the reader may not read is not returned, and nor is one that no longer exists.
+ */
+export function linkedRecordsQuery(count: number): string {
+  return `SELECT * FROM Document WHERE ecm:uuid IN (${Array.from({ length: count }, () => '?').join(', ')})`;
+}
+
+type Json = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Json =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** A record's name, the last part of its path: what Nuxeo calls a record whose title is empty. */
+function nameOf(path: unknown): string {
+  if (typeof path !== 'string') return '';
+  return (
+    path
+      .split('/')
+      .filter((part) => part.trim() !== '')
+      .pop() ?? ''
+  );
+}
+
+/**
+ * The records a search returned, by id: only those it was asked for, each with a title. An entry
+ * that is not one of `asked`, or names no title or path, is left out, and its id shows as
+ * unavailable. Its route is built from what the search returned for it, not from the value.
+ */
+export function readLinkedRecords(
+  raw: unknown,
+  asked: readonly string[],
+): ReadonlyMap<string, LinkedRecord> {
+  const wanted = new Set(asked);
+  const entries = isRecord(raw) && Array.isArray(raw['entries']) ? raw['entries'] : [];
+  const found = new Map<string, LinkedRecord>();
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue;
+    const { uid, type, path, facets } = entry;
+    if (!isDocumentId(uid) || !wanted.has(uid) || typeof type !== 'string') continue;
+    const title =
+      typeof entry['title'] === 'string' && entry['title'].trim() !== ''
+        ? entry['title']
+        : nameOf(path);
+    if (title === '') continue;
+    found.set(uid, {
+      title,
+      url: documentNavigationUrl({
+        uid,
+        type,
+        path: typeof path === 'string' ? path : '',
+        facets: Array.isArray(facets)
+          ? facets.filter((facet): facet is string => typeof facet === 'string')
+          : [],
+      }),
+    });
+  }
+  return found;
+}
