@@ -1490,6 +1490,30 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         expect(fixture.componentInstance.blobUrl()).not.toBeNull();
       });
 
+      it('is downloaded again at once when the record reloads while the Annotations tab is open', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await render({}, asset());
+        await answerAsset(['AcmeAsset/view'], ASSET_VIEW);
+        const page = fixture.componentInstance;
+        page.onTabChange(page.detailTabs().findIndex((tab) => tab.id === 'app.tabs.annotations'));
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(originalFetches()).toBe(1);
+
+        // An edit saved from the Annotations tab reloads the record, and holds its original back
+        // again: the tab still shows it, so it is fetched again without waiting for anything.
+        vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({
+          afterClosed: () => of({ ...asset(), lastModified: '2026-08-24T11:00:00.000Z' }),
+        } as unknown as ReturnType<MatDialog['open']>);
+        const reads = mockDetailService.getFullDocument.mock.calls.length;
+        page.openEditDialog();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(mockDetailService.getFullDocument.mock.calls.length).toBe(reads + 1);
+        expect(originalFetches()).toBe(2);
+      });
+
       it('is downloaded for the packaged viewer when the type has no record page', async () => {
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         await render({}, asset());

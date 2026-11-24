@@ -377,9 +377,12 @@ export default async function run(page, h) {
     .first()
     .click()
     .catch(deferred);
+  // Its answer, then a quiet network, before counting: a retry or the `blobholder:0` fallback
+  // after a failed first answer would be a second request, which "once" must see.
   await page
-    .waitForRequest((request) => original.test(request.url()), { timeout: 15_000 })
+    .waitForResponse((response) => original.test(response.url()), { timeout: 15_000 })
     .catch(deferred);
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(deferred);
   const annotated = asked.filter((request) => original.test(request.url));
   h.check(
     'opening the Annotations tab downloads the original, once: what the check above looks for',
