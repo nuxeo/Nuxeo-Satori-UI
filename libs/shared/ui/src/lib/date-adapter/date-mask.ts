@@ -74,7 +74,7 @@ export function dateMaskFor(localeId: string, translatedMask: string): string {
     // A two-digit year gets two letters; `y`, `yy` and `yyyy` are the only widths date-fns
     // uses here. Keep a complete Arabic field name rather than cutting a word in half.
     composed +=
-      segment.field === 'year' && segment.width === 2 && !FIELD_FOR_MASK_WORD[word]
+      segment.field === 'year' && segment.width === 2 && !FIELD_FOR_MASK_WORD.has(word)
         ? word.slice(0, 2)
         : word;
   }
@@ -121,11 +121,11 @@ function shortDatePattern(localeId: string): string {
   return dateFnsLocaleFor(localeId).formatLong?.date({ width: 'short' }) ?? '';
 }
 
-const FIELD_FOR_MASK_WORD: Readonly<Record<string, DateField>> = {
-  يوم: 'day',
-  شهر: 'month',
-  سنة: 'year',
-};
+const FIELD_FOR_MASK_WORD: ReadonlyMap<string, DateField> = new Map([
+  ['يوم', 'day'],
+  ['شهر', 'month'],
+  ['سنة', 'year'],
+]);
 
 const FIELD_FOR_MASK_LETTER: Readonly<Record<string, DateField>> = {
   d: 'day',
@@ -135,7 +135,9 @@ const FIELD_FOR_MASK_LETTER: Readonly<Record<string, DateField>> = {
 
 /** Latin mask letters and the Arabic catalogue words identify their fields independently of order. */
 function fieldsNamedByLetters(letters: string[]): DateField[] | null {
-  const fields = letters.map((run) => FIELD_FOR_MASK_WORD[run] ?? FIELD_FOR_MASK_LETTER[run[0]]);
+  const fields = letters.map(
+    (run) => FIELD_FOR_MASK_WORD.get(run) ?? FIELD_FOR_MASK_LETTER[run[0]],
+  );
   const named = fields.filter((field): field is DateField => field !== undefined);
   return named.length === letters.length && new Set(named).size === named.length ? named : null;
 }
@@ -178,7 +180,7 @@ function maskLetters(translatedMask: string): string[] | null {
   // which field each literal belongs to; falling back leaves the translator's value intact.
   if (!/^\p{L}+(?:[/\-.,: ]+\p{L}+)+$/u.test(mask)) return null;
   const runs = mask.match(/\p{L}+/gu) ?? [];
-  const namedWords = runs.length === 3 && runs.every((run) => FIELD_FOR_MASK_WORD[run]);
+  const namedWords = runs.length === 3 && runs.every((run) => FIELD_FOR_MASK_WORD.has(run));
   if (namedWords && new Set(runs).size === 3) return runs;
   if (runs.some((run) => [...run].some((character) => character !== run[0]))) return null;
   return runs;

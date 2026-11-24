@@ -125,6 +125,7 @@ describe('dateMaskFor', () => {
     { value: 'dmy/dd/yyyy', why: 'a run that is not one repeated letter' },
     { value: 'يوم/شهر/يوم', why: 'duplicate Arabic fields' },
     { value: 'أدخل/هذا/التاريخ', why: 'Arabic prose, not named date fields' },
+    { value: 'constructor/toString/valueOf', why: 'object prototype names, not named date fields' },
   ])('$why', ({ value }) => {
     it('returns the value it was given', () => {
       expect(dateMaskFor('en-GB', value)).toBe(value);
