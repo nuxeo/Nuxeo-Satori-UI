@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The claims review workflow's own variables, var_<workflow> as the platform's models name them.
+     A task form reads it beside its step's. Fictional, as the rest of the kit. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview">
+
+  <!-- Who determined the claim, when it went to a supervisor: the determination's last actor. -->
+  <xs:element name="determinedBy" type="xs:string" />
+</xs:schema>

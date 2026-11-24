@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The determination step's variables: the task form's var:decision, var:allowedAmount and
+     var:denialReason. Named after the workflow as well as the step, since a schema's name is
+     shared by the whole server. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview_determine"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview_determine">
+
+  <!-- The ids of the vocabulary PayersClaimDecision, which the form picks from. -->
+  <xs:element name="decision">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="approve" />
+        <xs:enumeration value="deny" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <!-- What the plan pays, in dollars: written to claim:allowedAmount when the claim is approved. -->
+  <xs:element name="allowedAmount" type="xs:double" />
+  <!-- Why the claim is denied, which a denial needs: written to the claim's history. -->
+  <xs:element name="denialReason" type="xs:string" />
+</xs:schema>

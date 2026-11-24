@@ -4,8 +4,9 @@
   "id": "contracts",
   "label": "Contracts",
   "labelKey": "contracts.app",
-  "packageVersion": "0.1.0",
+  "packageVersion": "0.2.0",
   "platform": ">=0.2.0 <1.0.0",
+  "address": "contract-desk",
   "groups": ["contract-managers", "legal-reviewers"],
   "branding": {
     "applicationTitle": "Contracts"

@@ -44,6 +44,12 @@ export const GRANTS = [
 /**
  * The demo's people: the claims' adjusters and the cases' assignees below. Morgan Chen
  * supervises as well as adjusts.
+ *
+ * The last two work the claims review workflow's demo
+ * (`scripts/beta-harness/steps/payers-claims-workflow.mjs`), on claims it writes for each run:
+ * Alex Rivera determines them, and Jordan Kim, a supervisor and nothing else, approves those over
+ * 5,000 dollars. They hold none of the claims below, so that what the workflow does never changes
+ * the figures phase 1's demo counts as Dana Lee and as member services.
  */
 export const USERS = [
   { username: 'dana.lee', firstName: 'Dana', lastName: 'Lee', groups: ['claims-adjusters'] },
@@ -55,7 +61,13 @@ export const USERS = [
   },
   { username: 'riley.brooks', firstName: 'Riley', lastName: 'Brooks', groups: ['member-services'] },
   { username: 'sam.patel', firstName: 'Sam', lastName: 'Patel', groups: ['member-services'] },
+  { username: 'alex.rivera', firstName: 'Alex', lastName: 'Rivera', groups: ['claims-adjusters'] },
+  { username: 'jordan.kim', firstName: 'Jordan', lastName: 'Kim', groups: ['claims-supervisors'] },
 ];
+
+/** The workflow demo's two people, by what they do in it. */
+export const WORKFLOW_ADJUSTER = 'alex.rivera';
+export const WORKFLOW_SUPERVISOR = 'jordan.kim';
 
 export const MEMBERS = [
   {

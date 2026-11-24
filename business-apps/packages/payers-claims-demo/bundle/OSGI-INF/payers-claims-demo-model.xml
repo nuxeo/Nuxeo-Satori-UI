@@ -3,7 +3,8 @@
   STAND-IN MODEL, until the presales Payers model arrives.
 
   Everything here is fictional: the document types, schemas and page providers the kit's layouts,
-  queues and home name, and nothing more. When the presales model arrives, this file and schemas/ are
+  queues and home name, and the claim lifecycle the claims review workflow follows, with what keeps
+  claim:status in step with it. When the presales model arrives, this file and schemas/ are
   replaced by theirs, and the layouts follow its property names. Records of these types must be
   deleted from a server before its model goes: a document whose type is gone cannot be read.
 
@@ -59,18 +60,122 @@
     </doctype>
   </extension>
 
-  <!-- The platform's default lifecycle, so that a record has a lifecycle state and the package's
-       approve action has a transition: that lifecycle's approve, which it offers only in the
-       project state. Approving moves the lifecycle state, not claim:status, which the queue and
-       the pages read: a Payers lifecycle that keeps the two as one is phase 2's. -->
+  <!-- A claim's lifecycle: its states are claim:status's values, so the two are one. The claims
+       review workflow (payers-claims-demo-workflow.xml) moves a claim through it: review when it
+       starts, then approve or deny. pend and resume put a claim on hold and back, pay settles an
+       approved one, and reopen brings a decided one back to review, as an adjustment or an appeal
+       does.
+
+       project is the platform's default lifecycle's first state, which a claim created before
+       version 0.4.0 is in: the lifecycle is read from the type, not kept on the document, so such
+       a claim follows this lifecycle from the upgrade. Its one way out, submit, is the seed's to
+       follow (demo/seed.mjs), on the way to the claim's status. No transition leads back to it,
+       and no claim starts in it. -->
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="lifecycle">
+    <lifecycle name="payersClaim" defaultInitial="submitted">
+      <transitions>
+        <transition name="review" destinationState="inReview">
+          <description>Start reviewing the claim</description>
+        </transition>
+        <transition name="pend" destinationState="pended">
+          <description>Hold the claim, waiting on information</description>
+        </transition>
+        <transition name="resume" destinationState="inReview">
+          <description>Review the held claim again</description>
+        </transition>
+        <transition name="approve" destinationState="approved">
+          <description>Approve the claim</description>
+        </transition>
+        <transition name="deny" destinationState="denied">
+          <description>Deny the claim</description>
+        </transition>
+        <transition name="pay" destinationState="paid">
+          <description>Pay the approved claim</description>
+        </transition>
+        <transition name="reopen" destinationState="inReview">
+          <description>Review a decided claim again, as an adjustment or an appeal</description>
+        </transition>
+        <transition name="submit" destinationState="submitted">
+          <description>Bring a claim created before version 0.4.0 into this lifecycle</description>
+        </transition>
+      </transitions>
+      <states>
+        <state name="submitted" description="Received, not yet reviewed" initial="true">
+          <transitions>
+            <transition>review</transition>
+          </transitions>
+        </state>
+        <state name="inReview" description="Being determined">
+          <transitions>
+            <transition>pend</transition>
+            <transition>approve</transition>
+            <transition>deny</transition>
+          </transitions>
+        </state>
+        <state name="pended" description="Held, waiting on information">
+          <transitions>
+            <transition>resume</transition>
+            <transition>approve</transition>
+            <transition>deny</transition>
+          </transitions>
+        </state>
+        <state name="approved" description="Approved, not yet paid">
+          <transitions>
+            <transition>pay</transition>
+            <transition>reopen</transition>
+          </transitions>
+        </state>
+        <state name="denied" description="Denied">
+          <transitions>
+            <transition>reopen</transition>
+          </transitions>
+        </state>
+        <state name="paid" description="Paid">
+          <transitions>
+            <transition>reopen</transition>
+          </transitions>
+        </state>
+        <state name="project" description="A claim created before version 0.4.0">
+          <transitions>
+            <transition>submit</transition>
+          </transitions>
+        </state>
+      </states>
+    </lifecycle>
+  </extension>
+
+  <!-- The platform's default lifecycle for every other type, so that a record has a lifecycle
+       state. A claim has its own, above. -->
   <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
     <types>
       <type name="Member">default</type>
-      <type name="Claim">default</type>
+      <type name="Claim">payersClaim</type>
       <type name="Case">default</type>
       <type name="Provider">default</type>
       <type name="ClaimDocument">default</type>
     </types>
+  </extension>
+
+  <!-- claim:status is the lifecycle state, after every transition, whoever follows it: the
+       workflow, a lifecycle button, or the seed. Written by the handler of the platform's
+       lifecycle_transition_event, which Nuxeo fires with the claim as read after the transition. -->
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="chains">
+    <chain id="PayersClaim.KeepStatus">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">claim:status</param>
+        <param type="serializable" name="value">expr:Document.lifeCycle</param>
+        <param type="boolean" name="save">true</param>
+      </operation>
+    </chain>
+  </extension>
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="event-handlers">
+    <handler chainId="PayersClaim.KeepStatus">
+      <event>lifecycle_transition_event</event>
+      <filters>
+        <doctype>Claim</doctype>
+      </filters>
+    </handler>
   </extension>
 
   <!-- Every page provider binds what it is given as a quoted, escaped literal, and leaves out

@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<!--
+  The claims review workflow, PayersClaimReview, contributed the way Nuxeo 2025's own models are:
+  nuxeo-routing-default's bundle contributes SerialDocumentReview and ParallelDocumentReview to the
+  routing service's routeModelImporter point as zips of a document export, with the variable
+  schemas, facets, chains and availability filter its nodes name, all in one component.
+
+  At every start, the routing service (RouteModelsInitializator, then importAllRouteModels) hands
+  each zip to RouteModelsZipImporter, which imports it under the route models' folder when no model
+  of its name is there, and replaces the model when the zip's MD5 digest differs from the one it
+  recorded. So a model changes on the server only with its zip's bytes, and build-route-model.mjs
+  writes the zip reproducibly from workflow/PayersClaimReview/, the reviewed source.
+
+  The lifecycle the chains follow, payersClaim, and what keeps claim:status in step with it, are
+  the stand-in model's (payers-claims-demo-model.xml). Fictional, like the rest of the kit.
+-->
+<component name="nuxeo.config.payers-claims-demo.workflow" version="1.0">
+  <!-- Registers after the platform's own components, as a Studio project's bundle does. The models
+       are imported when the repository starts, after every contribution is registered. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <!-- The workflow's variables, and the determination step's: var_<workflow> and the step's own,
+       each in the facet its route node names. -->
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="var_PayersClaimReview" prefix="var_PayersClaimReview" override="true"
+      src="schemas/var_PayersClaimReview.xsd" />
+    <schema name="var_PayersClaimReview_determine" prefix="var_PayersClaimReview_determine"
+      override="true" src="schemas/var_PayersClaimReview_determine.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <facet name="facet-var_PayersClaimReview">
+      <schema name="var_PayersClaimReview" />
+    </facet>
+    <facet name="facet-var_PayersClaimReview_determine">
+      <schema name="var_PayersClaimReview_determine" />
+    </facet>
+  </extension>
+
+  <!-- The decisions the determination's form picks from: the ids its var:decision may hold. -->
+  <extension target="org.nuxeo.ecm.directory.GenericDirectory" point="directories">
+    <directory name="PayersClaimDecision" extends="template-vocabulary">
+      <autoincrementIdField>false</autoincrementIdField>
+      <createTablePolicy>on_missing_columns</createTablePolicy>
+      <table>payers_vocabulary_PayersClaimDecision</table>
+      <dataFile>data/vocabularies/PayersClaimDecision.csv</dataFile>
+    </directory>
+  </extension>
+
+  <!-- Each chain a route node's transition names. A route chain's input is the workflow's
+       documents: here the one claim it was started on. -->
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="chains">
+    <!-- Start: a submitted claim goes into review. -->
+    <chain id="PayersClaimReview.Review">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.FollowLifecycleTransition">
+        <param type="string" name="value">review</param>
+      </operation>
+    </chain>
+
+    <!-- Not started: the claim is not submitted, so it is in review, held or decided already. -->
+    <chain id="PayersClaimReview.RefuseStart">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Review refused</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">Only a submitted claim is reviewed. The claim is unchanged, and this workflow ends.</param>
+      </operation>
+    </chain>
+
+    <!-- Determination refused: the claim is left as it is, and the step opens again. Recorded in
+         the claim's history, so a refusal a client never showed is still seen. -->
+    <chain id="PayersClaimReview.RefuseDenial">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Determination refused</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">A denial needs a reason. The claim is unchanged, and its determination is open again.</param>
+      </operation>
+    </chain>
+    <chain id="PayersClaimReview.RefuseApproval">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Determination refused</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">An approval needs an allowed amount, from 0 to the billed amount. The claim is unchanged, and its determination is open again.</param>
+      </operation>
+    </chain>
+    <chain id="PayersClaimReview.RefuseUndecided">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Determination refused</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">A determination approves or denies the claim. The claim is unchanged, and its determination is open again.</param>
+      </operation>
+    </chain>
+
+    <!-- Denied: nothing allowed, and the reason in the claim's history. -->
+    <chain id="PayersClaimReview.Deny">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">claim:allowedAmount</param>
+        <param type="serializable" name="value">expr:0.0</param>
+        <param type="boolean" name="save">true</param>
+      </operation>
+      <operation id="Document.FollowLifecycleTransition">
+        <param type="string" name="value">deny</param>
+      </operation>
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Claim denied</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} denied the claim: @{NodeVariables["denialReason"]}</param>
+      </operation>
+    </chain>
+
+    <!-- Over 5,000 dollars: the allowed amount is the claim's, and a supervisor approves it. -->
+    <chain id="PayersClaimReview.Recommend">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">claim:allowedAmount</param>
+        <param type="serializable" name="value">expr:NodeVariables["allowedAmount"]</param>
+        <param type="boolean" name="save">true</param>
+      </operation>
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Sent to a supervisor</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} approved @{NodeVariables["allowedAmount"]} dollars of a claim billed over 5,000 dollars, which a supervisor approves.</param>
+      </operation>
+      <operation id="Context.SetWorkflowVar">
+        <param type="string" name="name">determinedBy</param>
+        <param type="object" name="value">expr:nodeLastActor</param>
+      </operation>
+    </chain>
+
+    <!-- Approved by the adjuster, 5,000 dollars or less: the allowed amount, then approved. -->
+    <chain id="PayersClaimReview.ApproveDetermined">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.SetProperty">
+        <param type="string" name="xpath">claim:allowedAmount</param>
+        <param type="serializable" name="value">expr:NodeVariables["allowedAmount"]</param>
+        <param type="boolean" name="save">true</param>
+      </operation>
+      <operation id="Document.FollowLifecycleTransition">
+        <param type="string" name="value">approve</param>
+      </operation>
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Claim approved</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} approved @{NodeVariables["allowedAmount"]} dollars.</param>
+      </operation>
+    </chain>
+
+    <!-- Approved by a supervisor: the allowed amount is already the claim's. -->
+    <chain id="PayersClaimReview.Approve">
+      <operation id="Context.FetchDocument" />
+      <operation id="Document.FollowLifecycleTransition">
+        <param type="string" name="value">approve</param>
+      </operation>
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Claim approved</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} approved the claim, as a supervisor.</param>
+      </operation>
+    </chain>
+
+    <!-- Sent back by a supervisor: the adjuster determines the claim again. -->
+    <chain id="PayersClaimReview.SendBack">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Sent back to the adjuster</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{nodeLastActor} sent the determination back.</param>
+      </operation>
+    </chain>
+  </extension>
+
+  <!-- Who may start it, and on what: someone who may change a claim, on a submitted claim, which
+       starting it puts in review, so a claim whose review runs is not offered a second one.
+       Checked by the routing service when a workflow is started through the REST API
+       (canCreateInstance), and when it lists the workflows a document may start. The start node
+       refuses a claim that is not submitted too, for a start that skips this filter. -->
+  <extension target="org.nuxeo.ecm.platform.actions.ActionService" point="filters">
+    <filter id="filter@PayersClaimReview">
+      <rule grant="true">
+        <permission>ReadWrite</permission>
+        <type>Claim</type>
+        <condition>#{currentDocument.currentLifeCycleState == 'submitted'}</condition>
+      </rule>
+      <rule grant="false">
+        <condition>document.isImmutable()</condition>
+      </rule>
+    </filter>
+  </extension>
+
+  <!-- The model: build-route-model.mjs writes the zip from workflow/PayersClaimReview/. -->
+  <extension target="org.nuxeo.ecm.platform.routing.service" point="routeModelImporter">
+    <template-resource id="PayersClaimReview" path="data/PayersClaimReview.zip" />
+  </extension>
+</component>

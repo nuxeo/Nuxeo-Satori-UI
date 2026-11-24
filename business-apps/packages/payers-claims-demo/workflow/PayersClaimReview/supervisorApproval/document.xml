@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Supervisor approval: a claim billed over 5,000 dollars that an adjuster approved, for any
+     member of claims-supervisors. Approve approves it; Send back returns it to the adjuster's
+     determination. It has no variables of its own: its task form shows the claim read-only
+     (agentic-ui-config/tasks/PayersClaimReview.supervisorApproval.layout.json). Any other action
+     a client sends opens the approval again. -->
+<document repository="default" id="supervisorApproval">
+  <system>
+    <type>RouteNode</type>
+    <path>PayersClaimReview/supervisorApproval</path>
+    <lifecycle-state>validated</lifecycle-state>
+    <lifecycle-policy>documentRouteElement</lifecycle-policy>
+    <access-control/>
+  </system>
+  <schema xmlns:common="http://www.nuxeo.org/ecm/schemas/common/" name="common"></schema>
+  <schema xmlns:dc="http://www.nuxeo.org/ecm/schemas/dublincore/" name="dublincore">
+    <dc:title><![CDATA[Approve the determination]]></dc:title>
+  </schema>
+  <schema xmlns:rnode="http://www.nuxeo.org/ecm/schemas/route_node/" name="route_node">
+    <rnode:nodeId><![CDATA[supervisorApproval]]></rnode:nodeId>
+    <rnode:start><![CDATA[false]]></rnode:start>
+    <rnode:stop><![CDATA[false]]></rnode:stop>
+    <rnode:hasTask><![CDATA[true]]></rnode:hasTask>
+    <rnode:hasMultipleTasks><![CDATA[false]]></rnode:hasMultipleTasks>
+    <rnode:taskDocType><![CDATA[TaskDoc]]></rnode:taskDocType>
+    <rnode:taskDirective><![CDATA[Approve the determination]]></rnode:taskDirective>
+    <rnode:taskAssignees/>
+    <rnode:taskAssigneesExpr><![CDATA["group:claims-supervisors"]]></rnode:taskAssigneesExpr>
+    <rnode:taskDueDateExpr><![CDATA[CurrentDate.days(2)]]></rnode:taskDueDateExpr>
+    <rnode:allowTaskReassignment><![CDATA[true]]></rnode:allowTaskReassignment>
+    <rnode:executeOnlyFirstTransition><![CDATA[true]]></rnode:executeOnlyFirstTransition>
+    <rnode:inputChain><![CDATA[]]></rnode:inputChain>
+    <rnode:outputChain><![CDATA[]]></rnode:outputChain>
+    <rnode:taskButtons>
+      <button>
+        <name><![CDATA[reject]]></name>
+        <label><![CDATA[Send back]]></label>
+        <filter><![CDATA[]]></filter>
+        <validate><![CDATA[false]]></validate>
+      </button>
+      <button>
+        <name><![CDATA[approve]]></name>
+        <label><![CDATA[Approve]]></label>
+        <filter><![CDATA[]]></filter>
+        <validate><![CDATA[true]]></validate>
+      </button>
+    </rnode:taskButtons>
+    <rnode:transitions>
+      <transition>
+        <name><![CDATA[approve]]></name>
+        <label><![CDATA[Approve]]></label>
+        <condition><![CDATA[NodeVariables["button"] == "approve"]]></condition>
+        <chain><![CDATA[PayersClaimReview.Approve]]></chain>
+        <targetId><![CDATA[end]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[sendBack]]></name>
+        <label><![CDATA[Send back to the adjuster]]></label>
+        <condition><![CDATA[NodeVariables["button"] == "reject"]]></condition>
+        <chain><![CDATA[PayersClaimReview.SendBack]]></chain>
+        <targetId><![CDATA[determine]]></targetId>
+      </transition>
+      <transition>
+        <name><![CDATA[unknownAction]]></name>
+        <label><![CDATA[Refused: not an action of this step]]></label>
+        <condition><![CDATA[true]]></condition>
+        <chain><![CDATA[]]></chain>
+        <targetId><![CDATA[supervisorApproval]]></targetId>
+      </transition>
+    </rnode:transitions>
+    <rnode:escalationRules/>
+    <rnode:taskX><![CDATA[300]]></rnode:taskX>
+    <rnode:taskY><![CDATA[200]]></rnode:taskY>
+  </schema>
+</document>

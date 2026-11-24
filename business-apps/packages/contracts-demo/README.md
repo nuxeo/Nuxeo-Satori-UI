@@ -18,7 +18,8 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
   app is for; the active contracts for contract managers; the terminated ones for legal reviewers.
 - **An `app.json` that names its own groups,** `contract-managers` and `legal-reviewers`, and a
   component that contributes the app to the app registry, so a server with the package installed
-  lists it beside the Payers app to a person in a group of each.
+  lists it beside the Payers app to a person in a group of each. Its address is `contract-desk`,
+  since its id, `contracts`, is a platform route.
 - **A stand-in model, in its own component:** the `Contract` type, its `contract` schema and three
   page providers. It is fictional, and replaced whole when a real one comes.
 - **A seed script,** with its controls, which writes seven fictional contracts. It creates no user
@@ -28,27 +29,31 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
 
 ## What is in it
 
-| File                                                         | What it is                                                                          |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `bundle/agentic-ui-config/app.json`                          | The app: id `contracts`, its name, version, platform range and two groups           |
-| `bundle/agentic-ui-config/layouts/Contract/view.layout.json` | The Contract record page: three banners, four cards and the history                 |
-| `bundle/agentic-ui-config/layouts/Contract/edit.layout.json` | The Edit form, with the field rule and a check that the end is not before the start |
-| `bundle/agentic-ui-config/queues/up-for-renewal.json`        | The renewals queue                                                                  |
-| `bundle/agentic-ui-config/home.json`                         | The home: three figures, one for everyone and one for each group                    |
-| `bundle/agentic-ui-config/navigation.json`                   | The menu: the home and the queue                                                    |
-| `bundle/agentic-ui-config/labels/en.json`                    | Its labels, in English: every key the files above name                              |
-| `bundle/OSGI-INF/contracts-demo-config.xml`                  | The component that contributes the two layouts and the app                          |
-| `bundle/OSGI-INF/contracts-demo-model.xml`                   | **The stand-in model:** the document type, its lifecycle, three page providers      |
-| `bundle/schemas/contract.xsd`                                | **The stand-in model's** schema                                                     |
-| `content-model.json`                                         | The model as the server would answer it, for `--model` (below)                      |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`   | The seed script, its fictional contracts, and its controls. Not packaged            |
-| `package/package.xml`                                        | The Marketplace package: name, version, and what it depends on                      |
-| `build.mjs`                                                  | Version 1's builder: the generator's, byte for byte                                 |
+| File                                                         | What it is                                                                                         |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                          | The app: id `contracts`, address `contract-desk`, its name, version, platform range and two groups |
+| `bundle/agentic-ui-config/layouts/Contract/view.layout.json` | The Contract record page: three banners, four cards and the history                                |
+| `bundle/agentic-ui-config/layouts/Contract/edit.layout.json` | The Edit form, with the field rule and a check that the end is not before the start                |
+| `bundle/agentic-ui-config/queues/up-for-renewal.json`        | The renewals queue                                                                                 |
+| `bundle/agentic-ui-config/home.json`                         | The home: three figures, one for everyone and one for each group                                   |
+| `bundle/agentic-ui-config/navigation.json`                   | The menu: the home and the queue                                                                   |
+| `bundle/agentic-ui-config/labels/en.json`                    | Its labels, in English: every key the files above name                                             |
+| `bundle/OSGI-INF/contracts-demo-config.xml`                  | The component that contributes the two layouts and the app                                         |
+| `bundle/OSGI-INF/contracts-demo-model.xml`                   | **The stand-in model:** the document type, its lifecycle, three page providers                     |
+| `bundle/schemas/contract.xsd`                                | **The stand-in model's** schema                                                                    |
+| `content-model.json`                                         | The model as the server would answer it, for `--model` (below)                                     |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`   | The seed script, its fictional contracts, and its controls. Not packaged                           |
+| `package/package.xml`                                        | The Marketplace package: name, version, and what it depends on                                     |
+| `build.mjs`                                                  | Version 1's builder: the generator's, byte for byte                                                |
 
 - **No `actions.json`.** Nothing in the app reads one yet, and none was asked for.
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
-- **One version in three places:** 0.1.0, in `package.xml`, `app.json`'s `packageVersion` and the
+- **One version in three places:** 0.2.0, in `package.xml`, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`.
+- **Its address is `contract-desk`,** not its id: `contracts` is the platform's own page,
+  `/contracts`, the component showcase (`PLATFORM_ROUTES` in `libs/shared/app-definition`). 0.1.0
+  had no address, so the pipeline noted the clash; 0.2.0 gives one, and a changed address is a
+  breaking change, a minor below 1.0.0 (package-pipeline.md, section 8).
 
 ## The stand-in model
 
@@ -129,10 +134,15 @@ shape for the generators to read.
 | `npx nx g ./tools/satori-generators:app-package contracts-demo --owner=nuxeo --appId=contracts --title="Contracts" --vendor="Nuxeo" --groups=contract-managers,legal-reviewers --type=Contract --model=/tmp/contracts-kit/content-model.json`                                                              | `app.json`, `labels/en.json`, the component, `package/`, the manifest, `build.mjs`, and the record page: one card, `contract`, with all 13 properties in the model's order. Left out: nothing |
 | `npx nx g ./tools/satori-generators:app-queue --package=business-apps/packages/contracts-demo --id=up-for-renewal --pageProvider=contracts_up_for_renewal --columns=contract:number,dc:title,contract:counterparty,contract:end,contract:value --sort=contract:end --pageSize=50 --label="Up for renewal"` | `queues/up-for-renewal.json` and its label. It said to check the page provider with `describe_page_provider`, which had already said the server has none                                      |
 
+Run today, the first command is refused: `app-package` now refuses an id that is a platform route
+unless `--address` gives another, so it needs `--address=contract-desk`, the address 0.2.0 gives.
+
 Then by hand. The skill says to write the menu and the home by hand, and to edit what the
 generators wrote; it also says never to write the manifest or the component by hand, and both were,
-because no generator writes the edit layout's entry, the `<app>` element or a second component
-(phase 3 feedback, below):
+because no generator wrote the edit layout's entry, the `<app>` element or a second component then
+(phase 3 feedback, below). They do now: `app-form` writes an Edit form and its `<layout>`,
+`app-package` and `app-registry` the `<app>` element, and `app-model` a stand-in model in a
+component of its own that the manifest lists. What follows is what was written by hand then:
 
 - **The record page,** from the generator's one card: four cards in a person's order (the contract,
   its terms, its termination, its notes) and the history; `status-badge` with a tone for each
@@ -150,7 +160,8 @@ because no generator writes the edit layout's entry, the `<app>` element or a se
 - **The queue's widgets:** `relative-date` on the end, `currency` from the record's code, `user`.
 - **The home and the menu,** which have no generator, from app-definition-v2.md, sections 9 and 10.
 - **The component:** the edit layout's `<layout>`, and the `<app>` element, which the `app-package`
-  generator does not write yet, naming the four files the registry serves.
+  generator did not write then, naming the four files the registry serves. `app-registry`, run on
+  0.2.0, finds it naming every file already.
 - **The stand-in model:** `contracts-demo-model.xml`, `contract.xsd`, and the model component
   added to the manifest's `Nuxeo-Component`.
 
@@ -236,11 +247,25 @@ repository. Seeing all of this live needs the package installed and seeded, next
 npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0
 ```
 
-It writes `dist/contracts-demo-0.1.0.zip`. Held to its content model:
+It writes `dist/contracts-demo-0.2.0.zip`, with no note. Held to its content model:
 
 ```bash
 npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0 --model business-apps/packages/contracts-demo/content-model.json
 ```
+
+Held to the version before, as CI holds a pull request to its base, with that version's copy in
+`/tmp/base` (package-pipeline.md, section 8):
+
+```bash
+mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/contracts-demo | tar -x -C /tmp/base
+```
+
+```bash
+npm run app-package -- business-apps/packages/contracts-demo --platform 0.2.0 --previous /tmp/base/business-apps/packages/contracts-demo
+```
+
+From 0.1.0 it writes `dist/contracts-demo-0.2.0.changes.md`: the address changed, which is
+breaking, and the component, which is to judge, so 0.2.0, a minor. 0.1.1 is refused at step 3.
 
 ## Installing it on a local Nuxeo
 
@@ -256,11 +281,11 @@ starts, and removes itself. `nuxeoctl mp-install` refuses while the server runs,
 the container's main process.
 
 ```bash
-docker cp business-apps/packages/contracts-demo/dist/contracts-demo-0.1.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/contracts-demo/dist/contracts-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/contracts-demo-0.1.0.zip --accept=true > /var/log/nuxeo/contracts-kit-install.log 2>&1 || echo "contracts kit: install failed, see /var/log/nuxeo/contracts-kit-install.log"' 'rm -f "$0"' > /tmp/zz-contracts-kit-install.sh && chmod 755 /tmp/zz-contracts-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/contracts-demo-0.2.0.zip --accept=true > /var/log/nuxeo/contracts-kit-install.log 2>&1 || echo "contracts kit: install failed, see /var/log/nuxeo/contracts-kit-install.log"' 'rm -f "$0"' > /tmp/zz-contracts-kit-install.sh && chmod 755 /tmp/zz-contracts-kit-install.sh
 ```
 
 ```bash
@@ -287,7 +312,8 @@ docker cp /tmp/zz-contracts-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/
   ```
 
 A rebuild of a version already installed is skipped as unchanged: in the one-off script, run
-`nuxeoctl mp-remove contracts-demo --accept=true` before `mp-install`.
+`nuxeoctl mp-remove contracts-demo --accept=true` before `mp-install`. Do the same on a server with
+0.1.0 installed: remove `contracts-demo`, then install `contracts-demo-0.2.0.zip`, in one script.
 
 ### Removing it
 
@@ -387,30 +413,36 @@ reads, and the seed sets none, so its workspace has the server's defaults.
 
 ## Phase 3 feedback: where the skill and the generators fell short
 
-What the build met, in the order it met it. None was changed here: the skill says a refusal is
-fixed in the package, and the tools are another change's.
+What the build met, in the order it met it. None was changed in 0.1.0: the skill says a refusal
+is fixed in the package, and the tools are another change's. That change, #703, closed items 1 to
+4, 6 and the first point of 11, and item 12 in the tools; 0.2.0 closes item 12 in the kit. Each
+closed item says so.
 
 1. **No model, no kit.** Step 1 says to stop when the type does not exist, which is right for a
    customer's server. A demo kit needs a stand-in model, and nothing writes one: the schema, the
    type, the page providers and the manifest's second component were written by hand, as the
    Payers kit's were, and so was its content model, which the generators need before the server
-   can answer it.
+   can answer it. **Closed:** `app-model` writes a stand-in type, its schema and page providers, in
+   a model component the manifest lists first, and its `content-model.json`.
 2. **The scaffold is not served by the registry.** `app-package` writes no `<app>` element, so
    "Switch app" cannot list a generated app until someone writes it by hand. The pipeline says so,
-   as a note, and passes.
+   as a note, and passes. **Closed:** `app-package` writes it, `app-registry` writes or refreshes
+   it, and the generators that add a file keep it in step.
 3. **The pipeline passed a layout the component does not contribute.** With
    `layouts/Contract/edit.layout.json` written and not yet named in the component, the pipeline
    passed, "2 layouts were held to the content model", and said nothing. The server would never
    serve that file. It refuses a contribution from the wrong place, not a file contributed from
-   nowhere.
+   nowhere. **Closed:** step 2 refuses a `layouts/` file no enabled `<layout>` contributes.
 4. **A field rule in plain words needs a form, and no generator writes one.** `required` and
    `readOnlyWhen` are forms only, and `app-layout` writes `view` mode alone, so the edit layout and
-   its `<layout>` line were written by hand.
+   its `<layout>` line were written by hand. **Closed:** `app-form` writes an Edit or Create form,
+   with `--required`, and has the component contribute it.
 5. **The form types its inputs:** an enumerated string is a text field, so the status is typed, not
    chosen, and the rule follows what is typed. A vocabulary would make it a picker; that is the
    model's to decide.
 6. **The MCP tools' arguments are not in the skill.** `describe_document_type` takes `type` and
    `describe_schema` takes `schema`; the first calls, with `name`, were refused as invalid input.
+   **Closed:** the skill names them.
 7. **`preview_package` calls the Edit form "the Contract record page (edit)".** It is the Edit form.
 8. **A record page cannot be previewed for a model no server has.** `preview_package` serves the
    layouts, and the page needs a record of the type. Hence the stubbed drawing above, which is not
@@ -422,14 +454,17 @@ fixed in the package, and the tools are another change's.
     says not to edit it by hand.
 11. **Two documents say otherwise than the code:**
     - package-pipeline.md, section 2, says a package that contributes no app is refused; the
-      pipeline passes it with a note (item 2);
+      pipeline passes it with a note (item 2). **Closed:** the document now says what the code does;
     - layout-v2.md, section 3, gives `status-badge` "A select" in a form; the form draws a text
       field (item 5), as section 11 says.
 12. **An app's address can take a platform route's.** `app.json`'s `address` defaults to its id,
     `contracts`, and the platform has a page at `/contracts` already, its component showcase
     (`app.routes.ts`). The shell does not open an app at its address yet (app-definition-v2.md,
     section 13), and the validator does not refuse one a platform route has; the kit names none,
-    and the clash waits for that decision.
+    and the clash waits for that decision. **Closed:** the platform's routes are listed once,
+    `PLATFORM_ROUTES`; the validator refuses a written address that is one, and `app-package`
+    refuses an id that is one without `--address`. An id that is one, with no address, is still
+    only noted. 0.2.0 gives the kit the address `contract-desk`, so the pipeline notes nothing.
 
 ## Not done yet
 

@@ -1,4 +1,4 @@
-<package type="addon" name="payers-claims-demo" version="0.3.0">
+<package type="addon" name="payers-claims-demo" version="0.4.0">
   <title>Payers Claims (demo)</title>
   <description>
     <p>The demo app definition of the Nuxeo Satori business apps package pipeline, with fictional data.</p>

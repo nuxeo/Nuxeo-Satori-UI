@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The claims review workflow's model: a document export, as Nuxeo writes one and as the
+     platform's own models are shipped (nuxeo-routing-default's SerialDocumentReview), so that
+     RouteModelsZipImporter imports it at startup from bundle/data/PayersClaimReview.zip. The
+     route model's name is this folder's: PayersClaimReview, a task's workflowModelName. Fictional,
+     like the rest of the kit. build-route-model.mjs writes the zip from this folder. -->
+<document repository="default" id="PayersClaimReview">
+  <system>
+    <type>DocumentRoute</type>
+    <path>PayersClaimReview</path>
+    <lifecycle-state>validated</lifecycle-state>
+    <lifecycle-policy>documentRouteElement</lifecycle-policy>
+    <facet>DocumentRoute</facet>
+    <facet>Orderable</facet>
+    <facet>facet-var_PayersClaimReview</facet>
+    <access-control/>
+  </system>
+  <schema xmlns:docrm="http://www.nuxeo.org/ecm/schemas/document_route_model" name="document_route_model"></schema>
+  <schema xmlns:common="http://www.nuxeo.org/ecm/schemas/common/" name="common"></schema>
+  <schema xmlns:var_PayersClaimReview="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersClaimReview" name="var_PayersClaimReview"></schema>
+  <schema xmlns:dc="http://www.nuxeo.org/ecm/schemas/dublincore/" name="dublincore">
+    <dc:title><![CDATA[Claim review]]></dc:title>
+    <dc:description><![CDATA[An adjuster determines a claim; one over 5,000 dollars goes to a supervisor.]]></dc:description>
+  </schema>
+  <schema xmlns:docri="http://www.nuxeo.org/ecm/schemas/document_route_instance/" name="document_route_instance">
+    <docri:variablesFacet><![CDATA[facet-var_PayersClaimReview]]></docri:variablesFacet>
+    <docri:availabilityFilter><![CDATA[filter@PayersClaimReview]]></docri:availabilityFilter>
+  </schema>
+</document>
