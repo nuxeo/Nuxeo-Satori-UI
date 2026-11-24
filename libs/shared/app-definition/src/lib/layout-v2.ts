@@ -46,7 +46,10 @@ export interface ValidationOptions {
   readonly type?: string;
 }
 
-const FILE_KEYS = ['$schema', 'version', 'columns', 'cards', 'tabs'];
+const FILE_KEYS = ['$schema', 'version', 'columns', 'banners', 'cards', 'tabs'];
+const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen'];
+/** A banner's tones, in layout version 2's words for them: a status badge's, less two. */
+export const BANNER_TONES = ['info', 'warning', 'negative'] as const;
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
 /** What a card shows: exactly one of these. Every one but `fields` is for `view` mode only. */
 const CARD_CONTENTS = ['fields', 'related', 'timeline', 'comments'] as const;
@@ -58,6 +61,7 @@ const COMMENTS_KEYS = ['pageSize'];
 /** The keys each part of a file may hold, which the JSON Schema must list too (its own test checks). */
 export const LAYOUT_V2_KEYS = {
   file: FILE_KEYS,
+  banner: BANNER_KEYS,
   tab: TAB_KEYS,
   card: CARD_KEYS,
   field: FIELD_KEYS,
@@ -174,6 +178,10 @@ function layout(
       c.add('columns', 'structure', 'columns is 1, 2 or 3');
     } else columns = file['columns'] as number;
   }
+  if ('banners' in file) {
+    if (!view) c.add('banners', 'structure', 'banners belong in view mode only');
+    else banners(c, file['banners']);
+  }
   const hasCards = 'cards' in file;
   const hasTabs = 'tabs' in file;
   if (hasCards === hasTabs) c.add('', 'structure', 'a file has "cards" or "tabs", one of the two');
@@ -197,6 +205,31 @@ function layout(
   }
   if (model) c.findings.push(...againstModel(file, model.type, model.model, registries));
   return c.findings;
+}
+
+/**
+ * The record page's banners, above its cards: each a message in a tone, shown while its rule
+ * passes (layout-v2.md, section 2). A banner says something about the record; it holds no field,
+ * so the content model has nothing to check in it.
+ */
+function banners(c: Checker, list: unknown): void {
+  if (!Array.isArray(list)) {
+    c.add('banners', 'structure', 'banners must be a list');
+    return;
+  }
+  list.forEach((item, index) => {
+    const path = join('banners', index);
+    if (!isRecord(item)) {
+      c.add(path, 'structure', 'a banner is an object');
+      return;
+    }
+    c.unknownKeys(item, BANNER_KEYS, path);
+    c.claim(item['id'], join(path, 'id'));
+    c.named(item, path);
+    if ('tone' in item && !(BANNER_TONES as readonly unknown[]).includes(item['tone']))
+      c.add(join(path, 'tone'), 'structure', `tone is one of ${BANNER_TONES.join(', ')}`);
+    if ('visibleWhen' in item) c.rule(item['visibleWhen'], join(path, 'visibleWhen'));
+  });
 }
 
 /** A card's related records: a list of records from a page provider (layout-v2.md, section 7). */

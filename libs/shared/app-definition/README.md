@@ -101,7 +101,7 @@ install and no transpiler.
   - 21 widgets, each with its parameters, which are checked, and the property types it takes,
     which are checked when a content model is given;
   - the 6 computations and the 2 checks, with their signatures;
-  - the rules, row actions and bulk actions the platform registers, version 2's three rules
+  - the rules, row actions and bulk actions the platform registers, version 2's five rules
     among them;
   - the domain modules, of which there are none yet;
   - the pages a menu entry may open, by the ID of the platform's menu entry for each;

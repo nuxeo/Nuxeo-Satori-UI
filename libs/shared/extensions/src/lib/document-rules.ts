@@ -9,7 +9,11 @@ import {
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { daysFromToday } from './date-rules';
 import type { ExtensionRuleEvaluator } from './extension-rules';
+
+/** The furthest `app.rules.dateWithin` looks ahead: a hundred years, as the validator allows. */
+const MAX_DAYS_AHEAD = 36500;
 
 /** No document in focus is not "not trashed" — both trash rules deny on `null`. */
 function isTrashedDocument(document: NuxeoDocument | null): boolean {
@@ -135,6 +139,28 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
     const value = subjectOf(context.document, subject);
     const items: readonly unknown[] = Array.isArray(value) ? value : [value];
     return items.some((item) => values.some((wanted) => sameValue(item, wanted)));
+  },
+  /**
+   * The date has passed (layout-v2.md, section 5): its day is before the reader's today. The
+   * parameter is the date, a property of the focused record, `{ "field": "dc:expired" }`, or a
+   * literal, read as `date-rules.ts` reads one: a stored day as written, an instant on the reader's
+   * own day. No date, or a value that is not one, does not pass, so a banner it shows stays hidden.
+   */
+  'app.rules.datePassed': (context, parameters) => {
+    const days = daysFromToday(subjectOf(context.document, parameters[0]), new Date());
+    return days !== null && days < 0;
+  },
+  /**
+   * The date is today or within the next `days` days: `[{ "field": "dc:expired" }, 30]` passes from
+   * thirty days before it to the day itself, and not once it has passed, which `datePassed` says.
+   * `days` is a whole number from 0 to 36500; any other, or none, and the rule does not pass.
+   */
+  'app.rules.dateWithin': (context, parameters) => {
+    const [subject, ahead] = parameters;
+    if (!(Number.isInteger(ahead) && (ahead as number) >= 0 && (ahead as number) <= MAX_DAYS_AHEAD))
+      return false;
+    const days = daysFromToday(subjectOf(context.document, subject), new Date());
+    return days !== null && days >= 0 && days <= (ahead as number);
   },
   /** The focused record's lifecycle state is one of `parameters`, matched exactly. */
   'app.rules.inState': (context, parameters) => {

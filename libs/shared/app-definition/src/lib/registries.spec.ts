@@ -101,6 +101,7 @@ describe('the JSON Schema, held to the registries and the validator', () => {
   it('allows the same keys in each part of a file as the validator does', () => {
     expect(Object.keys(schema.properties).sort()).toEqual([...LAYOUT_V2_KEYS.file].sort());
     for (const [part, keys] of [
+      ['banner', LAYOUT_V2_KEYS.banner],
       ['tab', LAYOUT_V2_KEYS.tab],
       ['card', LAYOUT_V2_KEYS.card],
       ['field', LAYOUT_V2_KEYS.field],

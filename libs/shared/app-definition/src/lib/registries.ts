@@ -48,6 +48,13 @@ export type ParameterKind =
   | 'template'
   /** `days`, `months` or `years`. */
   | 'unit'
+  /** A whole number of days, from 0 to 36500: how far ahead of today a date rule looks. */
+  | 'days'
+  /**
+   * What a date rule reads: a property, or a literal date, `2026-12-01` or an ISO 8601 date and
+   * time with its zone. Never a computation, which the rules' library does not evaluate.
+   */
+  | 'date'
   /** A rule. */
   | 'rule';
 
@@ -193,9 +200,10 @@ export const CORE_RULES: Readonly<Record<string, Signature>> = {
 
 /**
  * The parameters of the rules in `APP_RULES` that take any: the types, facets or MIME types to
- * match; the operations `isNotBusy` waits for, none of which it also accepts; and layout version
- * 2's three (layout-v2.md, section 5), a property or a literal then the values, the lifecycle
- * states, or the groups. `fieldIn`'s values are texts, numbers or booleans, as its evaluator in
+ * match; the operations `isNotBusy` waits for, none of which it also accepts; layout version 2's
+ * three (layout-v2.md, section 5), a property or a literal then the values, the lifecycle states,
+ * or the groups; and its two date rules, a date, then for `dateWithin` how many days ahead it
+ * looks. `fieldIn`'s values are texts, numbers or booleans, as its evaluator in
  * `libs/shared/extensions` compares them; the rest are names, so texts. Every other rule takes
  * none.
  */
@@ -207,6 +215,8 @@ const APP_RULE_SIGNATURES: Readonly<Record<string, Signature>> = {
   'app.rules.fieldIn': { parameters: ['subject', 'literal'], rest: 'literal' },
   'app.rules.inState': { parameters: ['text'], rest: 'text' },
   'app.rules.inGroup': { parameters: ['text'], rest: 'text' },
+  'app.rules.datePassed': { parameters: ['date'] },
+  'app.rules.dateWithin': { parameters: ['date', 'days'] },
 };
 
 /** The rules the platform registers, as `docs/extension-reference.md`, section 4, documents them. */
@@ -245,6 +255,8 @@ export const APP_RULES: Readonly<Record<string, Signature>> = Object.fromEntries
     'app.rules.fieldIn',
     'app.rules.inState',
     'app.rules.inGroup',
+    'app.rules.datePassed',
+    'app.rules.dateWithin',
   ].map((id): [string, Signature] => [id, APP_RULE_SIGNATURES[id] ?? { parameters: [] }]),
 );
 

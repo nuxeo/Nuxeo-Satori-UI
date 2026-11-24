@@ -9,7 +9,7 @@
  */
 export { ACTIONS_V2_KEYS, PLACEMENTS, validateActions, type ActionsOptions } from './lib/actions';
 export { APP_ID, APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
-export { MAX_NESTING, type Finding } from './lib/checker';
+export { DATE_RULE_MAX_DAYS, MAX_NESTING, type Finding } from './lib/checker';
 export {
   propertiesOf,
   propertyTypeOf,
@@ -31,6 +31,7 @@ export {
 } from './lib/home';
 export { LABELS_V2_KEYS, validateLabels, validateModuleSettings } from './lib/labels';
 export {
+  BANNER_TONES,
   LAYOUT_MODES,
   LAYOUT_V2_KEYS,
   heldToModel,

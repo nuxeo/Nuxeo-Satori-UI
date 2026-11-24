@@ -20,6 +20,13 @@
       "maximum": 3,
       "description": "View mode only."
     },
+    "banners": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/banner"
+      },
+      "description": "View mode only. Shown above the cards, each while its rule passes."
+    },
     "cards": {
       "type": "array",
       "items": {
@@ -55,6 +62,38 @@
     "xpath": {
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$"
+    },
+    "banner": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelKey": {
+          "type": "string"
+        },
+        "tone": {
+          "enum": ["info", "warning", "negative"],
+          "description": "Default info."
+        },
+        "visibleWhen": {
+          "$ref": "#/$defs/rule"
+        }
+      },
+      "description": "A message about the record, above its cards. It needs a label or a labelKey.",
+      "anyOf": [
+        {
+          "required": ["label"]
+        },
+        {
+          "required": ["labelKey"]
+        }
+      ]
     },
     "tab": {
       "type": "object",

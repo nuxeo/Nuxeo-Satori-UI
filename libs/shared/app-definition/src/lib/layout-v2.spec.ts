@@ -480,6 +480,111 @@ describe('the validator finds', () => {
   });
 });
 
+describe('banners', () => {
+  const page = (...banners: unknown[]) => ({
+    version: 2,
+    banners,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+  const ending = {
+    id: 'rights-ending',
+    labelKey: 'acme.asset.rightsEnding',
+    tone: 'warning',
+    visibleWhen: { type: 'app.rules.dateWithin', parameters: [{ field: 'dc:expired' }, 30] },
+  };
+
+  it('take an id, a label or a key, a tone and a rule, the last two optional', () => {
+    expect(messages(page(ending, { id: 'note', label: 'A note' }))).toEqual([]);
+    expect(messages(page())).toEqual([]);
+  });
+
+  it('take the three tones only', () => {
+    expect(
+      messages(
+        page(...['info', 'warning', 'negative'].map((tone) => ({ ...ending, id: tone, tone }))),
+      ),
+    ).toEqual([]);
+    expect(messages(page({ ...ending, tone: 'positive' }))).toEqual([
+      'banners[0].tone: tone is one of info, warning, negative [structure]',
+    ]);
+  });
+
+  it('are refused outside view mode, as a timeline is', () => {
+    expect(messages(page(ending), 'edit')).toEqual([
+      'banners: banners belong in view mode only [structure]',
+    ]);
+  });
+
+  it('are refused without words, with a key of their own, or as anything but a list of objects', () => {
+    expect(messages(page({ id: 'quiet', tone: 'info' }))).toEqual([
+      'banners[0]: needs a "label" or a "labelKey" [structure]',
+    ]);
+    expect(messages(page({ ...ending, message: 'Hello' }))).toEqual([
+      'banners[0].message: "message" is not a key version 2 has [unknown]',
+    ]);
+    expect(messages({ ...page(), banners: { id: 'x' } })).toEqual([
+      'banners: banners must be a list [structure]',
+    ]);
+    expect(messages(page('rights'))).toEqual(['banners[0]: a banner is an object [structure]']);
+  });
+
+  it("share the file's ids with its cards", () => {
+    expect(messages(page({ id: 'c', label: 'Same as the card' }))).toEqual([
+      'cards[0].id: the id "c" is already used at banners[0].id [structure]',
+    ]);
+  });
+
+  it("name their rule as a card does, and an unregistered one is that banner's finding", () => {
+    expect(messages(page({ ...ending, visibleWhen: 'acme.rules.licensed' }))).toEqual([
+      'banners[0].visibleWhen: the rule "acme.rules.licensed" is not registered [unknown]',
+    ]);
+  });
+});
+
+describe('the date rules', () => {
+  const rule = (visibleWhen: unknown) =>
+    messages({ version: 2, cards: [{ id: 'c', fields: [{ field: 'dc:title', visibleWhen }] }] });
+
+  it('take a date, and dateWithin how many days ahead of today it looks', () => {
+    expect(rule({ type: 'app.rules.datePassed', parameters: [{ field: 'dc:expired' }] })).toEqual(
+      [],
+    );
+    expect(rule({ type: 'app.rules.datePassed', parameters: ['2026-12-01'] })).toEqual([]);
+    for (const days of [0, 30, 36500])
+      expect(
+        rule({ type: 'app.rules.dateWithin', parameters: [{ field: 'dc:expired' }, days] }),
+      ).toEqual([]);
+  });
+
+  it('refuse a whole number of days out of range, a text, a fraction or none', () => {
+    const within = (...parameters: unknown[]) =>
+      rule({ type: 'app.rules.dateWithin', parameters: [{ field: 'dc:expired' }, ...parameters] });
+    const refused =
+      'cards[0].fields[0].visibleWhen.parameters[1]: the rule "app.rules.dateWithin" takes a whole number of days from 0 to 36500 here [parameter]';
+    for (const days of [-1, 36501, '30', 1.5, null]) expect(within(days)).toEqual([refused]);
+    expect(within()).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters: the rule "app.rules.dateWithin" takes 2 parameters, not 1 [parameter]',
+    ]);
+  });
+
+  it('refuse a literal that is not a date, as the rules would never pass on it', () => {
+    const passed = (date: unknown) => rule({ type: 'app.rules.datePassed', parameters: [date] });
+    for (const date of ['2026-12-01T09:30:00Z', '2026-12-01T09:30:00.000+05:30', '2028-02-29'])
+      expect(passed(date)).toEqual([]);
+    const refused =
+      'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.datePassed" takes a property or a date here, as "2026-12-01" or an ISO 8601 date and time with its zone [parameter]';
+    for (const date of ['2026-13-01', '2027-02-29', '2026-12-01T09:30:00', '1 December', 30, true])
+      expect(passed(date)).toEqual([refused]);
+  });
+
+  it("refuse a computation for the date, which the rules' library never evaluates", () => {
+    const computed = { computed: { type: 'core.template', parameters: ['2026-12-01'] } };
+    expect(rule({ type: 'app.rules.datePassed', parameters: [computed] })).toEqual([
+      'cards[0].fields[0].visibleWhen.parameters[0]: the rule "app.rules.datePassed" takes a property or a date here, as "2026-12-01" or an ISO 8601 date and time with its zone [parameter]',
+    ]);
+  });
+});
+
 describe('a timeline and comments', () => {
   const card = (content: Record<string, unknown>) => ({
     version: 2,
