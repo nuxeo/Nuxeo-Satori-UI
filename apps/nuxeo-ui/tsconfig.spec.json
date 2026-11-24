@@ -7,6 +7,7 @@
     "types": ["jasmine"],
     "useDefineForClassFields": false,
     "importHelpers": false,
+    "resolveJsonModule": true,
     "rootDir": "../.."
   },
   "include": ["src/**/*.d.ts", "src/**/*.spec.ts"]

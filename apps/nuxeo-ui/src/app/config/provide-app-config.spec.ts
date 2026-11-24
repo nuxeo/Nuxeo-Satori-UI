@@ -33,8 +33,9 @@ import { Overlay } from '@angular/cdk/overlay';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
-import { provideSatoriDateAdapter } from '@nuxeo/satori-platform/ui';
+import { dateMaskFor, provideSatoriDateAdapter } from '@nuxeo/satori-platform/ui';
 
+import * as arabicCatalogue from '../../../public/i18n/ar.json';
 import { appConfig } from '../app.config';
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
 import { GENERATED_AUDIT_LOCALES, SHIPPED_CATALOGUE_LANGUAGES } from '../i18n/shipped-catalogues';
@@ -1004,4 +1005,13 @@ describe('syncDocumentFavicon', () => {
     expect(() => TestBed.tick()).not.toThrow();
     expect(icon()).toBeNull();
   });
+});
+
+/** The imported Crowdin value must work with regional date hints, not just a synthetic mask. */
+describe('approved Arabic catalogue date hint', () => {
+  for (const locale of ['ar-SA', 'ar-DZ', 'ar-MA']) {
+    it(`reorders the real catalogue hint for ${locale}`, () => {
+      expect(dateMaskFor(locale, arabicCatalogue.common['date-mask'])).toBe('شهر/يوم/سنة');
+    });
+  }
 });

@@ -1276,3 +1276,10 @@ fails any source that is not.
    next pull. And never change the meaning of an existing key — change the key, because
    `update_without_changes` will otherwise keep the old translation and it will be wrong in every
    locale.
+
+
+## NXSAT-754 review follow-up — 24 November 2026
+
+PR #696 now composes the approved Arabic `common.date-mask` words by their named fields. `ar-SA`, `ar-DZ` and `ar-MA` show month/day/year hints in Arabic, matching their date adapters; complete field names survive two-digit-year formats. The regression suite also rejects duplicate field words and arbitrary prose. App-level tests read the actual imported Arabic JSON rather than a replacement mask.
+
+Copilot also found misleading Hebrew republish wording and Arabic/Hebrew instructions tied to a screen side. These are translation-owner corrections in Crowdin project 160, separate from the four interpolation placeholders already corrected. Do not resolve those review threads or claim the catalogue ready until the corrected wording is approved, downloaded and validated. Non-English exports have not been hand-edited.

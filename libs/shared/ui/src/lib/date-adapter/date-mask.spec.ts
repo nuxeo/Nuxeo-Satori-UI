@@ -7,8 +7,8 @@ import { dateMaskFor } from './date-mask';
 import { DateMaskPipe } from './date-mask.pipe';
 
 /**
- * The seven catalogue values, as shipped. English is read from the published fallback so this
- * file cannot drift from it; the other six are literals because their catalogues live in
+ * The catalogue masks enabled on this branch. English is read from the published fallback so this
+ * file cannot drift from it; the non-English masks are literals because their catalogues live in
  * `apps/nuxeo-ui` and a library spec must not import across that boundary. Their agreement with
  * each parser is what `satori-date-adapter.spec.ts`' parse table already asserts.
  */
@@ -18,6 +18,8 @@ const CATALOGUE_MASKS = {
   de: 'tt.mm.jjjj',
   ja: 'yyyy/mm/dd',
   nl: 'dd-mm-jjjj',
+  ar: 'يوم/شهر/سنة',
+  he: 'יי/חח/שששש',
 } as const;
 
 describe('dateMaskFor', () => {
@@ -27,12 +29,7 @@ describe('dateMaskFor', () => {
 
   /**
    * A language's own mask is already right, and must come back untouched — including the
-   * localized letters a translator chose. Every locale this application can actually produce is
-   * one of these five, so this row set is also "the app's behaviour does not change".
-   *
-   * The other five the application targets — `ar`, `es`, `he`, `it`, `sv` — are not in
-   * `DATE_FNS_LOCALES` until their catalogues land, so they resolve to English here and have no
-   * meaningful row yet. Add one with each catalogue.
+   * localized letters or Arabic words a translator chose. Add a row when enabling another catalogue.
    */
   describe.each(Object.entries(CATALOGUE_MASKS))('%s', (language, mask) => {
     it('returns the catalogue value unchanged', () => {
@@ -126,6 +123,8 @@ describe('dateMaskFor', () => {
     { value: 'yyyy年mm月dd日', why: 'literal segments it cannot place' },
     { value: 'dd/mm', why: 'fewer fields than the pattern has' },
     { value: 'dmy/dd/yyyy', why: 'a run that is not one repeated letter' },
+    { value: 'يوم/شهر/يوم', why: 'duplicate Arabic fields' },
+    { value: 'أدخل/هذا/التاريخ', why: 'Arabic prose, not named date fields' },
   ])('$why', ({ value }) => {
     it('returns the value it was given', () => {
       expect(dateMaskFor('en-GB', value)).toBe(value);
@@ -157,6 +156,20 @@ describe('dateMaskFor', () => {
     it(`composes ${expected}`, () => {
       expect(dateMaskFor(locale, mask)).toBe(expected);
     });
+  });
+
+  describe.each(['ar-SA', 'ar-DZ', 'ar-MA'])('Arabic word mask under %s', (locale) => {
+    it('puts the month before the day, matching the regional parser', () => {
+      expect(dateMaskFor(locale, CATALOGUE_MASKS.ar)).toBe('شهر/يوم/سنة');
+    });
+  });
+
+  it('recognizes an already reordered Arabic word mask by field name', () => {
+    expect(dateMaskFor('ar', 'شهر/يوم/سنة')).toBe(CATALOGUE_MASKS.ar);
+  });
+
+  it('preserves a complete Arabic year word for a two-digit-year locale', () => {
+    expect(dateMaskFor('fr-CA', CATALOGUE_MASKS.ar)).toBe('سنة-شهر-يوم');
   });
 
   it('falls back to the base language for a region date-fns has no data for', () => {
