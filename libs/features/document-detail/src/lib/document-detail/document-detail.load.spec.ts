@@ -644,6 +644,48 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(component.doc()?.type).toBe('Picture');
     });
 
+    /**
+     * Nuxeo makes picture views for any record with the `Picture` facet, a kit's own type such as
+     * `AcmeAsset` included, a moment after it is written. Until they are made, the page asks for
+     * the record again, and hands the record page the views once they come. Seen red with only the
+     * type `Picture` asked again.
+     */
+    it("asks again for the views of a record of a kit's own type with the Picture facet", async () => {
+      const pending = doc({
+        type: 'AcmeAsset',
+        facets: ['Picture'],
+        properties: { 'picture:views': [], 'picture:info': {} },
+      });
+      const made = doc({
+        type: 'AcmeAsset',
+        facets: ['Picture'],
+        properties: {
+          'picture:info': { width: 1600, height: 1200 },
+          'picture:views': [
+            { title: 'Medium', width: 1000, height: 750, content: { 'mime-type': 'image/jpeg' } },
+          ],
+        },
+      });
+      mockDetailService.getFullDocument.mockReturnValueOnce(of(pending)).mockReturnValue(of(made));
+      fixture = TestBed.createComponent(DocumentDetailComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+      expect(component.doc()?.properties['picture:views']).toEqual([]);
+
+      // The first ask again is 500 ms after the record is read.
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      expect(mockDetailService.getFullDocument).toHaveBeenCalledTimes(2);
+      expect(component.doc()?.properties['picture:views']).toEqual(
+        made.properties['picture:views'],
+      );
+    });
+
+    it('does not ask again for a record of the same type without the facet', async () => {
+      await build(doc({ type: 'AcmeAsset', facets: [], properties: { 'picture:views': [] } }));
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      expect(mockDetailService.getFullDocument).toHaveBeenCalledTimes(1);
+    });
+
     it('takes the video path when transcoded videos are present', async () => {
       await build(
         doc({
