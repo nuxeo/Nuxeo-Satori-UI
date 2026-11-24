@@ -87,4 +87,16 @@ describe('ShareDialogComponent', () => {
     expect(toast.error).toHaveBeenCalledWith('Failed to copy link');
     expect(toast.show).not.toHaveBeenCalled();
   });
+
+  it('says the copy failed, rather than throwing, where the browser has no clipboard API', async () => {
+    // `navigator.clipboard` is undefined outside a secure context: an installation served over
+    // plain HTTP, other than on localhost.
+    clipboardIs(undefined);
+
+    expect(() => copyButton().click()).not.toThrow();
+    await flushPromises();
+
+    expect(toast.error).toHaveBeenCalledWith('Failed to copy link');
+    expect(toast.show).not.toHaveBeenCalled();
+  });
 });
