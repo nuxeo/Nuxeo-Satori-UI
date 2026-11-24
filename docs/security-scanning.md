@@ -21,9 +21,11 @@ CodeQL is GitHub's semantic code analysis engine that automatically scans for se
 
 ## When It Runs
 
-- **On Push:** Every push to `main`, `feature/**`, or `fix/**` branches
-- **On Pull Request:** All PRs targeting `main`
-- **Scheduled:** Weekly on Mondays at 6:00 UTC to catch newly disclosed vulnerabilities
+- **On Push:** Every push to `main`, `integration/**` or `staging/**`, which gives each a baseline
+  for its PRs' results
+- **On Pull Request:** All PRs targeting `main`, `integration/**` or `staging/**`, analysed on
+  `refs/pull/<n>/merge`, the ref the `code-scanning` gate reads
+- **Scheduled:** Weekly on Fridays at 06:22 UTC to catch newly disclosed vulnerabilities
 
 ## Viewing Results
 

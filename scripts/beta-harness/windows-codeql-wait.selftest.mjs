@@ -37,6 +37,20 @@ test('Windows verification and its CodeQL prerequisite run for PRs into main, no
   }
 });
 
+test('CodeQL runs wherever Windows verification waits for it, and for PRs into staging', () => {
+  const codeql = load(
+    readFileSync(new URL('../../.github/workflows/codeql.yml', import.meta.url), 'utf8'),
+  );
+  for (const event of ['pull_request', 'push']) {
+    // A branch Windows runs on and CodeQL does not has no analysis, and the wait times out.
+    for (const branch of workflow.on[event].branches)
+      assert.ok(codeql.on[event].branches.includes(branch), `CodeQL ${event} lacks ${branch}`);
+    // Without it, every PR into staging/enterprise-grade-app failed `code-scanning` as never
+    // analysed, and the branch had no baseline for a PR's results.
+    assert.ok(codeql.on[event].branches.includes('staging/**'), `CodeQL ${event} lacks staging/**`);
+  }
+});
+
 test('all platform jobs use the repository-pinned runtime accepted by gate zero', () => {
   for (const job of Object.values(workflow.jobs)) {
     const setup = job.steps.find((step) => step.uses?.startsWith('actions/setup-node@'));

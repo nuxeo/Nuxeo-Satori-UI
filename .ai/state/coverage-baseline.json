@@ -73,12 +73,12 @@
       "sCovered": 2018
     },
     "document-layouts": {
-      "lines": 96.59,
-      "statements": 96.59,
-      "branches": 90.69,
-      "functions": 94.26,
-      "sTotal": 2314,
-      "sCovered": 2235
+      "lines": 96.43,
+      "statements": 96.43,
+      "branches": 90.48,
+      "functions": 93.93,
+      "sTotal": 2214,
+      "sCovered": 2135
     },
     "integration-tests": {
       "lines": 50.84,
@@ -91,18 +91,18 @@
     "knowledge-discovery": {
       "lines": 64.02,
       "statements": 64.02,
-      "branches": 37.1,
+      "branches": 37.19,
       "functions": 60.48,
       "sTotal": 567,
       "sCovered": 363
     },
     "nuxeo-client": {
-      "lines": 87.87,
-      "statements": 87.87,
-      "branches": 78.29,
-      "functions": 88.62,
-      "sTotal": 2828,
-      "sCovered": 2485
+      "lines": 87.76,
+      "statements": 87.76,
+      "branches": 78.16,
+      "functions": 88.53,
+      "sTotal": 2811,
+      "sCovered": 2467
     },
     "permission-dialogs": {
       "lines": 100,
@@ -145,12 +145,12 @@
       "sCovered": 339
     },
     "shared-extensions": {
-      "lines": 94.75,
-      "statements": 94.75,
-      "branches": 94.15,
-      "functions": 90.54,
-      "sTotal": 724,
-      "sCovered": 686
+      "lines": 94.65,
+      "statements": 94.65,
+      "branches": 94.41,
+      "functions": 90.09,
+      "sTotal": 673,
+      "sCovered": 637
     },
     "shared-kd-client": {
       "lines": 99.67,
@@ -163,7 +163,7 @@
     "tasks": {
       "lines": 100,
       "statements": 100,
-      "branches": 96.7,
+      "branches": 94.51,
       "functions": 96,
       "sTotal": 207,
       "sCovered": 207
@@ -171,10 +171,10 @@
     "testing": {
       "lines": 100,
       "statements": 100,
-      "branches": 100,
+      "branches": 97.22,
       "functions": 100,
-      "sTotal": 4,
-      "sCovered": 4
+      "sTotal": 65,
+      "sCovered": 65
     },
     "trash": {
       "lines": 35.47,
@@ -209,20 +209,20 @@
       "sCovered": 851
     },
     "@nuxeo-satori/studio-migration": {
-      "lines": 94.59,
-      "statements": 94.59,
-      "branches": 86.16,
-      "functions": 98.11,
-      "sTotal": 4566,
-      "sCovered": 4319
+      "lines": 94.6,
+      "statements": 94.6,
+      "branches": 86.17,
+      "functions": 98.12,
+      "sTotal": 4571,
+      "sCovered": 4324
     },
     "shared-app-definition": {
-      "lines": 98.01,
-      "statements": 98.01,
-      "branches": 94.5,
-      "functions": 99.59,
-      "sTotal": 1856,
-      "sCovered": 1819
+      "lines": 97.96,
+      "statements": 97.96,
+      "branches": 94.39,
+      "functions": 99.58,
+      "sTotal": 1814,
+      "sCovered": 1777
     },
     "shared-app-registry": {
       "lines": 92.81,

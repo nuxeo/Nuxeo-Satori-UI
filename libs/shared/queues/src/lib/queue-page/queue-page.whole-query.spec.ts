@@ -36,12 +36,22 @@ import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
 import { QueueService, type QueueLoad } from '../queue.service';
-import { QUEUE_WHOLE_QUERY_TIMING } from '../whole-query-run';
+import { QUEUE_WHOLE_QUERY_TIMING, type WholeQueryTiming } from '../whole-query-run';
 import { QueuePageComponent } from './queue-page';
 
-/** The second read's delay after a run, and how long a spec waits for it. */
-const REINDEX_MS = 1000;
-const REINDEX_WAIT_MS = REINDEX_MS + 100;
+/**
+ * The page's waits here: none between status reads, and the shipped wait before the list's second
+ * read, for the index. That one runs on the clock the test moves (see `beforeEach`), never on how
+ * long the steps before it take.
+ */
+const TIMING: WholeQueryTiming = {
+  pollMs: 0,
+  countPollMs: 0,
+  countReads: 25,
+  failures: 2,
+  settle: 2,
+  reindexMs: 3000,
+};
 
 const QUEUE = {
   version: 2,
@@ -157,20 +167,7 @@ describe('QueuePageComponent, over the whole query', () => {
             },
           },
         },
-        {
-          provide: QUEUE_WHOLE_QUERY_TIMING,
-          useValue: {
-            pollMs: 0,
-            countPollMs: 0,
-            countReads: 25,
-            failures: 2,
-            settle: 2,
-            // Real time, so it has to outlast every await between the run ending and the list's
-            // first answer on a slow runner: at 30 ms CI answered after the window had closed, and
-            // the first read's count was named. REINDEX_WAIT_MS waits it out.
-            reindexMs: REINDEX_MS,
-          },
-        },
+        { provide: QUEUE_WHOLE_QUERY_TIMING, useValue: TIMING },
       ],
     });
     // As the app registers them: Delete's handler declares what it maps to over a whole query.
@@ -195,11 +192,20 @@ describe('QueuePageComponent, over the whole query', () => {
 
   async function settle(): Promise<void> {
     for (let i = 0; i < 3; i++) {
+      // The page's timers that are due: the status reads, which wait no time here. The clock does
+      // not move, so the list's second read waits for `later()`.
+      vi.advanceTimersByTime(0);
       fixture.detectChanges();
       await fixture.whenStable();
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
     fixture.detectChanges();
+  }
+
+  /** The wait before the list's second read runs out: the clock moves past it, and the page settles. */
+  async function later(): Promise<void> {
+    vi.advanceTimersByTime(TIMING.reindexMs);
+    await settle();
   }
 
   /** The page the list asked for last, answered: two rows of `total`. */
@@ -260,6 +266,11 @@ describe('QueuePageComponent, over the whole query', () => {
   };
 
   beforeEach(() => {
+    // The page's waits are RxJS timers, which RxJS schedules with setInterval: they run on a clock
+    // only the test moves. On the runner's clock the list's second read, for the index, raced the
+    // steps before it, and came first once a loaded runner made them take longer than the wait.
+    // Angular's scheduling and settle()'s yields use setTimeout, which stays real.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     files = { 'unassigned-claims': { kind: 'file', content: QUEUE } };
     pages = [];
     execute = vi.fn(() => {
@@ -282,6 +293,7 @@ describe('QueuePageComponent, over the whole query', () => {
   afterEach(() => {
     fixture?.destroy();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('offers every result of the query once a row is selected, naming the total', async () => {
@@ -350,14 +362,17 @@ describe('QueuePageComponent, over the whole query', () => {
     );
     // The list is read again: the records have changed. Until it answers, there is no count.
     expect(execute.mock.calls.length).toBe(asked + 1);
+    // The second read waits on the test's clock. Were RxJS to schedule on something else, it would
+    // wait on the runner's again, and this says so rather than the race coming back unseen.
+    expect(vi.getTimerCount(), "the list's second read waits on the test's clock").toBe(1);
     await press('.queue-whole-query__dismiss');
     // The first read answers, maybe from an index that has not caught up: its count is not named.
     await answer(120);
     await selectRow();
     expect(notice()).toBe('');
+    expect(execute.mock.calls.length).toBe(asked + 1);
     // And once more a little later, for a list the search index serves: that count is named.
-    await new Promise((resolve) => setTimeout(resolve, REINDEX_WAIT_MS));
-    await settle();
+    await later();
     expect(execute.mock.calls.length).toBe(asked + 2);
     await answer(80);
     await selectRow();
@@ -373,11 +388,12 @@ describe('QueuePageComponent, over the whole query', () => {
     await press('.queue-whole-query__select-all');
     await press('.queue-whole-query__run');
     await respond(at('COMPLETED', 120, 120));
+    // The second read is still to come when the other queue opens: what follows is not vacuous.
+    expect(vi.getTimerCount(), "the list's second read waits on the test's clock").toBe(1);
     fixture.componentRef.setInput('id', 'other');
     await settle();
     const asked = execute.mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, REINDEX_WAIT_MS));
-    await settle();
+    await later();
     expect(execute.mock.calls.length).toBe(asked);
   });
 
