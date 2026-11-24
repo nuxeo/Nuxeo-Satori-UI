@@ -88,7 +88,8 @@ function directoryOf(constraints: unknown): string | undefined {
 /**
  * Whether a `documentResolver` binds the value to a document by its id. Nuxeo reports its `store`
  * as `id` (also for a resolver given none, or one it does not know), `idOnly`, `path` or
- * `pathOnly`; the first two hold an id, the others a path, which no lookup by id could read.
+ * `pathOnly`; the first two name a document by its id, the others by a path, which no lookup by id
+ * could read.
  *
  * **A limit:** `id` accepts a bare id, as the Payers kit's seed writes one, and Nuxeo's resolver
  * itself writes `<repository>:<id>` for it. The lookup asks only for a bare, lower-case id, so such
