@@ -521,6 +521,9 @@ check that did not run does.
       - the rule's own values.
     - So an inverted rule, a widened one, a rule on the wrong field and a free JavaScript one
       slipped in all fail. A rule written differently that decides the same passes.
+    - A rule is read 256 levels deep (`MAX_NESTING`, as the validator reads it). One nested
+      deeper, in a conversion edited by hand, fails as a rule the table cannot read, rather than
+      the check overflowing its stack.
     - Each condition's own rule is held to the same table.
     - Nothing Web UI shows under a condition is shown to everyone: no field, action, home card,
       queue, menu entry, layout block's card or tab loses its rule, and no field of a block under a
