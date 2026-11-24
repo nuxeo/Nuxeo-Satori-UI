@@ -304,7 +304,10 @@ function visitScalars(
   if (type === 'complex' && depth < MAX_DEPTH) {
     const subs = Object.entries(definition.fields ?? {});
     for (const item of values.filter(isRecord)) {
-      for (const [name, sub] of subs) visitScalars(sub, item[name], depth + 1, visit);
+      // Own keys only, as `subFields` reads them.
+      for (const [name, sub] of subs) {
+        visitScalars(sub, Object.hasOwn(item, name) ? item[name] : undefined, depth + 1, visit);
+      }
     }
     return;
   }
