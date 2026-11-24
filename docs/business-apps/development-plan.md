@@ -18,7 +18,8 @@ will do the work.
 | 3. Builder kit  | The MCP server, with a preview; the app builder skill; the version 2 generators; package versions; a second kit, [contracts](../../business-apps/packages/contracts-demo/README.md), built with the skill                                           | Signatures and promotion; the outside builder's day; Claude seats; the contracts kit installed, seeded and seen live                                                                                                                                 |
 | 4. Migration    | Migrations M1 and M2: the converter and the harness's checks, with their negative controls; the report, and a decisions file for each reported item's owner and decision                                                                            | Three real packages, the lab server, accepting proposals, and a reviewer for each report                                                                                                                                                             |
 | 5. Brand assets | A picture's asset page with its views, and banners on its rights end date; the brand assets kit's first version: the asset and product pages, the library with its facets, a stand-in model and a seed, built by the pipeline                       | The kit installed on a server and its demo run: its asset page is seen only in dev mode, on the platform's own Pictures. Video, review, share links (decision C), rights the server enforces                                                         |
-| 6 to 10         | Nothing                                                                                                                                                                                                                                             | Everything                                                                                                                                                                                                                                           |
+| 6. Designer     | A first slice of the designer: an administrator opens a record page's layout file, reorders, hides and adds fields, renames a card, previews it on a real record with the record page engine, and downloads it once the validator finds nothing     | Plugins (decision 5, open: no customer code is loaded). Publishing and its approval step: the app registry has no write API. Queues and actions in the designer. The byte-for-byte round trip                                                        |
+| 7 to 10         | Nothing                                                                                                                                                                                                                                             | Everything                                                                                                                                                                                                                                           |
 
 This status does not check phase 0's end-to-end required check or its agreement with the Beta team.
 
@@ -419,6 +420,22 @@ without the agent.
 
 - decision 5;
 - real packages with custom elements.
+
+**Built so far** ([`libs/features/layout-designer`](../../libs/features/layout-designer/README.md)):
+the designer's first slice, for record pages only, at `/#/administration/layout-designer`.
+
+- **What it does:** it opens a record page's `view` file as the server serves it. It reorders and
+  hides fields, adds a property of the type, and changes a card's id, heading text and heading key.
+  The record page engine draws each change, read-only, on a real record of the type.
+- **What it checks:** the validator checks every change, and the file is downloaded only when it
+  finds nothing. The file is held to the server's content model when the model can be read; when it
+  cannot, the page says so and makes every other check, as the pipeline does without `--model`.
+- **Publishing is out of its scope.** It needs a write API the app registry does not have yet, so
+  the file is downloaded, for a package or for `npm run config:dev`, and nothing is written to the
+  server.
+- **No plugin and no customer code:** decision 5 is open.
+- **Only administrators see the page, and that is not a security control:** the server's
+  permissions decide what anyone may read or change.
 
 ### Phase 7. Records that live elsewhere (8 weeks)
 
