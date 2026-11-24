@@ -112,6 +112,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'login.message.invalid-credentials': 'Invalid username or password.',
   'login.message.server-unreachable': 'Could not reach Nuxeo. Check the server, proxy, and URL.',
   'search.workspace.search': 'Search',
+  'search.switch-to-queue-view': 'Switch to Queue view',
   'search.workspace.ask-agent': 'Ask Agent',
   'search.workspace.keywords': 'Keywords',
   'nav.item.configurable-view': 'User’s Configurable View',
