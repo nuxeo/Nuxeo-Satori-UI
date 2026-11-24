@@ -54,8 +54,11 @@ import com.fasterxml.jackson.core.JsonGenerator;
  * <p>{@code uses} holds the original, each picture view the document has, by its title, then each
  * rendition and blob the policy lists; {@code otherwise} is the answer for any use not among them.
  * Every reason is a code from {@link Reason}, for the client to translate. Days are the server's,
- * in UTC. A policy or a document that cannot be read writes every use refused with
- * {@code policy-error}, as the download permission refuses them.
+ * in UTC. Rights that cannot be read refuse with {@code policy-error} the uses that need them, and
+ * a broken policy every use, as the download permission refuses them; a preview stays served. For
+ * a proxy, whose rights are its live document's, the rights end, whether it has ended and the
+ * channels are written {@code null}, and a decision names no day: a reader of a proxy may not
+ * read the live document.
  *
  * <p>The enricher explains; the download permission is what refuses. Both decide through
  * {@link AssetRights#decide}.
@@ -90,8 +93,8 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
         }
         LocalDate today = rights.today();
         AssetFacts facts = null;
-        boolean unreadable = policy.broken();
-        if (!unreadable) {
+        boolean unreadable = false;
+        if (!policy.broken()) {
             try {
                 facts = rights.facts(document, policy);
             } catch (RuntimeException e) {
@@ -100,17 +103,35 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
                 unreadable = true;
             }
         }
+        // Decided as the permission decides each download: the rights are needed only past the
+        // preview, and rights that cannot be read refuse only the uses that need them.
+        AssetFacts known = facts;
+        boolean failed = unreadable;
+        Supplier<AssetFacts> read = () -> {
+            if (failed) {
+                throw new UnreadableRights();
+            }
+            return known;
+        };
         Map<Use, Decision> decided = new LinkedHashMap<>();
         for (Use use : uses(document, policy)) {
-            decided.put(use, unreadable ? Decision.refuse(Reason.POLICY_ERROR)
-                    : AssetRights.decide(policy, facts, use, today));
+            Decision decision;
+            try {
+                decision = AssetRights.decide(policy, read, use, today);
+            } catch (UnreadableRights e) {
+                decision = Decision.refuse(Reason.POLICY_ERROR);
+            }
+            decided.put(use, decision);
         }
-        Decision otherwise = unreadable ? Decision.refuse(Reason.POLICY_ERROR) : Decision.refuse(Reason.NOT_CLEARED);
+        Decision otherwise = policy.broken() ? Decision.refuse(Reason.POLICY_ERROR) : Decision.refuse(Reason.NOT_CLEARED);
+        // A proxy's rights are its live document's, which a reader of the proxy may not read: its
+        // fields are left out, and the decisions say only their reasons.
+        boolean details = !isProxy(document);
 
         jg.writeObjectFieldStart(NAME);
         jg.writeStringField("type", policy.type());
         jg.writeStringField("today", today.toString());
-        if (facts == null) {
+        if (facts == null || !details) {
             jg.writeNullField("rightsEnd");
             jg.writeNullField("ended");
             jg.writeNullField("channels");
@@ -128,14 +149,31 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
             jg.writeStartObject();
             jg.writeStringField("use", entry.getKey().kind().code());
             jg.writeStringField("name", entry.getKey().name());
-            writeDecision(jg, entry.getValue());
+            writeDecision(jg, entry.getValue(), details);
             jg.writeEndObject();
         }
         jg.writeEndArray();
         jg.writeObjectFieldStart("otherwise");
-        writeDecision(jg, otherwise);
+        writeDecision(jg, otherwise, details);
         jg.writeEndObject();
         jg.writeEndObject();
+    }
+
+    /** Thrown to the decision by rights that could not be read, and caught for that use alone. */
+    private static final class UnreadableRights extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        UnreadableRights() {
+            super(null, null, false, false);
+        }
+    }
+
+    private static boolean isProxy(DocumentModel document) {
+        try {
+            return document.isProxy();
+        } catch (RuntimeException e) {
+            return true;
+        }
     }
 
     /** The original, each view the document has, then each rendition and blob the policy lists. */
@@ -172,13 +210,13 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
         return views;
     }
 
-    private static void writeDecision(JsonGenerator jg, Decision decision) throws IOException {
+    private static void writeDecision(JsonGenerator jg, Decision decision, boolean details) throws IOException {
         jg.writeBooleanField("allowed", decision.allowed());
         jg.writeStringField("reason", decision.reason().code());
         if (decision.channel() != null) {
             jg.writeStringField("channel", decision.channel());
         }
-        if (decision.rightsEnd() != null) {
+        if (details && decision.rightsEnd() != null) {
             writeDay(jg, "rightsEnd", decision.rightsEnd());
         }
     }

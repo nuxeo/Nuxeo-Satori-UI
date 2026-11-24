@@ -154,9 +154,11 @@ describe('rightsRefusal', () => {
     expect(rightsRefusal(print, [], 'en-US')?.key).toBe(
       'document-layouts.rights.refused.channel-not-covered-none',
     );
-    expect(rightsRefusal(print, null, 'en-US')?.key).toBe(
-      'document-layouts.rights.refused.channel-not-covered-none',
-    );
+    expect(rightsRefusal(print, null, 'en-US')).toEqual({
+      reason: 'channel-not-covered',
+      key: 'document-layouts.rights.refused.channel-not-covered-unnamed',
+      params: { channel: 'Print' },
+    });
   });
 
   it("says the day the rights ended, the server's day, in the reader's language", () => {

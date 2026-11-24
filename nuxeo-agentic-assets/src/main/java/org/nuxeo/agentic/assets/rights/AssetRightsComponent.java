@@ -44,7 +44,8 @@ import org.nuxeo.runtime.model.DefaultComponent;
  * live document. One with no live document is refused.</li>
  * <li><strong>A container holding a covered asset refuses its renditions,</strong> but its
  * thumbnail: a folder's tree export or a collection's default rendition holds the bytes of each
- * document in it, under the container's own type, which no policy covers.</li>
+ * document in it, under the container's own type, which no policy covers, and goes into the
+ * containers it meets, so one holding another container refuses too ({@link #holdsAnyOf}).</li>
  * </ul>
  */
 public class AssetRightsComponent extends DefaultComponent implements AssetRightsService {
@@ -227,23 +228,36 @@ public class AssetRightsComponent extends DefaultComponent implements AssetRight
     }
 
     /**
-     * Whether the container holds a document of one of {@code types}: below it in the tree, or, for
-     * a collection, among its members. Asked with the reader's own session: a document they may not
-     * read is not one a container's rendition would give them.
+     * Whether the container holds a document of one of {@code types}, or another container that a
+     * container's export would go into: below it in the tree, or, for a collection, among its
+     * members. `Document.GetContainerRendition` zips a folder or a collection met on the way, so
+     * a collection below a folder, and a folder or a collection among a collection's members,
+     * refuse too, whatever they hold: that refuses more than it must, never less. Asked with the
+     * reader's own session: a document they may not read is not one a rendition would give them.
      */
     static boolean holdsAnyOf(DocumentModel container, Set<String> types) {
         CoreSession session = container.getCoreSession();
         if (session == null) {
             throw new IllegalStateException("a container with no session to query");
         }
+        return !session.queryProjection(containerQuery(container, types), 1, 0).isEmpty();
+    }
+
+    /** The query {@link #holdsAnyOf} asks: one document is enough. */
+    static String containerQuery(DocumentModel container, Set<String> types) {
         String id = querySafe(container.getId());
-        String in = types.stream().map(type -> "'" + querySafe(type) + "'").collect(Collectors.joining(", "));
-        String where = "ecm:ancestorId = '" + id + "'";
-        if (container.hasFacet(COLLECTION_FACET)) {
-            where = "(" + where + " OR collectionMember:collectionIds/* = '" + id + "')";
+        String covered = "ecm:primaryType IN ("
+                + types.stream().sorted().map(type -> "'" + querySafe(type) + "'").collect(Collectors.joining(", "))
+                + ")";
+        String below = "ecm:ancestorId = '" + id + "'";
+        if (!container.hasFacet(COLLECTION_FACET)) {
+            // Folders below are in the tree already; a collection below has members elsewhere.
+            return "SELECT ecm:uuid FROM Document WHERE " + below + " AND (" + covered + " OR ecm:mixinType = '"
+                    + COLLECTION_FACET + "')";
         }
-        return !session.queryProjection("SELECT ecm:uuid FROM Document WHERE ecm:primaryType IN (" + in + ") AND "
-                + where, 1, 0).isEmpty();
+        String members = "collectionMember:collectionIds/* = '" + id + "'";
+        return "SELECT ecm:uuid FROM Document WHERE (" + below + " OR " + members + ") AND (" + covered
+                + " OR ecm:mixinType IN ('" + COLLECTION_FACET + "', 'Folderish'))";
     }
 
     private static String querySafe(String value) {

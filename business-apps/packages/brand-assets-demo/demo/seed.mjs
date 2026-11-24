@@ -426,7 +426,8 @@ async function holds(document, file) {
  * module-level constant below it would be.
  */
 async function rightsRefuseOriginal(document) {
-  const RIGHTS_REFUSALS = ['rights-ended', 'channel-not-covered', 'not-cleared'];
+  // Not `not-cleared`: that is a policy that does not list the original, a mistake to see.
+  const RIGHTS_REFUSALS = ['rights-ended', 'channel-not-covered'];
   const { bytes } = await request('GET', `/id/${document.uid}`, {
     headers: { 'enrichers.document': 'assetRights' },
   });

@@ -147,7 +147,14 @@ export function rightsRefusal(
     }
     case 'channel-not-covered': {
       const channel = decision.channel ?? '';
-      return channels && channels.length > 0
+      // `null`: the server did not say, as for a proxy, whose live document's rights decide.
+      if (channels === null)
+        return {
+          reason: 'channel-not-covered',
+          key: key('channel-not-covered-unnamed'),
+          params: { channel },
+        };
+      return channels.length > 0
         ? {
             reason: 'channel-not-covered',
             key: key('channel-not-covered'),

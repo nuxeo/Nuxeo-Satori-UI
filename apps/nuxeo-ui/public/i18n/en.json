@@ -1541,6 +1541,7 @@
       "refused": {
         "channel-not-covered": "The server refused this view: it is covered by the {{channel}} channel, and this asset's rights cover {{channels}} only.",
         "channel-not-covered-none": "The server refused this view: it is covered by the {{channel}} channel, and this asset's rights cover no channel.",
+        "channel-not-covered-unnamed": "The server refused this view: it is covered by the {{channel}} channel, which this asset's rights do not cover.",
         "not-cleared": "The server refused this view: this asset's rights do not clear it for any use.",
         "policy-error": "The server refused this view: it could not read this asset's rights.",
         "rights-ended": "The server refused this view: the rights to this asset ended on {{end}}.",

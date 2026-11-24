@@ -18,6 +18,8 @@ import org.nuxeo.agentic.assets.rights.RightsPolicy.Rule;
  * <li>a broken policy refuses: {@code policy-error};</li>
  * <li>a use the policy does not list is refused: {@code not-cleared};</li>
  * <li>a preview is served: {@code preview};</li>
+ * <li>rights that cannot be read refuse: {@code policy-error}, from the caller, since only from
+ * here on are they read;</li>
  * <li>rights whose end day has passed refuse: {@code rights-ended};</li>
  * <li>channels that do not hold the use's refuse: {@code channel-not-covered};</li>
  * <li>otherwise the use is served: {@code cleared}.</li>

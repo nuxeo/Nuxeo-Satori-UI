@@ -51,9 +51,9 @@ Then decided, the first that applies winning:
 | In this order                                                 | Answer | Reason code           |
 | ------------------------------------------------------------- | ------ | --------------------- |
 | The policy has no rights end or no channels: it is broken     | 403    | `policy-error`        |
-| The rights fields cannot be read, or are not a date and text  | 403    | `policy-error`        |
 | The policy does not list the use                              | 403    | `not-cleared`         |
 | The policy marks the use a preview                            | served | `preview`             |
+| The rights fields cannot be read, or are not a date and text  | 403    | `policy-error`        |
 | The rights end day has passed: from the day after it, in UTC  | 403    | `rights-ended`        |
 | The asset's channels do not hold the channel covering the use | 403    | `channel-not-covered` |
 | Otherwise                                                     | served | `cleared`             |
@@ -64,9 +64,13 @@ Then decided, the first that applies winning:
   Its views and its original are still the version's own. One with no live document is refused.
 - **A container holding a covered asset is refused its renditions, but its thumbnail.** A folder's
   `zipTreeExport`, or a collection's `containerDefaultRendition`, holds the bytes of each document
-  in it, under the container's own type, which no policy covers. So a rendition of a folder, or of
-  a collection, is refused, code `contains-assets`, when the reader's own session finds a document
-  of a covered type below it or among its members.
+  in it, under the container's own type, which no policy covers, and goes into a folder or a
+  collection it meets. So a rendition of a folder, or of a collection, is refused, code
+  `contains-assets`, when the reader's own session finds below it, or among its members, a
+  document of a covered type, a collection, or, among a collection's members, a folder. That
+  refuses more than it must: a collection with no asset in it refuses its folder's export, and a
+  workspace or a domain holding assets refuses its every rendition, its metadata-only `xmlExport`
+  included.
 - **A preview is decided without reading the rights fields,** so a mistake in them refuses the
   uses they decide and leaves the thumbnails alone.
 - **A mistake refuses.** A use with both a channel and `preview="true"`, or neither, is left out,
@@ -136,7 +140,7 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
   decide whether a rendition is offered for a document, with no rendition name in their context,
   and a refusal there is a "not available" error with no reason a client could show.
 - **Compiled and tested against those jars:** the module's sources and tests compile against the
-  server's own 2025.10.18 jars in place of the 11.5 ones Maven resolves, and all 56 tests pass
+  server's own 2025.10.18 jars in place of the 11.5 ones Maven resolves, and all 59 tests pass
   there.
 
 ## What it does not cover
@@ -183,7 +187,8 @@ Contributed to `org.nuxeo.agentic.assets.rights`, point `policies`, by a compone
 
 Ask with the header `enrichers.document: assetRights`. For a document no policy covers it writes
 `"assetRights": null`. Otherwise its `type`, the server's `today`, the `rightsEnd`, whether it has
-`ended`, the `channels`, then `uses`: the original, each picture view the document has by its
+`ended`, the `channels`, which are `null` for a proxy, whose live document a reader may not
+read, then `uses`: the original, each picture view the document has by its
 title, and each rendition and blob the policy lists, each with `allowed`, `reason`, and the
 `channel` that covers it when there is one, and `rightsEnd` when that is the reason; and
 `otherwise`, the answer for any use not listed. The client reads it in
@@ -212,10 +217,13 @@ runtime: documents are proxies that answer only what the code reads.
 | `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                 |
 | `BundleTest`                   | The manifest's components, their classes, and the package's version                                                                      |
 
-Every guard was seen failing: each of 23 breakages, one at a time (a use not listed let through,
+Every guard was seen failing: each of 28 breakages, one at a time (a use not listed let through,
 the channel or the end day not checked, the script's `catch` removed, the point misnamed, the kit's
 print view given another channel, a version read by its own fields, a container's renditions
-served, and the others), turned the tests red, and the build unbroken was green.
+served, a nested collection not looked for, a proxy's live fields written, and the others), turned
+the tests red, and the build unbroken was green. **What the tests cannot reach:** the privileged
+lookup of a version's live document and the container query run against fakes here; the query's
+text is held exactly, but neither has run on a repository.
 
 The version is `assets.package.version` in `pom.xml`, which `package.xml` takes, and the manifest's
 `Bundle-Version` repeats; `BundleTest` refuses a build where they differ.

@@ -77,8 +77,8 @@ way.
 
 ## From the Studio parity plan
 
-Taken on 19 November 2026 in the [Studio parity plan](../nuxeo-studio-parity-plan.md), on the
-`fix/nuxeo-studio-evaluation-ca2a58` branch.
+Taken on 19 November 2026 in the Studio parity plan, `docs/nuxeo-studio-parity-plan.md` on the
+`fix/nuxeo-studio-evaluation-ca2a58` branch, which this branch does not have.
 
 | #   | Decision                                 | Outcome                                           | Here                                                                                                              |
 | --- | ---------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |

@@ -218,6 +218,42 @@ class AssetRightsComponentTest {
         }).decideDownload(folder.model(), null, null, "zipTreeExport"));
     }
 
+    /**
+     * The query a container's check asks: a folder's tree for a covered document or a collection,
+     * whose members are elsewhere; a collection's tree and members for those or a folder, which its
+     * export would go into.
+     */
+    @Test
+    void theContainerQueryAsksForCoveredDocumentsAndTheContainersAnExportGoesInto() {
+        Fakes.Doc folder = new Fakes.Doc();
+        folder.id = "f00d-1";
+        folder.folder = true;
+        Fakes.Doc collection = new Fakes.Doc();
+        collection.id = "c011-2";
+        collection.facets.add("Collection");
+
+        assertEquals("SELECT ecm:uuid FROM Document WHERE ecm:ancestorId = 'f00d-1' AND (ecm:primaryType IN "
+                + "('AcmeAsset', 'Brief') OR ecm:mixinType = 'Collection')",
+                AssetRightsComponent.containerQuery(folder.model(), java.util.Set.of("Brief", "AcmeAsset")));
+        assertEquals("SELECT ecm:uuid FROM Document WHERE (ecm:ancestorId = 'c011-2' OR "
+                + "collectionMember:collectionIds/* = 'c011-2') AND (ecm:primaryType IN ('AcmeAsset') OR "
+                + "ecm:mixinType IN ('Collection', 'Folderish'))",
+                AssetRightsComponent.containerQuery(collection.model(), java.util.Set.of("AcmeAsset")));
+    }
+
+    /** Nothing but a plain name or id is written into the query: anything else refuses. */
+    @Test
+    void aTypeOrAnIdThatIsNotPlainIsNotWrittenIntoTheQuery() {
+        Fakes.Doc folder = new Fakes.Doc();
+        folder.folder = true;
+        folder.id = "x' OR 1=1 --";
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> AssetRightsComponent.containerQuery(folder.model(), java.util.Set.of("AcmeAsset")));
+        folder.id = "f00d-1";
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> AssetRightsComponent.containerQuery(folder.model(), java.util.Set.of("Acme'Asset")));
+    }
+
     @Test
     void aContainerWhoseContentsCannotBeAskedIsRefused() {
         AssetRightsComponent component = Fakes.component(document -> document, (container, types) -> {

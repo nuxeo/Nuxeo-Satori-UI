@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.StringWriter;
 import java.lang.reflect.Field;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.nuxeo.ecm.core.api.DocumentModel;
@@ -94,20 +95,50 @@ class AssetRightsJsonEnricherTest {
         assertEquals(JSON.readTree("{ \"assetRights\": null }"), written(null, Fakes.asset().model()));
     }
 
-    /** Rights it cannot read are explained as the permission refuses them: every use, policy-error. */
+    /**
+     * Rights it cannot read are explained as the permission decides them: each use that needs them
+     * refused with policy-error, the previews still served, and any other use not cleared.
+     */
     @Test
-    void unreadableRightsAreEveryUseRefused() throws Exception {
+    void unreadableRightsRefuseTheUsesThatNeedThemAndNotThePreviews() throws Exception {
         Fakes.Doc unreadable = Fakes.asset();
         unreadable.properties.put("acmeasset:channels", 42);
+        AssetRightsComponent component = Fakes.component(Fakes.kitPolicy());
 
-        JsonNode rights = written(Fakes.component(Fakes.kitPolicy()), unreadable.model()).get("assetRights");
+        JsonNode rights = written(component, unreadable.model()).get("assetRights");
 
         assertTrue(rights.get("channels").isNull());
         for (JsonNode use : rights.get("uses")) {
-            assertEquals(false, use.get("allowed").asBoolean(), use::toString);
-            assertEquals("policy-error", use.get("reason").asText(), use::toString);
+            String name = use.get("name").asText();
+            Use asked = "original".equals(use.get("use").asText()) ? Use.ORIGINAL
+                    : "view".equals(use.get("use").asText()) ? Use.view(name) : Use.rendition(name);
+            String served = component.decideDownload(unreadable.model(),
+                    asked.kind() == Use.Kind.ORIGINAL ? "file:content"
+                            : asked.kind() == Use.Kind.VIEW ? "picture:views/" + List.of("Thumbnail", "Small",
+                                    "Medium", "FullHD", "OriginalJpeg").indexOf(name) + "/content" : null,
+                    null, asked.kind() == Use.Kind.RENDITION ? name : null).decision().reason().code();
+            assertEquals(served, use.get("reason").asText(), "as the permission decides it: " + use);
         }
-        assertEquals("policy-error", rights.get("otherwise").get("reason").asText());
+        assertEquals("preview", rights.get("uses").get(3).get("reason").asText());
+        assertEquals("policy-error", rights.get("uses").get(4).get("reason").asText());
+        assertEquals("not-cleared", rights.get("otherwise").get("reason").asText());
+    }
+
+    /** A proxy's rights are its live document's: their fields and days are not written. */
+    @Test
+    void aProxyIsExplainedWithoutItsLiveDocumentsFields() throws Exception {
+        Fakes.Doc proxy = Fakes.asset().rightsEnd("2026-11-14");
+        proxy.proxy = true;
+
+        JsonNode rights = written(Fakes.component(Fakes.kitPolicy()), proxy.model()).get("assetRights");
+
+        assertTrue(rights.get("rightsEnd").isNull());
+        assertTrue(rights.get("ended").isNull());
+        assertTrue(rights.get("channels").isNull());
+        JsonNode print = rights.get("uses").get(5);
+        assertEquals("OriginalJpeg", print.get("name").asText());
+        assertEquals("rights-ended", print.get("reason").asText());
+        assertTrue(print.get("rightsEnd") == null, print::toString);
     }
 
     @Test
