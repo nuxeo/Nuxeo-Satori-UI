@@ -6191,6 +6191,8 @@ function checkStorybookSatoriCatalogues() {
       const served = new Set();
       const servedFrom = [];
       let judgeable = true;
+      /** Ancestor mounts skipped because their directory inside `node_modules` is not there. */
+      const skippedInstalls = [];
       for (const { dir, exact } of mounts) {
         if (dir.startsWith('..')) {
           if (exact) {
@@ -6203,8 +6205,23 @@ function checkStorybookSatoriCatalogues() {
           continue;
         }
         if (!fileExists(dir)) {
-          // A mount above the catalogue path with no catalogue folder serves nothing there.
-          if (!exact) continue;
+          // A mount above the catalogue path with no catalogue folder serves nothing there, which
+          // is ordinary configuration — a Storybook may mount `public/` at `/` and the catalogues
+          // separately. So this is not warned about per mount. But when the missing directory is
+          // inside `node_modules` it may be missing BECAUSE of the install, and the "add a
+          // `staticDirs` entry" verdict below would then diagnose an install as configuration.
+          if (!exact) {
+            if (isInsideNodeModules(dir)) {
+              const ancestorRoot = installedPackageRootOf(dir);
+              skippedInstalls.push({
+                dir,
+                root: ancestorRoot,
+                installed: ancestorRoot !== null && fileExists(ancestorRoot),
+                drift: ancestorRoot === null ? null : installedVersionDrift(ancestorRoot),
+              });
+            }
+            continue;
+          }
           const packageRoot = installedPackageRootOf(dir);
           if (packageRoot && !fileExists(packageRoot)) {
             warn(
@@ -6288,6 +6305,41 @@ function checkStorybookSatoriCatalogues() {
       if (!judgeable) continue;
 
       if (servedFrom.length === 0) {
+        // "Add a `staticDirs` entry" is the right advice only when the configuration is what is
+        // missing. An ancestor mount pointing into `node_modules` can serve nothing because the
+        // package is stale or absent, and then editing `staticDirs` is the wrong move entirely —
+        // the same misdiagnosis this branch removed from every other verdict in both rules.
+        const stale = skippedInstalls.find((skipped) => skipped.drift?.state === 'drift');
+        const absent = skippedInstalls.find(
+          (skipped) => skipped.root !== null && !skipped.installed,
+        );
+        if (stale) {
+          fail(
+            `${stale.root} is installed at ${stale.drift.installed} but package-lock.json pins ` +
+              `${stale.drift.locked}, and ${main}${where} serves nothing at ` +
+              `${SATORI_STORYBOOK_CATALOGUE_DIR} because ${stale.dir} is not there. A directory ` +
+              'the locked version ships can be absent simply because the install is stale, so ' +
+              'this need not be a `staticDirs` problem at all. Run `npm ci` and re-run the ' +
+              'guardrails before editing `staticDirs`.',
+          );
+          continue;
+        }
+        if (absent) {
+          warn(
+            `${absent.root} is not installed, and ${main}${where} serves nothing at ` +
+              `${SATORI_STORYBOOK_CATALOGUE_DIR} because ${absent.dir} is not there, so whether ` +
+              '`staticDirs` is wrong could not be judged. Run `npm ci` and re-run the guardrails.',
+          );
+          continue;
+        }
+        const unverified = skippedInstalls.find((skipped) => skipped.drift?.state === 'unknown');
+        if (unverified) {
+          warn(
+            `whether ${unverified.root} is the version package-lock.json pins could not be ` +
+              `confirmed before calling the empty ${SATORI_STORYBOOK_CATALOGUE_DIR} a ` +
+              `\`staticDirs\` problem: ${unverified.drift.why}.`,
+          );
+        }
         fail(
           `${projectRoot}'s Storybook configures Satori's translation loader, but ${main}${where} ` +
             `serves nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request ` +

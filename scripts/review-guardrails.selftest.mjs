@@ -13152,6 +13152,49 @@ expectRed(
   /judged from node_modules\/@hylandsoftware without confirming the install: that path is inside node_modules but does not name one installed package/,
 );
 
+/* The last verdict in this rule that had no drift check: an ANCESTOR mount (one above the
+ * catalogue path) whose directory is missing was skipped by `continue`, so when it was the only
+ * mount the rule said "Add a `staticDirs` entry" — diagnosing a stale install as configuration.
+ * Here `node_modules/@hylandsoftware` exists, so the mount resolves inside the dependency tree,
+ * but the stale `satori-ui` has no `i18n`. */
+expectRed(
+  'a stale ancestor mount reported as a staticDirs problem',
+  'checkStorybookSatoriCatalogues',
+  {
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    // `to` is an ancestor of i18n/@hylandsoftware/satori-ui, so the mount is not exact and the
+    // path it resolves to — <from>/satori-ui — is not there, while the package itself is.
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /^(?![\s\S]*Add a `staticDirs` entry)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*need not be a `staticDirs` problem/,
+);
+
+// The other half: with a faithful install an empty catalogue path really is a `staticDirs`
+// problem, and must still say so. Qualifying the verdict must not swallow it.
+expectRed(
+  'a faithful install serving nothing at the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /serves nothing at i18n\/@hylandsoftware\/satori-ui[\s\S]*Add a `staticDirs` entry/,
+);
+
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
 falsePositiveControls += 1;
 expectSilent(
