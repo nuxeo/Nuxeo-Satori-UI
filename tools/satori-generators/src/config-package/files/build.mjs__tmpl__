@@ -109,9 +109,31 @@ const problems = [];
 const problem = (file, message) =>
   problems.push(`${relative(HERE, file).split(sep).join('/') || '.'}: ${message}`);
 
+/**
+ * Names the file system answers with an error rather than as missing, though they name no file:
+ * one under a file, such as `config.xml/x.xml` (ENOTDIR); one with a part longer than a file name
+ * can be (ENAMETOOLONG); and one holding a NUL byte, which Node refuses before asking.
+ */
+const NAMES_NOTHING = new Set(['ENOTDIR', 'ENAMETOOLONG', 'ERR_INVALID_ARG_VALUE']);
+
+/**
+ * What is at `path`, without following a link that `path` itself names, or `undefined` when
+ * nothing is: a name that is missing, or one of `NAMES_NOTHING`. Each names no file, and is
+ * refused as one, not thrown. A link in a folder along the way is still followed; the package
+ * pipeline refuses any link in a package before this builder runs.
+ */
+function entryOf(path) {
+  try {
+    return lstatSync(path, { throwIfNoEntry: false });
+  } catch (error) {
+    if (NAMES_NOTHING.has(error.code)) return undefined;
+    throw error;
+  }
+}
+
 /** Whether `path` is a symbolic link, reported if so: one is refused, not followed. */
 function isLink(path) {
-  if (!lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) return false;
+  if (!entryOf(path)?.isSymbolicLink()) return false;
   problem(
     path,
     'is a symbolic link; put the file itself here, so the package holds only what was reviewed',
@@ -144,11 +166,12 @@ function readUtf8(file) {
 
 /**
  * An XML file as a parser reads it — no byte-order mark, line endings normalised — checked for
- * well-formedness; `null`, reported, when it is missing or malformed.
+ * well-formedness; `null`, reported, when it is missing, not a file, or malformed.
  */
 function readXml(file) {
-  if (!existsSync(file)) {
-    problem(file, 'is missing');
+  if (!isFile(file)) {
+    // A folder or anything else where a file belongs is refused, not read.
+    problem(file, existsSync(file) ? 'is not a file' : 'is missing');
     return null;
   }
   const text = readUtf8(file);
@@ -381,7 +404,7 @@ function notWellFormed(xml) {
   }
 }
 
-const isFile = (path) => lstatSync(path, { throwIfNoEntry: false })?.isFile() === true;
+const isFile = (path) => entryOf(path)?.isFile() === true;
 /** What goes into the bundle. The one predicate for packaging and for checking a `src`. */
 const isPackaged = (path) => isFile(path) && !path.endsWith('.md');
 
@@ -759,7 +782,8 @@ if (!packageName || !packageVersion) {
 
 const manifestFile = join(BUNDLE, 'META-INF', 'MANIFEST.MF');
 // A manifest line longer than 72 bytes continues on the next one, which starts with a space.
-const manifest = ((existsSync(manifestFile) ? readUtf8(manifestFile) : '') ?? '').replace(
+if (existsSync(manifestFile) && !isFile(manifestFile)) problem(manifestFile, 'is not a file');
+const manifest = ((isFile(manifestFile) ? readUtf8(manifestFile) : '') ?? '').replace(
   /(?:\r\n|\r|\n) /g,
   '',
 );
@@ -1001,7 +1025,10 @@ for (const componentPath of componentPaths) {
 }
 
 const entries = [];
-for (const file of bundleIsLink || !existsSync(BUNDLE) ? [] : filesUnder(BUNDLE).sort()) {
+// A bundle/ that is a file holds nothing to package; it is refused, not walked.
+const bundleIsFolder = entryOf(BUNDLE)?.isDirectory() === true;
+if (existsSync(BUNDLE) && !bundleIsLink && !bundleIsFolder) problem(BUNDLE, 'is not a folder');
+for (const file of bundleIsLink || !bundleIsFolder ? [] : filesUnder(BUNDLE).sort()) {
   if (!isPackaged(file)) continue;
   const name = relative(BUNDLE, file).split(sep).join('/');
   // A contribution's JSON contract also applies when its src names the JAR manifest.
