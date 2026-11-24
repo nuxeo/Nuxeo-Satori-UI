@@ -12541,6 +12541,45 @@ expectRed(
   /is installed but has no node_modules\/@hylandsoftware\/satori-ui\/i18n[\s\S]*path is a typo/,
 );
 
+/* A path inside `node_modules` that names no ONE package — a bare scope directory — is read and
+ * judged like any other folder, but `installedPackageRootOf` returns null for it, so the drift
+ * check was skipped IN SILENCE. A genuinely stale install then produced an NXSAT-732 verdict the
+ * gate had never checked, which is the whole defect of this branch arriving by another door.
+ *
+ * The language verdict itself is kept — with this glob the build really does serve no `de-DE.json`
+ * at the asset root — so the control asserts the caveat ACCOMPANIES it rather than replacing it. */
+expectRed(
+  'a stale install judged through a path naming no one installed package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware', output: 'assets/satori-ui/i18n' },
+    ]),
+    [`${VENDOR_I18N}/de-DE.json`]: '{}\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de-DE'])),
+  },
+  null,
+  /judged from node_modules\/@hylandsoftware without confirming the install: that path is inside node_modules but does not name one installed package[\s\S]*lists de-DE in `languages`/,
+);
+
+// A repository path outside `node_modules` has no install to confirm, so it must NOT warn — the
+// distinction is the point, and warning on everything would make the caveat meaningless.
+falsePositiveControls += 1;
+expectGreen(
+  'a repository asset path is judged without an install caveat',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'apps/nuxeo-ui/upstream-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'apps/nuxeo-ui/upstream-i18n/de.json': '{}\n',
+    'apps/nuxeo-ui/upstream-i18n/en.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+);
+
 // And when the comparison cannot be made at all the rule still judges, but says that it did so
 // on trust. Staying silent here is how this blind spot survived in the first place.
 expectWarn(
@@ -13062,6 +13101,24 @@ expectRed(
   },
   null,
   /could not be confirmed before calling the missing node_modules\/@hylandsoftware\/satori-ui\/i18n a typo or a dropped folder[\s\S]*which does not exist/,
+);
+
+// The same silent skip at this site: a mount naming no one installed package was judged with no
+// drift check and no caveat.
+expectRed(
+  'a stale Storybook mount naming no one installed package',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB_VENDOR}/en-US.json`]: '{}\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /judged from node_modules\/@hylandsoftware without confirming the install: that path is inside node_modules but does not name one installed package/,
 );
 
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.

@@ -4685,6 +4685,22 @@ function installedPackageRootOf(path) {
   return segments.slice(0, index + span).join('/');
 }
 
+/**
+ * Whether a path resolves to somewhere inside the installed dependency tree.
+ *
+ * The companion to `installedPackageRootOf` returning `null`: that answer means "no ONE installed
+ * package owns this path", which covers both a repository path — nothing to verify, judge away —
+ * and a path inside `node_modules` that names no single package, such as a bare scope directory.
+ * The second is read and judged like any other, so without this distinction it skipped the drift
+ * check in silence and the rule stated an NXSAT-732 verdict about a stale install it never looked
+ * at. Telling the two apart is what lets the gate say which of them it is looking at.
+ */
+function isInsideNodeModules(path) {
+  const rel = toPosixRel(relative(repoRoot, join(repoRoot, path)));
+  if (rel === '' || rel === '..' || rel.startsWith('../')) return false;
+  return rel.split('/').includes('node_modules');
+}
+
 /** `package-lock.json`'s `packages` map, or why it could not be read. Parsed at most once. */
 let lockedPackagesCache;
 function lockedPackages() {
@@ -5159,6 +5175,17 @@ function checkUpstreamCatalogueLanguages() {
                 `${inputDir} on disk without confirming it is the locked version: ${drift.why}.`,
             );
           }
+        } else if (isInsideNodeModules(inputDir)) {
+          // Inside `node_modules`, but naming no single package — a bare scope directory, say. It
+          // is read and judged like any other folder, so skipping the drift check here in silence
+          // let a stale install produce an NXSAT-732 verdict the gate had not checked.
+          warn(
+            `the languages "${folderPath}" claims to ship were judged from ${inputDir} without ` +
+              'confirming the install: that path is inside node_modules but does not name one ' +
+              'installed package, so there is no lockfile entry to compare it to. Point the ' +
+              "asset rule at a package's own directory and a stale install can be told from a " +
+              'vendor change.',
+          );
         }
 
         const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
@@ -6240,6 +6267,15 @@ function checkStorybookSatoriCatalogues() {
                 `without confirming it is the locked version: ${drift.why}.`,
             );
           }
+        } else if (isInsideNodeModules(dir)) {
+          // As in `checkUpstreamCatalogueLanguages`: a mount inside `node_modules` that names no
+          // single package is still read and judged, so the gate says it could not verify it.
+          warn(
+            `the languages ${main} asks Satori for were judged from ${dir} without confirming ` +
+              'the install: that path is inside node_modules but does not name one installed ' +
+              'package, so there is no lockfile entry to compare it to. Mount a package’s ' +
+              'own directory and a stale install can be told from a vendor change.',
+          );
         }
 
         servedFrom.push(dir);
