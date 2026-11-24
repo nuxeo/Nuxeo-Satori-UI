@@ -98,8 +98,10 @@ read, and names exactly the files of the app definition that the registry serves
 `tasks/<workflow>.<step>.layout.json`. A file the package holds and does not name would never be
 served; one it names and does not hold would be missing on the server; one at another place, such
 as a layout, is not the registry's to serve. Each is refused, and so is a second app, a package
-being one app, and a package that contributes none. A disabled `<app>` contributes nothing. The
-selftest breaks the demo's contribution in each of these ways.
+being one app. A package that contributes none is built, with a note that the registry will not
+serve it: the generators write the contribution (`app-package`, and `app-registry` for a package
+without one), and whether to refuse a package without it is still to decide. A disabled `<app>`
+contributes nothing. The selftest breaks the demo's contribution in each of these ways.
 
 Nothing in a package is read through a symbolic link. Step 1 searches the package for one before
 any step reads a file, and refuses it: a link can point anywhere, a linked `build.mjs` would have

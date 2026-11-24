@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriAppModel",
+  "title": "Satori business app stand-in model",
+  "description": "For a demo only: writes a stand-in document type, its schema and page providers over it into a business app package, in a model component of its own that the manifest lists, and describes the type in content-model.json beside the bundle.",
+  "type": "object",
+  "properties": {
+    "package": {
+      "type": "string",
+      "description": "The app definition package, as a path from the workspace root, such as business-apps/packages/acme-contracts.",
+      "x-prompt": "Which package (e.g. business-apps/packages/acme-contracts)?"
+    },
+    "type": {
+      "type": "string",
+      "description": "The document type: a name of letters, digits, '_' and '-', not one of Nuxeo's own, such as Contract. It extends Document, with the common and dublincore schemas and its own.",
+      "x-prompt": "Which document type (e.g. Contract)?",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,127}$"
+    },
+    "properties": {
+      "type": "string",
+      "description": "Writes the type: its properties, separated by commas, each <name>, <name>:<type> or <name>=<value>|<value>. A type is string (the default), long, double, boolean or date, or a list of one but boolean, such as string[]. Values make a string take only those, such as status=Draft|Active."
+    },
+    "schema": {
+      "type": "string",
+      "description": "With properties: the schema's name. Defaults to the type's name in lower case.",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "prefix": {
+      "type": "string",
+      "description": "With properties: the prefix its properties are written with, as in contract:number. Defaults to the schema's name.",
+      "pattern": "^[a-z][a-z0-9]{0,31}$"
+    },
+    "pageProvider": {
+      "type": "string",
+      "description": "Writes a page provider over the type, reading the repository, with this name, which a queue or a home names.",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+    },
+    "where": {
+      "type": "string",
+      "description": "With pageProvider: an NXQL condition the records must meet besides their type, such as contract:status = 'Active'. A ? is a parameter, which a queue has no record to fill."
+    },
+    "sort": {
+      "type": "string",
+      "description": "With pageProvider: its sort, <prefix>:<name> for ascending or <prefix>:<name>:desc. Defaults to dc:modified:desc."
+    },
+    "pageSize": {
+      "type": "number",
+      "description": "With pageProvider: records per page, 1 to 100. Defaults to 50."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Write the type's schema again from properties, or the page provider again, when the package has it already.",
+      "default": false
+    }
+  },
+  "required": ["package", "type"]
+}

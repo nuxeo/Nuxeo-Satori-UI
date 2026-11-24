@@ -8,6 +8,8 @@ import { formatFiles, workspaceRoot, type Tree } from '@nx/devkit';
 
 import {
   addLabels,
+  appContributionSaid,
+  contributeApp,
   contributeLayout,
   ID,
   listOption,
@@ -37,7 +39,7 @@ export interface AppLayoutSchema {
 }
 
 /** A document type's name, as a layout's path writes it (`layouts/<Type>/`). */
-const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
+export const TYPE = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 
 /**
  * Nuxeo's own schemas, which nearly every document type carries: the title and dates, the icon and
@@ -118,7 +120,7 @@ function entryFor(
 }
 
 /** A card id from a schema's name: the name, when it is an id, else its letters and digits. */
-function cardId(schema: string, taken: Set<string>): string {
+export function cardId(schema: string, taken: Set<string>): string {
   const base = ID.test(schema)
     ? schema
     : schema.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 60) || 'card';
@@ -148,7 +150,9 @@ function addressShown(server: string): string {
  * go in a header only, never over plain HTTP to another machine, and never after a redirect. The
  * file it writes is removed once read.
  */
-async function loadModel(options: AppLayoutSchema): Promise<{ model: Model; from: string }> {
+export async function loadModel(
+  options: Pick<AppLayoutSchema, 'model' | 'modelServer'>,
+): Promise<{ model: Model; from: string }> {
   if ((options.model === undefined) === (options.modelServer === undefined)) {
     throw new Error(
       'Give the content model one way: --model <file>, as `npm run app-package:model` exports it, or --modelServer <address> to read it live.',
@@ -300,6 +304,8 @@ export default async function appLayoutGenerator(tree: Tree, options: AppLayoutS
     cards,
   });
   const kept = addLabels(tree, pkg, labels);
+  // labels/en.json is a file the app registry serves: named, if the component contributes the app.
+  const app = contributeApp(tree, pkg, { create: false });
 
   await formatFiles(tree);
 
@@ -310,7 +316,7 @@ Wrote ${file}
   Type:     ${options.type}, from ${from}
   Cards:    ${cards.map((card) => `${card.id} (${card.fields.length})`).join(', ')}
   Left out: ${left.length === 0 ? 'nothing' : `${left.length}\n    ${left.join('\n    ')}`}
-${kept.length > 0 ? `\n  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}
+${kept.length > 0 ? `\n  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}${appContributionSaid(pkg, app, { absent: false })}
 ${pkg.component} contributes it. Check it against the same model:
 
   npm run app-package -- ${pkg.root} --platform <platform version> --model <content-model.json>

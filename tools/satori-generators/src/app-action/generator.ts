@@ -2,6 +2,8 @@ import { formatFiles, type Tree } from '@nx/devkit';
 
 import {
   addLabels,
+  appContributionSaid,
+  contributeApp,
   humanize,
   ID,
   isRecord,
@@ -257,6 +259,8 @@ export default async function appActionGenerator(tree: Tree, options: AppActionS
     }
   }
   const kept = addLabels(tree, pkg, labels);
+  // actions.json is a file the app registry serves: named, when the component contributes the app.
+  const app = contributeApp(tree, pkg, { create: false });
 
   await formatFiles(tree);
 
@@ -266,7 +270,7 @@ Added ${id} to ${file}
 
   ${options.transition !== undefined ? `Transition: ${options.transition}` : `Operation:  ${options.operation}`}
   Shows on:   ${placements.join(', ')}${queueFile ? `, offered by ${queueFile}` : ''}
-${pruned.length > 0 ? `  No longer offered by ${pruned.join(', ')}\n` : ''}${kept.length > 0 ? `  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}${
+${pruned.length > 0 ? `  No longer offered by ${pruned.join(', ')}\n` : ''}${kept.length > 0 ? `  Kept the text labels/en.json already had for ${kept.join(', ')}\n` : ''}${appContributionSaid(pkg, app)}${
       options.operation !== undefined
         ? `
 ${options.operation} must be on the deployment's allow-list: the pipeline refuses every operation

@@ -167,6 +167,20 @@ describe('app-package generator', () => {
       id: 'contracts',
       labelKey: 'contracts.app',
     });
+    expect(json(tree, `${CONFIG}/app.json`)).not.toHaveProperty('address');
+    expect(tree.read(`${ROOT}/bundle/OSGI-INF/acme-contracts-config.xml`, 'utf-8')).toContain(
+      '<app id="contracts" src="agentic-ui-config/app.json">',
+    );
+  });
+
+  it('writes the address the shell is to open the app at, when it is not the id', async () => {
+    // `contracts` is a platform route: the validator refuses it as the app's address, so an app
+    // with that id needs one of its own.
+    await generate({ appId: 'contracts', address: 'contract-desk' });
+    expect(json(tree, `${CONFIG}/app.json`)).toMatchObject({
+      id: 'contracts',
+      address: 'contract-desk',
+    });
   });
 
   describe('refuses, and writes nothing', () => {
@@ -177,6 +191,7 @@ describe('app-package generator', () => {
       ['an owner with capitals', { owner: 'Acme' }, '--owner "Acme"'],
       ['an app id the registry refuses', { appId: 'Contracts' }, '--appId "Contracts"'],
       ['an app id over 63 characters', { appId: `a${'b'.repeat(63)}` }, '--appId'],
+      ['an address that is not a path segment', { address: 'Contract Desk' }, '--address'],
       ['a version that is not semantic', { version: '1.0' }, '--version "1.0"'],
       ['a group with a control character', { groups: 'legal\u0007' }, '--groups'],
       ['a directory that climbs', { directory: '../elsewhere' }, '--directory "../elsewhere"'],

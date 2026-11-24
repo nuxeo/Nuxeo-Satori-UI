@@ -623,7 +623,8 @@ function filesUnder(directory, prefix = '') {
  * names exactly the files of the app definition the registry serves. A file it holds and does not
  * name would never be served; one it names and does not hold would be missing on the server. A
  * disabled entry contributes nothing and is skipped. A package that contributes no app is said and
- * built, for now: the Builder kit's generators do not write the contribution yet. Called after
+ * built, for now: the Builder kit's generators write the contribution (`app-package` and
+ * `app-registry`), and refusing one without it is the user's to decide. Called after
  * `layoutContributions`, which has refused any component path that leaves `bundle/`.
  */
 function appContributions(directory, root) {
@@ -666,11 +667,12 @@ function appContributions(directory, root) {
   const app = JSON.parse(readFileSync(join(root, 'app.json'), 'utf8').replace(/^\uFEFF/, ''));
   const element = `<app id="${app.id}" src="agentic-ui-config/app.json">`;
   if (apps.length === 0) {
-    // Said, not refused, for now: the app-package, app-queue and app-action generators do not
-    // write the contribution yet, and what they scaffold must still build.
+    // Said, not refused, for now: a package written before the generators wrote the contribution
+    // must still build until the user decides to refuse it.
     process.stdout.write(
       `note: no component contributes the app, so the app registry will not serve it on a server. ` +
-        `Add ${element} to the component, with a <file path="..."> for each file of the app definition.\n`,
+        `Add ${element} to the component, with a <file path="..."> for each file of the app definition: ` +
+        `the app-registry generator writes it.\n`,
     );
     return null;
   }
@@ -700,7 +702,8 @@ function appContributions(directory, root) {
   if (unnamed.length > 0)
     return (
       `${component} does not name ${unnamed.join(', ')} in the app ${id}, so the app registry would ` +
-      `not serve ${unnamed.length === 1 ? 'it' : 'them'}. Add a <file path="..."> for each.`
+      `not serve ${unnamed.length === 1 ? 'it' : 'them'}. Add a <file path="..."> for each, as the ` +
+      'app-registry generator does.'
     );
   return null;
 }

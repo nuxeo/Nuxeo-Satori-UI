@@ -46,6 +46,12 @@
       "description": "Write a version 2 view layout, a document type's record page, from the type's schemas in the server's content model (a file, or read live), and have the package's component contribute it. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
       "x-satori-internal": true
     },
+    "app-form": {
+      "factory": "./src/app-form/generator",
+      "schema": "./src/app-form/schema.json",
+      "description": "Write a version 2 form, a document type's Edit or Create form, from the type's schemas in the server's content model (a file, or read live), with the fields --required names required, and have the package's component contribute it as app-layout does a record page. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
     "app-queue": {
       "factory": "./src/app-queue/generator",
       "schema": "./src/app-queue/schema.json",
@@ -56,6 +62,18 @@
       "factory": "./src/app-action/generator",
       "schema": "./src/app-action/schema.json",
       "description": "Add an action to a business app: a lifecycle transition or an allowed Automation operation, on the record page or a queue. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
+    "app-registry": {
+      "factory": "./src/app-registry/generator",
+      "schema": "./src/app-registry/schema.json",
+      "description": "Have a business app's component contribute the app to the app registry: the <app> element, from agentic-ui-config/app.json, naming every file of the app definition the registry serves. Writes it when there is none, and otherwise brings its files in step with the package's. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
+      "x-satori-internal": true
+    },
+    "app-model": {
+      "factory": "./src/app-model/generator",
+      "schema": "./src/app-model/schema.json",
+      "description": "For a demo only: write a stand-in model into a business app package, a document type with its schema, and page providers over it, in a model component of its own that the manifest lists, with a content-model.json the other generators and the pipeline can be given. A customer's model is Studio's, already on their server. Internal: it writes a package this repository's pipeline checks and builds (scripts/app-package.mjs), naming this repository's JSON Schemas, so it is not shipped in @nuxeo/satori-platform.",
       "x-satori-internal": true
     }
   }

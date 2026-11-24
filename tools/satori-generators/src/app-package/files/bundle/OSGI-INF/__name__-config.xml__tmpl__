@@ -3,14 +3,15 @@
   <!-- Registers after Satori's defaults, so what it contributes applies on top of them. -->
   <require>org.nuxeo.agentic.ui.config.defaults</require>
 
-  <!-- The app-layout generator adds each layout here, inside an org.nuxeo.agentic.ui.config
-       "configuration" extension: the server serves a layout only when this component names it,
-       and the package pipeline refuses one named from anywhere but its layouts/ file.
+  <!-- The app-layout and app-form generators add each layout here, inside an
+       org.nuxeo.agentic.ui.config "configuration" extension: the server serves a layout only when
+       this component names it, and the package pipeline refuses one named from anywhere but its
+       layouts/ file, and a layouts/ file this component does not name.
 
        app.json, actions.json, queues/ and labels/ travel in this package. The app registry in
-       nuxeo-agentic-core serves them, after sign-in, once this component contributes the app as an
-       <app> element naming each file (docs/business-apps/app-definition-v2.md, section 10). This
-       generator does not write that element yet; the package pipeline builds the package without
-       it, and says the registry will not serve the app.
+       nuxeo-agentic-core serves them, after sign-in, to the groups app.json names, as the <app>
+       element below names each file (docs/business-apps/app-definition-v2.md, section 10). The
+       app-registry generator writes it, and the generators that add a file keep it in step; run
+       app-registry again after writing a file by hand, such as the home or the menu.
        There is no bootstrap fragment on purpose: on a shared server it would rebrand everyone's app. -->
 </component>

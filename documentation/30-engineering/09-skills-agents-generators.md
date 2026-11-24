@@ -178,14 +178,14 @@ the definitions disagree.
 
 ---
 
-## 5. Generators — 10 implemented, 5 of them ship to customers
+## 5. Generators — 13 implemented, 5 of them ship to customers
 
 [`tools/satori-generators`](../../tools/satori-generators), Nx generators compiled into the
 published package — all but those `generators.json` marks `x-satori-internal`, which
 `scripts/build-platform-generators.mjs` leaves out: `satori-component`, because `nxs-` is our
-prefix, and the four business-app generators (`app-*`, added 2026-11-23 for phase 3 of
-[the business apps plan](../../docs/business-apps/development-plan.md)), because the packages they
-write are checked by this repository's pipeline and name its JSON Schemas.
+prefix, and the seven business-app generators (`app-*`, added 2026-11-23 and 2026-11-24 for
+phase 3 of [the business apps plan](../../docs/business-apps/development-plan.md)), because the
+packages they write are checked by this repository's pipeline and name its JSON Schemas.
 
 | Generator             | Produces                                                                                                                                                                                                                                                                                       |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,10 +195,13 @@ write are checked by this repository's pipeline and name its JSON Schemas.
 | `extension-component` | A component + registration                                                                                                                                                                                                                                                                     |
 | `config-package`      | A Nuxeo Marketplace package carrying Layer 0 and Layer 1 fragments, with a build target that checks them and writes the installable zip                                                                                                                                                        |
 | `satori-component`    | **Internal.** An `nxs-` component in `libs/shared/satori-components`, registered by ID for a slot: spec rendering it as that slot's host does, story tagged `autodocs`, Overview page, barrel export, `provideNxsComponents()` entry, extension-reference row, with-and-without-Satori section |
-| `app-package`         | **Internal.** A business app: an app definition package, version 2, with `app.json`, `labels/en.json`, the component that contributes its layouts, version 1's package files and the reviewed `build.mjs`; with `--type`, its first record page                                                |
+| `app-package`         | **Internal.** A business app: an app definition package, version 2, with `app.json`, `labels/en.json`, the component that contributes its layouts and its app to the app registry, version 1's package files and the reviewed `build.mjs`; with `--type`, its first record page                |
 | `app-layout`          | **Internal.** A version 2 `view` layout for a document type, one card per schema, from a content model file or read live, contributed by the package's component                                                                                                                               |
+| `app-form`            | **Internal.** A version 2 `edit` or `create` form for a document type, one card per schema, its title first and the fields `--required` names required, contributed by the package's component                                                                                                 |
 | `app-queue`           | **Internal.** A queue: a page provider's records, with columns, a sort and a page size                                                                                                                                                                                                         |
 | `app-action`          | **Internal.** An action: a lifecycle transition or an allowed operation, on the record page or a queue                                                                                                                                                                                         |
+| `app-registry`        | **Internal.** The component's `<app>` element for the app registry, naming every file of the app definition the registry serves; written, or brought in step with the package's files. `app-package` writes it, and the generators that add a file keep it in step                             |
+| `app-model`           | **Internal.** For a demo only: a stand-in model, a document type with its schema and page providers over it, in a model component of its own that the manifest lists, and a `content-model.json` beside the bundle for the other generators and the pipeline                                   |
 
 ### The splice bug, and why the post-condition assertion exists
 
