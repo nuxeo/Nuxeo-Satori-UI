@@ -6349,20 +6349,33 @@ function checkStorybookSatoriCatalogues() {
         continue;
       }
 
-      // Drift recorded on a skipped ancestor mount explains a catalogue the Storybook cannot find
-      // whichever verdict follows, so it is surfaced before the per-language ones too. Consuming
-      // it only in the "serves nothing" branch above left a MIXED configuration — one skipped
-      // mount inside a stale package, another that does serve something, so `servedFrom` is not
-      // empty — getting "use a language that folder ships" with the stale install never
-      // mentioned, and that advice names what 1.0.0 ships while the install is not 1.0.0.
-      const staleSkipped = skippedInstalls.find((skipped) => skipped.drift?.state === 'drift');
-      if (staleSkipped) {
+      // Whatever a skipped ancestor mount says about its install explains a catalogue the
+      // Storybook cannot find, so ALL THREE answers reach the per-language verdicts, not only
+      // drift.
+      //
+      // Written as one lookup over the three states rather than a branch per state because that
+      // is the shape review kept finding one step along: drift was handled at the "serves
+      // nothing" branch while absent and unverifiable were not, then drift was handled here while
+      // those two were not. A verdict a stale install could explain needs the whole answer or
+      // none of it, and the advice below names what `satori-ui 1.0.0` ships — which is wrong to
+      // print at all when the installed version is unknown or is something else.
+      const skippedInstall =
+        skippedInstalls.find((skipped) => skipped.drift?.state === 'drift') ??
+        skippedInstalls.find((skipped) => skipped.root !== null && !skipped.installed) ??
+        skippedInstalls.find((skipped) => skipped.drift?.state === 'unknown');
+      if (skippedInstall) {
+        const why =
+          skippedInstall.drift?.state === 'drift'
+            ? `is installed at ${skippedInstall.drift.installed} but package-lock.json pins ` +
+              `${skippedInstall.drift.locked}`
+            : skippedInstall.installed === false
+              ? 'is not installed'
+              : `could not be checked against package-lock.json (${skippedInstall.drift?.why})`;
         warn(
-          `${staleSkipped.root} is installed at ${staleSkipped.drift.installed} but ` +
-            `package-lock.json pins ${staleSkipped.drift.locked}, and ${main}${where} mounts ` +
-            `${staleSkipped.dir}, which is not there. A catalogue missing below ` +
-            `${SATORI_STORYBOOK_CATALOGUE_DIR} may be that stale install rather than the ` +
-            'language asked for. Run `npm ci` and re-run the guardrails.',
+          `${skippedInstall.root} ${why}, and ${main}${where} mounts ${skippedInstall.dir}, ` +
+            `which is not there. A catalogue missing below ${SATORI_STORYBOOK_CATALOGUE_DIR} may ` +
+            'be the install rather than the language asked for, so the advice below may name a ' +
+            'version this tree does not have. Run `npm ci` and re-run the guardrails.',
         );
       }
 

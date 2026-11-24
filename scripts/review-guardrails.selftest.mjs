@@ -13214,7 +13214,46 @@ expectRed(
     [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
   },
   null,
-  /is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*may be that stale install rather than the language asked for[\s\S]*serves no en-US\.json/,
+  /is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*may be the install rather than the language asked for[\s\S]*serves no en-US\.json/,
+);
+
+// The two states that fix left behind. An ABSENT dependency: the mount resolves inside
+// node_modules, the package is not installed, another mount serves catalogues — so the language
+// verdict fires and used to name what `satori-ui 1.0.0` ships with nothing installed at all.
+expectRed(
+  'a mixed configuration whose absent dependency never reaches the language verdict',
+  'checkStorybookSatoriCatalogues',
+  {
+    'package-lock.json': lockPinning('1.0.0'),
+    // `@hylandsoftware` exists so the mount is inside node_modules, but satori-ui is not there.
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    'apps/nuxeo-ui/public/satori-i18n/fr-FR.json': '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }, { from: '../../../../apps/nuxeo-ui/public/satori-i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /node_modules\/@hylandsoftware\/satori-ui is not installed, and[\s\S]*may be the install rather than the language asked for[\s\S]*serves no en-US\.json/,
+);
+
+// And an UNVERIFIABLE one: installed, but its version cannot be compared to the lockfile, so the
+// advice naming what 1.0.0 ships is a guess and must say so.
+expectRed(
+  'a mixed configuration whose unverifiable dependency never reaches the language verdict',
+  'checkStorybookSatoriCatalogues',
+  {
+    'package-lock.json': lockPinning('1.0.0'),
+    [VENDOR_PACKAGE_JSON]: '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'apps/nuxeo-ui/public/satori-i18n/fr-FR.json': '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }, { from: '../../../../apps/nuxeo-ui/public/satori-i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /could not be checked against package-lock\.json \(node_modules\/@hylandsoftware\/satori-ui\/package\.json declares no version\)[\s\S]*may be the install rather than the language asked for/,
 );
 
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
