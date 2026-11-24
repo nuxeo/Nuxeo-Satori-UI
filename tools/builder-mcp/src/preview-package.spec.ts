@@ -78,6 +78,18 @@ const TASK = {
  * The demo package with its home and menu replaced by these smaller ones, and a task form and an
  * image added, which it does not have: every kind of file the preview serves, and one it cannot.
  */
+/**
+ * `path` named in the app's contribution to the app registry, as the pipeline's step 2 asks of a
+ * file of the app definition: the demo's component names its own files, not those a test adds.
+ */
+function contribute(root: string, path: string): void {
+  const component = join(root, '..', 'OSGI-INF', 'payers-claims-demo-config.xml');
+  const xml = readFileSync(component, 'utf8');
+  const app = '<app id="payers-claims" src="agentic-ui-config/app.json">';
+  if (!xml.includes(app)) throw new Error("the demo's component does not contribute its app");
+  writeFileSync(component, xml.replace(app, `${app}\n      <file path="${path}" />`));
+}
+
 function packageWith(name: string, change: (root: string) => void = () => undefined): string {
   const directory = join(scratch, name);
   cpSync(DEMO, directory, { recursive: true, filter: (path) => relative(DEMO, path) !== 'dist' });
@@ -89,6 +101,7 @@ function packageWith(name: string, change: (root: string) => void = () => undefi
   write('home.json', HOME);
   write('navigation.json', NAVIGATION);
   write('tasks/claimReview.check.layout.json', TASK);
+  contribute(root, 'tasks/claimReview.check.layout.json');
   mkdirSync(join(root, 'assets'), { recursive: true });
   writeFileSync(join(root, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>\n');
   change(root);
@@ -283,9 +296,10 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
 
     it('names, rather than passes, a file whose name the validator takes and config:dev does not', async () => {
       const dev = checkout('names');
-      const directory = packageWith('names-package', (root) =>
-        cpSync(join(root, 'labels', 'en.json'), join(root, 'labels', 'es-419.json')),
-      );
+      const directory = packageWith('names-package', (root) => {
+        cpSync(join(root, 'labels', 'en.json'), join(root, 'labels', 'es-419.json'));
+        contribute(root, 'labels/es-419.json');
+      });
       const preview = await previewPackage({ directory }, options(dev, await closedOrigin()));
       expect(preview.validation.passed).toBe(true);
       expect(preview.served).toBe(true);

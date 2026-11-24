@@ -534,7 +534,6 @@ function layoutContributions(directory) {
   return null;
 }
 
-
 /** Every file under `directory`, as a path relative to it with `/` between its parts. */
 function filesUnder(directory, prefix = '') {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
@@ -551,8 +550,9 @@ function filesUnder(directory, prefix = '') {
  * from `agentic-ui-config/app.json`, which the validator read, under the id that file gives, and
  * names exactly the files of the app definition the registry serves. A file it holds and does not
  * name would never be served; one it names and does not hold would be missing on the server. A
- * disabled entry contributes nothing and is skipped. Called after `layoutContributions`, which has
- * refused any component path that leaves `bundle/`.
+ * disabled entry contributes nothing and is skipped. A package that contributes no app is said and
+ * built, for now: the Builder kit's generators do not write the contribution yet. Called after
+ * `layoutContributions`, which has refused any component path that leaves `bundle/`.
  */
 function appContributions(directory, root) {
   const bundle = join(directory, 'bundle');
@@ -578,11 +578,15 @@ function appContributions(directory, root) {
   }
   const app = JSON.parse(readFileSync(join(root, 'app.json'), 'utf8').replace(/^\uFEFF/, ''));
   const element = `<app id="${app.id}" src="agentic-ui-config/app.json">`;
-  if (apps.length === 0)
-    return (
-      `no component contributes the app, so the app registry would not serve it. Add ${element} ` +
-      'to the component, with a <file path="..."> for each file of the app definition.'
+  if (apps.length === 0) {
+    // Said, not refused, for now: the app-package, app-queue and app-action generators do not
+    // write the contribution yet, and what they scaffold must still build.
+    process.stdout.write(
+      `note: no component contributes the app, so the app registry will not serve it on a server. ` +
+        `Add ${element} to the component, with a <file path="..."> for each file of the app definition.\n`,
     );
+    return null;
+  }
   if (apps.length > 1)
     return `${apps.map((each) => each.component).join(', ')} contribute ${apps.length} apps; a package is one app.`;
   const [{ component, id, src, files }] = apps;

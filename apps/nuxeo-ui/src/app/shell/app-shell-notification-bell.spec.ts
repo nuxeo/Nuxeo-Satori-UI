@@ -69,6 +69,14 @@ describe('AppShellComponent — notification bell', () => {
     http
       .match((request) => /i18n\/[A-Za-z-]+\.json$/.test(request.url))
       .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+    // The catalogue also waits for the app registry's listing, which names the app open's labels:
+    // none here, as on a server without a registry.
+    for (let turn = 0; turn < 10; turn++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      http
+        .match((request) => request.url.endsWith('/agentic-ui-apps/apps.json'))
+        .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+    }
     fixture.detectChanges();
     // Not `whenStable`: the shell's other reads stay pending here, and the application with them.
     await Promise.resolve();
