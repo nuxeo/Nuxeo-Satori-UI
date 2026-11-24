@@ -131,6 +131,14 @@ hides that. It is the app's own defence against the anonymous-adoption trap abov
 working. Allowlisted in the harness with the reason stated; **worth a look on its own merits, and out
 of scope for the deck.**
 
+> **Corrected 2026-11-24.** The inference above does not hold. Measured with a live session cookie,
+> plain `GET /nuxeo/logout` answers **302 and invalidates the session** (the old cookie then answers
+> Anonymous); it 404s only when there is no session to end. `?requestedUrl=/nuxeo/` 302s even with
+> **no** session, so that 302 never showed anything being cleared. What did stop the call working
+> was the app remembering the first 404 as "no logout endpoint" and skipping it for the rest of the
+> page load — removed, together with a check that `/me` names the user who signed in, in the fix
+> for a password sign-in running as a leftover session's user (`auth.service.ts`, `meAnswersAs`).
+
 ### Verified captures
 
 Five, all distinct by SHA-256, all asserting their own content, run exit 0. The properties shot was

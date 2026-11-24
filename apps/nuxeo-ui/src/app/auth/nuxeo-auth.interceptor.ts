@@ -102,8 +102,9 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
   // principal — but `withCredentials` only governs a CROSS-origin request. A same-origin XHR,
   // which is the usual deployment and the dev proxy, sends cookies whatever it says, and Nuxeo
   // answers as the session's user rather than the Basic one. On the same origin the guard is
-  // AuthService: it ends the server session before a password sign-in and refuses a `/me` that
-  // names anyone else (`meAnswersAs` in auth.service.ts). This line only covers cross-origin.
+  // AuthService, at sign-in and on each hydration: it ends the server session first and refuses a
+  // `/me` that names anyone else (`meAnswersAs` in auth.service.ts). A foreign session that appears
+  // between reloads is still sent here. This line only covers cross-origin.
   const isLogout = isNuxeoLogoutRequest(req.url, allowedOrigins);
   const establishBrowserSession = req.context.get(NUXEO_ESTABLISH_BROWSER_SESSION);
   const usesBasicAuth = Boolean(basic) || hasBasicAuthorizationHeader(req.headers);

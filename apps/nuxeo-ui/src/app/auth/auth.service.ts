@@ -110,7 +110,10 @@ function readUsernameFromMe(me: unknown): string | null {
 /**
  * Whether `/me` answered as `username`.
  *
- * **This is what makes a password sign-in mean the user who typed it.** Nuxeo resolves the identity
+ * **This is what makes a password sign-in mean the user who typed it** — at sign-in and on each
+ * hydration, which is when it runs. It is not a running guarantee: a foreign session that appears
+ * mid-session (a Web UI sign-in on the same host) is used by every request until the next reload,
+ * because an XHR cannot leave a same-origin cookie behind. Nuxeo resolves the identity
  * cached in an HTTP session before it reads an `Authorization` header, so a same-origin request
  * carrying another user's JSESSIONID is answered as that user whatever Basic credentials ride with
  * it — and a same-origin XHR sends the cookie even with `withCredentials: false`. Measured on the
@@ -123,8 +126,14 @@ function readUsernameFromMe(me: unknown): string | null {
  * can); this is the second, for whatever survives it. A `/me` that names nobody fails too.
  *
  * Case-insensitive because a directory may be: LDAP commonly accepts `JDOE` and reports `jdoe`, and
- * refusing that would lock a legitimate user out. The local default directory is case-sensitive (a
- * lower-cased administrator login is a 401), so there this is exactly equality.
+ * refusing that would lock a legitimate user out. The cost, on a case-sensitive directory such as
+ * the local default one: if `/nuxeo/logout` could not end an `Administrator` session, typing
+ * `administrator` with any password is accepted as that session. That grants nothing the browser
+ * does not already hold — the cookie-only path would hydrate the same session unasked — so it is
+ * accepted over the lock-out. A different user is never accepted.
+ *
+ * A deployment whose login name is not the principal id (an email-login plugin, say) is refused
+ * here, with a message that blames another session; nothing in `/me` relates the two names.
  */
 function meAnswersAs(me: unknown, username: string): boolean {
   const answered = readUsernameFromMe(me);
@@ -407,9 +416,15 @@ export class AuthService {
    * ended again, and the next sign-in ran as its user. The 302 is followed by the XHR to a page
    * that may 404 in turn, so a console 404 here is the normal outcome, not a fault.
    *
-   * Best-effort all the same: a Nuxeo that really has no logout endpoint, or an SSO logout that
-   * redirects to an identity provider the XHR cannot follow, fails here quietly, and the principal
-   * check after it is what refuses the sign-in.
+   * Hydration runs once per page load, so a reload of a password session ends any Nuxeo session in
+   * the browser — the same user's Web UI tab included. The memo never changed that: it was static
+   * per page load, so the first call of every load was always made.
+   *
+   * Best-effort all the same: a Nuxeo that really has no logout endpoint fails here, and the
+   * principal check after it is what refuses the sign-in. Where Nuxeo's logout redirects to an
+   * identity provider (SAML single logout), the XHR follows it with credentials: the response is
+   * unreadable cross-origin, so this still fails over to the check, but the provider may have acted
+   * on the request. That was so before as well.
    */
   private clearStaleNuxeoCookieSession(): Observable<void> {
     return this.http
@@ -447,11 +462,15 @@ export class AuthService {
    * After password login or hydration, establish a same-origin Nuxeo browser session
    * (JSESSIONID) so embedded note `<img src="/nuxeo/nxfile/...">` loads without headers.
    *
+   * It may establish nothing: measured on the local Nuxeo, `/me` with Basic sets no cookie, since
+   * the REST chain is stateless. What it does do is report the session the browser already holds,
+   * if any, which is the one `<img>` and download links use.
+   *
    * The credentials are passed in rather than read from the stored session, so a sign-in can run
    * this before it stores anything. A failed request is tolerated — no browser session costs an
-   * embedded image, not the sign-in — but an answer naming someone else is not: this is the one
-   * call that sends cookies on a cross-origin deployment, where the probe could not see them, and
-   * the session it reports is the one every `<img>` and download link will use.
+   * embedded image, not the sign-in, and the check then simply does not run — but an answer naming
+   * someone else is not: on a cross-origin deployment this is the only `/me` that sends cookies, so
+   * it is the only one that can see a foreign session the probe could not.
    */
   private establishBasicAuthBrowserSession(username: string, basic: string): Observable<void> {
     return this.http
@@ -772,8 +791,9 @@ export class AuthService {
    *
    * Any Nuxeo session the browser holds is ended first, and the sign-in is refused with
    * `login.message.session-conflict` if `/me` still names anyone but `username` — see
-   * {@link meAnswersAs}. Nothing is stored, and the signed-out flag is left as it was, until both
-   * the probe and the browser-session call have answered as the user who signed in.
+   * {@link meAnswersAs}. Nothing is stored, and the signed-out flag is left as it was, until the
+   * probe has answered as the user who signed in and the browser-session call has not answered as
+   * anyone else (it may fail instead, which is tolerated).
    */
   login(username: string, password: string, remember: boolean): Observable<void> {
     // Drop any prior session so Nuxeo requests use only the new credentials.
