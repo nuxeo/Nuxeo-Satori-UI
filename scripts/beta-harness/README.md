@@ -13,8 +13,10 @@ TypeScript declarations supply Windows paths; filesystem operations retain nativ
 The platform jobs use the runtime pinned in `.nvmrc`. The Windows workflow explicitly builds
 `nuxeo-ui` because an affected build need not select the application, whereas the bundle
 gate always requires its output.
-Both Windows verification and CodeQL run for PRs into `main` and `integration/**`. The
-Satori 1.0 branch was merged (NXSAT-673), so it is no longer a trigger.
+Both Windows verification and CodeQL run for PRs into `main` and `integration/**`; CodeQL also
+runs for PRs into, and pushes to, `staging/**` (`staging/enterprise-grade-app`), which the
+`code-scanning` gate needs there. Windows verification waits for CodeQL, so its branches stay
+within CodeQL's. The Satori 1.0 branch was merged (NXSAT-673), so it is no longer a trigger.
 Document-detail tests use native worker console streams rather than Vitest 4's console
 RPC interception, which can reject a pending `onUserConsoleLog` during Windows teardown
 even when every assertion passes (upstream vitest-dev/vitest#11153). Warnings and errors

@@ -12,13 +12,15 @@
 name: "CodeQL Advanced"
 
 on:
-  # PRs into an `integration/<ticket>` branch need an analysis on `refs/pull/<n>/merge` for the
-  # `code-scanning` gate, and the push trigger gives the integration branch a baseline for those
-  # PR results to be compared against.
+  # PRs into an `integration/<ticket>` or a `staging/<name>` branch (staging/enterprise-grade-app)
+  # need an analysis on `refs/pull/<n>/merge` for the `code-scanning` gate, and the push trigger
+  # gives that branch a baseline for those PR results to be compared against. Without `staging/**`
+  # here every PR into staging failed that gate with "has never analysed". windows-gate.yml waits
+  # for this workflow, so its branches must stay within these.
   push:
-    branches: [ "main", "integration/**" ]
+    branches: [ "main", "integration/**", "staging/**" ]
   pull_request:
-    branches: [ "main", "integration/**" ]
+    branches: [ "main", "integration/**", "staging/**" ]
   schedule:
     - cron: '22 6 * * 5'
 
