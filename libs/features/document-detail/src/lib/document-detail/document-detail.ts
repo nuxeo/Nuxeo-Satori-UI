@@ -509,10 +509,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /**
    * The record page the focused document's type was contributed: its `view` layout file, version
-   * 2 (docs/business-apps/layout-v2.md), resolved for this document. `null` while it resolves and
-   * when the type has none, so the View tab stays today's until a record page is ready to replace
-   * it, and a slow or failed read never leaves the tab empty. A `documentView` entry still comes
-   * first: code or a manifest that chose the tab's component keeps it.
+   * 2 (docs/business-apps/layout-v2.md), resolved for this document, and the document it was
+   * resolved for. `null` until the first read answers, and its layout `null` when the type has
+   * none, so the View tab stays today's until a record page is ready to replace it, and a slow or
+   * failed read never leaves the tab empty. While the next document's is read it still holds the
+   * previous answer: `recordLayout` decides whom that answer may be shown for. A `documentView`
+   * entry still comes first: code or a manifest that chose the tab's component keeps it.
    */
   private readonly resolvedRecordLayout = toSignal(
     toObservable(this.doc).pipe(
@@ -525,10 +527,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     { initialValue: null },
   );
 
-  /** The record page for the document on screen, never the one resolved for the previous. */
+  /**
+   * The record page for the record on screen, never the one resolved for the previous. An edit or
+   * a transition hands over a new object for the same record: while the layout resolves for it,
+   * the one already resolved for that record stays, with the new document, so that the record page
+   * and its cards are kept rather than drawn anew. Compared by `uid`, so another record, even of
+   * the same type, shows no page until its own layout is resolved.
+   */
   readonly recordLayout = computed<ResolvedRecordLayout | null>(() => {
     const resolved = this.resolvedRecordLayout();
-    return resolved && resolved.document === this.doc() ? resolved.layout : null;
+    const document = this.doc();
+    return resolved && document && resolved.document.uid === document.uid ? resolved.layout : null;
   });
 
   /** `document` last, so a manifest `inputs.document` cannot stand in for the one on screen. */
@@ -1353,11 +1362,36 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.revokeStoryboardObjectUrls();
   }
 
+  /**
+   * Whether loading `uid` reloads the record on screen while the reader is on its View tab and the
+   * tab shows the type's record page, as after an edit, a transition or a check-in. The page then
+   * stays while the record reloads, instead of giving way to the spinner and being drawn anew: its
+   * timeline refreshes in place rather than starting again from its first page, and a comment half
+   * written in a comments card is kept. Everything else shows the spinner and is drawn anew, as it
+   * was: a reload from another tab, which the reader is looking at, and any other View tab body. A
+   * `documentView` entry is one even when its component could not load and gave way to the record
+   * page, since being drawn anew is how that component is tried again.
+   */
+  private keepsRecordPage(uid: string): boolean {
+    return (
+      this.doc()?.uid === uid &&
+      this.activeTabId() === 'app.tabs.view' &&
+      this.recordLayout() !== null &&
+      this.documentView() === null
+    );
+  }
+
   private loadDocument(uid: string): void {
     const generation = ++this.documentLoadGeneration;
     const isCurrent = (): boolean =>
       generation === this.documentLoadGeneration && uid === this.docUid;
-    this.loading.set(true);
+    if (this.keepsRecordPage(uid)) {
+      // The History tab reads the audit once, when it is drawn, and the spinner no longer draws it
+      // anew: put away until it is next opened, it reads the reloaded record's history then.
+      this.historyShown.set(false);
+    } else {
+      this.loading.set(true);
+    }
     this.error.set(null);
 
     this.detailService
@@ -3211,8 +3245,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         if (!updatedDoc) return;
         this.browseContext.requestTreeRefresh();
         this.browseContext.setFromDocument(updatedDoc);
-        this.doc.set(updatedDoc);
-        this.syncActionStates(updatedDoc);
+        // The save answers without the enrichers the toolbar reads, its permissions, favourite and
+        // transitions among them, and without the lock, which it is not asked for: those on screen
+        // stay until the reload below brings them back. A record page that stays through that
+        // reload would otherwise lose them for a moment, and its timeline be refreshed twice.
+        const shown: NuxeoDocument = {
+          ...this.mergeUpdatedDocument(currentDoc, updatedDoc),
+          lockOwner: updatedDoc.lockOwner ?? currentDoc.lockOwner,
+          lockCreated: updatedDoc.lockCreated ?? currentDoc.lockCreated,
+        };
+        this.doc.set(shown);
+        this.syncActionStates(shown);
         this.loadVocabularies();
         this.toast.show(this.translate.instant('browse.message.document-updated'));
         this.loadDocument(this.docUid);

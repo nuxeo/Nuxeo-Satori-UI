@@ -52,6 +52,10 @@ import {
 import { SelectionTopbarComponent } from '@nuxeo/satori-platform/ui';
 import { AiChatService, AiFeatureFlagService } from '@agentic-ui/shared/ai-client';
 import { AppRegistryService, type RegistryApp } from '@agentic-ui/shared/app-registry';
+import {
+  NOTIFICATIONS_FEATURE_TOGGLE,
+  NotificationBellComponent,
+} from '@agentic-ui/shared/notifications';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -83,6 +87,7 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     MatSidenavModule,
     MatTooltipModule,
     NavDrawerComponent,
+    NotificationBellComponent,
     PresetBadgeComponent,
     SelectionTopbarComponent,
     BrandLogoFallbackDirective,
@@ -121,6 +126,10 @@ export class AppShellComponent implements OnDestroy {
   private readonly appConfig = inject(AppConfigService);
   /** Layer 0 `branding.logo`; `null` keeps the Satori word mark. */
   protected readonly brandLogo = this.appConfig.brandingLogo;
+  /** The notification centre's bell, on unless a package turns `notifications.bell` off. */
+  protected readonly notificationsEnabled = computed(() =>
+    this.appConfig.featureToggle(NOTIFICATIONS_FEATURE_TOGGLE, true),
+  );
   private readonly translate = inject(TranslateService);
   /**
    * The active language, as a signal.

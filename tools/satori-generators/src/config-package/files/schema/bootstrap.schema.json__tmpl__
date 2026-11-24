@@ -38,6 +38,9 @@
     "session": {
       "$ref": "#/definitions/session"
     },
+    "notifications": {
+      "$ref": "#/definitions/notifications"
+    },
     "sso": {
       "$ref": "#/definitions/sso"
     },
@@ -108,6 +111,9 @@
         },
         "session": {
           "$ref": "#/definitions/session"
+        },
+        "notifications": {
+          "$ref": "#/definitions/notifications"
         },
         "sso": {
           "$ref": "#/definitions/sso"
@@ -264,6 +270,18 @@
         "warningBeforeMs": {
           "type": ["number", "null"],
           "exclusiveMinimum": 0
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The notification centre's bell in the header.",
+      "properties": {
+        "pollIntervalMs": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "description": "How often the bell checks for new tasks and changes, in milliseconds. null keeps the default, 60000. The bell uses no less than 15000 and no more than 3600000."
         }
       }
     },

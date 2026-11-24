@@ -12,12 +12,13 @@
  * - **Inside the repository only** (`within`): no link followed, in the path or anywhere in the
  *   package, no hidden folder or file, and the allow-list and the registered file are JSON files.
  *   The pipeline's messages can quote what it read, and they go to the agent.
- * - **Nothing in the package is written.** The zip and its checksum go to a temporary directory,
- *   which is removed afterwards; the package's own `dist/` is not touched.
+ * - **Nothing in the package is written.** The zip, its checksum and what the pipeline unpacks to
+ *   read the zip back go to a folder of the run's own, in the system's temporary directory unless
+ *   `workIn` names another, which is removed afterwards; the package's own `dist/` is not touched.
  * - **No package code runs** that this repository did not review: step 1 refuses a `build.mjs`
  *   that is not the generator's byte for byte, before step 4 runs it.
- * - **No network and no credential.** The pipeline gets only what finds `unzip` and a temporary
- *   directory from the environment: not `NUXEO_PASS`, not a registry token.
+ * - **No network and no credential.** The pipeline gets only what finds `unzip`, the run's own
+ *   temporary folder and the locale from the environment: not `NUXEO_PASS`, not a registry token.
  * - **Stopped whole.** Past {@link RUN_TIMEOUT_MS} or its output limit, the pipeline and every
  *   process it started are killed before the temporary directory is removed, and so they are when
  *   the server exits or is stopped by a signal it can catch (on Windows, only the pipeline's own
@@ -27,7 +28,15 @@
  * the step that refused the package, and the zip's digest when it was built.
  */
 import { spawn } from 'node:child_process';
-import { lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +71,11 @@ export interface PackageOptions {
   /** The folders a package and its files may be in. Default: the repository. */
   readonly roots?: readonly string[];
   readonly timeoutMs?: number;
+  /**
+   * Where the run works: a folder is made inside it for the zip, its checksum and the pipeline's
+   * own temporary files, and removed afterwards. Default: the system's temporary folder.
+   */
+  readonly workIn?: string;
 }
 
 export interface Finding {
@@ -151,11 +165,18 @@ export function linkInside(directory: string): string | null {
   return null;
 }
 
-/** Only what finds programs and a temporary directory: no credential reaches the pipeline. */
-export function pipelineEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(
+/**
+ * Only what finds programs and a temporary directory: no credential reaches the pipeline. Given
+ * `temporary`, that is the temporary directory, on every system's name for it, so what the
+ * pipeline unpacks goes there and nowhere else.
+ */
+export function pipelineEnvironment(env: NodeJS.ProcessEnv, temporary?: string): NodeJS.ProcessEnv {
+  const passed = Object.fromEntries(
     PASSED_ENVIRONMENT.filter((key) => env[key] !== undefined).map((key) => [key, env[key]]),
   );
+  return temporary === undefined
+    ? passed
+    : { ...passed, TMPDIR: temporary, TEMP: temporary, TMP: temporary };
 }
 
 export function platformVersion(): string {
@@ -210,7 +231,11 @@ export async function validatePackage(
       ? ['platform']
       : []),
   ];
-  const out = mkdtempSync(join(tmpdir(), 'builder-mcp-package-'));
+  // The zip goes to `out`, and what the pipeline unpacks to read it back to `temporary`: both in a
+  // folder of this run's own, removed whatever happens.
+  const work = mkdtempSync(join(options.workIn ?? tmpdir(), 'builder-mcp-package-'));
+  const out = join(work, 'out');
+  const temporary = join(work, 'tmp');
   const args = [
     PIPELINE,
     directory,
@@ -222,10 +247,15 @@ export async function validatePackage(
     ...(registered ? ['--registered', registered] : []),
   ];
   try {
-    const run = await runNode(args, options.timeoutMs ?? RUN_TIMEOUT_MS);
+    mkdirSync(temporary);
+    const run = await runNode(
+      args,
+      options.timeoutMs ?? RUN_TIMEOUT_MS,
+      pipelineEnvironment(process.env, temporary),
+    );
     return interpret(directory, run, platform, departsFromCi);
   } finally {
-    rmSync(out, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
   }
 }
 
@@ -269,8 +299,15 @@ function stopWithServer(): void {
     });
 }
 
-/** Runs Node with `args`, as the pipeline runs: its own environment, stopped whole. */
-export function runNode(args: readonly string[], timeoutMs: number): Promise<Run> {
+/**
+ * Runs Node with `args`, as the pipeline runs: its own environment, `pipelineEnvironment`'s unless
+ * given another, from the repository's root, stopped whole.
+ */
+export function runNode(
+  args: readonly string[],
+  timeoutMs: number,
+  env: NodeJS.ProcessEnv = pipelineEnvironment(process.env),
+): Promise<Run> {
   return new Promise((done) => {
     // The Node running this server, as the pipeline expects: no shell, no npm. On POSIX it leads a
     // process group of its own, so that stopping it stops what it started: the validator, the
@@ -278,7 +315,7 @@ export function runNode(args: readonly string[], timeoutMs: number): Promise<Run
     const group = process.platform !== 'win32';
     const child = spawn(process.execPath, args, {
       cwd: REPO_ROOT,
-      env: pipelineEnvironment(process.env),
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: group,
     });

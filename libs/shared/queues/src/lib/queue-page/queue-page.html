@@ -41,20 +41,48 @@
               }
             </section>
           }
-          <lib-record-list
-            class="queue-page__list"
-            [list]="shown.list"
-            [parameters]="shown.queue.parameters"
-            [label]="title() ?? shown.id"
-            [stateHeadingLevel]="2"
-            [source]="'queues/' + shown.id + '.json'"
-            [aggregates]="chosen()"
-            [selectable]="bulkActions().length > 0"
-            [selectedIds]="selectedIds()"
-            [emptyHeading]="'queues.empty' | translate"
-            (selectedIdsChange)="onSelection($event)"
-            (loaded)="onLoaded($event)"
-          />
+          <div class="queue-page__main">
+            @if (notice(); as notice) {
+              <div class="queue-whole-query">
+                <nxs-banner
+                  class="queue-whole-query__notice"
+                  [message]="notice.message"
+                  [tone]="notice.tone"
+                  [announce]="notice.announce"
+                  [actions]="notice.actions"
+                />
+                @if (notice.progress; as progress) {
+                  @if (progress.max === null) {
+                    <progress
+                      class="queue-whole-query__progress"
+                      [attr.aria-label]="progress.label"
+                    ></progress>
+                  } @else {
+                    <progress
+                      class="queue-whole-query__progress"
+                      [attr.aria-label]="progress.label"
+                      [value]="progress.value"
+                      [max]="progress.max"
+                    ></progress>
+                  }
+                }
+              </div>
+            }
+            <lib-record-list
+              class="queue-page__list"
+              [list]="shown.list"
+              [parameters]="shown.queue.parameters"
+              [label]="title() ?? shown.id"
+              [stateHeadingLevel]="2"
+              [source]="'queues/' + shown.id + '.json'"
+              [aggregates]="chosen()"
+              [selectable]="rowsSelectable()"
+              [selectedIds]="selectedIds()"
+              [emptyHeading]="'queues.empty' | translate"
+              (selectedIdsChange)="onSelection($event)"
+              (loaded)="onLoaded($event)"
+            />
+          </div>
         </div>
       }
     }

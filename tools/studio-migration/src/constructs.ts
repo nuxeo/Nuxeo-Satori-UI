@@ -14,6 +14,11 @@ export type ConstructKind =
   | 'file'
   | 'layout'
   | 'layout-field'
+  | 'task-layout'
+  | 'task-field'
+  | 'layout-block'
+  | 'block-use'
+  | 'block-field'
   | 'search'
   | 'search-field'
   | 'search-column'
@@ -29,6 +34,9 @@ export type ConstructKind =
 /** The kinds both counts cover. A file of one of these kinds holds them. */
 export const COUNTED_KINDS: readonly ConstructKind[] = [
   'layout-field',
+  'task-field',
+  'block-use',
+  'block-field',
   'search-field',
   'search-column',
   'search-view',
@@ -55,6 +63,8 @@ export interface Construct {
 /** Files whose content is read construct by construct. A file of another kind is one construct. */
 const CONTAINERS: ReadonlySet<FileKind> = new Set<FileKind>([
   'document-layout',
+  'task-layout',
+  'layout-block',
   'search-form',
   'search-results',
   'slot-contributions',
@@ -95,6 +105,41 @@ export function constructsOf(inventory: Inventory): Construct[] {
         layout.path,
         String(index + 1),
         fieldLabel(field.binding, field.label, field.element),
+        field.binding,
+      ),
+    );
+  }
+  for (const task of inventory.taskLayouts) {
+    add(
+      'task-layout',
+      task.path,
+      'layout',
+      `the task layout of step ${task.step} of ${task.workflow}`,
+    );
+    task.fields.forEach((field, index) =>
+      add(
+        'task-field',
+        task.path,
+        String(index + 1),
+        fieldLabel(field.binding, field.label, field.element),
+        field.binding,
+      ),
+    );
+  }
+  for (const block of inventory.blocks) {
+    add('layout-block', block.path, 'block', `the layout block ${block.element}`);
+  }
+  // A block's fields show where it is used, as many times as it is: each use's fields are
+  // constructs of the file that uses it, each decided where it shows.
+  for (const use of inventory.blockUses) {
+    add('block-use', use.path, String(use.index + 1), `the layout block ${use.element}`);
+    const block = inventory.blocks.find((candidate) => candidate.path === use.block);
+    block?.fields.forEach((field, index) =>
+      add(
+        'block-field',
+        use.path,
+        `${use.index + 1}.${index + 1}`,
+        `${use.element}: ${fieldLabel(field.binding, field.label, field.element)}`,
         field.binding,
       ),
     );

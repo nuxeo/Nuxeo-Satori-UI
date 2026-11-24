@@ -140,6 +140,15 @@ export interface AppSessionConfig {
   readonly warningBeforeMs: number | null;
 }
 
+/**
+ * The notification centre's bell (`libs/shared/notifications`). `null` keeps the compiled
+ * default; the bell clamps what it is given to the range it documents.
+ */
+export interface AppNotificationsConfig {
+  /** How often the bell checks for new tasks and changes, in milliseconds. */
+  readonly pollIntervalMs: number | null;
+}
+
 export interface AppSsoEndpointConfig {
   readonly id: string;
   readonly label: string;
@@ -172,6 +181,12 @@ export interface AppBootstrapConfig {
   readonly availableLanguages: readonly string[];
   readonly integrations: AppIntegrationsConfig;
   readonly session: AppSessionConfig;
+  /**
+   * The notification centre's settings. Optional, like `branding.favicon` and for the same reason:
+   * the key is new, and a required member added to an exported interface breaks every caller that
+   * constructs one. Absent is read as `{ pollIntervalMs: null }`.
+   */
+  readonly notifications?: AppNotificationsConfig;
   readonly sso: AppSsoConfig;
 }
 
@@ -305,6 +320,9 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   session: {
     idleTimeoutMs: null,
     warningBeforeMs: null,
+  },
+  notifications: {
+    pollIntervalMs: null,
   },
   sso: {
     // Empty on purpose. `main` commented these same two entries out of
@@ -529,6 +547,15 @@ function mergeSession(base: AppSessionConfig, value: unknown): AppSessionConfig 
     idleTimeoutMs: readPositiveNumber(value, 'idleTimeoutMs', base.idleTimeoutMs),
     warningBeforeMs: readPositiveNumber(value, 'warningBeforeMs', base.warningBeforeMs),
   };
+}
+
+function mergeNotifications(
+  base: AppNotificationsConfig | undefined,
+  value: unknown,
+): AppNotificationsConfig {
+  const from = base ?? { pollIntervalMs: null };
+  if (!isRecord(value)) return from;
+  return { pollIntervalMs: readPositiveNumber(value, 'pollIntervalMs', from.pollIntervalMs) };
 }
 
 function readSsoEndpoints(
@@ -1050,6 +1077,7 @@ export function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): 
     availableLanguages: readStringArray(patch, 'availableLanguages', base.availableLanguages),
     integrations: mergeIntegrations(base.integrations, patch['integrations']),
     session: mergeSession(base.session, patch['session']),
+    notifications: mergeNotifications(base.notifications, patch['notifications']),
     sso: mergeSso(base.sso, patch['sso']),
   };
 }

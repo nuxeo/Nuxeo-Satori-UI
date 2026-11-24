@@ -1,0 +1,185 @@
+<button
+  #bell
+  type="button"
+  mat-icon-button
+  class="notification-bell"
+  cdkOverlayOrigin
+  #origin="cdkOverlayOrigin"
+  aria-haspopup="dialog"
+  [attr.aria-expanded]="open()"
+  [attr.aria-controls]="open() ? panelId : null"
+  [attr.aria-label]="'notifications.bell.label' | translate: { count: unread() }"
+  (click)="toggle()"
+>
+  <mat-icon svgIcon="bell" aria-hidden="true" />
+  @if (unread() > 0) {
+    <!-- The number is in the accessible name above; the badge is what sighted readers see. -->
+    <span class="notification-bell__badge" aria-hidden="true">{{ badge() }}</span>
+  }
+</button>
+
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOpen]="open()"
+  [cdkConnectedOverlayPositions]="positions"
+  [cdkConnectedOverlayPush]="true"
+  (overlayOutsideClick)="outsideClick($event)"
+  (overlayKeydown)="$event.key === 'Escape' && close(true)"
+  (detach)="close(false)"
+>
+  <div class="notification-panel" cdkTrapFocus>
+    <div
+      #dialog
+      class="notification-panel__dialog"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      [id]="panelId"
+      [attr.aria-labelledby]="headingId"
+    >
+      <div class="notification-panel__header">
+        <h2 class="notification-panel__title" [id]="headingId">
+          {{ 'notifications.panel.title' | translate }}
+        </h2>
+        <button
+          type="button"
+          mat-button
+          class="notification-panel__mark-read"
+          [disabled]="tasks().length + changes().length === 0"
+          (click)="markAllRead()"
+        >
+          {{ 'notifications.panel.mark-all-read' | translate }}
+        </button>
+        <button
+          type="button"
+          mat-icon-button
+          class="notification-panel__close"
+          [attr.aria-label]="'notifications.panel.close' | translate"
+          (click)="close(true)"
+        >
+          <mat-icon svgIcon="x_large" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div class="notification-panel__body">
+        @if (!center.loaded()) {
+          <!-- Before the first check succeeds nothing is known: no list, not an empty one. -->
+          @if (center.failed()) {
+            <p class="notification-panel__state notification-panel__state--failed" role="status">
+              {{ 'notifications.panel.failed' | translate }}
+            </p>
+          } @else {
+            <p class="notification-panel__state" role="status">
+              {{ 'notifications.panel.loading' | translate }}
+            </p>
+          }
+        } @else {
+          @if (center.failed()) {
+            <p class="notification-panel__state notification-panel__state--failed" role="status">
+              {{ 'notifications.panel.failed' | translate }}
+            </p>
+          }
+
+          <section
+            class="notification-panel__section"
+            [attr.aria-labelledby]="headingId + '-tasks'"
+          >
+            <h3 class="notification-panel__section-title" [id]="headingId + '-tasks'">
+              {{ 'notifications.panel.tasks' | translate }}
+            </h3>
+            @if (tasks().length === 0) {
+              <p class="notification-panel__empty">
+                {{ 'notifications.panel.no-tasks' | translate }}
+              </p>
+            } @else {
+              <ul class="notification-panel__list">
+                @for (shown of tasks(); track shown.item.key) {
+                  <li>
+                    <a
+                      class="notification-panel__item"
+                      [class.notification-panel__item--new]="shown.isNew"
+                      [routerLink]="['/tasks', shown.item.taskId]"
+                      (click)="close(false)"
+                    >
+                      <mat-icon
+                        class="notification-panel__icon"
+                        svgIcon="tasks"
+                        aria-hidden="true"
+                      />
+                      <span class="notification-panel__text">
+                        <span class="notification-panel__primary">
+                          @if (shown.isNew) {
+                            <span class="notification-panel__new">{{
+                              'notifications.panel.new' | translate
+                            }}</span>
+                          }
+                          {{ shown.item.title }}
+                        </span>
+                        @if (shown.what) {
+                          <span class="notification-panel__secondary">{{ shown.what }}</span>
+                        }
+                        <time class="notification-panel__when" [attr.datetime]="shown.item.at">{{
+                          shown.when
+                        }}</time>
+                      </span>
+                    </a>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section
+            class="notification-panel__section"
+            [attr.aria-labelledby]="headingId + '-changes'"
+          >
+            <h3 class="notification-panel__section-title" [id]="headingId + '-changes'">
+              {{ 'notifications.panel.changes' | translate }}
+            </h3>
+            @if (changes().length === 0) {
+              <p class="notification-panel__empty">
+                {{ 'notifications.panel.no-changes' | translate }}
+              </p>
+            } @else {
+              <ul class="notification-panel__list">
+                @for (shown of changes(); track shown.item.key) {
+                  <li>
+                    <a
+                      class="notification-panel__item"
+                      [class.notification-panel__item--new]="shown.isNew"
+                      [routerLink]="['/doc', shown.item.uid]"
+                      (click)="close(false)"
+                    >
+                      <mat-icon
+                        class="notification-panel__icon"
+                        svgIcon="pencil"
+                        aria-hidden="true"
+                      />
+                      <span class="notification-panel__text">
+                        <span class="notification-panel__primary">
+                          @if (shown.isNew) {
+                            <span class="notification-panel__new">{{
+                              'notifications.panel.new' | translate
+                            }}</span>
+                          }
+                          {{ shown.item.title }}
+                        </span>
+                        <span class="notification-panel__secondary">{{ shown.what }}</span>
+                        <time class="notification-panel__when" [attr.datetime]="shown.item.at">{{
+                          shown.when
+                        }}</time>
+                      </span>
+                    </a>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+        }
+
+        <p class="notification-panel__note">{{ 'notifications.panel.this-browser' | translate }}</p>
+      </div>
+    </div>
+  </div>
+</ng-template>

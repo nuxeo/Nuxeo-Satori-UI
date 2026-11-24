@@ -19,8 +19,9 @@
  * - the rule skipping itself, which it does, with only a warning, when it finds no project graph.
  *
  * And the tiers' rules have no forbidden import to fail on until phase 1 creates the first module.
- * The four engines so far, `libs/shared/computations`, `libs/shared/document-layouts`,
- * `libs/shared/home` and `libs/shared/queues`, import only shared code and one another. So this
+ * The five engines so far, `libs/shared/computations`, `libs/shared/document-layouts`,
+ * `libs/shared/home`, `libs/shared/notifications` and `libs/shared/queues`, import only shared code
+ * and one another. So this
  * gate gives them projects now.
  *
  * ## What it does

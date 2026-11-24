@@ -26,7 +26,7 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
-getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>
+getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>
   // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>
 getSectionTree(): Observable<NuxeoDocumentList>
@@ -276,7 +276,8 @@ bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 
 ```typescript
 notifyTasksChanged(): void
-getUserTasks(userId: string, pageSize?: number): Observable<NuxeoTask[]>
+getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>
+  // context reaches every request it makes, the task list and any target read for a title
 getTask(taskId: string): Observable<NuxeoTask>
 getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>
 ```
@@ -580,6 +581,33 @@ refuses, without a request, a name that is not a page provider's, a page size ou
 sort that is not `<prefix>:<name>`, and an aggregate the search reads for itself (`pageSize`,
 `sortBy`, `properties` and the like) or named with a `.` or a `-`.
 
+```typescript
+isPageProviderName(name: string): boolean
+```
+
+---
+
+## BulkCommandService (`bulk-command.service.ts`)
+
+Nuxeo's Bulk Action Framework over REST, as the user: an action over a page provider's whole
+result on the server, its status, and stopping it. A queue's page runs a bulk action over every
+result of its query through it (`docs/api-integrations.md`, section 34).
+
+```typescript
+runOverPageProvider(name: string, query: BulkCommandQuery, action: string,
+  actionParameters: Readonly<Record<string, unknown>>): Observable<BulkCommandStatus> // POST …/search/pp/<name>/bulk/<action>
+status(commandId: string): Observable<BulkCommandStatus>  // GET …/bulk/<commandId>
+abort(commandId: string): Observable<BulkCommandStatus>   // PUT …/bulk/<commandId>/abort
+readBulkCommandStatus(body: unknown): BulkCommandStatus   // BulkCommandStatusError on anything but a bulkStatus
+```
+
+`BulkCommandQuery` carries the page provider's `parameters` only. There is no way to send a bucket:
+the server leaves chosen buckets out of the command, which would then reach records the list does
+not show. `BulkCommandStatus.ended` is true once the server writes `completed`, not merely
+`ABORTED`: after a stop, the batches already started still finish. It refuses, without a request, a
+name that is not a page provider's, an action that is not a name, an empty parameter and a command
+id that is not a UUID.
+
 ---
 
 ## QueueService (`libs/shared/queues/src/lib/queue.service.ts`)
@@ -591,6 +619,25 @@ load(id: string): Observable<QueueLoad>   // file | none (404, or an id that is 
 queueFileUrl(bootstrapUrl: string, id: string): string
 queueLink(id: string): readonly string[]  // ['/queues', id]
 ```
+
+---
+
+## NotificationSources (`libs/shared/notifications/src/lib/notification-sources.ts`)
+
+Where the notification bell's items come from. Every request is a background request. Nothing
+writes.
+
+```typescript
+tasks(user: string): Observable<TaskNotification[]>            // TaskService.getUserTasks, newest first
+followed(user: string, since: Date, page?: number): Observable<FollowedPage>
+  // Repository.Query: notif:notifications/*/subscribers/* = 'user:<id>', dc:modified > since, 20 to a page
+changes(wanted: readonly ChangesWanted[], audit: boolean): Observable<ChangesRead & { refused: boolean }>
+  // audit: one Audit.QueryWithPageProvider (administrators only); else one @audit per record; both paged
+```
+
+`NotificationCenter` (provided by the bell) holds the state and runs the checks with
+`NotificationPoller`; `NotificationReadState` keeps what each user has seen, by item, in
+`localStorage`.
 
 ---
 
@@ -643,8 +690,15 @@ Consumers reading it would have built against a synchronous, non-nullable contra
 Low-level HTTP wrapper. **Do not inject directly in features or components.**
 
 ```typescript
-get<T>(path: string, options?: HttpOptions): Observable<T>
-post<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
-put<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
-delete<T>(path: string, options?: HttpOptions): Observable<T>
+apiUrl(path: string): string
+get<T>(path: string, params?: HttpParams, headers?: Record<string, string>, context?: HttpContext): Observable<T>
+post<T>(path: string, body: unknown, headers?: Record<string, string>, context?: HttpContext): Observable<T>
+put<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>
+delete<T>(path: string, headers?: Record<string, string>): Observable<T>
+nxqlSearch(query: string, pageSize: number, headers?: Record<string, string>): Observable<NuxeoDocumentList>
 ```
+
+A request the application sends on its own, on a timer, passes `backgroundRequestContext()` as
+`context` (`background-request.context.ts`): the auth interceptor then does not count its response
+as activity for the idle timer, so it cannot keep a session open. It still carries the credentials,
+and a 401 still ends the session. The notification bell's reads are the only ones today.

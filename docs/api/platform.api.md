@@ -21,7 +21,7 @@ type PlatformEntryPoint = (typeof PLATFORM_ENTRY_POINTS)[number];
 
 ## @nuxeo/satori-platform/app-config
 
-40 exported symbol(s).
+41 exported symbol(s).
 
 ```ts
 const APP_BOOTSTRAP_CONFIG_FILE = "bootstrap.json";
@@ -51,6 +51,7 @@ interface AppBootstrapConfig {
     readonly availableLanguages: readonly string[];
     readonly integrations: AppIntegrationsConfig;
     readonly session: AppSessionConfig;
+    readonly notifications?: AppNotificationsConfig;
     readonly sso: AppSsoConfig;
     }
 }
@@ -114,6 +115,10 @@ type AppConfigSource = 'configuration-service' | 'packaged-default';
 interface AppIntegrationsConfig {
     readonly arender: AppARenderConfig | null;
     readonly knowledgeDiscoveryOperations: Readonly<Record<string, string>>;
+    }
+}
+interface AppNotificationsConfig {
+    readonly pollIntervalMs: number | null;
     }
 }
 interface AppRuntimeManifest {
@@ -3605,7 +3610,7 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo/satori-platform/extensions
 
-65 exported symbol(s).
+68 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
@@ -3668,6 +3673,7 @@ interface ExtensionActionDescriptor extends ExtensionElement {
 }
 interface ExtensionActionHandler {
     execute(context: ExtensionRuleContext): void;
+    readonly wholeQuery?: boolean;
     }
 }
 interface ExtensionActionRegistration {
@@ -3678,6 +3684,7 @@ class ExtensionActionRegistry {
     register(handlers: Readonly<Record<string, ExtensionActionHandler>>): ExtensionActionRegistration;
     registerPackaged(handlers: Readonly<Record<string, ExtensionActionHandler>>): ExtensionActionRegistration;
     has(id: string): boolean;
+    runsOverWholeQuery(id: string): boolean;
     registeredActionIds(): readonly string[];
     execute(descriptor: ExtensionActionDescriptor, context: ExtensionRuleContext): boolean;
     static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionActionRegistry, never>;
@@ -3870,6 +3877,7 @@ const PACKAGED_DOCUMENT_TABS: readonly ExtensionTabDescriptor[];
 const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescriptor[];
 const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[];
 const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[];
+const PACKAGED_WHOLE_QUERY_BULK_ACTIONS: Readonly<Record<string, WholeQueryBulkAction>>;
 interface PartitionedExtensionRoutes {
     readonly accepted: readonly ExtensionRouteDescriptor[];
     readonly rejected: readonly RejectedExtensionRoute[];
@@ -3916,6 +3924,12 @@ interface SatoriExtensionContributions {
     }
 }
 type SatoriExtensionContributor = SatoriExtensionContributions | (() => SatoriExtensionContributions);
+interface WholeQueryBulkAction {
+    readonly action: string;
+    readonly parameters: Readonly<Record<string, string | number | boolean>>;
+    readonly refresh: boolean;
+    }
+}
 function descriptorLabel(descriptor: {
     readonly label: string;
     readonly labelKey?: string;
@@ -3929,11 +3943,12 @@ function provideExtensionRoutes(options?: ExtensionRoutesOptions): EnvironmentPr
 function provideSatoriExtensions(contributor: SatoriExtensionContributor): EnvironmentProviders;
 function readExtensionConfig(raw: unknown): ExtensionConfig;
 function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionLayerResolver): ResolvedExtensionConfig;
+function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 ```
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-330 exported symbol(s).
+339 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4143,6 +4158,36 @@ interface BrowseSortEntry {
     sortOrder: 'ASC' | 'DESC';
     }
 }
+interface BulkCommandQuery {
+    readonly parameters?: readonly string[];
+    readonly limit?: number;
+    }
+}
+class BulkCommandService {
+    runOverPageProvider(name: string, query: BulkCommandQuery, action: string, actionParameters: Readonly<Record<string, unknown>>): Observable<BulkCommandStatus>;
+    status(commandId: string): Observable<BulkCommandStatus>;
+    abort(commandId: string): Observable<BulkCommandStatus>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<BulkCommandService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
+    }
+}
+type BulkCommandState = 'ABORTED' | 'COMPLETED' | 'RUNNING' | 'SCHEDULED' | 'SCROLLING_RUNNING' | 'UNKNOWN';
+interface BulkCommandStatus {
+    readonly commandId: string;
+    readonly state: BulkCommandState;
+    readonly processed: number;
+    readonly total: number;
+    readonly errorCount: number;
+    readonly skipCount: number;
+    readonly errorMessage: string | null;
+    readonly ended: boolean;
+    readonly result: Readonly<Record<string, unknown>> | null;
+    }
+}
+class BulkCommandStatusError extends Error {
+    constructor();
+    }
+}
 const CLIPBOARD_STORAGE_KEY = "nuxeo_clipboard";
 const CONTENT_LAKE_INGEST_DOCUMENT_TYPES: Set<string>;
 const CONTENT_LAKE_INGEST_MARKER_LEGACY_PROPERTY = "dc:rights";
@@ -4337,7 +4382,7 @@ class DocumentDetailService {
     fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchPdfRendition(uid: string): Observable<Blob>;
     fetchThumbnail(uid: string): Observable<Blob>;
-    getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>;
+    getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>;
     getPublishedVersions(uid: string): Observable<NuxeoDocumentList>;
     getSectionTree(): Observable<NuxeoDocumentList>;
     publishDocument(uid: string, targetSectionId: string, options?: {
@@ -4610,6 +4655,7 @@ const NOTE_FORMAT_OPTIONS: readonly [{
     }];
 }
 const NUXEO_API_ORIGIN: InjectionToken<string>;
+const NUXEO_BACKGROUND_REQUEST: HttpContextToken<boolean>;
 const NUXEO_POWERUSERS_GROUP = "powerusers";
 const NUXEO_SAML_LOGIN_ENDPOINTS: InjectionToken<NuxeoSamlLoginEndpoint[]>;
 const NUXEO_SERVER_URL: InjectionToken<string>;
@@ -4647,8 +4693,8 @@ interface NuxeoAllowedTransition {
 }
 class NuxeoApiBase {
     apiUrl(path: string): string;
-    get<T>(path: string, params?: HttpParams, headers?: Record<string, string>): Observable<T>;
-    post<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>;
+    get<T>(path: string, params?: HttpParams, headers?: Record<string, string>, context?: HttpContext): Observable<T>;
+    post<T>(path: string, body: unknown, headers?: Record<string, string>, context?: HttpContext): Observable<T>;
     put<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T>;
     delete<T>(path: string, headers?: Record<string, string>): Observable<T>;
     nxqlSearch(query: string, pageSize: number, headers?: Record<string, string>): Observable<NuxeoDocumentList>;
@@ -5203,7 +5249,7 @@ interface TaskDueDistance {
 class TaskService {
     readonly tasksChanged$: Subject<void>;
     notifyTasksChanged(): void;
-    getUserTasks(userId: string, pageSize?: number): Observable<NuxeoTask[]>;
+    getUserTasks(userId: string, pageSize?: number, context?: HttpContext): Observable<NuxeoTask[]>;
     getTask(taskId: string): Observable<NuxeoTask>;
     getDocumentTasks(docId: string, userId?: string): Observable<NuxeoTask[]>;
     completeTask(taskId: string, action: string, variables?: Record<string, unknown>, comment?: string): Observable<NuxeoTask>;
@@ -5358,6 +5404,7 @@ function allowedTransitions(document: NuxeoDocument | null | undefined): readonl
 function auditActivityLabel(entry: AuditEntry, eventTypeLabels?: Map<string, string> | Record<string, string>): string;
 function auditActivityLabelKey(entry: AuditEntry): string;
 function avatarColor(name: string): AvatarColor;
+function backgroundRequestContext(): HttpContext;
 function browseFolderFiltersActive(filters?: BrowseFolderFilters): boolean;
 function browseTreeContextPath(doc: NuxeoDocument): string;
 function buildContentLakeIngestMarker(blobDigest: string): string;
@@ -5436,6 +5483,7 @@ function isManagedDirectory(metadata: Pick<DirectoryMetadata, 'type'>): boolean;
 function isManagedDirectoryName(name: string): boolean;
 function isMarkdownNoteFormat(mimeType: string): boolean;
 function isNavigableBaseUrl(value: string | null | undefined, allowInsecure?: boolean): boolean;
+function isPageProviderName(name: string): boolean;
 function isPermissionDeniedError(err: unknown): boolean;
 function isPowerUserFromGroups(groups: readonly string[]): boolean;
 function isRecordDocument(doc: NuxeoDocument | null | undefined): boolean;
@@ -5476,6 +5524,7 @@ function principalPermissionTimeFrameLabel(row: PrincipalPermissionRow, translat
 function principalPermissionToLocalRow(row: PrincipalPermissionRow, translate: (key: string) => string, locale: string): LocalPermissionRow;
 function readAllGroupsFromMe(me: unknown): string[];
 function readBlobDigest(doc: NuxeoDocument): string | null;
+function readBulkCommandStatus(body: unknown): BulkCommandStatus;
 function readClipboardDocs(): ClipboardDoc[];
 function readContentLakeIngestMarker(doc: NuxeoDocument): string | null;
 function readGroupsFromMe(me: unknown): string[];

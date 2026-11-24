@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    {
+      "id": "home",
+      "labelKey": "payers.nav.home",
+      "icon": "home",
+      "page": "home",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["claims-adjusters", "claims-supervisors", "member-services"]
+      }
+    },
+    {
+      "id": "unassigned",
+      "icon": "inbox",
+      "queue": "unassigned-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "mine",
+      "icon": "user_task",
+      "queue": "my-claims",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+    },
+    {
+      "id": "pending",
+      "icon": "clock",
+      "queue": "pending-determination",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["claims-supervisors", "member-services"]
+      }
+    },
+    { "id": "tasks", "labelKey": "payers.nav.tasks", "icon": "tasks", "page": "app.navbar.tasks" },
+    {
+      "id": "search",
+      "labelKey": "payers.nav.search",
+      "icon": "search",
+      "page": "app.navbar.search"
+    }
+  ]
+}

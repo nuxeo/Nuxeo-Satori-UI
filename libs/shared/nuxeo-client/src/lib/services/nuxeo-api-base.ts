@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -14,12 +14,27 @@ export class NuxeoApiBase {
     return `${this.apiOrigin.replace(/\/$/, '')}${path}`;
   }
 
-  get<T>(path: string, params?: HttpParams, headers?: Record<string, string>): Observable<T> {
-    return this.http.get<T>(this.apiUrl(path), { params, headers });
+  /**
+   * @param context for the interceptors, such as `backgroundRequestContext()` for a read the
+   *   application sends on its own
+   */
+  get<T>(
+    path: string,
+    params?: HttpParams,
+    headers?: Record<string, string>,
+    context?: HttpContext,
+  ): Observable<T> {
+    return this.http.get<T>(this.apiUrl(path), { params, headers, context });
   }
 
-  post<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T> {
-    return this.http.post<T>(this.apiUrl(path), body, { headers });
+  /** @param context as for {@link get} */
+  post<T>(
+    path: string,
+    body: unknown,
+    headers?: Record<string, string>,
+    context?: HttpContext,
+  ): Observable<T> {
+    return this.http.post<T>(this.apiUrl(path), body, { headers, context });
   }
 
   put<T>(path: string, body: unknown, headers?: Record<string, string>): Observable<T> {

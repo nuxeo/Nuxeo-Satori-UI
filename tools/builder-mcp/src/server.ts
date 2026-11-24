@@ -2,8 +2,8 @@
  * The Builder kit's MCP server: its tools, each a read of the configured Nuxeo server or a run
  * of the package pipeline. Phase 3 of docs/business-apps/development-plan.md.
  *
- * Previewing a package in dev mode and publishing it to pre-production, the plan's other two, are
- * not here yet (README, "Not here yet").
+ * Publishing a package to pre-production, the plan's fourth job, is not here yet (README, "Not
+ * here yet"). Previewing it in dev mode is `preview_package`.
  */
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
@@ -17,6 +17,7 @@ import {
   readOperations,
 } from './operations.ts';
 import { describePageProvider, listPageProviders } from './page-providers.ts';
+import { previewPackage, type Preview, type PreviewOptions } from './preview-package.ts';
 import { validatePackage, type PackageCheck, type PackageRequest } from './validate-package.ts';
 import { MAX_PAGE_SIZE, listVocabularies, readVocabulary } from './vocabularies.ts';
 import { describeWorkflow, listWorkflows } from './workflows.ts';
@@ -31,6 +32,9 @@ export interface ServerDependencies {
    */
   readonly nuxeo: (() => NuxeoReads) | { readonly problem: string };
   readonly validate?: (request: PackageRequest) => Promise<PackageCheck>;
+  /** The dev server `preview_package` serves to, or why it cannot; config.ts reads it. */
+  readonly devServer?: PreviewOptions['devServer'];
+  readonly preview?: (request: PackageRequest) => Promise<Preview>;
 }
 
 const INSTRUCTIONS =
@@ -39,7 +43,9 @@ const INSTRUCTIONS =
   ' operation or starts a workflow. Use the content model tools before writing a layout, so every' +
   ' field is one the type has; describe_page_provider before writing a queue or a related-records' +
   ' card; describe_workflow before a task form; and validate_package after every change to a' +
-  ' package. A package that does not pass validate_package is not finished.';
+  ' package. A package that does not pass validate_package is not finished. preview_package' +
+  ' validates a package and serves it to the local development server, replacing what it served,' +
+  ' and returns the addresses to open.';
 
 /**
  * Every Nuxeo tool reads definitions and changes nothing. The only documents read are a workflow
@@ -59,6 +65,9 @@ export function createServer(dependencies: ServerDependencies): McpServer {
   );
   const { nuxeo } = dependencies;
   const validate = dependencies.validate ?? validatePackage;
+  const devServer = dependencies.devServer ?? { problem: 'No dev server is configured.' };
+  const preview =
+    dependencies.preview ?? ((request: PackageRequest) => previewPackage(request, { devServer }));
   /** A Nuxeo read, or the reason the server cannot make one. */
   const reading =
     <Args>(read: (reader: NuxeoReads, args: Args) => Promise<unknown>) =>
@@ -293,6 +302,48 @@ export function createServer(dependencies: ServerDependencies): McpServer {
       },
     },
     (args: PackageRequest) => answer(() => validate(args)),
+  );
+
+  server.registerTool(
+    'preview_package',
+    {
+      title: 'Preview a package in dev mode',
+      description:
+        'Validates a package folder as validate_package does, then serves it to the local' +
+        ' development server (npx nx serve nuxeo-ui) through npm run config:dev: its layouts,' +
+        ' home, menu, queues, labels and task forms, written into' +
+        ' apps/nuxeo-ui/public/agentic-ui-config/, replacing what was served before. A package' +
+        ' that does not pass is not served. Returns the address to open first and each page,' +
+        ' the files it could not serve and why (app.json, actions.json, modules, assets), and' +
+        ' whether the dev server answers every file as it was written, which it is given a few' +
+        ' seconds to do; one it still does not answer needs a restart. Writes nothing but that' +
+        " folder and, while it runs, a folder of its own in the package's dist/. Paths are" +
+        ' relative to the repository, and must be inside it.',
+      inputSchema: z.object({
+        directory: z.string().min(1).describe('Such as business-apps/packages/payers-claims-demo'),
+        allowList: z
+          .string()
+          .optional()
+          .describe('As validate_package: the deployment allow-list file'),
+        registered: z
+          .string()
+          .optional()
+          .describe('As validate_package: what the deployment registers in code'),
+        platform: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("As validate_package. Default: libs/platform's"),
+      }),
+      // It replaces what the dev folder served, so a client may ask before running it.
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    (args: PackageRequest) => answer(() => preview(args)),
   );
 
   return server;

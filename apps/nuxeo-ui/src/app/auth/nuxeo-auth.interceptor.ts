@@ -6,7 +6,7 @@ import {
 } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, tap, throwError } from 'rxjs';
-import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
+import { NUXEO_API_ORIGIN, NUXEO_BACKGROUND_REQUEST } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from './auth.service';
 import { NUXEO_ESTABLISH_BROWSER_SESSION } from './nuxeo-auth.context';
@@ -76,6 +76,11 @@ function hasBasicAuthorizationHeader(headers: HttpHeaders): boolean {
 /**
  * Sends cookies on `/nuxeo/**` requests (SSO after SAML) and attaches Basic when the user logged in with password.
  * Resets idle timeout on successful responses and logs out on HTTP 401 when the session is no longer valid.
+ *
+ * A request marked {@link NUXEO_BACKGROUND_REQUEST} — one the application sends on a timer, such as
+ * the notification centre's checks — gets the same credentials and the same 401 handling, but its
+ * response does not reset the idle timeout: a check every minute would otherwise keep a session
+ * open for as long as the tab stays open, with nobody at it.
  */
 export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -98,9 +103,10 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
   const establishBrowserSession = req.context.get(NUXEO_ESTABLISH_BROWSER_SESSION);
   const usesBasicAuth = Boolean(basic) || hasBasicAuthorizationHeader(req.headers);
   const withCredentials = isLogout || establishBrowserSession ? true : usesBasicAuth ? false : true;
+  const background = req.context.get(NUXEO_BACKGROUND_REQUEST);
   return next(req.clone({ headers, withCredentials })).pipe(
     tap((event) => {
-      if (event instanceof HttpResponse && auth.isAuthenticated()) {
+      if (event instanceof HttpResponse && !background && auth.isAuthenticated()) {
         sessionTimeout.recordActivity();
       }
     }),
