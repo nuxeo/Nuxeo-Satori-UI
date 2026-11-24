@@ -31,7 +31,6 @@
  * Exit codes: 0, every control held; 1, one did not.
  */
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,8 +94,6 @@ function standIn({ installed = true, viewsMade = true, fault = null } = {}) {
       out.properties['file:content'] = {
         name: doc.blob.name,
         length: String(doc.blob.bytes.length),
-        digest: createHash('md5').update(doc.blob.bytes).digest('hex'),
-        digestAlgorithm: 'MD5',
       };
     return out;
   };

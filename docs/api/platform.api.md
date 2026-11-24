@@ -200,7 +200,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-198 exported symbol(s).
+199 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -1274,6 +1274,7 @@ interface NxsDocumentListColumn {
     readonly label: string;
     readonly sortable?: boolean;
     readonly text?: (document: NuxeoDocument) => string;
+    readonly links?: (document: NuxeoDocument) => readonly NxsDocumentListLink[] | null;
     }
 }
 class NxsDocumentListComponent {
@@ -1334,6 +1335,7 @@ class NxsDocumentListComponent {
     protected initials(name: string): string;
     protected avatarColor(name: string): NxsAvatarColor;
     protected cellText(doc: NuxeoDocument, key: string): string;
+    protected cellLinks(doc: NuxeoDocument, key: string): readonly NxsDocumentListLink[] | null;
     protected createdDate(doc: NuxeoDocument): string | null;
     protected onSortChange(sort: Sort): void;
     protected onPageChange(index: number): void;
@@ -1457,6 +1459,11 @@ class NxsDocumentListComponent {
     "filesDropped": "filesDropped";
     "retry": "retry";
     }, never, never, true, never>;
+    }
+}
+interface NxsDocumentListLink {
+    readonly text: string;
+    readonly routerLink: string | null;
     }
 }
 interface NxsDocumentListRowAction {

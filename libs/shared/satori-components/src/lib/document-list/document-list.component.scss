@@ -130,6 +130,22 @@
   }
 }
 
+// A link in a cell opens what it names, through the router. Its own ring, as the row's open
+// button has: a row's controls are reached with Right and Left.
+.nxs-document-list__link {
+  color: var(--mat-sys-primary);
+
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
 .nxs-document-list__person {
   display: inline-flex;
   align-items: center;

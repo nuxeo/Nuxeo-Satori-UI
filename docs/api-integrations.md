@@ -117,7 +117,7 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 ---
 
-## 3. User Tasks (Dashboard Widget)
+## 3. User Tasks (Tasks Page, Drawer, Dashboard Widget)
 
 | Field           | Value                                                                       |
 | --------------- | --------------------------------------------------------------------------- |
@@ -128,10 +128,32 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Query Parameters:**
 
-| Parameter  | Value                                                  |
-| ---------- | ------------------------------------------------------ |
-| `userId`   | Current authenticated username (e.g., `Administrator`) |
-| `pageSize` | `10` (default)                                         |
+| Parameter  | Value                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------ |
+| `userId`   | Current authenticated username (e.g., `Administrator`)                                                       |
+| `pageSize` | First read: how many to return, 50 for the tasks page and the drawer, 10 for the dashboard, 100 for the bell |
+| `offset`   | Second read only: the first read's entry count, with `pageSize` the rest, at most 1000                       |
+
+**Order, and why there can be two reads.** Nuxeo cannot be asked for the newest tasks. Its task
+list (`RoutingTaskPageProvider` in `nuxeo-routing-core`, Nuxeo 2025.10) builds its own query,
+ending `ORDER BY nt:dueDate ASC`, and never reads `sortBy` or `sortOrder`: the first page holds
+the tasks due soonest, the last page those due latest. Paging itself is reliable. Measured with
+64 open tasks, due dates shuffled against creation:
+
+| Request                                            | Result                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `pageSize=50`                                      | `resultsCount: 64`, `isNextPageAvailable: true`, the 50 due soonest       |
+| `pageSize=50&currentPageIndex=1`                   | the 14 due latest, not the 14 newest                                      |
+| `sortBy=created` or `dc:created`, `sortOrder=desc` | the same order as without                                                 |
+| `pageSize=10&offset=54`                            | entries 55 to 64 of that order: `offset` need not fall on a page boundary |
+
+So `getUserTasks` reads the first page, and when `isNextPageAvailable` reads the rest after it
+with `offset`, up to 1000 more (the `maxPageSize` the endpoint reports), drops a task that arrives
+in both reads, sorts by `created` newest first and keeps the first `pageSize`. One request while the tasks fit,
+two when they do not. The page providers that query task documents directly
+(`GET_TASKS_FOR_ACTORS…`) return documents, not tasks, and need the reader's groups expanded, so
+they are not used. **Limit:** a user with more than `pageSize` + 1000 open tasks gets the newest of
+the ones due soonest.
 
 **Request Headers:**
 
@@ -169,7 +191,7 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 }
 ```
 
-**Enrichment:** For each task, the target document title is fetched via `GET /nuxeo/api/v1/id/{docId}` and merged as `targetDocTitle`. If the document fetch fails, the task is returned without the title.
+**Enrichment:** For each task kept, when the response did not carry it, the target document title is fetched via `GET /nuxeo/api/v1/id/{docId}` and merged as `targetDocTitle`. If the document fetch fails, the task is returned without the title.
 
 **Key response fields used:**
 
@@ -1589,12 +1611,13 @@ within 10 s (`CONFIG_LOAD_TIMEOUT_MS`) leaves the compiled defaults in force and
 | Field           | Value                                                                                                                                                                                                                                                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Service**     | `DocumentLayoutService` (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)                                                                                                                                                                                                                                            |
-| **Method**      | `layoutFor(type, mode, documentSchemas)`, per document shown; `vocabularyLabel(directory, id)`, per vocabulary value shown; each read below is cached for the session                                                                                                                                                                  |
+| **Method**      | `layoutFor(type, mode, documentSchemas)`, per document shown; `vocabularyLabel(directory, id)`, per vocabulary value shown; each read below is cached for the session, but `linkedRecords(ids)`, per page or list                                                                                                                      |
 | **HTTP Method** | `GET`                                                                                                                                                                                                                                                                                                                                  |
 | **Endpoints**   | `/nuxeo/agentic-ui-config/layouts.json` and `/nuxeo/agentic-ui-config/layouts/<type>/<mode>.layout.json` — without interceptors, no `Authorization` header                                                                                                                                                                             |
 |                 | `/nuxeo/api/v1/config/types/<type>` with header `fetch-schema: fields` — authenticated, through `NuxeoApiBase`                                                                                                                                                                                                                         |
 |                 | `/nuxeo/api/v1/config/schemas/<schema>` with header `fetch-schema: fields`, for a schema a dynamic facet added to the document — authenticated, through `NuxeoApiBase`                                                                                                                                                                 |
 |                 | `/nuxeo/api/v1/directory/<directory>/<entry id>` with headers `translate-directoryEntry: label` and `Accept-Language: en` — authenticated, through `NuxeoApiBase`. For an `l10n…` value the entry id is the **last segment** of the stored path, not the path: `art/architecture` is read as `architecture`, then `art` for its parent |
+|                 | `/nuxeo/api/v1/search/lang/NXQL/execute` with `queryParams`, for the records `document-link` values name (below) — authenticated, through `NuxeoApiBase`                                                                                                                                                                               |
 | **Server side** | `AgenticUiConfigServlet` (from `<layout>` contributions to `org.nuxeo.agentic.ui.config`); Nuxeo's type registry and directories                                                                                                                                                                                                       |
 
 The layout URLs sit beside `bootstrap.json` (from `APP_BOOTSTRAP_CONFIG_URL`), so under `nx serve`
@@ -1651,7 +1674,21 @@ different resource that answers 404 (NXSAT-726). The label is still composed fro
 path, which is what names the parent. Both the formatter and the stock vocabularies are two
 levels deep; a deeper path labels as the stored id.
 
-**Usage:** the Properties panel on document detail (`metadata` mode).
+**A `document-link` value** (`docs/business-apps/layout-v2.md`, section 11) is shown by the title of
+the record it names, read by `linkedRecords(ids)`: `GET /nuxeo/api/v1/search/lang/NXQL/execute`,
+authenticated through `NuxeoApiBase`, with `query` set to
+`SELECT * FROM Document WHERE ecm:uuid IN (?, …)`, one `?` per id, each id sent as a `queryParams`
+value of its own, which Nuxeo quotes before the query runs, and `pageSize` the number of ids. No
+`properties` header: the title, type, path and facets come with every record. Only a value that is
+an `ecm:uuid`, a lower-case UUID, is ever sent; one search asks for 100 at most. It is not cached
+by the service: `LinkedRecordLookup`, provided by the record page, whose lists share it, and by
+the form, asks once per page or list for the ids each new set adds, and keeps what it read for that
+page's life; a queue's list has its own. A record the reader may not read, or that no longer exists, is not returned, and shows
+"Unavailable". A failed search is logged and asked again by the next set that names its ids.
+
+**Usage:** the Properties panel on document detail (`metadata` mode); the record page, its lists
+and the queues (`view` mode), for the vocabulary labels, the user and group names and the linked
+records their values name.
 
 ---
 
@@ -2088,16 +2125,16 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ## 35. Notification Bell — Open Tasks, Followed Records and Their Audit
 
-| Field           | Value                                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Service**     | `NotificationSources` (`libs/shared/notifications/src/lib/notification-sources.ts`), through `TaskService`, `NuxeoApiBase` and `DocumentDetailService` |
-| **Method**      | `tasks(user)`, `followed(user, since, page)` and `changes(wanted, audit)`, at each check: every 60 seconds by default (`notifications.pollIntervalMs`) |
-| **HTTP Method** | `GET` for the tasks and `@audit`; `POST` for the two Automation operations                                                                             |
-| **Endpoints**   | `/nuxeo/api/v1/task?userId=<user>&pageSize=100` with `X-NXfetch.task: targetDocumentIds,actors` (the read the tasks page makes)                        |
-|                 | `/nuxeo/api/v1/automation/Repository.Query`, with `properties: dublincore`                                                                             |
-|                 | `/nuxeo/api/v1/automation/Audit.QueryWithPageProvider`, for an administrator                                                                           |
-|                 | `/nuxeo/api/v1/id/{uid}/@audit?startEventDate=…&eventId=documentModified&eventId=lifecycle_transition_event`, for anyone else, per record              |
-| **Context**     | `backgroundRequestContext()` on every request: the idle timer does not count them                                                                      |
+| Field           | Value                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `NotificationSources` (`libs/shared/notifications/src/lib/notification-sources.ts`), through `TaskService`, `NuxeoApiBase` and `DocumentDetailService`    |
+| **Method**      | `tasks(user)`, `followed(user, since, page)` and `changes(wanted, audit)`, at each check: every 60 seconds by default (`notifications.pollIntervalMs`)    |
+| **HTTP Method** | `GET` for the tasks and `@audit`; `POST` for the two Automation operations                                                                                |
+| **Endpoints**   | `/nuxeo/api/v1/task?userId=<user>&pageSize=100` with `X-NXfetch.task: targetDocumentIds,actors`, then `&offset=100` for the rest when Nuxeo has more (§3) |
+|                 | `/nuxeo/api/v1/automation/Repository.Query`, with `properties: dublincore`                                                                                |
+|                 | `/nuxeo/api/v1/automation/Audit.QueryWithPageProvider`, for an administrator                                                                              |
+|                 | `/nuxeo/api/v1/id/{uid}/@audit?startEventDate=…&eventId=documentModified&eventId=lifecycle_transition_event`, for anyone else, per record                 |
+| **Context**     | `backgroundRequestContext()` on every request: the idle timer does not count them                                                                         |
 
 **Followed records** — the documents whose `notif:notifications` list the reader, the property
 `Document.Subscribe` writes:

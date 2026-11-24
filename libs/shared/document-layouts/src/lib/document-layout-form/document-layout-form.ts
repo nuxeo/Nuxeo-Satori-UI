@@ -42,10 +42,15 @@ import { readDocumentSchemas } from '../resolve-layout';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from '../record-page/record-clock';
 import { showValue, viewText, type RecordValueContext } from '../record-page/record-field-view';
 import {
+  LinkedRecordLookup,
   LookupCollector,
   NO_LABELS,
+  NO_RECORDS,
   labelLookups,
+  namesOf,
   readLabels,
+  recordIdsOf,
+  recordLookups,
   sameLookups,
   type Lookups,
 } from '../record-page/record-lookups';
@@ -131,6 +136,8 @@ const CHECK_TEXT_KEYS: Readonly<Record<string, string>> = {
     NxsSpinnerComponent,
     TranslatePipe,
   ],
+  // The records a read-only `document-link` field names, read for as long as the form is open.
+  providers: [LinkedRecordLookup],
   templateUrl: './document-layout-form.html',
   styleUrl: './document-layout-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -157,6 +164,7 @@ export class DocumentLayoutFormComponent {
   readonly validChange = output<boolean>();
 
   private readonly layouts = inject(DocumentLayoutService);
+  private readonly linkedRecords = inject(LinkedRecordLookup);
   private readonly extensions = inject(AppExtensionsService);
   private readonly components = inject(ExtensionComponentRegistry);
   private readonly ruleContext = inject(ExtensionRuleContextService);
@@ -285,8 +293,9 @@ export class DocumentLayoutFormComponent {
   private readonly told = new Set<string>();
 
   /**
-   * The users, groups and vocabulary entries a version 2 form's read-only fields name: those are
-   * shown by name, as on the record page. An editable field's input reads its own.
+   * The users, groups, vocabulary entries and linked records a version 2 form's read-only fields
+   * name: those are shown by name or title, as on the record page. An editable field's input reads
+   * its own.
    */
   private readonly lookups = computed<Lookups>(
     () => {
@@ -316,8 +325,18 @@ export class DocumentLayoutFormComponent {
 
   /** Shown as the stored ids until the labels arrive, and as the id wherever one cannot be read. */
   private readonly labels = toSignal(
-    toObservable(this.lookups).pipe(switchMap((lookups) => readLabels(this.layouts, lookups))),
+    toObservable(namesOf(this.lookups)).pipe(
+      switchMap((lookups) => readLabels(this.layouts, lookups)),
+    ),
     { initialValue: NO_LABELS },
+  );
+
+  /** A read-only `document-link` field's records: their titles, never the stored ids. */
+  private readonly records = toSignal(
+    toObservable(recordIdsOf(this.lookups)).pipe(
+      switchMap((ids) => this.linkedRecords.records(ids)),
+    ),
+    { initialValue: NO_RECORDS },
   );
 
   /** A version 2 form for the values being entered; `null` for any other layout. */
@@ -345,6 +364,10 @@ export class DocumentLayoutFormComponent {
       today,
       timeZone: this.timeZone,
       ...labelLookups(this.labels()),
+      ...recordLookups(
+        this.records(),
+        this.translate.instant('document-layouts.record.unavailable'),
+      ),
       property: value,
       label,
       flagText,

@@ -382,10 +382,18 @@ included, is shown no app. The demo itself still runs on a development server, a
 
 ## Not done yet
 
-- **A reference shows its stored id, not a link:** the `document-link` widget has no lookup yet
-  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11), so a queue's member
-  column, the Case page's member and claim, and the Claim page's member show the record's
-  `ecm:uuid`. The demo opens the member by its address for that reason.
+- **The demo opens the member by its address, not by its link.** A reference now shows the record
+  it names, by its title, as a link that opens it
+  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11): a queue's member column,
+  the Provider page's claims, the Case page's member and claim, and the Claim page's member. A
+  reference to a record that no longer exists shows "Unavailable", and so does one the reader may
+  not read, which was not seen live: the check ran as an administrator, who may read every record.
+  The demo's step 3 still goes to the
+  member's address, and its note still says the column shows the stored id: opening the member
+  from the queue's link is the next change to the steps file, which needs a run as the demo's
+  people to check.
+- **The Properties panel beside a Case or a Claim lists a reference by its stored id:** it is
+  version 1's generated panel, which has no lookup, and only the Member has a `metadata` file.
 - **The approve button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
   and not served, and the queue leaves out an action the app does not register, saying so in the
   console.

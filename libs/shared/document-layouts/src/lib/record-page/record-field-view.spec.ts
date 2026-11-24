@@ -15,6 +15,9 @@ import {
 import { PACKAGED_WIDGETS } from '@agentic-ui/shared/app-definition';
 
 const TODAY = new Date('2026-11-23T12:00:00Z');
+const MEMBER = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+const PENDING = '9cd9b1cf-6f0b-442f-afa0-c2539996ba30';
+const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
 
 const context: RecordValueContext = {
   locale: 'en-US',
@@ -26,6 +29,13 @@ const context: RecordValueContext = {
       : kind === 'group' && id === 'members'
         ? 'Member services'
         : id,
+  // A read record, one still being read, and one the reader may not read.
+  record: (id) =>
+    id === MEMBER
+      ? { text: 'Wei Chen', url: `/doc/${MEMBER}` }
+      : id === PENDING
+        ? null
+        : { text: 'Unavailable', url: null },
   property: (xpath) => ({ 'claim:currency': 'EUR', 'claim:badCurrency': 'eur' })[xpath],
   label: (label) => label.literal ?? label.fallback,
   flagText: (flag) => (flag ? 'Yes' : 'No'),
@@ -310,6 +320,46 @@ describe('showValue', () => {
     ).toEqual({
       kind: 'chips',
       chips: ['France', 'xx'],
+    });
+  });
+
+  describe('document-link', () => {
+    it("shows the linked record's title, with the app's route to it", () => {
+      expect(show('document-link', MEMBER)).toEqual({
+        kind: 'records',
+        records: [{ text: 'Wei Chen', url: `/doc/${MEMBER}` }],
+      });
+    });
+
+    it('shows a list of links in its order, the unavailable ones as text, and never an id', () => {
+      const view = show('document-link', [GONE, MEMBER, '', 'not-an-id'], {}, { type: 'string[]' });
+      expect(view).toEqual({
+        kind: 'records',
+        records: [
+          { text: 'Unavailable', url: null },
+          { text: 'Wei Chen', url: `/doc/${MEMBER}` },
+          { text: 'Unavailable', url: null },
+        ],
+      });
+      const text = viewText(view, context.flagText);
+      expect(text).toBe('Unavailable, Wei Chen, Unavailable');
+      expect(text).not.toContain(GONE);
+      expect(text).not.toContain('not-an-id');
+    });
+
+    it('shows nothing of a record still being read, not its id', () => {
+      expect(show('document-link', PENDING)).toEqual({ kind: 'records', records: [] });
+      expect(
+        viewText(
+          show('document-link', [PENDING, MEMBER], {}, { type: 'string[]' }),
+          context.flagText,
+        ),
+      ).toBe('Wei Chen');
+    });
+
+    it('shows no value as empty', () => {
+      expect(show('document-link', [], {}, { type: 'string[]' })).toEqual({ kind: 'empty' });
+      expect(show('document-link', '')).toEqual({ kind: 'empty' });
     });
   });
 

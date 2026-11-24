@@ -11,14 +11,10 @@ import { humanize } from '../resolve-layout';
 
 /**
  * The widgets this build shows as version 1 would, until each has its own lookup: `image` and
- * `file-list` need the file fetched through the blob service, and `document-link` the linked
- * record's title. Shown by name or stored id meanwhile, and said so in the console.
+ * `file-list` need the file fetched through the blob service. Shown by name meanwhile, and said so
+ * in the console.
  */
-export const WIDGETS_SHOWN_AS_VERSION_1: ReadonlySet<string> = new Set([
-  'image',
-  'file-list',
-  'document-link',
-]);
+export const WIDGETS_SHOWN_AS_VERSION_1: ReadonlySet<string> = new Set(['image', 'file-list']);
 
 /**
  * The property type a widget's `accepts` is written in. Nuxeo reports some numeric fields as

@@ -82,6 +82,20 @@ export function richTextWords(html: string): string {
 
 export type Tone = 'positive' | 'warning' | 'negative' | 'info' | 'neutral';
 
+/**
+ * One record a `document-link` names, as the page shows it: its title and the app's route to it,
+ * or the unavailable text and no route, for a record the reader may not read, one that no longer
+ * exists, or a value that is not a document's id. Never the stored id.
+ */
+export interface RecordLink {
+  readonly text: string;
+  /**
+   * The app's route to the record, opened through the router: `/doc/<uid>`, or browse for a folder
+   * and the collection page for a collection, as a row opens one. `null` where there is none.
+   */
+  readonly url: string | null;
+}
+
 export type RecordValueView =
   | { readonly kind: 'empty' }
   | { readonly kind: 'text'; readonly text: string }
@@ -96,6 +110,11 @@ export type RecordValueView =
   | { readonly kind: 'link'; readonly text: string; readonly href: string }
   | { readonly kind: 'badge'; readonly text: string; readonly tone: Tone }
   | { readonly kind: 'chips'; readonly chips: readonly string[] }
+  /**
+   * `document-link`: the records the value names, in its order. One still being read is not
+   * listed yet, so the field shows nothing, rather than the id, until it is.
+   */
+  | { readonly kind: 'records'; readonly records: readonly RecordLink[] }
   /** `address`: one line per part. */
   | { readonly kind: 'lines'; readonly lines: readonly string[] }
   | {
@@ -117,6 +136,11 @@ export interface RecordValueContext {
   readonly vocabulary: (directory: string, id: string) => string;
   /** A user's or group's display name, or the id until it is read or when it cannot be. */
   readonly principal: (kind: 'user' | 'group', id: string) => string;
+  /**
+   * The record a `document-link` value names: its title and route, the unavailable text where it
+   * cannot be shown, or `null` while it is read. Never the stored id.
+   */
+  readonly record: (id: string) => RecordLink | null;
   /** Another property of the record, for a parameter that names one: `currency`'s code. */
   readonly property: (xpath: string) => unknown;
   /** A label's text, translated: for a table's column headings. */
@@ -269,6 +293,8 @@ export function viewText(view: RecordValueView, flagText: (flag: boolean) => str
       return flagText(view.flag);
     case 'chips':
       return view.chips.join(', ');
+    case 'records':
+      return view.records.map((record) => record.text).join(', ');
     case 'lines':
       return view.lines.join(', ');
     case 'table':
@@ -400,6 +426,16 @@ export const WIDGET_VIEWS: Readonly<Record<string, WidgetView>> = {
     const directory =
       typeof parameters['directory'] === 'string' ? parameters['directory'] : definition.directory;
     return listOrOne(value, (id) => (directory ? context.vocabulary(directory, id) : id));
+  },
+  'document-link': ({ value }, context) => {
+    const ids = (Array.isArray(value) ? value : [value]).filter((id) => !isEmpty(id));
+    if (ids.length === 0) return EMPTY;
+    return {
+      kind: 'records',
+      records: ids
+        .map((id) => context.record(textOf(id)))
+        .filter((record): record is RecordLink => record !== null),
+    };
   },
   chips: ({ value }) => listOrOne(Array.isArray(value) ? value : [value], (item) => item),
   'status-badge': ({ value, parameters, definition }, context) => {

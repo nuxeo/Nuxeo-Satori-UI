@@ -1531,6 +1531,9 @@
       "none": "The picture's views are not ready yet",
       "views": "Views of the picture"
     },
+    "record": {
+      "unavailable": "Unavailable"
+    },
     "related": {
       "empty": "No records"
     },

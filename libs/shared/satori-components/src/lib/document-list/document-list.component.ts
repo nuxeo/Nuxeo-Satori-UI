@@ -23,6 +23,7 @@ import { MatCheckboxModule, type MatCheckboxChange } from '@angular/material/che
 import { MatIconModule } from '@angular/material/icon';
 import { MatSort, MatSortModule, type Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
+import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { merge } from 'rxjs';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
@@ -70,6 +71,22 @@ export interface NxsDocumentListColumn {
    * stored value as text. A packaged key keeps its own view.
    */
   readonly text?: (document: NuxeoDocument) => string;
+  /**
+   * The cell's links, for a column whose key is not packaged: each one's text, already formatted,
+   * and the app route it opens, such as a record the row's property names. Drawn in order, comma
+   * separated. A link opens through the app's router, as a row does, never as a raw address; one
+   * whose `routerLink` is `null` is its text alone. Returning `null` leaves the cell to `text`.
+   * A packaged key keeps its own view.
+   */
+  readonly links?: (document: NuxeoDocument) => readonly NxsDocumentListLink[] | null;
+}
+
+/** One link in a cell: see {@link NxsDocumentListColumn.links}. */
+export interface NxsDocumentListLink {
+  /** Already translated or formatted. */
+  readonly text: string;
+  /** A route of the app, such as `/doc/<uid>`, opened with `routerLink`; `null` for text alone. */
+  readonly routerLink: string | null;
 }
 
 /** The server-side order a list is in: a column's key and a direction. */
@@ -107,7 +124,8 @@ let nextId = 0;
  * One row is in the Tab sequence at a time. Arrow keys move between rows, Home and End go to the
  * first and last, Space selects, Shift extends a selection from the last row selected, Ctrl or
  * Cmd+A selects the page, and Enter opens. Inside a row, Right and Left move between its controls,
- * which never take a Tab stop of their own.
+ * a cell's links among them, which never take a Tab stop of their own. A link in a cell opens what
+ * it names, not the row. A link needs the host to provide the router, as `routerLink` always does.
  */
 @Component({
   selector: 'nxs-document-list',
@@ -131,6 +149,7 @@ let nextId = 0;
     NxsSpinnerComponent,
     NxsTagComponent,
     NxsThumbnailComponent,
+    RouterLink,
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -392,6 +411,13 @@ export class NxsDocumentListComponent {
         return column?.text ? column.text(doc) : text(properties[key]);
       }
     }
+  }
+
+  /** The links a column's cell shows, or `null` where it shows text: see `links`. */
+  protected cellLinks(doc: NuxeoDocument, key: string): readonly NxsDocumentListLink[] | null {
+    if (!key.includes(':')) return null;
+    const column = this.columns().find((candidate) => candidate.key === key);
+    return column?.links?.(doc) ?? null;
   }
 
   protected createdDate(doc: NuxeoDocument): string | null {

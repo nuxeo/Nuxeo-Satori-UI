@@ -9,6 +9,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -778,6 +779,77 @@ describe('NxsDocumentListComponent', () => {
       expect(rows()[0].querySelector('mat-icon')?.classList).toContain(
         'nxs-document-list__icon--folder',
       );
+    });
+  });
+
+  describe('links in a cell', () => {
+    beforeEach(() => configure([provideNxsComponents(), provideRouter([])]));
+
+    const MEMBER: NxsDocumentListColumn = {
+      key: 'claim:member',
+      label: 'Member',
+      text: () => 'the text',
+      links: (document) =>
+        document.uid === 'uid-1'
+          ? [
+              { text: 'Wei Chen', routerLink: '/doc/m1' },
+              { text: 'Unavailable', routerLink: null },
+            ]
+          : null,
+    };
+    const memberCell = (row: number): HTMLTableCellElement =>
+      rows()[row].querySelectorAll('td')[2] as HTMLTableCellElement;
+
+    it("draws a column's links in order, a text alone where there is no route, and its text where it gives none", async () => {
+      host.columns.set([...COLUMNS.slice(0, 1), MEMBER]);
+      await render();
+      const links = [...memberCell(0).querySelectorAll('a')];
+      expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+        ['Wei Chen', '/doc/m1'],
+      ]);
+      expect(memberCell(0).textContent?.replace(/\s+/g, ' ').trim()).toBe('Wei Chen, Unavailable');
+      expect(memberCell(1).textContent?.trim()).toBe('the text');
+      expect(memberCell(1).querySelector('a')).toBeNull();
+    });
+
+    it('opens what the link names through the router, and not the row', async () => {
+      host.columns.set([...COLUMNS.slice(0, 1), MEMBER]);
+      await render();
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      memberCell(0).querySelector('a')?.click();
+      expect(host.opened).toEqual([]);
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(router.serializeUrl(navigate.mock.calls[0][0] as never)).toBe('/doc/m1');
+    });
+
+    it("keeps a link out of the Tab sequence, after the row's other controls on the arrow keys, and leaves Enter on it to the link", async () => {
+      host.columns.set([...COLUMNS.slice(0, 1), MEMBER]);
+      await render();
+      const link = memberCell(0).querySelector('a') as HTMLAnchorElement;
+      expect(link.getAttribute('tabindex')).toBe('-1');
+      rows()[0].focus();
+      // The checkbox, then the title's button, then the link: in the order the cells are.
+      key(rows()[0], 'ArrowRight');
+      expect(document.activeElement?.closest('mat-checkbox')).not.toBeNull();
+      key(document.activeElement as HTMLElement, 'ArrowRight');
+      expect(document.activeElement?.classList).toContain('nxs-document-list__open');
+      key(document.activeElement as HTMLElement, 'ArrowRight');
+      expect(document.activeElement).toBe(link);
+      // The row does not take Enter on the link for its own: the browser's activation of the link
+      // is what opens it, which a dispatched key does not perform (the test above clicks it).
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      link.dispatchEvent(enter);
+      expect(enter.defaultPrevented).toBe(false);
+      expect(host.opened).toEqual([]);
+    });
+
+    it("leaves a packaged key's view, links or not", async () => {
+      host.columns.set([
+        { key: 'title', label: 'Title', links: () => [{ text: 'never shown', routerLink: '/x' }] },
+      ]);
+      await render();
+      expect(rows()[0].textContent).not.toContain('never shown');
     });
   });
 

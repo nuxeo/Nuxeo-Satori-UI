@@ -10,11 +10,8 @@ import {
 } from '../models/principal-permissions.model';
 import { AdministrationService } from './administration.service';
 import { DocumentDetailService } from './document-detail.service';
+import { escapeNxqlLiteral } from '../utils/nxql.utils';
 import { matchesPrincipal } from '../utils/principal-match.utils';
-
-function escapeNxqlString(s: string): string {
-  return s.replace(/'/g, "''");
-}
 
 function extractLocalRows(doc: NuxeoDocument, logicalPrincipal: string): PrincipalPermissionRow[] {
   const acls = doc.contextParameters?.acls as NuxeoAcl[] | undefined;
@@ -63,7 +60,9 @@ export class PrincipalPermissionsService {
     pageSize: number,
     currentPageIndex: number,
   ): Observable<PrincipalPermissionPage> {
-    const e = escapeNxqlString(logicalPrincipal);
+    // A backslash, not a doubled quote: Nuxeo answers `'O''Brien'` with HTTP 400 (see
+    // `escapeNxqlLiteral`), which made every one of the four queries fail for such a name.
+    const e = escapeNxqlLiteral(logicalPrincipal);
     const strict = `SELECT * FROM Document WHERE ecm:acl/*1/principal = '${e}' AND ecm:acl/*1/name = 'local'`;
     const withUserPrefix = `SELECT * FROM Document WHERE ecm:acl/*1/principal = 'user:${e}' AND ecm:acl/*1/name = 'local'`;
     const withGroupPrefix = `SELECT * FROM Document WHERE ecm:acl/*1/principal = 'group:${e}' AND ecm:acl/*1/name = 'local'`;

@@ -52,8 +52,6 @@
  * /default-domain/workspaces, or a document at one of the seed's places that it did not write. An
  * argument other than `--preview` is refused with exit 2 too.
  */
-import { createHash } from 'node:crypto';
-
 import {
   ASSETS,
   FOLDERS,
@@ -396,13 +394,15 @@ async function ensure({ parent, name, path, type, properties, file }) {
   return updated;
 }
 
-/** Whether the document's file is already `file`: its name, its length and its bytes. */
+/**
+ * Whether the document's file is already `file`: its name, its length and its bytes, read back and
+ * compared whole. Not the server's digest, which is MD5 by default: a weak hash is no way to say
+ * two files are the same, and the pictures are small.
+ */
 async function holds(document, file) {
   const current = document.properties?.['file:content'];
   if (!current || current.name !== file.fileName || Number(current.length) !== file.bytes.length)
     return false;
-  if (current.digestAlgorithm === 'MD5' && typeof current.digest === 'string')
-    return current.digest === createHash('md5').update(file.bytes).digest('hex');
   const { bytes } = await request('GET', `/id/${document.uid}/@blob/file:content`);
   return bytes.equals(file.bytes);
 }

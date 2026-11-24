@@ -139,6 +139,9 @@ function resolveTableColumns(
       notes.push(
         `${place}: the widget "${column.widget}" shows the subfield's own value in this build`,
       );
+    } else if (column.widget === 'document-link' && widgetAccepts(column.widget, sub)) {
+      // A table's cell is one line of text: the record's title, without its link.
+      notes.push(`${place}: a table's cell shows the linked record's title, without its link`);
     } else if (column.widget !== null && !widgetAccepts(column.widget, sub)) {
       notes.push(
         `${place}: the widget "${column.widget}" does not show "${column.subfield}", a ${widgetPropertyType(sub)} value, so the cell shows the value itself`,

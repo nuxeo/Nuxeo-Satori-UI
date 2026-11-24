@@ -1,14 +1,16 @@
-import { type Observable, forkJoin, map, of, startWith } from 'rxjs';
+import { Injectable, type Signal, computed, inject } from '@angular/core';
+import { type Observable, catchError, forkJoin, map, of, shareReplay, startWith, tap } from 'rxjs';
 
-import type { DocumentLayoutService } from '../document-layout.service';
+import { DocumentLayoutService } from '../document-layout.service';
 import { type VocabularyValue, vocabularyValues } from '../document-layout/field-view';
 import type { LayoutFieldType } from '../layout.model';
-import type { RecordValueContext } from './record-field-view';
+import { LINKED_RECORDS_PER_REQUEST, type LinkedRecord, isDocumentId } from './linked-record';
+import type { RecordLink, RecordValueContext } from './record-field-view';
 
 /**
- * The names a page reads for the values it shows: a vocabulary entry's label, and a user's or a
- * group's display name. The record page and a list of records read them the same way, and only
- * those their values name.
+ * What a page reads for the values it shows: a vocabulary entry's label, a user's or a group's
+ * display name, and the record a `document-link` names. The record page and a list of records
+ * read them the same way, and only those their values name.
  */
 
 export interface Principal {
@@ -19,6 +21,8 @@ export interface Principal {
 export interface Lookups {
   readonly vocabulary: readonly VocabularyValue[];
   readonly principals: readonly Principal[];
+  /** The ids `document-link` values hold, each once, sorted: only those {@link isDocumentId} accepts. */
+  readonly records: readonly string[];
 }
 
 /** The labels read, by lookup; one that could not be read is absent. */
@@ -34,12 +38,45 @@ const principalKey = (kind: Principal['kind'], id: string): string => `${kind}\n
 
 /** Whether two sets of lookups read the same names: a signal's `equal`, so equal sets read nothing. */
 export function sameLookups(a: Lookups, b: Lookups): boolean {
-  const key = (lookups: Lookups) =>
+  return sameNames(a, b) && sameIds(a.records, b.records);
+}
+
+/** What a page reads labels for: the vocabulary entries and the users and groups its values name. */
+export type NameLookups = Pick<Lookups, 'vocabulary' | 'principals'>;
+
+/** Whether two sets of lookups read the same labels, whatever records they name. */
+function sameNames(a: NameLookups, b: NameLookups): boolean {
+  const key = (lookups: NameLookups) =>
     JSON.stringify([
       lookups.vocabulary.map((value) => [value.directory, value.id]),
       lookups.principals.map((principal) => [principal.kind, principal.id]),
     ]);
   return key(a) === key(b);
+}
+
+const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((id, index) => id === b[index]);
+
+/**
+ * The labels part of `lookups`, which changes only when the labels it names do: a page whose linked
+ * records change reads no label again, and shows none as its stored id meanwhile.
+ */
+export function namesOf(lookups: Signal<Lookups>): Signal<NameLookups> {
+  return computed(
+    (): NameLookups => {
+      const { vocabulary, principals } = lookups();
+      return { vocabulary, principals };
+    },
+    { equal: sameNames },
+  );
+}
+
+/**
+ * The linked records `lookups` names, which changes only when the set of ids does: a page whose
+ * labels change asks for no record again, and nor does an equal set, even after a failure.
+ */
+export function recordIdsOf(lookups: Signal<Lookups>): Signal<readonly string[]> {
+  return computed(() => lookups().records, { equal: sameIds });
 }
 
 function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
@@ -52,11 +89,13 @@ function sortedUnique<T>(items: readonly T[], key: (item: T) => string): T[] {
 export class LookupCollector {
   private readonly vocabulary: VocabularyValue[] = [];
   private readonly principals: Principal[] = [];
+  private readonly records: string[] = [];
 
   /**
    * What one value shown through `widget` names: the users or groups of a `user` or `group`
-   * widget; the vocabulary entries of a property with a directory, or of a `vocabulary` widget's
-   * own. A table's cells are each a value of their own, given with their column's widget.
+   * widget; the records of a `document-link`, by id; the vocabulary entries of a property with a
+   * directory, or of a `vocabulary` widget's own. A table's cells are each a value of their own,
+   * given with their column's widget.
    */
   value(
     widget: string | null,
@@ -67,6 +106,12 @@ export class LookupCollector {
     if (widget === 'user' || widget === 'group') {
       for (const id of Array.isArray(value) ? value : [value]) {
         if (typeof id === 'string' && id !== '') this.principals.push({ kind: widget, id });
+      }
+      return;
+    }
+    if (widget === 'document-link') {
+      for (const id of Array.isArray(value) ? value : [value]) {
+        if (isDocumentId(id)) this.records.push(id);
       }
       return;
     }
@@ -89,6 +134,7 @@ export class LookupCollector {
       principals: sortedUnique(this.principals, (principal) =>
         principalKey(principal.kind, principal.id),
       ),
+      records: sortedUnique(this.records, (id) => id),
     };
   }
 }
@@ -98,7 +144,10 @@ export class LookupCollector {
  * once. Never errors, since neither read does; a label that cannot be read is left absent, and
  * the value shows its stored id.
  */
-export function readLabels(layouts: DocumentLayoutService, lookups: Lookups): Observable<Labels> {
+export function readLabels(
+  layouts: DocumentLayoutService,
+  lookups: NameLookups,
+): Observable<Labels> {
   const { vocabulary, principals } = lookups;
   if (vocabulary.length + principals.length === 0) return of(NO_LABELS);
   return forkJoin([
@@ -126,5 +175,98 @@ export function labelLookups(labels: Labels): Pick<RecordValueContext, 'vocabula
   return {
     vocabulary: (directory, id) => labels.get(vocabularyKey(directory, id)) ?? id,
     principal: (kind, id) => labels.get(principalKey(kind, id)) ?? id,
+  };
+}
+
+/**
+ * The records read so far, by id: `null` for one the reader may not read, that does not exist, or
+ * whose read failed. An id not here is still being read.
+ */
+export type LinkedRecords = ReadonlyMap<string, LinkedRecord | null>;
+
+export const NO_RECORDS: LinkedRecords = new Map();
+
+/**
+ * The records the `document-link` values of one page name, read for as long as the page is drawn:
+ * each id once, in one request for every id a set adds, never one per field or cell. A set whose
+ * ids are all read asks for nothing. A failed request is not kept, and its ids are asked for again
+ * by the next set that names them; until then they show as unavailable.
+ *
+ * Provided by the record page, whose lists share it, so a record a field and a list both name is
+ * read once; and by a form. A list drawn elsewhere, as a queue's, has one of its own
+ * ({@link linkedRecordLookup}). Per page, not per session as a label is: a record's title changes
+ * more often than a user's name, and a record the reader may not read today may be shared with
+ * them tomorrow.
+ */
+@Injectable()
+export class LinkedRecordLookup {
+  private readonly layouts = inject(DocumentLayoutService);
+  private readonly read = new Map<string, Observable<LinkedRecord | null>>();
+
+  /** The records `ids` name, once all of them are read. Never errors. */
+  records(ids: readonly string[]): Observable<LinkedRecords> {
+    const wanted = [...new Set(ids.filter(isDocumentId))].sort();
+    if (wanted.length === 0) return of(NO_RECORDS);
+    const unread = wanted.filter((id) => !this.read.has(id));
+    for (let start = 0; start < unread.length; start += LINKED_RECORDS_PER_REQUEST) {
+      this.ask(unread.slice(start, start + LINKED_RECORDS_PER_REQUEST));
+    }
+    return forkJoin(
+      wanted.map((id) =>
+        (this.read.get(id) ?? of(null)).pipe(
+          map((record): [string, LinkedRecord | null] => [id, record]),
+        ),
+      ),
+    ).pipe(map((pairs): LinkedRecords => new Map(pairs)));
+  }
+
+  /** One request for `ids`, shared by each of them. */
+  private ask(ids: readonly string[]): void {
+    const ones = new Map<string, Observable<LinkedRecord | null>>();
+    const request = this.layouts.linkedRecords(ids).pipe(
+      catchError(() => of(null)),
+      // Once, as the request answers, whether or not anything still waits for it: a request kept
+      // running after the page moved on to another set must not leave its failure cached.
+      tap((found) => {
+        if (found !== null) return;
+        for (const [id, one] of ones) if (this.read.get(id) === one) this.read.delete(id);
+      }),
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
+    for (const id of ids) {
+      const one = request.pipe(map((found) => found?.get(id) ?? null));
+      ones.set(id, one);
+      this.read.set(id, one);
+    }
+  }
+}
+
+/**
+ * The lookup a list reads its records through: the record page's, when the list is one of its
+ * cards, so the page and its lists ask for a record once; else one of the list's own, for as long
+ * as the list is drawn. Called where `inject` may be.
+ */
+export function linkedRecordLookup(): LinkedRecordLookup {
+  return inject(LinkedRecordLookup, { optional: true }) ?? new LinkedRecordLookup();
+}
+
+/**
+ * The `document-link` lookup a widget's context answers from `records`: the record's title and
+ * its route, `unavailable` without a route where it cannot be shown, or `null` while it is read.
+ * A value that is not a document's id is unavailable at once, and was never asked for.
+ */
+export function recordLookups(
+  records: LinkedRecords,
+  unavailable: string,
+): Pick<RecordValueContext, 'record'> {
+  return {
+    record: (id): RecordLink | null => {
+      if (!isDocumentId(id)) return { text: unavailable, url: null };
+      const record = records.get(id);
+      if (record === undefined) return null;
+      return record === null
+        ? { text: unavailable, url: null }
+        : { text: record.title, url: record.url };
+    },
   };
 }

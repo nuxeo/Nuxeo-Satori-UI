@@ -1,4 +1,4 @@
-import { HttpBackend, HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpBackend, HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
@@ -60,6 +60,13 @@ import {
   resolveFormLayout,
   type ResolvedFormLayout,
 } from './form-layout/resolve-form-layout';
+import {
+  LINKED_RECORDS_PER_REQUEST,
+  type LinkedRecord,
+  isDocumentId,
+  linkedRecordsQuery,
+  readLinkedRecords,
+} from './record-page/linked-record';
 import { RecordLayoutFile, readRecordLayout } from './record-page/record-layout';
 import {
   RecordPreview,
@@ -370,6 +377,43 @@ export class DocumentLayoutService {
       this.principals.set(key, cached);
     }
     return cached;
+  }
+
+  /**
+   * The records with these ids that the reader may read, by id, each with its title and the app's
+   * route to it: what a `document-link` shows (layout-v2.md, section 11). `null` when the search
+   * fails, and the console says why. Never errors.
+   *
+   * One search, through the REST API as the reader, so Nuxeo returns only the records they may
+   * read: one they may not, or that no longer exists, is absent, and shows as unavailable. Each id
+   * is sent as a `queryParams` value of its own, never in the query's text
+   * ({@link linkedRecordsQuery}), and only an id {@link isDocumentId} accepts is sent at all; the
+   * others are left out of the search. No properties are asked for: the title, the type, the path
+   * and the facets that the route needs come with every record. Not cached: `LinkedRecordLookup`
+   * keeps what one page has read, for that page's life.
+   */
+  linkedRecords(ids: readonly string[]): Observable<ReadonlyMap<string, LinkedRecord> | null> {
+    const asked = [...new Set(ids.filter(isDocumentId))];
+    if (asked.length === 0) return of(new Map());
+    if (asked.length > LINKED_RECORDS_PER_REQUEST) {
+      warn(
+        `${asked.length} linked records not read: one search asks for ${LINKED_RECORDS_PER_REQUEST} at most`,
+      );
+      return of(null);
+    }
+    let params = new HttpParams()
+      .set('query', linkedRecordsQuery(asked.length))
+      .set('pageSize', asked.length)
+      .set('currentPageIndex', 0);
+    for (const id of asked) params = params.append('queryParams', id);
+    return this.api.get<unknown>('/nuxeo/api/v1/search/lang/NXQL/execute', params).pipe(
+      timeout(LAYOUT_LOAD_TIMEOUT_MS),
+      map((raw) => readLinkedRecords(raw, asked)),
+      catchError((error: unknown) => {
+        warn(`${asked.length} linked records not read: ${describe(error)}`);
+        return of(null);
+      }),
+    );
   }
 
   /**

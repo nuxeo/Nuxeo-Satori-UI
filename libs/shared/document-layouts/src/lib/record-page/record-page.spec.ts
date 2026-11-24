@@ -2,7 +2,7 @@ import { Component, input, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { NXS_PRIMITIVE_IDS, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
@@ -22,6 +22,7 @@ import { Subject, of, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import type { DocumentTypeDefinition } from '../layout.model';
+import type { LinkedRecord } from './linked-record';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY, RecordPageComponent } from './record-page';
@@ -45,6 +46,8 @@ const MEMBER_TYPE: DocumentTypeDefinition = {
         ssn: { type: 'string' },
         notes: { type: 'string' },
         caseManager: { type: 'string' },
+        referrer: { type: 'string' },
+        household: { type: 'string[]' },
         visits: {
           type: 'complex[]',
           fields: {
@@ -163,6 +166,44 @@ function layoutOf(content: Record<string, unknown>): ResolvedRecordLayout {
   return resolveRecordLayout(MEMBER_TYPE, read).layout;
 }
 
+const WEI = 'a00e20f3-1398-4b64-827e-628bfdada64c';
+const JOHN = '9cd9b1cf-6f0b-442f-afa0-c2539996ba30';
+const MARIA = '9a651335-d3d4-434c-a7b4-afe7e5c0edae';
+/** A record the reader may not read, or that no longer exists: the search does not return it. */
+const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
+const TITLES: Readonly<Record<string, string>> = {
+  [WEI]: 'Wei Chen',
+  [JOHN]: 'John Smith',
+  [MARIA]: 'Maria Alvarez',
+};
+
+/** What the search returns for `ids`: the records the reader may read. */
+const linked = (ids: readonly string[]): ReadonlyMap<string, LinkedRecord> =>
+  new Map(
+    ids
+      .filter((id) => id in TITLES)
+      .map((id): [string, LinkedRecord] => [id, { title: TITLES[id], url: `/doc/${id}` }]),
+  );
+
+/** A card of `document-link` fields, and a template that shows one of them. */
+const LINKS_PAGE = {
+  version: 2,
+  cards: [
+    {
+      id: 'links',
+      fields: [
+        { field: 'member:referrer', widget: 'document-link', parameters: { types: ['Member'] } },
+        { field: 'member:household', widget: 'document-link' },
+        {
+          id: 'referred',
+          label: 'Referred',
+          computed: { type: 'core.template', parameters: ['By {member:referrer}'] },
+        },
+      ],
+    },
+  ],
+};
+
 /** What a customer's own banner might be: it says which inputs reached it. */
 @Component({
   selector: 'lib-test-overridden-banner',
@@ -180,6 +221,12 @@ describe('RecordPageComponent', () => {
   let rules: { memberServices: boolean; canSeeService: boolean };
   let principal: (kind: string, id: string) => Observable<string | null>;
   let vocabularyLabel: (directory: string, id: string) => Observable<string | null>;
+  /** What a related list's rows' properties are, as the layout service reads them. */
+  let rowProperties: () => Observable<ReadonlyMap<string, unknown>>;
+  /** The linked records' search: each call is one request, with the ids it was given. */
+  let linkedRecords: ReturnType<
+    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>>
+  >;
   /** The zone the page shows an instant in: the process's own, unless a test chooses one. */
   let timeZone: string | undefined;
   /** The page's today, `RECORD_PAGE_TODAY`: 23 November, unless a test chooses another. */
@@ -220,6 +267,8 @@ describe('RecordPageComponent', () => {
             ? 'Active'
             : null,
       );
+    linkedRecords = vi.fn((ids: readonly string[]) => of(linked(ids)));
+    rowProperties = () => of(new Map());
     warnings = [];
     timeZone = undefined;
     pageToday = new Date('2026-11-23T12:00:00Z');
@@ -240,7 +289,8 @@ describe('RecordPageComponent', () => {
           useValue: {
             vocabularyLabel: (directory: string, id: string) => vocabularyLabel(directory, id),
             principalLabel: (kind: string, id: string) => principal(kind, id),
-            rowPropertiesOf: () => of(new Map()),
+            rowPropertiesOf: () => rowProperties(),
+            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => pageToday },
@@ -323,6 +373,166 @@ describe('RecordPageComponent', () => {
     names.complete();
     fixture.detectChanges();
     expect(valueOf(root, 'member:caseManager')).toBe('Jane Doe');
+  });
+
+  describe('a document-link', () => {
+    const linksOf = (root: HTMLElement, field: string) =>
+      [...root.querySelectorAll<HTMLAnchorElement>(`[data-field="${field}"] a`)].map((link) => ({
+        text: link.textContent?.trim(),
+        href: link.getAttribute('href'),
+      }));
+
+    it("shows the linked record's title, as a link that opens it through the app's router", async () => {
+      const root = await render(member({ 'member:referrer': WEI }), LINKS_PAGE);
+      expect(valueOf(root, 'member:referrer')).toBe('Wei Chen');
+      expect(linksOf(root, 'member:referrer')).toEqual([{ text: 'Wei Chen', href: `/doc/${WEI}` }]);
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      root.querySelector<HTMLAnchorElement>('[data-field="member:referrer"] a')?.click();
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(router.serializeUrl(navigate.mock.calls[0][0] as never)).toBe(`/doc/${WEI}`);
+      // A template's placeholder shows the property as the field does: by its title.
+      expect(valueOf(root, 'referred')).toBe('By Wei Chen');
+      expect(warnings.some((w) => w.includes('document-link'))).toBe(false);
+    });
+
+    it('reads every record the page names in one request, each id once', async () => {
+      await render(
+        member({ 'member:referrer': WEI, 'member:household': [JOHN, WEI, GONE] }),
+        LINKS_PAGE,
+      );
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0][0]).toEqual([GONE, JOHN, WEI].sort());
+    });
+
+    it('shows a record it may not read, one that is gone and a value that is no id as unavailable, never the id', async () => {
+      const injected = `${WEI}' OR ecm:uuid IS NOT NULL OR ecm:uuid = '`;
+      const root = await render(
+        member({ 'member:referrer': GONE, 'member:household': [JOHN, injected, GONE] }),
+        LINKS_PAGE,
+      );
+      expect(valueOf(root, 'member:referrer')).toBe('Unavailable');
+      expect(linksOf(root, 'member:referrer')).toEqual([]);
+      expect(valueOf(root, 'member:household')).toBe('John Smith, Unavailable, Unavailable');
+      expect(linksOf(root, 'member:household')).toEqual([
+        { text: 'John Smith', href: `/doc/${JOHN}` },
+      ]);
+      const text = root.textContent ?? '';
+      expect(text).not.toContain(GONE);
+      expect(text).not.toContain(injected);
+      // The value that is not an id was never asked for.
+      expect(linkedRecords.mock.calls.flatMap(([ids]) => ids)).not.toContain(injected);
+    });
+
+    it('shows nothing of a record while it is read, not its id', async () => {
+      const answer = new Subject<ReadonlyMap<string, LinkedRecord> | null>();
+      linkedRecords.mockReturnValueOnce(answer);
+      const root = await render(member({ 'member:referrer': WEI }), LINKS_PAGE);
+      expect(valueOf(root, 'member:referrer')).toBe('');
+      expect(root.textContent).not.toContain(WEI);
+      answer.next(linked([WEI]));
+      answer.complete();
+      fixture.detectChanges();
+      expect(valueOf(root, 'member:referrer')).toBe('Wei Chen');
+    });
+
+    it('reads a record the page and its list both name once, the list asking only for the others', async () => {
+      rowProperties = () => of(new Map([['claim:member', { type: 'string' }]]));
+      const row = (uid: string, memberId: string) => ({
+        uid,
+        title: uid,
+        type: 'Claim',
+        path: `/claims/${uid}`,
+        lastModified: '',
+        properties: { 'claim:number': uid, 'claim:member': memberId },
+      });
+      execute.mockReturnValue(
+        of({
+          entries: [row('CLM-1', WEI), row('CLM-2', JOHN)],
+          totalSize: 2,
+          currentPageSize: 2,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+          isNextPageAvailable: false,
+        }),
+      );
+      const root = await render(member({ 'member:referrer': WEI }), {
+        version: 2,
+        cards: [
+          LINKS_PAGE.cards[0],
+          {
+            id: 'claims',
+            related: {
+              pageProvider: 'member_claims',
+              parameters: [{ field: 'ecm:uuid' }],
+              columns: ['claim:number', { field: 'claim:member', widget: 'document-link' }],
+            },
+          },
+        ],
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const asked = linkedRecords.mock.calls.map(([ids]) => [...ids]);
+      expect(asked).toEqual([[WEI], [JOHN]]);
+      const list = root.querySelector('[data-card-id="claims"] table')?.textContent ?? '';
+      expect(list).toContain('Wei Chen');
+      expect(list).toContain('John Smith');
+      expect(valueOf(root, 'member:referrer')).toBe('Wei Chen');
+    });
+
+    it('reads no label again when only its linked records change', async () => {
+      const names = vi.fn(() => of('Jane Doe'));
+      principal = names;
+      const page = {
+        version: 2,
+        cards: [
+          {
+            id: 'links',
+            fields: [
+              { field: 'member:caseManager', widget: 'user' },
+              { field: 'member:referrer', widget: 'document-link' },
+            ],
+          },
+        ],
+      };
+      await render(member({ 'member:referrer': WEI }), page);
+      expect(names).toHaveBeenCalledTimes(1);
+      fixture.componentRef.setInput('document', member({ 'member:referrer': JOHN }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(linkedRecords).toHaveBeenCalledTimes(2);
+      expect(names).toHaveBeenCalledTimes(1);
+      expect(valueOf(fixture.nativeElement as HTMLElement, 'member:caseManager')).toBe('Jane Doe');
+    });
+
+    it('asks nothing more for the record reloaded with the same links, and only for an id it adds', async () => {
+      await render(member({ 'member:referrer': WEI, 'member:household': [JOHN] }), LINKS_PAGE);
+      fixture.componentRef.setInput(
+        'document',
+        member({
+          'member:referrer': WEI,
+          'member:household': [JOHN],
+          'member:phone': '+1 555 0199',
+        }),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      fixture.componentRef.setInput(
+        'document',
+        member({ 'member:referrer': MARIA, 'member:household': [JOHN, WEI] }),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(linkedRecords).toHaveBeenCalledTimes(2);
+      expect(linkedRecords.mock.calls[1][0]).toEqual([MARIA]);
+      expect(valueOf(fixture.nativeElement as HTMLElement, 'member:referrer')).toBe(
+        'Maria Alvarez',
+      );
+    });
   });
 
   it("shows rich text through the platform's sanitiser: formatting kept, script gone", async () => {
