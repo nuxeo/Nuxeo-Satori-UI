@@ -13,6 +13,9 @@ const types = { doctypes: { File: { parent: 'Document', facets: [], schemas: ['f
 const facets = [{ name: 'Folderish', schemas: [] }];
 const schemas = [{ name: 'file', prefix: 'file', fields: {} }];
 
+/** A JSON body as `TestRequest.flush` takes one: an object, an array, or `null`. */
+type Body = object | null;
+
 describe('ContentModelService', () => {
   let service: ContentModelService;
   let http: HttpTestingController;
@@ -27,7 +30,7 @@ describe('ContentModelService', () => {
 
   afterEach(() => http.verify());
 
-  const flushAll = (bodies: { types: unknown; facets: unknown; schemas: unknown }) => {
+  const flushAll = (bodies: { types: Body; facets: Body; schemas: Body }) => {
     http.expectOne(TYPES).flush(bodies.types);
     http.expectOne(FACETS).flush(bodies.facets);
     http.expectOne(SCHEMAS).flush(bodies.schemas);

@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { Subject } from 'rxjs';
-import { vi } from 'vitest';
+import { Observable, Subject } from 'rxjs';
+import { type Mock, vi } from 'vitest';
 
 import {
   ExportDialogComponent,
@@ -18,7 +18,7 @@ import {
 describe('ExportDialogComponent', () => {
   let fixture: ComponentFixture<ExportDialogComponent>;
   let close: ReturnType<typeof vi.fn>;
-  let exportFn: ReturnType<typeof vi.fn>;
+  let exportFn: Mock<(type: ExportType, uid: string) => Observable<Blob>>;
   let downloads: Subject<Blob>[];
   let saved: { href: string; download: string }[];
   let revoked: string[];
@@ -26,7 +26,7 @@ describe('ExportDialogComponent', () => {
   beforeEach(async () => {
     close = vi.fn();
     downloads = [];
-    exportFn = vi.fn((_type: ExportType, _uid: string) => {
+    exportFn = vi.fn((_type: ExportType, _uid: string): Observable<Blob> => {
       const download = new Subject<Blob>();
       downloads.push(download);
       return download;

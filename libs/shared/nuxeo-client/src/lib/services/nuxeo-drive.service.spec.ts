@@ -32,7 +32,7 @@ describe('NuxeoDriveService', () => {
   });
 
   describe('hasDriveToken', () => {
-    const answer = (body: unknown) => {
+    const answer = (body: object) => {
       let installed: boolean | undefined;
       service.hasDriveToken().subscribe((v) => (installed = v));
       const request = http.expectOne((r) => r.url === TOKEN_URL);
