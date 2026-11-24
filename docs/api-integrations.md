@@ -117,7 +117,7 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 ---
 
-## 3. User Tasks (Dashboard Widget)
+## 3. User Tasks (Tasks Page, Drawer, Dashboard Widget)
 
 | Field           | Value                                                                       |
 | --------------- | --------------------------------------------------------------------------- |
@@ -128,10 +128,32 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Query Parameters:**
 
-| Parameter  | Value                                                  |
-| ---------- | ------------------------------------------------------ |
-| `userId`   | Current authenticated username (e.g., `Administrator`) |
-| `pageSize` | `10` (default)                                         |
+| Parameter  | Value                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------ |
+| `userId`   | Current authenticated username (e.g., `Administrator`)                                                       |
+| `pageSize` | First read: how many to return, 50 for the tasks page and the drawer, 10 for the dashboard, 100 for the bell |
+| `offset`   | Second read only: the first read's entry count, with `pageSize` the rest, at most 1000                       |
+
+**Order, and why there can be two reads.** Nuxeo cannot be asked for the newest tasks. Its task
+list (`RoutingTaskPageProvider` in `nuxeo-routing-core`, Nuxeo 2025.10) builds its own query,
+ending `ORDER BY nt:dueDate ASC`, and never reads `sortBy` or `sortOrder`: the first page holds
+the tasks due soonest, the last page those due latest. Paging itself is reliable. Measured with
+64 open tasks, due dates shuffled against creation:
+
+| Request                                            | Result                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `pageSize=50`                                      | `resultsCount: 64`, `isNextPageAvailable: true`, the 50 due soonest       |
+| `pageSize=50&currentPageIndex=1`                   | the 14 due latest, not the 14 newest                                      |
+| `sortBy=created` or `dc:created`, `sortOrder=desc` | the same order as without                                                 |
+| `pageSize=10&offset=54`                            | entries 55 to 64 of that order: `offset` need not fall on a page boundary |
+
+So `getUserTasks` reads the first page, and when `isNextPageAvailable` reads the rest after it
+with `offset`, up to 1000 more (the `maxPageSize` the endpoint reports), drops a task that arrives
+in both reads, sorts by `created` newest first and keeps the first `pageSize`. One request while the tasks fit,
+two when they do not. The page providers that query task documents directly
+(`GET_TASKS_FOR_ACTORS…`) return documents, not tasks, and need the reader's groups expanded, so
+they are not used. **Limit:** a user with more than `pageSize` + 1000 open tasks gets the newest of
+the ones due soonest.
 
 **Request Headers:**
 
@@ -169,7 +191,7 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 }
 ```
 
-**Enrichment:** For each task, the target document title is fetched via `GET /nuxeo/api/v1/id/{docId}` and merged as `targetDocTitle`. If the document fetch fails, the task is returned without the title.
+**Enrichment:** For each task kept, when the response did not carry it, the target document title is fetched via `GET /nuxeo/api/v1/id/{docId}` and merged as `targetDocTitle`. If the document fetch fails, the task is returned without the title.
 
 **Key response fields used:**
 
@@ -2088,16 +2110,16 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ## 35. Notification Bell — Open Tasks, Followed Records and Their Audit
 
-| Field           | Value                                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Service**     | `NotificationSources` (`libs/shared/notifications/src/lib/notification-sources.ts`), through `TaskService`, `NuxeoApiBase` and `DocumentDetailService` |
-| **Method**      | `tasks(user)`, `followed(user, since, page)` and `changes(wanted, audit)`, at each check: every 60 seconds by default (`notifications.pollIntervalMs`) |
-| **HTTP Method** | `GET` for the tasks and `@audit`; `POST` for the two Automation operations                                                                             |
-| **Endpoints**   | `/nuxeo/api/v1/task?userId=<user>&pageSize=100` with `X-NXfetch.task: targetDocumentIds,actors` (the read the tasks page makes)                        |
-|                 | `/nuxeo/api/v1/automation/Repository.Query`, with `properties: dublincore`                                                                             |
-|                 | `/nuxeo/api/v1/automation/Audit.QueryWithPageProvider`, for an administrator                                                                           |
-|                 | `/nuxeo/api/v1/id/{uid}/@audit?startEventDate=…&eventId=documentModified&eventId=lifecycle_transition_event`, for anyone else, per record              |
-| **Context**     | `backgroundRequestContext()` on every request: the idle timer does not count them                                                                      |
+| Field           | Value                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `NotificationSources` (`libs/shared/notifications/src/lib/notification-sources.ts`), through `TaskService`, `NuxeoApiBase` and `DocumentDetailService`    |
+| **Method**      | `tasks(user)`, `followed(user, since, page)` and `changes(wanted, audit)`, at each check: every 60 seconds by default (`notifications.pollIntervalMs`)    |
+| **HTTP Method** | `GET` for the tasks and `@audit`; `POST` for the two Automation operations                                                                                |
+| **Endpoints**   | `/nuxeo/api/v1/task?userId=<user>&pageSize=100` with `X-NXfetch.task: targetDocumentIds,actors`, then `&offset=100` for the rest when Nuxeo has more (§3) |
+|                 | `/nuxeo/api/v1/automation/Repository.Query`, with `properties: dublincore`                                                                                |
+|                 | `/nuxeo/api/v1/automation/Audit.QueryWithPageProvider`, for an administrator                                                                              |
+|                 | `/nuxeo/api/v1/id/{uid}/@audit?startEventDate=…&eventId=documentModified&eventId=lifecycle_transition_event`, for anyone else, per record                 |
+| **Context**     | `backgroundRequestContext()` on every request: the idle timer does not count them                                                                         |
 
 **Followed records** — the documents whose `notif:notifications` list the reader, the property
 `Document.Subscribe` writes:

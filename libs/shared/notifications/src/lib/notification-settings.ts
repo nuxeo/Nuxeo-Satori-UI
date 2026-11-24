@@ -28,9 +28,9 @@ export const NOTIFICATION_WINDOW_MS = 7 * 24 * 60 * 60_000;
 export const NOTIFICATION_TASK_LIMIT = 20;
 
 /**
- * How many open tasks are read to find the newest: Nuxeo answers the task list oldest first and
- * ignores `sortBy` (measured on Nuxeo 2025). A reader with more open tasks than this does not see
- * the newest of them.
+ * How many open tasks `TaskService.getUserTasks` is asked for. It returns the newest, newest first,
+ * although Nuxeo orders its task list by due date and ignores `sortBy` (Nuxeo 2025.10): it reads
+ * past the first page, up to 1000 more tasks, to find them.
  */
 export const NOTIFICATION_TASK_READ_LIMIT = 100;
 

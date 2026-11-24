@@ -102,9 +102,10 @@ export class NotificationSources {
   private readonly documents = inject(DocumentDetailService);
 
   /**
-   * The reader's open tasks, the newest {@link NOTIFICATION_TASK_LIMIT}. Nuxeo answers the task
-   * list oldest first and ignores `sortBy` (measured on Nuxeo 2025), so more are read, up to
-   * {@link NOTIFICATION_TASK_READ_LIMIT}, and sorted here.
+   * The reader's open tasks, the newest {@link NOTIFICATION_TASK_LIMIT}. Nuxeo orders its task list
+   * by due date and ignores `sortBy` (Nuxeo 2025.10); `TaskService.getUserTasks` reads past its
+   * first page to return the newest {@link NOTIFICATION_TASK_READ_LIMIT}, newest first, and the
+   * sort here keeps the bell's order its own.
    */
   tasks(user: string): Observable<TaskNotification[]> {
     return this.taskService

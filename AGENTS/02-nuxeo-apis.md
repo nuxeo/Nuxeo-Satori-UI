@@ -76,6 +76,11 @@ enrichers-document: allowedTransitions → ours (nuxeo-agentic-core): [{ name, d
 | Complete task          | PUT    | `/nuxeo/api/v1/task/:taskId`        |
 | Get user tasks         | GET    | `/nuxeo/api/v1/task?userId=:userId` |
 
+The user task list is ordered `nt:dueDate` ascending by the server and ignores `sortBy` /
+`sortOrder` (Nuxeo 2025.10). Its paging is exact: `resultsCount` is the whole total, and `offset`
+works on any boundary. `TaskService.getUserTasks` relies on both to return the newest:
+`docs/api-integrations.md` §3.
+
 ### Tags
 
 | Operation         | Method | Endpoint                                     |
