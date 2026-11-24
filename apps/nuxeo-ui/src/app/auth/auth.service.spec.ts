@@ -17,9 +17,6 @@ describe('AuthService poweruser access', () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
-    // The "/nuxeo/logout is absent" memo is static, so without this a test that flushes a 404
-    // would silently suppress the probe in every test after it.
-    AuthService.resetNuxeoLogoutProbe();
     TestBed.configureTestingModule({
       imports: [testTranslateModule(), HttpClientTestingModule],
       providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
@@ -35,13 +32,12 @@ describe('AuthService poweruser access', () => {
   });
 
   /**
-   * A Nuxeo with no JSF web module 404s `/nuxeo/logout`. Measured on the local Docker stack, where
-   * `/nuxeo/logout`, `/nuxeo/logout.faces` and `/nuxeo/nxstartup.faces?nxo=logout` all 404. Login
-   * still has to work, and the probe must not re-fire on every subsequent sign-in and hydration —
-   * each failed attempt logged a console error that looked like a defect in whatever was being
-   * debugged at the time.
+   * `/nuxeo/logout` 404s when there is no session to end, and 302s, ending it, when there is one —
+   * measured on the local Nuxeo 2025.10. An earlier version took the first 404 to mean the endpoint
+   * was absent and never called it again in that page load, so a session that appeared afterwards
+   * (a Web UI sign-in on the same host, or the previous user's) decided who the next sign-in was.
    */
-  it('still signs in when /nuxeo/logout is absent, and stops probing it', () => {
+  it('still signs in when /nuxeo/logout answers 404, and ends the session again on the next sign-in', () => {
     service.login('member01', 'secret', false).subscribe();
 
     httpMock
@@ -57,9 +53,12 @@ describe('AuthService poweruser access', () => {
     expect(service.isAuthenticated()).toBe(true);
     expect(service.username()).toBe('member01');
 
-    // Second sign-in: no logout request at all this time.
+    // Second sign-in: the 404 is not remembered, so the session is ended again.
+    service.logout();
     service.login('member01', 'secret', false).subscribe();
-    httpMock.expectNone((r) => r.url.includes('/nuxeo/logout'));
+    const logout = httpMock.expectOne((r) => r.url.includes('/nuxeo/logout'));
+    expect(logout.request.withCredentials).toBeTrue();
+    logout.flush('');
     httpMock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
       .flush({ id: 'member01', properties: { username: 'member01', groups: ['members'] } });
@@ -317,15 +316,20 @@ describe('AuthService poweruser access', () => {
     mock.verify();
   });
 
-  it('preserves basic-auth username on hydration when /me principal differs from stale cookie', () => {
+  /**
+   * This spec used to assert the opposite — that the stored name survived `/me` naming someone
+   * else — which is the defect itself: the header said one user while every request ran as another,
+   * with that user's administrator flag.
+   */
+  it('signs a restored password session out when /me answers as someone else', () => {
     sessionStorage.setItem(
       'agentic_ui_nuxeo_session',
       JSON.stringify({
         kind: 'basic',
         username: 'test-user',
         basic: btoa('test-user:test-pass'),
-        isAdministrator: true,
-        groups: ['administrators'],
+        isAdministrator: false,
+        groups: ['members'],
       }),
     );
 
@@ -336,22 +340,24 @@ describe('AuthService poweruser access', () => {
     });
     const hydrated = TestBed.inject(AuthService);
     const mock = TestBed.inject(HttpTestingController);
+    const warn = spyOn(console, 'warn');
 
     hydrated.ensureHydrated().subscribe();
     mock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
     mock
       .expectOne((r) => r.url.includes('/nuxeo/api/v1/me'))
       .flush({
-        id: 'test.user@gmail.com',
-        properties: { username: 'test.user@gmail.com', groups: ['members'] },
-        isAdministrator: false,
+        id: 'Administrator',
+        properties: { username: 'Administrator', groups: ['administrators'] },
+        isAdministrator: true,
       });
-    mock
-      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials)
-      .flush({ id: 'test-user' });
+    // No browser-session call: the restored session is not carried on.
+    mock.expectNone((r) => r.url.includes('/nuxeo/api/v1/me'));
 
-    expect(hydrated.isAuthenticated()).toBe(true);
-    expect(hydrated.username()).toBe('test-user');
+    expect(hydrated.isAuthenticated()).toBe(false);
+    expect(hydrated.isAdministrator()).toBe(false);
+    expect(sessionStorage.getItem('agentic_ui_nuxeo_session')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(jasmine.stringContaining('Administrator'));
     mock.verify();
   });
 
@@ -423,6 +429,236 @@ describe('AuthService poweruser access', () => {
   });
 });
 
+/**
+ * Nuxeo answers a request as the user cached in its HTTP session before it reads `Authorization`,
+ * and a same-origin XHR sends the JSESSIONID whatever `withCredentials` says. Measured on the local
+ * Nuxeo 2025.10 with an Administrator session cookie: `/me` answered Administrator for a member's
+ * own credentials, for a wrong password, and for a user that does not exist. These specs flush
+ * what that server answered, and assert the sign-in is refused or ended rather than carried on.
+ */
+describe('AuthService with a Nuxeo session cookie for another user', () => {
+  const ADMIN_ME = {
+    id: 'Administrator',
+    properties: { username: 'Administrator', groups: ['administrators'] },
+    isAdministrator: true,
+  };
+  const MEMBER_ME = {
+    id: 'member01',
+    properties: { username: 'member01', groups: ['members'] },
+    isAdministrator: false,
+  };
+  const STORAGE_KEY = 'agentic_ui_nuxeo_session';
+  const SIGNED_OUT_KEY = 'agentic_ui_signed_out';
+
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+    TestBed.configureTestingModule({
+      imports: [testTranslateModule(), HttpClientTestingModule],
+      providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
+    });
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  /** Runs `login()` and returns what it ended with, so a refusal can be asserted by key. */
+  function signIn(username: string, remember = false): { error: unknown; completed: boolean } {
+    const outcome = { error: undefined as unknown, completed: false };
+    service.login(username, 'secret', remember).subscribe({
+      error: (e: unknown) => (outcome.error = e),
+      complete: () => (outcome.completed = true),
+    });
+    return outcome;
+  }
+
+  function probe() {
+    return httpMock.expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials);
+  }
+
+  function browserSessionCall() {
+    return httpMock.expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials);
+  }
+
+  function restore(session: object): { restored: AuthService; mock: HttpTestingController } {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],
+    });
+    return { restored: TestBed.inject(AuthService), mock: TestBed.inject(HttpTestingController) };
+  }
+
+  it('refuses a sign-in that /me answers as another user, and keeps nothing from it', () => {
+    const outcome = signIn('member01', true);
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    probe().flush(ADMIN_ME);
+    // Refused before the browser-session call, so nothing is established for the wrong user.
+    httpMock.expectNone((r) => r.url.includes('/nuxeo/api/v1/me'));
+
+    expect(outcome.completed).toBeFalse();
+    expect((outcome.error as { messageKey?: string }).messageKey).toBe(
+      'login.message.session-conflict',
+    );
+    expect(service.isAuthenticated()).toBeFalse();
+    expect(service.isAdministrator()).toBeFalse();
+    expect(service.username()).toBeNull();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('refuses a sign-in whose browser-session call answers as another user', () => {
+    // The probe can be right while the cookie-carrying call is not: on a cross-origin deployment
+    // only the latter sends cookies, and its session is the one every <img> and download uses.
+    sessionStorage.setItem(SIGNED_OUT_KEY, '1');
+    const outcome = signIn('member01', true);
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    probe().flush(MEMBER_ME);
+    const establish = browserSessionCall();
+    expect(establish.request.headers.get('Authorization')).toBe(`Basic ${btoa('member01:secret')}`);
+    establish.flush(ADMIN_ME);
+
+    expect((outcome.error as { messageKey?: string }).messageKey).toBe(
+      'login.message.session-conflict',
+    );
+    expect(service.isAuthenticated()).toBeFalse();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    // Left as a failed sign-in leaves it: a reload must not pick the other session up.
+    expect(sessionStorage.getItem(SIGNED_OUT_KEY)).toBe('1');
+  });
+
+  it('refuses a /me that names nobody, rather than trusting its administrator flag', () => {
+    const outcome = signIn('member01');
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    probe().flush({ isAdministrator: true });
+    httpMock.expectNone((r) => r.url.includes('/nuxeo/api/v1/me'));
+
+    expect((outcome.error as { messageKey?: string }).messageKey).toBe(
+      'login.message.session-conflict',
+    );
+    expect(service.isAuthenticated()).toBeFalse();
+  });
+
+  it('accepts a /me that differs from the typed username only in case', () => {
+    // A case-insensitive directory (LDAP, commonly) accepts JDOE and reports jdoe. Refusing that
+    // would lock a legitimate user out; it cannot let a different user in.
+    const outcome = signIn('MEMBER01');
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    probe().flush(MEMBER_ME);
+    browserSessionCall().flush({ id: 'member01' });
+
+    expect(outcome.completed).toBeTrue();
+    expect(service.isAuthenticated()).toBeTrue();
+    expect(service.isAdministrator()).toBeFalse();
+  });
+
+  it('still tolerates a failed browser-session call: that costs an image, not the sign-in', () => {
+    const outcome = signIn('member01');
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    probe().flush(MEMBER_ME);
+    browserSessionCall().flush('nope', { status: 500, statusText: 'Server Error' });
+
+    expect(outcome.completed).toBeTrue();
+    expect(service.username()).toBe('member01');
+  });
+
+  it('reports a wrong password as invalid credentials, as before', () => {
+    const outcome = signIn('member01');
+    httpMock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    probe().flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect((outcome.error as { messageKey?: string }).messageKey).toBe(
+      'login.message.invalid-credentials',
+    );
+  });
+
+  it('ends a restored password session when the browser-session call answers as someone else', () => {
+    const { restored, mock } = restore({
+      kind: 'basic',
+      username: 'member01',
+      basic: btoa('member01:secret'),
+      isAdministrator: false,
+      groups: ['members'],
+    });
+    spyOn(console, 'warn');
+
+    restored.ensureHydrated().subscribe();
+    mock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    mock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && !r.withCredentials)
+      .flush(MEMBER_ME);
+    mock.expectOne((r) => r.url.includes('/nuxeo/api/v1/me') && r.withCredentials).flush(ADMIN_ME);
+
+    expect(restored.isAuthenticated()).toBeFalse();
+    mock.verify();
+  });
+
+  it('ends a password session when refreshing /me answers as someone else', () => {
+    const { restored, mock } = restore({
+      kind: 'basic',
+      username: 'member01',
+      basic: btoa('member01:secret'),
+      isAdministrator: false,
+      groups: ['members'],
+    });
+    spyOn(console, 'warn');
+
+    restored.refreshCurrentUser().subscribe();
+    mock.expectOne((r) => r.url.includes('/nuxeo/logout')).flush('');
+    mock.expectOne((r) => r.url.includes('/nuxeo/api/v1/me')).flush(ADMIN_ME);
+
+    expect(restored.isAuthenticated()).toBeFalse();
+    expect(restored.isAdministrator()).toBeFalse();
+    mock.verify();
+  });
+
+  /**
+   * The SSO path has no password to check against: the session cookie *is* the sign-in, so the user
+   * is whoever `/me` names. None of the above may touch it — no logout, no Basic, no comparison.
+   */
+  it('still signs an SSO cookie session in as whoever /me names', () => {
+    service.ensureHydrated().subscribe();
+
+    httpMock.expectNone((r) => r.url.includes('/nuxeo/logout'));
+    const me = httpMock.expectOne((r) => r.url.includes('/nuxeo/api/v1/me'));
+    expect(me.request.headers.has('Authorization')).toBeFalse();
+    me.flush({ id: 'sso-user', properties: { username: 'sso-user', groups: ['members'] } });
+
+    expect(service.isAuthenticated()).toBeTrue();
+    expect(service.username()).toBe('sso-user');
+    expect(service.basicCredentials()).toBeNull();
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}').kind).toBe('cookie');
+  });
+
+  it('still restores an SSO cookie session as whoever /me names now', () => {
+    const { restored, mock } = restore({
+      kind: 'cookie',
+      username: 'sso-user',
+      isAdministrator: false,
+      groups: ['members'],
+    });
+
+    restored.ensureHydrated().subscribe();
+    mock.expectNone((r) => r.url.includes('/nuxeo/logout'));
+    mock
+      .expectOne((r) => r.url.includes('/nuxeo/api/v1/me'))
+      .flush({ id: 'sso-user', properties: { username: 'sso-user', groups: ['members'] } });
+
+    expect(restored.isAuthenticated()).toBeTrue();
+    expect(restored.username()).toBe('sso-user');
+    mock.verify();
+  });
+});
+
 describe('AuthService share landing', () => {
   const KEY = 'nxs.sharedDocumentPath';
   const RECIPIENT = 'transient/recipient@example.invalid';
@@ -432,7 +668,6 @@ describe('AuthService share landing', () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
-    AuthService.resetNuxeoLogoutProbe();
     TestBed.configureTestingModule({
       imports: [testTranslateModule(), HttpClientTestingModule],
       providers: [{ provide: NUXEO_API_ORIGIN, useValue: '' }],

@@ -98,7 +98,12 @@ export const nuxeoAuthInterceptor: HttpInterceptorFn = (req, next) => {
     headers = headers.set(AUTH_TOKEN_HEADER, shareToken);
   }
   // Logout must send cookies to clear stale JSESSIONID. Basic-auth requests (stored or
-  // in-flight during login) omit cookies to avoid principal override.
+  // in-flight during login) ask to omit them, so a session cookie cannot override the Basic
+  // principal — but `withCredentials` only governs a CROSS-origin request. A same-origin XHR,
+  // which is the usual deployment and the dev proxy, sends cookies whatever it says, and Nuxeo
+  // answers as the session's user rather than the Basic one. On the same origin the guard is
+  // AuthService: it ends the server session before a password sign-in and refuses a `/me` that
+  // names anyone else (`meAnswersAs` in auth.service.ts). This line only covers cross-origin.
   const isLogout = isNuxeoLogoutRequest(req.url, allowedOrigins);
   const establishBrowserSession = req.context.get(NUXEO_ESTABLISH_BROWSER_SESSION);
   const usesBasicAuth = Boolean(basic) || hasBasicAuthorizationHeader(req.headers);
