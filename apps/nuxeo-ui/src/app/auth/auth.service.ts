@@ -107,6 +107,57 @@ function readUsernameFromMe(me: unknown): string | null {
   return null;
 }
 
+/**
+ * Whether `/me` answered as `username`.
+ *
+ * **This is what makes a password sign-in mean the user who typed it** — at sign-in and on each
+ * hydration, which is when it runs. It is not a running guarantee: a foreign session that appears
+ * mid-session (a Web UI sign-in on the same host) is used by every request until the next reload,
+ * because an XHR cannot leave a same-origin cookie behind. Nuxeo resolves the identity
+ * cached in an HTTP session before it reads an `Authorization` header, so a same-origin request
+ * carrying another user's JSESSIONID is answered as that user whatever Basic credentials ride with
+ * it — and a same-origin XHR sends the cookie even with `withCredentials: false`. Measured on the
+ * local Nuxeo 2025.10 with an Administrator session cookie: `/me` answered Administrator, with
+ * `isAdministrator: true`, for the test user's own credentials, for a wrong password, and for a
+ * user that does not exist. The client took the flag at its word and gave a member the
+ * administrator's surface, and every request it then sent ran as the administrator.
+ *
+ * `/nuxeo/logout` before the probe is the first defence ({@link AuthService} ends the session it
+ * can); this is the second, for whatever survives it. A `/me` that names nobody fails too.
+ *
+ * Case-insensitive because a directory may be: LDAP commonly accepts `JDOE` and reports `jdoe`, and
+ * refusing that would lock a legitimate user out. The cost, on a case-sensitive directory such as
+ * the local default one: if `/nuxeo/logout` could not end an `Administrator` session, typing
+ * `administrator` with any password is accepted as that session. That grants nothing the browser
+ * does not already hold — the cookie-only path would hydrate the same session unasked — so it is
+ * accepted over the lock-out. A different user is never accepted.
+ *
+ * A deployment whose login name is not the principal id (an email-login plugin, say) is refused
+ * here, with a message that blames another session; nothing in `/me` relates the two names.
+ */
+function meAnswersAs(me: unknown, username: string): boolean {
+  const answered = readUsernameFromMe(me);
+  return answered !== null && answered.toLowerCase() === username.trim().toLowerCase();
+}
+
+/** `/me` named someone other than the user a password session belongs to. */
+class SessionPrincipalMismatch extends Error {
+  constructor(
+    readonly expected: string,
+    readonly answered: string | null,
+  ) {
+    super(`Nuxeo answered as ${answered ?? 'nobody'} for a session that belongs to ${expected}`);
+    this.name = 'SessionPrincipalMismatch';
+  }
+}
+
+/** Throws {@link SessionPrincipalMismatch} unless `/me` answered as `username`. */
+function requireAnswersAs(me: unknown, username: string): void {
+  if (!meAnswersAs(me, username)) {
+    throw new SessionPrincipalMismatch(username, readUsernameFromMe(me));
+  }
+}
+
 /** Default Nuxeo built-in admin user id — used if `/me` omits `isAdministrator`. */
 function isBuiltInAdministratorUsername(username: string): boolean {
   return username.trim().toLowerCase() === 'administrator';
@@ -306,20 +357,6 @@ export class AuthService {
   private readonly ssoPostLoginPath = inject(NUXEO_SSO_POST_LOGIN_PATH);
   private readonly ssoReturnQueryParam = inject(NUXEO_SSO_RETURN_QUERY_PARAM);
 
-  /**
-   * Set once `/nuxeo/logout` has answered 404, so the probe is not repeated.
-   *
-   * Static because the absence is a property of the Nuxeo being talked to, not of an injector —
-   * and `AuthService` is a root singleton anyway, so this only matters for tests, which reset it
-   * through {@link resetNuxeoLogoutProbe}.
-   */
-  private static nuxeoLogoutEndpointAbsent = false;
-
-  /** Test seam: forget that `/nuxeo/logout` was missing. */
-  static resetNuxeoLogoutProbe(): void {
-    AuthService.nuxeoLogoutEndpointAbsent = false;
-  }
-
   private readonly state = signal<StoredSession | null>(null);
   private hydration$: Observable<void> | null = null;
   /** In-memory token for Instant Share / external permission links (Nuxeo TOKEN_AUTH). */
@@ -365,25 +402,31 @@ export class AuthService {
   }
 
   /**
-   * Clears a stale Nuxeo browser session (JSESSIONID) before password login or hydration.
-   * Same-origin `/nuxeo/**` requests always send cookies; an old cookie can override Basic auth.
+   * Ends whatever Nuxeo browser session (JSESSIONID) the browser holds, before a password sign-in
+   * or a password session's hydration. Nuxeo answers a request as the user cached in its session,
+   * not as the Basic credentials beside it, so a session left by someone else would otherwise
+   * decide who this sign-in is — see {@link meAnswersAs}, which catches what this cannot end.
    *
-   * **Not every Nuxeo serves this endpoint.** A headless instance with no JSF web module answers
-   * `/nuxeo/logout` with 404 — measured against the local Docker stack, where `/nuxeo/logout`,
-   * `/nuxeo/logout.faces` and `/nuxeo/nxstartup.faces?nxo=logout` all 404. The call is therefore
-   * best-effort, as the `catchError` always implied, and a 404 is remembered so the request is
-   * attempted once per page load instead of on every login and every hydration. Each failed
-   * attempt put a console error in front of whoever was debugging something else.
+   * **Attempted every time, and a 404 is not remembered.** Measured on the local Nuxeo 2025.10:
+   * `/nuxeo/logout` answers 302 and invalidates the session when there is one, and 404 only when
+   * there is no session to end. An earlier version read that 404 as "this Nuxeo has no logout
+   * endpoint" and stopped calling it for the rest of the page load, which disabled the guard at the
+   * moment it mattered: once a sign-in had found no session, a session that appeared afterwards — a
+   * Web UI sign-in on the same host, which shares the cookie, or the previous user's — was never
+   * ended again, and the next sign-in ran as its user. The 302 is followed by the XHR to a page
+   * that may 404 in turn, so a console 404 here is the normal outcome, not a fault.
    *
-   * Remembering it does not weaken the guard: where the endpoint is absent it never cleared
-   * anything to begin with. What keeps a stale cookie from overriding Basic auth on this path is
-   * that the login probe and `fetchMe()` both run without `withCredentials`, so no cookie is sent;
-   * `establishBasicAuthBrowserSession()` is the one call that deliberately opts in.
+   * Hydration runs once per page load, so a reload of a password session ends any Nuxeo session in
+   * the browser — the same user's Web UI tab included. The memo never changed that: it was static
+   * per page load, so the first call of every load was always made.
+   *
+   * Best-effort all the same: a Nuxeo that really has no logout endpoint fails here, and the
+   * principal check after it is what refuses the sign-in. Where Nuxeo's logout redirects to an
+   * identity provider (SAML single logout), the XHR follows it with credentials: the response is
+   * unreadable cross-origin, so this still fails over to the check, but the provider may have acted
+   * on the request. That was so before as well.
    */
   private clearStaleNuxeoCookieSession(): Observable<void> {
-    if (AuthService.nuxeoLogoutEndpointAbsent) {
-      return of(undefined);
-    }
     return this.http
       .get(this.apiUrl('/nuxeo/logout'), {
         withCredentials: true,
@@ -391,12 +434,7 @@ export class AuthService {
       })
       .pipe(
         map(() => undefined),
-        catchError((error: unknown) => {
-          if (error instanceof HttpErrorResponse && error.status === 404) {
-            AuthService.nuxeoLogoutEndpointAbsent = true;
-          }
-          return of(undefined);
-        }),
+        catchError(() => of(undefined)),
       );
   }
 
@@ -423,25 +461,49 @@ export class AuthService {
   /**
    * After password login or hydration, establish a same-origin Nuxeo browser session
    * (JSESSIONID) so embedded note `<img src="/nuxeo/nxfile/...">` loads without headers.
+   *
+   * It may establish nothing: measured on the local Nuxeo, `/me` with Basic sets no cookie, since
+   * the REST chain is stateless. What it does do is report the session the browser already holds,
+   * if any, which is the one `<img>` and download links use.
+   *
+   * The credentials are passed in rather than read from the stored session, so a sign-in can run
+   * this before it stores anything. A failed request is tolerated — no browser session costs an
+   * embedded image, not the sign-in, and the check then simply does not run — but an answer naming
+   * someone else is not: on a cross-origin deployment this is the only `/me` that sends cookies, so
+   * it is the only one that can see a foreign session the probe could not.
    */
-  private establishBasicAuthBrowserSession(): Observable<void> {
-    if (this.state()?.kind !== 'basic') {
-      return of(undefined);
-    }
+  private establishBasicAuthBrowserSession(username: string, basic: string): Observable<void> {
     return this.http
-      .get(this.apiUrl('/nuxeo/api/v1/me'), {
-        headers: { Accept: 'application/json' },
+      .get<unknown>(this.apiUrl('/nuxeo/api/v1/me'), {
+        headers: { Accept: 'application/json', Authorization: `Basic ${basic}` },
         withCredentials: true,
         context: new HttpContext().set(NUXEO_ESTABLISH_BROWSER_SESSION, true),
       })
       .pipe(
-        map(() => undefined),
-        catchError(() => of(undefined)),
+        catchError(() => of(null)),
+        map((me) => {
+          if (me !== null) requireAnswersAs(me, username);
+        }),
       );
   }
 
   private isInvalidBasicAuthResponse(err: unknown): boolean {
     return err instanceof HttpErrorResponse && (err.status === 401 || err.status === 403);
+  }
+
+  /**
+   * True, after saying why on the console, when a restored password session found Nuxeo answering
+   * as someone else even after `/nuxeo/logout`. The session is then ended rather than kept: every
+   * request it sent would run as the other user, and keeping the stored name would only make the
+   * header say otherwise — which is how the defect this guards against was first seen.
+   */
+  private endsOnPrincipalMismatch(err: unknown): boolean {
+    if (!(err instanceof SessionPrincipalMismatch)) return false;
+    console.warn(
+      `[agentic-ui] Signed out: ${err.message}. This browser holds another Nuxeo session ` +
+        'that /nuxeo/logout did not end.',
+    );
+    return true;
   }
 
   private isExplicitlySignedOut(): boolean {
@@ -567,11 +629,12 @@ export class AuthService {
       if (existing.kind === 'basic') {
         return this.clearStaleNuxeoCookieSession().pipe(
           switchMap(() => this.fetchMe()),
+          tap((me) => requireAnswersAs(me, existing.username)),
           tap((me) => this.applyBasicSessionFromMe(existing, me)),
-          switchMap(() => this.establishBasicAuthBrowserSession()),
+          switchMap(() => this.establishBasicAuthBrowserSession(existing.username, existing.basic)),
           map(() => undefined),
           catchError((err) => {
-            if (this.isInvalidBasicAuthResponse(err)) {
+            if (this.isInvalidBasicAuthResponse(err) || this.endsOnPrincipalMismatch(err)) {
               this.logout();
             }
             return of(undefined);
@@ -725,6 +788,12 @@ export class AuthService {
 
   /**
    * Validates credentials against Nuxeo (`GET /nuxeo/api/v1/me`).
+   *
+   * Any Nuxeo session the browser holds is ended first, and the sign-in is refused with
+   * `login.message.session-conflict` if `/me` still names anyone but `username` — see
+   * {@link meAnswersAs}. Nothing is stored, and the signed-out flag is left as it was, until the
+   * probe has answered as the user who signed in and the browser-session call has not answered as
+   * anyone else (it may fail instead, which is tolerated).
    */
   login(username: string, password: string, remember: boolean): Observable<void> {
     // Drop any prior session so Nuxeo requests use only the new credentials.
@@ -742,37 +811,44 @@ export class AuthService {
 
     return this.clearStaleNuxeoCookieSession().pipe(
       switchMap(() =>
-        this.http
-          .get<unknown>(this.apiUrl('/nuxeo/api/v1/me'), { headers, withCredentials: false })
-          .pipe(
-            tap((me) => {
-              const flags = readSessionFlagsFromMe(me);
-              const session: BasicStoredSession = {
-                kind: 'basic',
-                username: trimmed,
-                basic,
-                isAdministrator: flags.isAdministrator,
-                groups: flags.groups,
-                allGroups: flags.allGroups,
-              };
-              this.state.set(session);
-              this.persist(session, remember);
-              this.clearSignedOut();
-              this.hydration$ = of(undefined).pipe(shareReplay(1));
-            }),
-            switchMap(() => this.establishBasicAuthBrowserSession()),
-            map(() => undefined),
-            catchError((err) =>
-              throwError(
-                () =>
-                  new SignInError(
-                    err?.status === 401 || err?.status === 403
-                      ? 'login.message.invalid-credentials'
-                      : 'login.message.server-unreachable',
-                  ),
-              ),
+        this.http.get<unknown>(this.apiUrl('/nuxeo/api/v1/me'), {
+          headers,
+          withCredentials: false,
+        }),
+      ),
+      map((me): BasicStoredSession => {
+        requireAnswersAs(me, trimmed);
+        const flags = readSessionFlagsFromMe(me);
+        return {
+          kind: 'basic',
+          username: trimmed,
+          basic,
+          isAdministrator: flags.isAdministrator,
+          groups: flags.groups,
+          allGroups: flags.allGroups,
+        };
+      }),
+      switchMap((session) =>
+        this.establishBasicAuthBrowserSession(trimmed, basic).pipe(map(() => session)),
+      ),
+      tap((session) => {
+        this.state.set(session);
+        this.persist(session, remember);
+        this.clearSignedOut();
+        this.hydration$ = of(undefined).pipe(shareReplay(1));
+      }),
+      map(() => undefined),
+      catchError((err) =>
+        throwError(
+          () =>
+            new SignInError(
+              err instanceof SessionPrincipalMismatch
+                ? 'login.message.session-conflict'
+                : err?.status === 401 || err?.status === 403
+                  ? 'login.message.invalid-credentials'
+                  : 'login.message.server-unreachable',
             ),
-          ),
+        ),
       ),
     );
   }
@@ -813,10 +889,11 @@ export class AuthService {
     if (session.kind === 'basic') {
       return this.clearStaleNuxeoCookieSession().pipe(
         switchMap(() => this.fetchMe()),
+        tap((me) => requireAnswersAs(me, session.username)),
         tap((me) => this.applyBasicSessionFromMe(session, me)),
         map(() => undefined),
         catchError((err) => {
-          if (this.isInvalidBasicAuthResponse(err)) {
+          if (this.isInvalidBasicAuthResponse(err) || this.endsOnPrincipalMismatch(err)) {
             this.logout();
           }
           return of(undefined);

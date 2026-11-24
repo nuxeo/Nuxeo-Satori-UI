@@ -113,7 +113,8 @@ in the product.** That ratio is the argument for the gates.
 Two facts worth keeping from that last one. The app's own defence, `clearStaleNuxeoCookieSession()`,
 GETs `/nuxeo/logout` and swallows failure — and measured against this Nuxeo, that path answers **404**
 without a `requestedUrl` parameter and **302** with one. The call omits it, so it very likely never
-clears the session it exists to clear. And the template app authenticates through its **own** login
+clears the session it exists to clear. (Corrected 2026-11-24: it does clear a live session — see
+`docs/demo-deck-claims.md`, "A fourth expected error".) And the template app authenticates through its **own** login
 form; it does not share the product's session.
 
 ---

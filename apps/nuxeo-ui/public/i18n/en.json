@@ -1715,7 +1715,8 @@
     "title": "Log in",
     "message": {
       "invalid-credentials": "Invalid username or password.",
-      "server-unreachable": "Could not reach Nuxeo. Check the server, proxy, and URL."
+      "server-unreachable": "Could not reach Nuxeo. Check the server, proxy, and URL.",
+      "session-conflict": "This browser is still signed in to Nuxeo as another user. Sign out of that session, then sign in again."
     }
   },
   "nav": {

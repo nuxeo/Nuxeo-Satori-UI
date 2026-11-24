@@ -351,7 +351,6 @@ describe('AuthService.startSamlLogin', () => {
 
     sessionStorage.clear();
     localStorage.clear();
-    AuthService.resetNuxeoLogoutProbe();
     TestBed.configureTestingModule({
       imports: [testTranslateModule(), HttpClientTestingModule],
       providers: [

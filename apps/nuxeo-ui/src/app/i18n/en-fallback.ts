@@ -111,6 +111,8 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   // itself failed, and a raw key there would be the user's only explanation.
   'login.message.invalid-credentials': 'Invalid username or password.',
   'login.message.server-unreachable': 'Could not reach Nuxeo. Check the server, proxy, and URL.',
+  'login.message.session-conflict':
+    'This browser is still signed in to Nuxeo as another user. Sign out of that session, then sign in again.',
   'app.nav.toggle': 'Toggle navigation menu',
   'app.nuxeo-drive-page.remove-synchronization-root': 'Remove synchronization root',
   'app.personal-space-page.loading': 'Loading',
