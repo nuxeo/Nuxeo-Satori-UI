@@ -672,6 +672,33 @@ a 1600 × 1067 PNG upload had five views, `Thumbnail`, `Small`, `Medium`, `FullH
 
 ---
 
+## 10a. Document Detail — Why the Server's Rights Refused a Use
+
+| Field           | Value                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
+| **Method**      | `fetchAssetRights(uid)`                                                                          |
+| **HTTP Method** | `GET`                                                                                            |
+| **Endpoint**    | `/nuxeo/api/v1/id/{uid}`                                                                         |
+
+**Request Headers:** `properties: dublincore`, `enrichers.document: assetRights`.
+
+**Response:** the document, whose `contextParameters.assetRights` is what the rights policy of
+`nuxeo-agentic-assets` decides for each use of it: the original, each picture view by its title,
+and each rendition the policy lists, each `allowed` or not with a `reason` code
+(`cleared`, `preview`, `rights-ended`, `channel-not-covered`, `not-cleared`, `policy-error`), and
+`otherwise` for any use not listed. `null` for a type no policy covers; absent on a server without
+the add-on. Read with `assetRights(doc)` and `assetRightsDecision(rights, use)`
+(`libs/shared/nuxeo-client/src/lib/utils/asset-rights.ts`); the full shape is in
+`nuxeo-agentic-assets/README.md`.
+
+**When it is asked:** only after the server has refused a download with 403. The record page's
+picture views (`record-picture-views.ts`) then say the server's reason in place of the view. The
+refusal is the server's download permission; this only explains it, and nothing is hidden or
+offered from it.
+
+---
+
 ## 11. Document Detail — Audit Log (History)
 
 | Field           | Value                                                                                            |

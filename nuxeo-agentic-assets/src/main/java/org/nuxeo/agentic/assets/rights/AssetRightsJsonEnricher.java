@@ -93,7 +93,7 @@ public class AssetRightsJsonEnricher extends AbstractJsonEnricher<DocumentModel>
         boolean unreadable = policy.broken();
         if (!unreadable) {
             try {
-                facts = AssetFacts.read(document, policy);
+                facts = rights.facts(document, policy);
             } catch (RuntimeException e) {
                 log.error("Asset rights: the rights of {} ({}) could not be read", AssetRightsComponent.id(document),
                         document.getType(), e);

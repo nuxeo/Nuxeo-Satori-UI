@@ -33,7 +33,9 @@ public record Decision(boolean allowed, Reason reason, String channel, LocalDate
         /** Refused: the policy does not list the use, so nothing clears it. */
         NOT_CLEARED("not-cleared", false),
         /** Refused: the policy, or the asset's rights fields, could not be read. */
-        POLICY_ERROR("policy-error", false);
+        POLICY_ERROR("policy-error", false),
+        /** Refused: a container's rendition, such as a tree export, holding a document a policy covers. */
+        CONTAINS_ASSETS("contains-assets", false);
 
         private final String code;
 

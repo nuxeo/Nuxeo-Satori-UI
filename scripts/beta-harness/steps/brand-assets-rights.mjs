@@ -14,6 +14,11 @@
  *      web view of the asset with no Print channel, and an ended asset's preview; and in the app,
  *      the cleared asset's print view shown.
  *
+ * **What "called directly" covers:** the REST API's download endpoints, `@blob`, `@rendition` and
+ * `/nxfile/`, where the add-on refuses. Automation operations that return a blob are not refused
+ * by this version, and this run does not call them; the add-on's README says so, under "What it
+ * does not cover", and its security review decides them.
+ *
  * The kit's print rendition is the picture view `OriginalJpeg`, the picture at its own size,
  * which its policy covers by the Print channel, as the original is; the web view is `FullHD`,
  * covered by E-commerce; `Thumbnail`, `Small` and `Medium` are previews, served whatever the

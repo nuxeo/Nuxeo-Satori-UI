@@ -3957,7 +3957,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-339 exported symbol(s).
+347 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -3977,6 +3977,7 @@ class ARenderService {
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
+const ASSET_RIGHTS_ENRICHER = "assetRights";
 interface AdminAccessChecks {
     isAdministrator: () => boolean;
     isPowerUser: () => boolean;
@@ -4039,6 +4040,23 @@ interface AssetQueueItem {
     icon: string;
     }
 }
+interface AssetRightsDecision {
+    readonly allowed: boolean;
+    readonly reason: AssetRightsReason;
+    readonly channel: string | null;
+    readonly rightsEnd: string | null;
+    }
+}
+interface AssetRightsExplanation {
+    readonly type: string;
+    readonly today: string | null;
+    readonly rightsEnd: string | null;
+    readonly channels: readonly string[] | null;
+    readonly uses: readonly (AssetUse & AssetRightsDecision)[];
+    readonly otherwise: AssetRightsDecision;
+    }
+}
+type AssetRightsReason = 'channel-not-covered' | 'cleared' | 'not-cleared' | 'policy-error' | 'preview' | 'rights-ended';
 interface AssetSearchParams {
     pageIndex?: number;
     pageSize?: number;
@@ -4064,6 +4082,12 @@ class AssetService {
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
+interface AssetUse {
+    readonly kind: AssetUseKind;
+    readonly name: string | null;
+    }
+}
+type AssetUseKind = 'blob' | 'original' | 'rendition' | 'view';
 interface AuditEntry {
     id: number;
     category: string;
@@ -4389,6 +4413,7 @@ class DocumentDetailService {
     getDocumentPermissions(uid: string): Observable<NuxeoDocument>;
     fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>;
     fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>;
+    fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>;
     fetchPdfRendition(uid: string): Observable<Blob>;
     fetchThumbnail(uid: string): Observable<Blob>;
     getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>;
@@ -5410,6 +5435,8 @@ class WorkflowService {
 const administrationAccessGuard: CanActivateFn;
 const administrationLandingGuard: CanActivateFn;
 function allowedTransitions(document: NuxeoDocument | null | undefined): readonly NuxeoAllowedTransition[];
+function assetRights(document: NuxeoDocument | null | undefined): AssetRightsExplanation | null;
+function assetRightsDecision(rights: AssetRightsExplanation, use: AssetUse): AssetRightsDecision;
 function auditActivityLabel(entry: AuditEntry, eventTypeLabels?: Map<string, string> | Record<string, string>): string;
 function auditActivityLabelKey(entry: AuditEntry): string;
 function avatarColor(name: string): AvatarColor;

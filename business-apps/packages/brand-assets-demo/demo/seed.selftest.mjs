@@ -23,7 +23,8 @@
  *   workspace or a document in it, beside a sibling workspace whose name begins as its; the second
  *   run creating and uploading nothing; a record trashed at its place restored, not created again;
  * - **with the rights add-on:** an original the kit's own rights policy refuses to read back, with
- *   403, uploaded again, and only those (exit 0); any other failure to read one back stops the run
+ *   403 and a rights reason from the `assetRights` enricher, uploaded again, and only those (exit
+ *   0); a 403 the rights do not explain, and any other failure to read one back, stops the run
  *   (exit 1);
  * - **a check that fails (exit 1):** each page provider answering wrong in its own way (a filled
  *   shot listed as missing, the products out of order, another product's asset, a library bucket
@@ -65,13 +66,15 @@ function control(name, condition, detail = '') {
  * `missing-shots` lists a filled shot as missing, `products-order` lists the products in the wrong
  * order, `cross-product` lists another product's asset, and `short-bucket` counts a library bucket
  * one short. `originalStatus` answers a read of a document's original with that status instead of
- * its bytes, as `nuxeo-agentic-assets` refuses one with 403 under the kit's rights policy.
+ * its bytes, as `nuxeo-agentic-assets` refuses one with 403 under the kit's rights policy, and
+ * `originalReason` is the reason its `assetRights` enricher then gives, or `null` for none.
  */
 function standIn({
   installed = true,
   viewsMade = true,
   fault = null,
   originalStatus = () => 200,
+  originalReason = () => null,
 } = {}) {
   const docs = new Map();
   const batches = new Map();
@@ -154,7 +157,17 @@ function standIn({
     }
     if (req.method === 'GET' && /^\/id\/[^/]+$/.test(path)) {
       const doc = byUid(path.slice('/id/'.length));
-      return doc ? send(200, view(doc)) : send(404);
+      if (!doc) return send(404);
+      const answer = view(doc);
+      if (req.headers['enrichers.document'] === 'assetRights') {
+        const reason = originalReason(doc);
+        answer.contextParameters = {
+          assetRights: reason
+            ? { type: doc.type, uses: [{ use: 'original', name: null, allowed: false, reason }] }
+            : null,
+        };
+      }
+      return send(200, answer);
     }
     if (req.method === 'GET' && path.endsWith('/@blob/file:content')) {
       const doc = byUid(path.split('/')[2]);
@@ -423,7 +436,10 @@ const othersOf = (stand) =>
     (asset) => !asset.channels.includes('Print') || asset.rightsEndInDays < 0,
   ).map((asset) => asset.id);
   const idOf = (doc) => doc.path.slice(doc.path.lastIndexOf('/') + 1);
-  const stand = standIn({ originalStatus: (doc) => (refused.includes(idOf(doc)) ? 403 : 200) });
+  const stand = standIn({
+    originalStatus: (doc) => (refused.includes(idOf(doc)) ? 403 : 200),
+    originalReason: (doc) => (refused.includes(idOf(doc)) ? 'channel-not-covered' : null),
+  });
   const first = await runSeed(stand);
   const second = await runSeed(stand);
   const expected = 1 + 3 + PRODUCTS.length + ASSETS.length + SHOTS.length;
@@ -446,6 +462,20 @@ const othersOf = (stand) =>
         second.output.includes(`assets/${id}: its original cannot be read back`),
       ),
     second.output,
+  );
+}
+{
+  // A 403 the server's rights do not explain, as a broken install gives for every download, is
+  // not taken for a refusal: the run stops rather than upload every picture again.
+  let refusing = false;
+  const stand = standIn({ originalStatus: () => (refusing ? 403 : 200) });
+  await runSeed(stand);
+  refusing = true;
+  const run = await runSeed(stand);
+  control(
+    'a 403 the rights do not explain: the run stops, exit 1',
+    run.code === 1 && !run.output.includes('cannot be read back'),
+    `${run.code}: ${run.output}`,
   );
 }
 {

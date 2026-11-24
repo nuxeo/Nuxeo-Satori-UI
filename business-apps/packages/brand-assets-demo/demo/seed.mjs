@@ -409,14 +409,31 @@ async function holds(document, file) {
   } catch (error) {
     // With nuxeo-agentic-assets installed, the kit's own rights policy refuses the original of an
     // asset with no Print channel or whose rights have ended, to every user: its bytes cannot be
-    // read back, so they are uploaded again rather than taken on trust.
-    if (error instanceof HttpError && error.status === 403) {
+    // read back, so they are uploaded again rather than taken on trust. Only when the server's
+    // rights say that is why: any other 403, such as a broken install's, stops the run.
+    if (error instanceof HttpError && error.status === 403 && (await rightsRefuseOriginal(document))) {
       console.log(`  refused  ${document.path}: its original cannot be read back, so it is uploaded again`);
       return false;
     }
     throw error;
   }
   return bytes.equals(file.bytes);
+}
+
+/**
+ * Whether the server's rights, asked through the `assetRights` enricher, refuse this original, for
+ * one of the reasons the add-on's rights give. Declared in the function: the script runs before a
+ * module-level constant below it would be.
+ */
+async function rightsRefuseOriginal(document) {
+  const RIGHTS_REFUSALS = ['rights-ended', 'channel-not-covered', 'not-cleared'];
+  const { bytes } = await request('GET', `/id/${document.uid}`, {
+    headers: { 'enrichers.document': 'assetRights' },
+  });
+  const original = JSON.parse(bytes.toString('utf8'))?.contextParameters?.assetRights?.uses?.find(
+    (use) => use?.use === 'original',
+  );
+  return original?.allowed === false && RIGHTS_REFUSALS.includes(original.reason);
 }
 
 /** A picture uploaded to a new batch, as the value a document's `file:content` takes. */

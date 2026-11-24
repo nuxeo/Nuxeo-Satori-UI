@@ -45,6 +45,14 @@ final class Fakes {
 
         final Set<String> schemas = new HashSet<>(Set.of("dublincore", "file", "picture", "acmeasset"));
 
+        final Set<String> facets = new HashSet<>();
+
+        boolean version;
+
+        boolean proxy;
+
+        boolean folder;
+
         final Map<String, Serializable> properties = new HashMap<>();
 
         /** Every property read, in order. */
@@ -86,6 +94,10 @@ final class Fakes {
                     case "getType" -> type;
                     case "getId" -> id;
                     case "hasSchema" -> schemas.contains((String) args[0]);
+                    case "hasFacet" -> facets.contains((String) args[0]);
+                    case "isVersion" -> version;
+                    case "isProxy" -> Doc.this.proxy;
+                    case "isFolder" -> folder;
                     case "getPropertyValue" -> {
                         String xpath = (String) args[0];
                         read.add(xpath);
@@ -159,8 +171,14 @@ final class Fakes {
         return policy;
     }
 
+    /** A component whose documents are their own rights source, and whose containers hold nothing. */
     static AssetRightsComponent component(RightsPolicyDescriptor... policies) {
-        AssetRightsComponent component = new AssetRightsComponent(CLOCK);
+        return component(document -> document, (container, types) -> false, policies);
+    }
+
+    static AssetRightsComponent component(java.util.function.UnaryOperator<DocumentModel> rightsSource,
+            java.util.function.BiPredicate<DocumentModel, Set<String>> holdsAny, RightsPolicyDescriptor... policies) {
+        AssetRightsComponent component = new AssetRightsComponent(CLOCK, rightsSource, holdsAny);
         for (RightsPolicyDescriptor policy : policies) {
             component.register(policy, "test");
         }

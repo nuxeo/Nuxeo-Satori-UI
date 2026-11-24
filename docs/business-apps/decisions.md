@@ -62,6 +62,18 @@ way.
     the tenant and the listing filters by it too; the contribution and the client do not change.
   - **Parity decision P4,** one global configuration, still conflicts with E as recommended:
     the registry serves a configuration per app and group.
+- **B, the assets module's server add-on (24 November 2026).** Built against the recommendation:
+  rights on assets are `nuxeo-agentic-assets`, a Maven module beside `nuxeo-agentic-core` with a
+  Marketplace package of its own, which the brand assets kit depends on; nothing of it went into
+  `nuxeo-agentic-core`. It enforces the rights half of the plan's rights and sharing add-on at the
+  platform's download permission. Share links, decision C, are not built. What changes if B goes
+  another way:
+  - **One large add-on:** the module's bundle moves into that add-on's package as it is, and a kit's
+    `package.xml` depends on that package in place of `nuxeo-agentic-assets`. The component names a
+    kit's policy requires, `org.nuxeo.agentic.assets.rights`, do not change.
+  - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
+    dropped from the kit, and every customer then gets the download permission, which refuses
+    nothing until a policy is contributed.
 
 ## From the Studio parity plan
 

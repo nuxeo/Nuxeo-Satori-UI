@@ -4,6 +4,7 @@
 package org.nuxeo.agentic.assets.rights;
 
 import java.time.LocalDate;
+import java.util.function.Supplier;
 
 import org.nuxeo.agentic.assets.rights.Decision.Reason;
 import org.nuxeo.agentic.assets.rights.RightsPolicy.Rule;
@@ -29,6 +30,14 @@ public final class AssetRights {
     }
 
     public static Decision decide(RightsPolicy policy, AssetFacts facts, Use use, LocalDate today) {
+        return decide(policy, () -> facts, use, today);
+    }
+
+    /**
+     * As {@link #decide(RightsPolicy, AssetFacts, Use, LocalDate)}, reading the asset's rights only
+     * when the decision needs them: never for a broken policy, a use not listed or a preview.
+     */
+    public static Decision decide(RightsPolicy policy, Supplier<AssetFacts> rights, Use use, LocalDate today) {
         if (policy.broken()) {
             return Decision.refuse(Reason.POLICY_ERROR);
         }
@@ -39,6 +48,7 @@ public final class AssetRights {
         if (rule.preview()) {
             return Decision.allow(Reason.PREVIEW, null);
         }
+        AssetFacts facts = rights.get();
         if (facts.ended(today)) {
             return Decision.refuse(Reason.RIGHTS_ENDED, rule.channel(), facts.rightsEnd());
         }

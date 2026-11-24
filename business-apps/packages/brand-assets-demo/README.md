@@ -15,7 +15,7 @@ downloaded.
   `dc:expired`.
 - **Rights the server enforces:** the kit's rights policy for `AcmeAsset`, which the assets
   module's server add-on, [`nuxeo-agentic-assets`](../../../nuxeo-agentic-assets/README.md),
-  enforces for every user: a print view or rendition refused to an asset whose channels hold no
+  enforces for every user at the platform's download endpoints: a print view or rendition refused to an asset whose channels hold no
   Print, every use but a preview refused once its rights have ended, and the server's reason on
   the asset page (below, "Rights on the server"). The package depends on the add-on.
 - **A product page:** a product's details, its shots, and the shots its shot list still misses,
@@ -85,7 +85,10 @@ Each view is listed as a view and as the rendition of the same name. The add-on 
 403, a use whose channel the asset's channels do not hold, every use but a preview from the day
 after its rights end, in UTC, and any use the policy does not list, such as the `pdf` or
 `zipExport` rendition. A preview is served whatever the rights, so the asset page and the lists
-still show an ended asset's picture. Nothing here exempts an administrator.
+still show an ended asset's picture. Nothing here exempts an administrator. The add-on decides the
+platform's download endpoints, `/nxfile/` and the REST API's `@blob`, `@rendition` and
+`@preview`, not yet Automation operations that return a blob: its README, "What it does not
+cover".
 
 **On the seeded assets:** asset 503 holds E-commerce and Social, so its print view and its
 original are refused and its web view served; asset 505's rights have ended, so everything but its

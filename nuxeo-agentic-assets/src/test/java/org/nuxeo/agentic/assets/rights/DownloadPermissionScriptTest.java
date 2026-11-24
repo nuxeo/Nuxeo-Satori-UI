@@ -166,9 +166,13 @@ class DownloadPermissionScriptTest {
         assertSame(Boolean.FALSE, run(missing, null, null, null, "download", null));
     }
 
-    /** The script is the one-line hand-over the class documents: every global goes to it, in its order. */
+    /**
+     * The script hands the class its globals in their places: the four the decision reads reach the
+     * service as they were bound. {@code Reason} is logged only, {@code Infos} and
+     * {@code CurrentUser} are not read: the decision asks nothing of the user.
+     */
     @Test
-    void theScriptHandsEveryGlobalToTheClass() throws Exception {
+    void theScriptHandsTheDocumentXpathBlobAndRenditionToTheService() throws Exception {
         List<Object> seen = new java.util.ArrayList<>();
         AssetRightsDownloadPermission.service = () -> new AssetRightsService() {
             @Override
@@ -179,6 +183,11 @@ class DownloadPermissionScriptTest {
             @Override
             public java.time.LocalDate today() {
                 return null;
+            }
+
+            @Override
+            public AssetFacts facts(DocumentModel document, RightsPolicy policy) {
+                throw new AssertionError("not asked");
             }
 
             @Override

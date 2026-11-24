@@ -18,6 +18,14 @@ public interface AssetRightsService {
     LocalDate today();
 
     /**
+     * The rights of {@code document} under {@code policy}: its own fields, or its live document's
+     * for a version or a proxy.
+     *
+     * @throws RuntimeException when they cannot be read; the caller refuses
+     */
+    AssetFacts facts(DocumentModel document, RightsPolicy policy);
+
+    /**
      * What the rights decide for this download, or {@code null} when no policy covers the
      * document, which this add-on then never refuses. Never throws: a policy or a document that
      * cannot be read gives a {@code policy-error} refusal.
