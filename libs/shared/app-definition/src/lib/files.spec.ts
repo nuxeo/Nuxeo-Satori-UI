@@ -1,5 +1,5 @@
 import { validateActions } from './actions';
-import { validateApp } from './app';
+import { addressTakenById, validateApp } from './app';
 import type { Finding } from './checker';
 import { validateLabels, validateModuleSettings } from './labels';
 import { validateLayoutV2, validateTaskForm } from './layout-v2';
@@ -52,6 +52,17 @@ describe('app.json', () => {
     expect(show(validateApp(app({ id: 'contracts', address: 'contract-desk' })))).toEqual([]);
   });
 
+  it('says, and does not refuse, an id that is a platform route with no address', () => {
+    // Refused, it would refuse the contracts kit, built before the rule; the command says it.
+    expect(show(validateApp(app({ id: 'contracts' })))).toEqual([]);
+    expect(addressTakenById(app({ id: 'contracts' }))).toBe(
+      `with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts: give the app an "address" no platform route has`,
+    );
+    expect(addressTakenById(app({ id: 'contracts', address: 'contract-desk' }))).toBeUndefined();
+    expect(addressTakenById(app({ id: 'claims' }))).toBeUndefined();
+    expect(addressTakenById([])).toBeUndefined();
+  });
+
   const rows: readonly Row[] = [
     { what: 'not an object', input: [], found: [': an app.json is a JSON object [structure]'] },
     {
@@ -81,17 +92,10 @@ describe('app.json', () => {
       ],
     },
     {
-      what: "an id that is one of the platform's routes, with no address of its own",
-      input: app({ id: 'contracts' }),
+      what: 'an address that is a route under settings/, which is reserved whole',
+      input: app({ address: 'settings' }),
       found: [
-        `id: with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts: give the app an "address" no platform route has [structure]`,
-      ],
-    },
-    {
-      what: 'an id that is a route under settings/, which is reserved whole',
-      input: app({ id: 'settings' }),
-      found: [
-        `id: with no "address", the app's address is its id, "settings", which is the platform's own page, /settings: give the app an "address" no platform route has [structure]`,
+        `address: the address "settings" is the platform's own page, /settings: choose one no platform route has [structure]`,
       ],
     },
     {

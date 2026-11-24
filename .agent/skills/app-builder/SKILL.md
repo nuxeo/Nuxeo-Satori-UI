@@ -121,10 +121,11 @@ What each writes, and what it leaves to you:
   request. The component contributes the app to the app registry, so "Switch app" can list it on
   a server. A package with no record page is refused by the pipeline's step 5, so give it
   `--type`.
-- **The app's id and address.** The address, where the shell is to open the app, is its id unless
-  `--address` gives another, and the pipeline refuses one that is a platform route: `contracts`,
-  `search`, `tasks` and the rest of `PLATFORM_ROUTES` in `libs/shared/app-definition`. For such an
-  id, give `--address`, such as `--appId=contracts --address=contract-desk`.
+- **The app's id and address.** `app-package` writes the address, where the shell is to open the
+  app: its id unless `--address` gives another. The pipeline refuses one that is a platform route:
+  `contracts`, `search`, `tasks` and the rest of `PLATFORM_ROUTES` in `libs/shared/app-definition`.
+  For such an id, give `--address`, such as `--appId=contracts --address=contract-desk`. A package
+  whose `app.json` has no address and whose id is one is only noted: fix it all the same.
 - **`app-layout`:** one card per schema of the type, leaving out Nuxeo's own (`common`,
   `dublincore`, `uid`, `file`, `files`, `facetedTag`, `relatedtext`) unless `--schemas` names
   them. A widget only where the model says more than the type: `vocabulary` for a property bound to

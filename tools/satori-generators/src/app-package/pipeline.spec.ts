@@ -337,8 +337,9 @@ describe.skipIf(process.platform === 'win32')(
         return directory;
       };
       const clash = pipeline(await scaffoldAs(), ['--platform', PLATFORM]);
+      // app-package writes the address, the id here, so the validator holds it to the routes.
       expect(clash.output).toContain(
-        `id: with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts`,
+        `address: the address "contracts" is the platform's own page, /contracts: choose one no platform route has`,
       );
       expect(clash.output).toContain('step 2 refused it');
       expect(clash.status).toBe(1);

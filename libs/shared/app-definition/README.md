@@ -133,9 +133,10 @@ install and no transpiler.
 - **`image-source.ts`** holds the rules for a branding image's address. They are version 1's own,
   copied unchanged from `libs/shared/app-config`, which cannot be imported here without Angular.
 - **`platform-routes.ts`** is the one list of the platform's own routes, `PLATFORM_ROUTES`, which
-  `validateApp` refuses as an app's address, written or taken from its id. This library cannot
-  read the application, so `platform-routes.spec.ts` in `apps/nuxeo-ui` holds the list to
-  `app.routes.ts`, both ways.
+  `validateApp` refuses as an app's written address. An id that is one, with no address, is said
+  by the command line, `addressTakenById`, not refused: the contracts kit was built so, before the
+  rule. This library cannot read the application, so `platform-routes.spec.ts` in `apps/nuxeo-ui`
+  holds the list to `app.routes.ts`, both ways.
 
 ## What holds it to the rest
 
@@ -199,7 +200,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - letting a branding image climb out with `..`, or hold a backslash;
     - a relative image outside `assets/`;
     - the image rules drifting from version 1's;
-    - an address, or an id with none, that is a platform route.
+    - a written address that is a platform route.
   - **`actions.json`:**
     - ignoring the allow-list;
     - letting it take a platform id, or rebind an id registered in code;

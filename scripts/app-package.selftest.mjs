@@ -348,6 +348,17 @@ expectRefused(
   2,
   `address: the address "contracts" is the platform's own page, /contracts`,
 );
+// The same clash through the id, with no address written, is said and built: refused, it would
+// refuse the contracts kit, built before the rule. The app-package generator writes the address.
+expectBuilt(
+  "an app whose id is one of the platform's routes, with no address: built, and told",
+  ({ edit }) => {
+    edit('bundle/agentic-ui-config/app.json', '"id": "payers-claims",', '"id": "contracts",');
+    edit(COMPONENT, APP_ELEMENT, '<app id="contracts" src="agentic-ui-config/app.json">');
+  },
+  [],
+  `note: with no "address", the app's address is its id, "contracts", which is the platform's own page, /contracts`,
+);
 expectRefused(
   "an app contributed under an id that is not app.json's",
   ({ edit }) =>

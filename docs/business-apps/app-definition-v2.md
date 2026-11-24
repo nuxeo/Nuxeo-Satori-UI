@@ -113,11 +113,13 @@ demo/                                starter kits only; not checked
 | `modules`           | No          | The domain modules it turns on ([architecture](architecture.md#6-the-modules), section 6)                                                |
 | `branding`          | No          | `applicationTitle`, `documentTitle`, `logo` and `favicon`, as version 1's bootstrap writes them, and `theme`: one of the server's themes |
 
-- **The address is not the platform's.** An address, or the id when there is none, that is the
-  first segment of one of the platform's own pages is refused, so that the shell can open the app
-  there: an app with the id `contracts` and no address would take `/contracts`, the component
-  showcase, so it needs an `address` of its own, such as `contract-desk`. The platform's routes
-  are listed in one place, `PLATFORM_ROUTES` in
+- **The address is not the platform's.** An address that is the first segment of one of the
+  platform's own pages is refused, so that the shell can open the app there: an app with the id
+  `contracts` would take `/contracts`, the component showcase, so it needs an `address` of its
+  own, such as `contract-desk`. With no `address`, the id is the address, and an id that is one of
+  them is said by the pipeline and the command line, not refused yet: the contracts kit was built
+  so, before the rule. The `app-package` generator writes every new app's address, which is then
+  held to the rule. The platform's routes are listed in one place, `PLATFORM_ROUTES` in
   [`libs/shared/app-definition/src/lib/platform-routes.ts`](../../libs/shared/app-definition/src/lib/platform-routes.ts),
   which a test in `apps/nuxeo-ui` holds to `app.routes.ts` both ways. A queue's id needs no such
   check: a queue opens under `/queues/`.

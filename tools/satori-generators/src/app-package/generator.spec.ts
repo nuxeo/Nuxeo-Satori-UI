@@ -38,6 +38,8 @@ describe('app-package generator', () => {
       labelKey: 'acme-contracts.app',
       packageVersion: '0.1.0',
       platform: '>=0.2.0 <1.0.0',
+      // Written, so that the validator holds it to the platform's routes.
+      address: 'acme-contracts',
       groups: ['contract-managers', 'legal'],
       branding: { applicationTitle: 'Acme Contracts' },
     });
@@ -167,7 +169,7 @@ describe('app-package generator', () => {
       id: 'contracts',
       labelKey: 'contracts.app',
     });
-    expect(json(tree, `${CONFIG}/app.json`)).not.toHaveProperty('address');
+    expect(json(tree, `${CONFIG}/app.json`)).toHaveProperty('address', 'contracts');
     expect(tree.read(`${ROOT}/bundle/OSGI-INF/acme-contracts-config.xml`, 'utf-8')).toContain(
       '<app id="contracts" src="agentic-ui-config/app.json">',
     );

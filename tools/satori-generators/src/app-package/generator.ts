@@ -162,9 +162,10 @@ function defaultPlatform(tree: Tree): string | null {
  * Forms, queues and actions are `app-form`'s, `app-queue`'s and `app-action`'s; a stand-in model,
  * for a demo whose types no server has yet, is `app-model`'s.
  *
- * - **The app's address** is its id unless `--address` gives another. The validator refuses one
- *   that is a platform route, such as `contracts` (`PLATFORM_ROUTES` in
- *   `libs/shared/app-definition`), so an id that is one needs an `--address`.
+ * - **The app's address**, where the shell is to open it, is written in `app.json`: `--address`, or
+ *   the id. Written, it is held to the validator, which refuses one that is a platform route, such
+ *   as `contracts` (`PLATFORM_ROUTES` in `libs/shared/app-definition`): an id that is one needs an
+ *   `--address`. Left out, as a package written by hand may, the validator only says so.
  *
  * ## Internal
  *
@@ -272,7 +273,9 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
     labelKey: appLabel,
     packageVersion: version,
     platform,
-    ...(options.address !== undefined ? { address: options.address } : {}),
+    // Written, so that the validator holds it to the platform's routes: one left out is said, not
+    // refused, for the packages built before the rule.
+    address: options.address ?? appId,
     groups,
     branding: { applicationTitle: title },
   });
