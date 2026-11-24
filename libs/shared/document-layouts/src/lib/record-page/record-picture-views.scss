@@ -52,3 +52,8 @@
   background: var(--mat-sys-secondary-container);
   color: var(--mat-sys-on-secondary-container);
 }
+
+/* A view the server refused: its reason in the frame, where the picture would be. */
+.record-picture__refusal {
+  max-width: 480px;
+}

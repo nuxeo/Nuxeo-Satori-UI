@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.rights.download">
+
+  <documentation>
+    The download permission: the platform's DownloadService asks every permission before it
+    streams a blob, and refuses the download with 403 when one returns false. This one asks the
+    rights policies (org.nuxeo.agentic.assets.rights) about the document, the xpath and the
+    rendition being downloaded. The script only hands them to AssetRightsDownloadPermission,
+    which decides in Java. Should the class not load, the script answers false, so a broken
+    install refuses downloads rather than serving them.
+  </documentation>
+
+  <require>org.nuxeo.ecm.core.io.download.DownloadService</require>
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.ecm.core.io.download.DownloadService" point="permissions">
+    <permission name="agenticAssetRights">
+      <script language="JavaScript">
+        function run() {
+          try {
+            return Java.type("org.nuxeo.agentic.assets.rights.AssetRightsDownloadPermission")
+              .allows(Document, XPath, Blob, Reason, Rendition, Infos) === true;
+          } catch (e) {
+            return false;
+          }
+        }
+      </script>
+    </permission>
+  </extension>
+
+</component>

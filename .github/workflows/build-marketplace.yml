@@ -121,6 +121,14 @@ jobs:
           mvn clean package -pl nuxeo-agentic-ui-package -am -B -V -nsu --no-transfer-progress
           ls nuxeo-agentic-ui-package/target/*.zip
 
+      # The assets module's server add-on is its own Marketplace package (decision B's
+      # recommendation), so the UI package's build above does not reach it. Built here so that its
+      # tests run on every pull request this workflow sees; its zip is not uploaded or published.
+      - name: Build and test the assets add-on
+        run: |
+          mvn package -pl nuxeo-agentic-assets -am -B -nsu --no-transfer-progress
+          ls nuxeo-agentic-assets/target/nuxeo-agentic-assets-*.zip
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:

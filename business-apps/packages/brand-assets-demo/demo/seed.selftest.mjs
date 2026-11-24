@@ -22,6 +22,9 @@
  *   the kit's workspace and marked, nothing else new, and every write of every run to the
  *   workspace or a document in it, beside a sibling workspace whose name begins as its; the second
  *   run creating and uploading nothing; a record trashed at its place restored, not created again;
+ * - **with the rights add-on:** an original the kit's own rights policy refuses to read back, with
+ *   403, uploaded again, and only those (exit 0); any other failure to read one back stops the run
+ *   (exit 1);
  * - **a check that fails (exit 1):** each page provider answering wrong in its own way (a filled
  *   shot listed as missing, the products out of order, another product's asset, a library bucket
  *   counting short), and pictures whose views are never made;
@@ -61,9 +64,15 @@ function control(name, condition, detail = '') {
  * one page provider answer wrong, so that the check meant to see it is seen failing:
  * `missing-shots` lists a filled shot as missing, `products-order` lists the products in the wrong
  * order, `cross-product` lists another product's asset, and `short-bucket` counts a library bucket
- * one short.
+ * one short. `originalStatus` answers a read of a document's original with that status instead of
+ * its bytes, as `nuxeo-agentic-assets` refuses one with 403 under the kit's rights policy.
  */
-function standIn({ installed = true, viewsMade = true, fault = null } = {}) {
+function standIn({
+  installed = true,
+  viewsMade = true,
+  fault = null,
+  originalStatus = () => 200,
+} = {}) {
   const docs = new Map();
   const batches = new Map();
   const calls = [];
@@ -149,6 +158,8 @@ function standIn({ installed = true, viewsMade = true, fault = null } = {}) {
     }
     if (req.method === 'GET' && path.endsWith('/@blob/file:content')) {
       const doc = byUid(path.split('/')[2]);
+      const status = originalStatus(doc);
+      if (status !== 200) return send(status, { message: 'refused by the stand-in' });
       res.writeHead(200, { 'Content-Type': 'image/png' });
       return res.end(doc.blob.bytes);
     }
@@ -401,6 +412,53 @@ const othersOf = (stand) =>
     writes(stand).some((call) => call.path === '/automation/Document.Untrash') &&
       wroteOnlyItsOwn(stand, before),
     JSON.stringify(writes(stand).slice(0, 5)),
+  );
+}
+
+// ── With the rights add-on: the originals the kit's own policy refuses ───────────────────────────
+{
+  // The kit's policy refuses an asset's original, to every user, when its channels hold no Print
+  // or its rights have ended (bundle/OSGI-INF/brand-assets-demo-rights.xml).
+  const refused = ASSETS.filter(
+    (asset) => !asset.channels.includes('Print') || asset.rightsEndInDays < 0,
+  ).map((asset) => asset.id);
+  const idOf = (doc) => doc.path.slice(doc.path.lastIndexOf('/') + 1);
+  const stand = standIn({ originalStatus: (doc) => (refused.includes(idOf(doc)) ? 403 : 200) });
+  const first = await runSeed(stand);
+  const second = await runSeed(stand);
+  const expected = 1 + 3 + PRODUCTS.length + ASSETS.length + SHOTS.length;
+  control(
+    'refused originals: the data has some, and some it serves',
+    refused.length > 0 && refused.length < ASSETS.length,
+    refused.join(', '),
+  );
+  control(
+    'refused originals: both runs exit 0',
+    first.code === 0 && second.code === 0,
+    `${first.code}, ${second.code}: ${second.output}`,
+  );
+  control(
+    'refused originals: the second run uploads again exactly the pictures it could not read back',
+    second.output.includes(
+      `Done: 0 created, ${expected} updated, 0 restored from the trash, ${refused.length} picture(s) uploaded`,
+    ) &&
+      refused.every((id) =>
+        second.output.includes(`assets/${id}: its original cannot be read back`),
+      ),
+    second.output,
+  );
+}
+{
+  // Anything but a refusal is not taken for one: a server failure on the read stops the run.
+  let failing = false;
+  const stand = standIn({ originalStatus: () => (failing ? 500 : 200) });
+  await runSeed(stand);
+  failing = true;
+  const run = await runSeed(stand);
+  control(
+    'a failing read of an original: the run stops, exit 1',
+    run.code === 1,
+    `${run.code}: ${run.output}`,
   );
 }
 

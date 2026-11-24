@@ -1537,6 +1537,16 @@
     "related": {
       "empty": "No records"
     },
+    "rights": {
+      "refused": {
+        "channel-not-covered": "The server refused this view: it is covered by the {{channel}} channel, and this asset's rights cover {{channels}} only.",
+        "channel-not-covered-none": "The server refused this view: it is covered by the {{channel}} channel, and this asset's rights cover no channel.",
+        "not-cleared": "The server refused this view: this asset's rights do not clear it for any use.",
+        "policy-error": "The server refused this view: it could not read this asset's rights.",
+        "rights-ended": "The server refused this view: the rights to this asset ended on {{end}}.",
+        "rights-ended-undated": "The server refused this view: the rights to this asset have ended."
+      }
+    },
     "sections": "Property sections",
     "timeline": {
       "all": "All events",

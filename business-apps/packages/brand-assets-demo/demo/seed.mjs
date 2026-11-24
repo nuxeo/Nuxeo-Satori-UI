@@ -403,7 +403,19 @@ async function holds(document, file) {
   const current = document.properties?.['file:content'];
   if (!current || current.name !== file.fileName || Number(current.length) !== file.bytes.length)
     return false;
-  const { bytes } = await request('GET', `/id/${document.uid}/@blob/file:content`);
+  let bytes;
+  try {
+    ({ bytes } = await request('GET', `/id/${document.uid}/@blob/file:content`));
+  } catch (error) {
+    // With nuxeo-agentic-assets installed, the kit's own rights policy refuses the original of an
+    // asset with no Print channel or whose rights have ended, to every user: its bytes cannot be
+    // read back, so they are uploaded again rather than taken on trust.
+    if (error instanceof HttpError && error.status === 403) {
+      console.log(`  refused  ${document.path}: its original cannot be read back, so it is uploaded again`);
+      return false;
+    }
+    throw error;
+  }
   return bytes.equals(file.bytes);
 }
 

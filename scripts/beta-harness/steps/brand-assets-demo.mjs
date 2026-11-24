@@ -9,9 +9,10 @@
  *   4. A product page, listing its shots and the shots it is still missing.
  *   5. The layout files behind the pages: configuration, no code.
  *
- * The plan's steps 2 to 4 (the print rendition refused by the server, share links, review with
- * pins) are not this kit's yet: rights the server enforces, decision C and the review are out of
- * its scope, and said in notes.
+ * The plan's step 2, the print rendition refused by the server, is its own steps file,
+ * `brand-assets-rights.mjs`, since it needs `nuxeo-agentic-assets`. Steps 3 and 4 (share links,
+ * review with pins) are not this kit's yet: decision C and the review are out of its scope, and
+ * said in notes.
  *
  * The records, titles and dates it expects are read from the kit's own files, `demo/data.mjs` and
  * `bundle/agentic-ui-config/`, and each asset's rights end date from the server, where the seed
@@ -39,8 +40,8 @@
  * server's order, its Rights buckets counted as seeded, and narrowed on the server by one; the
  * product's missing shots and its shots, exactly; the served layouts the kit's own, and the asset
  * page drawn as its file says. Negative ones: the other banner absent on each asset, no original
- * download, whose positive control is the Annotations tab downloading it once, and no code in the
- * bundle.
+ * downloaded by any of the three record pages, whose positive control is the Annotations tab
+ * downloading the cleared asset's once, which its rights cover, and no code in the bundle.
  *
  * Not covered, and said in notes: the server's own install (the dev server reads the layouts from
  * `config:dev`, not from the package), the plan's demo steps 2 to 4, and the views being made for
@@ -370,32 +371,9 @@ export default async function run(page, h) {
     JSON.stringify(rights),
   );
   await h.screenshot('rights-ending');
-  // The positive control for the check above: the Annotations tab's viewer shows the original, so
-  // opening it downloads it, and the listener and the address above do see that request.
-  await page
-    .locator('[role="tab"]', { hasText: /^\s*Annotations\s*$/ })
-    .first()
-    .click()
-    .catch(deferred);
-  // Its answer, then a quiet network, before counting: a retry or the `blobholder:0` fallback
-  // after a failed first answer would be a second request, which "once" must see.
-  await page
-    .waitForResponse((response) => original.test(response.url()), { timeout: 15_000 })
-    .catch(deferred);
-  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(deferred);
-  const annotated = asked.filter((request) => original.test(request.url));
-  h.check(
-    'opening the Annotations tab downloads the original, once: what the check above looks for',
-    annotated.length === 1,
-    JSON.stringify(annotated.map((request) => request.url)),
-  );
-  page.off('request', listen);
-  // Back to the View tab, which the next record opens on if the page keeps its tab.
-  await page
-    .locator('[role="tab"]', { hasText: /^\s*View\s*$/ })
-    .first()
-    .click()
-    .catch(deferred);
+  // The positive control for the check above is in step 2, on the cleared asset: with
+  // nuxeo-agentic-assets installed, the kit's rights refuse this asset's original, which has no
+  // Print channel, and the viewer would ask for it twice, through its `blobholder:0` fallback.
 
   // ── 2. Rights that have ended ──────────────────────────────────────────────────────────────
   await h.step('2. Rights that have ended, and none on cleared rights');
@@ -418,6 +396,41 @@ export default async function run(page, h) {
     cleared.banners.length === 0 && cleared.cards.length === assetCards.length,
     JSON.stringify(cleared.banners),
   );
+  const originalsSoFar = asked.filter((request) => original.test(request.url));
+  h.check(
+    'no record page of the three asked for its original: each shows its views',
+    originalsSoFar.length === 0,
+    JSON.stringify(originalsSoFar.map((request) => request.url)),
+  );
+  // The positive control for that check: the Annotations tab's viewer shows the original, so
+  // opening it downloads it, and the listener and the address above do see that request. On the
+  // cleared asset, whose rights cover its original on the Print channel, so that the server serves
+  // it with nuxeo-agentic-assets installed or not.
+  await page
+    .locator('[role="tab"]', { hasText: /^\s*Annotations\s*$/ })
+    .first()
+    .click()
+    .catch(deferred);
+  // Its answer, then a quiet network, before counting: a retry or the `blobholder:0` fallback
+  // after a failed first answer would be a second request, which "once" must see.
+  await page
+    .waitForResponse((response) => original.test(response.url()), { timeout: 15_000 })
+    .catch(deferred);
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(deferred);
+  const clearedUid = seeded.get(CLEARED.id).uid;
+  const annotated = asked.filter((request) => original.test(request.url));
+  h.check(
+    `opening the Annotations tab on ${CLEARED.title} downloads its original, once: what the checks above look for`,
+    annotated.length === 1 && annotated[0].url.includes(`/id/${clearedUid}/`),
+    JSON.stringify(annotated.map((request) => request.url)),
+  );
+  page.off('request', listen);
+  // Back to the View tab, which the next record opens on if the page keeps its tab.
+  await page
+    .locator('[role="tab"]', { hasText: /^\s*View\s*$/ })
+    .first()
+    .click()
+    .catch(deferred);
 
   // ── 3. The library ─────────────────────────────────────────────────────────────────────────
   await h.step('3. The asset library, narrowed by its Rights facet on the server');
@@ -607,8 +620,8 @@ export default async function run(page, h) {
       'serve from a package',
   );
   h.note(
-    "the plan's demo steps 2 to 4, the print rendition refused by the server, a share link and a " +
-      "review with pins, are not this kit's yet: rights the server enforces, decision C and the " +
-      'review are out of its scope',
+    "the plan's demo step 2, the print rendition refused by the server, is brand-assets-rights; " +
+      "steps 3 and 4, a share link and a review with pins, are not this kit's yet: decision C and " +
+      'the review are out of its scope',
   );
 }

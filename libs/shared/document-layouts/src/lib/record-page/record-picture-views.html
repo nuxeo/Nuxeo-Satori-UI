@@ -17,6 +17,15 @@
               | translate: { title: document().title, view: view.title }
           "
         />
+      } @else if (refusal(); as refused) {
+        <!-- The server's rights refused this view: their reason, never the client's guess. -->
+        <nxs-banner
+          class="record-picture__refusal"
+          tone="error"
+          announce="alert"
+          [attr.data-refusal]="refused.reason"
+          [message]="refused.key | translate: refused.params"
+        />
       } @else if (failure(); as status) {
         <nxs-error-state
           [status]="status"

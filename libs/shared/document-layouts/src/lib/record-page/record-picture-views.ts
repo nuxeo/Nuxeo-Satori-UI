@@ -1,7 +1,9 @@
+import { formatDate } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  LOCALE_ID,
   computed,
   inject,
   input,
@@ -11,6 +13,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
+  NxsBannerComponent,
   NxsEmptyStateComponent,
   NxsErrorStateComponent,
   NxsSpinnerComponent,
@@ -18,7 +21,14 @@ import {
   type NxsErrorStatus,
   type NxsHeadingLevel,
 } from '@nuxeo/satori-platform/components';
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  DocumentDetailService,
+  assetRightsDecision,
+  type AssetRightsDecision,
+  type AssetRightsExplanation,
+  type AssetRightsReason,
+  type NuxeoDocument,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { catchError, concat, map, of, switchMap, type Observable } from 'rxjs';
 
 /** One of a picture's views, as Nuxeo writes it in `picture:views`: a rendition of the picture. */
@@ -96,10 +106,90 @@ export function firstPictureView(views: readonly PictureViewEntry[]): PictureVie
   return views[0];
 }
 
+/**
+ * Why the server refused a view, as the page says it: a translation key and its parameters, from
+ * the reason the server's rights gave (`nuxeo-agentic-assets`, the `assetRights` enricher).
+ */
+export interface RightsRefusal {
+  /** The server's code, on the page as `data-refusal`. */
+  readonly reason: Exclude<AssetRightsReason, 'cleared' | 'preview'>;
+  readonly key: string;
+  readonly params: Readonly<Record<string, string>>;
+}
+
+/**
+ * What the page says of a use the server's rights refuse, or `null` when they do not refuse it: a
+ * 403 for any other reason, such as the record's permissions, is then said as any 403 is.
+ *
+ * @param channels the asset's channels, as the server read them
+ * @param locale the reader's, for the day and the list of channels
+ */
+export function rightsRefusal(
+  decision: AssetRightsDecision,
+  channels: readonly string[] | null,
+  locale: string,
+): RightsRefusal | null {
+  const key = (code: string) => `document-layouts.rights.refused.${code}`;
+  switch (decision.reason) {
+    case 'cleared':
+    case 'preview':
+      return null;
+    case 'rights-ended': {
+      // The server's day, in UTC: the day the asset's rights card shows.
+      const end = decision.rightsEnd ? new Date(`${decision.rightsEnd}T00:00:00Z`) : null;
+      return end && !Number.isNaN(end.getTime())
+        ? {
+            reason: 'rights-ended',
+            key: key('rights-ended'),
+            params: { end: formatDate(end, 'longDate', locale, 'UTC') },
+          }
+        : { reason: 'rights-ended', key: key('rights-ended-undated'), params: {} };
+    }
+    case 'channel-not-covered': {
+      const channel = decision.channel ?? '';
+      return channels && channels.length > 0
+        ? {
+            reason: 'channel-not-covered',
+            key: key('channel-not-covered'),
+            params: {
+              channel,
+              channels: new Intl.ListFormat(locale, { type: 'conjunction' }).format(channels),
+            },
+          }
+        : {
+            reason: 'channel-not-covered',
+            key: key('channel-not-covered-none'),
+            params: { channel },
+          };
+    }
+    case 'not-cleared':
+      return { reason: 'not-cleared', key: key('not-cleared'), params: {} };
+    case 'policy-error':
+      return { reason: 'policy-error', key: key('policy-error'), params: {} };
+  }
+}
+
+/** What the server's rights say of `view`, once it was refused; `null` when they say nothing. */
+function viewRefusal(
+  rights: AssetRightsExplanation | null,
+  view: PictureViewEntry,
+  locale: string,
+): RightsRefusal | null {
+  if (!rights) return null;
+  const decision = assetRightsDecision(rights, { kind: 'view', name: view.title });
+  return rightsRefusal(decision, rights.channels, locale);
+}
+
 type Shown =
   | { readonly key: string; readonly status: 'loading' }
   | { readonly key: string; readonly status: 'ready'; readonly url: string }
-  | { readonly key: string; readonly status: 'failed'; readonly error: NxsErrorStatus };
+  | {
+      readonly key: string;
+      readonly status: 'failed';
+      readonly error: NxsErrorStatus;
+      /** The server's rights' reason, when they are why it was refused. */
+      readonly refusal: RightsRefusal | null;
+    };
 
 /**
  * A Picture's views on its record page: the one chosen, large, and a button for each of them.
@@ -113,12 +203,18 @@ type Shown =
  *
  * Fetched with the reason `view`, as the document page's preview is, so Nuxeo audits it as a view
  * and not a download.
+ *
+ * **A view the server's rights refuse** (`nuxeo-agentic-assets`) answers 403. The component then
+ * asks the server why, through the `assetRights` enricher, and says the server's reason in place of
+ * the view. It hides no button and greys none: each view is asked for, and the server decides. A
+ * 403 the rights do not explain, such as one from the record's permissions, is said as any 403 is.
  */
 @Component({
   selector: 'lib-record-picture-views',
   standalone: true,
   imports: [
     MatButtonModule,
+    NxsBannerComponent,
     NxsEmptyStateComponent,
     NxsErrorStateComponent,
     NxsSpinnerComponent,
@@ -134,6 +230,7 @@ export class RecordPictureViewsComponent {
   readonly stateHeadingLevel = input<NxsHeadingLevel>(4);
 
   private readonly documents = inject(DocumentDetailService);
+  private readonly locale = inject(LOCALE_ID);
 
   readonly views = computed(() => readPictureViews(this.document()), {
     equal: (a, b) => a.length === b.length && a.every((view, i) => view.key === b[i].key),
@@ -168,6 +265,12 @@ export class RecordPictureViewsComponent {
   readonly failure = computed<NxsErrorStatus | null>(() => {
     const shown = this.shown();
     return shown?.status === 'failed' ? shown.error : null;
+  });
+
+  /** The server's rights' reason for refusing the selected view, when they are why. */
+  readonly refusal = computed<RightsRefusal | null>(() => {
+    const shown = this.shown();
+    return shown?.status === 'failed' ? shown.refusal : null;
   });
 
   /** The blob URL of each view fetched, by its key: what is revoked. */
@@ -226,10 +329,26 @@ export class RecordPictureViewsComponent {
           this.urls.set(view.key, url);
           return { key: view.key, status: 'ready', url };
         }),
-        catchError((error: unknown) =>
-          of<Shown>({ key: view.key, status: 'failed', error: nxsErrorStatus(error) }),
-        ),
+        catchError((error: unknown) => this.failed(uid, view, nxsErrorStatus(error))),
       ),
+    );
+  }
+
+  /**
+   * The state of a view that could not be fetched. A 403 may be the server's rights refusing it:
+   * the server is then asked why, and says so, or says nothing and the 403 is shown as it is.
+   */
+  private failed(uid: string, view: PictureViewEntry, error: NxsErrorStatus): Observable<Shown> {
+    const shown = (refusal: RightsRefusal | null): Shown => ({
+      key: view.key,
+      status: 'failed',
+      error,
+      refusal,
+    });
+    if (error !== 403) return of(shown(null));
+    return this.documents.fetchAssetRights(uid).pipe(
+      map((rights) => shown(viewRefusal(rights, view, this.locale))),
+      catchError(() => of(shown(null))),
     );
   }
 
