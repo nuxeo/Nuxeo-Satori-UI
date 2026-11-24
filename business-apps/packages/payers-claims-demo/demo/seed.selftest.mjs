@@ -12,7 +12,10 @@
  * `Repository.Query`, a search endpoint whose index has not yet seen what was trashed, as
  * OpenSearch's can lag, and trash renaming a document to `<name>._<time>_.trashed` (the document
  * alone: its children are neither flagged nor moved, which Nuxeo may do differently). So a pass
- * proves the script's logic: preconditions, a second run that adds nothing, a trashed record
+ * proves the script's logic: preconditions, version 0.3.0 refused, each claim brought along the
+ * claim lifecycle to its status, from a new claim's state and from 0.3.0's, a claim that cannot be
+ * stopping the run, and a claim read back in another state failing it, a second run that adds and
+ * moves nothing, a trashed record
  * restored, a document of another type left alone, a user or a group the seed did not create left
  * alone, the demo's people put back, and checks that fail when a page provider, its aggregates or
  * a user's rights are wrong. It says nothing about whether a real server accepts
@@ -29,6 +32,10 @@ import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { CLAIMS } from './data.mjs';
+import { pathBetween, readLifecycle } from './lifecycle.mjs';
+
+const LIFECYCLE = readLifecycle();
 const SEED = process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
 const ROOT = '/default-domain/workspaces/payers-demo';
 const PAGE_PROVIDERS = [
@@ -60,12 +67,19 @@ function expect(condition, what, output = '') {
  * that user's `/me` with none of their groups; `indexLag` answers the queue page providers, which
  * read the search index, with nothing for that many requests, as an index not yet caught up does;
  * `membersWrite` gives the platform's `members` group, which every user is in, ReadWrite
- * everywhere, as a server configured so would.
+ * everywhere, as a server configured so would. A claim follows the stand-in model's `payersClaim`
+ * lifecycle, read from its XML as the seed reads it, starting `submitted`, and keeps claim:status
+ * in step with each transition, as the model's event handler does; `statusOnly` answers the claim
+ * of that number, read back by its id, in `submitted` whatever its state, as a server whose state
+ * and status had come apart would. `workflowModel: false` answers as version 0.3.0, which has no
+ * claims review workflow.
  */
 function standIn({
   user,
   password,
   administrator = true,
+  workflowModel = true,
+  statusOnly = null,
   noAggregations = false,
   guestFor = null,
   groupless = null,
@@ -95,6 +109,7 @@ function standIn({
       uid: randomUUID(),
       path,
       type,
+      state: type === 'Claim' ? LIFECYCLE.initial : 'project',
       isTrashed: false,
       properties: { ...properties },
     };
@@ -335,9 +350,15 @@ function standIn({
       if (path.startsWith('/id/')) {
         const document = byId.get(path.slice('/id/'.length));
         if (!document) return send(404, { message: 'not found' });
+        // The one claim `statusOnly` names, read back by id after the seed wrote it, in submitted.
+        const drifted =
+          statusOnly !== null && document.properties['claim:number'] === statusOnly
+            ? { state: LIFECYCLE.initial }
+            : {};
         if (method === 'GET')
           return send(200, {
             ...view(document),
+            ...drifted,
             ...(request.headers['enrichers-document'] === 'acls'
               ? {
                   contextParameters: {
@@ -367,6 +388,26 @@ function standIn({
         };
         return send(201, { uploaded: 'true' });
       }
+      // A lifecycle transition, refused as Nuxeo refuses one the document's state does not allow.
+      if (method === 'POST' && path === '/automation/Document.FollowLifecycleTransition') {
+        const body = JSON.parse(raw);
+        const document = byId.get(body.input.replace(/^doc:/, ''));
+        const transition = body.params?.value;
+        const allowed =
+          document?.type === 'Claim' &&
+          (LIFECYCLE.states.get(document.state) ?? []).includes(transition);
+        if (!allowed)
+          return send(500, {
+            message: `Not allowed to follow transition <${transition}> from state <${document?.state}>`,
+          });
+        document.state = LIFECYCLE.transitions.get(transition);
+        document.properties['claim:status'] = document.state;
+        return send(200, view(document));
+      }
+      if (method === 'GET' && path.startsWith('/workflowModel/'))
+        return workflowModel && path === '/workflowModel/PayersClaimReview'
+          ? send(200, { 'entity-type': 'workflow', name: 'PayersClaimReview' })
+          : send(404, { message: 'no such workflow model' });
       if (method === 'POST' && path === '/automation/Document.Untrash') {
         const document = byId.get(JSON.parse(raw).input.replace(/^doc:/, ''));
         untrash(document);
@@ -534,7 +575,7 @@ await against(
     const { status, output } = await run();
     expect(
       status === 2 &&
-        /version 0.2.0 or older .* upgrade it to 0.3.0/.test(output) &&
+        /version 0.2.0 or older .* upgrade it to 0.4.0/.test(output) &&
         server.calls.every((call) => call.startsWith('GET ')),
       'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
       output,
@@ -580,16 +621,45 @@ for (const renameOnTrash of [true, false]) {
       first.output,
     );
     expect(
-      /People: 7 created, 0 updated, 5 permission\(s\) granted, 0 removed, for 4 users in 3 groups/.test(
+      /People: 9 created, 0 updated, 5 permission\(s\) granted, 0 removed, for 6 users in 3 groups/.test(
         first.output,
       ),
-      `${how}: a first run creates 4 users and 3 groups, and grants 5 permissions`,
+      `${how}: a first run creates 6 users and 3 groups, and grants 5 permissions`,
+      first.output,
+    );
+    // Each claim brought from submitted to its status, along the fewest transitions, and kept so.
+    const wanted = CLAIMS.reduce(
+      (count, claim) => count + pathBetween(LIFECYCLE, LIFECYCLE.initial, claim.status).length,
+      0,
+    );
+    const transitions = (from) =>
+      server.calls
+        .slice(from)
+        .filter((call) => call.endsWith('/Document.FollowLifecycleTransition')).length;
+    const settled = () =>
+      CLAIMS.every((claim) => {
+        const document = at(server, `claims/${claim.number.toLowerCase()}`);
+        return (
+          document?.state === claim.status && document.properties['claim:status'] === claim.status
+        );
+      });
+    expect(
+      settled() &&
+        transitions(0) === wanted &&
+        new RegExp(`${wanted} lifecycle transition`).test(first.output),
+      `${how}: a first run brings every claim to the state its status names, in ${wanted} transitions`,
       first.output,
     );
     const before = ids(server);
+    const callsBefore = server.calls.length;
     const second = await run();
     expect(
-      /People: 0 created, 4 updated, 0 permission\(s\) granted, 0 removed/.test(second.output),
+      settled() && transitions(callsBefore) === 0,
+      `${how}: a second run follows no transition`,
+      second.output,
+    );
+    expect(
+      /People: 0 created, 6 updated, 0 permission\(s\) granted, 0 removed/.test(second.output),
       `${how}: a second run creates no user, group or permission`,
       second.output,
     );
@@ -655,6 +725,64 @@ for (const renameOnTrash of [true, false]) {
     );
   });
 }
+
+// The claims' lifecycle.
+await against({ workflowModel: false }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.4.0/.test(
+        output,
+      ) &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'version 0.3.0 of the package, with no claims review workflow, is exit 2, with nothing written',
+    output,
+  );
+});
+await against({}, async ({ server, run }) => {
+  const first = await run();
+  expect(first.status === 0, 'a first run, for the lifecycle, exits 0', first.output);
+  // As version 0.3.0 left them: in the default lifecycle's first state, now this one's legacy.
+  for (const claim of CLAIMS) at(server, `claims/${claim.number.toLowerCase()}`).state = 'project';
+  const upgraded = await run();
+  expect(
+    upgraded.status === 0 &&
+      CLAIMS.every((claim) => {
+        const document = at(server, `claims/${claim.number.toLowerCase()}`);
+        return (
+          document.state === claim.status && document.properties['claim:status'] === claim.status
+        );
+      }) &&
+      /moved {4}CLAIM-000130 from project to paid: submit, review, approve, pay/.test(
+        upgraded.output,
+      ),
+    'a claim created before 0.4.0, in project, is brought through submit to its status',
+    upgraded.output,
+  );
+  // Reviewed since, though data.mjs has it submitted: no transition leads back.
+  const reviewed = at(server, 'claims/claim-000140');
+  reviewed.state = 'inReview';
+  const stuck = await run();
+  expect(
+    stuck.status === 1 &&
+      /CLAIM-000140 is inReview, and the claim lifecycle has no way from there to submitted/.test(
+        stuck.output,
+      ) &&
+      reviewed.state === 'inReview',
+    'a claim no transition can bring to its status stops the run with exit 1, naming it, its state as it was',
+    stuck.output,
+  );
+});
+await against({ statusOnly: 'CLAIM-000131' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 &&
+      /The claims are not in their statuses' states/.test(output) &&
+      /CLAIM-000131 is submitted with status inReview, not inReview/.test(output),
+    "a claim read back in another state than its status fails the seed's check",
+    output,
+  );
+});
 
 // The demo's people: in their groups, with the demo password, and put back when changed by hand.
 await against({}, async ({ server, run, demoPassword }) => {
