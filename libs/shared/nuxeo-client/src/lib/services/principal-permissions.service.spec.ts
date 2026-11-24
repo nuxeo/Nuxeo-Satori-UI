@@ -183,6 +183,26 @@ describe('PrincipalPermissionsService.listLocalPermissionRows', () => {
     ]);
   });
 
+  it('escapes a quote in the principal with a backslash, the escape Nuxeo’s NXQL parser accepts', () => {
+    // A doubled quote (`'O''Brien'`) is HTTP 400 on Nuxeo, checked against the local server;
+    // every query failed and the table read "no permissions" for anyone with an apostrophe.
+    const result = list("O'Brien");
+
+    expectQuery(strict("O\\'Brien")).flush(page(['d1']));
+    expectDocument('d1').flush(
+      fullDoc('d1', [{ name: 'local', aces: [ace({ username: "O'Brien" })] }]),
+    );
+
+    expect(result()?.rows.map((r) => r.acePrincipal)).toEqual(["O'Brien"]);
+  });
+
+  it('escapes a backslash in the principal too, so it cannot escape the closing quote', () => {
+    list('dom\\');
+
+    expectQuery(strict('dom\\\\')).flush(page(['d1']));
+    expectDocument('d1').flush(fullDoc('d1', []));
+  });
+
   it('titles a row by the document title, then its dc:title, then its id', () => {
     const result = list('jdoe');
 
