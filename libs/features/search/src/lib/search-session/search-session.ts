@@ -93,6 +93,8 @@ export class SearchSession {
   private readonly pageQuery = signal<SearchPageQuery>(EMPTY_PAGE_QUERY, { equal: samePageQuery });
   private readonly attempt = signal(0);
   private readonly pageIndexSignal = signal(0);
+  private readonly pageSizeSignal = signal(SEARCH_PAGE_SIZE);
+  readonly pageSize = this.pageSizeSignal.asReadonly();
   /** The page on screen, from zero. */
   readonly pageIndex = this.pageIndexSignal.asReadonly();
 
@@ -100,7 +102,7 @@ export class SearchSession {
   readonly request = computed<SearchQueryParams>(() => ({
     ...nxsSearchFiltersToQuery(this.filters(), this.pageQuery()),
     pageIndex: this.pageIndexSignal(),
-    pageSize: SEARCH_PAGE_SIZE,
+    pageSize: this.pageSizeSignal(),
   }));
 
   readonly results$: Observable<SearchResultsState> = combineLatest([
@@ -174,6 +176,12 @@ export class SearchSession {
     this.pageIndexSignal.set(Math.max(0, Math.floor(pageIndex)));
   }
 
+  setPageSize(pageSize: number): void {
+    if (![25, 40, 50, 100].includes(pageSize)) return;
+    this.pageSizeSignal.set(pageSize);
+    this.setPageIndex(0);
+  }
+
   /** Runs the current query again. */
   retry(): void {
     this.attempt.update((attempt) => attempt + 1);
@@ -213,7 +221,16 @@ export class SearchSession {
       map((params) => {
         // A late answer for a search the user has already left is dropped.
         if (this.savedSearchId() !== id) return;
-        const filters = nxsSearchFiltersFromParams(params);
+        let filesOnly = false;
+        try {
+          filesOnly = JSON.parse(params['contentViewData'] || '{}').nxsFilesOnly === true;
+        } catch {
+          /* Older searches may carry opaque view data. */
+        }
+        const filters = nxsSearchFiltersFromParams({
+          ...params,
+          ...(filesOnly ? { filesOnly: 'true' } : {}),
+        });
         this.loadedParams = params;
         this.savedFilters.set(filters);
         // Opening a search starts it from the first page, even when its filters match the ones on
@@ -236,6 +253,7 @@ export class SearchSession {
         title,
         params: nxsSearchFiltersToSavedParams(filters),
         pageProviderName: SEARCH_PAGE_PROVIDER,
+        ...(filters.filesOnly ? { contentViewData: JSON.stringify({ nxsFilesOnly: true }) } : {}),
       })
       .pipe(
         map((saved) => {
@@ -260,17 +278,33 @@ export class SearchSession {
       ...nxsSavedParamsToClear(this.loadedParams),
       ...nxsSearchFiltersToSavedParams(filters),
     };
+    let viewData: Record<string, unknown> = {};
+    try {
+      const stored: unknown = JSON.parse(this.loadedParams['contentViewData'] || '{}');
+      if (stored && typeof stored === 'object' && !Array.isArray(stored))
+        viewData = stored as Record<string, unknown>;
+    } catch {
+      /* No structured view state to merge. */
+    }
+    const contentViewData =
+      filters.filesOnly || this.savedFilters()?.filesOnly || 'nxsFilesOnly' in viewData
+        ? JSON.stringify({ ...viewData, nxsFilesOnly: !!filters.filesOnly })
+        : undefined;
     return this.searchService
       .updateSavedSearch(id, {
         title: this.savedSearchTitle(),
         params,
         pageProviderName: SEARCH_PAGE_PROVIDER,
+        ...(contentViewData !== undefined ? { contentViewData } : {}),
       })
       .pipe(
         map(() => {
           if (this.savedSearchId() !== id) return;
           this.savedFilters.set(filters);
-          this.loadedParams = params;
+          this.loadedParams = {
+            ...params,
+            ...(contentViewData !== undefined ? { contentViewData } : {}),
+          };
         }),
       );
   }

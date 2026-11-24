@@ -3,6 +3,7 @@ import {
   DestroyRef,
   computed,
   inject,
+  input,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
@@ -68,8 +69,10 @@ const QUEUE_QUICK_FILTER_OPTIONS = [
   templateUrl: './search-filters-drawer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search-filters-drawer.component.scss',
+  host: { '[class.inline]': 'inline()' },
 })
 export class SearchFiltersDrawerComponent {
+  readonly inline = input(false);
   private readonly session = inject(SearchSession);
   private readonly searchAggregationService = inject(SearchAggregationService);
   private readonly directoryService = inject(DirectoryService);
@@ -133,6 +136,7 @@ export class SearchFiltersDrawerComponent {
 
     this.activatedRoute.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.selectedQueueQuickFilters.set(this.parseQuickFilters(params.get('quickFilters') ?? ''));
+      if (params.get('searchQueue') === 'true') this.viewMode.set('queue');
     });
   }
 
@@ -192,7 +196,7 @@ export class SearchFiltersDrawerComponent {
   switchToFilterView(): void {
     this.viewMode.set('filter');
     void this.router.navigate(['/search'], {
-      queryParams: { quickFilters: this.toQuickFiltersQueryParam() },
+      queryParams: { quickFilters: this.toQuickFiltersQueryParam(), searchQueue: null },
       queryParamsHandling: 'merge',
     });
   }

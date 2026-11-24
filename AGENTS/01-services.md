@@ -164,7 +164,7 @@ suggest(searchTerm: string, pageSize?: number): Observable<GlobalSearchSuggestio
 getUserCollections(): Observable<SearchCollectionOption[]>
 getTagSuggestions(term: string): Observable<string[]>          // TagService.suggestTags; [] when blank or on failure
 getSavedSearches(pageProvider?: string): Observable<SavedSearchOption[]>
-getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON
+getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON; optional contentViewData retained
 saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>
 updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown>
 renameSavedSearch(id: string, title: string, pageProviderName?: string): Observable<unknown>  // keeps params

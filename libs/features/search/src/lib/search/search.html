@@ -1,112 +1,146 @@
 <div class="results-page">
-  <!-- AI Search Bar -->
-  @if (featureFlags.aiEnabled()) {
-    <div class="ai-search-section">
-      <div class="ai-search-header">
+  <div class="search-tabs">
+    <button
+      mat-button
+      [attr.aria-pressed]="!aiSearchMode()"
+      (click)="aiSearchMode() && toggleAiSearch()"
+    >
+      {{ 'search.workspace.search' | translate }}
+    </button>
+    @if (featureFlags.aiEnabled()) {
+      <button
+        mat-button
+        [attr.aria-pressed]="aiSearchMode()"
+        (click)="!aiSearchMode() && toggleAiSearch()"
+      >
+        {{ 'search.workspace.ask-agent' | translate }}
+      </button>
+    }
+  </div>
+  @if (!aiSearchMode()) {
+    <section class="search-workspace" [attr.aria-label]="'search.workspace.search' | translate">
+      <nxs-saved-search-select
+        class="search-filter-set"
+        labelKey="search.workspace.filter-set"
+        [defaultLabel]="'search.workspace.default' | translate"
+        [selectedId]="selectedSavedSearchId()"
+        [selectedTitle]="selectedSavedSearchTitle()"
+        [refresh]="searchState.savedSearchVersion()"
+        (selectedChange)="selectFilterSet($event.id, $event.title)"
+      />
+      <div class="search-filter-area">
         <button
-          mat-flat-button
-          class="ai-toggle-btn"
-          [class.active]="aiSearchMode()"
-          (click)="toggleAiSearch()"
+          class="advanced-toggle"
+          type="button"
+          [attr.aria-expanded]="advancedFiltersOpen()"
+          aria-controls="search-advanced-filters"
+          (click)="advancedFiltersOpen.set(!advancedFiltersOpen())"
         >
-          <mat-icon class="ai-sparkle-icon" svgIcon="ai" />
-          {{
-            aiSearchMode()
-              ? ('search.ai-search-active' | translate)
-              : ('search.ai-search' | translate)
-          }}
+          {{ 'search.workspace.advanced-filters' | translate }}:
         </button>
-        @if (aiSearchMode() && aiGeneratedNxql()) {
+        <div id="search-advanced-filters">
+          @if (advancedFiltersOpen()) {
+            <lib-search-filters-drawer [inline]="true" />
+          }
+        </div>
+      </div>
+      <div class="search-workspace__actions">
+        <button mat-button [disabled]="!hasFilters()" (click)="onSaveAs()">
+          {{ 'search.workspace.save-search' | translate }}
+        </button>
+        <button mat-button [disabled]="!canReset()" (click)="resetSearch()">
+          {{ 'search.workspace.reset' | translate }}
+        </button>
+      </div>
+    </section>
+  }
+  <!-- AI Search Bar -->
+  <div class="ai-search-section">
+    @if (featureFlags.aiEnabled() && aiSearchMode()) {
+      <label for="search-question">{{ 'search.workspace.question' | translate }}</label>
+      <button mat-button (click)="clearAsk()">
+        {{ 'search.workspace.clear-ask' | translate }}
+      </button>
+      <div class="ai-search-bar">
+        <mat-icon class="ai-search-icon" svgIcon="ai" />
+        <input
+          id="search-question"
+          class="ai-search-input"
+          type="text"
+          [placeholder]="'search.search.ask-in-natural-language-e-g' | translate"
+          [ngModel]="aiQuery()"
+          (ngModelChange)="onAiQueryInput($event)"
+          (keydown.enter)="executeAiSearch()"
+          [matAutocomplete]="aiAutoComplete"
+        />
+        @if (aiLoading()) {
+          <mat-spinner
+            diameter="20"
+            class="ai-search-spinner"
+            [attr.aria-label]="'search.search.loading' | translate"
+          ></mat-spinner>
+        } @else {
           <button
-            mat-stroked-button
-            class="nxql-toggle-btn"
-            (click)="showNxqlPanel.set(!showNxqlPanel())"
+            mat-icon-button
+            class="ai-search-go"
+            [attr.aria-label]="'search.search.run-ai-search' | translate"
+            (click)="executeAiSearch()"
+            [disabled]="!featureFlags.aiEnabled() || !aiQuery().trim()"
           >
-            <mat-icon svgIcon="code" />
-            {{
-              showNxqlPanel()
-                ? ('search.hide-query' | translate)
-                : ('search.view-query' | translate)
-            }}
+            <mat-icon svgIcon="send" />
           </button>
         }
+        <mat-autocomplete
+          #aiAutoComplete="matAutocomplete"
+          (optionSelected)="selectAiSuggestion($event.option.value)"
+        >
+          @for (suggestion of aiSuggestions(); track suggestion) {
+            <mat-option [value]="suggestion">
+              <mat-icon class="suggestion-icon" svgIcon="ai" />
+              {{ suggestion }}
+            </mat-option>
+          }
+        </mat-autocomplete>
       </div>
 
-      @if (aiSearchMode()) {
-        <div class="ai-search-bar">
-          <mat-icon class="ai-search-icon" svgIcon="ai" />
-          <input
-            class="ai-search-input"
-            type="text"
-            [placeholder]="'search.search.ask-in-natural-language-e-g' | translate"
-            [ngModel]="aiQuery()"
-            (ngModelChange)="onAiQueryInput($event)"
-            (keydown.enter)="executeAiSearch()"
-            [matAutocomplete]="aiAutoComplete"
-          />
-          @if (aiLoading()) {
-            <mat-spinner
-              diameter="20"
-              class="ai-search-spinner"
-              [attr.aria-label]="'search.search.loading' | translate"
-            ></mat-spinner>
-          } @else {
-            <button
-              mat-icon-button
-              class="ai-search-go"
-              [attr.aria-label]="'search.search.run-ai-search' | translate"
-              (click)="executeAiSearch()"
-              [disabled]="!aiQuery().trim()"
-            >
-              <mat-icon svgIcon="send" />
-            </button>
-          }
-          <mat-autocomplete
-            #aiAutoComplete="matAutocomplete"
-            (optionSelected)="selectAiSuggestion($event.option.value)"
-          >
-            @for (suggestion of aiSuggestions(); track suggestion) {
-              <mat-option [value]="suggestion">
-                <mat-icon class="suggestion-icon" svgIcon="ai" />
-                {{ suggestion }}
-              </mat-option>
-            }
-          </mat-autocomplete>
-        </div>
-
-        @if (aiError()) {
-          <nxs-banner class="ai-error" tone="error" announce="alert" [message]="aiError() ?? ''" />
-        }
-
-        @if (showNxqlPanel() && aiGeneratedNxql()) {
-          <div class="ai-nxql-panel">
-            <div class="ai-nxql-explanation">
-              <mat-icon svgIcon="info" />
-              <span>{{ aiExplanation() }}</span>
-            </div>
-            <pre class="ai-nxql-code">{{ aiGeneratedNxql() }}</pre>
-          </div>
-        }
+      @if (aiError()) {
+        <nxs-banner class="ai-error" tone="error" announce="alert" [message]="aiError() ?? ''" />
       }
-    </div>
-  }
 
-  <div class="results-top-actions">
-    <nxs-saved-search-actions
-      [savedSearchId]="selectedSavedSearchId()"
-      [dirty]="savedSearchDirty()"
-      [hasFilters]="hasFilters()"
-      (saveAs)="onSaveAs()"
-      (save)="onSave()"
-      (rename)="onRename()"
-      (share)="onShare()"
-      (remove)="onDelete()"
-    />
+      @if (aiGeneratedNxql()) {
+        <button mat-stroked-button (click)="showNxqlPanel.set(!showNxqlPanel())">
+          {{ (showNxqlPanel() ? 'search.hide-query' : 'search.view-query') | translate }}
+        </button>
+      }
+      @if (showNxqlPanel() && aiGeneratedNxql()) {
+        <div class="ai-nxql-panel">
+          <div class="ai-nxql-explanation">
+            <mat-icon svgIcon="info" />
+            <span>{{ aiExplanation() }}</span>
+          </div>
+          <pre class="ai-nxql-code">{{ aiGeneratedNxql() }}</pre>
+        </div>
+      }
+    }
   </div>
 
+  @if (selectedSavedSearchId()) {
+    <div class="results-top-actions">
+      <nxs-saved-search-actions
+        [savedSearchId]="selectedSavedSearchId()"
+        [dirty]="savedSearchDirty()"
+        [hasFilters]="hasFilters()"
+        (saveAs)="onSaveAs()"
+        (save)="onSave()"
+        (rename)="onRename()"
+        (share)="onShare()"
+        (remove)="onDelete()"
+      />
+    </div>
+  }
   <div class="results-toolbar">
     <div class="results-summary">
-      @if (totalCount() > 0) {
+      @if (!busy() && !resultsError()) {
         <span class="results-count">{{
           (totalCount() === 1 ? 'common.count.result-one' : 'common.count.result-many')
             | translate: { count: totalCount() }
@@ -115,20 +149,30 @@
 
       <div class="quick-filters">
         @for (filter of quickFilterOptions; track filter.value) {
-          <button
-            mat-stroked-button
-            type="button"
-            class="quick-filter-btn"
-            [class.active]="isQuickFilterSelected(filter.value)"
-            (click)="toggleQuickFilter(filter.value)"
-          >
-            {{ filter | descriptorLabel }}
-          </button>
+          @if (filter.value !== 'noFolder') {
+            <button
+              mat-stroked-button
+              type="button"
+              class="quick-filter-btn"
+              [class.active]="isQuickFilterSelected(filter.value)"
+              (click)="toggleQuickFilter(filter.value)"
+            >
+              {{ filter | descriptorLabel }}
+            </button>
+          }
         }
       </div>
     </div>
 
     <div class="toolbar-actions">
+      <button
+        mat-icon-button
+        [attr.aria-label]="'search.switch-to-queue-view' | translate"
+        [matTooltip]="'search.switch-to-queue-view' | translate"
+        (click)="openQueue()"
+      >
+        <mat-icon svgIcon="bullet_list" />
+      </button>
       <button
         mat-icon-button
         [matTooltip]="'search.search.export-csv' | translate"
@@ -310,7 +354,33 @@
 
       <div class="result-list">
         <div class="list-header" [style.grid-template-columns]="gridTemplate()">
-          <span class="col-checkbox"></span>
+          <span class="col-checkbox">
+            <mat-checkbox
+              [checked]="isAllSelected()"
+              [indeterminate]="isIndeterminate()"
+              [aria-label]="'search.workspace.select-page' | translate"
+              (change)="toggleAll()"
+            />
+            <button
+              mat-icon-button
+              [matMenuTriggerFor]="selectionMenu"
+              [disabled]="selectingAll()"
+              [attr.aria-label]="'search.workspace.selection-scope' | translate"
+            >
+              <mat-icon svgIcon="chevron_down" />
+            </button>
+            <mat-menu #selectionMenu="matMenu">
+              <button mat-menu-item (click)="selectPage()">
+                {{ 'search.workspace.select-page' | translate }}
+              </button>
+              <button mat-menu-item (click)="selectAllResults()">
+                {{ 'search.workspace.select-all' | translate }}
+              </button>
+              <button mat-menu-item (click)="clearSelection()">
+                {{ 'search.workspace.clear-selection' | translate }}
+              </button>
+            </mat-menu>
+          </span>
           @for (col of visibleColumns(); track col.key) {
             @if (SORTABLE_COLUMNS.has(col.key)) {
               <button
@@ -373,7 +443,13 @@
                     [title]="row.name"
                     (click)="openDocument(row.id); $event.stopPropagation()"
                   >
-                    {{ row.name }}
+                    @for (part of highlightedTitle(row.name); track $index) {
+                      @if (part.matched) {
+                        <mark>{{ part.text }}</mark>
+                      } @else {
+                        {{ part.text }}
+                      }
+                    }
                   </button>
                 </span>
               } @else if (col.key === 'type') {
@@ -450,7 +526,13 @@
                 [title]="row.name"
                 (click)="openDocument(row.id); $event.stopPropagation()"
               >
-                {{ row.name }}
+                @for (part of highlightedTitle(row.name); track $index) {
+                  @if (part.matched) {
+                    <mark>{{ part.text }}</mark>
+                  } @else {
+                    {{ part.text }}
+                  }
+                }
               </button>
               <span class="simple-list-type-badge" [title]="row.type | docTypeLabel">{{
                 row.type | docTypeLabel
@@ -490,6 +572,10 @@
     <nxs-pager
       [pageIndex]="pager().pageIndex"
       [pageSize]="pageSize"
+      [pageSizeOptions]="[25, 40, 50, 100]"
+      [showEdges]="true"
+      [disabled]="loading()"
+      (pageSizeChange)="changePageSize($event)"
       [itemCount]="pager().itemCount"
       [totalSize]="pager().totalSize"
       [hasNextPage]="pager().hasNextPage"

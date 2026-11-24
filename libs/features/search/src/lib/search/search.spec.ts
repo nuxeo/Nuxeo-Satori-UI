@@ -25,6 +25,7 @@ import { SearchComponent } from './search';
 import { SearchSession } from '../search-session/search-session';
 import {
   DocumentDetailService,
+  DirectoryService,
   type SearchResultItem,
   NuxeoApiBase,
   SearchAggregationService,
@@ -41,7 +42,11 @@ import {
 } from '@nuxeo/satori-platform/components';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
-type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
+type SearchResponseLike = {
+  items: SearchResultItem[];
+  aggregations: Record<string, unknown>;
+  hasNextPage?: boolean;
+};
 
 /** A card registered under the packaged card's ID, which shows what the page passed it. */
 @Component({
@@ -70,6 +75,7 @@ class ProbeCardComponent implements NxsCardInputs {
 }
 
 const mockSearchService = {
+  getSavedSearches: vi.fn(() => of([{ id: 'ss-1', title: 'My filters' }])),
   search: vi.fn((_request?: Record<string, unknown>): Observable<SearchResponseLike> =>
     of({ items: [], aggregations: {} }),
   ),
@@ -99,6 +105,8 @@ const EMPTY_SAVED_PARAMS: Record<string, string> = {
 };
 
 const mockSearchAggregationService = {
+  savedSearchVersion: signal(0),
+  keywordRequest: signal<{ term: string } | null>(null),
   drawerFilters: signal<Record<string, string>>({}),
   aggregations: signal<Record<string, unknown>>({}),
   items: signal<SearchResultItem[]>([]),
@@ -108,6 +116,7 @@ const mockSearchAggregationService = {
 };
 
 const mockDocumentDetailService = {
+  getDocumentPermissions: vi.fn(() => of({ contextParameters: { permissions: [] } })),
   fetchThumbnail: vi.fn((): Observable<Blob | null> => of(null)),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob())),
   addToFavorites: vi.fn((): Observable<void> => of(undefined)),
@@ -272,6 +281,10 @@ describe('SearchComponent', () => {
           useValue: { queryParamMap: of(convertToParamMap(queryParams)) },
         },
         { provide: SearchService, useValue: mockSearchService },
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
         { provide: SearchAggregationService, useValue: mockSearchAggregationService },
         { provide: DocumentDetailService, useValue: mockDocumentDetailService },
         { provide: SelectionService, useValue: mockSelectionService },
@@ -298,7 +311,10 @@ describe('SearchComponent', () => {
     mockSearchService.search.mockReturnValue(of({ items: [], aggregations: {} }));
     mockDocumentDetailService.fetchThumbnail.mockReturnValue(of(null));
     mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
+    mockSearchAggregationService.keywordRequest.set(null);
     mockSearchAggregationService.drawerFilters.set({});
+    mockSearchAggregationService.selectedSavedSearchId.set('');
+    mockSearchAggregationService.selectedSavedSearchTitle.set('');
     mockSearchAggregationService.aggregations.set({});
     mockSearchAggregationService.items.set([]);
 
@@ -319,6 +335,10 @@ describe('SearchComponent', () => {
           },
         },
         { provide: SearchService, useValue: mockSearchService },
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
         { provide: SearchAggregationService, useValue: mockSearchAggregationService },
         { provide: DocumentDetailService, useValue: mockDocumentDetailService },
         { provide: SelectionService, useValue: mockSelectionService },
@@ -434,6 +454,60 @@ describe('SearchComponent', () => {
   });
 
   describe('selection', () => {
+    it('selects every result page using the current criteria, only after all pages succeed', async () => {
+      await fixture.whenStable();
+      const session = TestBed.inject(SearchSession);
+      const request = session.request();
+      mockSearchService.search
+        .mockReturnValueOnce(
+          of({ items: [resultItem({ id: 'a' })], aggregations: {}, hasNextPage: true }),
+        )
+        .mockReturnValueOnce(
+          of({ items: [resultItem({ id: 'b' })], aggregations: {}, hasNextPage: false }),
+        );
+      component.selectAllResults();
+      expect(mockSearchService.search).toHaveBeenLastCalledWith({
+        ...request,
+        pageSize: 1000,
+        pageIndex: 1,
+      });
+      expect(mockSelectionService.selectAll).toHaveBeenLastCalledWith(['a', 'b'], {
+        a: 'Test Doc',
+        b: 'Test Doc',
+      });
+      expect(component.selectingAll()).toBe(false);
+    });
+
+    it('retains selection if loading all results fails', async () => {
+      await fixture.whenStable();
+      mockSearchService.search.mockReturnValueOnce(throwError(() => new Error('offline')));
+      component.selectAllResults();
+      expect(mockSelectionService.selectAll).not.toHaveBeenCalled();
+      expect(component.selectingAll()).toBe(false);
+    });
+
+    it('cancels pending selection when criteria change or selection is cleared', async () => {
+      await fixture.whenStable();
+      const pending = new Subject<SearchResponseLike>();
+      mockSearchService.search.mockReturnValueOnce(pending);
+      component.selectAllResults();
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: 'changed' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      pending.next({ items: [resultItem()], aggregations: {} });
+      pending.complete();
+      expect(mockSelectionService.selectAll).not.toHaveBeenCalled();
+      expect(component.selectingAll()).toBe(false);
+      const second = new Subject<SearchResponseLike>();
+      mockSearchService.search.mockReturnValueOnce(second);
+      component.selectAllResults();
+      component.clearSelection();
+      second.next({ items: [resultItem()], aggregations: {} });
+      second.complete();
+      expect(mockSelectionService.selectAll).not.toHaveBeenCalled();
+    });
+
     it('should toggle individual selection', () => {
       vi.spyOn(component, 'displayResults').mockReturnValue([row()]);
       component.toggleSelection('doc1');
@@ -486,6 +560,199 @@ describe('SearchComponent', () => {
       expect(mockSearchService.search.mock.calls.at(-1)?.[0]).toEqual(
         mockSearchService.search.mock.calls[before - 1][0],
       );
+    });
+  });
+
+  describe('separate search inputs', () => {
+    it('keeps the saved filter set visibly selected when options are refreshed', async () => {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      mockSearchService.getSavedSearchById.mockReturnValue(
+        of({ dc_modified_agg: '["lastMonth"]' }),
+      );
+      component.loadFilterSets();
+      component.selectFilterSet('ss-1');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        'nxs-saved-search-select input',
+      );
+      expect(select?.value).toBe('My filters');
+      component.loadFilterSets();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(select?.value).toBe('My filters');
+    });
+
+    it('opens queue mode while retaining the existing search query parameters', () => {
+      const navigate = vi.spyOn(component['router'], 'navigate');
+      component.openQueue();
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: { searchQueue: 'true' },
+          queryParamsHandling: 'merge',
+        }),
+      );
+    });
+
+    it('honors the existing AI visibility flag and enables save/reset only with criteria', async () => {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true });
+      mockAiFeatureFlagService.aiEnabled.set(false);
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      try {
+        fixture.detectChanges();
+        await fixture.whenStable();
+        const el = fixture.nativeElement as HTMLElement;
+        expect(el.querySelectorAll('.search-tabs button')).toHaveLength(1);
+        const buttons = el.querySelectorAll<HTMLButtonElement>('.search-workspace__actions button');
+        expect(buttons[0].disabled).toBe(true);
+        expect(buttons[1].disabled).toBe(true);
+        component.keywordDraft.set('contract');
+        component.applyKeywords();
+        fixture.detectChanges();
+        expect(buttons[0].disabled).toBe(false);
+        expect(buttons[1].disabled).toBe(false);
+        mockAiFeatureFlagService.aiEnabled.set(true);
+        fixture.detectChanges();
+        expect(el.querySelectorAll('.search-tabs button')).toHaveLength(2);
+      } finally {
+        mockAiFeatureFlagService.aiEnabled.set(true);
+      }
+    });
+
+    it('consumes a header submission once, preserves metadata and starts on page one', async () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), authors: ['alice'] });
+      session.setPageIndex(2);
+      component.aiSearchMode.set(true);
+      mockSearchAggregationService.keywordRequest.set({ term: '  contract  ' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(session.filters().fulltext).toBe('contract');
+      expect(session.filters().authors).toEqual(['alice']);
+      expect(session.pageIndex()).toBe(0);
+      expect(mockSearchAggregationService.keywordRequest()).toBeNull();
+      expect(component.aiSearchMode()).toBe(false);
+    });
+
+    it('highlights literal keyword matches without HTML interpolation', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: '[a]' });
+      expect(component.highlightedTitle('<b>[A] and [a]</b>')).toEqual([
+        { text: '<b>', matched: false },
+        { text: '[A]', matched: true },
+        { text: ' and ', matched: false },
+        { text: '[a]', matched: true },
+        { text: '</b>', matched: false },
+      ]);
+    });
+
+    it('applies keywords through the existing filter session without losing metadata', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), authors: ['alice'], modified: ['lastWeek'] });
+      component.keywordDraft.set('  contract  ');
+      component.applyKeywords();
+      expect(session.filters().fulltext).toBe('contract');
+      expect(session.filters().authors).toEqual(['alice']);
+      expect(session.filters().modified).toEqual(['lastWeek']);
+    });
+
+    it('resets metadata and all quick filters without changing sort or Ask input', () => {
+      const session = TestBed.inject(SearchSession);
+      const navigate = vi.spyOn(component['router'], 'navigate');
+      session.setFilters({ ...session.filters(), fulltext: 'contract', authors: ['alice'] });
+      component.selectedQuickFilters.set(new Set(['noFolder', 'onlyValidated', 'mostRecent']));
+      component.sortColumn.set('modified');
+      component.sortDirection.set('desc');
+      component.aiQuery.set('Find documents');
+      component.resetSearch();
+      expect(session.filters().fulltext).toBe('');
+      expect(session.filters().authors).toEqual([]);
+      expect([...component.selectedQuickFilters()]).toEqual([]);
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: { quickFilters: null, page: null },
+          queryParamsHandling: 'merge',
+        }),
+      );
+      expect(component.sortColumn()).toBe('modified');
+      expect(component.sortDirection()).toBe('desc');
+      expect(component.aiQuery()).toBe('Find documents');
+    });
+
+    it('keeps Reset enabled when only a quick filter is active', async () => {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+      component.selectedQuickFilters.set(new Set(['onlyValidated']));
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        '.search-workspace__actions button',
+      );
+      expect(buttons[0].disabled).toBe(true);
+      expect(buttons[1].disabled).toBe(false);
+      buttons[1].click();
+      fixture.detectChanges();
+      expect(component.selectedQuickFilters().size).toBe(0);
+      expect(buttons[1].disabled).toBe(true);
+    });
+
+    it('loads saved filter sets and opens the chosen search', () => {
+      component.loadFilterSets();
+      expect(component.filterSets()).toEqual([{ id: 'ss-1', title: 'My filters' }]);
+      const session = TestBed.inject(SearchSession);
+      const open = vi.spyOn(session, 'openSavedSearch').mockReturnValue(of(undefined));
+      component.selectFilterSet('ss-1');
+      expect(open).toHaveBeenCalledWith('ss-1', 'My filters');
+    });
+
+    it('returns to empty criteria when Default is selected', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: 'NEV', authors: ['alice'] });
+      component.selectFilterSet('');
+      expect(session.filters().fulltext).toBe('');
+      expect(session.filters().authors).toEqual([]);
+    });
+
+    it('does not submit AI requests while the feature is disabled', () => {
+      mockAiFeatureFlagService.aiEnabled.set(false);
+      component.aiQuery.set('Find documents');
+      component.executeAiSearch();
+      expect(mockAiGatewayService.nlToNxql).not.toHaveBeenCalled();
+      mockAiFeatureFlagService.aiEnabled.set(true);
+    });
+
+    it('clears keywords while preserving metadata filters', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: 'contract', authors: ['alice'] });
+      component.clearKeywords();
+      expect(session.filters().fulltext).toBe('');
+      expect(session.filters().authors).toEqual(['alice']);
+    });
+
+    it('clears Ask without clearing keyword criteria or leaving Ask mode', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: 'contract' });
+      component.aiSearchMode.set(true);
+      component.aiQuery.set('Find contracts');
+      component.aiNxqlLoading.set(true);
+      component.aiSearchExecuted.set(true);
+      component.clearAsk();
+      expect(component.aiQuery()).toBe('');
+      expect(component.aiSearchMode()).toBe(true);
+      expect(component.aiSearchExecuted()).toBe(false);
+      expect(component.aiNxqlLoading()).toBe(false);
+      expect(session.filters().fulltext).toBe('contract');
     });
   });
 

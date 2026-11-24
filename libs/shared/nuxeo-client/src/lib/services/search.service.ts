@@ -46,6 +46,8 @@ export interface SavedSearchOption {
 }
 
 export interface SaveSavedSearchParams {
+  /** Presentation state supported by the saved-search endpoint. */
+  contentViewData?: string;
   title: string;
   params: Record<string, string>;
   pageProviderName?: string;
@@ -309,6 +311,8 @@ export class SearchService {
                   : String(value);
               }
             }
+            if (typeof saved['contentViewData'] === 'string')
+              result['contentViewData'] = saved['contentViewData'];
             return result;
           }
 
@@ -322,6 +326,8 @@ export class SearchService {
                 result[key] = String(value);
               }
             }
+            const viewData = saved['contentViewData'] ?? props['contentview:contentViewData'];
+            if (typeof viewData === 'string') result['contentViewData'] = viewData;
             return result;
           }
 
@@ -332,13 +338,14 @@ export class SearchService {
   }
 
   saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown> {
-    const { title, params, pageProviderName = 'default_search' } = request;
+    const { title, params, pageProviderName = 'default_search', contentViewData } = request;
 
     return this.api.post<unknown>(
       '/nuxeo/api/v1/search/saved',
       {
         'entity-type': 'savedSearch',
         pageProviderName,
+        ...(contentViewData !== undefined ? { contentViewData } : {}),
         params: {
           ...params,
           highlight: this.savedSearchHighlight,
@@ -355,13 +362,14 @@ export class SearchService {
 
   updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown> {
     const encodedId = encodeURIComponent(id);
-    const { title, params, pageProviderName = 'default_search' } = request;
+    const { title, params, pageProviderName = 'default_search', contentViewData } = request;
 
     return this.api.put<unknown>(
       `/nuxeo/api/v1/search/saved/${encodedId}`,
       {
         'entity-type': 'savedSearch',
         pageProviderName,
+        ...(contentViewData !== undefined ? { contentViewData } : {}),
         params: {
           ...params,
           highlight: this.savedSearchHighlight,
@@ -725,6 +733,7 @@ export class SearchService {
 
     const displayLabel =
       this.asString(item['displayLabel']) ??
+      this.asString(item['label']) ??
       this.asString(item['title']) ??
       this.asString(properties['dc:title']) ??
       id;

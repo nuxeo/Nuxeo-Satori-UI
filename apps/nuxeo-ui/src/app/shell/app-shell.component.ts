@@ -6,6 +6,7 @@ import {
   OnDestroy,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
   ChangeDetectionStrategy,
@@ -41,6 +42,7 @@ import {
   DocumentDetailService,
   BrowseContextService,
   SearchService,
+  SearchAggregationService,
   SelectionService,
   readClipboardDocs,
   isBrowseRouterUrl,
@@ -58,7 +60,13 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { AuthService } from '../auth/auth.service';
 import { SessionTimeoutService } from '../auth/session-timeout.service';
 import { BrandLogoFallbackDirective } from '../config/brand-logo-fallback.directive';
-import { AppNavItem, SETTINGS_DRAWER_ITEMS, toAppNavItem } from '../platform-nav-items';
+import {
+  AppNavItem,
+  SEARCH_QUEUE_NAV_ITEM,
+  SETTINGS_DRAWER_ITEMS,
+  navGroup,
+  toAppNavItem,
+} from '../platform-nav-items';
 import { ThemingFeatureFlagService } from '../theme/theming-feature-flag.service';
 import { drawerItemForPath } from './drawer-route-match';
 import { NavDrawerComponent } from './nav-drawer/nav-drawer.component';
@@ -108,6 +116,7 @@ export class AppShellComponent implements OnDestroy {
 
   private readonly router = inject(Router);
   private readonly platformNavState = inject(SatPlatformNavState);
+  readonly platformNavCollapsed = this.platformNavState.collapsed;
   private readonly auth = inject(AuthService);
   private readonly sessionTimeout = inject(SessionTimeoutService);
   private readonly snackBar = inject(MatSnackBar);
@@ -115,6 +124,7 @@ export class AppShellComponent implements OnDestroy {
   private readonly collectionService = inject(CollectionService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly searchService = inject(SearchService);
+  private readonly searchState = inject(SearchAggregationService);
   private readonly browseContext = inject(BrowseContextService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly appConfig = inject(AppConfigService);
@@ -149,6 +159,7 @@ export class AppShellComponent implements OnDestroy {
    * test could do none of those.
    */
   private readonly navDescriptors = inject(APP_NAV_ITEMS);
+  protected readonly navGroup = navGroup;
   protected readonly navItems = computed(() => this.navDescriptors().map(toAppNavItem));
 
   readonly displayName = computed(() => this.auth.username() ?? 'User');
@@ -175,6 +186,11 @@ export class AppShellComponent implements OnDestroy {
   readonly highlightedSearchTerm = computed(() => this.globalSearchTerm().trim());
 
   private readonly currentUrl = signal(this.router.url.split('?')[0]);
+  readonly searchExpanded = computed(() => this.currentUrl() === '/search');
+  private searchReturnUrl = '/dashboard';
+  private readonly syncSearchKeywords = effect(() => {
+    this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+  });
 
   readonly pageTitle = computed(() => {
     const url = this.currentUrl();
@@ -218,6 +234,7 @@ export class AppShellComponent implements OnDestroy {
       ...this.navItems(),
       ...PACKAGED_NAV_ITEMS.map(toAppNavItem),
       ...SETTINGS_DRAWER_ITEMS,
+      SEARCH_QUEUE_NAV_ITEM,
     ];
     const match = candidates.find((item) => url === item.path || url.startsWith(item.path + '/'));
     // Layer 0: the product name on an unmatched route is branding, not a literal.
@@ -287,7 +304,11 @@ export class AppShellComponent implements OnDestroy {
         }
         this.currentUrl.set(nextPath);
         this.refreshClipboardCount();
-        this.clearGlobalSearch();
+        if (nextPath !== '/search') {
+          this.clearGlobalSearch();
+        } else if (previousPath !== '/search') {
+          this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+        }
         this.syncDrawerToRoute(nextPath);
       });
 
@@ -323,7 +344,6 @@ export class AppShellComponent implements OnDestroy {
       )
       .subscribe((results) => {
         this.globalSearchResults.set(results);
-        this.globalSearchOpen.set(this.globalSearchTerm().trim().length >= 2);
         this.loadThumbnailsForResults(results);
       });
   }
@@ -397,6 +417,16 @@ export class AppShellComponent implements OnDestroy {
       this.platformNavState.toggleCollapsed();
     }
 
+    // Search owns its filters in the workspace. Its drawer is reserved for the optional queue.
+    if (item.path === '/search') {
+      event.preventDefault();
+      this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+      this.drawerOpen.set(false);
+      this.activeDrawerItem.set(null);
+      void this.router.navigateByUrl('/search');
+      return;
+    }
+
     if (item.hasDrawer) {
       event.preventDefault();
       event.stopPropagation();
@@ -447,6 +477,18 @@ export class AppShellComponent implements OnDestroy {
    * look, and previously only happened if the user clicked the nav item themselves.
    */
   private syncDrawerToRoute(currentPath: string): void {
+    if (this.router.parseUrl(this.router.url).queryParams['searchQueue'] === 'true') {
+      const searchItem =
+        this.navItems().find((item) => item.path === '/search') ?? SEARCH_QUEUE_NAV_ITEM;
+      this.activeDrawerItem.set(searchItem);
+      this.drawerOpen.set(true);
+      return;
+    }
+    if (currentPath === '/search') {
+      this.activeDrawerItem.set(null);
+      this.drawerOpen.set(false);
+      return;
+    }
     const matchingItem = drawerItemForPath(this.navItems(), currentPath);
 
     // Re-setting the same item would reopen a drawer the user has just closed, so a
@@ -498,7 +540,32 @@ export class AppShellComponent implements OnDestroy {
   }
 
   onGlobalSearchFocus(): void {
+    if (!this.searchExpanded()) {
+      this.searchReturnUrl = this.router.url;
+      this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+      this.drawerOpen.set(false);
+      this.activeDrawerItem.set(null);
+      void this.router.navigateByUrl('/search');
+    }
     this.globalSearchOpen.set(this.globalSearchTerm().trim().length >= 2);
+    if (this.globalSearchOpen()) this.searchInput$.next(this.globalSearchTerm());
+  }
+
+  submitGlobalSearch(): void {
+    this.globalSearchOpen.set(false);
+    this.searchInput$.next('');
+    this.searchState.keywordRequest.set({ term: this.globalSearchTerm().trim() });
+  }
+
+  clearSearchKeywords(): void {
+    this.globalSearchTerm.set('');
+    this.submitGlobalSearch();
+  }
+
+  closeSearch(): void {
+    this.searchState.keywordRequest.set(null);
+    this.clearGlobalSearch();
+    void this.router.navigateByUrl(this.searchReturnUrl);
   }
 
   onGlobalSearchFocusOut(event: FocusEvent): void {
@@ -509,7 +576,7 @@ export class AppShellComponent implements OnDestroy {
       return;
     }
 
-    this.clearGlobalSearch();
+    this.globalSearchOpen.set(false);
   }
 
   onGlobalSearchSelect(result: GlobalSearchSuggestion): void {
@@ -525,6 +592,7 @@ export class AppShellComponent implements OnDestroy {
   }
 
   private clearGlobalSearch(): void {
+    this.searchInput$.next('');
     this.globalSearchTerm.set('');
     this.globalSearchLoading.set(false);
     this.globalSearchError.set(null);

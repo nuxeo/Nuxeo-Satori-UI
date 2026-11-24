@@ -2,6 +2,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
+  HostListener,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -12,6 +16,9 @@ import {
   untracked,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { A11yModule } from '@angular/cdk/a11y';
+import { CdkOverlayOrigin, OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
+import { MatRadioModule } from '@angular/material/radio';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
@@ -44,6 +51,7 @@ import type { NxsChipItem } from '../primitives';
 type CheckboxField = 'modified' | 'nature' | 'subjects' | 'coverage' | 'size';
 /** A typeahead whose choices collect as chips, as Web UI's multiple-choice fields do. */
 type ChoiceField = 'authors' | 'collections' | 'tags';
+type FilterMenu = CheckboxField | ChoiceField | 'scope' | 'logic' | 'properties';
 
 interface CheckboxGroup {
   readonly field: CheckboxField;
@@ -87,6 +95,9 @@ let nextId = 0;
   templateUrl: './search-filters.component.html',
   styleUrl: './search-filters.component.scss',
   imports: [
+    A11yModule,
+    OverlayModule,
+    MatRadioModule,
     MatAutocompleteModule,
     MatButtonModule,
     MatCheckboxModule,
@@ -96,9 +107,131 @@ let nextId = 0;
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'nxs-search-filters' },
+  host: { class: 'nxs-search-filters', '[class.horizontal]': "layout() === 'horizontal'" },
 })
 export class NxsSearchFiltersComponent {
+  protected readonly horizontalMenus: readonly FilterMenu[] = [
+    'scope',
+    'logic',
+    'properties',
+    'modified',
+    'authors',
+    'coverage',
+    'subjects',
+    'tags',
+    'collections',
+  ];
+  protected readonly activeMenu = signal<FilterMenu | null>(null);
+  protected readonly panelOrigin = signal<CdkOverlayOrigin | null>(null);
+  protected readonly scopeDraft = signal(false);
+  protected readonly panelPositions: ConnectedPosition[] = [
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -6 },
+  ];
+  protected readonly propertyGroups = computed(() =>
+    this.groups().after.filter((group) => group.field === 'nature' || group.field === 'size'),
+  );
+  protected readonly activeGroup = computed(() =>
+    [...this.groups().before, ...this.groups().after].find(
+      (group) => group.field === this.activeMenu(),
+    ),
+  );
+
+  protected menuLabel(menu: FilterMenu): string {
+    const keys: Record<FilterMenu, string> = {
+      scope: 'search.workspace.in',
+      logic: 'search.workspace.logic',
+      properties: 'search.workspace.properties',
+      modified: 'search.workspace.date',
+      authors: 'search.workspace.people',
+      coverage: 'satori-components.search-filters.coverage',
+      subjects: 'search.workspace.categories',
+      tags: 'satori-components.search-filters.tags',
+      collections: 'satori-components.search-filters.collections',
+      nature: 'satori-components.search-filters.nature',
+      size: 'satori-components.search-filters.size.title',
+    };
+    const label = this.translate.instant(keys[menu]);
+    if (menu === 'scope')
+      return `${label}: ${this.translate.instant(this.filters().filesOnly ? 'search.workspace.files' : 'search.workspace.files-folders')}`;
+    if (menu === 'logic') return label;
+    if (menu === 'properties') {
+      const count = this.filters().nature.length + this.filters().size.length;
+      return count ? `${label} (${count})` : label;
+    }
+    const values = this.filters()[menu];
+    if (menu === 'modified' && !values.length)
+      return `${label}: ${this.translate.instant('search.workspace.any-time')}`;
+    if (!values.length) return label;
+    if (values.length > 1) return `${label} (${values.length})`;
+    const group = [...this.groups().before, ...this.groups().after].find(
+      (entry) => entry.field === menu,
+    );
+    const value = group
+      ? group.labelKeys?.[values[0]]
+        ? this.translate.instant(group.labelKeys[values[0]])
+        : this.optionText(group, values[0])
+      : this.chipItems(menu as ChoiceField, values)[0]?.label;
+    return `${label}: ${value ?? values[0]}`;
+  }
+
+  protected panelTitle(): string {
+    return this.activeMenu() === 'scope'
+      ? this.translate.instant('search.workspace.search-in')
+      : this.menuLabel(this.activeMenu() ?? 'properties');
+  }
+
+  protected openPanel(menu: FilterMenu, origin: CdkOverlayOrigin): void {
+    if (this.activeMenu() === menu) {
+      this.closePanel();
+      return;
+    }
+    this.panelOrigin.set(origin);
+    this.scopeDraft.set(!!this.filters().filesOnly);
+    this.activeMenu.set(menu);
+    if (menu === 'collections') this.onCollectionsFocus();
+  }
+
+  protected closePanel(restoreFocus = true): void {
+    const trigger = this.panelOrigin()?.elementRef.nativeElement as HTMLElement | undefined;
+    this.activeMenu.set(null);
+    // CDK restores the first opener when one overlay is reused across triggers.
+    // Restore the current opener after the trap has finished detaching instead.
+    if (restoreFocus) afterNextRender(() => trigger?.focus(), { injector: this.injector });
+  }
+
+  protected outsidePanel(event: MouseEvent): void {
+    if (!event.composedPath().includes(this.hostElement.nativeElement)) {
+      const target =
+        event.target instanceof HTMLElement
+          ? event.target.closest<HTMLElement>('input, button, a, [tabindex]')
+          : null;
+      this.closePanel(false);
+      // Do not let the trap steal focus from a control clicked outside the panel.
+      if (target) afterNextRender(() => target.focus(), { injector: this.injector });
+    }
+  }
+
+  protected panelKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.closePanel();
+    }
+  }
+
+  protected applyScope(): void {
+    this.update({ filesOnly: this.scopeDraft() });
+    this.closePanel();
+  }
+
+  protected clearDate(): void {
+    this.update({ modified: [] });
+    this.closePanel();
+  }
+  /** Horizontal filter menus for the search workspace; the drawer keeps its vertical layout. */
+  readonly layout = input<'vertical' | 'horizontal'>('vertical');
   /** The filters shown. Two-way: every change the user makes is written back. */
   readonly filters = model<NxsSearchFilters>(NXS_EMPTY_SEARCH_FILTERS);
   /** The server's aggregates for the query the filters produce: each choice's count. */
@@ -139,6 +272,37 @@ export class NxsSearchFiltersComponent {
 
   /** Which collapsible groups are open. Modification date starts open, as in Web UI. */
   private readonly expanded = signal<ReadonlySet<CheckboxField>>(new Set(['modified']));
+  protected readonly horizontalExpanded = signal<CheckboxField | ChoiceField | 'properties' | null>(
+    null,
+  );
+  private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  protected readonly propertiesOpen = computed(() =>
+    ['properties', 'nature', 'size'].includes(this.horizontalExpanded() ?? ''),
+  );
+
+  protected toggleChoice(field: ChoiceField | 'properties', event: Event): void {
+    if (this.layout() !== 'horizontal') return;
+    event.preventDefault();
+    const open =
+      field === 'properties' ? this.propertiesOpen() : this.horizontalExpanded() === field;
+    this.horizontalExpanded.set(open ? null : field);
+  }
+
+  @HostListener('document:click', ['$event'])
+  protected closeOutside(event: Event): void {
+    if (
+      this.layout() === 'horizontal' &&
+      !event.composedPath().includes(this.hostElement.nativeElement)
+    ) {
+      this.horizontalExpanded.set(null);
+    }
+  }
+
+  @HostListener('keydown.escape')
+  protected closeMenus(): void {
+    this.horizontalExpanded.set(null);
+  }
 
   protected readonly groups = computed<{ before: CheckboxGroup[]; after: CheckboxGroup[] }>(() => {
     const filters = this.filters();
@@ -147,7 +311,10 @@ export class NxsSearchFiltersComponent {
       before: [
         {
           field: 'modified',
-          titleKey: 'satori-components.search-filters.modified.title',
+          titleKey:
+            this.layout() === 'horizontal'
+              ? 'search.workspace.date'
+              : 'satori-components.search-filters.modified.title',
           options: nxsRangeOptions(NXS_MODIFIED_RANGES, aggregations.dc_modified_agg),
           labelKeys: MODIFIED_LABEL_KEYS,
         },
@@ -160,12 +327,18 @@ export class NxsSearchFiltersComponent {
         },
         {
           field: 'subjects',
-          titleKey: 'satori-components.search-filters.subjects',
+          titleKey:
+            this.layout() === 'horizontal'
+              ? 'search.workspace.categories'
+              : 'satori-components.search-filters.subjects',
           options: nxsTermOptions(aggregations.dc_subjects_agg, filters.subjects),
         },
         {
           field: 'coverage',
-          titleKey: 'satori-components.search-filters.coverage',
+          titleKey:
+            this.layout() === 'horizontal'
+              ? 'search.workspace.location'
+              : 'satori-components.search-filters.coverage',
           options: nxsTermOptions(aggregations.dc_coverage_agg, filters.coverage),
         },
         {
@@ -233,10 +406,19 @@ export class NxsSearchFiltersComponent {
   }
 
   protected isExpanded(field: CheckboxField): boolean {
+    if (this.layout() === 'horizontal') return this.horizontalExpanded() === field;
     return this.expanded().has(field);
   }
 
+  protected selectedCount(field: CheckboxField): number {
+    return this.filters()[field].length;
+  }
+
   protected toggleGroup(field: CheckboxField): void {
+    if (this.layout() === 'horizontal') {
+      this.horizontalExpanded.update((current) => (current === field ? null : field));
+      return;
+    }
     this.expanded.update((current) => {
       const next = new Set(current);
       if (next.has(field)) next.delete(field);

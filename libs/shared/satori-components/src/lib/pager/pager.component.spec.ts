@@ -5,6 +5,8 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { MatSelect } from '@angular/material/select';
 
 import { NxsPagerComponent } from './pager.component';
 
@@ -21,6 +23,9 @@ import { NxsPagerComponent } from './pager.component';
       [hasNextPage]="hasNextPage()"
       [disabled]="disabled()"
       [label]="label()"
+      [pageSizeOptions]="sizes()"
+      [showEdges]="edges()"
+      (pageSizeChange)="sizeChanges.push($event)"
       (pageChange)="asked.push($event)"
     />
   `,
@@ -34,6 +39,9 @@ class HostComponent {
   readonly disabled = signal(false);
   readonly label = signal('');
   readonly asked: number[] = [];
+  readonly sizes = signal<number[]>([]);
+  readonly edges = signal(false);
+  readonly sizeChanges: number[] = [];
 }
 
 describe('NxsPagerComponent', () => {
@@ -64,6 +72,38 @@ describe('NxsPagerComponent', () => {
     host.hasNextPage.set(false);
     await render();
     expect(el().querySelector('nav')).toBeNull();
+  });
+
+  it('offers page sizes on a single page and emits the selected size', async () => {
+    host.hasNextPage.set(false);
+    host.sizes.set([25, 50, 100]);
+    await render();
+    const select: MatSelect = fixture.debugElement.query(By.directive(MatSelect)).componentInstance;
+    select.open();
+    await render();
+    const option = [...document.querySelectorAll<HTMLElement>('mat-option')].find(
+      (node) => node.textContent?.trim() === '25',
+    );
+    expect(option).toBeDefined();
+    option?.click();
+    await render();
+    expect(host.sizeChanges).toEqual([25]);
+  });
+
+  it('navigates to first and last pages and disables edges while loading', async () => {
+    host.edges.set(true);
+    host.totalSize.set(121);
+    host.pageIndex.set(1);
+    await render();
+    const first = el().querySelector<HTMLButtonElement>('[aria-label="First page"]');
+    const last = el().querySelector<HTMLButtonElement>('[aria-label="Last page"]');
+    first?.click();
+    last?.click();
+    expect(host.asked).toEqual([0, 2]);
+    host.disabled.set(true);
+    await render();
+    expect(first?.disabled).toBe(true);
+    expect(last?.disabled).toBe(true);
   });
 
   it('shows the range without a total when the server did not count', () => {

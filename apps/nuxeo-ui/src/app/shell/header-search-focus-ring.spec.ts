@@ -93,6 +93,9 @@ describe('header global search — keyboard focus indicator', () => {
     fixture = TestBed.createComponent(HeaderSearchHostComponent);
     // The element has to be in the live document for :focus to match and for the global
     // stylesheet's theme tokens to resolve against <html>.
+    // Paint a themed surface like the real header. A transparent fixture otherwise
+    // compares a dark-scheme ring against the white fallback, which is not its backdrop.
+    fixture.nativeElement.style.backgroundColor = 'var(--mat-sys-surface)';
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
     await fixture.whenStable();

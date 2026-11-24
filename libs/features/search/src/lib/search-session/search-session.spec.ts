@@ -78,6 +78,57 @@ describe('SearchSession', () => {
 
   const flush = () => TestBed.tick();
 
+  it('saves Files scope as view state, restores it and clears it on update', async () => {
+    session.setFilters({ ...NXS_EMPTY_SEARCH_FILTERS, filesOnly: true });
+    expect(session.hasFilters()).toBe(true);
+    expect(session.request().quickFilters).toBe('noFolder');
+    await firstValueFrom(session.saveAs('Files'));
+    expect(searchService.saveSavedSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ nxsFilesOnly: true }),
+      }),
+    );
+    searchService.getSavedSearchById.mockReturnValue(
+      of({
+        ...EMPTY_SAVED_PARAMS,
+        contentViewData: JSON.stringify({ unrelated: 'kept', nxsFilesOnly: true }),
+      }),
+    );
+    await firstValueFrom(session.openSavedSearch('scope', 'Files'));
+    expect(session.filters().filesOnly).toBe(true);
+    session.setFilters(NXS_EMPTY_SEARCH_FILTERS);
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).toHaveBeenCalledWith(
+      'scope',
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ unrelated: 'kept', nxsFilesOnly: false }),
+      }),
+    );
+    expect(session.request().quickFilters).toBeUndefined();
+    session.reset();
+    expect(session.hasFilters()).toBe(false);
+  });
+
+  it('changes page size and returns to the first page, ignoring unsupported sizes', () => {
+    session.setPageIndex(3);
+    session.setPageSize(25);
+    expect(session.request()).toEqual(expect.objectContaining({ pageSize: 25, pageIndex: 0 }));
+    session.setPageSize(0);
+    expect(session.pageSize()).toBe(25);
+  });
+
+  it('leaves unrelated legacy view data untouched when only metadata filters change', async () => {
+    searchService.getSavedSearchById.mockReturnValue(
+      of({ ...EMPTY_SAVED_PARAMS, contentViewData: 'legacy opaque state' }),
+    );
+    await firstValueFrom(session.openSavedSearch('legacy', 'Legacy search'));
+    session.setFilters({ ...session.filters(), authors: ['alice'] });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'contentViewData',
+    );
+  });
+
   describe('the one search', () => {
     it('sends nothing until something subscribes, then one request shared by every subscriber', () => {
       flush();

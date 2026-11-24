@@ -10,6 +10,14 @@
   justify-content: flex-end;
   gap: 4px;
   padding: 4px 8px;
+  flex-wrap: wrap;
+}
+
+.nxs-pager__size {
+  width: 64px;
+  padding: 6px 8px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 4px;
 }
 
 .nxs-pager__range {

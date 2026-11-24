@@ -15,7 +15,13 @@
        Satori fix, not by re-adding persistent visible text here. -->
   <sat-platform-nav>
     <sat-platform-nav-menu>
-      @for (item of navItems(); track item.id) {
+      @for (item of navItems(); track item.id; let index = $index) {
+        @if (index > 0 && navGroup(item.id) !== navGroup(navItems()[index - 1].id)) {
+          <hr
+            class="nav-group-divider"
+            [class.nav-group-divider--collapsed]="platformNavCollapsed()"
+          />
+        }
         <a
           sat-platform-nav-menu-item
           [attr.data-nav-id]="item.id"
@@ -42,7 +48,7 @@
   </sat-platform-nav>
 
   <sat-platform-nav-main-content>
-    <sat-app-header>
+    <sat-app-header [class.search-expanded]="searchExpanded()">
       <button
         type="button"
         mat-icon-button
@@ -79,16 +85,45 @@
             placeholder=" "
             [value]="globalSearchTerm()"
             (focus)="onGlobalSearchFocus()"
+            (click)="!searchExpanded() && onGlobalSearchFocus()"
             (input)="onGlobalSearchInput($any($event.target).value)"
+            (keydown.enter)="submitGlobalSearch()"
+            (keydown.escape)="closeSearch()"
           />
           <label
             class="header-search-label"
             [class.header-search-label--caption]="globalSearchTerm().trim().length > 0"
             for="global-header-search-input"
           >
-            {{ 'shell.search.placeholder' | translate }}
+            {{
+              (searchExpanded() ? 'search.workspace.search' : 'shell.search.placeholder')
+                | translate
+            }}
           </label>
         </div>
+        @if (searchExpanded()) {
+          <div class="header-search-actions">
+            <button
+              mat-button
+              type="button"
+              (click)="clearSearchKeywords()"
+              [disabled]="!globalSearchTerm()"
+            >
+              {{ 'search.workspace.clear-search' | translate }}
+            </button>
+            <button mat-flat-button type="button" (click)="submitGlobalSearch()">
+              {{ 'search.workspace.search' | translate }}
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              (click)="closeSearch()"
+              [attr.aria-label]="'search.workspace.close-search' | translate"
+            >
+              <mat-icon svgIcon="x_large" />
+            </button>
+          </div>
+        }
 
         @if (globalSearchOpen()) {
           <div class="header-search-dropdown">

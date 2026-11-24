@@ -46,6 +46,7 @@ const AGGREGATIONS: SearchAggregations = {
   imports: [NxsSearchFiltersComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-search-filters
+    [layout]="layout()"
     [(filters)]="filters"
     [aggregations]="aggregations()"
     [optionLabels]="labels()"
@@ -54,6 +55,7 @@ const AGGREGATIONS: SearchAggregations = {
   />`,
 })
 class HostComponent {
+  readonly layout = signal<'vertical' | 'horizontal'>('vertical');
   readonly filters = signal<NxsSearchFilters>(NXS_EMPTY_SEARCH_FILTERS);
   readonly aggregations = signal<SearchAggregations>(AGGREGATIONS);
   readonly labels = signal<NxsFacetLabels>({});
@@ -68,6 +70,67 @@ describe('NxsSearchFiltersComponent', () => {
   let getTagSuggestions: ReturnType<typeof vi.fn>;
 
   const el = () => fixture.nativeElement as HTMLElement;
+
+  const menuTrigger = (prefix: string) =>
+    [...el().querySelectorAll<HTMLButtonElement>('.filter-trigger')].find((button) =>
+      button.textContent?.trim().startsWith(prefix),
+    )!;
+  const panel = () => document.querySelector<HTMLElement>('.filter-panel')!;
+
+  it('keeps date multi-selection and displays the selected range in its trigger', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('Date').click();
+    await render();
+    panel().querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    await render();
+    expect(host.filters().modified).toEqual(['last24h']);
+    expect(menuTrigger('Date').textContent).toContain('Last 24h');
+    menuTrigger('Properties').click();
+    await render();
+    expect(document.querySelectorAll('.filter-panel')).toHaveLength(1);
+    expect(panel().textContent).toContain('Nature');
+    expect(host.filters().modified).toEqual(['last24h']);
+  });
+
+  it('stages Files until Apply and discards a draft when closed', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('In:').click();
+    await render();
+    panel().querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click();
+    await render();
+    expect(host.filters().filesOnly).toBeFalsy();
+    panel().querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
+    await render();
+    menuTrigger('In:').click();
+    await render();
+    expect(panel().querySelectorAll<HTMLInputElement>('input[type="radio"]')[0].checked).toBe(true);
+    panel().querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click();
+    await render();
+    [...panel().querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Apply')!
+      .click();
+    await render();
+    expect(host.filters().filesOnly).toBe(true);
+    expect(menuTrigger('In:').textContent).toContain('Files');
+    expect(document.querySelector('.filter-panel')).toBeNull();
+  });
+
+  it('restores the latest trigger after switching panels and closing with Escape', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').click();
+    await render();
+    const coverage = menuTrigger('Coverage');
+    const focus = vi.spyOn(coverage, 'focus');
+    coverage.click();
+    await render();
+    panel().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await render();
+    expect(document.querySelector('.filter-panel')).toBeNull();
+    expect(focus).toHaveBeenCalled();
+  });
 
   async function render(): Promise<void> {
     fixture.detectChanges();

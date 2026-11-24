@@ -15,6 +15,31 @@
         {{ 'satori-components.pager.range' | translate: { first: first(), last: last() } }}
       }
     </span>
+    @if (pageSizeOptions().length) {
+      <span>{{ 'satori-components.pager.page-size' | translate }}</span>
+      <mat-select
+        class="nxs-pager__size"
+        [value]="pageSize()"
+        [disabled]="disabled()"
+        [aria-label]="'satori-components.pager.page-size' | translate"
+        (selectionChange)="pageSizeChange.emit($event.value)"
+      >
+        @for (size of pageSizeOptions(); track size) {
+          <mat-option [value]="size">{{ size }}</mat-option>
+        }
+      </mat-select>
+    }
+    @if (showEdges()) {
+      <button
+        mat-icon-button
+        type="button"
+        [disabled]="!canPrevious()"
+        [attr.aria-label]="'satori-components.pager.first' | translate"
+        (click)="pageChange.emit(0)"
+      >
+        <span aria-hidden="true">«</span>
+      </button>
+    }
     <button
       mat-icon-button
       type="button"
@@ -37,5 +62,16 @@
     >
       <mat-icon class="nxs-pager__chevron" aria-hidden="true" svgIcon="chevron_right" />
     </button>
+    @if (showEdges() && knownTotal() !== null) {
+      <button
+        mat-icon-button
+        type="button"
+        [disabled]="disabled() || pageIndex() >= lastPage()"
+        [attr.aria-label]="'satori-components.pager.last' | translate"
+        (click)="pageChange.emit(lastPage())"
+      >
+        <span aria-hidden="true">»</span>
+      </button>
+    }
   </nav>
 }

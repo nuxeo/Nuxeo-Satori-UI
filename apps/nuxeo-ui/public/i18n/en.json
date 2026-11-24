@@ -514,7 +514,9 @@
       "retry": "Retry"
     },
     "placeholder-page": {
-      "coming-soon": "Coming soon"
+      "coming-soon": "Coming soon",
+      "configurable-view-description": "Your own configured view of the repository.",
+      "configurable-view-message": "This section is a placeholder until its design is agreed."
     },
     "preset": {
       "badge": "Preset: {{ label }}"
@@ -666,7 +668,7 @@
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
-      "filtering": "Filtering\u2026",
+      "filtering": "Filtering…",
       "from": "From",
       "granted-by": "Granted by",
       "if-you-want-to-explicitly-control": "If you want to explicitly control the access to this document you can block the permissions inheritance. Any change made on parent document will not affect the access conditions to this document. You and the administrators will be added to local permissions.",
@@ -1683,12 +1685,13 @@
       "clipboard": "Clipboard",
       "collections": "Collections",
       "dashboard": "Dashboard",
-      "expired-queue": "Expired Queue",
+      "expired-queue": "Expired Queues",
       "favorites": "Favorites",
       "knowledge-discovery": "Knowledge Discovery",
       "personal-space": "Personal Space",
       "recently-viewed": "Recently viewed",
-      "search-filters": "Search filters",
+      "search-filters": "Search Filters",
+      "configurable-view": "User’s Configurable View",
       "settings": "Settings",
       "tasks": "Tasks",
       "trash": "Trash"
@@ -2131,7 +2134,10 @@
       "past-end": "No more items",
       "previous": "Previous page",
       "range": "{{ first }}–{{ last }}",
-      "range-of": "{{ first }}–{{ last }} of {{ total }}"
+      "range-of": "{{ first }}–{{ last }} of {{ total }}",
+      "page-size": "Items per page",
+      "first": "First page",
+      "last": "Last page"
     },
     "permissions-panel": {
       "add": "Add",
@@ -2512,7 +2518,39 @@
     "switch-to-list-view": "Switch to List view",
     "switch-to-queue-view": "Switch to Queue view",
     "switch-to-table-view": "Switch to Table View",
-    "view-query": "View Query"
+    "view-query": "View Query",
+    "workspace": {
+      "search": "Search",
+      "ask-agent": "Ask Agent",
+      "keywords": "Keywords",
+      "clear-search": "Clear",
+      "filter-set": "Filter set",
+      "default": "Default",
+      "save-search": "Save Search",
+      "reset": "Reset",
+      "advanced-filters": "Advanced Filters",
+      "question": "Question",
+      "clear-ask": "Clear Ask",
+      "close-search": "Close search",
+      "properties": "Properties",
+      "people": "People",
+      "date": "Date",
+      "categories": "Categories",
+      "location": "Location",
+      "in": "In",
+      "files-folders": "Files and folders",
+      "files": "Files",
+      "search-in": "Search in",
+      "apply": "Apply",
+      "logic": "Logic",
+      "logic-unavailable": "Additional logic options are not available. Existing filter matching is unchanged.",
+      "any-time": "Any time",
+      "selection-scope": "Selection scope",
+      "select-page": "Select this page",
+      "select-all": "Select all results",
+      "clear-selection": "Clear selection",
+      "selection-failed": "Could not select all results. Please try again."
+    }
   },
   "settings": {
     "authorized-applications": {
@@ -2784,7 +2822,7 @@
     "overdue": "Overdue",
     "search": {
       "no-results": "No results found",
-      "placeholder": "Search documents, users or groups",
+      "placeholder": "Keywords",
       "searching": "Searching…"
     },
     "settings": {
