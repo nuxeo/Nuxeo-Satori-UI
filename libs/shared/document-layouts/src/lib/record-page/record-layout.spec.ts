@@ -304,7 +304,111 @@ describe('readRecordLayout', () => {
           { rules: known },
         ),
       ).toEqual({
-        invalid: 'cards[0]: a card has one of "fields", "related", "timeline" or "comments"',
+        invalid:
+          'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external"',
+      });
+    });
+  });
+
+  describe('a card from another system', () => {
+    const payment = (fields: unknown[], more: Record<string, unknown> = {}) => ({
+      version: 2,
+      cards: [
+        { id: 'claim', fields: ['dc:title'] },
+        {
+          id: 'payment',
+          label: 'Payment',
+          external: { connector: 'payers.claimPayments', fields, ...more },
+        },
+      ],
+    });
+
+    it('reads its connector and its fields, by name or written out', () => {
+      const file = read(
+        payment([
+          'paymentStatus',
+          {
+            name: 'paidAmount',
+            labelKey: 'payers.claim.paid',
+            widget: 'currency',
+            parameters: { currency: 'USD' },
+            visibleWhen: 'app.rules.canWrite',
+          },
+        ]),
+      );
+      expect(file.problems).toEqual([]);
+      expect(file.cards[1]).toMatchObject({
+        id: 'payment',
+        fields: [],
+        related: null,
+        timeline: null,
+        comments: null,
+        external: {
+          connector: 'payers.claimPayments',
+          fields: [
+            {
+              place: 'cards[1].external.fields[0]',
+              name: 'paymentStatus',
+              label: { keys: [], fallback: 'Payment status' },
+              widget: null,
+              parameters: {},
+              visibleWhen: null,
+            },
+            {
+              place: 'cards[1].external.fields[1]',
+              name: 'paidAmount',
+              label: { keys: ['payers.claim.paid'], fallback: 'Paid amount' },
+              widget: 'currency',
+              parameters: { currency: 'USD' },
+              visibleWhen: 'app.rules.canWrite',
+            },
+          ],
+        },
+      });
+      expect(file.cards[0].external).toBeNull();
+    });
+
+    it('leaves out one field a finding or an unanswerable rule names, and a name shown already', () => {
+      const file = read(
+        payment([
+          'paymentStatus',
+          { name: 'paidOn', widget: 'calendar' },
+          { name: 'paidAmount', visibleWhen: 'app.rules.isNote' },
+          { name: 'policyNumber', widget: 'rich-text' },
+          { name: 'paymentStatus', label: 'Again' },
+        ]),
+      );
+      expect(file.cards[1].external?.fields.map((field) => field.name)).toEqual(['paymentStatus']);
+      expect(file.problems).toEqual([
+        'cards[1].external.fields[1].widget: the widget "calendar" is not registered; cards[1].external.fields[1] left out',
+        'cards[1].external.fields[3].widget: the widget "rich-text" does not show a value from another system: one of text, long-text, number, currency, percent, date, relative-date, boolean, status-badge does; cards[1].external.fields[3] left out',
+        'cards[1].external.fields[2] names the rule "app.rules.isNote", which this build does not register; left out',
+        'cards[1].external.fields[4] shows paymentStatus again; that field left out',
+      ]);
+    });
+
+    it('leaves out the card for a key of its own this build lacks, or when no field is left', () => {
+      const unknownKey = read(payment(['paymentStatus'], { cache: 60 }));
+      expect(unknownKey.cards.map((card) => card.id)).toEqual(['claim']);
+      expect(unknownKey.problems).toEqual([
+        'cards[1].external.cache: "cache" is not a key version 2 has; cards[1] left out',
+      ]);
+      const none = read(payment([{ name: 'paidOn', widget: 'calendar' }]));
+      expect(none.cards.map((card) => card.id)).toEqual(['claim']);
+      expect(none.problems).toContain('cards[1] has no field this build can show; left out');
+    });
+
+    it('refuses the whole file for an address in the card, as a structural error', () => {
+      expect(
+        readRecordLayout(
+          payment([{ name: 'paymentStatus', label: 'https://core.example.invalid' }]),
+          {
+            rules: known,
+          },
+        ),
+      ).toEqual({
+        invalid:
+          "cards[1].external.fields[0].label: an address is never written in a layout: a connector's address is the server's configuration",
       });
     });
   });

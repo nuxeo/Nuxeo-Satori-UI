@@ -436,16 +436,47 @@ describe('app-definition validate', () => {
       ).toBe(0);
     });
 
+    it("holds a card from another system to the connectors' allow-lists the deployment gives", () => {
+      const claim = {
+        version: 2,
+        cards: [
+          {
+            id: 'payment',
+            label: 'Payment',
+            external: {
+              connector: 'payers.claimPayments',
+              fields: ['paymentStatus', 'bankAccount'],
+            },
+          },
+        ],
+      };
+      const root = packageWith({ 'layouts/Claim/view.layout.json': claim });
+      // Without the server's connectors, the names are held to their form only.
+      expect(run(['validate', root]).code).toBe(0);
+      const deployment = packageWith({
+        'registered.json': { connectors: { 'payers.claimPayments': ['paymentStatus', 'paidOn'] } },
+      });
+      const held = run(['validate', root, '--registered', join(deployment, 'registered.json')]);
+      expect(held.code).toBe(1);
+      expect(held.out).toContain(
+        'cards[0].external.fields[1]: the connector "payers.claimPayments" does not return the field "bankAccount" [unknown]',
+      );
+    });
+
     it('exits 2 for an allow-list or a registered file of the wrong shape', () => {
       const root = packageWith({
         'extra.json': { operations: [], chains: [] },
         'numbers.json': { operations: [1] },
         'registered.json': { widgets: ['map'] },
+        'connectors-list.json': { connectors: ['payers.claimPayments'] },
+        'connectors-fields.json': { connectors: { 'payers.claimPayments': 'paymentStatus' } },
       });
       for (const [option, file, message] of [
         ['--allow-list', 'extra.json', 'an allow-list is'],
         ['--allow-list', 'numbers.json', 'an allow-list is'],
         ['--registered', 'registered.json', 'a registered file is'],
+        ['--registered', 'connectors-list.json', 'a registered file is'],
+        ['--registered', 'connectors-fields.json', 'a registered file is'],
       ]) {
         const { code, err } = run(['validate', root, option, join(root, file)]);
         expect(code).toBe(2);

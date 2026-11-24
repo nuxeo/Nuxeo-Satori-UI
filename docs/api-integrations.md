@@ -2301,6 +2301,45 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ---
 
+## 37. Record Page — a Record of Another System, through a Connector
+
+| Field           | Value                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `ConnectorRecordService` (`libs/shared/document-layouts/src/lib/record-page/connector-record.service.ts`)                              |
+| **Method**      | `read(connector, uid)`, once for each `external` card drawn, and again when the record is reloaded with another modification date      |
+| **HTTP Method** | `POST`                                                                                                                                 |
+| **Endpoint**    | `/nuxeo/api/v1/automation/Connector.Read`                                                                                              |
+| **Server side** | `ReadConnectorOperation` in `nuxeo-agentic-connectors` (its [README](../nuxeo-agentic-connectors/README.md)), not installed by default |
+
+**Request Payload:** the open record and the connector's id, and nothing else. The address of the
+other system, the key, the credential and the fields that may come back are the connector's, on
+the server.
+
+```json
+{ "params": { "connector": "payers.claimPayments" }, "context": {}, "input": "doc:<uid>" }
+```
+
+**Response (200 OK):** `status` is `found`, `not-found` (the other system has no such record) or
+`no-key` (the record holds no key the connector can send, so nothing was asked). `fields` holds the
+connector's allowed fields that have a text, number or boolean value:
+
+```json
+{
+  "connector": "payers.claimPayments",
+  "status": "found",
+  "fields": { "paymentStatus": "Paid", "paidAmount": 412.5 }
+}
+```
+
+**Errors:** the operation throws `403` without the connector's permission on the record (`Read` by
+default), `404` for an unknown connector, `503` when the server's address or credential for it is
+missing, `502` when the other system refuses, redirects, answers too much or not JSON, and `504`
+when it does not answer in time. The card shows the error state, with Retry for all but `401`,
+`403` and `404`. That Automation answers with these statuses is not checked on a server yet; an
+answer of another shape is treated as a `500`.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

@@ -682,6 +682,21 @@ re-exports the library.
 
 ---
 
+## ConnectorRecordService (`libs/shared/document-layouts/src/lib/record-page/connector-record.service.ts`)
+
+A record of another system for an open record, through a connector of `nuxeo-agentic-connectors`
+(`docs/business-apps/layout-v2.md`, section 7). Internal to the library, for the record page's
+`external` card.
+
+```typescript
+read(connector: string, uid: string): Observable<ConnectorAnswer>
+  // POST /automation/Connector.Read, { params: { connector }, input: 'doc:<uid>' }
+  // { connector, status: 'found' | 'not-found' | 'no-key', fields: { <name>: text | number | boolean } }
+  // an answer of another shape errors with status 500; the server's errors pass through
+```
+
+---
+
 ## ArenderService (`arender.service.ts`)
 
 ```typescript

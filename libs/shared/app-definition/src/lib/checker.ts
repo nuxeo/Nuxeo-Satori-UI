@@ -694,6 +694,7 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
     value,
     computation,
     field,
+    widget,
     actions,
     list,
   };

@@ -1,0 +1,58 @@
+@let current = state();
+<div class="record-external" [attr.aria-busy]="current.status === 'loading'">
+  @switch (current.status) {
+    @case ('failed') {
+      <nxs-error-state
+        [status]="current.error"
+        [heading]="'document-layouts.external.failed' | translate"
+        [headingLevel]="stateHeadingLevel()"
+        [retryable]="current.error === 500"
+        (retry)="retry()"
+      />
+    }
+    @case ('loaded') {
+      @if (fields().length === 0) {
+        <nxs-empty-state
+          icon="search_off"
+          [heading]="emptyHeading() | translate"
+          [headingLevel]="stateHeadingLevel()"
+        />
+      } @else {
+        <dl class="record-external__fields">
+          @for (field of fields(); track field.place) {
+            <div class="record-external__field" [attr.data-field]="field.name">
+              <dt class="record-external__label">{{ field.label }}</dt>
+              <dd class="record-external__value">
+                @switch (field.value.kind) {
+                  @case ('text') {
+                    {{ field.value.text }}
+                  }
+                  @case ('multiline') {
+                    <span class="record-external__multiline">{{ field.value.text }}</span>
+                  }
+                  @case ('flag') {
+                    {{
+                      (field.value.flag ? 'document-layouts.yes' : 'document-layouts.no')
+                        | translate
+                    }}
+                  }
+                  @case ('badge') {
+                    <lib-extension-outlet
+                      [componentId]="statusTagId"
+                      [componentInputs]="field.tag"
+                    />
+                  }
+                }
+              </dd>
+            </div>
+          }
+        </dl>
+      }
+    }
+    @default {
+      <div class="record-external__loading">
+        <nxs-spinner diameter="32" [label]="'document-layouts.external.loading' | translate" />
+      </div>
+    }
+  }
+</div>

@@ -21,7 +21,9 @@
  *   `--mode` names it.
  * - **Operations** are refused unless `--allow-list` names a file that lists them (decision 3).
  * - **What the deployment registers in code**, a customer's own rules, actions and pages, and the
- *   domain modules it has, come from `--registered`.
+ *   domain modules it has, come from `--registered`. So do the connectors its server registers,
+ *   `"connectors": { "<id>": ["<field>", ...] }`: given them, an `external` card's fields are held
+ *   to their connector's allow-list; without them, to the form of a name only.
  * - **`app.json`'s platform range** is held to `--platform`, when it is given.
  * - **The server's content model**, from `--model`, holds each version 2 layout to the document
  *   type its path names: its properties, and the property types its widgets show. The file is
@@ -449,11 +451,17 @@ const REGISTERED_KEYS = [
   'pages',
 ] as const;
 
+/** A list of ids, none of them empty. */
+const isIdList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((id) => typeof id === 'string' && id !== '');
+
 /**
  * What a deployment registers in code beyond the platform's own, from
- * `{ "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }`, each a list of ids, or
- * what is wrong. `actions` are the others a deployment registers in code, in any other slot.
- * `pages` are the menu entries of its own a menu may open, by ID.
+ * `{ "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }`, each a list of ids, and
+ * `"connectors"`, each connector's id with the list of its fields, or what is wrong. `actions` are
+ * the others a deployment registers in code, in any other slot. `pages` are the menu entries of its
+ * own a menu may open, by ID. `connectors` are those its server registers
+ * (`nuxeo-agentic-connectors`), each with the fields its allow-list returns.
  */
 function readRegistered(path: string): Registries | string {
   let content: unknown;
@@ -463,10 +471,16 @@ function readRegistered(path: string): Registries | string {
     return `cannot be read as JSON: ${(error as Error).message}`;
   }
   const wrong =
-    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }, each a list of ids';
+    'a registered file is { "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }, each a list of ids, and "connectors", { "<id>": [fields] }';
   if (!isRecord(content)) return wrong;
   const lists: Partial<Record<(typeof REGISTERED_KEYS)[number], string[]>> = {};
+  let connectors: Record<string, string[]> | undefined;
   for (const [key, value] of Object.entries(content)) {
+    if (key === 'connectors') {
+      if (!isRecord(value) || !Object.values(value).every(isIdList)) return wrong;
+      connectors = value as Record<string, string[]>;
+      continue;
+    }
     if (
       !REGISTERED_KEYS.includes(key as (typeof REGISTERED_KEYS)[number]) ||
       !Array.isArray(value) ||
@@ -475,7 +489,7 @@ function readRegistered(path: string): Registries | string {
       return wrong;
     lists[key as (typeof REGISTERED_KEYS)[number]] = value as string[];
   }
-  return withRegistered(PACKAGED_REGISTRIES, lists);
+  return withRegistered(PACKAGED_REGISTRIES, { ...lists, ...(connectors ? { connectors } : {}) });
 }
 
 /**

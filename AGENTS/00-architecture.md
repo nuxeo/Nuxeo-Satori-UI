@@ -106,6 +106,8 @@ libs/
 
 business-apps/
   packages/                      ← App definition packages the package pipeline builds; payers-claims-demo is the Payers kit, phase 0's and phase 1's demo; contracts-demo is a second app, written with the app builder skill and not installed yet
+
+nuxeo-agentic-connectors/        ← Maven module, the connectors add-on (business apps, phase 7, first slice): the `Connector.Read` operation reads one record of a system of record by a document's key, after the reader's permission, and returns the allowed fields; layout version 2's `external` card shows it. Not installed yet
 ```
 
 ---
