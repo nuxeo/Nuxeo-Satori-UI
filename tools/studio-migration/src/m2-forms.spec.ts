@@ -505,21 +505,26 @@ describe('the checks on task forms, tabs and layout blocks', () => {
   });
 
   /** The input with one of the harness's mutations applied to its conversion. */
-  const mutated = (name: string): HarnessInput => {
+  const mutated = (name: string, on: HarnessInput = input): HarnessInput => {
     const mutation = MUTATIONS.find((candidate) => candidate.name === name);
     if (!mutation) throw new Error(name);
-    return { ...input, conversion: mutation.apply(input.conversion).conversion };
+    return { ...on, conversion: mutation.apply(on.conversion).conversion };
   };
 
+  /** An input no other test shares: its own package, conversion and catalogue. */
+  const fresh = (): HarnessInput => ({ ...prepare(), catalogue: loadCatalogue() });
+
   // Every other test here asks one check what it finds, and runs that check alone: it must be the
-  // check the ten give. Each check runs alone first, so one that changed its input would show.
+  // check the ten give. The checks run alone on an input of their own, last first, and the ten on
+  // another, in order. A check that changed what another check reads would then show, whichever
+  // of the two runs first: on one input both sides would see the change.
   it.each([
-    ['the conversion', () => input],
-    ['a conversion check 5 fails', () => mutated('drop-tab-rule')],
+    ['the conversion', (subject: HarnessInput) => subject],
+    ['a conversion check 5 fails', (subject: HarnessInput) => mutated('drop-tab-rule', subject)],
   ])('give each check alone as the ten give it, on %s', (_, given) => {
-    const subject = given();
-    const alone = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((number) => runCheck(subject, number));
-    expect(alone).toEqual(runHarness(subject).checks);
+    const subject = given(fresh());
+    const alone = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((number) => runCheck(subject, number));
+    expect(alone.reverse()).toEqual(runHarness(given(fresh())).checks);
     expect(runCheck(subject, 11)).toBeUndefined();
   });
 
