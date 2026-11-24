@@ -1,0 +1,58 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "contract",
+      "labelKey": "contracts.card.contract.contract",
+      "fields": [
+        { "field": "contract:number", "required": true },
+        { "field": "dc:title", "labelKey": "contracts.field.title", "required": true },
+        "contract:counterparty",
+        "contract:category",
+        { "field": "contract:status", "required": true },
+        {
+          "field": "contract:terminationReason",
+          "widget": "long-text",
+          "parameters": { "rows": 3 },
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "contract:status" }, "Terminated"]
+          }
+        },
+        { "field": "contract:owner", "widget": "user", "labelKey": "contracts.field.owner" }
+      ]
+    },
+    {
+      "id": "terms",
+      "labelKey": "contracts.card.contract.terms",
+      "fields": [
+        {
+          "field": "contract:value",
+          "widget": "currency",
+          "labelKey": "contracts.field.value",
+          "parameters": { "currency": { "field": "contract:currency" } }
+        },
+        "contract:currency",
+        "contract:start",
+        {
+          "field": "contract:end",
+          "checks": [
+            {
+              "type": "core.notBefore",
+              "parameters": [{ "field": "contract:start" }],
+              "labelKey": "contracts.check.endBeforeStart"
+            }
+          ]
+        },
+        { "field": "contract:noticeDays", "labelKey": "contracts.field.noticeDays" },
+        { "field": "contract:autoRenew", "labelKey": "contracts.field.autoRenew" }
+      ]
+    },
+    {
+      "id": "notes",
+      "labelKey": "contracts.card.contract.notes",
+      "fields": [{ "field": "contract:notes", "widget": "long-text" }]
+    }
+  ]
+}

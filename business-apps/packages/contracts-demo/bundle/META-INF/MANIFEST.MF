@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: contracts-demo
+Bundle-SymbolicName: nuxeo.config.contracts-demo;singleton:=true
+Bundle-Version: 0.1.0
+Nuxeo-Component: OSGI-INF/contracts-demo-model.xml,OSGI-INF/contracts-demo-config.xml
