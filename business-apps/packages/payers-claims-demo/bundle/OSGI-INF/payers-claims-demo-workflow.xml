@@ -58,6 +58,16 @@
       </operation>
     </chain>
 
+    <!-- Not started: the claim is not submitted, so it is in review, held or decided already. -->
+    <chain id="PayersClaimReview.RefuseStart">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Review refused</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">Only a submitted claim is reviewed. The claim is unchanged, and this workflow ends.</param>
+      </operation>
+    </chain>
+
     <!-- Determination refused: the claim is left as it is, and the step opens again. Recorded in
          the claim's history, so a refusal a client never showed is still seen. -->
     <chain id="PayersClaimReview.RefuseDenial">
@@ -164,15 +174,17 @@
     </chain>
   </extension>
 
-  <!-- Who may start it, and on what: someone who may change a claim, on a claim not yet decided.
+  <!-- Who may start it, and on what: someone who may change a claim, on a submitted claim, which
+       starting it puts in review, so a claim whose review runs is not offered a second one.
        Checked by the routing service when a workflow is started through the REST API
-       (canCreateInstance), and when it lists the workflows a document may start. -->
+       (canCreateInstance), and when it lists the workflows a document may start. The start node
+       refuses a claim that is not submitted too, for a start that skips this filter. -->
   <extension target="org.nuxeo.ecm.platform.actions.ActionService" point="filters">
     <filter id="filter@PayersClaimReview">
       <rule grant="true">
         <permission>ReadWrite</permission>
         <type>Claim</type>
-        <condition>#{currentDocument.currentLifeCycleState == 'submitted' or currentDocument.currentLifeCycleState == 'inReview' or currentDocument.currentLifeCycleState == 'pended'}</condition>
+        <condition>#{currentDocument.currentLifeCycleState == 'submitted'}</condition>
       </rule>
       <rule grant="false">
         <condition>document.isImmutable()</condition>

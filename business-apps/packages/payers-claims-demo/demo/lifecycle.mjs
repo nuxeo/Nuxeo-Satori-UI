@@ -1,7 +1,7 @@
 /**
  * The claim lifecycle, `payersClaim`, as the stand-in model contributes it
- * (`bundle/OSGI-INF/payers-claims-demo-model.xml`): read from that file, so that the seed, its
- * controls and the workflow's demo follow the lifecycle the server has, not a copy of it.
+ * (`bundle/OSGI-INF/payers-claims-demo-model.xml`): read from that file, so that the seed and its
+ * controls follow the lifecycle the package gives a server, not a copy of it.
  *
  * A lifecycle's states are claim:status's values, and the seed brings each claim's state to its
  * status along the fewest transitions (`pathBetween`).

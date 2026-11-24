@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Start: a submitted claim is put in review, through the Payers lifecycle's review transition;
-     one already in review, or pended, goes to the adjuster as it is. The first transition that
-     holds is the one followed. -->
+<!-- Start: a submitted claim is put in review, through the Payers lifecycle's review transition,
+     and goes to the adjuster. A claim that is not submitted is not determined: the workflow ends,
+     with the refusal in the claim's history. So a claim is determined once, and a second workflow
+     started on a claim whose first one runs, past the availability filter, changes nothing. The
+     first transition that holds is the one followed. -->
 <document repository="default" id="start">
   <system>
     <type>RouteNode</type>
@@ -31,11 +33,11 @@
         <targetId><![CDATA[determine]]></targetId>
       </transition>
       <transition>
-        <name><![CDATA[inReview]]></name>
-        <label><![CDATA[Already in review]]></label>
+        <name><![CDATA[notSubmitted]]></name>
+        <label><![CDATA[Refused: the claim is not submitted]]></label>
         <condition><![CDATA[true]]></condition>
-        <chain><![CDATA[]]></chain>
-        <targetId><![CDATA[determine]]></targetId>
+        <chain><![CDATA[PayersClaimReview.RefuseStart]]></chain>
+        <targetId><![CDATA[end]]></targetId>
       </transition>
     </rnode:transitions>
     <rnode:escalationRules/>

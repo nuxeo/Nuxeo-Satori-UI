@@ -134,8 +134,12 @@ async function until(probe, timeout = 20_000) {
   }
 }
 
-/** A REST call from Node, as `username`: the supervisor's channel, which page.request is not. */
-async function restAs(baseUrl, username, password, method, path, json) {
+/**
+ * A REST call from Node, as `username`, with Basic authentication and no cookie: the adjuster's
+ * and the supervisor's channels. Not page.request, which shares the browser's cookie jar, so that
+ * once the browser has signed in as the supervisor it could be answered as them.
+ */
+async function restAs(baseUrl, username, password, method, path, json, headers = {}) {
   try {
     const response = await fetch(`${baseUrl}/nuxeo/api/v1${path}`, {
       method,
@@ -144,6 +148,7 @@ async function restAs(baseUrl, username, password, method, path, json) {
         properties: '*',
         Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
         ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...headers,
       },
       body: json === undefined ? undefined : JSON.stringify(json),
       redirect: 'manual',
@@ -162,24 +167,14 @@ async function restAs(baseUrl, username, password, method, path, json) {
   }
 }
 
-/** The run's own user's REST channel: page.request, which the identity guard judges as the run. */
-async function rest(page, baseUrl, method, path, json) {
-  try {
-    const response = await page.request.fetch(`${baseUrl}/nuxeo/api/v1${path}`, {
-      method,
-      headers: {
-        Accept: 'application/json',
-        properties: '*',
-        ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      data: json === undefined ? undefined : JSON.stringify(json),
-      timeout: 30_000,
-    });
-    const body = await response.json().catch(unread);
-    return { status: response.status(), body };
-  } catch (error) {
-    return { status: String(error?.message ?? error), body: null };
-  }
+/**
+ * A served file as the app reads it. A layout comes in the servlet's envelope, as `config:dev`
+ * writes it too: its `content`. The task forms and the labels come as the package writes them.
+ */
+function unwrap(body) {
+  return body?.format === 'nuxeo-agentic-ui-config/1' && body.layer === 'layout'
+    ? body.content
+    : body;
 }
 
 /** The task form drawn in the task panel, from a layout file of version 2, has settled. */
@@ -253,7 +248,9 @@ export default async function run(page, h) {
       USERS.some((user) => user.username === adjuster && user.groups.includes('claims-adjusters')),
     `NUXEO_USER is ${adjuster}: set it to ${WORKFLOW_ADJUSTER}, and NUXEO_PASS to the demo password`,
   );
-  const me = (await rest(page, h.baseUrl, 'GET', '/me')).body;
+  const asAdjuster = (method, path, json, headers) =>
+    restAs(h.baseUrl, adjuster, adjusterPassword, method, path, json, headers);
+  const me = (await asAdjuster('GET', '/me')).body;
   const myGroups = (me?.extendedGroups ?? []).map((group) => group.name);
   h.requirePrecondition(
     'the server has the adjuster, in claims-adjusters and not claims-supervisors',
@@ -283,36 +280,37 @@ export default async function run(page, h) {
       'run demo/seed.mjs with the same PAYERS_DEMO_PASSWORD',
   );
 
-  const schema = await rest(page, h.baseUrl, 'GET', `/config/schemas/var_${MODEL}_${DETERMINE}`);
+  const schema = await asAdjuster('GET', `/config/schemas/var_${MODEL}_${DETERMINE}`);
   h.requirePrecondition(
     'the kit 0.4.0 or later is installed: its determination variables are on the server',
     schema.status === 200,
     `GET /config/schemas/var_${MODEL}_${DETERMINE} answered ${schema.status}: install the kit (README)`,
   );
-  const folder = await rest(page, h.baseUrl, 'GET', `/path${CLAIMS_FOLDER}`);
-  const folderRights = await page.request
-    .get(`${h.baseUrl}/nuxeo/api/v1/path${CLAIMS_FOLDER}`, {
-      headers: { 'enrichers-document': 'permissions' },
-    })
-    .then((r) => (r.ok() ? r.json() : null))
-    .catch(unread);
+  const folder = await asAdjuster('GET', `/path${CLAIMS_FOLDER}`, undefined, {
+    'enrichers-document': 'permissions',
+  });
   h.requirePrecondition(
     'the seeded claims folder is there, and the adjuster may add claims to it',
     folder.status === 200 &&
-      (folderRights?.contextParameters?.permissions ?? []).includes('AddChildren'),
+      (folder.body?.contextParameters?.permissions ?? []).includes('AddChildren'),
     `GET /path${CLAIMS_FOLDER} answered ${folder.status}: run demo/seed.mjs against this server`,
   );
 
-  // What the dev server serves at /agentic-ui-config/ must be the kit's own task forms and labels:
-  // they are what the rest of this run asserts the forms were drawn from.
+  // What the dev server serves at /agentic-ui-config/ must be the kit's own task forms, labels and
+  // Claim page: they are what the rest of this run asserts the forms and the page were drawn from.
   const differing = [];
-  for (const path of [taskFile(DETERMINE), taskFile(SUPERVISOR), 'labels/en.json']) {
+  for (const path of [
+    taskFile(DETERMINE),
+    taskFile(SUPERVISOR),
+    'labels/en.json',
+    'layouts/Claim/view.layout.json',
+  ]) {
     const answer = await page.request.get(`${h.baseUrl}/agentic-ui-config/${path}`).catch(unread);
-    const content = answer?.ok() ? await answer.json().catch(unread) : null;
+    const content = answer?.ok() ? unwrap(await answer.json().catch(unread)) : null;
     if (!sameJson(content, kitFile(path))) differing.push(`${path} (${answer?.status()})`);
   }
   h.requirePrecondition(
-    "the dev server serves the kit's two task forms and its labels",
+    "the dev server serves the kit's two task forms, its labels and its Claim page",
     differing.length === 0,
     `not the kit's: ${differing.join(', ')}. Run the README's config:dev command, then restart ` +
       'the dev server',
@@ -321,7 +319,7 @@ export default async function run(page, h) {
   // ── Set up: the run's claims, each with the workflow started ───────────────────────────────
   await h.step('Set up: three claims of the run, each with the claims review workflow started');
   // An earlier run's claims, put away first: their workflows cancelled, and the claims trashed.
-  const leftovers = await rest(page, h.baseUrl, 'POST', '/automation/Repository.Query', {
+  const leftovers = await asAdjuster('POST', '/automation/Repository.Query', {
     params: {
       query:
         "SELECT * FROM Document WHERE ecm:primaryType = 'Claim' AND dc:description = " +
@@ -331,20 +329,24 @@ export default async function run(page, h) {
   });
   const putAway = [];
   for (const claim of leftovers.body?.entries ?? []) {
-    const running = await rest(page, h.baseUrl, 'GET', `/id/${claim.uid}/@workflow`);
-    for (const workflow of running.body?.entries ?? [])
-      if (workflow.state === 'running')
-        await rest(page, h.baseUrl, 'DELETE', `/workflow/${workflow.id}`);
-    const trashed = await rest(page, h.baseUrl, 'POST', '/automation/Document.Trash', {
+    const running = await asAdjuster('GET', `/id/${claim.uid}/@workflow`);
+    if (running.status !== 200) putAway.push(`${claim.path}'s workflows (${running.status})`);
+    for (const workflow of running.body?.entries ?? []) {
+      if (workflow.state !== 'running') continue;
+      const cancelled = await asAdjuster('DELETE', `/workflow/${workflow.id}`);
+      if (typeof cancelled.status !== 'number' || cancelled.status >= 300)
+        putAway.push(`${claim.path}'s workflow ${workflow.id} (${cancelled.status})`);
+    }
+    const trashed = await asAdjuster('POST', '/automation/Document.Trash', {
       input: `doc:${claim.uid}`,
       params: {},
     });
     if (trashed.status !== 200) putAway.push(`${claim.path} (${trashed.status})`);
   }
   h.requirePrecondition(
-    "an earlier run's claims are put away",
+    "an earlier run's claims are put away: their workflows cancelled, and they trashed",
     leftovers.status === 200 && putAway.length === 0,
-    `could not trash ${putAway.join(', ') || `the earlier claims (${leftovers.status})`}`,
+    `could not put away ${putAway.join(', ') || `the earlier claims (${leftovers.status})`}`,
   );
   h.note(
     `${leftovers.body?.entries?.length ?? 0} claim(s) of an earlier run were put away: their ` +
@@ -362,7 +364,7 @@ export default async function run(page, h) {
     denied: { number: `CLAIM-WF-${runId}-3`, billedAmount: 2310 },
   };
   const read = (claim) =>
-    rest(page, h.baseUrl, 'GET', `/id/${claim.uid}`).then(({ body }) => ({
+    asAdjuster('GET', `/id/${claim.uid}`).then(({ body }) => ({
       state: body?.state ?? null,
       status: body?.properties?.['claim:status'] ?? null,
       allowedAmount: body?.properties?.['claim:allowedAmount'] ?? null,
@@ -374,7 +376,7 @@ export default async function run(page, h) {
    */
   const openTasks = async (claim) => {
     const asked = await asSupervisor('GET', `/id/${claim.uid}/@task`);
-    const mine = await rest(page, h.baseUrl, 'GET', `/id/${claim.uid}/@task`);
+    const mine = await asAdjuster('GET', `/id/${claim.uid}/@task`);
     if (![asked, mine].every(({ status, body }) => status === 200 && Array.isArray(body?.entries)))
       return null;
     const all = [...asked.body.entries, ...mine.body.entries];
@@ -389,7 +391,7 @@ export default async function run(page, h) {
   const actorsOf = (task) => (task?.actors ?? []).map((actor) => actor?.id ?? actor);
 
   for (const [name, claim] of Object.entries(claims)) {
-    const created = await rest(page, h.baseUrl, 'POST', `/path${CLAIMS_FOLDER}`, {
+    const created = await asAdjuster('POST', `/path${CLAIMS_FOLDER}`, {
       'entity-type': 'document',
       name: claim.number.toLowerCase(),
       type: 'Claim',
@@ -412,7 +414,7 @@ export default async function run(page, h) {
       `POST answered ${created.status}, state ${created.body?.state}`,
     );
     const started = claim.uid
-      ? await rest(page, h.baseUrl, 'POST', `/id/${claim.uid}/@workflow`, {
+      ? await asAdjuster('POST', `/id/${claim.uid}/@workflow`, {
           'entity-type': 'workflow',
           workflowModelName: MODEL,
           attachedDocumentIds: [claim.uid],
@@ -490,7 +492,8 @@ export default async function run(page, h) {
   await h.step('2. The supervisor approves it, and the claim moves to Approved');
   // As phase 1's demo signs in member services: declared first, the adjuster's cookie dropped,
   // every frame's Nuxeo request given the supervisor's header until the reload commits, then the
-  // app's own header, from the session it restored. page.request keeps the adjuster's.
+  // app's own header, from the session it restored. The REST reads below are Node's, as the
+  // adjuster or the supervisor, and share no cookie with the browser.
   await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(deferred);
   await h.signedInAs(supervisor, "the supervisor approves the adjuster's determination");
   const supervisorBasic = Buffer.from(`${supervisor}:${demoPassword}`).toString('base64');
@@ -558,12 +561,11 @@ export default async function run(page, h) {
     JSON.stringify(approved ?? (await read(claims.over))),
   );
   h.check('no task is left open on the claim', await noTaskOpen(claims.over));
-  const workflows = await rest(page, h.baseUrl, 'GET', `/id/${claims.over.uid}/@workflow`);
+  const workflow = await asAdjuster('GET', `/workflow/${claims.over.workflow}`);
   h.check(
-    "the claim's workflow is no longer running",
-    workflows.status === 200 &&
-      !(workflows.body?.entries ?? []).some((workflow) => workflow.state === 'running'),
-    JSON.stringify((workflows.body?.entries ?? []).map((workflow) => workflow.state)),
+    "the claim's workflow, read by its id, is done",
+    workflow.status === 200 && workflow.body?.state === 'done',
+    `GET /workflow answered ${workflow.status}, ${workflow.body?.state}`,
   );
   await h.goToDoc(claims.over.uid);
   await page
@@ -580,8 +582,8 @@ export default async function run(page, h) {
     String(shownStatus),
   );
   await h.screenshot('claim-approved', page.locator('.record-page__card').first());
-  // page.request runs as the adjuster on the shared cookie jar: a cookie the supervisor's session
-  // picked up would answer it as them at the step boundary.
+  // The browser's cookie jar is the identity guard's to judge: a cookie the supervisor's session
+  // picked up would answer the next step boundary as them.
   await page.context().clearCookies();
 
   // ── 3. A denial with no reason ─────────────────────────────────────────────────────────────
@@ -610,7 +612,7 @@ export default async function run(page, h) {
       (await reason.getAttribute('data-nxs-invalid').catch(unread)) === 'true',
   );
   await h.screenshot('denial-without-reason-refused');
-  const stillOpen = await rest(page, h.baseUrl, 'GET', `/task/${claims.denied.task?.id}`);
+  const stillOpen = await asAdjuster('GET', `/task/${claims.denied.task?.id}`);
   const deniedAfterForm = await read(claims.denied);
   h.check(
     'nothing was sent: the determination is still open, and the claim still in review',
@@ -622,7 +624,7 @@ export default async function run(page, h) {
 
   // ── The server's side: past the form ───────────────────────────────────────────────────────
   await h.step('The server refuses a denial with no reason, and denies one with a reason');
-  const bare = await rest(page, h.baseUrl, 'PUT', `/task/${claims.denied.task?.id}/submit`, {
+  const bare = await asAdjuster('PUT', `/task/${claims.denied.task?.id}/submit`, {
     'entity-type': 'task',
     id: claims.denied.task?.id,
     variables: { decision: 'deny' },
@@ -642,12 +644,28 @@ export default async function run(page, h) {
     reopened !== null,
     `PUT answered ${bare.status}`,
   );
+  // Which transition held: the denial's own refusal, by the comment its chain records, and not the
+  // one for no decision at all, which would mean the variables were never applied.
+  const refusal = await until(async () => {
+    const entries =
+      (await asAdjuster('GET', `/id/${claims.denied.uid}/@audit`)).body?.entries ?? [];
+    return entries.find(
+      (entry) =>
+        entry.eventId === 'Determination refused' &&
+        /A denial needs a reason/.test(entry.comment ?? ''),
+    );
+  });
+  h.check(
+    'the refusal is the denial\'s: "A denial needs a reason" in the claim\'s history',
+    Boolean(refusal),
+    JSON.stringify(refusal ?? null),
+  );
   h.note(
     `the server's answer to a denial with no reason: HTTP ${bare.status}. It refuses it by its ` +
       'route model, not by an error: the first transition holds, the claim stays in review, and ' +
       'the determination opens again',
   );
-  const withReason = await rest(page, h.baseUrl, 'PUT', `/task/${reopened?.id}/submit`, {
+  const withReason = await asAdjuster('PUT', `/task/${reopened?.id}/submit`, {
     'entity-type': 'task',
     id: reopened?.id,
     variables: { decision: 'deny', denialReason: 'Not a covered service (fictional).' },
@@ -658,23 +676,18 @@ export default async function run(page, h) {
   });
   h.check(
     'the same denial, with a reason, denies the claim, with nothing allowed',
-    withReason.status === 200 && denied?.status === 'denied' && Number(denied?.allowedAmount) === 0,
+    // Strictly 0: the claim was created with no allowed amount, which reads as null, not 0.
+    withReason.status === 200 && denied?.status === 'denied' && denied?.allowedAmount === 0,
     JSON.stringify({ answered: withReason.status, claim: denied ?? (await read(claims.denied)) }),
   );
 
   // ── At the threshold: no supervisor ────────────────────────────────────────────────────────
   await h.step(`A claim billed $${THRESHOLD}, at the threshold, skips the supervisor`);
-  const atThreshold = await rest(
-    page,
-    h.baseUrl,
-    'PUT',
-    `/task/${claims.atThreshold.task?.id}/submit`,
-    {
-      'entity-type': 'task',
-      id: claims.atThreshold.task?.id,
-      variables: { decision: 'approve', allowedAmount: claims.atThreshold.allowedAmount },
-    },
-  );
+  const atThreshold = await asAdjuster('PUT', `/task/${claims.atThreshold.task?.id}/submit`, {
+    'entity-type': 'task',
+    id: claims.atThreshold.task?.id,
+    variables: { decision: 'approve', allowedAmount: claims.atThreshold.allowedAmount },
+  });
   const approvedAlone = await until(async () => {
     const now = await read(claims.atThreshold);
     return now.state === 'approved' ? now : null;
@@ -690,10 +703,9 @@ export default async function run(page, h) {
   // The claims' histories, which the audit writes a moment after each change: the claim of step 1
   // went to a supervisor, and this one did not, by the event the route model's chain records.
   const events = async (claim) =>
-    (
-      (await rest(page, h.baseUrl, 'GET', `/id/${claim.uid}/@audit?category=Claim%20review`)).body
-        ?.entries ?? []
-    ).map((entry) => entry.eventId);
+    ((await asAdjuster('GET', `/id/${claim.uid}/@audit`)).body?.entries ?? []).map(
+      (entry) => entry.eventId,
+    );
   const overEvents = await until(async () => {
     const found = await events(claims.over);
     return found.includes('Claim approved') ? found : null;

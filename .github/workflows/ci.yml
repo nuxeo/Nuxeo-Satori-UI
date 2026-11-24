@@ -169,6 +169,12 @@ jobs:
           npm run docs:links-selftest
           npm run docs:storage-selftest
 
+      # The Payers kit's route model is a committed zip, which a server imports, written from the
+      # XML a reviewer reads. This fails a pull request whose zip is not its source's, byte for
+      # byte, then runs the model's own controls. Node, and the runner's zip and unzip; no server.
+      - name: Run the Payers kit's route model controls
+        run: node business-apps/packages/payers-claims-demo/workflow/route-model.selftest.mjs
+
   # Static checks that `beta:gate` has run locally since Phase 5 and that had
   # never run here. They are seconds each and they close a specific hole: the local
   # gate and CI were two different gates, so "green locally" and "green in CI" made

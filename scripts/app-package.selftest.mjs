@@ -195,7 +195,7 @@ expectRefused(
   ({ edit }) =>
     edit(
       'bundle/agentic-ui-config/actions.json',
-      '"transition": "approve",',
+      '"transition": "pay",',
       '"operation": "Payers.ApproveClaim",',
     ),
   2,
@@ -730,7 +730,7 @@ expectBuilt(
   ({ edit, write }) => {
     edit(
       'bundle/agentic-ui-config/actions.json',
-      '"transition": "approve",',
+      '"transition": "pay",',
       '"operation": "Payers.ApproveClaim",',
     );
     // The deployment's, so beside the package rather than in it.

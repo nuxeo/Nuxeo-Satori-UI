@@ -118,6 +118,9 @@ public class PlatformCheck {
     };
     LifeCycleDescriptor payersClaim = null;
     Set<String> chains = new TreeSet<>();
+    List<Object> handlers = new ArrayList<>();
+    Map<String, String> lifeCycleOfType = new HashMap<>();
+    Set<String> filterIds = new TreeSet<>();
     for (String component : List.of("payers-claims-demo-model.xml", "payers-claims-demo-workflow.xml")) {
       org.w3c.dom.Document xml = DocumentBuilderFactory.newInstance().newDocumentBuilder()
           .parse(new File(bundle, "OSGI-INF/" + component));
@@ -127,6 +130,8 @@ public class PlatformCheck {
         String key = extension.getAttribute("target") + "#" + extension.getAttribute("point");
         Class<?> type = descriptors.get(key);
         if (type == null) {
+          // Facets and document types, and page providers, are not loaded here: the route model's
+          // facets are held to the documents by route-model.selftest.mjs.
           if (key.endsWith("#doctype") || key.endsWith("#providers")) continue;
           check(false, component + ": no descriptor class known for " + key);
           continue;
@@ -148,9 +153,17 @@ public class PlatformCheck {
             chains.add(id);
             check(ops.length > 0, "chain " + id + ": " + ops.length + " operations");
           }
-          if (type.getSimpleName().equals("EventHandler")) {
-            System.out.println("        handler " + type.getMethod("getChainId").invoke(o) + " on "
-                + type.getMethod("getEvents").invoke(o) + " for " + type.getMethod("getDoctypes").invoke(o));
+          if (type.getSimpleName().equals("EventHandler")) handlers.add(o);
+          if (type.getSimpleName().equals("LifeCycleTypesDescriptor"))
+            lifeCycleOfType.put((String) type.getMethod("getDocumentType").invoke(o),
+                (String) type.getMethod("getLifeCycleName").invoke(o));
+          if (type.getSimpleName().equals("DefaultActionFilter"))
+            filterIds.add((String) type.getMethod("getId").invoke(o));
+          if (type.getSimpleName().equals("BaseDirectoryDescriptor")) {
+            String name = (String) type.getField("name").get(o);
+            String dataFile = (String) type.getField("dataFileName").get(o);
+            check("PayersClaimDecision".equals(name) && dataFile != null && new File(bundle, dataFile).isFile(),
+                "directory " + name + " reads its entries from " + dataFile + ", a file of the bundle");
           }
           if (type.getSimpleName().equals("SchemaBindingDescriptor")) {
             Object src = type.getField("src").get(o);
@@ -167,6 +180,20 @@ public class PlatformCheck {
         }
       }
     }
+
+    System.out.println("== What the descriptors say");
+    check("payersClaim".equals(lifeCycleOfType.get("Claim")), "a Claim follows payersClaim: " + lifeCycleOfType);
+    check(filterIds.contains("filter@PayersClaimReview"), "the availability filter is contributed: " + filterIds);
+    Class<?> eventHandler = Class.forName("org.nuxeo.ecm.automation.core.events.EventHandler");
+    boolean keepsStatus = false;
+    for (Object handler : handlers) {
+      String chainId = (String) eventHandler.getMethod("getChainId").invoke(handler);
+      Set<?> events = (Set<?>) eventHandler.getMethod("getEvents").invoke(handler);
+      Set<?> doctypes = (Set<?>) eventHandler.getMethod("getDoctypes").invoke(handler);
+      keepsStatus |= "PayersClaim.KeepStatus".equals(chainId) && chains.contains(chainId)
+          && events.contains("lifecycle_transition_event") && doctypes != null && doctypes.contains("Claim");
+    }
+    check(keepsStatus, "a contributed chain, PayersClaim.KeepStatus, handles lifecycle_transition_event on a Claim");
 
     System.out.println("== The payersClaim lifecycle, as LifeCycleImpl answers it");
     check(payersClaim != null, "payersClaim is contributed");
@@ -206,8 +233,8 @@ public class PlatformCheck {
     // Each case: the node, its NodeVariables, the claim's properties, and the transition expected.
     Object[][] cases = {
       {"start", vars(), claim(null, "submitted"), "review"},
-      {"start", vars(), claim(null, "inReview"), "inReview"},
-      {"start", vars(), claim(null, "pended"), "inReview"},
+      {"start", vars(), claim(null, "inReview"), "notSubmitted"},
+      {"start", vars(), claim(null, "approved"), "notSubmitted"},
       {"determine", vars("decision", "deny"), claim(2310.0, "inReview"), "denialWithoutReason"},
       {"determine", vars("decision", "deny", "denialReason", "   "), claim(2310.0, "inReview"), "denialWithoutReason"},
       {"determine", vars("decision", "deny", "denialReason", "Not covered"), claim(2310.0, "inReview"), "deny"},

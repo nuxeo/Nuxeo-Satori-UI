@@ -25,7 +25,7 @@ break copies of it.
 - **The claims review workflow,** version 0.4.0's: a route model the bundle contributes, as Nuxeo's
   own models are, with a task form for each of its two steps and a claim lifecycle whose states are
   `claim:status`'s values. An adjuster determines a claim; one billed over $5,000 that they approve
-  goes to a supervisor. Phase 2's first three demo steps run on it, in
+  goes to a supervisor. Phase 2's first three demo steps are written for it, in
   [`scripts/beta-harness/steps/payers-claims-workflow.mjs`](../../../scripts/beta-harness/steps/payers-claims-workflow.mjs)
   ([below](#the-claims-review-workflow)). **Not run on a server yet:** the kit is not installed.
 - **What a production install shows:** the record pages and the model, to everyone, and the home,
@@ -49,7 +49,7 @@ break copies of it.
 | `bundle/agentic-ui-config/queues/pending-determination.json`   | Member services and supervisors: claims in review or pended                                |
 | `bundle/agentic-ui-config/home.json`                           | The home: KPI cards for adjusters and for member services                                  |
 | `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the three queues, and two platform pages                               |
-| `bundle/agentic-ui-config/actions.json`                        | An approve button: a lifecycle transition                                                  |
+| `bundle/agentic-ui-config/actions.json`                        | A Mark as paid button for supervisors: a lifecycle transition                              |
 | `bundle/agentic-ui-config/tasks/*.layout.json`                 | The claims review workflow's two task forms, one per step with a task                      |
 | `bundle/agentic-ui-config/labels/en.json`                      | Its labels, in English: every key the files above name                                     |
 | `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts, and the app with its files                |
@@ -76,11 +76,12 @@ break copies of it.
   differs, and, given the package as it was (`--previous`), a version that moved less than the
   changes need ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8).
   0.3.0 was the minor raise over 0.2.0: the `members` group no longer had the app. **0.4.0** is a
-  minor raise too, by judgement: the pipeline counts 19 changes since 0.3.0, which by its rules need
-  a patch, and leaves the component, schema and data changes to a person. Claims change lifecycle:
-  a claim created before 0.4.0 is in the default lifecycle's `project` state, which the new
-  lifecycle keeps only as a way into it, so until the seed moves it on it has none of a claim's
-  transitions. That breaks what relied on it, and below 1.0.0 a breaking change raises the minor.
+  minor raise too: the pipeline counts 29 changes since 0.3.0, which need a minor, since the approve
+  action and its three labels are removed, and it leaves the component, schema and data changes to
+  a person. Those break something too: claims change lifecycle, and a claim created before 0.4.0
+  is in the default lifecycle's `project` state, which the new lifecycle keeps only as a way into
+  it, so until the seed moves it on it has none of a claim's transitions. Below 1.0.0 a breaking
+  change raises the minor.
 
 ## The stand-in model
 
@@ -147,10 +148,11 @@ records.
 
 ## The claims review workflow
 
-Phase 2's first three demo steps run on it
-([development plan](../../../docs/business-apps/development-plan.md), phase 2): an adjuster
-approves a claim over $5,000, and it goes to a supervisor; the supervisor approves it, and the claim
-moves to Approved; a denial with no reason is stopped by the form's field rule, and by the server.
+Phase 2's first three demo steps are written for it
+([development plan](../../../docs/business-apps/development-plan.md), phase 2), and not yet run: an
+adjuster approves a claim over $5,000, and it goes to a supervisor; the supervisor approves it, and
+the claim moves to Approved; a denial with no reason is stopped by the form's field rule, and by the
+server.
 It is built on decision 2's recommendation, which is open: reopen the Beta scope, so that phases 1
 and 2 build workflow and business records ([decisions.md](../../../docs/business-apps/decisions.md)).
 
@@ -179,7 +181,10 @@ machine on the classes `unzip -p` copied out. Nothing was deployed, installed or
   when the zip's bytes do.
 - **The documents are a document export.** The platform's models are `DocumentRoute` and
   `RouteNode` documents, `validated`, in the `documentRouteElement` lifecycle, their fields those of
-  `route_node.xsd` and `document_route_instance.xsd` in `nuxeo-routing-core`.
+  `route_node.xsd` and `document_route_instance.xsd` in `nuxeo-routing-core`. A document's `id` is
+  not kept: `AbstractDocumentModelWriter.createDocument` creates each one anew, by its folder's
+  name, and sets its lifecycle state from the export's. So an id needs no UUID's form, as the
+  platform's own show (`SerialDocumentReview`, `Task542`).
 - **What a node's conditions and chains see.** A transition's condition is MVEL that must give a
   `Boolean` (`GraphNodeImpl.evaluateTransitions`), with `NodeVariables`, `WorkflowVariables` and
   `Document`, the first of the workflow's documents (`Scripting.initBindings`); with
@@ -200,14 +205,16 @@ the builder after changing the source.
 
 | Node                 | Task                                                   | Then                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `start`              | None                                                   | A submitted claim follows `review`; one in review or held goes on as it is                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `start`              | None                                                   | A submitted claim follows `review`, and goes to `determine`. Any other claim is refused: the workflow ends, the claim unchanged, with "Review refused" in its history. So a claim is determined once                                                                                                                                                                                                                                                                          |
 | `determine`          | The claim's adjuster, or any adjuster when it has none | Its form sets `decision`, `allowedAmount` and `denialReason`. In order: a denial with no reason is refused; a denial denies; an approval with no allowed amount, or one below 0 or above the billed amount, is refused; an approval of a claim billed over $5,000 goes to `supervisorApproval`; any other approval approves; anything else is refused. A refusal leaves the claim as it is, records "Determination refused" in its history, and opens the determination again |
 | `supervisorApproval` | Any member of `claims-supervisors`                     | Approve approves the claim; Send back returns it to `determine`; any other action opens the approval again                                                                                                                                                                                                                                                                                                                                                                    |
 | `end`                | None                                                   | The claim is approved or denied, by the chain that led here                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
-- **Who may start it:** someone with `ReadWrite` on a claim that is submitted, in review or held,
-  by the action filter `filter@PayersClaimReview`, which the REST API's start checks
-  (`WorkflowAdapter.doPost`, `canCreateInstance`).
+- **Who may start it:** someone with `ReadWrite` on a submitted claim, by the action filter
+  `filter@PayersClaimReview`, which the REST API's start checks (`WorkflowAdapter.doPost`,
+  `canCreateInstance`). Starting it puts the claim in review, so a claim whose review runs is not
+  offered a second, and the start node refuses one that is not submitted, for a start that skips
+  the filter. A claim seeded in review or held is not determined by the workflow.
 - **What it writes:** the allowed amount, to `claim:allowedAmount` (0 on a denial); the claim's
   lifecycle, and so its status; who determined a claim sent to a supervisor, as the workflow
   variable `determinedBy`; and each decision in the claim's history, under "Claim review".
@@ -231,15 +238,22 @@ the builder after changing the source.
   local container, read-only, and runs `PlatformCheck.java` on this machine with them (Java 21).
   `NuxeoArchiveReader` reads the kit's zip as the model and its four nodes, after reading the
   platform's `SerialDocumentReview.zip` the same way as a control; XMap loads every extension of the
-  model and workflow components with the descriptor class its point declares, the
-  `template-resource` resolving to the zip; `XSDLoader` loads the two variable schemas;
-  `LifeCycleImpl` answers `payersClaim`'s transitions from each state; and MVEL, the server's
-  version, evaluates each node's conditions in order for 19 cases and its task assignees. Run on 24
-  November 2026: 89 checks passed. With the supervisor's threshold changed to `>= 5000`, it failed
-  on the claim billed exactly $5,000.
-- **Without a server:** `node workflow/route-model.selftest.mjs`, which checks the zip, the
-  documents, the graph and what they name across the kit (its header lists them), then breaks a copy
-  of the kit in 16 ways, each refused for its own reason.
+  model and workflow components but their facets, document types and page providers, with the
+  descriptor class its point declares, and what those descriptors say is checked: the
+  `template-resource` resolving to the zip, `Claim` mapped to `payersClaim`, the filter and the
+  vocabulary contributed, the vocabulary's rows a file of the bundle, and `PayersClaim.KeepStatus`
+  a contributed chain handling `lifecycle_transition_event` on a `Claim`; `XSDLoader` loads the two
+  variable schemas; `LifeCycleImpl` answers `payersClaim`'s transitions from each state; and MVEL,
+  the server's version, evaluates each node's conditions in order for 19 cases and its task
+  assignees. Run on 24 November 2026: 95 checks passed. Seen failing: with the supervisor's
+  threshold changed to `>= 5000`, on the claim billed exactly $5,000; and with the handler's event
+  misspelled and `Claim` mapped to `default`, on the two checks that read them. What it does not
+  check: the chains' operations and parameters beyond their number, which only a server runs.
+- **Without a server, and in CI:** `node workflow/route-model.selftest.mjs`, which checks that the
+  zip is its source's, byte for byte, then the documents, the graph and what they name across the
+  kit (its header lists them), then breaks a copy of the kit in 23 ways, each refused for its own
+  reason. `ci.yml` runs it on every pull request, so a source changed without its zip, or a zip
+  changed by hand, fails there.
 - **The package pipeline**, below, and its selftest.
 - **Not yet:** an install. Whether the server imports the model, starts it and runs its chains is
   for the demo's steps file, once the kit is installed.
@@ -261,8 +275,7 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
 `dist/payers-claims-demo-0.4.0.changes.md`. Run on 24 November 2026 against the staging branch's
-0.3.0: 19 changes, which by the pipeline's rules need a patch, and 0.4.0 raises the minor, for the
-claim lifecycle (above).
+0.3.0: 29 changes, which need a minor version, and 0.4.0 raises the minor.
 
 ```bash
 mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
@@ -394,6 +407,13 @@ provider.
 **First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it
 from the trash: do the same before replacing the stand-in model. A document whose type is gone
 cannot be read, and would break the folder and the searches that hold it.
+
+**From 0.4.0, cancel the claims review workflows first,** and delete the route model: every running
+`PayersClaimReview` instance (`DELETE /nuxeo/api/v1/workflow/<id>`, as an administrator, for each
+`GET /nuxeo/api/v1/workflow?workflowModelName=PayersClaimReview` lists), then the model
+`PayersClaimReview` under the route models' folder. Its instances, their tasks and its nodes carry
+the `facet-var_PayersClaimReview…` facets, whose schemas leave with the package, as the claims'
+types do. **Not run yet.**
 
 Then remove the package the way it was installed. `nuxeoctl mp-remove`, like `mp-install`,
 refuses while the server runs, and stopping the server stops the container, so a one-off script
@@ -596,7 +616,8 @@ Exit 2 means a precondition is not met, and says which: the run's user is not `a
 `claims-adjusters` and not `claims-supervisors`; `jordan.kim` does not sign in with
 `PAYERS_DEMO_PASSWORD`, in `claims-supervisors` and not `claims-adjusters`; the package is older
 than 0.4.0; the claims folder is missing or the adjuster may not add to it; the dev server serves
-other task forms or labels; or an earlier run's claims could not be put away. **Not run yet.**
+other task forms, labels or Claim page; or an earlier run's claims could not be put away: their
+workflows cancelled, and they trashed. **Not run yet.**
 
 ## What a server shows, and what the dev server does
 
@@ -638,10 +659,16 @@ included, is shown no app. The demo itself still runs on a development server, a
   people to check.
 - **The Properties panel beside a Case or a Claim lists a reference by its stored id:** it is
   version 1's generated panel, which has no lookup, and only the Member has a `metadata` file.
-- **The approve button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
+- **The kit's button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
   and not served, and the queue leaves out an action the app does not register, saying so in the
-  console. Since 0.4.0 it is for supervisors, on a claim in review or held, which the lifecycle's
-  `approve` allows.
+  console. Since 0.4.0 it is Mark as paid, for supervisors, on an approved claim: the lifecycle's
+  `pay`, which no step of the workflow follows. Before, it was an approve button, which on a claim
+  whose review runs would have approved it outside the workflow, and left the workflow's next chain
+  to fail.
+- **The platform's lifecycle buttons offer a claim's transitions while its review runs.** The
+  record page lists the transitions the claim's state allows; one followed there, approve or deny
+  in review, makes the workflow's own next transition fail when its step completes, and the
+  workflow is then abandoned from the task panel. The demo follows none.
 - **The claims review workflow has not run on a server:** the kit 0.4.0 is not installed. Its route
   model has been held to the platform's own classes (`workflow/platform-check.mjs`) and its own
   controls, not imported, started or run; the steps file has not run.
@@ -654,8 +681,11 @@ included, is shown no app. The demo itself still runs on a development server, a
 - **Not run by the demo:** a supervisor sending a determination back, and demo step 6, the appeal
   case with its checklist and timeline, which this model does not give: an appeal is a case, not a
   claim, and the timeline and comments are already the record pages'.
-- **The route model's controls are not in CI either:** `workflow/route-model.selftest.mjs` needs
-  Node and `unzip`, and `workflow/platform-check.mjs` Docker, the local container and Java 21.
+- **The platform check is not in CI:** `workflow/platform-check.mjs` needs Docker, the local
+  container and Java 21. The route model's own controls are (above).
+- **Phase 1's demo can be pointed at the workflow's adjuster,** `alex.rivera`, who is an adjuster
+  in no other group, as its precondition asks: it would then count the workflow demo's claims as
+  theirs, and refuse the server. Run it as `dana.lee`, as above.
 - **The menu's two platform entries are not added:** `app.navbar.tasks` and `app.navbar.search`
   are in the platform's menu already, and the console says so. They are there for when an app's
   entries may replace the platform's (app-definition-v2.md, section 13).

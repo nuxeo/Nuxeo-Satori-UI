@@ -5,9 +5,13 @@
  *
  *   node business-apps/packages/payers-claims-demo/workflow/route-model.selftest.mjs
  *
- * First the kit as it is must have no problem; then each control breaks a copy of the kit in one
- * way, and the check that guards it must name the problem. So every check here has been seen
- * failing, on every run. What it checks:
+ * First the kit as it is must have no problem; then each control below breaks a copy of the kit in
+ * one way, and the check that guards it must name the problem, on every run. Not every check has a
+ * control of its own: a document's id, path and lifecycle policy, a stop node with transitions, a
+ * node that leads nowhere, a task with no buttons or buttons with no task, a transition with no
+ * condition, the number of start and template-resource contributions, the DocumentRoute and
+ * Orderable facets, a zip entry with no folder entry or that `unzip -t` refuses, are checked and not
+ * seen failing here. What it checks:
  *
  * - **the zip** is the source's, byte for byte (`build-route-model.mjs --check`), and `unzip`, a
  *   reader that had no part in writing it, finds the marker `ExportedZipImporter` requires and
@@ -30,8 +34,8 @@
  *
  * What it does not show: that a server imports the model and runs it. `platform-check.mjs` holds
  * the same files to the server's own classes, and the beta harness's `payers-claims-workflow`
- * steps file runs the workflow, once the kit is installed. Node 24 and the system's `unzip`. CI
- * does not run it.
+ * steps file runs the workflow, once the kit is installed. Node 24, and the system's `unzip`, and
+ * `zip` for the control that removes the marker.
  *
  * Exit 0 when the kit passes and every control is refused for its own reason, 1 otherwise.
  */
@@ -699,17 +703,75 @@ refuse(
   ({ edit, rebuild }) => {
     edit(
       `workflow/${MODEL}/start/document.xml`,
-      '<condition><![CDATA[true]]></condition>\n        <chain><![CDATA[]]></chain>\n        <targetId><![CDATA[determine]]></targetId>',
-      '<condition><![CDATA[true]]></condition>\n        <chain><![CDATA[]]></chain>\n        <targetId><![CDATA[end]]></targetId>',
-    );
-    edit(
-      `workflow/${MODEL}/start/document.xml`,
       '<chain><![CDATA[PayersClaimReview.Review]]></chain>\n        <targetId><![CDATA[determine]]></targetId>',
       '<chain><![CDATA[PayersClaimReview.Review]]></chain>\n        <targetId><![CDATA[end]]></targetId>',
     );
     rebuild();
   },
   /determine\/document\.xml is not reached from the start/,
+);
+refuse(
+  'a node from which no stop node is reached',
+  ({ edit, rebuild }) => {
+    edit(
+      SUPERVISOR,
+      '<chain><![CDATA[PayersClaimReview.Approve]]></chain>\n        <targetId><![CDATA[end]]></targetId>',
+      '<chain><![CDATA[PayersClaimReview.Approve]]></chain>\n        <targetId><![CDATA[supervisorApproval]]></targetId>',
+    );
+    edit(
+      SUPERVISOR,
+      '<chain><![CDATA[PayersClaimReview.SendBack]]></chain>\n        <targetId><![CDATA[determine]]></targetId>',
+      '<chain><![CDATA[PayersClaimReview.SendBack]]></chain>\n        <targetId><![CDATA[supervisorApproval]]></targetId>',
+    );
+    rebuild();
+  },
+  /supervisorApproval\/document\.xml reaches no stop node/,
+);
+refuse(
+  'a transition name given twice in a node',
+  ({ edit, rebuild }) => {
+    edit(DETERMINE, '<name><![CDATA[deny]]></name>', '<name><![CDATA[approve]]></name>');
+    rebuild();
+  },
+  /determine\/document\.xml repeats a transition name/,
+);
+refuse(
+  'a model that is not validated, which the routing service does not find',
+  ({ edit, rebuild }) => {
+    edit(
+      `workflow/${MODEL}/document.xml`,
+      '<lifecycle-state>validated</lifecycle-state>',
+      '<lifecycle-state>draft</lifecycle-state>',
+    );
+    rebuild();
+  },
+  /PayersClaimReview\/document\.xml is not validated/,
+);
+refuse(
+  'an availability filter no component contributes',
+  ({ edit }) => edit(WORKFLOW, 'filter id="filter@PayersClaimReview"', 'filter id="filter@Other"'),
+  /availabilityFilter filter@PayersClaimReview is not contributed/,
+);
+refuse(
+  'a manifest that does not list the workflow component',
+  ({ edit }) =>
+    edit('bundle/META-INF/MANIFEST.MF', ',OSGI-INF/payers-claims-demo-workflow.xml', ''),
+  /the manifest does not list the workflow component/,
+);
+refuse(
+  'a task form for a step that has no task',
+  ({ kit }) =>
+    writeFileSync(
+      join(kit, 'bundle', 'agentic-ui-config', 'tasks', `${MODEL}.start.layout.json`),
+      '{ "version": 2, "cards": [] }\n',
+    ),
+  /tasks\/PayersClaimReview\.start\.layout\.json is a task form for start, which has no task/,
+);
+refuse(
+  'a vocabulary no component contributes',
+  ({ edit }) =>
+    edit(WORKFLOW, '<directory name="PayersClaimDecision"', '<directory name="PayersDecision"'),
+  /picks from PayersClaimDecision, which no component contributes/,
 );
 refuse(
   'a facet no component contributes',

@@ -34,7 +34,9 @@
   <xs:element name="billedAmount" type="xs:double" />
   <xs:element name="allowedAmount" type="xs:double" />
 
-  <!-- A property, as section 9 shows it, not the lifecycle state. -->
+  <!-- A property, as section 9 shows it. Since 0.4.0 it is also the claim's lifecycle state:
+       the claim lifecycle's states are these values, and PayersClaim.KeepStatus writes the state
+       here after every transition (payers-claims-demo-model.xml). -->
   <xs:element name="status">
     <xs:simpleType>
       <xs:restriction base="xs:string">

@@ -3,22 +3,22 @@
   "version": 2,
   "actions": [
     {
-      "id": "payers.claim.approve",
-      "labelKey": "payers.action.approve",
-      "icon": "check",
+      "id": "payers.claim.pay",
+      "labelKey": "payers.action.pay",
+      "icon": "payments",
       "order": 10,
       "on": ["record", "row"],
       "visibleWhen": {
         "type": "core.every",
         "parameters": [
           { "type": "app.rules.isType", "parameters": ["Claim"] },
-          { "type": "app.rules.inState", "parameters": ["inReview", "pended"] },
+          { "type": "app.rules.inState", "parameters": ["approved"] },
           { "type": "app.rules.inGroup", "parameters": ["claims-supervisors"] }
         ]
       },
-      "transition": "approve",
-      "confirm": { "labelKey": "payers.action.approve.confirm" },
-      "success": { "labelKey": "payers.action.approve.done" }
+      "transition": "pay",
+      "confirm": { "labelKey": "payers.action.pay.confirm" },
+      "success": { "labelKey": "payers.action.pay.done" }
     }
   ]
 }
