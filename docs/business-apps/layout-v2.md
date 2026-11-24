@@ -266,7 +266,8 @@ Version 2 adds five rules to the 29 or so that exist:
 - **A date** is a property, `{ "field": "dc:expired" }`, or a literal: a day, `"2026-12-01"`, or an
   ISO 8601 date and time with its zone. The validator refuses any other literal, a day that does
   not exist included. It is read as the `date` widget reads one (section 11): a stored day as
-  written, and an instant on the reader's day. Today is the reader's day, from the browser's clock.
+  written, and an instant on the reader's day. Today is the reader's day, from the page's clock:
+  the browser's in the app, and one a test or a demo pins (section 11).
   A property with no date, or a value that is not one, passes neither date rule.
 - **A rule is never a security control.** A field hidden from a group is still readable through the
   API to anyone the server lets read it. Protecting a field is decision I, a platform decision.
@@ -694,10 +695,17 @@ becomes. In version 2's terms:
   reference's stored id: naming the `document-link` widget is what shows its title there.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
-- **The date rules read the browser's clock**, as the rules' library does everywhere, not the
-  record page's own `RECORD_PAGE_TODAY`, which its computations and dates read. In the app both are
-  the browser's clock; only a test, or a host that provides `RECORD_PAGE_TODAY`, sets one and not
-  the other and sees them disagree.
+- **The date rules read the page's clock**, `RECORD_PAGE_TODAY` and `RECORD_PAGE_TIME_ZONE` in
+  `record-clock.ts`, as its computations and dates do: on the record page, its banners, cards,
+  tabs, fields and a related list's columns, and in a version 2 form, its fields' rules. The page
+  gives them to the rules as the rule context's `today` and `timeZone`, so a banner on a date reads
+  the day the date field beside it shows, and a test or a host that pins the page's day pins its
+  banners too. In the app both tokens are the browser's: its clock, and the reader's zone. A zone
+  given to `RECORD_PAGE_TIME_ZONE` is an offset, such as `+0530`: the `date` widget formats with
+  Angular, which reads no IANA zone, so one would reach the rules and not the fields beside them.
+  Elsewhere, in a queue's or a home card's rule and in a row action's, the date rules read the
+  browser's clock, as the rest of the rules' library does. A zone the browser cannot read passes
+  neither date rule.
 - **Banners** are drawn above everything else on the page, the picture and the tabs included, one
   under the other in the file's order, each while its rule passes for the open record and the user,
   through the component ID `nxs.primitives.banner`, so that an override of the ID reaches them
@@ -722,16 +730,19 @@ becomes. In version 2's terms:
     replaced on the record has new files, which are fetched, and the blob URLs of the old ones are
     revoked at once, as are another record's. All of them are revoked when the page is left;
   - a view that cannot be fetched shows the error state, with Retry for a server error; a picture
-    whose views Nuxeo has not made yet, as just after an upload, says so. For a record of the type
-    `Picture` the document page asks the server again, up to six times half a second apart, and
-    the page shows the views when it is given the record. A record that has the `picture` schema
-    from a facet is not asked again, and nor is any once those six have passed: it shows the views
-    when it is next opened;
+    whose views Nuxeo has not made yet, as just after an upload, says so. For a record with the
+    `Picture` facet, which Nuxeo makes views for, a Picture or a kit's own type that extends
+    Picture, the document page asks the server again, up to six times half a second apart, and the
+    page shows the views when it is given the record. A record that has the `picture` schema
+    without the facet is not asked again, since Nuxeo makes it no views, and nor is any once those
+    six have passed: it shows the views when it is next opened;
   - the record's own file is not shown, nor the picture's information, EXIF and IPTC that the
     document page's viewer lists: a field shows a property a kit wants, such as `dc:rights`;
-  - **the document page still reads the record's own file,** the original, for the packaged viewer
-    the record page has taken the place of: one request more per page, which nothing shows, and
-    which the console does not mention. Not reading it is the next step.
+  - **the document page does not download the record's own file,** the original, while the record
+    page holds the View tab: it is held back until something on the page shows it, the Annotations
+    tab, whose viewer does, or the packaged viewer, when the type turns out to have no record page.
+    A record with the `picture:views` property and none of the `video` schema's is held back so,
+    until its type's layout is read.
 - **The limits.** Each one that leaves something out is said in the console when a file meets it:
   - **a cell is one line of text:** a `status-badge` column shows its label without the tag, and
     a `phone` or `email` column shows its value without the link;

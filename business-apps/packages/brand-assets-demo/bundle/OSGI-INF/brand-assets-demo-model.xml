@@ -1,0 +1,157 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, until a brand team's own model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the kit's layouts
+  and queues name, for the fictional Acme Outdoor, and nothing more. When a real model arrives, this
+  file and schemas/ are replaced by theirs, and the layouts follow its property names. Records of
+  these types must be deleted from a server before its model goes: a document whose type is gone
+  cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.brand-assets-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, Picture's included, as a Studio project's bundle
+       does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="acmeasset" prefix="acmeasset" src="schemas/acmeasset.xsd" />
+    <schema name="acmeproduct" prefix="acmeproduct" src="schemas/acmeproduct.xsd" />
+    <schema name="acmeshot" prefix="acmeshot" src="schemas/acmeshot.xsd" />
+    <schema name="acme_asset_search" prefix="acmesearch" src="schemas/acmeassetsearch.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- An asset is a Picture: it has Picture's schemas and its Picture facet, so Nuxeo makes its
+         picture views as it does a Picture's, and its record page shows them first
+         (docs/business-apps/layout-v2.md, section 11). A type of its own, not the platform's
+         Picture, so that the kit's layout is drawn for the kit's assets only. Its rights end on
+         dc:expired. -->
+    <doctype name="AcmeAsset" extends="Picture">
+      <schema name="acmeasset" />
+    </doctype>
+    <!-- A product is a record with no file, so it opens as a record page. -->
+    <doctype name="AcmeProduct" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="acmeproduct" />
+    </doctype>
+    <!-- One shot of a product's shot list: missing while no asset fills it. -->
+    <doctype name="AcmeShot" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="acmeshot" />
+    </doctype>
+    <!-- The library's search document, as DefaultSearch is default_search's: never saved, it holds
+         the facets the library sends back (schemas/acmeassetsearch.xsd). No folder lists it among
+         its subtypes, so nothing offers to create one, and it is hidden from navigation. -->
+    <doctype name="AcmeAssetSearch" extends="Document">
+      <facet name="HiddenInNavigation" />
+      <schema name="acme_asset_search" />
+    </doctype>
+  </extension>
+
+  <!-- The platform's default lifecycle, so that each record has a lifecycle state. An asset
+       lifecycle with review states is the review's, which this kit does not have yet. -->
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="AcmeAsset">default</type>
+      <type name="AcmeProduct">default</type>
+      <type name="AcmeShot">default</type>
+    </types>
+  </extension>
+
+  <!-- Every page provider that is given a value binds it as a quoted, escaped literal, and each
+       leaves out versions, proxies and trashed records. -->
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <!-- The products queue: every product, the next launch first. -->
+    <coreQueryPageProvider name="acme_products">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'AcmeProduct'
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="acmeproduct:launch" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The product page's shots card: the product's assets, given its acmeproduct:style. -->
+    <coreQueryPageProvider name="acme_product_assets">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'AcmeAsset' AND acmeasset:product = ?
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="dc:title" ascending="true" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The product page's missing shots card: the product's shots that no asset fills yet, given
+         its acmeproduct:style, the soonest due first. -->
+    <coreQueryPageProvider name="acme_product_missing_shots">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'AcmeShot' AND acmeshot:product = ?
+        AND acmeshot:asset IS NULL
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="acmeshot:due" ascending="true" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+
+    <!-- The asset library: every asset, with three facets. A queue's facets are the aggregates of
+         its page provider's results, which only the search index answers: a coreQueryPageProvider
+         queries the repository and returns none. So this is SearchServicePageProvider, the class
+         the platform's default_search is replaced with (nxserver/config/search-classreplacer-config.xml),
+         with the search document AcmeAssetSearch. An aggregate's id, its field there and the
+         parameter the app sends back are one name.
+
+         The Rights facet buckets dc:expired by the server's day, in UTC, which is how a stored day
+         is written (T00:00:00.000Z): Ended before today, Ending from today to 30 days ahead, as the
+         asset page's warning banner says (app.rules.dateWithin, 30), and Cleared after. An asset
+         with no end date is in none of them. The date math was run against the local OpenSearch,
+         read only: now/d is today's midnight UTC, and now+31d/d the midnight 31 days on.
+
+         The index is written a moment after the repository, so the library lags a change by about
+         a second; the seed asks it again until it agrees with what it wrote. -->
+    <genericPageProvider name="acme_asset_library"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>AcmeAssetSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'AcmeAsset'
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="acme_rights_agg" type="date_range" parameter="dc:expired">
+          <field schema="acme_asset_search" name="acme_rights_agg" />
+          <dateRanges>
+            <dateRange key="Ended" toDate="now/d" />
+            <dateRange key="Ending" fromDate="now/d" toDate="now+31d/d" />
+            <dateRange key="Cleared" fromDate="now+31d/d" />
+          </dateRanges>
+        </aggregate>
+        <aggregate id="acme_shot_agg" type="terms" parameter="acmeasset:shot">
+          <field schema="acme_asset_search" name="acme_shot_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="acme_product_agg" type="terms" parameter="acmeasset:product">
+          <field schema="acme_asset_search" name="acme_product_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <!-- The rights that end soonest first. Not dc:title: the index maps it as analysed text, so it
+           would sort by a word of each title rather than the title. -->
+      <sort column="dc:expired" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+  </extension>
+</component>

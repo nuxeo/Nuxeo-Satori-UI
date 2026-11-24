@@ -15,7 +15,8 @@
  *   an empty or missing value.
  *
  * **Today is the reader's own day,** so a licence that ends on the 1st has passed for them from
- * their midnight.
+ * their midnight. The day and the zone are the caller's: the rule context's `today` and
+ * `timeZone`, which the record page fills from its own clock, and the browser's otherwise.
  *
  * The rule is the computations' own, written again here: this library is in the published package
  * and that one is not, so it cannot import it. `date-rules.spec.ts` holds this copy to cases of
@@ -101,10 +102,12 @@ function dayNumber({ year, month, day }: CalendarDay): number {
 
 /**
  * How many days `value` is after `today`'s day: `0` for today, `-1` for yesterday, `30` for thirty
- * days from now. `null` when `value` is not a date, or `today` not a valid `Date`.
+ * days from now. `null` when `value` is not a date, `today` not a valid `Date`, or `timeZone` not
+ * a zone `Intl` reads.
  *
- * @param timeZone the reader's zone: `undefined` in the app, and an IANA zone in a test, so that a
- *   test chooses it rather than inheriting the one it happens to run in
+ * @param timeZone the reader's zone: `undefined`, the reader's own, as in the app; an IANA zone, or
+ *   an offset such as `+0530` as `RECORD_PAGE_TIME_ZONE` writes one, so that a test or a host
+ *   chooses it rather than inheriting the one it happens to run in
  */
 export function daysFromToday(
   value: unknown,
@@ -112,6 +115,12 @@ export function daysFromToday(
   timeZone: string | undefined = undefined,
 ): number | null {
   if (!(today instanceof Date) || Number.isNaN(today.getTime())) return null;
-  const day = dayOf(value, timeZone);
-  return day === null ? null : dayNumber(day) - dayNumber(dayIn(today, timeZone));
+  try {
+    const day = dayOf(value, timeZone);
+    return day === null ? null : dayNumber(day) - dayNumber(dayIn(today, timeZone));
+  } catch (error) {
+    // `Intl.DateTimeFormat` refuses a zone it does not know, with a RangeError: no day is read.
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
 }
