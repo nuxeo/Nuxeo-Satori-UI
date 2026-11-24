@@ -1,0 +1,110 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "renewal-due",
+      "tone": "warning",
+      "labelKey": "contracts.banner.renewalDue",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.fieldIn", "parameters": [{ "field": "contract:status" }, "Active"] },
+          { "type": "app.rules.dateWithin", "parameters": [{ "field": "contract:end" }, 90] }
+        ]
+      }
+    },
+    {
+      "id": "ended-still-active",
+      "tone": "negative",
+      "labelKey": "contracts.banner.endedStillActive",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.fieldIn", "parameters": [{ "field": "contract:status" }, "Active"] },
+          { "type": "app.rules.datePassed", "parameters": [{ "field": "contract:end" }] }
+        ]
+      }
+    },
+    {
+      "id": "terminated",
+      "tone": "negative",
+      "labelKey": "contracts.banner.terminated",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "contract:status" }, "Terminated"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "contract",
+      "labelKey": "contracts.card.contract.contract",
+      "fields": [
+        "contract:number",
+        { "field": "dc:title", "labelKey": "contracts.field.title" },
+        "contract:counterparty",
+        "contract:category",
+        {
+          "field": "contract:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Draft": "neutral",
+              "Active": "positive",
+              "Terminated": "negative",
+              "Expired": "warning"
+            }
+          }
+        },
+        { "field": "contract:owner", "widget": "user", "labelKey": "contracts.field.owner" }
+      ]
+    },
+    {
+      "id": "terms",
+      "labelKey": "contracts.card.contract.terms",
+      "fields": [
+        {
+          "field": "contract:value",
+          "widget": "currency",
+          "labelKey": "contracts.field.value",
+          "parameters": { "currency": { "field": "contract:currency" } }
+        },
+        { "field": "contract:start", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "contract:end", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "term",
+          "labelKey": "contracts.field.term",
+          "widget": "number",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "contract:start" }, { "field": "contract:end" }, "months"]
+          }
+        },
+        { "field": "contract:noticeDays", "labelKey": "contracts.field.noticeDays" },
+        { "field": "contract:autoRenew", "labelKey": "contracts.field.autoRenew" }
+      ]
+    },
+    {
+      "id": "termination",
+      "labelKey": "contracts.card.contract.termination",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "contract:status" }, "Terminated"]
+      },
+      "fields": [{ "field": "contract:terminationReason", "widget": "long-text" }]
+    },
+    {
+      "id": "notes",
+      "labelKey": "contracts.card.contract.notes",
+      "fields": [{ "field": "contract:notes", "widget": "long-text" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "contracts.card.contract.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}
