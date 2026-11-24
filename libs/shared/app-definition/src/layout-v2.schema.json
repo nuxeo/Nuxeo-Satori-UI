@@ -157,9 +157,12 @@
         },
         "comments": {
           "$ref": "#/$defs/comments"
+        },
+        "external": {
+          "$ref": "#/$defs/external"
         }
       },
-      "description": "A card shows one of fields, related records, a timeline or comments.",
+      "description": "A card shows one of fields, related records, a timeline, comments or fields from another system.",
       "oneOf": [
         {
           "required": ["fields"]
@@ -172,6 +175,9 @@
         },
         {
           "required": ["comments"]
+        },
+        {
+          "required": ["external"]
         }
       ]
     },
@@ -480,6 +486,73 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100
+        }
+      }
+    },
+    "external": {
+      "type": "object",
+      "required": ["connector", "fields"],
+      "additionalProperties": false,
+      "description": "View mode only. Fields of a record in another system, read on the server through a connector it registers (nuxeo-agentic-connectors). The connector's address, key and credential are the server's configuration: no text in this card may look like an address.",
+      "properties": {
+        "connector": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "description": "The id of a connector the server registers."
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/externalFieldName"
+              },
+              {
+                "$ref": "#/$defs/externalField"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "externalFieldName": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+      "description": "A field the connector's allow-list returns, by its name."
+    },
+    "externalField": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/externalFieldName"
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelKey": {
+          "type": "string"
+        },
+        "widget": {
+          "enum": [
+            "text",
+            "long-text",
+            "number",
+            "currency",
+            "percent",
+            "date",
+            "relative-date",
+            "boolean",
+            "status-badge"
+          ]
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "visibleWhen": {
+          "$ref": "#/$defs/rule"
         }
       }
     }

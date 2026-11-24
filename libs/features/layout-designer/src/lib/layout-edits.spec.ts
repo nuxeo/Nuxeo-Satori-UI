@@ -80,6 +80,7 @@ describe('the layout edits', () => {
             cards: [
               { id: 'b', timeline: {} },
               { id: 'c', comments: {} },
+              { id: 'd', external: { connector: 'payers.claimPayments', fields: ['paidOn'] } },
             ],
           },
         ],
@@ -88,6 +89,7 @@ describe('the layout edits', () => {
         ['tabs[0].cards[0]', 'main', 'fields'],
         ['tabs[1].cards[0]', 'more', 'timeline'],
         ['tabs[1].cards[1]', 'more', 'comments'],
+        ['tabs[1].cards[2]', 'more', 'external'],
       ]);
     });
 

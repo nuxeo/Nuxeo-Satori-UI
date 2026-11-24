@@ -32,6 +32,8 @@ export {
 export { LABELS_V2_KEYS, validateLabels, validateModuleSettings } from './lib/labels';
 export {
   BANNER_TONES,
+  CONNECTOR_FIELD,
+  CONNECTOR_ID,
   LAYOUT_MODES,
   LAYOUT_V2_KEYS,
   heldToModel,
@@ -56,6 +58,7 @@ export { QUEUE_V2_KEYS, validateQueue } from './lib/queue';
 export {
   APP_RULES,
   CORE_RULES,
+  EXTERNAL_WIDGETS,
   PACKAGED_BULK_ACTIONS,
   PACKAGED_CHECKS,
   PACKAGED_COMPUTATIONS,

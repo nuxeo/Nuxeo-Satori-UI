@@ -122,6 +122,29 @@ export interface RecordCommentsEntry {
   readonly pageSize: number;
 }
 
+/** One field of a card from another system: a field of its connector's answer, by name. */
+export interface RecordExternalField {
+  /** Where the entry is in the file, as `cards[2].external.fields[1]`, for the console. */
+  readonly place: string;
+  /** The field's name, as the connector's allow-list names it. */
+  readonly name: string;
+  readonly label: LayoutLabel;
+  /** One of the widgets that show one value as text, or `null` for the one its value picks. */
+  readonly widget: string | null;
+  readonly parameters: Readonly<Record<string, unknown>>;
+  readonly visibleWhen: RecordRule | null;
+}
+
+/**
+ * A card from another system (layout-v2.md, section 7): the server's connector it reads through,
+ * and the fields of its answer it shows. Where that system is, and what the server may return, are
+ * the connector's, on the server.
+ */
+export interface RecordExternalEntry {
+  readonly connector: string;
+  readonly fields: readonly RecordExternalField[];
+}
+
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
@@ -134,7 +157,7 @@ export interface RecordCardEntry {
   /** How many columns it takes, at least 1 and at most the file's `columns`. */
   readonly span: number;
   readonly visibleWhen: RecordRule | null;
-  /** Its fields; empty for a card of related records, a timeline or comments. */
+  /** Its fields; empty for a card of related records, a timeline, comments or another system's. */
   readonly fields: readonly RecordFieldEntry[];
   /** For a card of related records, the list it shows; `null` for any other card. */
   readonly related: RecordListEntry | null;
@@ -142,6 +165,8 @@ export interface RecordCardEntry {
   readonly timeline: RecordTimelineEntry | null;
   /** For a card of comments, how it shows them; `null` for any other card. */
   readonly comments: RecordCommentsEntry | null;
+  /** For a card from another system, its connector and fields; `null` for any other card. */
+  readonly external: RecordExternalEntry | null;
 }
 
 export interface RecordTabEntry {
@@ -209,16 +234,16 @@ export function labelOf(
 }
 
 /**
- * The entry a finding is about: the banner, or the innermost tab, card, field, list column or row
- * action its path passes through, as `banners[1]`, `tabs[0].cards[1].fields[2]` or
- * `cards[3].related.columns[1]`. A widget's own
+ * The entry a finding is about: the banner, or the innermost tab, card, field, list column, row
+ * action or field from another system its path passes through, as `banners[1]`,
+ * `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or `cards[4].external.fields[0]`. A widget's own
  * lists — a table's `parameters.columns` — are not fields of the file, so a finding inside one
  * names the field whose widget it is. `null` for a finding about the file as a whole.
  */
 export function entryOf(path: string): string | null {
   let entry: string | null = null;
   for (const match of path.matchAll(
-    /(?:^|\.)(banners|tabs|cards|fields|related\.columns|related\.rowActions)\[(\d+)\]/g,
+    /(?:^|\.)(banners|tabs|cards|fields|related\.columns|related\.rowActions|external\.fields)\[(\d+)\]/g,
   )) {
     const end = (match.index ?? 0) + match[0].length;
     // Only a chain from the start of the path: `cards[0].fields[1].parameters.columns[0]` stops
@@ -536,6 +561,49 @@ export function readRecordList(
   };
 }
 
+/**
+ * A card from another system, with what this build cannot show of it left out: a field a finding
+ * names, one whose rule the page cannot answer, and one that names a field shown already. `null`,
+ * and the card left out, when no field is left. Findings about the card's own keys left the card
+ * out before this is reached.
+ */
+function readExternal(
+  raw: Json,
+  place: string,
+  owner: string,
+  reading: EntryReading,
+): RecordExternalEntry | null {
+  const shown = new Set<string>();
+  const fields = (Array.isArray(raw['fields']) ? raw['fields'] : []).flatMap(
+    (entry: unknown, index): RecordExternalField[] => {
+      const at = `${place}.fields[${index}]`;
+      const written = isRecord(entry) ? entry : {};
+      if (!keptEntry(reading, at, written)) return [];
+      const name = typeof entry === 'string' ? entry : String(written['name']);
+      if (shown.has(name)) {
+        reading.problems.push(`${at} shows ${name} again; that field left out`);
+        return [];
+      }
+      shown.add(name);
+      return [
+        {
+          place: at,
+          name,
+          label: labelOf(written, [], humanize(name)),
+          widget: text(written['widget']) ?? null,
+          parameters: isRecord(written['parameters']) ? written['parameters'] : {},
+          visibleWhen: (written['visibleWhen'] as RecordRule | undefined) ?? null,
+        },
+      ];
+    },
+  );
+  if (fields.length === 0) {
+    reading.problems.push(`${owner} has no field this build can show; left out`);
+    return null;
+  }
+  return { connector: String(raw['connector']), fields };
+}
+
 const pageSizeOf = (raw: Json): number =>
   typeof raw['pageSize'] === 'number' ? raw['pageSize'] : DEFAULT_LIST_PAGE_SIZE;
 
@@ -631,10 +699,14 @@ export function readRecordLayout(
         span: typeof card['span'] === 'number' ? card['span'] : 1,
         visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
       };
-      const none = { fields: [], related: null, timeline: null, comments: null };
+      const none = { fields: [], related: null, timeline: null, comments: null, external: null };
       if (isRecord(card['related'])) {
         const related = readRecordList(card['related'], `${place}.related`, place, reading);
         return related ? [{ ...common, ...none, related }] : [];
+      }
+      if (isRecord(card['external'])) {
+        const external = readExternal(card['external'], `${place}.external`, place, reading);
+        return external ? [{ ...common, ...none, external }] : [];
       }
       // Any finding inside a timeline or comments left their card out above, so what is here is sound.
       if (isRecord(card['timeline'])) {

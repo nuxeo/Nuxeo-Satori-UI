@@ -1,0 +1,13 @@
+{
+  "connectors": {
+    "payers.claimPayments": [
+      "paymentStatus",
+      "paidAmount",
+      "paidOn",
+      "paymentReference",
+      "policyNumber",
+      "policyStatus",
+      "deductibleMet"
+    ]
+  }
+}

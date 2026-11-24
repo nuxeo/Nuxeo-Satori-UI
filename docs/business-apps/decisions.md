@@ -73,6 +73,27 @@ way.
   - **Parity decision P4,** one global configuration, still conflicts with E as recommended:
     the registry serves a configuration per app and group.
 
+- **D, the connectors add-on's first slice (24 November 2026).** Built against the
+  recommendation: inside Nuxeo, as an add-on of its own, not a separate service.
+  [`nuxeo-agentic-connectors`](../../nuxeo-agentic-connectors/README.md) is a Maven module beside
+  `nuxeo-agentic-core`, and its Automation operation `Connector.Read` reads one record of another
+  system by a key the document holds, after the reader's permission on the document, and returns
+  the fields its connector allows. A kit contributes the connector; each server sets its address and
+  credential. Layout version 2's `external` card shows the answer (layout-v2.md, section 7). What
+  changes if D goes another way:
+  - **A separate integration service, reached through Nuxeo:** `Connector.Read` calls the service
+    instead of the system, and keeps the permission check. The card, the layout and the validator
+    do not change.
+  - **A separate service the client calls itself:** `ConnectorRecordService` in
+    `libs/shared/document-layouts` gets the service's address, and the service must check the
+    reader's permission on the record by asking Nuxeo as the reader, which needs decision F's
+    tokens. The connectors' contributions, their credentials and their allow-lists move to the
+    service's own configuration; the validator's `--registered` connectors stay as they are.
+  - **F is not touched.** The connector calls the other system with its own credential, from the
+    server's configuration, and does not pass the reader's sign-in on. So the other system's own
+    access rules are not applied reader by reader: whoever may read the record sees its connector's
+    fields. Token exchange, decision F, is what would change that.
+
 ## From the Studio parity plan
 
 Taken on 19 November 2026 in the [Studio parity plan](../nuxeo-studio-parity-plan.md), on the

@@ -43,7 +43,10 @@ install and no transpiler.
     `{ "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }`, each a list of ids. A
     customer's Layer 2 rules and actions go here: `actions` are those in any other slot, a
     toolbar's for one, which a package's own action may not take the id of. Domain modules go here
-    too, until each is built.
+    too, until each is built. So do the connectors its server registers, as
+    `"connectors": { "<id>": ["<field>", ...] }`: given them, a card from another system is held to
+    its connector's allow-list, and one naming a connector or a field they lack is refused; without
+    them, its connector and fields are held to the form of a name only (layout-v2.md, section 7).
   - **`--platform`:** its platform version, which `app.json`'s range must hold.
   - **`--model`:** its server's content model, `{ doctypes, facets, schemas }`, as
     `npm run app-package:model` exports it
@@ -105,8 +108,11 @@ install and no transpiler.
     among them;
   - the domain modules, of which there are none yet;
   - the pages a menu entry may open, by the ID of the platform's menu entry for each;
+  - the connectors to systems of record a server registers, with their fields: none known
+    (`null`) until a caller gives them, and `EXTERNAL_WIDGETS`, the 9 widgets a card from another
+    system may use;
   - `withRegistered`, which adds a customer's own rules, actions and pages, registered in a
-    manifest or in Layer 2 code, and modules.
+    manifest or in Layer 2 code, modules, and a server's connectors.
 - **The JSON Schemas** (draft 2020-12) are for editors, the designer and the agent. Each file may
   name its schema in a `$schema` key. The validators are what refuse a package. They also check
   what a schema expresses poorly:

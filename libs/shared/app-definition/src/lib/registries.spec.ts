@@ -11,6 +11,7 @@ import { parseRange, parseVersion } from './semver';
 import {
   APP_RULES,
   CORE_RULES,
+  EXTERNAL_WIDGETS,
   PACKAGED_BULK_ACTIONS,
   PACKAGED_CHECKS,
   PACKAGED_COMPUTATIONS,
@@ -96,6 +97,27 @@ describe('the JSON Schema, held to the registries and the validator', () => {
     expect([...(defs['related'].properties['rowActions'].items?.enum ?? [])].sort()).toEqual(
       [...PACKAGED_ROW_ACTIONS].sort(),
     );
+    expect([...(defs['externalField'].properties['widget'].enum ?? [])].sort()).toEqual(
+      [...EXTERNAL_WIDGETS].sort(),
+    );
+    // Every widget a card from another system may use is one the platform registers.
+    expect([...EXTERNAL_WIDGETS].filter((id) => !Object.hasOwn(PACKAGED_WIDGETS, id))).toEqual([]);
+  });
+
+  it('knows no connector until it is given the ones a server registers', () => {
+    expect(PACKAGED_REGISTRIES.connectors).toBeNull();
+    const given = withRegistered(PACKAGED_REGISTRIES, {
+      connectors: { 'payers.claimPayments': ['paymentStatus'] },
+    });
+    expect(given.connectors?.['payers.claimPayments']).toEqual(new Set(['paymentStatus']));
+    // Adding rules keeps them; adding connectors again replaces one by its id.
+    const again = withRegistered(withRegistered(given, { rules: ['acme.rules.x'] }), {
+      connectors: { 'payers.claimPayments': ['paidOn'], 'payers.policy': ['policyNumber'] },
+    });
+    expect(again.connectors).toEqual({
+      'payers.claimPayments': new Set(['paidOn']),
+      'payers.policy': new Set(['policyNumber']),
+    });
   });
 
   it('allows the same keys in each part of a file as the validator does', () => {
@@ -108,6 +130,8 @@ describe('the JSON Schema, held to the registries and the validator', () => {
       ['related', LAYOUT_V2_KEYS.related],
       ['timeline', LAYOUT_V2_KEYS.timeline],
       ['comments', LAYOUT_V2_KEYS.comments],
+      ['external', LAYOUT_V2_KEYS.external],
+      ['externalField', LAYOUT_V2_KEYS.externalField],
       ['check', LAYOUT_V2_KEYS.check],
     ] as const) {
       expect(Object.keys(defs[part].properties).sort()).toEqual([...keys].sort());

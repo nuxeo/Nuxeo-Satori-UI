@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.connectors.operations">
+
+  <documentation>
+    Connector.Read: one record from a system of record, for the input document, through a connector
+    the server registers. Its only parameter is the connector's id.
+  </documentation>
+
+  <require>org.nuxeo.agentic.connectors</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.connectors.ReadConnectorOperation" />
+  </extension>
+
+</component>

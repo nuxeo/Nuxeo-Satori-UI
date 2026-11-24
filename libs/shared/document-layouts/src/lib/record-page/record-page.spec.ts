@@ -22,6 +22,7 @@ import { Subject, of, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import type { DocumentTypeDefinition } from '../layout.model';
+import { ConnectorRecordService } from './connector-record.service';
 import type { LinkedRecord } from './linked-record';
 import { readRecordLayout } from './record-layout';
 import { RecordListComponent } from './record-list';
@@ -237,6 +238,8 @@ describe('RecordPageComponent', () => {
   let pageToday: Date;
   let warnings: string[];
   let execute: ReturnType<typeof vi.fn>;
+  /** What a card from another system asks the server's connector. */
+  let connectorRead: ReturnType<typeof vi.fn>;
   /** The record's history and comments: what the timeline and the comments cards ask for. */
   let documents: {
     getAuditLog: ReturnType<typeof vi.fn>;
@@ -248,6 +251,7 @@ describe('RecordPageComponent', () => {
 
   beforeEach(() => {
     execute = vi.fn(() => new Subject());
+    connectorRead = vi.fn(() => new Subject());
     documents = {
       getAuditLog: vi.fn(() => new Subject()),
       getAllComments: vi.fn(() => new Subject()),
@@ -286,6 +290,7 @@ describe('RecordPageComponent', () => {
         provideRouter([]),
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         { provide: PageProviderService, useValue: { execute } },
+        { provide: ConnectorRecordService, useValue: { read: connectorRead } },
         { provide: DocumentDetailService, useValue: documents },
         { provide: CURRENT_USERNAME, useValue: () => 'jdoe' },
         {
@@ -1361,6 +1366,71 @@ describe('RecordPageComponent', () => {
       expect(
         root.querySelector('[data-tab-id="activity"] .nxs-comments__text')?.textContent?.trim(),
       ).toBe('First');
+    });
+  });
+
+  describe('a card from another system', () => {
+    const POLICY_PAGE = {
+      version: 2,
+      columns: 2,
+      cards: [
+        { id: 'member', label: 'Member', fields: ['member:phone'] },
+        {
+          id: 'policy',
+          label: 'Policy',
+          external: {
+            connector: 'payers.memberPolicy',
+            fields: [
+              'policyNumber',
+              { name: 'premium', widget: 'currency', parameters: { currency: 'USD' } },
+              { name: 'internalRating', visibleWhen: 'test.rules.memberServices' },
+            ],
+          },
+        },
+      ],
+    };
+
+    it('draws it from the layout file, asking the connector for the open record', async () => {
+      connectorRead.mockReturnValue(
+        of({
+          connector: 'payers.memberPolicy',
+          status: 'found',
+          fields: { policyNumber: 'POL-FICT-0048', premium: 120, internalRating: 'B' },
+        }),
+      );
+      const root = await render(member(), POLICY_PAGE);
+
+      const card = root.querySelector<HTMLElement>('[data-card-id="policy"]');
+      expect(card?.querySelector('h3')?.textContent?.trim()).toBe('Policy');
+      expect(card?.querySelector('lib-record-external')).not.toBeNull();
+      expect(connectorRead).toHaveBeenCalledTimes(1);
+      expect(connectorRead).toHaveBeenCalledWith('payers.memberPolicy', 'm1');
+      // The page passes only the fields whose rules pass: member services' field is not drawn.
+      expect(
+        [...(card?.querySelectorAll<HTMLElement>('.record-external__field') ?? [])].map(
+          (row) => row.dataset['field'],
+        ),
+      ).toEqual(['policyNumber', 'premium']);
+      expect(card?.textContent).toContain('$120.00');
+      expect(card?.textContent).not.toContain('Internal rating');
+    });
+
+    it('leaves the card out when no field of it passes its rule, and asks for nothing', async () => {
+      const root = await render(member(), {
+        version: 2,
+        cards: [
+          { id: 'member', label: 'Member', fields: ['member:phone'] },
+          {
+            id: 'policy',
+            external: {
+              connector: 'payers.memberPolicy',
+              fields: [{ name: 'internalRating', visibleWhen: 'test.rules.memberServices' }],
+            },
+          },
+        ],
+      });
+      expect(root.querySelector('[data-card-id="policy"]')).toBeNull();
+      expect(connectorRead).not.toHaveBeenCalled();
     });
   });
 

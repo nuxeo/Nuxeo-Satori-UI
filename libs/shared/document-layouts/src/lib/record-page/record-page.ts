@@ -38,7 +38,6 @@ import {
   RICH_TEXT_HTML,
   type RecordValueContext,
   type RecordValueView,
-  type Tone,
   WIDGETS_SHOWN_AS_VERSION_1,
   columnWidget,
   computedDefinition,
@@ -63,15 +62,18 @@ import {
   recordLookups,
   sameLookups,
 } from './record-lookups';
+import { RecordExternalComponent } from './record-external';
 import {
   type RecordBannerTone,
   type RecordCommentsEntry,
+  type RecordExternalEntry,
   type RecordListEntry,
   type RecordTimelineEntry,
   propertiesReadBy,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RecordPictureViewsComponent } from './record-picture-views';
+import { TAG_STATUS } from './record-tags';
 import { RecordTimelineComponent } from './record-timeline';
 import {
   type ResolvedPropertyField,
@@ -83,15 +85,6 @@ import {
 import { own, tableColumns } from './widget-support';
 
 export { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
-
-/** The design system's status for each of version 2's tones. */
-const TAG_STATUS: Readonly<Record<Tone, NxsTagStatus>> = {
-  positive: 'success',
-  warning: 'warning',
-  negative: 'important',
-  info: 'info',
-  neutral: 'neutral',
-};
 
 /** The design system's banner tone for each of a banner's, in layout version 2's words. */
 const BANNER_TONE: Readonly<Record<RecordBannerTone, NxsBannerTone>> = {
@@ -146,6 +139,14 @@ export interface RecordTimelineShown {
   readonly label: string;
 }
 
+/** A card from another system, as the page hands it to `lib-record-external`. */
+export interface RecordExternalShown {
+  /** Its fields are those whose rules pass. */
+  readonly external: RecordExternalEntry;
+  /** Where it is written, for the console. */
+  readonly source: string;
+}
+
 export interface RecordCardShown {
   readonly id: string;
   readonly heading: string | null;
@@ -157,6 +158,8 @@ export interface RecordCardShown {
   readonly timeline: RecordTimelineShown | null;
   /** For a card of comments, the record's thread; `null` for any other card. */
   readonly comments: RecordCommentsEntry | null;
+  /** For a card from another system; `null` for any other card. */
+  readonly external: RecordExternalShown | null;
 }
 
 export interface RecordPageShown {
@@ -199,7 +202,8 @@ function fieldShowing(
  * `view` mode (docs/business-apps/layout-v2.md). Cards fill one to three columns, or tabs hold
  * them; each field shows a property through a registered widget, or what a registered
  * computation works out from the record; a rule shows or hides a banner, a tab, a card or a field.
- * A card may list related records instead, or show the record's timeline or its comments. Banners
+ * A card may list related records instead, or show the record's timeline or its comments, or fields
+ * of a record in another system, read on the server through a connector (`lib-record-external`). Banners
  * come first, then, for a Picture, its views (`lib-record-picture-views`), then the cards.
  *
  * Its fields are read-only; the comments card is where a user writes, and the server decides what
@@ -215,6 +219,7 @@ function fieldShowing(
     NgTemplateOutlet,
     NxsBannerComponent,
     NxsCommentsComponent,
+    RecordExternalComponent,
     RecordListComponent,
     RecordPictureViewsComponent,
     RecordTimelineComponent,
@@ -381,6 +386,15 @@ export class RecordPageComponent {
               ? { timeline: card.timeline, label: heading ?? humanize(card.id) }
               : null,
             comments: card.comments,
+            external: card.external
+              ? {
+                  external: {
+                    ...card.external,
+                    fields: card.external.fields.filter((field) => passes(field.visibleWhen)),
+                  },
+                  source: `${layout.type}/view layout: ${card.place}`,
+                }
+              : null,
           };
         })
         .filter(
@@ -388,7 +402,8 @@ export class RecordPageComponent {
             card.fields.length > 0 ||
             (card.related?.list.columns.length ?? 0) > 0 ||
             card.timeline !== null ||
-            card.comments !== null,
+            card.comments !== null ||
+            (card.external?.external.fields.length ?? 0) > 0,
         );
     if (layout.tabs) {
       const tabs = layout.tabs

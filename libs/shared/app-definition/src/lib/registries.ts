@@ -90,6 +90,14 @@ export interface Registries {
    * Layer 2 code. `home`, the app's own home, is not one of them: every app has it.
    */
   readonly pages: ReadonlySet<string>;
+  /**
+   * The connectors to systems of record a server registers, by id, each with the fields its
+   * allow-list returns (`nuxeo-agentic-connectors`), which an `external` card may name
+   * (layout-v2.md, section 7). `null` where the caller does not know them, as the app does not and
+   * as the pipeline does not unless `--registered` lists them: a connector is the server's to
+   * define, as a page provider is, so a card is then held to the form of its names only.
+   */
+  readonly connectors: Readonly<Record<string, ReadonlySet<string>>> | null;
 }
 
 const text: ParameterCheck = (value) =>
@@ -306,6 +314,24 @@ export const PACKAGED_PAGES: ReadonlySet<string> = new Set([
  */
 export const PACKAGED_MODULES: ReadonlySet<string> = new Set();
 
+/**
+ * The widgets an `external` card's field may use: those that show one text, number, date or
+ * boolean as text. Not `rich-text`, whose HTML would come from another system; not the links,
+ * `phone`, `email` and `document-link`, nor the lookups, `user`, `group` and `vocabulary`, whose ids
+ * are Nuxeo's and not that system's; nor those that show a complex value or a list.
+ */
+export const EXTERNAL_WIDGETS: ReadonlySet<string> = new Set([
+  'text',
+  'long-text',
+  'number',
+  'currency',
+  'percent',
+  'date',
+  'relative-date',
+  'boolean',
+  'status-badge',
+]);
+
 export const PACKAGED_REGISTRIES: Registries = {
   widgets: PACKAGED_WIDGETS,
   computations: PACKAGED_COMPUTATIONS,
@@ -316,12 +342,14 @@ export const PACKAGED_REGISTRIES: Registries = {
   actions: new Set(),
   modules: PACKAGED_MODULES,
   pages: PACKAGED_PAGES,
+  connectors: null,
 };
 
 /**
  * The packaged registries with more IDs added: the rules and actions a customer registered in
  * Layer 2 code, whose parameters this library cannot know, so it accepts any; a package's own
- * actions, from its `actions.json`; modules; and pages a menu may open. A rule the platform already
+ * actions, from its `actions.json`; modules; pages a menu may open; and the connectors a server
+ * registers, with their fields, which replace a connector of the same id. A rule the platform already
  * registers keeps its own signature, so that adding it again cannot loosen the checks of its
  * parameters.
  */
@@ -334,8 +362,18 @@ export function withRegistered(
     readonly actions?: readonly string[];
     readonly modules?: readonly string[];
     readonly pages?: readonly string[];
+    /** Connectors by id, each with the fields its allow-list returns. */
+    readonly connectors?: Readonly<Record<string, readonly string[]>>;
   },
 ): Registries {
+  const connectors = extra.connectors
+    ? {
+        ...(base.connectors ?? {}),
+        ...Object.fromEntries(
+          Object.entries(extra.connectors).map(([id, fields]) => [id, new Set(fields)]),
+        ),
+      }
+    : base.connectors;
   return {
     ...base,
     rules: { ...Object.fromEntries((extra.rules ?? []).map((id) => [id, null])), ...base.rules },
@@ -344,6 +382,7 @@ export function withRegistered(
     actions: new Set([...base.actions, ...(extra.actions ?? [])]),
     modules: new Set([...base.modules, ...(extra.modules ?? [])]),
     pages: new Set([...base.pages, ...(extra.pages ?? [])]),
+    connectors,
   };
 }
 

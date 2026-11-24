@@ -127,6 +127,7 @@ Automation operations use `POST /nuxeo/api/v1/automation/:operationId` with body
 | Unblock inheritance     | `Document.UnblockPermissionInheritance` | —                                                                                                                               |
 | Bulk download           | `Blob.BulkDownload`                     | `uids`                                                                                                                          |
 | CSV export              | `Bulk.RunAction`                        | `action: "csvExport"`                                                                                                           |
+| Read a system of record | `Connector.Read`                        | `connector`; input the document. Ours (`nuxeo-agentic-connectors`), not installed by default                                    |
 
 ---
 
