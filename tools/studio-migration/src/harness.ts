@@ -10,8 +10,9 @@
  * waits for M3's plugins.
  *
  * A migration is ready only when all ten pass, nothing is pending, nothing proposed waits for a
- * decision, and every reported item has an owner. So an M1 run is never ready, and says what
- * stands in the way.
+ * decision, and every reported item has an owner and a decision, in the conversion's
+ * `decisions.json` (`decisions.ts`), with nothing wrong in that file. So an M1 run is never ready,
+ * and says what stands in the way.
  */
 import { mapThemeProperty, type Catalogue } from './catalogue';
 import { checkConditions } from './check-conditions';
@@ -22,13 +23,17 @@ import { checkRequests } from './check-requests';
 import { checkSeen } from './check-seen';
 import { contrastRatio, parseColour } from './colour';
 import { constructsOf, countsOf } from './constructs';
+import { holdDecisions } from './decisions';
 import {
   EXPLAINED,
   OUTCOMES,
   labelsOf,
   platformVersion,
+  packageBuildOf,
   readCatalogue,
+  studioBuildOf,
   type Conversion,
+  type MigrationReport,
   type ReportEntry,
 } from './convert';
 import type { Inventory } from './inventory';
@@ -115,10 +120,21 @@ export function runHarness(given: HarnessInput): HarnessResult {
   const input = completed(given);
   const checks: CheckResult[] = CHECKS.map((check) => runOne(check, input));
 
-  const entries = input.conversion.report.constructs ?? [];
+  // An id listed twice is read by its first entry, as the decisions and the report read it.
+  const entries = firstEntries(input.conversion.report.constructs ?? []);
   const pending = entries.filter((entry) => entry.outcome === 'pending').length;
-  const unowned = entries.filter((entry) => entry.outcome === 'reported' && !entry.owner).length;
   const proposed = entries.filter((entry) => entry.outcome === 'proposed').length;
+  const { unowned, undecided, findings } = holdDecisions(
+    input.conversion.report,
+    input.conversion.decisions,
+    packageBuildOf(input.pkg),
+  );
+  // A reason that names the allow-list is the conversion's, so a decision made on it rests on the
+  // list the conversion was made with.
+  const recorded = [...(input.conversion.report.allowList ?? [])].sort();
+  const deployment = [...(input.allowList ?? [])].sort();
+  const otherList =
+    !input.allowListFromReport && JSON.stringify(recorded) !== JSON.stringify(deployment);
   const blockers = [
     ...checks
       .filter((check) => check.status === 'fail')
@@ -131,9 +147,33 @@ export function runHarness(given: HarnessInput): HarnessResult {
       .map((check) => `check ${check.number} did not run`),
     ...(pending ? [`${pending} constructs are pending a later phase`] : []),
     ...(proposed ? [`${proposed} proposals wait for a person to accept or reject them`] : []),
-    ...(unowned ? [`${unowned} reported items have no owner`] : []),
+    ...(unowned
+      ? [`${unowned} reported ${unowned === 1 ? 'item has' : 'items have'} no owner`]
+      : []),
+    ...(undecided
+      ? [
+          `${undecided} reported ${undecided === 1 ? 'item has' : 'items have'} an owner but no decision`,
+        ]
+      : []),
+    // What is wrong with decisions.json: a decision it holds that the harness does not take.
+    ...findings,
+    ...(otherList
+      ? [
+          `the conversion was made with the allow-list ${recorded.join(', ') || 'none'}, not the deployment's, ${deployment.join(', ') || 'none'}: convert it again with the deployment's`,
+        ]
+      : []),
   ];
   return { checks, ready: blockers.length === 0, blockers };
+}
+
+/** The first entry of each id, in the report's order. */
+function firstEntries(entries: readonly ReportEntry[]): ReportEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
 }
 
 /**
@@ -172,13 +212,32 @@ function runOne([number, name, run]: (typeof CHECKS)[number], input: HarnessInpu
 }
 
 /**
- * Check 1. Every construct of the package is in the report once, with an outcome, and with a
- * reason where the outcome needs one; nothing in the report is invented; and the two counts of
- * the package agree.
+ * Check 1. The report is of the package given, its name, version and Studio build; every
+ * construct of the package is in it once, with an outcome, and with a reason where the outcome
+ * needs one; nothing in it is invented; and the two counts of the package agree.
  */
 export function nothingDropped({ pkg, inventory, conversion }: HarnessInput): string[] {
   const findings: string[] = [];
   const constructs = constructsOf(inventory);
+
+  // Construct ids are places in files, so a report of another build can hold the same ids for
+  // other constructs, and the decisions made on it with them.
+  const of = conversion.report.package as Partial<MigrationReport['package']> | undefined;
+  const { name, version } = pkg.descriptor;
+  if (of?.name !== name || of?.version !== version) {
+    findings.push(
+      `the report is of ${String(of?.name)} ${String(of?.version)}, not of the package given, ${name} ${version}`,
+    );
+  }
+  const studio = studioBuildOf(pkg);
+  const recorded = conversion.report.studio as Partial<MigrationReport['studio']> | undefined;
+  if (recorded?.commit !== studio.commit || recorded?.buildTime !== studio.buildTime) {
+    const build = (of: Partial<MigrationReport['studio']> | undefined): string =>
+      `${of?.commit ? `commit ${of.commit}` : 'no commit'} and ${of?.buildTime ? `build time ${of.buildTime}` : 'no build time'}`;
+    findings.push(
+      `the report records Studio's ${build(recorded)}, and the package's manifest ${build(studio)}`,
+    );
+  }
 
   const first = countsOf(constructs);
   const second = secondCount(pkg, inventory);
@@ -221,11 +280,17 @@ export function nothingDropped({ pkg, inventory, conversion }: HarnessInput): st
     (construct) => (byId.get(construct.id) ?? []).length > 0,
   ).length;
   if (constructs.length > 0 && accounted < constructs.length) {
-    findings.push(
-      `coverage is ${Math.floor((accounted / constructs.length) * 1000) / 10}%, not 100%`,
-    );
+    findings.push(`coverage is ${coverage(accounted, constructs.length)}%, not 100%`);
   }
   return findings;
+}
+
+/**
+ * The share of a package's constructs its report accounts for, as a percentage rounded down to a
+ * tenth, so that 99.96% is never shown as 100%. A package of no construct is wholly accounted for.
+ */
+export function coverage(accounted: number, constructs: number): number {
+  return constructs === 0 ? 100 : Math.floor((accounted / constructs) * 1000) / 10;
 }
 
 /**

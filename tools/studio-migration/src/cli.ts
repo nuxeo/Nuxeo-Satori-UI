@@ -7,17 +7,29 @@
  *   check     <package.zip> <conversion-directory> [--json] [--allow-list <file>]
  *                                                             the harness
  *   mutate    <conversion-directory> <mutation> <new-directory> [--package <zip>]   a deliberately broken copy
- *   mutate    --list                                          the mutations, and the check each fails
+ *   mutate    --list                                          the mutations, and what must refuse each
+ *   decisions <package.zip> <conversion-directory> [--from <decisions.json>]
+ *                                                             the decisions file, for people to fill in
+ *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+ *                                                             the report, for the person who approves it
  *
  * `--allow-list` names the deployment's operations, `{ "operations": [...] }` (decision 3): a button
- * becomes an action only when its operation is on it. `check` reads the list the conversion was
- * made with unless it is given one.
+ * becomes an action only when its operation is on it. `check` and `report` read the list the
+ * conversion was made with unless they are given one.
+ *
+ * `decisions` writes the conversion's `decisions.json` for the package given, an entry for each
+ * reported item, for people to say who owns it and what they decided; `--from` carries each
+ * decision of an earlier file, for the same build of the package, that still holds. `check` and
+ * `report` read it from the conversion, and take it only for the package they are given.
  *
  * Exit codes: 0 done, and for `check`, no check failed; 1 a check failed, or something could not be
- * read or written, with the reason; 2 the command was wrong. Nothing in a package is ever run, and
- * nothing is ever written over: `convert` and `mutate` write only into a new or empty directory.
+ * read or written, with the reason; 2 the command was wrong. `report` exits 0 once it has printed the
+ * report, whatever the report says. Nothing in a package is ever run, and nothing is ever written
+ * over: `convert` and `mutate` write only into a new or empty directory, and `decisions` only a
+ * `decisions.json` the conversion does not hold yet.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { account, type Accounting } from './account';
 import { CatalogueError, loadCatalogue, type How } from './catalogue';
 import {
@@ -25,14 +37,24 @@ import {
   ConversionError,
   labelsOf,
   OUTCOMES,
+  packageBuildOf,
   readConversion,
   writeConversion,
   type Conversion,
   type Outcome,
 } from './convert';
+import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
 import { runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
-import { MUTATIONS, MutationError, mutation } from './mutations';
+import {
+  DECISION_MUTATIONS,
+  MUTATIONS,
+  MutationError,
+  mutation,
+  type DecisionMutation,
+  type Mutation,
+} from './mutations';
+import { summarise, TALLIES, type MigrationSummary } from './report';
 import { readStudioPackage, StudioPackageError, type StudioPackage } from './studio-package';
 import { ZipError } from './zip';
 
@@ -48,6 +70,8 @@ const USAGE = `usage:
   studio-migration check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration mutate <conversion-directory> <mutation> <new-directory> [--package <package.zip>]
   studio-migration mutate --list
+  studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
+  studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 `;
 
 /** What a command expects: its positional arguments, the flags it takes, and those with a value. */
@@ -65,13 +89,15 @@ const COMMANDS: Readonly<
   convert: { args: 2, flags: [], valued: ['--allow-list'] },
   check: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
   mutate: { args: 3, flags: [], valued: ['--package'] },
+  decisions: { args: 2, flags: [], valued: ['--from'] },
+  report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
 };
 
 export function main(argv: readonly string[], io: CliIo): number {
   const [command, ...rest] = argv;
   if (command === 'mutate' && rest.length === 1 && rest[0] === '--list') {
-    for (const m of MUTATIONS)
-      io.out(`${m.name.padEnd(22)} check ${m.caughtBy}   ${m.description}\n`);
+    for (const m of [...MUTATIONS, ...DECISION_MUTATIONS])
+      io.out(`${m.name.padEnd(22)} ${catcher(m).padEnd(10)} ${m.description}\n`);
     return 0;
   }
   const spec =
@@ -152,8 +178,60 @@ export function main(argv: readonly string[], io: CliIo): number {
         const { conversion, changed } = chosen.apply(readConversion(args[0]), source);
         writeConversion(args[2], conversion);
         io.out(
-          `${chosen.name}: ${changed}. Written to ${args[2]}; check ${chosen.caughtBy} must now fail.\n`,
+          `${chosen.name}: ${changed}. Written to ${args[2]}; ${
+            chosen.caughtBy === 'decisions'
+              ? 'what stands in the way of readiness must now show it'
+              : `check ${chosen.caughtBy} must now fail`
+          }.\n`,
         );
+        return 0;
+      }
+      case 'decisions': {
+        const pkg = readPackage(io, args[0]);
+        const conversion = readConversion(args[1]);
+        const from = values.get('--from');
+        const earlier = from === undefined ? undefined : { raw: readJson(io, from), file: from };
+        const { file, carried, notCarried, blank } = decisionsFor(
+          conversion.report,
+          packageBuildOf(pkg),
+          earlier,
+        );
+        const path = join(args[1], DECISIONS_FILE);
+        try {
+          // `wx`: written only where no file is, so a person's decisions are never written over.
+          writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`, { flag: 'wx' });
+        } catch (error) {
+          throw new DecisionsError(
+            (error as NodeJS.ErrnoException).code === 'EEXIST'
+              ? `${path} exists, and is never written over`
+              : `${path}: ${(error as Error).message}`,
+          );
+        }
+        const lines = [
+          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them with an owner or a decision to fill in`,
+        ];
+        if (from !== undefined) {
+          lines.push(`  carried from ${from}: ${carried}`);
+          if (notCarried.length > 0) {
+            // Printed once: the earlier file is read, never changed, so it still holds each.
+            lines.push(`  not carried, and still in ${from}: ${notCarried.length}`);
+            for (const line of notCarried) lines.push(`    - ${line}`);
+          }
+        }
+        io.out(`${lines.join('\n')}\n`);
+        return 0;
+      }
+      case 'report': {
+        const pkg = readPackage(io, args[0]);
+        const allowList = readAllowList(io, allowListFile);
+        const summary = summarise({
+          pkg,
+          inventory: inventory(pkg),
+          catalogue: loadCatalogue(),
+          conversion: readConversion(args[1]),
+          ...(allowList ? { allowList } : {}),
+        });
+        io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
         return 0;
       }
     }
@@ -163,7 +241,8 @@ export function main(argv: readonly string[], io: CliIo): number {
       error instanceof StudioPackageError ||
       error instanceof CatalogueError ||
       error instanceof ConversionError ||
-      error instanceof MutationError
+      error instanceof MutationError ||
+      error instanceof DecisionsError
     ) {
       io.err(`${error.message}\n`);
       return 1;
@@ -173,15 +252,23 @@ export function main(argv: readonly string[], io: CliIo): number {
   return 2;
 }
 
-/** The deployment's allow-list, `{ "operations": [...] }`, as app-definition's command line reads it. */
-function readAllowList(io: CliIo, path: string | undefined): ReadonlySet<string> | undefined {
-  if (path === undefined) return undefined;
-  let parsed: unknown;
+/** Which part of the harness must refuse what a control breaks. */
+function catcher(control: Mutation | DecisionMutation): string {
+  return control.caughtBy === 'decisions' ? 'decisions' : `check ${control.caughtBy}`;
+}
+
+function readJson(io: CliIo, path: string): unknown {
   try {
-    parsed = JSON.parse(io.readFile(path).toString('utf8'));
+    return JSON.parse(io.readFile(path).toString('utf8'));
   } catch (error) {
     throw new ConversionError(`${path}: ${(error as Error).message}`);
   }
+}
+
+/** The deployment's allow-list, `{ "operations": [...] }`, as app-definition's command line reads it. */
+function readAllowList(io: CliIo, path: string | undefined): ReadonlySet<string> | undefined {
+  if (path === undefined) return undefined;
+  const parsed = readJson(io, path);
   const operations =
     typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)['operations']
@@ -249,7 +336,14 @@ export function harnessSummary(
   const lines = [
     `${pkg.descriptor.name} ${pkg.descriptor.version}, against the conversion in ${directory}`,
     '',
+    ...checkLines(result),
   ];
+  return `${lines.join('\n')}\n`;
+}
+
+/** The ten checks, each with what it found, then the verdict and what stands in its way. */
+function checkLines(result: Pick<HarnessResult, 'checks' | 'ready' | 'blockers'>): string[] {
+  const lines: string[] = [];
   for (const check of result.checks) {
     const head = `${String(check.number).padStart(2)}  ${check.name.padEnd(26)}`;
     if (check.status === 'not run') lines.push(`${head} not run: ${check.reason}`);
@@ -260,7 +354,114 @@ export function harnessSummary(
   }
   lines.push('', `Verdict: ${result.ready ? 'ready' : 'not ready'}`);
   for (const blocker of result.blockers) lines.push(`  - ${blocker}`);
+  return lines;
+}
+
+/** The report of section 8 as text, which `report` prints. */
+export function reportSummary(summary: MigrationSummary): string {
+  const { header, all } = summary;
+  const { package: pkg, studio } = header;
+  const lines = [
+    `Migration report: ${pkg.name} ${pkg.version}`,
+    '',
+    `Package: ${pkg.name} ${pkg.version}, for ${pkg.targetPlatform ?? 'any platform'}` +
+      `${pkg.targetPlatformName ? ` (${pkg.targetPlatformName})` : ''}; its bundle ${pkg.bundle}`,
+    `Studio: branch ${studio.branch ?? 'not recorded'}, commit ${studio.commit ?? 'not recorded'}, built ${studio.buildTime ?? 'at a time not recorded'}`,
+    `App: ${header.app.id ?? 'no app.json'}${header.app.platform ? `, for platform ${header.app.platform}` : ''}`,
+    `Converter: ${header.converter.name} ${header.converter.version}, phase ${header.converter.phase}`,
+    `Allow-list: ${header.allowList.operations.join(', ') || 'none'}, ${
+      header.allowList.from === 'deployment'
+        ? "the deployment's, as given"
+        : "as the conversion recorded it, not the deployment's word for it"
+    }`,
+    '',
+    `Summary: ${plural(all.total, 'construct')}, by kind and outcome`,
+  ];
+  // A column for each tally a construct has, and `missing` always: its 0 is what coverage means.
+  const tallies = TALLIES.filter((tally) => tally === 'missing' || all.tallies[tally] > 0);
+  const headings = [
+    'total',
+    ...tallies.flatMap((tally) => (tally === 'reported' ? ['reported', 'decided'] : [tally])),
+  ];
+  const first = Math.max('kind'.length, ...summary.kinds.map((count) => count.kind.length));
+  const row = (name: string, cells: readonly string[]): string =>
+    `  ${name.padEnd(first)}${cells.map((cell, index) => cell.padStart(Math.max(5, headings[index].length) + 2)).join('')}`;
+  lines.push(row('kind', headings));
+  for (const count of [...summary.kinds, all]) {
+    lines.push(
+      row(count.kind, [
+        String(count.total),
+        ...tallies.flatMap((tally) =>
+          tally === 'reported'
+            ? [String(count.tallies.reported), String(count.decided)]
+            : [String(count.tallies[tally])],
+        ),
+      ]),
+    );
+  }
+  const { coverage } = summary;
+  lines.push(
+    `Coverage: ${coverage.percent}%, ${coverage.accounted} of the package's ${coverage.constructs} constructs in the report`,
+    '',
+    'What the harness found:',
+    ...checkLines(summary).map((line) => (line === '' ? line : `  ${line}`)),
+    '',
+  );
+
+  const decided = summary.reported.filter((item) => item.owner && item.decision).length;
+  lines.push(
+    `Decisions needed: ${plural(summary.reported.length, 'reported item')}, ${decided} of them decided`,
+  );
+  // Each on one line: an owner's words, or a package's, cannot make a line of their own, such as
+  // an item that looks decided.
+  for (const item of summary.reported) {
+    lines.push(
+      `  - ${oneLine(item.label)}, in ${oneLine(item.file)}`,
+      `      id: ${oneLine(item.id)}`,
+      `      why: ${oneLine(item.note)}`,
+    );
+    if (item.to !== undefined) lines.push(`      written to: ${oneLine(item.to)}`);
+    lines.push(
+      `      owner: ${item.owner === null ? 'none' : oneLine(item.owner)}; decided: ${item.decision === null ? 'nothing yet' : oneLine(item.decision)}`,
+    );
+  }
+  if (summary.decisionFindings.length > 0) {
+    lines.push('  Not taken from decisions.json:');
+    for (const finding of summary.decisionFindings) lines.push(`    - ${oneLine(finding)}`);
+  }
+  lines.push(
+    '',
+    summary.proposed.length === 0
+      ? 'Proposals: none'
+      : `Proposals: ${summary.proposed.length}, each waiting for a person to accept or reject it`,
+  );
+  for (const item of summary.proposed)
+    lines.push(
+      `  - ${oneLine(item.label)}, in ${oneLine(item.file)}`,
+      `      id: ${oneLine(item.id)}`,
+      `      why: ${oneLine(item.note)}`,
+    );
+
+  lines.push('', `Files: ${summary.files.length}`);
+  for (const file of summary.files) {
+    const counted = TALLIES.filter((tally) => file.tallies[tally])
+      .map((tally) => `${tally} ${file.tallies[tally]}`)
+      .join(', ');
+    lines.push(`  ${oneLine(file.path)} (${file.kind}): ${counted}`);
+    for (const place of file.became) lines.push(`      became: ${oneLine(place)}`);
+  }
   return `${lines.join('\n')}\n`;
+}
+
+/** Text on one line: each control character, a line break among them, written as an escape. */
+function oneLine(text: string): string {
+  const named: Readonly<Record<string, string>> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\u0000-\u001f\u007f]/g, (character) =>
+    Object.hasOwn(named, character)
+      ? named[character]
+      : `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 export function summary(result: Inventory, accounting: Accounting): string {
