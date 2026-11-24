@@ -207,18 +207,19 @@ describe('holding the decisions to the report', () => {
     expect([...held.taken.keys()]).toEqual(reported.map((entry) => entry.id));
   });
 
-  it('counts an owner with nothing decided, a decision with no owner, and an owner of spaces', () => {
+  it('counts an owner with nothing decided, a decision with no owner, and spaces as nothing', () => {
     const raw = changed(conversion, (_file, items) => {
       items[0]['decision'] = '';
       items[1]['owner'] = '';
       items[2]['owner'] = '   ';
       delete items[3]['owner'];
       delete items[4]['decision'];
+      items[5]['decision'] = ' \n ';
     });
     expect(holdDecisions(conversion.report, raw)).toMatchObject({
       findings: [],
       unowned: 3,
-      undecided: 2,
+      undecided: 3,
     });
   });
 
@@ -349,6 +350,21 @@ describe('holding the decisions to the report', () => {
     }
   });
 
+  it('takes a decision made on a rule the report still gives, read back from its file', () => {
+    const rule = {
+      type: 'core.every',
+      parameters: [{ type: 'app.rules.isType', parameters: ['Claim'] }],
+    };
+    const now = withEntry(conversion, first.id, { rule }).report;
+    // As the file is read: parsed from its text, so its rule is another object of the same JSON.
+    const raw = JSON.parse(JSON.stringify(decisionsFor(now).file)) as Json;
+    for (const item of raw['decisions'] as Json[]) {
+      item['owner'] = 'Migration lead';
+      item['decision'] = 'Kept';
+    }
+    expect(holdDecisions(now, raw)).toMatchObject({ findings: [], unowned: 0, undecided: 0 });
+  });
+
   it('takes no decision missing what it was made on', () => {
     const raw = changed(conversion, (_file, items) => {
       delete items[0]['note'];
@@ -469,6 +485,25 @@ describe('each deliberate breakage of the decisions stands in the way of readine
         /no decision of decisions\.json names an owner and what they decided/,
       );
     }
+  });
+
+  it('breaks a decision readiness takes, never one it already leaves aside', () => {
+    // The first decision filled in is of an item the report does not list: breaking it would
+    // change nothing readiness reads.
+    const decisions = changed(corpus.conversion, (_file, items) => {
+      items.unshift({ ...items[0], id: 'file:elsewhere.html#file' });
+    });
+    const conversion = { ...corpus.conversion, decisions };
+    const before = runHarness({ ...corpus, conversion }).blockers;
+    const broken = DECISION_MUTATIONS.find((candidate) => candidate.name === 'drop-owner')?.apply(
+      conversion,
+    );
+    expect(broken?.changed).toBe(`took the owner off ${reportedIn(corpus.conversion)[0].id}`);
+    expect(
+      runHarness({ ...corpus, conversion: broken?.conversion ?? conversion }).blockers.filter(
+        (line) => !before.includes(line),
+      ),
+    ).toEqual(['1 reported item has no owner']);
   });
 
   describe('names what broke', () => {

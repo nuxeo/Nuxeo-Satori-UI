@@ -5,7 +5,7 @@ Phases M0, M1 and M2 of the migration in
 Studio Designer package written for Web UI and accounts for everything in it. It converts the
 declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) into an app
 definition the package pipeline's validator accepts, and runs the verification harness over the
-result.
+result. It writes the report a person approves, with every reported item's owner and decision.
 
 ```bash
 npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
@@ -13,12 +13,17 @@ npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> 
 npx tsx tools/studio-migration/src/cli.ts check <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutation> <new-directory>
 npx tsx tools/studio-migration/src/cli.ts mutate --list
+npx tsx tools/studio-migration/src/cli.ts decisions <conversion-directory> [--from <decisions.json>]
+npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 ```
 
 - `inventory` says what the package holds, what each part becomes and what someone has to decide.
 - `convert` writes the M1 conversion and its report.
 - `check` runs the harness on a conversion.
 - `mutate` writes a deliberately broken copy of a conversion, for the harness to refuse.
+- `decisions` writes the conversion's `decisions.json`, for people to say who owns each reported
+  item and what they decided. `--from` carries the decisions of an earlier file that still hold.
+- `report` prints the report of the migration document's section 8 (below, **The report**).
 - `--allow-list` names the deployment's operations, `{ "operations": [...] }`, as the app
   definition's validator reads them (decision 3). A button becomes an action only when its
   operation is on it. `check` uses the list the conversion was made with, unless it is given one.
@@ -28,11 +33,12 @@ npx tsx tools/studio-migration/src/cli.ts mutate --list
 **Exit codes:**
 
 - **0:** done, and for `check`, no check failed. A check that ran only in part has not failed.
+  `report` exits 0 once it has printed the report, whatever the report says.
 - **1:** a check failed, or something could not be read or written; the reason is printed.
 - **2:** the command was wrong.
 
-`convert` and `mutate` write only into a new or empty directory, so they never write over
-anything.
+`convert` and `mutate` write only into a new or empty directory, and `decisions` only a
+`decisions.json` the conversion does not hold yet, so none of them writes over anything.
 
 ## The phase 0 demo
 
@@ -181,6 +187,9 @@ gives the same conversion. A conversion directory holds:
   bootstrap configuration (Layer 0). A value that refers to a property the theme does not set is
   reported instead.
 - `themes/<name>/<file>`: each theme's assets, copied unchanged.
+
+Beside them, `decisions.json` holds who owns each reported item and what they decided. People
+write it, with the `decisions` command, and no conversion does (below, **The report**).
 
 **Layouts.** Each Web UI layout becomes the file of its type, from its `@doctype`, and its mode:
 
@@ -548,8 +557,9 @@ check that did not run does.
 - **Not run:** 9, plugins, which M3 brings.
 
 **Readiness.** A migration is ready only when all ten pass, nothing is pending, nothing proposed
-waits for a decision, and every reported item has an owner. So an M1 run is never ready, and it
-lists what stands in the way.
+waits for a decision, and every reported item has an owner and a decision in `decisions.json`,
+with nothing wrong in that file (below, **The report**). So an M1 run is never ready, and it lists
+what stands in the way.
 
 **Negative controls.** [`src/mutations.ts`](src/mutations.ts) holds the controls of section 7 for
 the checks that run. Each breaks one thing and names the check that must then fail. The tests
@@ -616,6 +626,76 @@ Section 7's "invert a rule" is `invert-rule`. It and `drop-rule` take the first 
 conversion carries, on a layout field, a tab, a card, a task form's field, an action, a home card,
 a menu entry or a queue. The tests also drop and invert each rule of the made-up package in turn,
 M2's corpus included, and check 5 fails for every one.
+
+**The decisions' controls.** Six more, in the same file, break one decision of a `decisions.json`
+filled in. No check fails then: readiness must name what broke among what stands in the way,
+which `mutate --list` shows as `decisions`. Each needs a decisions file with a decision filled in,
+and says so when the conversion has none.
+
+| Mutation           | Breaks                                                                            | Readiness then says                                |
+| ------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `drop-owner`       | Takes the owner off a reported item's decision                                    | 1 reported item has no owner                       |
+| `drop-decision`    | Leaves a reported item's owner with nothing decided                               | 1 reported item has an owner but no decision       |
+| `stale-decision`   | Changes the reason the report gives for a decided item, as converting again would | it was decided when the report gave another reason |
+| `decide-unlisted`  | Decides an item the report does not list                                          | it is not in the report                            |
+| `decide-converted` | Decides an item the report gives as converted                                     | only a reported item takes a decision              |
+| `decide-twice`     | Decides one reported item twice                                                   | it is decided 2 times                              |
+
+The tests apply each to the made-up package with M2's corpus and a decisions file filled in, and
+each adds a line of its own to what stands in the way. Each breaks a decision readiness takes, so
+that it cannot pass by breaking one readiness already leaves aside. Each was also applied with
+`mutate` to the made-up package's conversion, with and without M2's corpus, its decisions filled
+in, and `check` named it, where the unbroken copy had nothing of the decisions in the way. The
+sample is not in this repository, and was not used.
+
+## The report
+
+Section 8 of the migration document describes the report a person approves, and step 5 of phase 4's
+demo shows it: 100% of the package accounted for, and every reported item with an owner.
+
+**The decisions** ([`src/decisions.ts`](src/decisions.ts)). `report.json` is the converter's, the
+same for the same package every time. What people decide is kept beside it, in `decisions.json`,
+which no conversion writes, so that converting again, once the catalogue has learnt something,
+loses none of it.
+
+- **`decisions <conversion>`** writes `decisions.json`, in the provisional format
+  `studio-migration-decisions/1`: the package and its version, and an entry for every reported
+  item, in the report's order. Each entry copies what it is made on from the report, the item's
+  label, property, outcome, where it was written, its reason and its rule, and leaves `owner` and
+  `decision` for a person to fill in. It never writes over a `decisions.json` the conversion holds.
+- **`--from <earlier decisions.json>`** carries each decision of a file written for an earlier
+  conversion of the package, at any version of it, where the decision still holds for this report.
+  It lists each that does not, and why. It refuses the decisions of another package.
+- **A decision is taken** only when what it copied still matches the report. One made on another
+  reason, label, property, place or rule was made on something else, and is not taken: it is
+  decided again. Nor is one of an item the report does not list, or does not report, one listed
+  twice, one holding a key a decision does not take, such as a verdict, or one whose owner or
+  decision is not text. A file of another format, of another package or version, or with no list,
+  is taken not at all. Each is a line of what stands in the way.
+- **Readiness** then counts the reported items with no owner, and those whose owner says nothing
+  decided, as `check` prints them. An owner or a decision of spaces alone is none.
+- **Only a reported item takes a decision.** Accepting or rejecting a proposal is not built: the
+  converter would have to write what a person accepts, and until it does a proposal waits.
+
+**The report** ([`src/report.ts`](src/report.ts)): `report <package> <conversion>` prints it, and
+`--json` gives the same as data. It reads the package, the conversion and its decisions, and writes
+nothing.
+
+- **The header:** the package and its version, the platform it targets, its bundle; Studio's
+  branch, commit and build time, from the bundle's manifest; the app's id and platform range; the
+  converter; the allow-list.
+- **The summary:** the package's constructs, as the inventory reads them, by kind, with the outcome
+  of each one's first entry in the report: how many are converted, proposed, reported and of those
+  decided, generated, left on the server, pending, and missing from the report. An entry whose
+  outcome is none is counted apart. The coverage is check 1's: the share of the constructs the
+  report lists, rounded down to a tenth, so that 99.96% never reads as 100%.
+- **What the harness found:** the ten checks, and the verdict with what stands in its way.
+- **The decisions needed:** every reported item, with its reason, where it was written, and its
+  owner and decision, or none; what was not taken from `decisions.json`; and every proposal.
+- **Each file:** its constructs by outcome, and where those converted went.
+
+Screenshots and the request logs wait for the migration server. The reviewer's approval is the
+reviewer's: no command records it.
 
 ## Tests
 
@@ -748,6 +828,31 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     label, and check 6's equals in Web UI's places. Three rounds found five no test reached, each
     now tested.
 
+  - **For the report and its decisions, 49 guards**, broken the same way, each seen turning the
+    suite red:
+    - **Reading `decisions.json`:** its format, its package's name and version, its list; a
+      decision of no item or of an empty id; one listed twice; a key a decision does not take; an
+      item the report does not list, or does not report, and the word that accepting a proposal
+      is not built; each of the six things a decision copies, compared as JSON; an owner or a
+      decision that is not text, or only spaces; each reported item once; a file it takes nothing
+      of, named.
+    - **Carrying an earlier file:** only what still holds, and never another package's.
+    - **Readiness:** each of its three kinds of line.
+    - **The report:** a construct missing, and an outcome that is none; decided only with an owner
+      and a decision; the coverage of what the report lists; an item, and a proposal, listed once,
+      by its first entry; what a file became, only of what was converted; an owner shown only
+      when named.
+    - **Elsewhere:** `decisions.json` written and read with the conversion, never written over;
+      the command's errors; `mutate --list` and `mutate` naming the decisions; two controls
+      breaking what they say; a control needing a decision filled in, and breaking one readiness
+      takes.
+
+    Before the round, four guards were seen to have no test reaching them: the copied rule
+    compared as JSON rather than as an object, a decision of spaces, a proposal listed twice, and
+    what a file became taken from what was reported. Each got its test, and the round found none.
+    After it, reading the code found that a control could break a decision readiness already left
+    aside. It now breaks one readiness takes, and its test fails on the old choice.
+
   - **An independent review of the slot registration** found eleven things. Fixed, each with a
     test: a contribution with no template that comes first was not registered, so its priority did
     not outrank a later one; the custom bundle's contributions were not read; a contribution naming
@@ -857,8 +962,13 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **Version 1 in the package pipeline.** The app-definition validator, and so the pipeline, checks
   nothing in a version 1 layout. Check 10 holds them to the documented contract, but the pipeline
   itself does not, until version 1's reader is shared from `libs/shared/document-layouts`.
-- **Owners for reported items, and accepting proposals:** the report has an `owner` field and
-  the verdict counts what lacks one, but no command sets owners yet.
+- **Accepting proposals.** A reported item takes an owner and a decision in `decisions.json`; a
+  proposal takes nothing yet. Accepting one means the converter writes what was accepted, a
+  condition's rule or the page provider of a card fed by an operation, so the decisions file would
+  feed `convert`, and check 5 would hold an accepted rule as it holds a converted one. Until then
+  every proposal waits, and the verdict says how many.
+- **A reviewer's approval of the report.** `report` prints what the reviewer approves, and no
+  command records that they did.
 - **Contrast against the base palette:** a pair is checked only when the theme sets both tokens.
   A pair the theme sets only half of is not checked yet. Checking it needs the compiled palette's
   values, which are Sass and not JSON.

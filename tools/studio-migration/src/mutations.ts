@@ -7,6 +7,10 @@
  * `mutate` command applies one to a copy of a conversion: a deliberately broken conversion, which
  * the harness refuses, saying why. A mutation that finds nothing of its kind to break, such as a
  * conditional field in a package with no conditions, says so and writes nothing.
+ *
+ * The controls of the report's decisions (`DECISION_MUTATIONS`) break one decision of the
+ * conversion's `decisions.json` instead. No check fails then: readiness, which holds that file to
+ * the report, must name what broke among what stands in the way.
  */
 import { isRecord } from '@agentic-ui/shared/app-definition';
 import { actionIdOf, appIdOf, labelsPath, placed } from './app-files';
@@ -15,6 +19,7 @@ import { labelsOf, type Conversion, type ConvertedTheme, type ReportEntry } from
 import { slotEntry, type Catalogue } from './catalogue';
 import { menuEntryId } from './convert-home';
 import { buttonAction } from './convert-slots';
+import { holdDecisions } from './decisions';
 import type { Inventory, SlotContribution } from './inventory';
 import { slotRegistry } from './slot-registry';
 import type { StudioPackage } from './studio-package';
@@ -1121,7 +1126,10 @@ export interface DecisionMutation extends Omit<Mutation, 'caughtBy'> {
   readonly caughtBy: 'decisions';
 }
 
-/** The conversion's decisions, copied, and the first that names an owner and what they decided. */
+/**
+ * The conversion's decisions, copied, and the first of them readiness takes that names an owner
+ * and what they decided: one whose breakage readiness must then see.
+ */
 function decided(conversion: Conversion): { file: Json; items: Json[]; item: Json } {
   const file = conversion.decisions === undefined ? undefined : clone(conversion.decisions);
   if (!isRecord(file) || !Array.isArray(file['decisions']))
@@ -1129,14 +1137,11 @@ function decided(conversion: Conversion): { file: Json; items: Json[]; item: Jso
       'the conversion has no decisions.json to break: `decisions` writes one, for a person to fill in',
     );
   const items = file['decisions'] as Json[];
-  const item = items.find(
-    (candidate) =>
-      isRecord(candidate) &&
-      typeof candidate['owner'] === 'string' &&
-      candidate['owner'].trim() !== '' &&
-      typeof candidate['decision'] === 'string' &&
-      candidate['decision'].trim() !== '',
-  );
+  const { taken } = holdDecisions(conversion.report, conversion.decisions);
+  const item = items.find((candidate) => {
+    const decision = isRecord(candidate) ? taken.get(String(candidate['id'])) : undefined;
+    return Boolean(decision?.owner.trim() && decision.decision.trim());
+  });
   if (!item)
     throw new MutationError('no decision of decisions.json names an owner and what they decided');
   return { file, items, item };

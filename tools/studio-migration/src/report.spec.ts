@@ -114,6 +114,19 @@ describe('the report of a sound conversion', () => {
     expect(summary.blockers).toContain('2 reported items have no owner');
   });
 
+  it('counts as decided only an item whose owner says what they decided', () => {
+    const conversion = decided(input.conversion);
+    const raw = conversion.decisions as { decisions: Record<string, unknown>[] };
+    raw.decisions[0]['decision'] = '';
+    raw.decisions[1]['owner'] = ' ';
+    const partly = summarise({ ...input, conversion });
+    expect(partly.all.decided).toBe(raw.decisions.length - 2);
+    expect(partly.reported.slice(0, 2).map(({ owner, decision }) => [owner, decision])).toEqual([
+      ['Migration lead', null],
+      [null, 'Rebuilt by hand'],
+    ]);
+  });
+
   it('lists every proposal, which waits for a person', () => {
     expect(summary.proposed.map((item) => item.id)).toEqual(
       entries.filter((entry) => entry.outcome === 'proposed').map((entry) => entry.id),
@@ -138,6 +151,19 @@ describe('the report of a sound conversion', () => {
         (file) => file.path === `${UI}/document/claim/nuxeo-claim-edit-layout.html`,
       ),
     ).toMatchObject({ tallies: { converted: 3, reported: 1, generated: 1 } });
+  });
+
+  it('says a file became only where its constructs were converted, not where one was reported', () => {
+    const fr = 'data/i18n/messages-fr.json';
+    let changed = false;
+    const constructs = entries.map((entry) => {
+      if (changed || entry.file !== fr) return entry;
+      changed = true;
+      return { ...entry, outcome: 'reported' as const, note: 'Left out', to: 'somewhere else' };
+    });
+    expect(
+      summarise(withConstructs(input, constructs)).files.find((file) => file.path === fr),
+    ).toMatchObject({ tallies: { converted: 2, reported: 1 }, became: ['app/labels/fr.json'] });
   });
 
   it('gives the harness’s own findings and verdict', () => {
@@ -175,8 +201,10 @@ describe('the report of a conversion that misses something', () => {
         { ...first, outcome: 'kept' as ReportEntry['outcome'] },
         ...entries.slice(1),
         { ...second, outcome: 'reported', note: 'A second entry' },
+        { ...second, outcome: 'proposed', note: 'A third entry' },
       ]),
     );
+    expect(summary.proposed.some((item) => item.note === 'A third entry')).toBe(false);
     expect(summary.all.tallies['not an outcome']).toBe(1);
     expect(summary.all.tallies[second.outcome]).toBe(
       entries.filter((entry) => entry.outcome === second.outcome).length -

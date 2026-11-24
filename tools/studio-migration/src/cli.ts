@@ -7,7 +7,7 @@
  *   check     <package.zip> <conversion-directory> [--json] [--allow-list <file>]
  *                                                             the harness
  *   mutate    <conversion-directory> <mutation> <new-directory> [--package <zip>]   a deliberately broken copy
- *   mutate    --list                                          the mutations, and what each breaks
+ *   mutate    --list                                          the mutations, and what must refuse each
  *   decisions <conversion-directory> [--from <decisions.json>]
  *                                                             the decisions file, for people to fill in
  *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
