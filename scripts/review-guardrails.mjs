@@ -6349,6 +6349,23 @@ function checkStorybookSatoriCatalogues() {
         continue;
       }
 
+      // Drift recorded on a skipped ancestor mount explains a catalogue the Storybook cannot find
+      // whichever verdict follows, so it is surfaced before the per-language ones too. Consuming
+      // it only in the "serves nothing" branch above left a MIXED configuration — one skipped
+      // mount inside a stale package, another that does serve something, so `servedFrom` is not
+      // empty — getting "use a language that folder ships" with the stale install never
+      // mentioned, and that advice names what 1.0.0 ships while the install is not 1.0.0.
+      const staleSkipped = skippedInstalls.find((skipped) => skipped.drift?.state === 'drift');
+      if (staleSkipped) {
+        warn(
+          `${staleSkipped.root} is installed at ${staleSkipped.drift.installed} but ` +
+            `package-lock.json pins ${staleSkipped.drift.locked}, and ${main}${where} mounts ` +
+            `${staleSkipped.dir}, which is not there. A catalogue missing below ` +
+            `${SATORI_STORYBOOK_CATALOGUE_DIR} may be that stale install rather than the ` +
+            'language asked for. Run `npm ci` and re-run the guardrails.',
+        );
+      }
+
       for (const { file, lang, via } of requested) {
         const parts = lang.split(/[-_]/);
         const baseLang = parts.length > 1 ? parts[0] : null;

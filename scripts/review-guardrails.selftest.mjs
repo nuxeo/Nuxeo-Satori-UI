@@ -13195,6 +13195,28 @@ expectRed(
   /serves nothing at i18n\/@hylandsoftware\/satori-ui[\s\S]*Add a `staticDirs` entry/,
 );
 
+/* The mixed case: one skipped ancestor mount inside a stale package AND one mount that does serve
+ * catalogues, so `servedFrom` is not empty and the "serves nothing" branch never runs. The drift
+ * was recorded and then dropped, leaving "use a language that folder ships — satori-ui 1.0.0 ships
+ * regional codes only" while the install is an alpha. The serving mount is a repository path on
+ * purpose: a vendor one would hit the per-mount drift check and never reach here. */
+expectRed(
+  'a mixed configuration whose recorded drift never reaches the language verdict',
+  'checkStorybookSatoriCatalogues',
+  {
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    // A local override that really does serve catalogues, but not the language asked for.
+    'apps/nuxeo-ui/public/satori-i18n/fr-FR.json': '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }, { from: '../../../../apps/nuxeo-ui/public/satori-i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*may be that stale install rather than the language asked for[\s\S]*serves no en-US\.json/,
+);
+
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
 falsePositiveControls += 1;
 expectSilent(
