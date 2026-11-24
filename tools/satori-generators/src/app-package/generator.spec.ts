@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Tree } from '@nx/devkit';
@@ -8,7 +9,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { generatorFilesDir } from '../util/generator-files-dir';
 import appPackageGenerator, { type AppPackageSchema } from './generator';
-import { CONTRACTS_MODEL } from './testing/scaffold';
+import { platformRoutes, PLATFORM_ROUTES_FILE } from './package-files';
+import { CONTRACTS_MODEL, validate } from './testing/scaffold';
 
 const ROOT = 'business-apps/packages/acme-contracts';
 const CONFIG = `${ROOT}/bundle/agentic-ui-config`;
@@ -164,14 +166,14 @@ describe('app-package generator', () => {
   });
 
   it('writes the app id the registry knows, when it is not the package name', async () => {
-    await generate({ appId: 'contracts' });
+    await generate({ appId: 'acme-legal' });
     expect(json(tree, `${CONFIG}/app.json`)).toMatchObject({
-      id: 'contracts',
-      labelKey: 'contracts.app',
+      id: 'acme-legal',
+      labelKey: 'acme-legal.app',
+      address: 'acme-legal',
     });
-    expect(json(tree, `${CONFIG}/app.json`)).toHaveProperty('address', 'contracts');
     expect(tree.read(`${ROOT}/bundle/OSGI-INF/acme-contracts-config.xml`, 'utf-8')).toContain(
-      '<app id="contracts" src="agentic-ui-config/app.json">',
+      '<app id="acme-legal" src="agentic-ui-config/app.json">',
     );
   });
 
@@ -185,6 +187,67 @@ describe('app-package generator', () => {
     });
   });
 
+  describe("the platform's routes, read from the one place they are listed", () => {
+    it('reads every name the validator refuses as an address, and some it must', () => {
+      const routes = platformRoutes();
+      // A guard on the reading itself: one that found nothing would let every address through.
+      expect(routes).toEqual(expect.arrayContaining(['contracts', 'login', 'settings', 'tasks']));
+      expect(routes.length).toBeGreaterThan(15);
+      // Each, as an app's address, is refused by the validator: what the generator reads is in
+      // the validator's list. The other way, apps/nuxeo-ui's platform-routes.spec.ts holds that
+      // list to the application's routes, and the strict reading below to its every entry.
+      const scratch = mkdtempSync(join(tmpdir(), 'platform-routes-'));
+      try {
+        for (const route of routes) {
+          mkdirSync(join(scratch, route));
+          writeFileSync(
+            join(scratch, route, 'app.json'),
+            JSON.stringify({
+              version: 2,
+              id: 'acme-app',
+              label: 'Acme',
+              packageVersion: '0.1.0',
+              platform: '>=0.2.0 <1.0.0',
+              address: route,
+              groups: ['members'],
+            }),
+          );
+        }
+        const run = validate(scratch);
+        for (const route of routes)
+          expect(run.output).toContain(
+            `address: the address "${route}" is the platform's own page, /${route}`,
+          );
+        expect(run.output).toContain(`${routes.length} files: 0 passed, ${routes.length} refused.`);
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses a list it cannot read whole, rather than read it in part', () => {
+      const scratch = mkdtempSync(join(tmpdir(), 'platform-routes-'));
+      const file = join(scratch, PLATFORM_ROUTES_FILE);
+      try {
+        mkdirSync(join(file, '..'), { recursive: true });
+        writeFileSync(
+          file,
+          "export const PLATFORM_ROUTES: readonly string[] = [\n  'browse',\n  // 'gone',\n  'search',\n];\n",
+        );
+        expect(() => platformRoutes(scratch)).toThrow('is not a list of quoted names there');
+        writeFileSync(
+          file,
+          "export const PLATFORM_ROUTES: readonly string[] = ['browse', 'search'];\n",
+        );
+        expect(platformRoutes(scratch)).toEqual(['browse', 'search']);
+        expect(() => platformRoutes(join(scratch, 'nowhere'))).toThrow(
+          "Cannot read the platform's routes",
+        );
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('refuses, and writes nothing', () => {
     const refusals: [string, Partial<AppPackageSchema>, string][] = [
       ['a name that is not kebab-case', { name: 'Acme_Contracts' }, 'must be kebab-case'],
@@ -194,6 +257,16 @@ describe('app-package generator', () => {
       ['an app id the registry refuses', { appId: 'Contracts' }, '--appId "Contracts"'],
       ['an app id over 63 characters', { appId: `a${'b'.repeat(63)}` }, '--appId'],
       ['an address that is not a path segment', { address: 'Contract Desk' }, '--address'],
+      [
+        'an id that is a platform route, with no address of its own',
+        { appId: 'contracts' },
+        `The app's address would be "contracts", its id, which is the platform's own page, /contracts`,
+      ],
+      [
+        'an address that is a platform route',
+        { address: 'search' },
+        `The app's address would be "search", which is the platform's own page, /search`,
+      ],
       ['a version that is not semantic', { version: '1.0' }, '--version "1.0"'],
       ['a group with a control character', { groups: 'legal\u0007' }, '--groups'],
       ['a directory that climbs', { directory: '../elsewhere' }, '--directory "../elsewhere"'],

@@ -81,7 +81,8 @@ inline, or contributed from another file or in another mode, is refused, because
 what the component says. The other way round as well: a file under `agentic-ui-config/layouts/`
 that no enabled `<layout>` entry contributes is refused, with the entry that would contribute it,
 since the validator passed it and the server would never serve it. So is one that only a disabled
-entry names, and a file there at no layout's place. A Markdown file there is not packaged, and is
+entry names, or only an entry outside an extension of the configuration's point, where nothing
+registers it, and a file there at no layout's place. A Markdown file there is not packaged, and is
 let be. It finds the components as the builder, the verifier and the server do:
 the `Nuxeo-Component` headers of the manifest's main section, in any letter case, and it checks
 those of every such header. A manifest that names them in more than one header, or spells the

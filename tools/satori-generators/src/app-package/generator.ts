@@ -11,6 +11,8 @@ import {
   contributeApp,
   listOption,
   parseJson,
+  platformRoutes,
+  PLATFORM_ROUTES_FILE,
   readAppPackage,
   schemaFor,
   writeJson,
@@ -163,9 +165,10 @@ function defaultPlatform(tree: Tree): string | null {
  * for a demo whose types no server has yet, is `app-model`'s.
  *
  * - **The app's address**, where the shell is to open it, is written in `app.json`: `--address`, or
- *   the id. Written, it is held to the validator, which refuses one that is a platform route, such
- *   as `contracts` (`PLATFORM_ROUTES` in `libs/shared/app-definition`): an id that is one needs an
- *   `--address`. Left out, as a package written by hand may, the validator only says so.
+ *   the id. One that is a platform route, such as `contracts` (`PLATFORM_ROUTES` in
+ *   `libs/shared/app-definition`), is refused here, as the validator refuses it once written: an
+ *   id that is one needs an `--address`. Left out, as a package written by hand may, the validator
+ *   only says so.
  *
  * ## Internal
  *
@@ -211,6 +214,13 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
   if (options.address !== undefined && !APP_ID.test(options.address)) {
     throw new Error(
       `--address "${options.address}" must be lower-case letters, digits and "-", starting with a letter, at most 63 characters: it is where the shell opens the app.`,
+    );
+  }
+  // Refused here rather than at the pipeline's step 2, where the validator would refuse it.
+  const address = options.address ?? appId;
+  if (platformRoutes().includes(address)) {
+    throw new Error(
+      `The app's address would be "${address}"${options.address === undefined ? ', its id' : ''}, which is the platform's own page, /${address} (${PLATFORM_ROUTES_FILE}). Give --address another, such as --address=${address}-app.`,
     );
   }
   const version = options.version ?? '0.1.0';
@@ -275,7 +285,7 @@ export default async function appPackageGenerator(tree: Tree, options: AppPackag
     platform,
     // Written, so that the validator holds it to the platform's routes: one left out is said, not
     // refused, for the packages built before the rule.
-    address: options.address ?? appId,
+    address,
     groups,
     branding: { applicationTitle: title },
   });

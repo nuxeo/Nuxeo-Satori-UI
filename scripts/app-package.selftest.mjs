@@ -298,6 +298,17 @@ expectRefused(
   `${CLAIM_FORM_FILE} is a layout OSGI-INF/payers-claims-demo-config.xml names only in a disabled entry`,
 );
 expectRefused(
+  'a layout entry outside the configuration point, where nothing registers it',
+  ({ edit }) =>
+    edit(
+      COMPONENT,
+      `  ${CONTRIBUTION}\n`,
+      `</extension>\n  <extension target="org.nuxeo.agentic.ui.config" point="configurations">\n    ${CONTRIBUTION}\n  </extension>\n  <extension target="org.nuxeo.agentic.ui.config" point="configuration">\n`,
+    ),
+  2,
+  `${LAYOUT} is a layout OSGI-INF/payers-claims-demo-config.xml names only outside an extension of org.nuxeo.agentic.ui.config's "configuration" point`,
+);
+expectRefused(
   'a contributed layout whose file is taken away from the contribution, leaving the file',
   ({ edit }) => edit(COMPONENT, CONTRIBUTION, ''),
   2,

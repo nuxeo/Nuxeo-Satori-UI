@@ -320,30 +320,33 @@ describe.skipIf(process.platform === 'win32')(
       });
     });
 
-    it('an app whose id is a platform route is refused at step 2, and passes with an address of its own', async () => {
-      const scaffoldAs = async (address?: string): Promise<string> => {
-        const own = createTreeWithEmptyWorkspace();
-        await appPackageGenerator(own, {
-          name: 'acme-contracts',
-          owner: 'acme',
-          appId: 'contracts',
-          address,
-          platform: '>=0.2.0 <1.0.0',
-          type: 'Contract',
-          model: CONTRACTS_MODEL,
-        });
-        const directory = join(scratch, `route-${address ?? 'none'}`);
-        flush(own, ROOT, directory);
-        return directory;
+    it('an app whose address is a platform route is refused at step 2, the generator refusing it first', async () => {
+      const own = createTreeWithEmptyWorkspace();
+      const options = {
+        name: 'acme-contracts',
+        owner: 'acme',
+        appId: 'contracts',
+        platform: '>=0.2.0 <1.0.0',
+        type: 'Contract',
+        model: CONTRACTS_MODEL,
       };
-      const clash = pipeline(await scaffoldAs(), ['--platform', PLATFORM]);
-      // app-package writes the address, the id here, so the validator holds it to the routes.
+      await expect(appPackageGenerator(own, options)).rejects.toThrow(
+        "which is the platform's own page, /contracts",
+      );
+      await appPackageGenerator(own, { ...options, address: 'contract-desk' });
+      const directory = join(scratch, 'route');
+      flush(own, ROOT, directory);
+      expect(pipeline(directory, ['--platform', PLATFORM]).status).toBe(0);
+      // The same package with its address written as the id, by hand: the validator refuses it.
+      edit(config(directory, 'app.json'), (app) => {
+        app['address'] = 'contracts';
+      });
+      const clash = pipeline(directory, ['--platform', PLATFORM]);
       expect(clash.output).toContain(
         `address: the address "contracts" is the platform's own page, /contracts: choose one no platform route has`,
       );
       expect(clash.output).toContain('step 2 refused it');
       expect(clash.status).toBe(1);
-      expect(pipeline(await scaffoldAs('contract-desk'), ['--platform', PLATFORM]).status).toBe(0);
     });
 
     it('a package with no record page is refused at step 5: it contributes nothing', async () => {
@@ -426,10 +429,34 @@ describe.skipIf(process.platform === 'win32')(
         columns: 'acon:number,dc:title,acon:end',
         sort: 'acon:end',
       });
-      tree.write(
-        `${KIT}/bundle/agentic-ui-config/navigation.json`,
-        `${JSON.stringify({ version: 2, entries: [{ id: 'active', icon: 'inbox', queue: 'active' }] }, null, 2)}\n`,
-      );
+      // By hand, one at each place of the registry's that no generator writes, so that the
+      // generators' copy of the pipeline's REGISTRY_FILES is held to it at every place.
+      const byHand = (file: string, content: unknown) =>
+        tree.write(
+          `${KIT}/bundle/agentic-ui-config/${file}`,
+          `${JSON.stringify(content, null, 2)}\n`,
+        );
+      byHand('navigation.json', {
+        version: 2,
+        entries: [{ id: 'active', icon: 'inbox', queue: 'active' }],
+      });
+      byHand('home.json', {
+        version: 2,
+        label: 'Contracts',
+        cards: [
+          {
+            id: 'active',
+            label: 'Active',
+            kpi: { pageProvider: 'acme_active_contracts' },
+            queue: 'active',
+          },
+        ],
+      });
+      byHand('tasks/contractReview.approve.layout.json', {
+        version: 2,
+        cards: [{ id: 'review', fields: [{ field: 'var:comment', required: true }] }],
+      });
+      byHand('labels/fr-CA.json', { version: 2, labels: { 'acme-desk.app': 'Bureau' } });
       await appRegistryGenerator(tree, { package: KIT });
     });
 
@@ -451,6 +478,20 @@ describe.skipIf(process.platform === 'win32')(
       const run = pipeline(directory, flags(directory));
       expect(run.output).toContain('2 layouts were held to the content model');
       expect(run.output).toContain('acme-demo 0.1.0: checked, built and verified');
+      // Every place the registry serves is named, the ones written by hand included.
+      const component = readFileSync(
+        join(directory, 'bundle/OSGI-INF/acme-demo-config.xml'),
+        'utf8',
+      );
+      for (const file of [
+        'home.json',
+        'navigation.json',
+        'queues/active.json',
+        'labels/en.json',
+        'labels/fr-CA.json',
+        'tasks/contractReview.approve.layout.json',
+      ])
+        expect(component).toContain(`<file path="${file}" />`);
       expect(run.output).not.toContain('no component contributes the app');
       expect(run.status).toBe(0);
       // The model component is the bundle's, and loaded first.

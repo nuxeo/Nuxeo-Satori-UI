@@ -29,7 +29,7 @@
     },
     "address": {
       "type": "string",
-      "description": "Where the shell is to open the app, under its own address: app.json's address, of the same form as appId, which it defaults to. The pipeline refuses one that is a platform route, such as contracts (PLATFORM_ROUTES in libs/shared/app-definition), so an app id that is one needs an address.",
+      "description": "Where the shell is to open the app, under its own address: app.json's address, of the same form as appId, which it defaults to. Refused when it is a platform route, such as contracts (PLATFORM_ROUTES in libs/shared/app-definition), as the pipeline refuses it: an app id that is one needs an address.",
       "pattern": "^[a-z][a-z0-9-]{0,62}$"
     },
     "title": {

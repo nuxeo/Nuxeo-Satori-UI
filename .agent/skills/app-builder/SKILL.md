@@ -122,10 +122,11 @@ What each writes, and what it leaves to you:
   a server. A package with no record page is refused by the pipeline's step 5, so give it
   `--type`.
 - **The app's id and address.** `app-package` writes the address, where the shell is to open the
-  app: its id unless `--address` gives another. The pipeline refuses one that is a platform route:
-  `contracts`, `search`, `tasks` and the rest of `PLATFORM_ROUTES` in `libs/shared/app-definition`.
-  For such an id, give `--address`, such as `--appId=contracts --address=contract-desk`. A package
-  whose `app.json` has no address and whose id is one is only noted: fix it all the same.
+  app: its id unless `--address` gives another. It refuses one that is a platform route, as the
+  pipeline refuses one written in `app.json`: `contracts`, `search`, `tasks` and the rest of
+  `PLATFORM_ROUTES` in `libs/shared/app-definition`. For such an id, give `--address`, such as
+  `--appId=contracts --address=contract-desk`. A package whose `app.json` has no address and whose
+  id is one is only noted by the pipeline: fix it all the same.
 - **`app-layout`:** one card per schema of the type, leaving out Nuxeo's own (`common`,
   `dublincore`, `uid`, `file`, `files`, `facetedTag`, `relatedtext`) unless `--schemas` names
   them. A widget only where the model says more than the type: `vocabulary` for a property bound to

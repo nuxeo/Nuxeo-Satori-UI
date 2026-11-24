@@ -202,6 +202,36 @@ describe('app-layout generator', () => {
     });
   });
 
+  it('refuses an entry outside the configuration point, where nothing registers it', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    tree.write(
+      COMPONENT,
+      xml.replace(
+        '</component>',
+        '  <extension target="org.nuxeo.agentic.ui.config" point="configurations">\n' +
+          '    <layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />\n' +
+          '  </extension>\n</component>',
+      ),
+    );
+    const before = tree.read(COMPONENT, 'utf-8');
+    await expect(generate()).rejects.toThrow(
+      `has the Contract/view layout outside an extension of org.nuxeo.agentic.ui.config's "configuration" point`,
+    );
+    expect(tree.read(COMPONENT, 'utf-8')).toBe(before);
+  });
+
+  it('reads an extension closed as </extension >, as the pipeline does', async () => {
+    const xml = tree.read(COMPONENT, 'utf-8') ?? '';
+    tree.write(
+      COMPONENT,
+      xml.replace('  </extension>\n</component>', '  </extension >\n</component>'),
+    );
+    await generate();
+    expect(tree.read(COMPONENT, 'utf-8')).toContain(
+      '<layout type="Contract" mode="view" src="agentic-ui-config/layouts/Contract/view.layout.json" />',
+    );
+  });
+
   it('finds an extension whose attributes are quoted with apostrophes, and adds to it', async () => {
     const xml = tree.read(COMPONENT, 'utf-8') ?? '';
     tree.write(

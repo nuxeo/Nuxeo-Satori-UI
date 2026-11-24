@@ -173,6 +173,39 @@ describe('app-model generator', () => {
       '<schema name="acme_contract" prefix="acon" src="schemas/acme_contract.xsd" />',
     );
     expect(tree.exists(`${ROOT}/bundle/schemas/acme_contract.xsd`)).toBe(true);
+    // Without --prefix, the schema's name without its "_", which a prefix may not have.
+    await generate({ type: 'AcmeDeed', properties: 'number', schema: 'acme_deed' });
+    expect(read(tree, MODEL)).toContain(
+      '<schema name="acme_deed" prefix="acmedeed" src="schemas/acme_deed.xsd" />',
+    );
+  });
+
+  it('keeps a condition with parentheses and quotes of its own whole', async () => {
+    await generate({
+      pageProvider: 'p',
+      where:
+        "(contract:status = 'Active' OR contract:status = 'Draft (old)') AND contract:end IS NOT NULL",
+    });
+    expect(read(tree, MODEL)).toContain(
+      "AND ((contract:status = 'Active' OR contract:status = 'Draft (old)') AND contract:end IS NOT NULL)",
+    );
+  });
+
+  it('writes again a page provider written as an empty element, and nothing after it', async () => {
+    await generate({ pageProvider: 'first' });
+    await generate({ pageProvider: 'second' });
+    tree.write(
+      MODEL,
+      read(tree, MODEL).replace(
+        /<coreQueryPageProvider name="first">[\s\S]*?<\/coreQueryPageProvider>/,
+        '<coreQueryPageProvider name="first" />',
+      ),
+    );
+    await generate({ pageProvider: 'first', sort: 'dc:title', force: true });
+    const xml = read(tree, MODEL);
+    expect(xml.match(/<coreQueryPageProvider /g)).toHaveLength(2);
+    expect(xml).toContain('<coreQueryPageProvider name="second">');
+    expect(xml).toContain('<sort column="dc:title" ascending="true" />');
   });
 
   describe('refuses, and writes nothing', () => {
@@ -188,6 +221,18 @@ describe('app-model generator', () => {
       ['a property name with a colon', { properties: 'contract:number' }, 'has the type "number"'],
       ["Nuxeo's own schema", { properties: 'a', schema: 'dublincore' }, '--schema "dublincore"'],
       ["Dublin Core's prefix", { properties: 'a', prefix: 'dc' }, '--prefix "dc"'],
+      ["a task's schema", { type: 'Task', properties: 'a' }, '--schema "task"'],
+      ["a task's prefix", { properties: 'a', prefix: 'nt' }, '--prefix "nt"'],
+      [
+        'a condition that breaks out of its parentheses',
+        { pageProvider: 'p', where: "contract:status = 'Active') OR (1 = 1" },
+        'its parentheses and quotes closed',
+      ],
+      [
+        'a condition left open',
+        { pageProvider: 'p', where: "contract:status = 'Active" },
+        'its parentheses and quotes closed',
+      ],
       ['a schema with no properties', { pageProvider: 'p', schema: 'x' }, 'give those too'],
       [
         'a condition with an order',

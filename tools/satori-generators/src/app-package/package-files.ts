@@ -1,6 +1,7 @@
-import { posix } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, posix } from 'node:path';
 
-import type { Tree } from '@nx/devkit';
+import { workspaceRoot, type Tree } from '@nx/devkit';
 
 /**
  * What the business-app generators share: finding the app definition package they add to, and the
@@ -256,10 +257,18 @@ export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode
   if (xml === null) throw new Error(`Cannot read ${pkg.component}.`);
   const markup = markupOnly(xml);
   const src = `agentic-ui-config/layouts/${type}/${mode}.layout.json`;
-  const existing = [...markup.matchAll(/<layout\b[^>]*>/g)]
-    .map(([tag]) => tag)
-    .filter((tag) => attribute(tag, 'type') === type && attribute(tag, 'mode') === mode);
-  for (const tag of existing) {
+  const extensions = configurationExtensions(pkg, markup);
+  const existing = [...markup.matchAll(/<layout\b[^>]*>/g)].filter(
+    ([tag]) => attribute(tag, 'type') === type && attribute(tag, 'mode') === mode,
+  );
+  for (const [tag, at = 0] of existing.map((match) => [match[0], match.index] as const)) {
+    // One outside the configuration's point is registered by nothing: the pipeline refuses it,
+    // and an entry added beside it would leave two to read.
+    if (!extensions.some(({ start, close }) => at > start && at < close)) {
+      throw new Error(
+        `${pkg.component} has the ${type}/${mode} layout outside an extension of org.nuxeo.agentic.ui.config's "configuration" point, where nothing registers it. Move it into one, or remove it.`,
+      );
+    }
     const enabled = attribute(tag, 'enabled');
     if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
       throw new Error(
@@ -275,7 +284,6 @@ export function contributeLayout(tree: Tree, pkg: AppPackage, type: string, mode
   }
   if (existing.length > 0) return;
   const entry = `<layout type="${type}" mode="${mode}" src="${src}" />`;
-  const extensions = configurationExtensions(pkg, markup);
   // The layouts go in a configuration extension of their own, not in the one that holds the app,
   // as the kits write them: the app's element stays whole, and is the last thing in its extension.
   const opening = extensions.find(({ body }) => !APP_TAG().test(body));
@@ -331,7 +339,9 @@ function configurationExtensions(pkg: AppPackage, markup: string): Extension[] {
     )
       continue;
     const start = match.index ?? 0;
-    const close = markup.indexOf('</extension>', start);
+    // `</extension >` closes it too, as the pipeline reads an end tag.
+    const end = /<\/extension[ \t\r\n]*>/.exec(markup.slice(start));
+    const close = end === null ? -1 : start + end.index;
     if (close < 0)
       throw new Error(`${pkg.component}: its configuration extension is never closed.`);
     found.push({ start, close, body: markup.slice(start + tag.length, close) });
@@ -584,6 +594,38 @@ export function appContributionSaid(
   return lines.length === 0
     ? ''
     : `\n  The app's <app> in ${pkg.component} ${lines.join(', and ')}.\n`;
+}
+
+/** Where the platform's own routes are listed, once: the validator's `PLATFORM_ROUTES`. */
+export const PLATFORM_ROUTES_FILE = 'libs/shared/app-definition/src/lib/platform-routes.ts';
+
+/**
+ * The platform's own routes, which no app's address may be, read from the one place they are
+ * listed (`PLATFORM_ROUTES_FILE`), which these sources cannot import (the top of this file says
+ * why). Read strictly: the list must hold quoted names and nothing else, so that a change of its
+ * form is refused rather than read in part. `app-package/generator.spec.ts` holds what this reads
+ * to the validator, run as a command.
+ */
+export function platformRoutes(root: string = workspaceRoot): readonly string[] {
+  let text: string;
+  try {
+    text = readFileSync(join(root, PLATFORM_ROUTES_FILE), 'utf-8');
+  } catch (error) {
+    throw new Error(
+      `Cannot read the platform's routes from ${PLATFORM_ROUTES_FILE}: ${(error as NodeJS.ErrnoException).code ?? (error as Error).message}.`,
+    );
+  }
+  const body = /export const PLATFORM_ROUTES: readonly string\[\] = \[([^\]]*)\];/.exec(text)?.[1];
+  const items = (body ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+  if (items.length === 0 || !items.every((item) => /^'[a-z][a-z0-9-]*'$/.test(item))) {
+    throw new Error(
+      `Cannot read the platform's routes from ${PLATFORM_ROUTES_FILE}: PLATFORM_ROUTES is not a list of quoted names there.`,
+    );
+  }
+  return items.map((item) => item.slice(1, -1));
 }
 
 /** A comma-separated option as a list, or a list as given; empty items dropped. */

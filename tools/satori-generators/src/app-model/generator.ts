@@ -55,17 +55,67 @@ const NUXEO_TYPES = new Set([
   'WorkspaceRoot',
 ]);
 
+/**
+ * Schemas the platform's own types carry besides `NUXEO_SCHEMAS`, which a stand-in of the same
+ * name would replace: a picture's, a note's, a task's, a collection's and the like.
+ */
+const PLATFORM_SCHEMAS = new Set([
+  'audio',
+  'collection',
+  'collectionMember',
+  'comment',
+  'dublincore',
+  'image_metadata',
+  'note',
+  'picture',
+  'publishing',
+  'task',
+  'thumbnail',
+  'video',
+  'webcontainer',
+]);
+
 /** Prefixes Nuxeo's own schemas, or its system properties, write their properties with. */
 const NUXEO_PREFIXES = new Set([
+  'collection',
+  'collectionMember',
+  'comment',
   'common',
   'dc',
   'ecm',
   'file',
   'files',
+  'note',
+  'nt',
   'nxtag',
+  'picture',
   'relatedtext',
+  'thumb',
   'uid',
 ]);
+
+/**
+ * Whether `where` is one condition: its parentheses balanced outside its literals, quoted either
+ * way with a backslash escaping, and none closed before it is opened. `x) OR (y` would break out
+ * of the `AND (...)` it is written into, and with it the page provider's own conditions on
+ * versions, proxies and the trash.
+ */
+function isOneCondition(where: string): boolean {
+  let depth = 0;
+  let quote = '';
+  for (let i = 0; i < where.length; i++) {
+    const c = where[i];
+    if (quote !== '') {
+      if (c === '\\') i++;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === "'" || c === '"') quote = c;
+    else if (c === '(') depth++;
+    else if (c === ')' && --depth < 0) return false;
+  }
+  return depth === 0 && quote === '';
+}
 
 /** A schema's name, and the prefix its properties are written with. */
 const SCHEMA = /^[a-z][a-z0-9_]{0,63}$/;
@@ -227,7 +277,10 @@ function addToExtension(
       attribute(tag, 'point') !== point
     )
       continue;
-    const close = markup.indexOf('</extension>', match.index);
+    const start = match.index ?? 0;
+    // `</extension >` closes it too, as the pipeline reads an end tag.
+    const found = /<\/extension[ \t\r\n]*>/.exec(markup.slice(start));
+    const close = found === null ? -1 : start + found.index;
     if (close < 0) throw new Error(`${file}: its ${point} extension is never closed.`);
     const lineStart = markup.lastIndexOf('\n', close) + 1;
     const before = markup.slice(lineStart, close).trim() === '' ? lineStart : close;
@@ -360,12 +413,13 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   const repeated = properties.find((p, i) => properties.findIndex((q) => q.name === p.name) !== i);
   if (repeated) throw new Error(`--properties lists "${repeated.name}" twice.`);
   const schema = options.schema ?? type.toLowerCase().replace(/[^a-z0-9_]/g, '');
-  if (!SCHEMA.test(schema) || NUXEO_SCHEMAS.includes(schema) || schema === 'dublincore') {
+  if (!SCHEMA.test(schema) || NUXEO_SCHEMAS.includes(schema) || PLATFORM_SCHEMAS.has(schema)) {
     throw new Error(
       `--schema "${schema}" must be lower-case letters, digits and "_", starting with a letter, and not one of Nuxeo's own schemas.`,
     );
   }
-  const prefix = options.prefix ?? schema;
+  // A prefix has no "_", which a schema's name may.
+  const prefix = options.prefix ?? schema.replace(/_/g, '');
   if (!PREFIX.test(prefix) || NUXEO_PREFIXES.has(prefix)) {
     throw new Error(
       `--prefix "${prefix}" must be lower-case letters and digits, starting with a letter, at most 32, and not a prefix Nuxeo's own schemas write with.`,
@@ -389,10 +443,13 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   const where = options.where?.replace(/\s+/g, ' ').trim();
   if (
     where !== undefined &&
-    (where === '' || /\border\s+by\b/i.test(where) || where.includes(']]>'))
+    (where === '' ||
+      /\border\s+by\b/i.test(where) ||
+      where.includes(']]>') ||
+      !isOneCondition(where))
   ) {
     throw new Error(
-      `--where "${options.where}" must be an NXQL condition, such as contract:status = 'Active', with no ORDER BY: the order is --sort's.`,
+      `--where "${options.where}" must be one NXQL condition, such as contract:status = 'Active', its parentheses and quotes closed, with no ORDER BY: the order is --sort's.`,
     );
   }
   let sort = { column: 'dc:modified', ascending: false };
@@ -512,12 +569,18 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       const tagName = existing[0][0].startsWith('<coreQueryPageProvider')
         ? 'coreQueryPageProvider'
         : 'genericPageProvider';
-      const close = current.indexOf(`</${tagName}>`, at);
-      if (close < 0)
+      // An empty element ends at its own tag; else at its end tag, `</name >` included.
+      const end = existing[0][0].endsWith('/>')
+        ? { at: at + existing[0][0].length, length: 0 }
+        : (() => {
+            const found = new RegExp(`</${tagName}[ \\t\\r\\n]*>`).exec(current.slice(at));
+            return found === null ? null : { at: at + found.index, length: found[0].length };
+          })();
+      if (end === null)
         throw new Error(`${modelFile}: the page provider ${pageProvider} is never closed.`);
       const indent = current.slice(current.lastIndexOf('\n', at) + 1, at);
       const replaced = element.split('\n').join(`\n${/^[ \t]*$/.test(indent) ? indent : '    '}`);
-      xml = `${xml.slice(0, at)}${replaced}${xml.slice(close + `</${tagName}>`.length)}`;
+      xml = `${xml.slice(0, at)}${replaced}${xml.slice(end.at + end.length)}`;
     } else {
       xml = addToExtension(
         xml,

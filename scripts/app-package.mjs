@@ -527,9 +527,13 @@ function layoutContributions(directory) {
   // way, is the builder's to refuse, at step 4.
   const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
   const root = resolve(bundle);
-  /** The files the enabled entries contribute, and those only a disabled entry names. */
+  /**
+   * The files the enabled entries contribute, those only a disabled entry names, and those only an
+   * entry outside the configuration's extension point names, where nothing registers it.
+   */
   const contributed = new Set();
   const disabled = new Map();
+  const misplaced = new Map();
   let missing = false;
   for (const component of componentPathsOf(text)) {
     const file = componentFileOf(root, component);
@@ -545,8 +549,9 @@ function layoutContributions(directory) {
       return `the manifest names the component ${component}, which cannot be read: ${error.code ?? error.message}.`;
     }
     const xml = componentXmlOf(source);
-    for (const [, tag] of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
-      const { type, mode, src, enabled } = attributesOf(tag);
+    const configuration = configurationExtensions(xml);
+    for (const match of xml.matchAll(new RegExp(`<layout${TAG}`, 'g'))) {
+      const { type, mode, src, enabled } = attributesOf(match[1]);
       if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
         if (src !== undefined) disabled.set(posix.normalize(src), component);
         continue;
@@ -562,13 +567,31 @@ function layoutContributions(directory) {
           `${component} contributes the ${type}/${mode} layout from ${src}. Contribute it from ` +
           `${checked}, where the validator reads it in that mode.`
         );
-      contributed.add(checked);
+      if (configuration.some(([from, to]) => match.index > from && match.index < to))
+        contributed.add(checked);
+      else misplaced.set(checked, component);
     }
   }
   // A component that is missing is the builder's to refuse, at step 4: the layouts it would have
   // contributed are not called uncontributed first.
   if (missing) return null;
-  return uncontributedLayout(bundle, contributed, disabled);
+  return uncontributedLayout(bundle, contributed, disabled, misplaced);
+}
+
+/**
+ * Where Nuxeo registers a `<layout>` or an `<app>` in a component's markup: its extensions to
+ * `org.nuxeo.agentic.ui.config`'s "configuration" point, each as `[start, end]`. One anywhere else,
+ * a misspelt point or another component's target, is registered by nothing.
+ */
+function configurationExtensions(xml) {
+  return [
+    ...xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g')),
+  ].flatMap((extension) => {
+    const { target, point } = attributesOf(extension[1]);
+    return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration'
+      ? [[extension.index, extension.index + extension[0].length]]
+      : [];
+  });
 }
 
 /**
@@ -578,7 +601,7 @@ function layoutContributions(directory) {
  * Markdown file is not packaged (`build.mjs`), so it is not one. Step 1 has refused any symbolic
  * link, so the walk follows none.
  */
-function uncontributedLayout(bundle, contributed, disabled) {
+function uncontributedLayout(bundle, contributed, disabled, misplaced) {
   const layouts = join(bundle, 'agentic-ui-config', 'layouts');
   if (!existsSync(layouts) || !lstatSync(layouts).isDirectory()) return null;
   for (const path of filesUnder(layouts).sort()) {
@@ -594,9 +617,11 @@ function uncontributedLayout(bundle, contributed, disabled) {
         'the server would never serve it.'
       );
     const entry = `<layout type="${place[1]}" mode="${place[2]}" src="${src}" />`;
-    const why = disabled.has(src)
-      ? `${disabled.get(src)} names only in a disabled entry`
-      : 'no component contributes';
+    const why = misplaced.has(src)
+      ? `${misplaced.get(src)} names only outside an extension of org.nuxeo.agentic.ui.config's "configuration" point, where nothing registers it`
+      : disabled.has(src)
+        ? `${disabled.get(src)} names only in a disabled entry`
+        : 'no component contributes';
     return (
       `${shown} is a layout ${why}, so the server would never serve it. Add ${entry} to the ` +
       'component\'s org.nuxeo.agentic.ui.config "configuration" extension, as the app-layout and ' +
@@ -637,16 +662,7 @@ function appContributions(directory, root) {
     const file = componentFileOf(resolve(bundle), component);
     if (typeof file !== 'string' || file === '') continue;
     const xml = componentXmlOf(readFileSync(file, 'utf8'));
-    // Where Nuxeo registers an <app>: in an extension to the configuration's point. One anywhere
-    // else, a misspelt point or another component's target, is registered by nothing.
-    const configuration = [
-      ...xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g')),
-    ].flatMap((extension) => {
-      const { target, point } = attributesOf(extension[1]);
-      return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration'
-        ? [[extension.index, extension.index + extension[0].length]]
-        : [];
-    });
+    const configuration = configurationExtensions(xml);
     for (const match of xml.matchAll(new RegExp(`<app${TAG}`, 'g'))) {
       const attributes = attributesOf(match[1]);
       if (attributes.enabled !== undefined && attributes.enabled.toLowerCase() !== 'true') continue;

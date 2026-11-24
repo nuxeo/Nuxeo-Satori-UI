@@ -118,8 +118,9 @@ demo/                                starter kits only; not checked
   `contracts` would take `/contracts`, the component showcase, so it needs an `address` of its
   own, such as `contract-desk`. With no `address`, the id is the address, and an id that is one of
   them is said by the pipeline and the command line, not refused yet: the contracts kit was built
-  so, before the rule. The `app-package` generator writes every new app's address, which is then
-  held to the rule. The platform's routes are listed in one place, `PLATFORM_ROUTES` in
+  so, before the rule. The `app-package` generator writes every new app's address, and refuses one
+  that is a route. The shell refuses an app with a refused address too, as it refuses any finding
+  in `app.json` (section 10): "Switch app" does not list it. The platform's routes are listed in one place, `PLATFORM_ROUTES` in
   [`libs/shared/app-definition/src/lib/platform-routes.ts`](../../libs/shared/app-definition/src/lib/platform-routes.ts),
   which a test in `apps/nuxeo-ui` holds to `app.routes.ts` both ways. A queue's id needs no such
   check: a queue opens under `/queues/`.
