@@ -307,8 +307,9 @@ as it should.
   dev server with the preview's `config:dev` above, the asset page showed the warning banner on the
   ending picture, the negative one on the ended picture and none on a cleared one, each picture's
   Medium view from a blob URL, and the kit's cards with the Picture's own fields; it did not
-  download the original until the Annotations tab was opened; and with the browser's clock pinned
-  25 days on, and then 380, the banners moved as the dates say.
+  download the original until the Annotations tab was opened, and against a build with that
+  hold-back turned off on purpose, the same check saw the download and failed; and with the
+  browser's clock pinned 25 days on, and then 380, the banners moved as the dates say.
 
 ## Not done yet
 
