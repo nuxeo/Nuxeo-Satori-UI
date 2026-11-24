@@ -8,6 +8,28 @@ Re-measure before quoting anything here. The 16 September edition of this page c
 **23 of 23 green** while `guardrails` was failing, and put the catalogue at **1653** keys when it
 held 1968 — both figures had a command printed beside them and neither had been re-run.
 
+## Arabic and Hebrew enabled — 24 November 2026
+
+NXSAT-754 imports the unchanged corrected approved Arabic and Hebrew exports from
+[diagnostic run 45248551082](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/runs/45248551082).
+Crowdin reports both languages 100% translated and approved; all four reported placeholder
+mismatches are corrected. Each exported catalogue has 2,771 keys. The current English source
+has one newer key, which uses the normal English fallback until the next approved export.
+
+This independent branch enables Arabic and Hebrew in the shipped-catalogue list, both Layer 0
+defaults, date adapter and ongoing Crowdin pulls. Existing document/CDK RTL support activates
+through real startup, including overlay direction. Date parsing covers Hebrew, bare Arabic and
+Arabic regional variants with different field order or separators. Shared Satori strings without
+an upstream catalogue retain English fallback. Italian/Swedish integration remains in PR #656.
+
+Spanish PR #401 was rechecked at commit 15795c5669393e14f4fd42a483b1680792f2b2a0. Its Spanish
+catalogue passes placeholder and renderable-value checks but lacks enablement. The shared French
+export contains 12 literal Unicode escapes and five parenthesized-plural findings (17 findings
+across 16 entries); fix those in Crowdin and re-export. Each of the five exported catalogues also
+lacks the one newer English key; that warns and uses English fallback rather than blocking.
+
+These measurements supersede the historical readiness claims in the older dated sections below.
+
 ## Languages — the set is Nuxeo Web UI's, 30 October 2026
 
 The application's language set was aligned to the one Nuxeo Web UI supports. That **dropped Thai

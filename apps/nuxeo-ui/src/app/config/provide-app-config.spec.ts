@@ -29,6 +29,7 @@ import {
   signal,
 } from '@angular/core';
 import { DIR_DOCUMENT, Directionality } from '@angular/cdk/bidi';
+import { Overlay } from '@angular/cdk/overlay';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
@@ -179,7 +180,7 @@ describe('resolveStringLanguage', () => {
   });
 
   it('refuses every locale registered ahead of its catalogue', () => {
-    // The five mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
+    // The remaining mid-flight languages of `D8e-webui`: Angular locale data registered, no catalogue
     // yet. Admitting them on registration alone would render English under their own `lang`.
     const registeredOnly = REGISTERED_LOCALES.filter(
       (locale) => !SHIPPED_CATALOGUE_LANGUAGES.includes(locale),
@@ -357,6 +358,24 @@ describe('the configured language at startup', () => {
     expect((await boot('en')).lang).toBe('en');
   });
 
+  for (const language of ['ar', 'he']) {
+    it(`boots ${language}, loads its catalogue and applies RTL to document, CDK and overlays`, async () => {
+      const { lang, urls, messages } = await boot(language);
+      expect(lang).toBe(language);
+      expect(urls.some((url) => url.endsWith(`/i18n/${language}.json`))).toBeTrue();
+      expect(document.documentElement.lang).toBe(language);
+      expect(document.documentElement.dir).toBe('rtl');
+      expect(TestBed.inject(Directionality).value).toBe('rtl');
+      const overlay = TestBed.inject(Overlay).create();
+      try {
+        expect(overlay.getDirection()).toBe('rtl');
+      } finally {
+        overlay.dispose();
+      }
+      expect(messages.filter((message) => message.includes('defaultLanguage'))).toEqual([]);
+    });
+  }
+
   it('announces that language on <html lang> once startup has settled', async () => {
     await boot('fr');
     expect(document.documentElement.lang).toBe('fr');
@@ -466,12 +485,8 @@ describe('the configured language at startup', () => {
    * Same gap the `LOCALE_ID` block below was written against, and the same gap NXSAT-733's own
    * tests cite: the function was easy to get right, and nothing consulted it.
    *
-   * **Why this boots `fr` and not `ar`.** Since NXSAT-733, `resolveStringLanguage` refuses a
-   * language this build ships no catalogue for, and no `ar.json` or `he.json` ships — so
-   * `boot('ar')` applies `en` and a right-to-left direction is unreachable through startup today.
-   * That is NXSAT-733 working as intended (`<html lang="ar">` over English text is the WCAG 3.1.1
-   * defect it fixed), not a regression here. The mapping from language to direction is covered by
-   * `syncDocumentDirection` above; what only startup can show is that the initializer is wired.
+   * The Arabic and Hebrew startup cases above assert the RTL direction. This French case
+   * separately proves startup rewrites a stale RTL direction back to LTR.
    *
    * So both assertions are made load-bearing from the other side, by starting from a stale `rtl`
    * — the state a previous boot, a cached shell or a server-rendered document would leave:
@@ -572,7 +587,7 @@ describe('LOCALE_ID provider', () => {
    * These assert from configuration, not from the constant: `injectLocaleFor` goes through the
    * real provider from `provideAppConfig()`.
    */
-  const REGISTERED_BUT_NOT_SHIPPED = ['ar', 'es', 'he', 'it', 'sv'] as const;
+  const REGISTERED_BUT_NOT_SHIPPED = ['es', 'it', 'sv'] as const;
 
   it('does not admit a locale registered ahead of its catalogue', () => {
     // Guards the premise: if these ever stop being registered-but-unadvertised the test below
@@ -648,8 +663,15 @@ describe('LOCALE_ID provider', () => {
    * year contributes neither digit.
    */
   it('keeps Angular formatting and the date adapter on the same field order', () => {
-    const dayBeforeMonth = (rendered: string): boolean =>
-      rendered.indexOf('3') < rendered.indexOf('4');
+    // Arabic Angular pipes can render Arabic-Indic digits while date-fns uses ASCII.
+    // Normalize the glyphs before comparing field order; otherwise absent ASCII digits
+    // both have index -1 and a comparison can silently assert nothing.
+    const dayBeforeMonth = (rendered: string): boolean => {
+      const digits = rendered.replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660));
+      expect(digits).withContext(rendered).toContain('3');
+      expect(digits).withContext(rendered).toContain('4');
+      return digits.indexOf('3') < digits.indexOf('4');
+    };
 
     const configurations = [
       ...DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages,

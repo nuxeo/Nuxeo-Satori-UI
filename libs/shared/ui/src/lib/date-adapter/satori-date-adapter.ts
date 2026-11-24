@@ -3,6 +3,11 @@ import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
 import { MAT_DATE_LOCALE } from '@angular/material/core';
 import type { Locale } from 'date-fns';
 import {
+  ar,
+  arDZ,
+  arEG,
+  arMA,
+  arSA,
   de,
   enAU,
   enCA,
@@ -15,6 +20,7 @@ import {
   fr,
   frCA,
   frCH,
+  he,
   ja,
   nl,
   nlBE,
@@ -24,19 +30,16 @@ import {
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The five bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The seven bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to locales
  * that are both registered and in `availableLanguages` — and a test asserts they match
  * `availableLanguages`, so adding a language cannot quietly leave its dates being parsed as
  * English. That clamp used to read `REGISTERED_LOCALES` alone, and registering `es` ahead of its
  * catalogue was enough to admit a locale this map has no entry for (#522).
  *
- * That test is why this map holds five rather than the ten the application targets. `ar`, `es`,
- * `he`, `it` and `sv` have Angular locale data registered and are requested from Crowdin, but
- * they are not advertised until their catalogues land — so they do not belong here yet either.
- * Each arrives with its catalogue, and `ar` brings the regional variants with it: date-fns'
- * `ar-DZ`, `ar-MA` and `ar-SA` are month-first while bare `ar` is day-first, so they need their
- * own entries by the rule below or they would parse day-first through the fallback.
+ * This branch enables Arabic and Hebrew with their catalogues. Spanish, Italian and Swedish
+ * remain pending their separate integrations. Arabic regional variants are explicit because
+ * ar-DZ, ar-MA and ar-SA are month-first while bare ar is day-first; ar-EG differs in padding.
  *
  * The regional entries are here for the **published** provider rather than for us. These
  * dialogs are exported from `@nuxeo/satori-platform/ui`, so a customer's `LOCALE_ID` reaches
@@ -55,12 +58,14 @@ import {
  * | `fr-CA` | `yy-MM-dd` | `dd/MM/y` |
  * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
+ * | `ar-DZ` `ar-MA` `ar-SA` | `MM/dd/yyyy` | `dd/MM/yyyy` |
+ * | `ar-EG` | `d/MM/y` | `dd/MM/yyyy` |
  *
  * `de-AT`, `zh-HK` and `zh-TW` are deliberately **absent**: their `P` is identical to their
  * base, so an entry would add a locale to every consumer's bundle and change no behaviour. They
  * resolve correctly through the bare-language fallback.
  *
- * The same rule decides what the five pending languages bring with them. Measured, so it does
+ * The same rule decides what additional languages bring with them. Measured, so it does
  * not have to be re-derived: `ar-DZ`, `ar-MA` and `ar-SA` are `MM/dd/yyyy` and `ar-EG` is
  * `d/MM/y` against bare `ar`'s `dd/MM/yyyy`, so all four need entries; `ar-TN` matches its base
  * and does not. `it-CH` is `dd.MM.y` against `it`'s `dd/MM/y`, so it does. date-fns ships no
@@ -87,6 +92,12 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   ja,
   nl,
   'nl-be': nlBE,
+  ar,
+  'ar-dz': arDZ,
+  'ar-eg': arEG,
+  'ar-ma': arMA,
+  'ar-sa': arSA,
+  he,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */

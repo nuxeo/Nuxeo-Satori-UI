@@ -36,6 +36,15 @@ import {
 const PARSE_CASES = [
   { locale: 'en', input: '03/04/2026', year: 2026, month: 2, date: 4, why: 'US order, unchanged' },
   { locale: 'fr', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'French is day-first' },
+  { locale: 'ar', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'Arabic is day-first' },
+  {
+    locale: 'he',
+    input: '3.4.2026',
+    year: 2026,
+    month: 3,
+    date: 3,
+    why: 'Hebrew uses day-first dots',
+  },
   { locale: 'nl', input: '03-04-2026', year: 2026, month: 3, date: 3, why: 'Dutch uses hyphens' },
   { locale: 'de', input: '03.04.2026', year: 2026, month: 3, date: 3, why: 'German uses dots' },
   {
@@ -166,6 +175,11 @@ describe('provideSatoriDateAdapter', () => {
     { locale: 'fr-CA', input: '26-04-03', month: 3, date: 3 },
     { locale: 'fr-CH', input: '03.04.2026', month: 3, date: 3 },
     { locale: 'nl-BE', input: '03.04.2026', month: 3, date: 3 },
+    { locale: 'ar-DZ', input: '03/04/2026', month: 2, date: 4 },
+    { locale: 'ar-MA', input: '03/04/2026', month: 2, date: 4 },
+    { locale: 'ar-SA', input: '03/04/2026', month: 2, date: 4 },
+    { locale: 'ar-EG', input: '3/4/2026', month: 3, date: 3 },
+    { locale: 'ar-TN', input: '03/04/2026', month: 3, date: 3 },
     { locale: 'en-US', input: '03/04/2026', month: 2, date: 4 },
   ])(
     'reads "$input" in $locale with that region\'s own order',
