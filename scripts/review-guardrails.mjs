@@ -4645,6 +4645,39 @@ const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 /** The locale manifest an upstream catalogue folder may ship beside its catalogues (DS-2803). */
 const VENDOR_LOCALES_MANIFEST = 'languages.json';
 
+/**
+ * The installed package a path inside `node_modules` belongs to, keyed as `package-lock.json`
+ * keys it, or `null` for a path that names no complete package.
+ *
+ * Used for two things: telling "this dependency is not installed" — which a clean checkout
+ * legitimately is — from "the dependency is installed and the directory this rule names is not
+ * there", which is a typo or a vendor that dropped the folder in a version bump; and looking the
+ * package up in the lockfile to check the install is faithful.
+ *
+ * Normalised, and resolved from the LAST `node_modules` segment, because review of this gate found
+ * two shapes where it silently handed back the pre-fix behaviour rather than a verdict:
+ *
+ * - An asset input may be written `./node_modules/…` and a lockfile key never is, so the drift
+ *   lookup missed, reported "no entry", and let the rule judge a stale install after all.
+ * - A nested install — `node_modules/parent/node_modules/@scope/pkg` — resolved from the FIRST
+ *   segment names `node_modules/parent`, a different package whose version agreeing with its own
+ *   lock entry says nothing about the nested one.
+ *
+ * Both are the same failure: a package root that does not name the package whose files are about
+ * to be read. One resolver, used by both rules, so the two cannot drift apart again.
+ */
+function installedPackageRootOf(path) {
+  const segments = toPosixRel(path)
+    .split('/')
+    .filter((segment) => segment !== '' && segment !== '.');
+  const index = segments.lastIndexOf('node_modules');
+  if (index === -1) return null;
+  const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+  // `node_modules` alone, or `node_modules/@scope`, names no package: nothing to look up.
+  if (segments.length < index + span) return null;
+  return segments.slice(0, index + span).join('/');
+}
+
 /** `package-lock.json`'s `packages` map, or why it could not be read. Parsed at most once. */
 let lockedPackagesCache;
 function lockedPackages() {
@@ -4812,24 +4845,6 @@ function checkUpstreamCatalogueLanguages() {
         '`checkUpstreamCatalogueLanguages` the new shape — do not leave it asserting nothing.',
     );
     return;
-  }
-
-  /**
-   * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
-   *
-   * Used to tell "this dependency is not installed" — which a clean checkout legitimately is —
-   * from "the dependency is installed and the directory this rule names is not there", which is
-   * a typo or a vendor that dropped the folder in a version bump. Only the second can be judged,
-   * and it has to be judged: it means the build copies nothing and the loader 404s for every
-   * language.
-   */
-  function installedPackageRoot(inputDir) {
-    const segments = inputDir.split('/');
-    const index = segments.lastIndexOf('node_modules');
-    if (index === -1) return null;
-    const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
-    const root = segments.slice(0, index + span).join('/');
-    return segments.length > index + span - 1 ? root : null;
   }
 
   /**
@@ -5066,7 +5081,7 @@ function checkUpstreamCatalogueLanguages() {
           // typo, or a vendor that dropped the folder in a version bump. The build then copies
           // nothing and the loader 404s for **every** language, which is worse than the defect
           // NXSAT-732 reported, so it fails.
-          const packageRoot = installedPackageRoot(inputDir);
+          const packageRoot = installedPackageRootOf(inputDir);
           if (packageRoot === null) {
             fail(
               `the ${where} asset rule copies ${inputDir} to "${served}", but that directory ` +
@@ -5095,7 +5110,7 @@ function checkUpstreamCatalogueLanguages() {
         // about this repository if the package on disk is the one the lockfile pins. Checked here
         // rather than once per rule because it is this read, not the folder's existence, that the
         // verdict below rests on.
-        const versionedRoot = installedPackageRoot(inputDir);
+        const versionedRoot = installedPackageRootOf(inputDir);
         if (versionedRoot !== null) {
           const drift = installedVersionDrift(versionedRoot);
           if (drift.state === 'drift') {
@@ -6128,16 +6143,10 @@ function checkStorybookSatoriCatalogues() {
           }
           continue;
         }
-        const mountedPackageRoot = () => {
-          const segments = dir.split('/');
-          const index = segments.indexOf('node_modules');
-          const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
-          return index === -1 ? null : segments.slice(0, index + span).join('/');
-        };
         if (!fileExists(dir)) {
           // A mount above the catalogue path with no catalogue folder serves nothing there.
           if (!exact) continue;
-          const packageRoot = mountedPackageRoot();
+          const packageRoot = installedPackageRootOf(dir);
           if (packageRoot && !fileExists(packageRoot)) {
             warn(
               `${packageRoot} is not installed, so the languages ${main} asks Satori for were ` +
@@ -6156,7 +6165,7 @@ function checkStorybookSatoriCatalogues() {
         // this rule fails a language the folder does not serve, so a version that ships MORE
         // catalogues than the locked one makes it pass a request that 404s on the real install.
         // Lenience is the dangerous direction here, and it is invisible without this check.
-        const versionedRoot = mountedPackageRoot();
+        const versionedRoot = installedPackageRootOf(dir);
         if (versionedRoot !== null) {
           const drift = installedVersionDrift(versionedRoot);
           if (drift.state === 'drift') {

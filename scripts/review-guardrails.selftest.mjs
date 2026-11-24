@@ -12412,6 +12412,66 @@ expectGreen(
   },
 );
 
+/* Review of the drift check found two path shapes that handed back the pre-fix behaviour, both
+ * because the package root did not name the package whose files were about to be read. Each is
+ * worse than a plain miss: the lookup reports "no entry", which only warns, so the rule goes on
+ * to judge the stale install and print the advice that reintroduces NXSAT-732. */
+
+// An asset input may be written `./node_modules/…`; a lockfile key never is.
+expectRed(
+  'a stale install reached through a ./-prefixed asset input',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: `./${VENDOR_I18N}`, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
+);
+
+// A nested install must be compared against its OWN lock entry, not its parent's. Resolving from
+// the first `node_modules` segment named the parent, whose version agreeing with the lockfile
+// says nothing about the nested package actually being read.
+expectRed(
+  'a stale nested install judged against its parent package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      {
+        glob: '**/*',
+        input: 'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n',
+        output: 'assets/satori-ui/i18n',
+      },
+    ]),
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/fr.json': '{}\n',
+    // The parent is faithful; only the nested package is stale.
+    'node_modules/parent/package.json': `${JSON.stringify({ name: 'parent', version: '2.0.0' }, null, 2)}\n`,
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/package.json':
+      vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': `${JSON.stringify(
+      {
+        name: 'agentic-ui',
+        lockfileVersion: 3,
+        packages: {
+          'node_modules/parent': { version: '2.0.0' },
+          'node_modules/parent/node_modules/@hylandsoftware/satori-ui': { version: '1.0.0' },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*node_modules\/parent\/node_modules\/@hylandsoftware\/satori-ui is installed at 1\.0\.0-alpha\.171/,
+);
+
 // And when the comparison cannot be made at all the rule still judges, but says that it did so
 // on trust. Staying silent here is how this blind spot survived in the first place.
 expectWarn(
@@ -12868,6 +12928,41 @@ expectRed(
   },
   null,
   /is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The nested-install shape at this second site, which is where review found it: resolving from
+// the first `node_modules` segment compared `node_modules/parent`, so a faithful parent vouched
+// for a stale nested Satori and the leftover `en.json` went on hiding the doomed request.
+expectRed(
+  'a stale nested Satori install vouched for by a faithful parent',
+  'checkStorybookSatoriCatalogues',
+  {
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/en-US.json': '{}\n',
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/fr-FR.json': '{}\n',
+    // The leftover an older install shipped, which 1.0.0 does not.
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/parent/package.json': `${JSON.stringify({ name: 'parent', version: '2.0.0' }, null, 2)}\n`,
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/package.json':
+      vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': `${JSON.stringify(
+      {
+        name: 'agentic-ui',
+        lockfileVersion: 3,
+        packages: {
+          'node_modules/parent': { version: '2.0.0' },
+          'node_modules/parent/node_modules/@hylandsoftware/satori-ui': { version: '1.0.0' },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /node_modules\/parent\/node_modules\/@hylandsoftware\/satori-ui is installed at 1\.0\.0-alpha\.171/,
 );
 
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
