@@ -316,6 +316,37 @@ function expectGreen(label, guardrail, files) {
   });
 }
 
+/**
+ * Asserts a correct tree is green AND that the guardrail says nothing at all.
+ *
+ * `expectWarn` already records why green-and-silent and green-with-a-warning are different
+ * outcomes that an exit code cannot tell apart; this is the missing half of that pair. Without it
+ * every "it must NOT warn here" control was written with `expectGreen`, which checks only the exit
+ * code — and `warn()` does not change it. Review of the install-caveat work found exactly that:
+ * the control asserting a repository path gets no install caveat would have passed just as well
+ * with the caveat emitted for every path, which is the one distinction it existed to protect.
+ *
+ * Use it wherever the absence of a warning is the claim. Where a warning is expected, `expectWarn`
+ * names it; where some unrelated warning is legitimate, `expectGreen` still applies.
+ */
+function expectSilent(label, guardrail, files) {
+  if (!selected(guardrail)) return;
+  positive += 1;
+  withFixture(files, null, (runGuardrail) => {
+    const { code, out } = runGuardrail(guardrail);
+    if (code !== 0) {
+      failures.push(`${label}: ${guardrail} failed on a correct tree.\n    ${out.trim()}`);
+      return;
+    }
+    if (/Review guardrail warnings:/.test(out)) {
+      failures.push(
+        `${label}: ${guardrail} was green but warned, and this control asserts it says ` +
+          `nothing.\n    ${out.trim()}`,
+      );
+    }
+  });
+}
+
 const APP = {
   'apps/nuxeo-ui/public/i18n/en.json': EN_JSON,
   'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK,
@@ -12387,7 +12418,7 @@ expectRed(
 // The false-positive half: a faithful install must be judged exactly as before. Without this,
 // "fail when the versions differ" would have been free to fail every correct tree too.
 falsePositiveControls += 1;
-expectGreen(
+expectSilent(
   'an installed version that matches the lockfile pin',
   'checkUpstreamCatalogueLanguages',
   {
@@ -12400,7 +12431,7 @@ expectGreen(
 // A prerelease pin is not drift when it is what the lockfile asks for — the rule compares the two
 // versions, it does not prefer the higher or the stabler one.
 falsePositiveControls += 1;
-expectGreen(
+expectSilent(
   'a prerelease installed because the lockfile pins it',
   'checkUpstreamCatalogueLanguages',
   {
@@ -12567,7 +12598,7 @@ expectRed(
 // A repository path outside `node_modules` has no install to confirm, so it must NOT warn — the
 // distinction is the point, and warning on everything would make the caveat meaningless.
 falsePositiveControls += 1;
-expectGreen(
+expectSilent(
   'a repository asset path is judged without an install caveat',
   'checkUpstreamCatalogueLanguages',
   {
@@ -13123,7 +13154,7 @@ expectRed(
 
 // And a faithful install is judged as before, so the drift check cannot fail every Storybook.
 falsePositiveControls += 1;
-expectGreen(
+expectSilent(
   'a Storybook asking only for languages a faithfully installed folder ships',
   'checkStorybookSatoriCatalogues',
   {
