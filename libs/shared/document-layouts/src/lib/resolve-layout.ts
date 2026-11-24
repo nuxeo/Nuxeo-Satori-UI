@@ -89,6 +89,11 @@ function directoryOf(constraints: unknown): string | undefined {
  * Whether a `documentResolver` binds the value to a document by its id. Nuxeo reports its `store`
  * as `id` (also for a resolver given none, or one it does not know), `idOnly`, `path` or
  * `pathOnly`; the first two hold an id, the others a path, which no lookup by id could read.
+ *
+ * **A limit:** `id` accepts a bare id, as the Payers kit's seed writes one, and Nuxeo's resolver
+ * itself writes `<repository>:<id>` for it. The lookup asks only for a bare, lower-case id, so such
+ * a value shows "Unavailable", in the Properties panel as in a `document-link` on the record page
+ * (layout-v2.md, section 11).
  */
 function storesDocumentId(constraints: unknown): boolean {
   if (!Array.isArray(constraints)) return false;

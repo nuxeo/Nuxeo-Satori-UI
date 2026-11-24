@@ -685,10 +685,13 @@ becomes. In version 2's terms:
   above: one search for every record the panel names, each id once, only lower-case UUIDs sent,
   "Unavailable" for a record the reader may not read, one that no longer exists or a value that is
   not an id, and nothing while the record is read. The panel keeps its own lookup for as long as
-  it is drawn, so a record the record page beside it names is asked for once by each. A resolver
-  that stores a path, `path` or `pathOnly`, holds no id, and its value shows as stored. On the
-  record page, a field with no widget still shows a reference's stored id: naming the
-  `document-link` widget is what shows its title there.
+  it is drawn, so a record the record page beside it names is asked for once by each: a Case page
+  sends two searches for its member and its claim (measured). A resolver that stores a path,
+  `path` or `pathOnly`, holds no id, and its value shows as stored. `store` `id` accepts a bare id,
+  as the Payers kit's seed writes one, but Nuxeo's resolver itself writes `<repository>:<id>` for
+  it, and such a value is not an id the lookup asks for: it shows "Unavailable" here, as in a
+  `document-link` on the record page. On the record page, a field with no widget still shows a
+  reference's stored id: naming the `document-link` widget is what shows its title there.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
 - **The date rules read the browser's clock**, as the rules' library does everywhere, not the

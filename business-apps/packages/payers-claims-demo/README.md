@@ -398,9 +398,12 @@ included, is shown no app. The demo itself still runs on a development server, a
   its title, as a link that opens it
   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 11): a queue's member column,
   the Provider page's claims, the Case page's member and claim, the Claim page's member, and the
-  Properties panel beside a Case or a Claim. A reference to a record that no longer exists shows
-  "Unavailable", and so does one the reader may not read, which was not seen: the checks ran as an
-  administrator, who may read every record.
+  Properties panel beside a Case or a Claim. The panel was checked live on 24 November 2026, as an
+  administrator in a headless browser: beside CASE-2042, the member shows as "John Smith" and the
+  claim as "CLAIM-000132", each a link to its record, the member's opening it when clicked, and
+  neither id is on the panel. A reference to a record that no longer exists shows "Unavailable",
+  and so does one the reader may not read, which was not seen: the checks ran as an administrator,
+  who may read every record.
 - **The approve button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
   and not served, and the queue leaves out an action the app does not register, saying so in the
   console.

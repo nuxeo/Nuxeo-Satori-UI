@@ -356,10 +356,11 @@ describe('RecordPageComponent', () => {
     expect(valueOf(root, 'age')).toBe('45');
   });
 
-  it("turns an age over at the reader's midnight, in whatever zone the reader is", async () => {
+  it("turns an age over at the reader's midnight, which only a zone off UTC tells from UTC's", async () => {
     // The stored birth date is midnight UTC, 24 November 1980: that day in any zone. A page that
     // read today in UTC fails this case in any zone east of UTC (the second age) or west of it
     // (the first), and cannot fail it in a zone at UTC's own offset, where both midnights agree.
+    // This suite pins no zone, so on a UTC runner, as CI's are, it asserts only the ages.
     now = () => new Date(2026, 10, 23, 23, 59);
     expect(valueOf(await render(), 'age')).toBe('45');
     now = () => new Date(2026, 10, 24, 0, 1);
