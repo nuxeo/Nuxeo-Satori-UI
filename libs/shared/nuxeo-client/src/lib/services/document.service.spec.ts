@@ -97,6 +97,26 @@ describe('DocumentService', () => {
       expect(request.request.params.get('pageSize')).toBe('20');
       request.flush(list());
     });
+
+    it('escapes a quote in the user id, which Nuxeo otherwise refuses with HTTP 400', () => {
+      // Checked against the local server: `dc:creator = 'o'brien'` is a syntax error, so the
+      // dashboard's and the drawer's recently-viewed lists failed for such a user.
+      service.getRecentlyViewed("o'brien").subscribe();
+
+      const request = expectNxql();
+      expect(request.request.params.get('query')).toContain(
+        "(dc:creator = 'o\\'brien' OR dc:lastContributor = 'o\\'brien')",
+      );
+      request.flush(list());
+    });
+
+    it('puts the user id in as written, even where it looks like a replacement pattern', () => {
+      service.getRecentlyViewed('a$&b').subscribe();
+
+      const request = expectNxql();
+      expect(request.request.params.get('query')).toContain("dc:creator = 'a$&b'");
+      request.flush(list());
+    });
   });
 
   describe('expired documents', () => {

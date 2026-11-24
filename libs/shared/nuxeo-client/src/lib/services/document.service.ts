@@ -7,6 +7,7 @@ import {
   RECENTLY_VIEWED_QUERY,
   EXPIRED_DOCUMENTS_QUERY,
 } from '../queries/nxql-queries';
+import { escapeNxqlLiteral } from '../utils/nxql.utils';
 import { NuxeoApiBase } from './nuxeo-api-base';
 
 @Injectable({ providedIn: 'root' })
@@ -18,7 +19,10 @@ export class DocumentService {
   }
 
   getRecentlyViewed(userId: string, pageSize = 10): Observable<NuxeoDocumentList> {
-    const query = RECENTLY_VIEWED_QUERY.replace(/\{user\}/g, userId);
+    // Escaped, because the id lands inside a quoted literal: `o'brien` was HTTP 400 on Nuxeo.
+    // A replacer function, because a replacement string reads `$&` and `$'` in the id as patterns.
+    const user = escapeNxqlLiteral(userId);
+    const query = RECENTLY_VIEWED_QUERY.replace(/\{user\}/g, () => user);
     return this.api.nxqlSearch(query, pageSize);
   }
 
