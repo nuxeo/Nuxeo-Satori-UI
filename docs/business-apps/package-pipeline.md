@@ -57,7 +57,7 @@ package, and runs steps 7 and 8 for a tag.
 
 | Step              | What is checked or done                                                                                                                                                                                                                                             |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed                                                                                                       |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it  |
 | 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4)                                                    |
 | 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8) |
 | 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                   |
@@ -82,7 +82,7 @@ header another way, is the builder's to refuse, at step 4: the server would load
 component path must also stay in `bundle/`: one that climbs out with `..`, is absolute, or names a
 folder or a hard link is refused before it is read. Read, a component outside the package would
 have its layout attributes quoted back from wherever it is. A component that is missing is the
-builder's to refuse.
+builder's to refuse. A manifest that is a folder is refused at step 2 too, rather than read.
 
 Nothing in a package is read through a symbolic link. Step 1 searches the package for one before
 any step reads a file, and refuses it: a link can point anywhere, a linked `build.mjs` would have

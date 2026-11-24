@@ -43,7 +43,8 @@
  *     `-`, since both name the files this script writes;
  *   - a symbolic link as `bundle/` or anything in it, or as `package/` or either XML file in it,
  *     which would package bytes from outside what was reviewed — and an asset is served without
- *     authentication.
+ *     authentication. A `Nuxeo-Component` or `src` path through links that loop names no file,
+ *     and is refused as one.
  *
  * Packaged: everything under `bundle/` except Markdown files. Every `.json` file, and any other
  * file a fragment or layout names as its `src`, is packaged compact, with a top-level `"$schema"`
@@ -112,9 +113,11 @@ const problem = (file, message) =>
 /**
  * Names the file system answers with an error rather than as missing, though they name no file:
  * one under a file, such as `config.xml/x.xml` (ENOTDIR); one with a part longer than a file name
- * can be (ENAMETOOLONG); and one holding a NUL byte, which Node refuses before asking.
+ * can be (ENAMETOOLONG); one through symbolic links that loop, such as `x/c.xml` where `x` links
+ * to `x`, or that chain further than the system follows (ELOOP); and one holding a NUL byte, which
+ * Node refuses before asking.
  */
-const NAMES_NOTHING = new Set(['ENOTDIR', 'ENAMETOOLONG', 'ERR_INVALID_ARG_VALUE']);
+const NAMES_NOTHING = new Set(['ENOTDIR', 'ENAMETOOLONG', 'ELOOP', 'ERR_INVALID_ARG_VALUE']);
 
 /**
  * What is at `path`, without following a link that `path` itself names, or `undefined` when
