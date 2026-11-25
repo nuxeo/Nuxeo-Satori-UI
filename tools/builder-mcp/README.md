@@ -147,20 +147,26 @@ What each does:
      `.gitignore`. Nothing writes `deployment/`, whose build allow-list is what CI gives the
      pipeline, so an agent could otherwise allow its own operations (decision 3); an asset; code,
      such as `demo/*.mjs`; or `dist/`;
-   - a generator other than those seven; an option its schema does not have, or of another type
-     or value; `package`, `name` or `directory` among the options, which the package argument
-     gives; and `modelServer`, since a generator given an address sends `NUXEO_USER` and
-     `NUXEO_PASS` there. A `model` is a JSON file of the package, or one inside the repository or
-     a package root, through no link and no hidden folder, as `validate_package` reads an
-     allow-list. A customer's model can be exported into the checkout's `tmp/`, which git ignores:
-     `npm run app-package:model -- --server <address> --out tmp/content-model.json`.
+   - a path that differs from a file of the package only in case: where case is ignored it is
+     that file, under a name it was not given;
+   - a generator other than those seven; an option its schema does not have, or not of its type,
+     its values or its pattern; `package`, `name` or `directory` among the options, which the
+     package argument gives; and `modelServer`, since a generator given an address sends
+     `NUXEO_USER` and `NUXEO_PASS` there. A `model` is a JSON file of the package, or one inside
+     the repository or a package root, through no link and no hidden folder, as `validate_package`
+     reads an allow-list; that one is read by the tool, without following a link, and the
+     generator is given the copy. A customer's model can be exported into the checkout's `tmp/`,
+     which git ignores: `npm run app-package:model -- --server <address> --out tmp/content-model.json`.
 2. **It makes the changes to a staging copy:** the package's files, but for its `dist/`, in a
    folder of its own in the system's temporary directory. A file is written there. A generator runs
    in a process of its own, `src/run-generator.ts`, which loads it with `tsx` and gives it Nx's
    tree, whose reads under the package's path go to the staging copy and whose writes stay in
-   memory and come back to the server. Each file it would write must be inside the package and
-   one a generator writes, or nothing is written. Its process gets from the environment what the
-   pipeline does: no credential.
+   memory and come back to the server. The tree is rooted in a folder of its own that holds only
+   the repository's `.prettierrc` and `.editorconfig`: Nx's `formatFiles` looks for a prettier
+   configuration upwards from the tree's root joined with each file, and loads the nearest, so
+   rooted at the repository it would load a `prettier.config.mjs` the package held, and run it.
+   Each file it would write must be inside the package and one a generator writes, or nothing is
+   written. Its process gets from the environment what the pipeline does: no credential.
 3. **It validates the staging copy as `validate_package` validates a folder alone, as CI does:**
    steps 1 to 6, with the package's own `deployment/build-allow-list.json` when it has one,
    `libs/platform`'s version, and its own `content-model.json` when it ships a stand-in model. It
@@ -170,25 +176,38 @@ What each does:
    does not check a layout of version 1, which the pipeline alone would pass whatever it named.
 4. **It writes only with no finding and no refusing step.** Otherwise the answer says
    `written: false`, with the findings, the step that refused it and what would have changed, and
-   the package is byte for byte as it was. With none, the package is read again, and one that
-   changed since the staging copy was taken, or gained a link, is not written. Then each file is
-   written into a folder of the write's own in the package's `dist/`, which git and the builder
-   leave out, and renamed into its place, which replaces a file whole. A failure part way puts
-   back every file already moved and removes every folder made, so the package is as it was.
-   `dist/` is removed afterwards when the write made it.
+   the package is byte for byte as it was. With none, the write takes the package's lock,
+   `dist/builder-mcp-write.lock`, a file made only when there is none, which a write by another
+   process, such as a second server on the same checkout, takes too; a lock its holder left
+   behind, no longer running, is taken over, and one a running process holds refuses the write.
+   Then the package is read again, and one that changed since the staging copy was taken, or
+   gained a link, or a name that differs from another only in case, is not written. Then each
+   file is written into a folder of the write's own in the package's `dist/`, which git and the
+   builder leave out, and renamed into its place, which replaces a file whole and keeps its mode,
+   once the folder it goes in is found to be where the package's real path says. A failure part
+   way puts back every file already moved and removes every folder made, so the package is as it
+   was. The lock, and `dist/` when the write made it, are removed afterwards.
 
 The answer holds `written`; `changes`, each file `created`, `updated` or `removed`; `validation`,
 the pipeline's answer, naming the package rather than its copy; `generatorOutput`, what each
-generator printed, such as what to run next; and a `note`. One write runs at a time.
+generator printed, such as what to run next; and a `note`. One write runs at a time in a server,
+and one commit at a time in a package.
 
 **What it never does:**
 
-- **Run package code.** The generators are this repository's, loaded by their path, and nothing of
-  the package is loaded. The pipeline runs a package's `build.mjs` only once step 1 has found it
-  the generator's, byte for byte, as for `validate_package`.
+- **Run package code.** The generators are this repository's, loaded by their path, and their
+  tree is rooted where formatting finds the repository's configuration and nothing of the
+  package. The pipeline runs a package's `build.mjs` only once step 1 has found it the
+  generator's, byte for byte, as for `validate_package`.
 - **Write outside the package**, but for its staging folder, which is removed. A server killed
-  outright part way through a commit cannot put files back, and can leave its folder in `dist/`.
+  outright part way through a commit cannot put files back, and can leave its folder and its lock
+  in `dist/`; the lock is taken over by the next write, since its holder is gone.
 - **Read a server, publish, sign or tag.** None of the three sends a request.
+
+**What it cannot stop:** a process that writes into the package at the same moment as a commit,
+outside the lock, such as an editor or the agent's own file tools. Each folder is checked just
+before its file is moved, not held, so such a process could still swap a folder for a link in
+between. The skill keeps the agent's writes to these tools.
 
 **What it does not do yet:**
 
@@ -285,13 +304,13 @@ only place it sends anything is the Nuxeo server it is configured with:
 
 From the environment only, read once when the server starts:
 
-| Variable                | Meaning                                                                                                                                                                                                               |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NUXEO_URL`             | The server's origin, such as `http://localhost:8080`. Default: that. `http` only for this machine                                                                                                                     |
-| `NUXEO_USER`            | Required. No default                                                                                                                                                                                                  |
-| `NUXEO_PASS`            | Required. No default                                                                                                                                                                                                  |
-| `DEV_SERVER_URL`        | The dev server `preview_package` serves to. Default: `http://localhost:4200`, `nx serve`'s. This machine only                                                                                                         |
-| `BUILDER_PACKAGE_ROOTS` | The folders the write tools write a package in, replacing `business-apps/packages/`: absolute or from the repository, separated as `PATH` separates. Each must exist; none may hold the repository. Default: that one |
+| Variable                | Meaning                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NUXEO_URL`             | The server's origin, such as `http://localhost:8080`. Default: that. `http` only for this machine                                                                                                                                                                                        |
+| `NUXEO_USER`            | Required. No default                                                                                                                                                                                                                                                                     |
+| `NUXEO_PASS`            | Required. No default                                                                                                                                                                                                                                                                     |
+| `DEV_SERVER_URL`        | The dev server `preview_package` serves to. Default: `http://localhost:4200`, `nx serve`'s. This machine only                                                                                                                                                                            |
+| `BUILDER_PACKAGE_ROOTS` | The folders the write tools write a package in, replacing `business-apps/packages/`: absolute or from the repository, separated as `PATH` separates. Each must exist; none may hold the repository, or reach one of its folders by another spelling or through a link. Default: that one |
 
 - **No default account.** `scripts/beta-harness/nuxeo-credentials.mjs` says why. Without the pair
   the server still starts, `validate_package` and `preview_package` still answer, and each Nuxeo
@@ -348,11 +367,13 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
   finding, an unregistered rule, a layout of version 1 with an unregistered widget, which the
   pipeline alone passes, and an operation off the build allow-list, each refused with the package
   unchanged; a move that fails part way, and one the file system refuses, each put back; a package
-  that changed or gained a link while it was checked; generators run on the staging copy, a
-  generator writing outside the package, and a new demo kit made in one call. The checks against a
-  write with a finding, a path that leaves the package, a link, a file of version 1, a package
-  changed meanwhile and a move that fails part way were each removed once, and their tests seen
-  failing, before they were trusted.
+  that changed or gained a link while it was checked; a lock held, and one left behind; a path
+  that differs only in case; a file's mode kept; generators run on the staging copy, a generator
+  writing outside the package, a `prettier.config.mjs` at the package's path that formatting must
+  not load, and a new package made in one call. The checks against a write with a finding, a path
+  that leaves the package, a link, a file of version 1, a package changed meanwhile, a move that
+  fails part way, the lock, case, a mode, an option's pattern and that configuration were each
+  removed or undone once, and their tests seen failing, before they were trusted.
 - **`src/preview-package.spec.ts`** runs the real pipeline and a byte copy of
   `scripts/dev-config.mjs` in a scratch checkout of its own, so the tests never write this
   checkout's dev folder, against a stand-in dev server: the files served and not, a refused

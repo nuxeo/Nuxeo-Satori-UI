@@ -13,14 +13,18 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  GENERATORS_SOURCE,
   fileKind,
+  runGenerator,
   writePackage,
   type Change,
   type WriteOptions,
@@ -275,6 +279,9 @@ describe('writePackage, refusing before anything runs', () => {
     );
     expect(await run('app-form', { type: 'Contract', mode: 'delete', model: 'x.json' })).toContain(
       'one of edit, create',
+    );
+    expect(await run('app-queue', { id: '../escape', pageProvider: 'p' })).toContain(
+      'is not of the form app-queue takes there',
     );
   });
 
@@ -573,6 +580,72 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       },
     );
 
+    it('refuses a path that differs from a file of the package only in case', async () => {
+      const root = kit('contracts-demo', 'case');
+      const before = fingerprint(root);
+      await expect(
+        writeFile(root, VIEW.replace('/Contract/', '/contract/'), read(root, VIEW)),
+      ).rejects.toThrow(`differs only in case from ${VIEW}`);
+      expect(fingerprint(root)).toEqual(before);
+    });
+
+    it('keeps the mode of a file it replaces', async () => {
+      const root = kit('contracts-demo', 'mode');
+      chmodSync(join(root, ...LABELS.split('/')), 0o600);
+      const result = await writeFile(
+        root,
+        LABELS,
+        edited(root, LABELS, '"Contract manager"', '"Owner"'),
+      );
+      expect(result.written).toBe(true);
+      if (process.platform !== 'win32')
+        expect(statSync(join(root, ...LABELS.split('/'))).mode & 0o777).toBe(0o600);
+    });
+
+    it('waits for no one: a lock a running process holds refuses the write, and one left is taken over', async () => {
+      const root = kit('contracts-demo', 'locked');
+      mkdirSync(join(root, 'dist'));
+      const lock = join(root, 'dist', 'builder-mcp-write.lock');
+      const content = edited(root, LABELS, '"Contract manager"', '"Owner"');
+      // Held by a running process: this one.
+      writeFileSync(lock, `${process.pid}\n`);
+      const before = fingerprint(root);
+      await expect(writeFile(root, LABELS, content)).rejects.toThrow(
+        `is being committed, by process ${process.pid}`,
+      );
+      expect(fingerprint(root)).toEqual(before);
+      expect(existsSync(lock)).toBe(true);
+      // Left by one that has stopped.
+      const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))']);
+      writeFileSync(lock, `${String(gone.stdout)}\n`);
+      const result = await writeFile(root, LABELS, content);
+      expect(result.written).toBe(true);
+      expect(existsSync(lock)).toBe(false);
+      // dist/ was the package's own, so it stays.
+      expect(existsSync(join(root, 'dist'))).toBe(true);
+    });
+
+    it('names a model it was given as given, not the copy the generator read', async () => {
+      const root = kit('contracts-demo', 'model-named');
+      const model = 'business-apps/packages/contracts-demo/content-model.json';
+      let message = '';
+      try {
+        await writePackage(
+          {
+            package: root,
+            changes: [
+              { kind: 'generator', generator: 'app-layout', options: { type: 'Nothing', model } },
+            ],
+          },
+          OPTIONS,
+        );
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain(`The content model ${model} has no document type "Nothing"`);
+      expect(message).not.toContain('<temporary>');
+    });
+
     it('writes nothing to a package that changed while it was being checked', async () => {
       const root = kit('contracts-demo', 'changed-meanwhile');
       const content = edited(root, LABELS, '"Contract manager"', '"Owner"');
@@ -649,6 +722,59 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(result.generatorOutput.join('\n')).toContain('active-contracts');
       expect(result.generatorOutput.join('\n')).not.toContain(work);
     });
+
+    it.skipIf(process.platform === 'win32')(
+      'loads no code of the package while a generator formats what it wrote',
+      async () => {
+        // A stand-in repository, as the generator's process reads one. At the package's path in it
+        // is a prettier.config.mjs, which Nx's formatFiles would load, since it looks for a
+        // configuration upwards from each file it formats. A package in business-apps/packages/
+        // of this checkout is where it would be; the test does not write there.
+        const fake = mkdtempSync(join(scratch, 'fake-repository-'));
+        for (const file of ['package.json', '.prettierrc', '.editorconfig', '.prettierignore'])
+          cpSync(join(REPO_ROOT, file), join(fake, file));
+        symlinkSync(join(REPO_ROOT, 'node_modules'), join(fake, 'node_modules'));
+        const packagePath = 'business-apps/packages/planted';
+        const planted = join(fake, ...packagePath.split('/'));
+        mkdirSync(planted, { recursive: true });
+        // Loaded, it leaves a marker at the stand-in repository's root.
+        writeFileSync(
+          join(planted, 'prettier.config.mjs'),
+          "import { writeFileSync } from 'node:fs';\n" +
+            "writeFileSync(new URL('../../../loaded.txt', import.meta.url), 'loaded');\n" +
+            'export default {};\n',
+        );
+        const staging = kit('contracts-demo', 'runner-staging');
+        const runWork = mkdtempSync(join(scratch, 'runner-work-'));
+        const answer = await runGenerator({
+          generator: 'app-queue',
+          request: {
+            factory: join(GENERATORS_SOURCE, 'app-queue', 'generator.ts'),
+            options: {
+              package: packagePath,
+              id: 'all-contracts',
+              pageProvider: 'contracts_up_for_renewal',
+              force: false,
+            },
+            root: fake,
+            packagePath,
+            staging,
+          },
+          work: runWork,
+          timeoutMs: 60_000,
+        });
+        expect('error' in answer ? answer.error : '').toBe('');
+        expect(existsSync(join(fake, 'loaded.txt')), 'the package prettier.config.mjs ran').toBe(
+          false,
+        );
+        // Formatted all the same, with the repository's configuration: printWidth 100.
+        const queue = 'changes' in answer ? answer.changes : [];
+        const written = queue.find((change) => change.path.endsWith('queues/all-contracts.json'));
+        expect(Buffer.from(written?.content ?? '', 'base64').toString('utf8')).toContain(
+          '"columns": ["dc:title", "dc:modified"]',
+        );
+      },
+    );
 
     it("refuses an action id that is the platform's, as the generator does", async () => {
       const root = kit('contracts-demo', 'platform-id');

@@ -20,22 +20,30 @@
  *    allow-list, registered file or platform version is taken, so nothing the agent gives can
  *    register an id. Every app definition file the changes touch must be of version 2, since the
  *    validator does not check a layout of version 1.
- * 5. **Only with no finding and no refusing step** are the changes committed: each file is
- *    written beside its place, inside the package's own `dist/`, then renamed into it. A failure
- *    part way puts back every file already moved, so the package is as it was. A package that
- *    changed since the staging copy was taken is not written at all.
+ * 5. **Only with no finding and no refusing step** are the changes committed, under a lock in the
+ *    package's own `dist/` that another process's write also takes: each file is written there,
+ *    then renamed into its place. A failure part way puts back every file already moved, so the
+ *    package is as it was. A package that changed since the staging copy was taken, or a path that
+ *    differs from another only in case, is not written at all.
  *
- * What it never does: run package code (the generators are this repository's, and the pipeline
- * runs `build.mjs` only once step 1 found it the generator's, byte for byte); write outside the
+ * What it never does: run package code (the generators are this repository's, their tree is rooted
+ * in a folder that holds only the repository's formatting configuration, and the pipeline runs
+ * `build.mjs` only once step 1 found it the generator's, byte for byte); write outside the
  * package, but for its own temporary folder; follow a link; give a credential to anything it runs.
  */
 import { randomBytes } from 'node:crypto';
 import {
+  chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmdirSync,
   rmSync,
@@ -76,6 +84,8 @@ export const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_PACKAGE_BYTES = 64 * 1024 * 1024;
 const GENERATOR_TIMEOUT_MS = 120_000;
 const RUNNER = fileURLToPath(new URL('./run-generator.ts', import.meta.url));
+/** What `formatFiles` reads to format a generator's files, copied to the tree's own root. */
+const FORMATTING = ['.prettierrc', '.editorconfig'] as const;
 /** `app-package`'s rule for a package's name, which is its folder's. */
 const PACKAGE_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const CONFIG = 'bundle/agentic-ui-config';
@@ -97,7 +107,7 @@ export interface WriteRequest {
 /** A run of a generator, as the server asks for one. */
 export interface GeneratorRun {
   readonly generator: AppGenerator;
-  readonly request: Omit<GeneratorRequest, 'answer'>;
+  readonly request: Omit<GeneratorRequest, 'answer' | 'treeRoot'>;
   readonly work: string;
   readonly timeoutMs: number;
 }
@@ -376,11 +386,16 @@ function generatorOptions(
   target: Target,
   staging: string,
   modelRoots: readonly string[],
+  work: string,
+  shown: Map<string, string>,
 ): Record<string, unknown> {
   const schema = JSON.parse(
     readFileSync(join(GENERATORS_SOURCE, generator, 'schema.json'), 'utf8'),
   ) as {
-    properties: Record<string, { type?: string; enum?: unknown[]; default?: unknown }>;
+    properties: Record<
+      string,
+      { type?: string; enum?: unknown[]; pattern?: string; default?: unknown }
+    >;
     required?: string[];
   };
   const own = generator === 'app-package' ? ['name', 'directory'] : ['package'];
@@ -415,8 +430,18 @@ function generatorOptions(
     if (!fits) throw new Error(`options.${key}: ${generator} takes a ${type ?? 'value'} here.`);
     if (property.enum && !property.enum.includes(value))
       throw new Error(`options.${key}: one of ${property.enum.join(', ')}.`);
+    if (
+      property.pattern !== undefined &&
+      typeof value === 'string' &&
+      !new RegExp(property.pattern).test(value)
+    )
+      throw new Error(
+        `options.${key}: ${JSON.stringify(value)} is not of the form ${generator} takes there, ${property.pattern}.`,
+      );
     options[key] =
-      key === 'model' ? modelFile(value as string, target, staging, modelRoots) : value;
+      key === 'model'
+        ? modelFile(value as string, target, staging, modelRoots, work, shown)
+        : value;
   }
   for (const [key, property] of Object.entries(schema.properties))
     if (options[key] === undefined && property.default !== undefined)
@@ -434,13 +459,18 @@ function generatorOptions(
  * The content model a generator reads, as a path it can open: the staging copy's, for one inside
  * the package, so that a model an earlier step wrote is the one read; otherwise a JSON file inside
  * the repository or a package root, through no link and no hidden folder, as `validate_package`
- * reads its allow-list. A generator can quote what it read, and that goes to the agent.
+ * reads its allow-list. A generator can quote what it read, and that goes to the agent, so the
+ * file is read here, opened without following a link, and the generator is given that copy: a
+ * link put in its place after the check is not followed. `shown` learns the copy's name, so that
+ * messages name the file given.
  */
 function modelFile(
   path: string,
   target: Target,
   staging: string,
   roots: readonly string[],
+  work: string,
+  shown: Map<string, string>,
 ): string {
   const absolute = inRepository(path);
   const inPackage = relative(target.directory, absolute);
@@ -452,16 +482,40 @@ function modelFile(
   }
   const found = within(path, roots);
   if (typeof found !== 'string') throw new Error(`options.model: ${found.problem}`);
-  if (!found.endsWith('.json') || !lstatSync(found).isFile())
-    throw new Error(`options.model: ${path} is not a JSON file.`);
-  return found;
+  if (!found.endsWith('.json')) throw new Error(`options.model: ${path} is not a JSON file.`);
+  let data: Buffer;
+  let descriptor: number | null = null;
+  try {
+    descriptor = openSync(found, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const entry = fstatSync(descriptor);
+    if (!entry.isFile() || entry.nlink > 1 || entry.size > MAX_PACKAGE_BYTES)
+      throw new Error('not one file');
+    data = readFileSync(descriptor);
+  } catch {
+    throw new Error(`options.model: ${path} is not a JSON file, or goes through a link.`);
+  } finally {
+    if (descriptor !== null) closeSync(descriptor);
+  }
+  const copy = join(work, `model-${randomBytes(6).toString('hex')}.json`);
+  writeFileSync(copy, data, { flag: 'wx' });
+  shown.set(copy, path);
+  return copy;
 }
 
 /** The generator, run in a process of its own (`run-generator.ts`), with no credential. */
-async function runGenerator(run: GeneratorRun): Promise<GeneratorAnswer> {
+export async function runGenerator(run: GeneratorRun): Promise<GeneratorAnswer> {
   const answer = join(run.work, `answer-${randomBytes(6).toString('hex')}.json`);
   const requestFile = join(run.work, `request-${randomBytes(6).toString('hex')}.json`);
-  writeFileSync(requestFile, JSON.stringify({ ...run.request, answer }));
+  // The tree's root: the repository's formatting configuration, and nothing else
+  // (run-generator.ts says why).
+  const treeRoot = mkdtempSync(join(run.work, 'tree-'));
+  for (const file of FORMATTING) {
+    const from = join(run.request.root, file);
+    if (lstatSync(from, { throwIfNoEntry: false })?.isFile())
+      writeFileSync(join(treeRoot, file), readFileSync(from));
+  }
+  const request: GeneratorRequest = { ...run.request, treeRoot, answer };
+  writeFileSync(requestFile, JSON.stringify(request));
   const temporary = mkdtempSync(join(run.work, 'tmp-'));
   const result = await runNode(
     [RUNNER, requestFile],
@@ -563,10 +617,25 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
     }
     if (target.exists) mkdirSync(staging);
     for (const [path, data] of before) writeInto(staging, path, data);
+    // A file the package holds, named in another case: on a file system that ignores case it is
+    // that file, and the write would land on it under a name it was not given.
+    for (const [index, change] of request.changes.entries()) {
+      if (change.kind !== 'write' || before.has(change.path)) continue;
+      const held = sameButCase(change.path, before.keys());
+      if (held !== undefined)
+        throw new Error(
+          `changes[${index}].path: ${change.path} differs only in case from ${held}, which the package holds. Write ${held}. Nothing was written.`,
+        );
+    }
 
     const said: string[] = [];
-    const shownPaths = (text: string) =>
-      text.split(staging).join(target.shown).split(work).join('<temporary>');
+    /** Each path of the write's own, and the name the answer gives it instead. */
+    const shown = new Map<string, string>();
+    const shownPaths = (text: string) => {
+      let said = text;
+      for (const [path, as] of shown) said = said.split(path).join(as);
+      return said.split(staging).join(target.shown).split(work).join('<temporary>');
+    };
     /** A change that cannot be made to the staging copy, said of the package. */
     const unmade = (index: number, error: unknown) =>
       new Error(`changes[${index}]: ${shownPaths((error as Error).message)} Nothing was written.`);
@@ -588,6 +657,8 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
           target,
           staging,
           options.modelRoots ?? [REPO_ROOT, ...roots],
+          work,
+          shown,
         );
       } catch (error) {
         throw new Error(`changes[${index}].${(error as Error).message}`);
@@ -638,6 +709,19 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
       const kind = fileKind(path);
       if (typeof kind !== 'string') throw new Error(`${kind.problem} Nothing was written.`);
     }
+    // Two names of one file where case is ignored, as the package's volume may ignore it though
+    // the staging copy's does not: what was validated as two files would be written as one.
+    const names = [...new Set([...before.keys(), ...after.keys()])];
+    for (const { path } of changes) {
+      const other = sameButCase(
+        path,
+        names.filter((name) => name !== path),
+      );
+      if (other !== undefined)
+        throw new Error(
+          `${path} and ${other} differ only in case, and are one file where case is ignored. Nothing was written.`,
+        );
+    }
     const versionOne = changes.filter(
       ({ path, change }) => change !== 'removed' && !isVersionTwo(after.get(path), path),
     );
@@ -666,29 +750,39 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
     options.beforeCommit?.();
     // What was validated is what is written: a package that changed meanwhile is not written.
     let again: Target;
-    let now: Files;
     try {
       again = packageFolder(request.package, roots);
     } catch (error) {
       throw new Error(`${(error as Error).message} Nothing was written.`);
     }
+    // One commit to a package at a time, across processes too, such as two servers on one
+    // checkout: the lock is taken before the package is read again, and held until every file is
+    // in place, so that a second commit reads the first one's result, and refuses it as a change.
+    const lock = again.exists ? lockPackage(target) : null;
     try {
-      now = again.exists ? readFiles(target.directory) : new Map();
-    } catch (error) {
-      throw new Error(`package: ${target.shown}: ${(error as Error).message} Nothing was written.`);
+      let now: Files;
+      try {
+        now = again.exists ? readFiles(target.directory) : new Map();
+      } catch (error) {
+        throw new Error(
+          `package: ${target.shown}: ${(error as Error).message} Nothing was written.`,
+        );
+      }
+      if (again.exists !== target.exists || !sameFiles(before, now))
+        return {
+          package: target.shown,
+          written: false,
+          changes,
+          validation: check,
+          generatorOutput: said,
+          note:
+            'Not written: the package changed while the changes were being checked, so what passed' +
+            ' is not what would be written. Nothing was written; read it again and write again.',
+        };
+      commit(target, changes, after, before, options.beforeMove, lock?.dist);
+    } finally {
+      lock?.release();
     }
-    if (again.exists !== target.exists || !sameFiles(before, now))
-      return {
-        package: target.shown,
-        written: false,
-        changes,
-        validation: check,
-        generatorOutput: said,
-        note:
-          'Not written: the package changed while the changes were being checked, so what passed' +
-          ' is not what would be written. Nothing was written; read it again and write again.',
-      };
-    commit(target, changes, after, before, options.beforeMove);
     return {
       package: target.shown,
       written: true,
@@ -764,14 +858,97 @@ function withoutColour(text: string): string {
   return text.replace(/\u001b\[[0-9;]*m/g, '');
 }
 
+/** The first of `names` that is `path` but for case, or `undefined`. */
+function sameButCase(path: string, names: Iterable<string>): string | undefined {
+  const folded = path.toLowerCase();
+  for (const name of names) if (name !== path && name.toLowerCase() === folded) return name;
+  return undefined;
+}
+
 // ------------------------------------------------------------------------------- the commit
+
+/** The lock's name, in the package's `dist/`. */
+const LOCK = 'builder-mcp-write.lock';
+
+/**
+ * The package's write lock, taken: a file made only if there is none, `wx`, holding this process's
+ * id, in the package's `dist/`, which is made when there is none and removed with the lock. One a
+ * process left that is no longer running is taken over; one a running process holds refuses this
+ * write.
+ */
+function lockPackage(target: Target): { readonly dist: string; release(): void } {
+  const dist = join(target.directory, 'dist');
+  const entry = lstatSync(dist, { throwIfNoEntry: false });
+  if (entry && (entry.isSymbolicLink() || !entry.isDirectory()))
+    throw new Error(
+      `${target.shown}/dist is not a folder, and the write works in it. Nothing was written.`,
+    );
+  const made = entry === undefined;
+  if (made) mkdirSync(dist);
+  const file = join(dist, LOCK);
+  const take = () => writeFileSync(file, `${process.pid}\n`, { flag: 'wx' });
+  const removeDist = () => {
+    if (!made) return;
+    try {
+      rmdirSync(dist);
+    } catch {
+      // Something else is in it now, and it stays.
+    }
+  };
+  try {
+    try {
+      take();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      const holder = Number(readFileSync(file, 'utf8').trim());
+      if (Number.isInteger(holder) && holder > 0 && running(holder))
+        throw new Error(
+          `another write to ${target.shown} is being committed, by process ${holder}. Nothing was written; write again once it is done.`,
+        );
+      // Left by a process that has stopped: taken over. Two taking it over at once cannot both
+      // make it.
+      rmSync(file, { force: true });
+      take();
+    }
+  } catch (error) {
+    removeDist();
+    throw error;
+  }
+  return {
+    dist,
+    release: () => {
+      rmSync(file, { force: true });
+      removeDist();
+    },
+  };
+}
+
+function running(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+interface Moved {
+  readonly change: FileChange;
+  readonly file: string;
+  /** The mode the file had, when it had one. */
+  readonly mode: number | undefined;
+}
 
 /**
  * The changes, into the package. Each new file is written first into a folder of the write's own
  * inside the package's `dist/`, which is on the package's volume and which git and the builder
- * leave out; then each is renamed into its place, which replaces a file whole. Should a move fail,
- * every file already moved is put back as it was, and every folder made is removed, so that the
- * package is left as it was. A process killed outright part way cannot do that.
+ * leave out; then each is renamed into its place, which replaces a file whole and keeps its mode.
+ * Before each move, the folder it goes to is found to be where it was, through no link. Should a
+ * move fail, every file already moved is put back as it was, and every folder made is removed, so
+ * that the package is left as it was. A process killed outright part way cannot do that.
+ *
+ * `dist` is the package's `dist/`, which the lock made or found; for a package that is new, it is
+ * made here, and removed afterwards.
  */
 function commit(
   target: Target,
@@ -779,46 +956,48 @@ function commit(
   after: Files,
   before: Files,
   beforeMove: WriteOptions['beforeMove'],
+  dist: string | undefined,
 ): void {
   const made: string[] = [];
   const makeFolder = (folder: string) => {
     mkdirSync(folder);
     made.push(folder);
   };
-  if (!target.exists) makeFolder(target.directory);
-  const dist = join(target.directory, 'dist');
-  const distEntry = lstatSync(dist, { throwIfNoEntry: false });
-  if (distEntry && !distEntry.isDirectory())
-    throw new Error(
-      `${target.shown}/dist is not a folder, and the write works in it. Nothing was written.`,
-    );
-  if (!distEntry) makeFolder(dist);
-  const scratch = mkdtempSync(join(dist, 'builder-mcp-commit-'));
-  const moved: FileChange[] = [];
+  const ownDist = dist === undefined ? join(target.directory, 'dist') : undefined;
+  const moved: Moved[] = [];
+  let scratch: string | null = null;
   let failure: unknown = null;
   try {
+    if (!target.exists) makeFolder(target.directory);
+    if (ownDist !== undefined) makeFolder(ownDist);
+    const into = mkdtempSync(join(dist ?? (ownDist as string), 'builder-mcp-commit-'));
+    scratch = into;
+    const real = realpathSync(target.directory);
     const prepared = changes.map((change, index) => {
       if (change.change === 'removed') return null;
-      const file = join(scratch, String(index));
+      const file = join(into, String(index));
       writeFileSync(file, after.get(change.path) as Buffer, { flag: 'wx' });
       return file;
     });
     for (const [index, change] of changes.entries()) {
       beforeMove?.(change.path, index);
-      const file = placeOf(target.directory, change.path, makeFolder);
+      const { file, mode } = placeOf(target.directory, real, change.path, makeFolder);
       if (change.change === 'removed') unlinkSync(file);
-      else renameSync(prepared[index] as string, file);
-      moved.push(change);
+      else {
+        if (mode !== undefined) chmodSync(prepared[index] as string, mode);
+        renameSync(prepared[index] as string, file);
+      }
+      moved.push({ change, file, mode });
     }
   } catch (error) {
     failure = error;
   }
-  const unrestored = failure === null ? [] : putBack(target.directory, moved, before, scratch);
-  rmSync(scratch, { recursive: true, force: true });
-  // The folders made, deepest first, when they are empty again: `dist/` once the scratch is gone,
-  // and on a failure every folder a move made.
+  const unrestored = failure === null || scratch === null ? [] : putBack(moved, before, scratch);
+  if (scratch !== null) rmSync(scratch, { recursive: true, force: true });
+  // The folders made, deepest first, when they are empty again: a new package's `dist/` once the
+  // scratch is gone, and on a failure every folder made, the package's own included.
   for (const folder of made.reverse()) {
-    if (failure === null && folder !== dist) continue;
+    if (failure === null && folder !== ownDist) continue;
     try {
       rmdirSync(folder);
     } catch {
@@ -830,15 +1009,21 @@ function commit(
       `Writing ${target.shown} failed part way (${(failure as Error).message}). ` +
         (unrestored.length === 0
           ? 'Every file already written was put back, so the package is as it was.'
-          : `These could not be put back, and must be restored by hand, from git: ${unrestored.join(', ')}.`),
+          : `These could not be put back, and must be restored by hand, from version control where the package is in it: ${unrestored.join(', ')}.`),
     );
 }
 
 /**
- * The file a change goes to, making the folders it needs: each part of the way is a folder, not a
- * link, as it was when the package was read.
+ * The file a change goes to, and the mode it has, making the folders it needs: each part of the
+ * way is a folder, not a link, as it was when the package was read, and the folder the file goes
+ * in is, resolved, where the package's real path says it is.
  */
-function placeOf(directory: string, path: string, makeFolder: (folder: string) => void): string {
+function placeOf(
+  directory: string,
+  real: string,
+  path: string,
+  makeFolder: (folder: string) => void,
+): { readonly file: string; readonly mode: number | undefined } {
   inside(directory, path);
   const parts = path.split('/');
   let current = directory;
@@ -849,29 +1034,26 @@ function placeOf(directory: string, path: string, makeFolder: (folder: string) =
     else if (entry.isSymbolicLink() || !entry.isDirectory())
       throw new Error(`${path} goes through ${part}, which is not a folder`);
   }
+  if (realpathSync(current) !== join(real, ...parts.slice(0, -1)))
+    throw new Error(`${path} no longer leads into the package: a folder on its way was replaced`);
   const file = join(current, parts[parts.length - 1]);
   const entry = lstatSync(file, { throwIfNoEntry: false });
   if (entry && (entry.isSymbolicLink() || !entry.isFile() || entry.nlink > 1))
     throw new Error(`${path} is no longer a plain file`);
-  return file;
+  return { file, mode: entry === undefined ? undefined : entry.mode & 0o7777 };
 }
 
-/** Puts back each file already moved, as it was; the paths that could not be. */
-function putBack(
-  directory: string,
-  moved: readonly FileChange[],
-  before: Files,
-  scratch: string,
-): string[] {
+/** Puts back each file already moved, as it was, with its mode; the paths that could not be. */
+function putBack(moved: readonly Moved[], before: Files, scratch: string): string[] {
   const unrestored: string[] = [];
-  for (const [index, change] of [...moved].reverse().entries()) {
-    const file = inside(directory, change.path);
+  for (const [index, { change, file, mode }] of [...moved].reverse().entries()) {
     try {
       const was = before.get(change.path);
       if (was === undefined) unlinkSync(file);
       else {
         const back = join(scratch, `back-${index}`);
         writeFileSync(back, was, { flag: 'wx' });
+        if (mode !== undefined) chmodSync(back, mode);
         renameSync(back, file);
       }
     } catch {

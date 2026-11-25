@@ -12,7 +12,7 @@
  * would send the password in clear text. `DEV_SERVER_URL` is the dev server `preview_package`
  * serves to, and `BUILDER_PACKAGE_ROOTS` the folders the write tools may write a package in.
  */
-import { lstatSync } from 'node:fs';
+import { lstatSync, realpathSync } from 'node:fs';
 import { delimiter, isAbsolute, relative, resolve } from 'node:path';
 
 export const DEFAULT_NUXEO_URL = 'http://localhost:8080';
@@ -118,7 +118,8 @@ export const PACKAGE_ROOTS_ENV = 'BUILDER_PACKAGE_ROOTS';
  * are none. Unset, it is `business-apps/packages/` alone. Set, its folders replace that one: each
  * a path, absolute or from the repository's root, separated as `PATH` separates them (`:`, or `;`
  * on Windows). Each must be a folder that exists, and none may hold the repository itself, so
- * that a package is never the checkout or a folder above it.
+ * that a package is never the checkout or a folder above it, nor reach a folder of the
+ * repository by another spelling or through a link, which would be judged as outside it.
  */
 export function readPackageRoots(
   env: Environment,
@@ -135,10 +136,25 @@ export function readPackageRoots(
     });
     if (!lstatSync(root, { throwIfNoEntry: false })?.isDirectory())
       return refuse('is not a folder, or is a link to one');
-    const toRepository = relative(root, repository);
-    if (toRepository === '' || (!toRepository.startsWith('..') && !isAbsolute(toRepository)))
+    // Compared as the file system resolves them, which follows links and, where case is ignored,
+    // spells each name as it is stored.
+    const real = realpathSync.native(root);
+    const realRepository = realpathSync.native(repository);
+    if (holds(real, realRepository))
       return refuse('holds the repository, so a package there could be the checkout itself');
+    // A folder of the repository reached by another spelling, or through a link, would be judged
+    // as outside it, and miss the checks a root inside it has (no link, no hidden folder).
+    if (holds(realRepository, real) !== holds(repository, root))
+      return refuse(
+        'is a folder of the repository by another spelling, or through a link. Name it from the repository, as business-apps/packages is',
+      );
     roots.push(root);
   }
   return roots;
+}
+
+/** Whether `folder` is `inner` or holds it. */
+function holds(folder: string, inner: string): boolean {
+  const from = relative(folder, inner);
+  return from === '' || (!from.startsWith('..') && !isAbsolute(from));
 }

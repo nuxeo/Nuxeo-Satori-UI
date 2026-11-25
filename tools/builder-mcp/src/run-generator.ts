@@ -14,6 +14,13 @@
  * - **It writes nothing.** What the generator writes stays in the tree's memory, and is returned,
  *   each file with its content, for the server to check before anything is written. The callback
  *   a generator returns, which prints what to do next, runs on a locked tree, so it cannot write.
+ * - **The tree's root is a folder of its own,** `request.treeRoot`, which holds the repository's
+ *   `.prettierrc` and `.editorconfig` and nothing else. Nx's `formatFiles` looks for a prettier
+ *   configuration upwards from the tree's root joined with each file it formats, and loads the
+ *   nearest, JavaScript included: rooted at the repository, it would look in the package's own
+ *   folder first, and run a `prettier.config.mjs` a package holds. Rooted here, it finds the
+ *   repository's configuration and nothing of the package. Only the four reads below use the
+ *   tree's root, and they go to the repository and the staging copy.
  *
  * The answer goes to the file `request.answer` names, so that stdout and stderr hold only what the
  * generator printed.
@@ -28,8 +35,13 @@ export interface GeneratorRequest {
   /** The generator's factory module, an absolute path to its `.ts` file. */
   readonly factory: string;
   readonly options: Readonly<Record<string, unknown>>;
-  /** The repository's root: the tree's. */
+  /** The repository's root, which the tree reads outside the package's path. */
   readonly root: string;
+  /**
+   * The tree's own root: a folder holding only the repository's formatting configuration, so that
+   * nothing looks for a configuration in the package's folder.
+   */
+  readonly treeRoot: string;
   /** The package's path in the tree, from the root, with `/`. */
   readonly packagePath: string;
   /** The folder the package's path is read from: the staging copy. */
@@ -71,8 +83,9 @@ try {
   const { FsTree } = load('nx/src/devkit-internals') as { FsTree: FsTreeClass };
   const prefix = request.packagePath;
   /**
-   * Nx's own tree, whose four reads of the file system go to the staging copy under the package's
-   * path. Everything else it does, what it records and how it lists the changes, is Nx's.
+   * Nx's own tree, rooted at `treeRoot`, whose four reads of the file system go to the staging copy
+   * under the package's path and to the repository everywhere else. Everything else it does, what
+   * it records and how it lists the changes, is Nx's.
    */
   class StagedTree extends FsTree {
     where(path: string): string {
@@ -104,7 +117,7 @@ try {
       }
     }
   }
-  const tree = new StagedTree(request.root, false);
+  const tree = new StagedTree(request.treeRoot, false);
   const module = tsxRequire(request.factory, import.meta.url) as {
     default?: (tree: NxTree, options: unknown) => unknown;
   };

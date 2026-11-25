@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -142,4 +142,24 @@ describe('readPackageRoots', () => {
       expect('problem' in result && result.problem, value).toContain(why);
     }
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a folder of the repository reached through a link, which would skip its checks',
+    () => {
+      const elsewhere = mkdtempSync(join(tmpdir(), 'builder-mcp-roots-link-'));
+      try {
+        symlinkSync(repository, join(elsewhere, 'checkout'));
+        const result = readPackageRoots(
+          { BUILDER_PACKAGE_ROOTS: join(elsewhere, 'checkout', 'customer-apps') },
+          repository,
+          fallback,
+        );
+        expect('problem' in result && result.problem).toContain(
+          'is a folder of the repository by another spelling, or through a link',
+        );
+      } finally {
+        rmSync(elsewhere, { recursive: true, force: true });
+      }
+    },
+  );
 });
