@@ -673,7 +673,7 @@ function allowListContributions(directory) {
           `${component} contributes to ${ALLOW_LIST_COMPONENT}${point ? `'s "${point}" point` : ''}, the ` +
           "server's allow-list of the operations an app's buttons may run. The allow-list is the " +
           "deployment's, never a package's: name the operation in actions.json, and give the server's " +
-          'administrators the contribution that allows it, as the Payers kit\'s README does.'
+          "administrators the contribution that allows it, as the Payers kit's README does."
         );
     }
   }

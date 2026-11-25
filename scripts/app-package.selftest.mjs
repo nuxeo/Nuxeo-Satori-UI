@@ -84,8 +84,20 @@ function packageWith(change = unchanged) {
   return { scratch, directory, out: join(scratch, 'out') };
 }
 
+/**
+ * The allow-list a package names beside its bundle, for the deployment it is built for: what CI
+ * gives the pipeline (`app-packages.yml`). The Payers kit's buttons run two chains.
+ */
+const BUILD_ALLOW_LIST = join('deployment', 'build-allow-list.json');
+
+/** As CI runs it: given the package's own build allow-list, unless the control gives another. */
 function run(directory, out, args = []) {
-  const result = spawnSync(process.execPath, [SCRIPT, directory, '--out', out, ...args], {
+  const allowList = join(directory, BUILD_ALLOW_LIST);
+  const withAllowList =
+    !args.includes('--allow-list') && existsSync(allowList)
+      ? [...args, '--allow-list', allowList]
+      : args;
+  const result = spawnSync(process.execPath, [SCRIPT, directory, '--out', out, ...withAllowList], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -816,10 +828,56 @@ expectBuilt(
       '"transition": "pay",',
       '"operation": "Payers.ApproveClaim",',
     );
-    // The deployment's, so beside the package rather than in it.
-    write('../allow-list.json', JSON.stringify({ operations: ['Payers.ApproveClaim'] }));
+    // The deployment's, so beside the package rather than in it, with the kit's own two chains.
+    const kit = JSON.parse(readFileSync(join(DEMO, BUILD_ALLOW_LIST), 'utf8')).operations;
+    write('../allow-list.json', JSON.stringify({ operations: [...kit, 'Payers.ApproveClaim'] }));
   },
   (scratch) => ['--allow-list', join(scratch, 'allow-list.json')],
+);
+
+// The operation buttons (plan decision 3, on its recommendation): the kit's run two chains, which
+// the deployment allows, and which a package may never allow itself.
+expectRefused(
+  "the kit's buttons, given an allow-list that holds none of their chains",
+  ({ write }) => write('../empty-allow-list.json', JSON.stringify({ operations: [] })),
+  2,
+  `the operation "Payers.RequestMedicalRecords" is not on this deployment's allow-list`,
+  (scratch) => ['--allow-list', join(scratch, 'empty-allow-list.json')],
+);
+const OPERATIONS = 'bundle/OSGI-INF/payers-claims-demo-operations.xml';
+const ALLOW_ITSELF =
+  '<extension target="org.nuxeo.agentic.ui.operations" point="allowList">\n' +
+  '    <operation id="Payers.ReferToInvestigations" />\n  </extension>\n</component>';
+expectRefused(
+  "a package that allows its own operations, contributing to the server's allow-list",
+  ({ edit }) => edit(OPERATIONS, '</component>', ALLOW_ITSELF),
+  2,
+  `contributes to org.nuxeo.agentic.ui.operations's "allowList" point, the server's allow-list`,
+);
+expectRefused(
+  "a package that removes an operation from the server's allow-list, with a disabled entry",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      ALLOW_ITSELF.replace(
+        '<operation id="Payers.ReferToInvestigations" />',
+        '<operation id="Payers.RequestMedicalRecords" enabled="false" />',
+      ),
+    ),
+  2,
+  'contributes to org.nuxeo.agentic.ui.operations',
+);
+expectRefused(
+  "a package that contributes to the server's allow-list from another of its components",
+  ({ edit }) =>
+    edit(
+      'bundle/OSGI-INF/payers-claims-demo-model.xml',
+      '</component>',
+      ALLOW_ITSELF.replace('point="allowList"', 'point="anything"'),
+    ),
+  2,
+  `OSGI-INF/payers-claims-demo-model.xml contributes to org.nuxeo.agentic.ui.operations's "anything" point`,
 );
 
 // Versions (package-pipeline.md, section 8): given the package as it was, `--previous`, the
@@ -1461,8 +1519,22 @@ await (async () => {
         done({ status: code, output });
       });
     });
+  // With the package's build allow-list, as `run` gives it, so that only the model differs.
   const live = (directory, out, environment = env) =>
-    command([SCRIPT, directory, '--out', out, '--model-server', address], environment);
+    command(
+      [
+        SCRIPT,
+        directory,
+        '--out',
+        out,
+        '--model-server',
+        address,
+        ...(existsSync(join(directory, BUILD_ALLOW_LIST))
+          ? ['--allow-list', join(directory, BUILD_ALLOW_LIST)]
+          : []),
+      ],
+      environment,
+    );
   const bareEnv = () => withoutCredentials(process.env);
   const scratch = mkdtempSync(join(tmpdir(), 'app-package-live-'));
   try {

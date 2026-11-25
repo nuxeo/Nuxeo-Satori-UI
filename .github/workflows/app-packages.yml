@@ -126,6 +126,13 @@ jobs:
             dir="${dir%/}"
             name=$(basename "$dir")
             args=(--out dist/app-packages --platform "$platform")
+            # The operations a package's buttons run are held to the allow-list of the deployment it
+            # is built for, which the package names beside it, never in its bundle: on a server the
+            # allow-list is the deployment's own contribution (plan decision 3), and the pipeline
+            # refuses a package that contributes to it. Without one, every operation is refused.
+            if [ -f "$dir/deployment/build-allow-list.json" ]; then
+              args+=(--allow-list "$dir/deployment/build-allow-list.json")
+            fi
             if [ -n "$tag" ]; then
               # A tag publishes the one package it names.
               [[ "$tag" == "app-package/$name/"* ]] || continue

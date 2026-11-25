@@ -1,0 +1,37 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+<mat-dialog-content class="lib-app-action">
+  <p class="lib-app-action__question" [id]="questionId">{{ data.question }}</p>
+  @if (data.form; as form) {
+    <lib-document-layout-form
+      class="lib-app-action__form"
+      mode="task"
+      [preview]="form"
+      [document]="data.document"
+      [disabled]="running()"
+      [headingLevel]="3"
+    />
+  }
+  @if (failure(); as message) {
+    <nxs-banner class="lib-app-action__failure" tone="error" announce="alert" [message]="message" />
+  }
+  @if (running()) {
+    <p class="lib-app-action__running" role="status">
+      {{ 'document-layouts.action.running' | translate }}
+    </p>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button type="button" mat-button [mat-dialog-close]="cancelResult" [disabled]="running()">
+    {{ 'document-layouts.action.cancel' | translate }}
+  </button>
+  <button
+    type="button"
+    mat-flat-button
+    data-app-action-run
+    [attr.aria-describedby]="questionId"
+    [disabled]="running()"
+    (click)="confirm()"
+  >
+    {{ data.title }}
+  </button>
+</mat-dialog-actions>
