@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 /**
  * The designer with the engines themselves, not stand-ins: the real `LayoutDesignerService`,
  * `DocumentLayoutService`, `lib-record-page` and `lib-document-layout-form`, the server answered by
@@ -6,7 +7,6 @@
  */
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { provideRouter } from '@angular/router';
@@ -20,6 +20,24 @@ import {
 import { of } from 'rxjs';
 
 import { LayoutDesignerPageComponent } from './layout-designer-page';
+import { LayerPanelComponent } from '../layer/layer-panel';
+
+/**
+ * The deployment layer's panel, as the page hands it the file open: what it is given is what is
+ * checked here. The panel itself, and every request it makes, is held by `layer-panel.spec.ts`.
+ */
+@Component({
+  selector: 'lib-layer-panel',
+  standalone: true,
+  template: '<p class="stub-layer-panel">{{ path() }}</p>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class StubLayerPanelComponent {
+  readonly path = input<string | null>(null);
+  readonly file = input<unknown>(null);
+  readonly saveable = input(false);
+  readonly openVersion = output<unknown>();
+}
 
 const CONFIG = '/nuxeo/agentic-ui-config';
 const FORMAT = 'nuxeo-agentic-ui-config/1';
@@ -89,6 +107,10 @@ describe('LayoutDesignerPageComponent, with the record page and form engines', (
         // The record, as the document page reads it: the one read here not answered over HTTP.
         { provide: DocumentDetailService, useValue: { getFullDocument: () => of(RECORD) } },
       ],
+    });
+    TestBed.overrideComponent(LayoutDesignerPageComponent, {
+      remove: { imports: [LayerPanelComponent] },
+      add: { imports: [StubLayerPanelComponent] },
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(LayoutDesignerPageComponent);

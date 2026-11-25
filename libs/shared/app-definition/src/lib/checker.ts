@@ -143,6 +143,12 @@ export const ICON = /^[a-z0-9_]{1,64}$/;
  */
 export const MAX_NESTING = 256;
 
+/**
+ * The longest text `core.template` takes, which the record page holds it to as well
+ * (`MAX_TEMPLATE_LENGTH` in libs/shared/computations, whose spec checks the two agree).
+ */
+export const TEMPLATE_MAX_LENGTH = 1000;
+
 export type Checker = ReturnType<typeof createChecker>;
 
 /** One file's findings, and the checks that add to them. */
@@ -373,7 +379,19 @@ export function createChecker(registries: Registries, options: CheckerOptions = 
           add(path, 'parameter', `${owner} takes a text with {<prefix>:<name>} placeholders`);
           return;
         }
-        for (const [, inner] of item.matchAll(/\{([^}]*)\}/g)) {
+        // The record page draws no longer one (`MAX_TEMPLATE_LENGTH` in libs/shared/computations),
+        // and a long one is not read on: the server runs this check on every write.
+        if (item.length > TEMPLATE_MAX_LENGTH) {
+          add(
+            path,
+            'parameter',
+            `${owner} takes a text of at most ${TEMPLATE_MAX_LENGTH} characters, not ${item.length}`,
+          );
+          return;
+        }
+        // A brace opens a placeholder only until the next brace, so that a text of many braces is
+        // read in one pass, not once from each of them.
+        for (const [, inner] of item.matchAll(/\{([^{}]*)\}/g)) {
           if (!XPATH.test(inner))
             add(path, 'parameter', `the placeholder {${inner}} is not a property, <prefix>:<name>`);
           else variable(inner, path);

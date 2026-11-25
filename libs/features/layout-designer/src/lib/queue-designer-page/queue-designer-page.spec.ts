@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
@@ -10,6 +10,24 @@ import { BehaviorSubject, Subject, firstValueFrom, of, startWith } from 'rxjs';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import type { LayoutJson } from '../layout-edits';
 import { QueueDesignerPageComponent } from './queue-designer-page';
+import { LayerPanelComponent } from '../layer/layer-panel';
+
+/**
+ * The deployment layer's panel, as the page hands it the file open: what it is given is what is
+ * checked here. The panel itself, and every request it makes, is held by `layer-panel.spec.ts`.
+ */
+@Component({
+  selector: 'lib-layer-panel',
+  standalone: true,
+  template: '<p class="stub-layer-panel">{{ path() }}</p>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class StubLayerPanelComponent {
+  readonly path = input<string | null>(null);
+  readonly file = input<unknown>(null);
+  readonly saveable = input(false);
+  readonly openVersion = output<unknown>();
+}
 
 /** The queue page, as the designer hands it a preview: what it is given is what is checked. */
 @Component({
@@ -115,8 +133,8 @@ describe('QueueDesignerPageComponent', () => {
       ],
     });
     TestBed.overrideComponent(QueueDesignerPageComponent, {
-      remove: { imports: [QueuePageComponent] },
-      add: { imports: [StubQueuePageComponent] },
+      remove: { imports: [QueuePageComponent, LayerPanelComponent] },
+      add: { imports: [StubQueuePageComponent, StubLayerPanelComponent] },
     });
     fixture = TestBed.createComponent(QueueDesignerPageComponent);
     page = fixture.componentInstance;
@@ -162,6 +180,21 @@ describe('QueueDesignerPageComponent', () => {
       reader.onload = () => resolve(String(reader.result));
       reader.readAsText(blob);
     });
+
+  it("hands the deployment layer's panel the queue open, as edited, and opens a version it gives", async () => {
+    await open();
+    const panel = fixture.debugElement.query(
+      (node) => node.componentInstance instanceof StubLayerPanelComponent,
+    ).componentInstance as StubLayerPanelComponent;
+    expect(panel.path()).toBe('queues/up-for-renewal.json');
+    expect(panel.file()).toEqual(RENEWALS);
+    expect(panel.saveable()).toBe(page.saveState() === 'saveable');
+
+    const live = { ...(RENEWALS as object), label: 'Renewals, live' };
+    panel.openVersion.emit(live);
+    await settle();
+    expect(page.file()).toEqual(live);
+  });
 
   it("offers the queues the app's menu opens, and opens one by its button", async () => {
     await settle();

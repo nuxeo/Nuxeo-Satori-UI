@@ -140,7 +140,9 @@ public class OperationAllowListComponent extends DefaultComponent implements Ope
     public AppActionRunner.Result runAction(CoreSession session, DocumentModel input, String app, String action,
             String values) {
         AgenticUiConfigService config = Framework.getService(AgenticUiConfigService.class);
-        AppRegistryEndpoint registry = AppRegistryEndpoint.current(config.getSnapshot(), allowList);
+        // The registry the servlet serves, its deployment layer included, so that the two share one.
+        AppRegistryEndpoint registry = AppRegistryEndpoint.current(config.getSnapshot(), allowList,
+                AgenticUiAppsServlet.layer().live());
         return new AppActionRunner(registry, this::getAllowList, OperationAllowListComponent::automation, PLATFORM)
                                                                                                          .run(session,
                                                                                                                  input,

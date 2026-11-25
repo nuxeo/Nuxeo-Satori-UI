@@ -1,0 +1,249 @@
+<section class="layer-panel" aria-labelledby="layer-panel-heading">
+  <h3 class="layer-panel__heading" id="layer-panel-heading">
+    {{ 'layout-designer.layer.heading' | translate }}
+  </h3>
+  <p class="layer-panel__note">{{ 'layout-designer.layer.everyone' | translate }}</p>
+
+  @switch (reading().kind) {
+    @case ('reading') {
+      <nxs-spinner [diameter]="24" [label]="'layout-designer.layer.reading' | translate" />
+    }
+    @case ('unavailable') {
+      @if (reading(); as unavailable) {
+        @if (unavailable.kind === 'unavailable') {
+          <p class="layer-panel__message" [attr.data-layer]="unavailable.reason">
+            {{ 'layout-designer.layer.unavailable-' + unavailable.reason | translate }}
+          </p>
+        }
+      }
+    }
+    @case ('failed') {
+      @if (reading(); as failed) {
+        @if (failed.kind === 'failed') {
+          <nxs-banner
+            tone="error"
+            announce="alert"
+            [message]="'layout-designer.layer.failed' | translate: { problem: failed.problem }"
+          />
+        }
+      }
+    }
+  }
+
+  @if (state(); as state) {
+    @if (state.packageChanged) {
+      <nxs-banner
+        tone="warning"
+        data-layer="package-changed"
+        [message]="'layout-designer.layer.package-changed' | translate"
+      />
+    }
+    @if (state.live && !state.served) {
+      <nxs-banner
+        tone="error"
+        data-layer="not-served"
+        [message]="'layout-designer.layer.not-served' | translate"
+      />
+    }
+
+    <div class="layer-panel__versions">
+      <section class="layer-panel__version" data-version="package" aria-labelledby="layer-package">
+        <h4 class="layer-panel__version-heading" id="layer-package">
+          {{ 'layout-designer.layer.package' | translate }}
+        </h4>
+        @if (state.package) {
+          <pre class="layer-panel__json">{{ json(state.package.content) }}</pre>
+        } @else {
+          <p class="layer-panel__message">{{ 'layout-designer.layer.package-none' | translate }}</p>
+        }
+      </section>
+
+      <section class="layer-panel__version" data-version="live" aria-labelledby="layer-live">
+        <h4 class="layer-panel__version-heading" id="layer-live">
+          {{ 'layout-designer.layer.live' | translate }}
+        </h4>
+        @if (state.live; as live) {
+          <p class="layer-panel__meta">
+            {{
+              'layout-designer.layer.live-meta'
+                | translate
+                  : {
+                      version: live.version,
+                      by: live.approvedBy ?? '',
+                      at: live.at,
+                    }
+            }}
+            @if (live.kind === 'rollback') {
+              {{
+                'layout-designer.layer.live-rollback'
+                  | translate: { from: live.from ?? 0, by: live.restoredBy ?? '' }
+              }}
+            }
+          </p>
+          <pre class="layer-panel__json">{{ json(live.content) }}</pre>
+        } @else {
+          <p class="layer-panel__message">{{ 'layout-designer.layer.live-none' | translate }}</p>
+        }
+      </section>
+
+      <section class="layer-panel__version" data-version="draft" aria-labelledby="layer-draft">
+        <h4 class="layer-panel__version-heading" id="layer-draft">
+          {{ 'layout-designer.layer.draft' | translate }}
+        </h4>
+        @if (state.draft; as draft) {
+          <p class="layer-panel__meta">
+            {{
+              'layout-designer.layer.draft-meta'
+                | translate: { by: draft.savedBy, at: draft.savedAt }
+            }}
+            @if (draft.submittedBy) {
+              {{ 'layout-designer.layer.draft-submitted' | translate: { by: draft.submittedBy } }}
+            }
+          </p>
+          <pre class="layer-panel__json">{{ json(draft.content) }}</pre>
+        } @else {
+          <p class="layer-panel__message">{{ 'layout-designer.layer.draft-none' | translate }}</p>
+        }
+      </section>
+    </div>
+
+    <section class="layer-panel__differences" aria-labelledby="layer-differences">
+      <h4 class="layer-panel__version-heading" id="layer-differences">
+        {{ 'layout-designer.layer.differences' | translate }}
+      </h4>
+      @for (comparison of comparisons(); track comparison.key) {
+        <p class="layer-panel__comparison" [attr.data-comparison]="comparison.key">
+          {{ comparison.key | translate: { count: comparison.total } }}
+        </p>
+        @if (comparison.differences.length > 0) {
+          <ul class="layer-panel__difference-list">
+            @for (difference of comparison.differences; track $index) {
+              <li [attr.data-change]="difference.change">
+                <code>{{
+                  difference.path || ('layout-designer.layer.whole-file' | translate)
+                }}</code>
+                {{ 'layout-designer.layer.change-' + difference.change | translate }}
+              </li>
+            }
+          </ul>
+        }
+      }
+    </section>
+
+    <div class="layer-panel__actions">
+      <button
+        mat-flat-button
+        type="button"
+        data-layer-action="save"
+        [disabled]="!canSave()"
+        (click)="save()"
+      >
+        {{ 'layout-designer.layer.save' | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        data-layer-action="submit"
+        [disabled]="!canSubmit()"
+        (click)="submit()"
+      >
+        {{ 'layout-designer.layer.submit' | translate }}
+      </button>
+      <button
+        mat-flat-button
+        type="button"
+        data-layer-action="approve"
+        [disabled]="!canApprove()"
+        (click)="approve()"
+      >
+        {{ 'layout-designer.layer.approve' | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        data-layer-action="rollback"
+        [disabled]="!canRollBack()"
+        (click)="rollBack()"
+      >
+        {{ 'layout-designer.layer.rollback' | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        data-layer-action="rollback-package"
+        [disabled]="!canRestorePackage()"
+        (click)="restorePackage()"
+      >
+        {{ 'layout-designer.layer.rollback-package' | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        data-layer-action="discard"
+        [disabled]="!canDiscard()"
+        (click)="discard()"
+      >
+        {{ 'layout-designer.layer.discard' | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        data-layer-action="open"
+        [disabled]="!state.draft && !state.live"
+        (click)="openNewest()"
+      >
+        {{ 'layout-designer.layer.open' | translate }}
+      </button>
+    </div>
+    @if (!saveable()) {
+      <p class="layer-panel__message" data-layer-why="save">
+        {{ 'layout-designer.layer.save-refused' | translate }}
+      </p>
+    }
+    @if (state.draft?.submittedBy && state.permissions.approveRefused; as why) {
+      <p class="layer-panel__message" data-layer-why="approve">{{ why }}</p>
+    }
+
+    <p class="layer-panel__message" role="status" data-layer="done">
+      @if (done(); as action) {
+        {{ 'layout-designer.layer.done-' + action | translate }}
+      }
+    </p>
+
+    @if (state.trail.length > 0) {
+      <section class="layer-panel__trail" aria-labelledby="layer-trail">
+        <h4 class="layer-panel__version-heading" id="layer-trail">
+          {{ 'layout-designer.layer.trail' | translate }}
+        </h4>
+        <ol class="layer-panel__trail-list">
+          @for (line of state.trail; track line.revision) {
+            <li>
+              {{
+                'layout-designer.layer.trail-line'
+                  | translate
+                    : { at: line.at, by: line.by, action: line.action, revision: line.revision }
+              }}
+            </li>
+          }
+        </ol>
+      </section>
+    }
+  }
+
+  @if (refusal(); as refusal) {
+    <nxs-banner tone="error" announce="alert" data-layer="refused" [message]="refusal.message" />
+    @if (refusal.findings.length > 0) {
+      <ul class="layer-panel__findings">
+        @for (finding of refusal.findings; track $index) {
+          <li [attr.data-kind]="finding.kind">
+            @if (finding.path) {
+              <code>{{ finding.path }}</code
+              >:
+            }
+            {{ finding.message }}
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>
