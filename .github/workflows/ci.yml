@@ -179,6 +179,13 @@ jobs:
           node business-apps/packages/payers-claims-demo/workflow/route-model.selftest.mjs
           node scripts/beta-harness/steps/payers-claims-demo.selftest.mjs
 
+      # The brand assets library's performance check needs Chromium and a production build, so it
+      # does not run here: phase 10 puts performance budgets in CI. Its offline half does: the
+      # synthetic library against Nuxeo's paging and aggregates, the stand-in's routes and
+      # latencies, the budget's judgement and its page, and the controls' verdict. Node alone.
+      - name: Run the asset library performance check's offline controls
+        run: npm run beta:asset-performance-selftest
+
   # Static checks that `beta:gate` has run locally since Phase 5 and that had
   # never run here. They are seconds each and they close a specific hole: the local
   # gate and CI were two different gates, so "green locally" and "green in CI" made
