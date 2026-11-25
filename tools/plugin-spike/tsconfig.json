@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "$comment": "The sources are plain ES modules with JSDoc types, because the host page loads them in a browser as they are, with no build. checkJs holds them to their types; the specs are TypeScript.",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.mjs", "dev/**/*.mjs", "host/**/*.mjs", "sample/**/*.js"]
+}

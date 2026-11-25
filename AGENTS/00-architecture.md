@@ -58,8 +58,16 @@ engine: the development server's addresses, and the app registry's on a server.
   still uses the current app's features.
 - **A gate proves the rules.** Until modules and experiences exist, lint has no forbidden import to
   fail on. So `npm run beta:module-boundaries` lints imports between probe projects that carry each
-  tag, with the real rule. 6 forbidden imports must be reported and 6 allowed ones must stay quiet.
-  It runs in CI's static gates.
+  tag, with the real rule. 14 forbidden imports must be reported and 7 allowed ones must stay
+  quiet. It runs in CI's static gates.
+- **Decision 5's plugin spike is reachable from nothing.** `tools/plugin-spike` carries
+  `type:spike` alone, which no rule lists and no rule has as its source, so nothing may depend on it
+  and, in the file types the rule reads, it may depend on no project. The same gate proves both
+  with a probe, refuses to pass unless the real project carries exactly that tag, and fails on any
+  target Nx resolves for it beyond tests, lint and the type check. The rule does not read `.mjs`,
+  so `checkPluginSpikeIsolated` fails on any other reference to or link into the directory, and on
+  an import from it of anything but its own files, Node's built-ins, Vitest and Playwright
+  ([the spike's report](../docs/business-apps/spikes/plugins-decision-5.md)).
 
 ---
 

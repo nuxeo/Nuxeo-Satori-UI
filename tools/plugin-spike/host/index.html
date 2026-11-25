@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Plugin spike, decision 5: not product code</title>
+    <link rel="stylesheet" href="/host/host.css" />
+    <script type="module" src="/host/host.mjs"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Plugin spike for decision 5</h1>
+      <p>
+        A host page that loads a sample custom element at run time, only when it is signed by a
+        trusted key, pinned, and its bytes match the signed hash. Not product code, not part of any
+        build. Every key was generated when the demo server started and is trusted nowhere; every
+        session value on this page is a planted fake.
+      </p>
+    </header>
+
+    <main>
+      <section aria-labelledby="secret-heading">
+        <h2 id="secret-heading">What the host holds</h2>
+        <p id="host-secret">FAKE-host-only-text: a value only the host's own code should read</p>
+        <spike-host-widget></spike-host-widget>
+        <p id="host-state">Planting the fake session…</p>
+      </section>
+
+      <section aria-labelledby="scenarios-heading">
+        <h2 id="scenarios-heading">Load attempts</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Scenario</th>
+              <th scope="col">Expected</th>
+              <th scope="col">Outcome</th>
+              <th scope="col">Detail</th>
+            </tr>
+          </thead>
+          <tbody id="scenario-rows"></tbody>
+        </table>
+      </section>
+
+      <section aria-labelledby="in-page-heading">
+        <h2 id="in-page-heading">The plugin in the host's page</h2>
+        <div id="in-page-slot"></div>
+      </section>
+
+      <section aria-labelledby="framed-heading">
+        <h2 id="framed-heading">The same bytes in a sandboxed iframe</h2>
+        <p>
+          <code>sandbox="allow-scripts"</code>, without <code>allow-same-origin</code>: the frame
+          gets an opaque origin of its own.
+        </p>
+        <div id="framed-slot"></div>
+        <ul id="framed-report"></ul>
+      </section>
+
+      <section aria-labelledby="server-heading">
+        <h2 id="server-heading">What the server saw</h2>
+        <ul id="server-log"></ul>
+      </section>
+    </main>
+  </body>
+</html>

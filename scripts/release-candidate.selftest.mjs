@@ -51,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 
 import { demoSteps, readSource } from './release-candidate-demo.mjs';
 import {
+  allowListArguments,
   bundleDifferences,
   compareNuxeoVersions,
   dependencyMatches,
@@ -496,7 +497,10 @@ function kitCopy(source, label, change) {
   return directory;
 }
 
-/** A kit through the pipeline and read back as the candidate reads it, or why it was not. */
+/**
+ * A kit through the pipeline and read back as the candidate reads it, or why it was not. Built
+ * against its deployment's allow-list as the command builds it, with the same function.
+ */
 function builtKit(directory, label) {
   const out = join(scratch, 'zips', label);
   const built = spawnSync(
@@ -508,6 +512,7 @@ function builtKit(directory, label) {
       out,
       '--platform',
       platformVersion(),
+      ...allowListArguments(directory),
     ],
     {
       encoding: 'utf8',
@@ -525,6 +530,18 @@ function platformVersion() {
 }
 
 function kitsFromZips() {
+  // The allow-list is what passes the kit's operation buttons, not a step skipped: the same kit
+  // with its deployment folder taken away is refused for the operations its buttons run.
+  const noAllowList = kitCopy(PAYERS, 'no-allow-list');
+  rmSync(join(noAllowList, 'deployment'), { recursive: true, force: true });
+  const unlisted = builtKit(noAllowList, 'no-allow-list');
+  check(
+    "refused: the Payers kit built with no deployment allow-list, for its buttons' operations",
+    unlisted.problem !== undefined &&
+      /is not on this deployment's allow-list/.test(unlisted.problem) &&
+      /step 2 refused it/.test(unlisted.problem),
+    unlisted.problem ?? 'built',
+  );
   const payers = builtKit(PAYERS, 'payers');
   const contracts = builtKit(CONTRACTS, 'contracts');
   if (payers.problem || contracts.problem) {
@@ -723,7 +740,7 @@ async function theDemoListing() {
   check(
     "the repository's kit demos listed, with their people, seeds and environment",
     problems.length === 0 &&
-      of('payers-claims-demo').length === 3 &&
+      of('payers-claims-demo').length === 4 &&
       of('brand-assets-demo').length === 3 &&
       demo?.runAs.users.includes('dana.lee') &&
       demo?.signsInAs.length === 1 &&
@@ -733,6 +750,21 @@ async function theDemoListing() {
       demo?.steps[0]?.startsWith('Preconditions') &&
       demo?.steps.at(-1) === 'Health',
     `${problems.join('; ')} ${JSON.stringify(demo)}`,
+    false,
+  );
+  // The operation buttons' demo: its adjuster, the member services person it signs in through the
+  // REST API, and the deployment contribution a server run needs beside the kit.
+  const operations = of('payers-claims-demo').find((each) =>
+    each.file.endsWith('/payers-operations.mjs'),
+  );
+  check(
+    "the operation buttons' demo listed, with its people and the deployment's allow-list it needs",
+    JSON.stringify(operations?.runAs.users) === JSON.stringify(['dana.lee']) &&
+      JSON.stringify(operations?.signsInAs) === JSON.stringify(['riley.brooks']) &&
+      operations?.environment.includes('PAYERS_DEMO_PASSWORD') &&
+      operations?.needs.some((need) => need.includes('payers-claims-demo-operations-config.xml')) &&
+      operations?.steps.at(-1) === 'Health',
+    JSON.stringify(operations),
     false,
   );
 

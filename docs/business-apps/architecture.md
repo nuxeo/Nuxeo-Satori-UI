@@ -486,8 +486,10 @@ The waves of the plan's section 14, and what each tier delivers in them.
   `libs/shared/document-layouts` and the home's `libs/shared/home`, and all three import only shared
   code. No module or experience exists before phase 1, so lint has no forbidden
   import to fail on, and `npm run beta:module-boundaries` proves the rules in CI. It lints imports
-  between probe projects that carry each tag, with the real rule: 6 forbidden imports reported, 6
-  allowed ones quiet.
+  between probe projects that carry each tag, with the real rule: 14 forbidden imports reported,
+  7 allowed ones quiet. Eight of the forbidden ones keep decision 5's plugin spike,
+  `tools/plugin-spike`, out of every app, library and package
+  ([the spike](spikes/plugins-decision-5.md)).
 
 - **Packages.** The engines and the domain modules ship in one package, `@nuxeo/satori-platform`.
   Each module is its own entry point (`@nuxeo/satori-platform/modules/<name>`), so an app built
