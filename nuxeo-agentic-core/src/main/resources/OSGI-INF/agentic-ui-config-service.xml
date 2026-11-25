@@ -15,6 +15,15 @@
     /nuxeo/agentic-ui-apps/ after sign-in: apps.json lists the apps whose app.json names a group
     the person is in, and apps/{id}/{path} serves each one's files. Seeing an app is not a
     security control: Nuxeo's permissions still decide which records anyone reads.
+
+    With nuxeo.agentic.ui.layer.enabled=true, each app has a deployment layer too: an
+    administrator's own versions of its layouts and queues, made in the layout designer, kept in
+    the repository under /agentic-ui-layers, checked on every write with the app definition's
+    validator, and live only once a second administrator approves them
+    (nuxeo.agentic.ui.layer.selfApproval=true lets the same one). The registry serves a live file in
+    place of the package's to the app's groups; the configuration servlet never reads the layer.
+    Its addresses, for administrators alone, are apps/{id}/layer/{path}, apps/{id}/layer.json and
+    layer.json, under /nuxeo/agentic-ui-apps/.
   </documentation>
 
   <implementation class="org.nuxeo.agentic.config.AgenticUiConfigComponent" />

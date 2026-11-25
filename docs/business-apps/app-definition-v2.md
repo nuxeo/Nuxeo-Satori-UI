@@ -19,7 +19,8 @@ the Payers Claims app, checked as a whole.
 
 Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1;
 the app registry, which serves an app's files on a server after sign-in, on 24 November 2026
-(section 10). The app draws the home (section 10), the queues (section 4), the menu (section 9),
+(section 10); the deployment layer, a customer's own versions of an app's layouts and queues that
+the registry serves over its package's, on 25 November 2026 (section 10). The app draws the home (section 10), the queues (section 4), the menu (section 9),
 the labels (section 7) and the task forms (section 6). Nothing in the app reads `actions.json` or
 module settings yet.
 
@@ -727,6 +728,33 @@ and E, which are still open ([decisions.md](decisions.md), notes):
 - **The endpoint,** its responses and headers, is in
   [api-integrations.md](../api-integrations.md).
 
+**The deployment layer.** Built on 25 November 2026, the designer's third slice, against the same
+proposed answers to B and E ([decisions.md](decisions.md), notes). **It changes an app for every
+user of it from an administrator's screen.**
+
+- **What it holds:** a customer's own versions of an app's record pages, edit and create forms
+  (`layouts/<Type>/<view|edit|create>.layout.json`) and queues (`queues/<id>.json`), made in the
+  [layout designer](../../libs/features/layout-designer/README.md#publishing-the-deployment-layer)
+  and kept in the server's repository. Nothing else of the app: not `app.json`, the menu, the home,
+  the actions or the labels.
+- **Its precedence:** the customer's overlay of the architecture's "starter kit, then customer,
+  then tenant, then environment" ([architecture.md](architecture.md), section 10). A live file wins
+  over the package's file at the same path, and adds one where the package has none, as a layout
+  the `<app>` does not name. It does not touch the labels: a `labelKey` it names is looked up as
+  before, so the manifest's labels, which win over an app's, win over it too.
+- **Who sees it:** the registry serves each live file at its path, to the app's groups, after
+  sign-in, and lists it in the app's `files` with its version under `layer`. The record page and the
+  forms read a layer layout for the app open before the configuration servlet's
+  (`DocumentLayoutService`); a queue is read from the registry already. **The configuration
+  servlet, which everyone reads before sign-in, never reads a layer, drafts or live versions.**
+  So someone in none of the app's groups keeps the package's file, as a server with layouts for
+  two apps keeps one per type and mode for everyone else (section 13).
+- **How a change goes live:** as a draft, which the registry never serves; submitted; and approved
+  by an administrator who neither wrote nor submitted it, unless the server lets the same one. Every
+  write is checked on the server with this document's validator, against the server's content
+  model, and a file it finds anything in is refused. Every publish keeps the previous version, and a
+  rollback restores it. The switch, `nuxeo.agentic.ui.layer.enabled`, is off unless set.
+
 ### What the app does with it
 
 The app's page `/home` reads the file, checks it with the validator, and draws it:
@@ -804,9 +832,11 @@ When the app loads a file, what a finding does depends on its kind and on the fi
   start form.
 - **In labels:** placeholders and plural forms, and a check that every key an app uses has a text.
 - **Each module's settings schema**, which comes with the module.
-- **Layouts per app.** The registry serves an app's other files; its layouts are still the
+- **Layouts per app.** The registry serves an app's other files; its packages' layouts are still the
   configuration servlet's, one per type and mode for the whole server, to everyone. Two apps with
-  a layout for the same type and mode replace each other's.
+  a layout for the same type and mode replace each other's. Only an app's deployment layer
+  (section 10) has layouts per app, and only for the people in its groups with the app open.
+- **The deployment layer per tenant**, and its labels, menu, home and actions: not built.
 - **Actions and module settings in the app.** The registry serves `actions.json`, and nothing in
   the app reads it yet (phase 2). It does not serve `modules/<module>.json`: no domain module
   exists yet.

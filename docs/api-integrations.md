@@ -2272,6 +2272,7 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
       "bundle": "nuxeo.config.payers-claims-demo",
       "source": "agentic-ui-config/app.json",
       "files": ["app.json", "home.json", "navigation.json", "queues/unassigned-claims.json"],
+      "layer": {},
       "content": { "version": 2, "id": "payers-claims", "groups": ["claims-adjusters"] }
     }
   ],
@@ -2296,8 +2297,14 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 - **A 200, a 304 and a 404 are `Cache-Control: private, no-cache`** with
   `X-Content-Type-Options: nosniff`, so the browser revalidates and a shared cache keeps nothing; a
   200 and a 304 also carry an ETag, `Vary: Cookie, Authorization` and the configuration servlet's
-  `Content-Security-Policy`. The servlet's own 401 is `no-store`. GET and HEAD only: anything else
-  is 405, with an `Allow` header and no body.
+  `Content-Security-Policy`. The servlet's own 401 is `no-store`. GET and HEAD only, but for a POST
+  to a deployment layer's file (section 40): anything else is 405, with an `Allow` header and no
+  body.
+- **An app's deployment layer,** where the server switches it on (section 40): each live file is
+  served at its path in place of the package's file there, a layout
+  `layouts/<Type>/<view|edit|create>.layout.json` among them, which the package's `<app>` does not
+  name; `files` lists it and `layer` gives its version, `{ "<path>": <version> }`, empty when the
+  app has none. A draft is never served here.
 - **Diagnostics** are the configuration envelope's: `level`, `code`, `message`, the `app` it is
   about, and the contribution's `component`, `bundle` and `source`. A person gets those the
   contribution in force made, from its own component and bundle, about the apps they see, not
@@ -2324,7 +2331,8 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   request with no credentials there was 401, not `Anonymous`.
 
 **Used by:** `HomeService` (the home and the menu), `QueueService` (a queue), `DocumentLayoutService`
-(a task form), `AppTranslateLoader` (the labels), and the shell's "Switch app".
+(a task form, and a record page or form of the app's deployment layer), `AppTranslateLoader` (the
+labels), and the shell's "Switch app".
 
 ---
 
@@ -2495,6 +2503,64 @@ error; a failed read after a write keeps what is shown. A refused write (`403`) 
 not; any other failure, a `401` included, says the pin or the close could not be saved, keeping
 what was typed, and so does a pin saved that does not read back as one, or a close that opened no
 round.
+
+---
+
+## 40. Layout Designer — Publishing through an App's Deployment Layer
+
+| Field           | Value                                                                                                                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DeploymentLayerService` (`libs/features/layout-designer/src/lib/layer/deployment-layer.service.ts`), for `LayerPanelComponent` on both designer pages                                                          |
+| **HTTP Method** | `GET` to read; `POST` to change                                                                                                                                                                                 |
+| **Endpoints**   | `/nuxeo/agentic-ui-apps/apps/<id>/layer/<path>` — one file of the app open's layer: its package, live and draft versions, versions kept, trail and the person's permissions; a change is a POST to it           |
+|                 | `/nuxeo/agentic-ui-apps/apps/<id>/layer.json` — the app's layer, file by file                                                                                                                                   |
+|                 | `/nuxeo/agentic-ui-apps/layer.json` — every app's files whose override is in force, with their versions: what the upgrade check's `--deployment` reads                                                          |
+| **Auth**        | Authenticated, through the interceptors, with `X-No-Basic-Header: true`. Administrators alone, as Nuxeo counts them: anyone else is 403 at every address                                                        |
+| **Server side** | `LayerEndpoint` and `LayerService` in `nuxeo-agentic-core`, behind the app registry's servlet; the layer is stored in the repository (`RepositoryLayerStore`). Off unless `nuxeo.agentic.ui.layer.enabled=true` |
+
+**A change** is `application/json`, with the header `X-Agentic-Layer-Change: 1`:
+
+```json
+{ "action": "save", "revision": 3, "content": { "version": 2, "cards": [] } }
+```
+
+`action` is `save` (with `content`), `submit`, `approve`, `rollback` (with `to`, a version, or `0`
+for the package's file; by default what was live before) or `discard`, and `revision` is the
+file's, as last read. The answer is the file as it then is:
+
+```json
+{
+  "format": "nuxeo-agentic-ui-layer/1",
+  "app": "payers-claims",
+  "path": "layouts/Claim/view.layout.json",
+  "revision": 4,
+  "package": { "sha256": "…", "content": {} },
+  "live": { "version": 1, "kind": "approved", "content": {}, "approvedBy": "ben", "at": "…" },
+  "draft": null,
+  "versions": [{ "version": 1, "kind": "approved", "replaced": 0, "approvedBy": "ben", "at": "…" }],
+  "trail": [{ "at": "…", "by": "ben", "action": "approve", "revision": 4, "version": 1 }],
+  "packageChanged": false,
+  "permissions": { "write": true, "approve": false, "approveRefused": "…", "selfApproval": false }
+}
+```
+
+**Notes:**
+
+- **Refused, and nothing written:** 403 for anyone but an administrator (`forbidden`), and for an
+  approval by an administrator who wrote or submitted the draft (`self-approval`) unless
+  `nuxeo.agentic.ui.layer.selfApproval=true`; 404 when the layer is switched off, for an app the
+  server does not have, and for a path no layer holds; 400 for a request that is not a change; 409
+  for a revision that is not the file's (`stale`, with `state`, the file as it is), and for a change
+  the file's state does not allow; 413 over 1 MiB and 64 KiB; 415 for anything but
+  `application/json`, and 403 without the header (`no-change-header`); 422 for a file the validator
+  finds anything in (`invalid`, with `findings`, the validator's).
+- **Every answer is `Cache-Control: no-store`**, `nosniff`, with the configuration servlet's
+  `Content-Security-Policy`.
+- **What is served to readers:** only the live version, by the app registry, to the app's groups
+  (section 36); the configuration servlet never reads a layer.
+
+**Used by:** `LayerPanelComponent` (`libs/features/layout-designer`), and the upgrade check,
+`scripts/app-upgrade-check.mjs --deployment`, with an export of `/nuxeo/agentic-ui-apps/layer.json`.
 
 ---
 

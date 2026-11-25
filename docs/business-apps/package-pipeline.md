@@ -595,6 +595,19 @@ a component, an extension point and a descriptor's elements and attributes in it
 the repository's own reviewed code at that commit, its library checked for links first. One Node
 cannot load stops the run, exit 2.
 
+### A deployment's own layer
+
+A server's deployment layer ([app-definition-v2.md](app-definition-v2.md), section 10) holds the customer's own versions
+of an app's layouts and queues, made in the designer, and each overrides the kit's file at its
+path. Given that server's export, `--deployment <file>`, what `GET /nuxeo/agentic-ui-apps/layer.json`
+answers an administrator, the check **warns** for each file of the kit's app the deployment
+overrides that the upgrade adds, changes or removes: the override keeps winning, so the kit's
+change does not show on that server until an administrator takes it into a new draft and has it
+approved, or rolls the override back to the package's version. A warning refuses nothing and
+leaves the exit code alone, since no configuration is lost; a file the upgrade leaves as it was
+says nothing, and an export that is not one is a command that cannot be run, exit 2. The controls
+are `npm run app-upgrade:selftest`'s.
+
 ### Migration notes
 
 A kit's notes are its `upgrade-notes.json`, beside `package/`, outside the zip, so a note changes no

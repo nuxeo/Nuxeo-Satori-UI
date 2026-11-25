@@ -23,6 +23,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * envelope, as the development server serves {@code home.json}. Anything else, an app the person
  * may not see included, is 404, as a file a package does not have is.
  *
+ * An app's deployment layer in force ({@link LayerService#live}) is served over its package: a
+ * live file at its path, in place of the package's file there or beside the package's files, and
+ * listed in the app's {@code files}, with its version under {@code layer}. Only live versions: a
+ * draft is never in what this is built from.
+ *
  * <b>Seeing an app is not a security control.</b> The groups decide which apps the shell offers a
  * person, so that a claims adjuster is not shown the payroll app. They do not decide what anyone
  * may read: an app definition holds no record, and the records its queues, homes and pages show
