@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, written by the app-model generator for a demo, until a real model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the package's
+  layouts, queues and home name, and nothing more. When a real model arrives, from Studio or a
+  model package, this file and schemas/ are replaced by it, and the layouts follow its property
+  names. Records of these types must be deleted from a server before its model goes: a document
+  whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.facilities-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="workorder" prefix="wo" src="schemas/workorder.xsd" />
+    <schema name="building" prefix="bldg" src="schemas/building.xsd" />
+    <!-- By hand: the open work orders queue's search document, below. -->
+    <schema name="workorder_search" prefix="wosearch" src="schemas/workordersearch.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="WorkOrder" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="workorder" />
+    </doctype>
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="Building" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="building" />
+    </doctype>
+    <!-- By hand: the open work orders queue's search document, as DefaultSearch is
+         default_search's. Never saved: it holds the facets the queue sends back
+         (schemas/workordersearch.xsd). No folder lists it among its subtypes, so nothing offers to
+         create one, and it is hidden from navigation. -->
+    <doctype name="WorkOrderSearch" extends="Document">
+      <facet name="HiddenInNavigation" />
+      <schema name="workorder_search" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="WorkOrder">default</type>
+    </types>
+    <types>
+      <type name="Building">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <coreQueryPageProvider name="facilities_building_work_orders">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'WorkOrder' AND (wo:building = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="wo:due" ascending="false" />
+      <pageSize>20</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <!-- By hand, from the one app-model wrote: the open work orders queue, with two facets, and the
+         home's figures. A facet is an aggregate of the page provider's results, which only the
+         search index answers: a coreQueryPageProvider reads the repository and returns none. So
+         this is SearchServicePageProvider, the class the platform's default_search is replaced
+         with, as the Payers kit's queues are, with the search document WorkOrderSearch. An
+         aggregate's id, its field there and the parameter the app sends back are one name.
+
+         The index is written a moment after the repository, so the queue lags a change by about a
+         second. -->
+    <genericPageProvider name="facilities_open_work_orders"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>WorkOrderSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'WorkOrder' AND wo:status IN ('New', 'Assigned')
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="wo_priority_agg" type="terms" parameter="wo:priority">
+          <field schema="workorder_search" name="wo_priority_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="wo_category_agg" type="terms" parameter="wo:category">
+          <field schema="workorder_search" name="wo_category_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="wo:due" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+  </extension>
+</component>

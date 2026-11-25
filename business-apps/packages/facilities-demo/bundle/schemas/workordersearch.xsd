@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, written by hand: the search document of the open work orders queue, as
+     default_search's is the platform's. It is never saved. A facet's chosen buckets are sent back
+     as named parameters, each named after its aggregate, such as wo_priority_agg=["Urgent"]; the
+     server writes each into the field of the same name here, and the aggregate of that name reads
+     its selection from it. So each field is named exactly as its aggregate is, in
+     facilities-demo-model.xml. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/facilities-demo/workordersearch"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/facilities-demo/workordersearch">
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+  <!-- The priorities chosen in the queue's Priority facet. -->
+  <xs:element name="wo_priority_agg" type="nxs:stringList" />
+  <!-- The categories chosen in its Category facet. -->
+  <xs:element name="wo_category_agg" type="nxs:stringList" />
+</xs:schema>
