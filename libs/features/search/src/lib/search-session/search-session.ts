@@ -168,11 +168,11 @@ export class SearchSession {
     this.shared.drawerFilters.set(nxsSearchFiltersToRecord(filters));
   }
 
-  /** The search page's URL changed: its quick filters and sort are part of the query. */
+  /** A search or queue URL changed: its quick filters and sort are part of the query. */
   setPageQuery(query: SearchPageQuery): void {
     const filesOnly = query.quickFilters.split(',').some((value) => value.trim() === 'noFolder');
     // The session outlives the search page while the document queue is open.
-    if (filesOnly || this.urlFilesOnly === true) {
+    if ((filesOnly || this.urlFilesOnly === true) && filesOnly !== !!this.filters().filesOnly) {
       this.setFilters({ ...this.filters(), filesOnly });
     }
     this.urlFilesOnly = filesOnly;

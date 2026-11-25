@@ -130,6 +130,11 @@ three, with Files enabled and disabled, cleared all quick filters and kept them 
 subsequent paging. Those four real-router regression controls are retained; Reset production code
 was not changed based on the unconfirmed claim.
 
+A later review exposed a Queue deep-link gap: its chips reflected URL filters while a fresh
+session fetched the default query and page. Queue routes now hydrate the existing quick filters,
+sort, page and page size without taking ownership of the Search page's URL. Regression checks
+cover direct entry, changed queue URLs and retaining the current request between queue documents.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:

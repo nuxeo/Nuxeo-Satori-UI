@@ -60,6 +60,8 @@ describe('Search drawer route and session integration', () => {
         provideRouter([
           { path: 'search', component: SearchComponent },
           { path: 'doc/:id', component: DocumentPage },
+          { path: 'collections/:id', component: DocumentPage },
+          { path: 'browse/:id', component: DocumentPage },
         ]),
         { provide: SearchService, useValue: searchService },
         {
@@ -89,6 +91,126 @@ describe('Search drawer route and session integration', () => {
     drawer = TestBed.createComponent(SearchFiltersDrawerComponent);
     drawer.detectChanges();
     await drawer.whenStable();
+  });
+
+  it.each(['/doc/first', '/collections/first', '/browse/first'])(
+    'hydrates an initially mounted queue at %s before fetching its results',
+    async (path) => {
+      drawer.destroy();
+      await harness.navigateByUrl(
+        `${path}?searchQueue=true&quickFilters=noFolder,onlyValidated,customFilter&page=3&pageSize=25&sortBy=dc:title&sortOrder=asc`,
+        DocumentPage,
+      );
+      drawer = TestBed.createComponent(SearchFiltersDrawerComponent);
+      drawer.detectChanges();
+      await drawer.whenStable();
+
+      expect(drawer.componentInstance.viewMode()).toBe('queue');
+      expect(drawer.componentInstance.selectedQueueQuickFilters()).toEqual(
+        new Set(['noFolder', 'onlyValidated']),
+      );
+      expect(searchService.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          quickFilters: 'noFolder,onlyValidated,customFilter',
+          pageIndex: 2,
+          pageSize: 25,
+          sortBy: 'dc:title',
+          sortOrder: 'asc',
+        }),
+      );
+    },
+  );
+
+  it('hydrates a direct document queue URL in an already mounted drawer', async () => {
+    await harness.navigateByUrl(
+      '/doc/first?searchQueue=true&quickFilters=noFolder,onlyValidated&page=3&pageSize=25&sortBy=dc:title&sortOrder=asc',
+      DocumentPage,
+    );
+    await drawer.whenStable();
+
+    expect(drawer.componentInstance.viewMode()).toBe('queue');
+    expect(drawer.componentInstance.selectedQueueQuickFilters()).toEqual(
+      new Set(['noFolder', 'onlyValidated']),
+    );
+    expect(searchService.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        quickFilters: 'noFolder,onlyValidated',
+        pageIndex: 2,
+        pageSize: 25,
+        sortBy: 'dc:title',
+        sortOrder: 'asc',
+      }),
+    );
+  });
+
+  it('updates the shared request when queue URL filters and pagination change', async () => {
+    await harness.navigateByUrl(
+      '/search?quickFilters=noFolder&page=2&pageSize=25&sortBy=dc:title&sortOrder=asc',
+      SearchComponent,
+    );
+    await drawer.whenStable();
+    const callsBeforeQueue = searchService.search.mock.calls.length;
+    await harness.navigateByUrl(
+      '/doc/first?searchQueue=true&quickFilters=noFolder&page=2&pageSize=25&sortBy=dc:title&sortOrder=asc',
+      DocumentPage,
+    );
+    await drawer.whenStable();
+    expect(searchService.search).toHaveBeenCalledTimes(callsBeforeQueue);
+    await harness.navigateByUrl(
+      '/doc/second?searchQueue=true&quickFilters=noFolder&page=2&pageSize=25&sortBy=dc:title&sortOrder=asc',
+      DocumentPage,
+    );
+    await drawer.whenStable();
+    expect(searchService.search).toHaveBeenCalledTimes(callsBeforeQueue);
+    await harness.navigateByUrl(
+      '/doc/next?searchQueue=true&quickFilters=onlyValidated&page=3&pageSize=50&sortBy=dc:modified&sortOrder=desc',
+      DocumentPage,
+    );
+    await drawer.whenStable();
+
+    expect(drawer.componentInstance.selectedQueueQuickFilters()).toEqual(
+      new Set(['onlyValidated']),
+    );
+    expect(searchService.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        quickFilters: 'onlyValidated',
+        pageIndex: 2,
+        pageSize: 50,
+        sortBy: 'dc:modified',
+        sortOrder: 'desc',
+      }),
+    );
+  });
+
+  it.each([
+    { pageQuery: '', pageIndex: 0, pageSize: 40 },
+    { pageQuery: '&page=-3&pageSize=12&sortOrder=invalid', pageIndex: 0, pageSize: 40 },
+    { pageQuery: '&page=invalid&pageSize=100', pageIndex: 0, pageSize: 100 },
+  ])('validates queue pagination $pageQuery', async ({ pageQuery, pageIndex, pageSize }) => {
+    await harness.navigateByUrl(`/doc/first?searchQueue=true${pageQuery}`, DocumentPage);
+    await drawer.whenStable();
+
+    expect(searchService.search).toHaveBeenLastCalledWith({ pageIndex, pageSize });
+  });
+
+  it('retains the shared search when visiting a document without a queue', async () => {
+    await harness.navigateByUrl(
+      '/search?quickFilters=onlyValidated&page=2&pageSize=25&sortBy=dc:title&sortOrder=asc',
+      SearchComponent,
+    );
+    await drawer.whenStable();
+    const callsBeforeDocument = searchService.search.mock.calls.length;
+    await harness.navigateByUrl('/doc/first', DocumentPage);
+    await drawer.whenStable();
+
+    expect(searchService.search).toHaveBeenCalledTimes(callsBeforeDocument);
+    expect(session.request()).toEqual({
+      quickFilters: 'onlyValidated',
+      pageIndex: 1,
+      pageSize: 25,
+      sortBy: 'dc:title',
+      sortOrder: 'asc',
+    });
   });
 
   it.each([

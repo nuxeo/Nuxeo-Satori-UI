@@ -39,6 +39,7 @@ import { loadFacetLabels } from './facet-labels';
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
 import {
   SEARCH_PAGE_PROVIDER,
+  SEARCH_PAGE_SIZE,
   SearchSession,
   type SearchResultsState,
 } from '../search-session/search-session';
@@ -147,12 +148,34 @@ export class SearchFiltersDrawerComponent {
             ? urlParts[docIndex + 1].split('?')[0]
             : '',
         );
+        this.hydrateQueueQuery(event.urlAfterRedirects);
       });
 
     this.activatedRoute.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.selectedQueueQuickFilters.set(this.parseQuickFilters(params.get('quickFilters') ?? ''));
       if (params.get('searchQueue') === 'true') this.viewMode.set('queue');
     });
+    this.hydrateQueueQuery(this.router.url);
+  }
+
+  /** A queue deep link must restore its request even when the search page has not been opened. */
+  private hydrateQueueQuery(url: string): void {
+    const params = this.router.parseUrl(url).queryParamMap;
+    // The search page owns its URL. Read completed queue navigations so an outgoing queue URL
+    // cannot overwrite filters just applied by a saved search or a reset on the search page.
+    if (url.split('?')[0] === '/search' || params.get('searchQueue') !== 'true') return;
+
+    const sortOrder = params.get('sortOrder');
+    this.session.setPageQuery({
+      quickFilters: (params.get('quickFilters') ?? '').trim(),
+      sortBy: params.get('sortBy'),
+      sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : null,
+    });
+    const rawPageSize = Number(params.get('pageSize'));
+    const pageSize = [25, 40, 50, 100].includes(rawPageSize) ? rawPageSize : SEARCH_PAGE_SIZE;
+    if (pageSize !== this.session.pageSize()) this.session.setPageSize(pageSize);
+    const page = Number.parseInt(params.get('page') ?? '', 10);
+    this.session.setPageIndex(Number.isFinite(page) && page > 1 ? page - 1 : 0);
   }
 
   onFiltersChange(filters: NxsSearchFilters): void {
