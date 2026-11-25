@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: Nuxeo Agentic Assets
+Bundle-SymbolicName: org.nuxeo.agentic.assets;singleton:=true
+Bundle-Version: 0.1.0
+Bundle-Vendor: Hyland Software
+Nuxeo-Component: OSGI-INF/asset-rights-service.xml,
+ OSGI-INF/asset-rights-download-permission.xml,
+ OSGI-INF/asset-rights-enricher-contrib.xml

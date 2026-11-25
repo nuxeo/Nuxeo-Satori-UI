@@ -1,12 +1,17 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
-import { Subject, type Observable } from 'rxjs';
+import {
+  DocumentDetailService,
+  type AssetRightsExplanation,
+  type NuxeoDocument,
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { Subject, of, throwError, type Observable } from 'rxjs';
 
 import {
   RecordPictureViewsComponent,
   firstPictureView,
   readPictureViews,
+  rightsRefusal,
 } from './record-picture-views';
 
 /** A view as Nuxeo 2025 writes one in `picture:views`, its file's `data` the server's address. */
@@ -88,9 +93,106 @@ describe('readPictureViews', () => {
   });
 });
 
+/** What the server's `assetRights` enricher says of asset 503: no Print channel among its rights. */
+function noPrintRights(): AssetRightsExplanation {
+  const refused = {
+    allowed: false,
+    reason: 'channel-not-covered',
+    channel: 'Print',
+    rightsEnd: null,
+  } as const;
+  return {
+    type: 'AcmeAsset',
+    today: '2026-11-24',
+    rightsEnd: '2026-12-14',
+    channels: ['E-commerce', 'Social'],
+    uses: [
+      { kind: 'original', name: null, ...refused },
+      {
+        kind: 'view',
+        name: 'Medium',
+        allowed: true,
+        reason: 'preview',
+        channel: null,
+        rightsEnd: null,
+      },
+      {
+        kind: 'view',
+        name: 'FullHD',
+        allowed: true,
+        reason: 'cleared',
+        channel: 'E-commerce',
+        rightsEnd: null,
+      },
+      { kind: 'view', name: 'OriginalJpeg', ...refused },
+    ],
+    otherwise: { allowed: false, reason: 'not-cleared', channel: null, rightsEnd: null },
+  };
+}
+
+describe('rightsRefusal', () => {
+  const decision = (reason: string, extra: { channel?: string; rightsEnd?: string } = {}) =>
+    ({
+      allowed: reason === 'cleared' || reason === 'preview',
+      reason,
+      channel: extra.channel ?? null,
+      rightsEnd: extra.rightsEnd ?? null,
+    }) as Parameters<typeof rightsRefusal>[0];
+
+  it('says nothing of a use the rights serve: a 403 then is not theirs', () => {
+    expect(rightsRefusal(decision('cleared', { channel: 'Print' }), ['Print'], 'en-US')).toBeNull();
+    expect(rightsRefusal(decision('preview'), [], 'en-US')).toBeNull();
+  });
+
+  it('names the channel that covers the view and the channels the rights cover', () => {
+    const print = decision('channel-not-covered', { channel: 'Print' });
+    expect(rightsRefusal(print, ['E-commerce', 'Social'], 'en-US')).toEqual({
+      reason: 'channel-not-covered',
+      key: 'document-layouts.rights.refused.channel-not-covered',
+      params: { channel: 'Print', channels: 'E-commerce and Social' },
+    });
+    expect(rightsRefusal(print, [], 'en-US')?.key).toBe(
+      'document-layouts.rights.refused.channel-not-covered-none',
+    );
+    expect(rightsRefusal(print, null, 'en-US')).toEqual({
+      reason: 'channel-not-covered',
+      key: 'document-layouts.rights.refused.channel-not-covered-unnamed',
+      params: { channel: 'Print' },
+    });
+  });
+
+  it("says the day the rights ended, the server's day, in the reader's language", () => {
+    expect(
+      rightsRefusal(decision('rights-ended', { rightsEnd: '2026-11-14' }), [], 'en-US'),
+    ).toEqual({
+      reason: 'rights-ended',
+      key: 'document-layouts.rights.refused.rights-ended',
+      params: { end: 'November 14, 2026' },
+    });
+    expect(rightsRefusal(decision('rights-ended'), [], 'en-US')?.key).toBe(
+      'document-layouts.rights.refused.rights-ended-undated',
+    );
+    expect(rightsRefusal(decision('rights-ended', { rightsEnd: 'soon' }), [], 'en-US')?.key).toBe(
+      'document-layouts.rights.refused.rights-ended-undated',
+    );
+  });
+
+  it('has its own words for a use no rights clear and for rights the server could not read', () => {
+    expect(rightsRefusal(decision('not-cleared'), [], 'en-US')?.key).toBe(
+      'document-layouts.rights.refused.not-cleared',
+    );
+    expect(rightsRefusal(decision('policy-error'), [], 'en-US')?.key).toBe(
+      'document-layouts.rights.refused.policy-error',
+    );
+  });
+});
+
 describe('RecordPictureViewsComponent', () => {
   let fixture: ComponentFixture<RecordPictureViewsComponent> | null;
   let fetchBlobByXpath: ReturnType<typeof vi.fn>;
+  let fetchAssetRights: ReturnType<typeof vi.fn>;
+  /** What the server says why, when asked. */
+  let rightsAnswer: Observable<AssetRightsExplanation | null>;
   /** Each request's answer, by `<uid> <xpath>`, in the order asked. */
   let requests: { key: string; answer: Subject<Blob> }[];
   let created: string[];
@@ -116,9 +218,13 @@ describe('RecordPictureViewsComponent', () => {
       requests.push({ key: `${uid} ${xpath}`, answer });
       return answer;
     });
+    rightsAnswer = of(noPrintRights());
+    fetchAssetRights = vi.fn(() => rightsAnswer);
     TestBed.configureTestingModule({
       imports: [RecordPictureViewsComponent, MatIconTestingModule],
-      providers: [{ provide: DocumentDetailService, useValue: { fetchBlobByXpath } }],
+      providers: [
+        { provide: DocumentDetailService, useValue: { fetchBlobByXpath, fetchAssetRights } },
+      ],
     });
   });
 
@@ -273,5 +379,129 @@ describe('RecordPictureViewsComponent', () => {
     const root = await render(picture([VIEWS[0]]));
     expect(root.querySelector('.record-picture__views')).toBeNull();
     expect(fetchBlobByXpath).toHaveBeenCalledWith('p1', 'picture:views/0/content');
+  });
+
+  describe('a view the server refuses', () => {
+    const WITH_PRINT = [...VIEWS, view('OriginalJpeg', 6000, 7500)];
+    const refusalOf = (root: HTMLElement) => root.querySelector('nxs-banner[data-refusal]');
+
+    /** Render the asset, choose its print view, and have the server answer it with `error`. */
+    async function refusePrintView(error: unknown): Promise<HTMLElement> {
+      const root = await render(picture(WITH_PRINT));
+      await answer(0);
+      button(root, 'OriginalJpeg')?.click();
+      await settle();
+      expect(fetchBlobByXpath).toHaveBeenLastCalledWith('p1', 'picture:views/4/content');
+      requests[1].answer.error(error);
+      return settle();
+    }
+
+    it("says the server's own reason, asked of the server after its 403", async () => {
+      const root = await refusePrintView({ status: 403 });
+
+      expect(fetchAssetRights).toHaveBeenCalledTimes(1);
+      expect(fetchAssetRights).toHaveBeenCalledWith('p1');
+      expect(refusalOf(root)?.getAttribute('data-refusal')).toBe('channel-not-covered');
+      expect(refusalOf(root)?.textContent).toContain(
+        "The server refused this view: it is covered by the Print channel, and this asset's rights cover E-commerce and Social only.",
+      );
+      expect(image(root)).toBeNull();
+      expect(root.querySelector('nxs-error-state')).toBeNull();
+    });
+
+    /** The refusal is the server's: every view is still offered, and each one asked for. */
+    it('hides no view and disables none, and the next one chosen is asked for', async () => {
+      const root = await refusePrintView({ status: 403 });
+
+      const print = button(root, 'OriginalJpeg');
+      expect(print).not.toBeNull();
+      expect(print?.disabled).toBe(false);
+      expect(root.querySelectorAll('.record-picture__view')).toHaveLength(WITH_PRINT.length);
+
+      button(root, 'FullHD')?.click();
+      await settle();
+      expect(fetchBlobByXpath).toHaveBeenLastCalledWith('p1', 'picture:views/3/content');
+      await answer(2);
+      expect(image(root)?.getAttribute('src')).toBe('blob:view-2');
+      expect(refusalOf(root)).toBeNull();
+    });
+
+    it('asks again, and asks why again, when the refused view is chosen again', async () => {
+      const root = await refusePrintView({ status: 403 });
+      button(root, 'Medium')?.click();
+      await settle();
+      button(root, 'OriginalJpeg')?.click();
+      await settle();
+
+      expect(fetchBlobByXpath).toHaveBeenCalledTimes(3);
+      requests[2].answer.error({ status: 403 });
+      await settle();
+      expect(fetchAssetRights).toHaveBeenCalledTimes(2);
+    });
+
+    it('says the day the rights ended when that is the reason', async () => {
+      const ended = noPrintRights();
+      rightsAnswer = of({
+        ...ended,
+        uses: ended.uses.map((use) =>
+          use.name === 'OriginalJpeg'
+            ? { ...use, reason: 'rights-ended' as const, rightsEnd: '2026-11-14' }
+            : use,
+        ),
+      });
+      const root = await refusePrintView({ status: 403 });
+
+      expect(refusalOf(root)?.textContent).toContain(
+        'the rights to this asset ended on November 14, 2026',
+      );
+    });
+
+    it('says the reason for any view the rights do not list', async () => {
+      const unlisted = noPrintRights();
+      rightsAnswer = of({
+        ...unlisted,
+        uses: unlisted.uses.filter((use) => use.name !== 'OriginalJpeg'),
+      });
+      const root = await refusePrintView({ status: 403 });
+
+      expect(refusalOf(root)?.getAttribute('data-refusal')).toBe('not-cleared');
+    });
+
+    it('shows a 403 the rights do not explain as any 403: no add-on', async () => {
+      rightsAnswer = of(null);
+      const root = await refusePrintView({ status: 403 });
+
+      expect(refusalOf(root)).toBeNull();
+      expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+    });
+
+    it('shows a 403 the rights do not explain as any 403: rights that serve the view', async () => {
+      const served = noPrintRights();
+      rightsAnswer = of({
+        ...served,
+        uses: served.uses.map((use) =>
+          use.name === 'OriginalJpeg' ? { ...use, allowed: true, reason: 'cleared' as const } : use,
+        ),
+      });
+      const root = await refusePrintView({ status: 403 });
+
+      expect(refusalOf(root)).toBeNull();
+      expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+    });
+
+    it('shows the 403 as it is when the server cannot be asked why', async () => {
+      rightsAnswer = throwError(() => ({ status: 500 }));
+      const root = await refusePrintView({ status: 403 });
+
+      expect(refusalOf(root)).toBeNull();
+      expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+    });
+
+    it('asks why only after a 403', async () => {
+      const root = await refusePrintView({ status: 503 });
+
+      expect(fetchAssetRights).not.toHaveBeenCalled();
+      expect(root.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+    });
   });
 });

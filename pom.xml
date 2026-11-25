@@ -13,6 +13,8 @@
   <modules>
     <module>apps/nuxeo-ui</module>
     <module>nuxeo-agentic-core</module>
+    <!-- The assets module's server add-on, with its own Marketplace package (decision B). -->
+    <module>nuxeo-agentic-assets</module>
     <module>nuxeo-agentic-connectors</module>
     <module>nuxeo-agentic-ui-package</module>
   </modules>

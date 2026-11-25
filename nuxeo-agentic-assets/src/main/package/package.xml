@@ -1,0 +1,17 @@
+<package type="addon" name="nuxeo-agentic-assets" version="@assets.package.version@">
+  <title>Nuxeo Satori assets: rights on the server</title>
+  <description>
+    <p>The assets module's server add-on. At the platform's download permission hook, for every user, it refuses an asset's original, picture views and renditions that the asset's rights do not cover, and the assetRights document enricher says why. It refuses nothing until a package contributes a rights policy for a document type.</p>
+  </description>
+  <vendor>Hyland Software</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <require-terms-and-conditions-acceptance>false</require-terms-and-conditions-acceptance>
+  <license>Apache License, Version 2.0</license>
+  <license-url>http://www.apache.org/licenses/LICENSE-2.0</license-url>
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <visibility>PRIVATE</visibility>
+</package>

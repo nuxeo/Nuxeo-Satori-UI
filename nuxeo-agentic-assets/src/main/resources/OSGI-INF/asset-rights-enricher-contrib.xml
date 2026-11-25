@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.rights.enrichers">
+
+  <documentation>
+    The assetRights document enricher: what the rights policy decides for each use of the
+    document, with a reason code a client translates. Ask for it with the header
+    "enrichers.document: assetRights". It explains a refusal; the download permission is what
+    refuses.
+  </documentation>
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.ecm.core.io.MarshallerRegistry" point="marshallers">
+    <register class="org.nuxeo.agentic.assets.rights.AssetRightsJsonEnricher" enable="true" />
+  </extension>
+
+</component>

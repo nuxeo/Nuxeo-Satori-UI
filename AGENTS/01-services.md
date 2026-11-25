@@ -26,6 +26,10 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
+fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null>
+  // GET /id/{uid} with enrichers.document: assetRights (nuxeo-agentic-assets), read with
+  // assetRights(doc): why the server's rights refused a use. Asked only after a 403, never to
+  // decide what to offer: the server refuses whatever this says
 getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery, context?: HttpContext): Observable<AuditLogList>
   // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>

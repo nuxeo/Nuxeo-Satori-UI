@@ -16,6 +16,11 @@ import { NuxeoWorkflowModel } from '../models/workflow.model';
 import type { AuditLogList, AuditLogQuery } from '../models/audit.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
 import { ALLOWED_TRANSITIONS_ENRICHER } from '../utils/allowed-transitions';
+import {
+  ASSET_RIGHTS_ENRICHER,
+  assetRights,
+  type AssetRightsExplanation,
+} from '../utils/asset-rights';
 import { normalizeDocumentAcls } from '../utils/ace-principal';
 import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-client-reason';
 
@@ -78,6 +83,22 @@ export class DocumentDetailService {
       responseType: 'blob',
       params,
     });
+  }
+
+  /**
+   * Why the server's rights refuse a use of an asset: the `assetRights` enricher's answer, read
+   * fresh, or `null` when the server gives none (no add-on, or no rights policy for the type).
+   *
+   * Ask it after a refusal, never to decide what to offer: the server refuses a download its
+   * rights do not cover whatever this says.
+   */
+  fetchAssetRights(uid: string): Observable<AssetRightsExplanation | null> {
+    return this.api
+      .get<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}`, undefined, {
+        properties: 'dublincore',
+        'enrichers.document': ASSET_RIGHTS_ENRICHER,
+      })
+      .pipe(map((document) => assetRights(document)));
   }
 
   fetchPdfRendition(uid: string): Observable<Blob> {

@@ -314,6 +314,16 @@ export {
   type NuxeoAllowedTransition,
 } from './lib/utils/allowed-transitions';
 export {
+  ASSET_RIGHTS_ENRICHER,
+  assetRights,
+  assetRightsDecision,
+  type AssetRightsDecision,
+  type AssetRightsExplanation,
+  type AssetRightsReason,
+  type AssetUse,
+  type AssetUseKind,
+} from './lib/utils/asset-rights';
+export {
   buildDocumentCompareSections,
   formatCompareDate,
   formatCompareValue,

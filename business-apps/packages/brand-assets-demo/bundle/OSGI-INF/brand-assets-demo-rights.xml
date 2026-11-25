@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!-- The kit's rights policy, for nuxeo-agentic-assets: which channel covers each use of an
+     AcmeAsset, as the prototype's renditions table says, on the stand-in model's fields. The
+     server refuses a use whose channel the asset's acmeasset:channels does not hold, or any but a
+     preview once the day in dc:expired has passed, and any use not listed here. -->
+<component name="nuxeo.config.brand-assets-demo.rights">
+
+  <require>org.nuxeo.agentic.assets.rights</require>
+
+  <extension target="org.nuxeo.agentic.assets.rights" point="policies">
+    <policy type="AcmeAsset">
+      <rightsEnd xpath="dc:expired" />
+      <channels xpath="acmeasset:channels" />
+      <!-- The original file, as the prototype's "Original": print. -->
+      <original channel="Print" />
+      <!-- The picture views, by title: the stock picture conversions of Nuxeo LTS 2025. -->
+      <view name="Thumbnail" preview="true" />
+      <view name="Small" preview="true" />
+      <view name="Medium" preview="true" />
+      <view name="FullHD" channel="E-commerce" />
+      <view name="OriginalJpeg" channel="Print" />
+      <!-- The same views as renditions, and the thumbnail the lists show. -->
+      <rendition name="thumbnail" preview="true" />
+      <rendition name="Thumbnail" preview="true" />
+      <rendition name="Small" preview="true" />
+      <rendition name="Medium" preview="true" />
+      <rendition name="FullHD" channel="E-commerce" />
+      <rendition name="OriginalJpeg" channel="Print" />
+    </policy>
+  </extension>
+
+</component>
