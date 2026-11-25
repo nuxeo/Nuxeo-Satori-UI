@@ -76,9 +76,14 @@ describe('validateDeploymentFile', () => {
       content: myClaims,
       model,
     });
-    expect('findings' in without && without.findings.map((finding) => finding.kind)).toEqual([
-      'unknown',
-    ]);
+    // Without the app's own actions, each of them the queue names is unknown, and nothing else is.
+    const own = ((myClaims as { rowActions?: string[] }).rowActions ?? []).filter(
+      (id) => !id.startsWith('app.'),
+    );
+    expect(own.length).toBeGreaterThan(0);
+    expect('findings' in without && without.findings.map((finding) => finding.kind)).toEqual(
+      own.map(() => 'unknown'),
+    );
   });
 
   it.each([
