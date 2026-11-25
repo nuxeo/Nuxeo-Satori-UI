@@ -370,8 +370,8 @@ provider, for the development server.
 
   **A package never contributes it.** The server reads it only from its configuration directory, in
   whose context the runtime deploys that directory's files, and refuses, and logs, a contribution
-  from a bundle; the pipeline refuses a package that contributes to it, under any spelling of the
-  component's name, too. So configuration cannot widen it. Never allowed, whoever contributes them:
+  from a bundle; the pipeline refuses a package that contributes to it, the target written with
+  or without its `service:` type, too. So configuration cannot widen it. Never allowed, whoever contributes them:
   the platform's own `AgenticUi.` operations, and those that run another operation, a script or as
   another user, such as `RunOperation` or `Auth.LoginAs`, any of which would allow everything. An
   entry that fails a check is not registered, and takes an entry of its id that was before it out
