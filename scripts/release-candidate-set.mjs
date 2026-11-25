@@ -515,8 +515,9 @@ export function duplicatesAcross(kits) {
 }
 
 /**
- * Every path `git status --porcelain=v1 -z` names: `XY path`, and for a rename or a copy a second
- * field, the path it came from, which is a path of its own, not one to cut three characters from.
+ * Every path `git status --porcelain=v1 -z` names, each a plain path: `XY path`, and for a rename
+ * or a copy a second field, the path it came from, which is a path of its own, not one to cut
+ * three characters from. A rename is listed by both its names.
  */
 export function uncommittedPaths(status) {
   const fields = status.split('\0');
@@ -525,8 +526,7 @@ export function uncommittedPaths(status) {
     const field = fields[index];
     if (field.length < 4) continue;
     paths.push(field.slice(3));
-    if (/[RC]/.test(field.slice(0, 2)) && index + 1 < fields.length)
-      paths.push(`${fields[++index]} (its name before)`);
+    if (/[RC]/.test(field.slice(0, 2)) && index + 1 < fields.length) paths.push(fields[++index]);
   }
   return paths;
 }

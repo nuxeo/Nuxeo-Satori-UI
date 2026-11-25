@@ -15,10 +15,13 @@ name: Release candidate
 #
 # **What each kit is held to.** `--since` is the last release. A kit is released by a tag
 # `app-package/<name>/<version>` (app-packages.yml), and none has been pushed, so no kit has a
-# release to be held to. Until one has, the job holds every kit to the commit before the push, as
+# release to be held to. So the job holds every kit to the commit before the push, as
 # app-packages.yml holds a push, so that a version that did not move with its kit's changes is
 # refused here too, and the release note lists what the push changed. A new branch, or a commit
 # before that this clone cannot fetch, is held to `origin/main` instead, and the log says so.
+# Nothing here moves to a kit's release tag once one is pushed: that is a change to this step, by
+# hand. And a push whose run a later push cancelled is not held to anything of its own, since the
+# later run is held to that push's tip, as in app-packages.yml.
 #
 # **The packages and the bundle are not uploaded.** This repository is public, so anyone signed in
 # to GitHub can download a run's artifacts, and the bundle carries the `@hylandsoftware` packages,

@@ -188,7 +188,25 @@ function stopped(result) {
   if (result.status === 0) return null;
   if (result.signal) return `was interrupted (${result.signal})`;
   if (result.error) return `could not be run: ${result.error.message}`;
+  // Maven and Nx exit 128 and the signal's number when a signal stops them.
+  if (result.status === 130 || result.status === 143)
+    return `was interrupted (exit ${result.status})`;
   return `exited ${result.status}`;
+}
+
+/** An interruption: the signal this process was sent, once a checkpoint has seen it. */
+class Interrupted extends Error {}
+
+/**
+ * The signal this process was sent, if any. A listener keeps Node from exiting on the signal, and
+ * runs only when the event loop turns, which a child started with `spawnSync` does not let it do:
+ * so the listener only notes the signal, and each checkpoint, after every child and between the
+ * stages, lets the loop turn and stops the run there.
+ */
+let interruptedBy = null;
+async function checkpoint() {
+  await new Promise((resolve) => setImmediate(resolve));
+  if (interruptedBy !== null) throw new Interrupted(interruptedBy);
 }
 
 /** `git`'s answer, or `null` when it refused. */
@@ -322,21 +340,28 @@ const removeWhatThisRunMade = (candidateToo) => {
   if (candidateToo) rmSync(out, { recursive: true, force: true });
   rmSync(scratch, { recursive: true, force: true });
 };
-// Ctrl-C reaches the child too, which then stops and is refused below; a signal between children,
-// or a cancelled job's SIGTERM, lands here once the running child has returned.
+// Ctrl-C reaches the running child too, which stops; a signal sent to this process alone, or a
+// cancelled job's SIGTERM, is noted, and the next checkpoint stops the run (`checkpoint`).
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'])
-  process.once(signal, () => {
-    removeWhatThisRunMade(true);
-    console.error(`\nInterrupted (${signal}): ${options.out} and the scratch folder are removed.`);
-    process.exit(128 + constants.signals[signal]);
+  process.on(signal, () => {
+    interruptedBy ??= signal;
   });
 let code = 0;
 try {
   await build();
+  // A signal during the last stage, after its last checkpoint, still stops the candidate.
+  await checkpoint();
   removeWhatThisRunMade(false);
 } catch (error) {
-  // A refusal says why; anything else is this script's own failure, and says where. Either way
-  // what was written is no candidate, and the folder was this run's.
+  // An interruption, a refusal, or this script's own failure, which says where. Each way what was
+  // written is no candidate, and the folder was this run's.
+  if (error instanceof Interrupted) {
+    removeWhatThisRunMade(true);
+    console.error(
+      `\nInterrupted (${error.message}): ${options.out} and the scratch folder are removed.`,
+    );
+    process.exit(128 + constants.signals[error.message]);
+  }
   console.error(
     error instanceof Refused
       ? `\nThe release candidate is refused: ${error.message}`
@@ -359,12 +384,15 @@ async function build() {
       `Built as the working tree is, not as ${head?.slice(0, 12)} is: the manifest lists every uncommitted path.\n`,
     );
 
-  const kits = buildKits();
+  const kits = await buildKits();
+  await checkpoint();
   checkKits(kits);
+  await checkpoint();
   stage(4, 'The demo steps a server run would execute, listed, not run');
   const demo = await listDemoSteps(kits);
-  const bundle = buildClient();
-  const server = buildServer(bundle);
+  await checkpoint();
+  const bundle = await buildClient();
+  const server = await buildServer(bundle);
 
   stage(7, 'The packages as a set');
   const packages = [
@@ -390,7 +418,7 @@ async function build() {
 }
 
 // ── 2. Every kit through the pipeline ─────────────────────────────────────────────────────────
-function buildKits() {
+async function buildKits() {
   stage(2, `Every kit through the pipeline, held to ${options.since}`);
   const directories = readdirSync(PACKAGES, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -403,6 +431,8 @@ function buildKits() {
   const kits = [];
   /** The platform as it was at `--since`, exported once for the upgrade check's platform side. */
   let platformBefore = null;
+  /** The folders at `--since` a kit is held to: a kit renamed since is held, not removed. */
+  const held = new Set();
   for (const name of directories) {
     const directory = join(PACKAGES, name);
     // Where the package of this name was, as app-packages.yml asks the upgrade check: a kit whose
@@ -413,12 +443,15 @@ function buildKits() {
       sinceCommit,
       `business-apps/packages/${name}`,
     ]);
+    await checkpoint();
     if (stopped(placed))
       throw new Refused(
         `stage 2: the upgrade check could not say where ${name} was at ${options.since}: ${(placed.stderr || placed.stdout).trim()}`,
       );
     const was = placed.stdout.trim();
+    if (was !== '') held.add(was);
     const previous = was === '' ? null : kitAt(sinceCommit, was);
+    await checkpoint();
     const args = [APP_PACKAGE, directory, '--out', kitsOut, '--platform', platform.version];
     if (previous !== null) {
       if (platformBefore === null) {
@@ -429,6 +462,7 @@ function buildKits() {
           sinceCommit,
           platformBefore,
         ]);
+        await checkpoint();
         if (stopped(exported))
           throw new Refused(
             `stage 2: the upgrade check could not export the platform at ${options.since}: ${(exported.stderr || exported.stdout).trim()}`,
@@ -444,6 +478,7 @@ function buildKits() {
       stdio: ['ignore', 'inherit', 'inherit'],
       env: childEnv(),
     });
+    await checkpoint();
     if (result.signal) throw new Refused(`stage 2: the pipeline ${stopped(result)} on ${name}.`);
     if (result.status !== 0) {
       refused.push(`${name} (${stopped(result)})`);
@@ -467,13 +502,15 @@ function buildKits() {
   }
   if (refused.length > 0)
     throw new Refused(`stage 2: the pipeline refused ${refused.join(', ')}, as above.`);
-  // A kit `--since` had and this candidate has not: the release note says so.
+  // A kit `--since` had and this candidate has not: the release note says so. A folder some kit is
+  // held to is that kit's, renamed, not removed.
   const listed = git(['ls-tree', '-d', '--name-only', sinceCommit, 'business-apps/packages/']);
   if (listed === null)
     throw new Refused(`stage 2: git could not list business-apps/packages/ at ${options.since}.`);
   kits.removed = listed
     .split('\n')
     .filter(Boolean)
+    .filter((path) => !held.has(path))
     .map((path) => path.split('/').pop())
     .filter((name) => !directories.includes(name));
   for (const name of kits.removed)
@@ -556,7 +593,7 @@ function checkKits(kits) {
 }
 
 // ── 5. The client app's production bundle ─────────────────────────────────────────────────────
-function buildClient() {
+async function buildClient() {
   stage(5, "The client app's production bundle");
   // Where the Maven assembly of nuxeo-agentic-ui-package looks for it: `../dist/nuxeo-ui/browser`.
   const output = join(scratch, 'maven', 'dist', 'nuxeo-ui');
@@ -572,6 +609,7 @@ function buildClient() {
     ],
     { cwd: REPO, stdio: ['ignore', 'inherit', 'inherit'], env: childEnv() },
   );
+  await checkpoint();
   if (stopped(result)) throw new Refused(`stage 5: the production build ${stopped(result)}.`);
   const browser = join(output, 'browser');
   if (!existsSync(join(browser, 'index.html')))
@@ -600,7 +638,7 @@ function buildClient() {
 }
 
 // ── 6. The server packages ────────────────────────────────────────────────────────────────────
-function buildServer(bundle) {
+async function buildServer(bundle) {
   stage(6, `The server packages: mvn package at the root, at ${version}`);
   // The whole working tree, every file git does not ignore, and so no `target/`, `dist/` or
   // `node_modules/`: a module's tests may read beyond it, as nuxeo-agentic-assets' read the brand
@@ -628,9 +666,16 @@ function buildServer(bundle) {
       stdio: ['ignore', 'inherit', 'inherit'],
       env: childEnv(),
     });
+    return result;
+  };
+  const refusedBy = (args, result) => {
     if (stopped(result)) throw new Refused(`stage 6: mvn ${args[0]} ${stopped(result)}.`);
   };
-  maven(['versions:set', `-DnewVersion=${version}`, '-DgenerateBackupPoms=false']);
+  await checkpoint();
+  const setting = ['versions:set', `-DnewVersion=${version}`, '-DgenerateBackupPoms=false'];
+  const set = maven(setting);
+  await checkpoint();
+  refusedBy(setting, set);
   // build-marketplace.yml stamps nuxeo-agentic-ui-package's package.xml with sed; its assembly takes
   // the file unfiltered, so without this the package is `@VERSION@`, 0.0.0 to Nuxeo.
   const stamped = [];
@@ -646,7 +691,13 @@ function buildServer(bundle) {
     }
   }
   process.stdout.write(`Stamped ${version} into ${stamped.join(', ') || 'no package.xml'}.\n`);
-  maven(['package', ...(modules.includes(CLIENT_MODULE) ? ['-pl', `!${CLIENT_MODULE}`] : [])]);
+  const packaging = [
+    'package',
+    ...(modules.includes(CLIENT_MODULE) ? ['-pl', `!${CLIENT_MODULE}`] : []),
+  ];
+  const packaged = maven(packaging);
+  await checkpoint();
+  refusedBy(packaging, packaged);
 
   const serverOut = join(out, 'server');
   mkdirSync(serverOut);

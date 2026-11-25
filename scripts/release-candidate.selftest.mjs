@@ -427,12 +427,7 @@ function theUncommittedPaths() {
   check(
     "a rename's two names, a change and a new file, each whole, as git status names them",
     JSON.stringify(paths) ===
-      JSON.stringify([
-        'alpha-file.txt (its name before)',
-        'kept.txt',
-        'new.txt',
-        'renamed-file.txt',
-      ]),
+      JSON.stringify(['alpha-file.txt', 'kept.txt', 'new.txt', 'renamed-file.txt']),
     JSON.stringify({ status, paths }),
     false,
   );

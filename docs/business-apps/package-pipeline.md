@@ -40,7 +40,7 @@ added on 25 November 2026 (section 10); its server-side half is not built.
   packages and every kit, and refuses a set that does not hold together: a dependency Nuxeo would
   not count as met, two kits contributing the same name, a kit whose version did not move since the
   commit it is held to. It runs offline on every push to a staging branch, which holds each kit to
-  the commit before the push until kits have releases to be held to (section 11).
+  the commit before the push, since no kit has a release yet (section 11).
 
 ## 1. What an app definition package is
 
@@ -822,10 +822,12 @@ pull request that touches the candidate or what its controls read, and the whole
 push to a `staging/**` branch.
 
 - **Held to the commit before the push.** No kit has a release tag yet, so no commit is every kit's
-  last release. Until one is, the job holds each kit to the commit before the push, as
-  `app-packages.yml` holds a push: a kit whose version did not move with its changes is refused,
-  and the release note lists what the push changed. A new branch, or a commit before that the
-  clone cannot read, is held to `origin/main` instead, where no kit is yet, and the log warns.
+  last release, and the job holds each kit to the commit before the push, as `app-packages.yml`
+  holds a push: a kit whose version did not move with its changes is refused, and the release note
+  lists what the push changed. A new branch, or a commit before that the clone cannot read, is held
+  to `origin/main` instead, where no kit is yet, and the log warns. Nothing moves the job to a
+  kit's release tag once one is pushed: that is a change to the workflow's step, by hand. A push
+  whose run a later push cancelled is held to nothing of its own, as in `app-packages.yml`.
 - **One secret, for the install only.** The client cannot be built without the `@hylandsoftware`
   packages, so `npm ci` reads the read-only `SATORI_GH_READONLY_TOKEN` in its own step, in both
   jobs, as ci.yml's jobs do. The candidate's step runs with no token and checks so, and the script
