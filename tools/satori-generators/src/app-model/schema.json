@@ -32,7 +32,7 @@
     },
     "pageProvider": {
       "type": "string",
-      "description": "Writes a page provider over the type, reading the repository, with this name, which a queue or a home names.",
+      "description": "Writes a page provider over the type, with this name, which a queue or a home names. It reads the repository, or the search index when aggregates are given.",
       "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
     },
     "where": {
@@ -46,6 +46,10 @@
     "pageSize": {
       "type": "number",
       "description": "With pageProvider: records per page, 1 to 100. Defaults to 50."
+    },
+    "aggregates": {
+      "type": "string",
+      "description": "With pageProvider: properties of the type, <prefix>:<name> separated by commas, that a queue's facets or a home's figures group the records by. The page provider then reads the search index, which alone answers aggregates, with a terms aggregate <prefix>_<name>_agg for each, and the type gets a search document, <Type>Search. Not with a ? in where: a queue has no record to fill it."
     },
     "force": {
       "type": "boolean",

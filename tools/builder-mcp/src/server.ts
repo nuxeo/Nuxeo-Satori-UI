@@ -268,7 +268,9 @@ export function createServer(dependencies: ServerDependencies): McpServer {
         " on a package folder (scripts/app-package.mjs): the builder, the app definition's" +
         ' validation, the version, the build, the zip and its checksum. Given the folder alone, it' +
         ' passes what CI passes, and asCi is true; an allow-list, a registered file or another' +
-        ' platform version change what is checked, and are listed under departsFromCi. Returns' +
+        ' platform version change what is checked, and are listed under departsFromCi. A package' +
+        ' that ships a stand-in model is held to its own content-model.json, as in CI; one on a' +
+        " server's model is held to none, for which npm run app-package takes --model. Returns" +
         ' whether it passed, each finding with its file and place, and the step that refused it.' +
         ' The zip is built in a temporary folder and removed; nothing is published. Paths are' +
         ' relative to the repository, and must be inside it.',

@@ -8,7 +8,9 @@
  * - **As CI runs it, unless told otherwise.** Given the folder alone, it passes what the workflow
  *   passes: `--out` and `--platform`, the version of `libs/platform`. An allow-list, a registered
  *   file or another platform version are the deployment's to give, and change what is checked, so
- *   the answer lists each one it was given under `departsFromCi`, and `asCi` is then false.
+ *   the answer lists each one it was given under `departsFromCi`, and `asCi` is then false. It
+ *   gives no content model, as CI gives none: the pipeline holds a package that ships a stand-in
+ *   model to its own `content-model.json`, and a package on a server's model to none.
  * - **Inside the repository only** (`within`): no link followed, in the path or anywhere in the
  *   package, no hidden folder or file, and the allow-list and the registered file are JSON files.
  *   The pipeline's messages can quote what it read, and they go to the agent.
