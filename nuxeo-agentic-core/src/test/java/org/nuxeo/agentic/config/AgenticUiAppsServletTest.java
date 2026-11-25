@@ -24,10 +24,15 @@ import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 class AgenticUiAppsServletTest {
 
     private static HttpServletRequest request(String method, Principal principal) {
+        return request(method, principal, "/apps.json");
+    }
+
+    private static HttpServletRequest request(String method, Principal principal, String path) {
         return (HttpServletRequest) Proxy.newProxyInstance(HttpServletRequest.class.getClassLoader(),
                 new Class<?>[] { HttpServletRequest.class }, (proxy, m, args) -> switch (m.getName()) {
                 case "getMethod" -> method;
                 case "getUserPrincipal" -> principal;
+                case "getPathInfo" -> path;
                 default -> throw new UnsupportedOperationException(m.getName());
                 });
     }
@@ -53,6 +58,34 @@ class AgenticUiAppsServletTest {
                 case "isAdministrator" -> administrator;
                 default -> throw new UnsupportedOperationException(m.getName());
                 });
+    }
+
+    /**
+     * Before the principal is read: a change is only ever a POST to a deployment layer's address,
+     * and a preflight, OPTIONS, is answered like any other method, with no CORS header.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = { "OPTIONS", "TRACE", "PUT", "DELETE", "PATCH" })
+    void aDeploymentLayersAddressTakesPostAndNoOtherMethodButGetAndHead(String method) throws Exception {
+        for (String path : List.of("/apps/payers-claims/layer/layouts/Claim/view.layout.json", "/layer.json")) {
+            Map<String, Object> recorded = new HashMap<>();
+
+            new AgenticUiAppsServlet().service(request(method, null, path), response(recorded));
+
+            assertEquals(HttpServletResponse.SC_METHOD_NOT_ALLOWED, recorded.get("status"));
+            assertEquals("GET, HEAD, POST", recorded.get("Allow"));
+            assertFalse(recorded.containsKey("Access-Control-Allow-Origin"));
+        }
+    }
+
+    @Test
+    void aChangeWithNoNuxeoPrincipalIsUnauthorizedAndReadsNoBody() throws Exception {
+        Map<String, Object> recorded = new HashMap<>();
+
+        new AgenticUiAppsServlet().service(request("POST", null, "/apps/payers-claims/layer/queues/my-claims.json"),
+                response(recorded));
+
+        assertEquals(HttpServletResponse.SC_UNAUTHORIZED, recorded.get("status"));
     }
 
     @ParameterizedTest

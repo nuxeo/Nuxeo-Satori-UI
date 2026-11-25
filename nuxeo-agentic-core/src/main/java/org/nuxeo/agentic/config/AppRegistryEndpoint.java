@@ -65,23 +65,40 @@ final class AppRegistryEndpoint {
 
     private final ConfigSnapshot snapshot;
 
+    private final LayerService.Live live;
+
     /** Each app's files by path, {@code app.json} first, rendered once. */
     private final Map<String, Map<String, Resource>> files = new HashMap<>();
 
     AppRegistryEndpoint(ConfigSnapshot snapshot) {
+        this(snapshot, LayerService.Live.NONE);
+    }
+
+    /**
+     * @param live each app's deployment layer in force ({@link LayerService#live}): a live file is
+     *            served in place of the package's file at its path, or beside the package's files
+     *            for a path the package has none at, such as a layout. Drafts are never in it.
+     */
+    AppRegistryEndpoint(ConfigSnapshot snapshot, LayerService.Live live) {
         this.snapshot = snapshot;
+        this.live = live;
         for (ConfigSnapshot.App app : snapshot.apps()) {
             Map<String, Resource> byPath = new LinkedHashMap<>();
             byPath.put(APP_FILE, resource(app.appBytes()));
             for (ConfigSnapshot.AppFile file : app.files().values()) {
                 byPath.put(file.path(), resource(file.bytes()));
             }
+            live.of(app.id()).forEach((path, file) -> byPath.put(path, resource(file.body())));
             files.put(app.id(), byPath);
         }
     }
 
     ConfigSnapshot snapshot() {
         return snapshot;
+    }
+
+    LayerService.Live live() {
+        return live;
     }
 
     static boolean mayView(ConfigSnapshot.App app, Viewer viewer) {
@@ -150,6 +167,8 @@ final class AppRegistryEndpoint {
             entry.put("source", app.provenance().source());
             ArrayNode paths = entry.putArray("files");
             files.get(app.id()).keySet().forEach(paths::add);
+            ObjectNode layer = entry.putObject("layer");
+            live.of(app.id()).forEach((path, file) -> layer.put(path, file.version()));
             entry.set("content", app.app());
         }
         listing.set("diagnostics", diagnostics(snapshot.diagnostics(), inForce, viewer.administrator()));

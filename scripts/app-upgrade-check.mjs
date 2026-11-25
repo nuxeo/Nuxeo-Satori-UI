@@ -6,9 +6,9 @@
  * with the package as it is, and the platform as it was with the platform as it is.
  *
  *   node scripts/app-upgrade-check.mjs [<package directory>...] --since <git ref>
- *     [--root <repository>] [--json]
+ *     [--root <repository>] [--deployment <file>] [--json]
  *   node scripts/app-upgrade-check.mjs <package directory> --previous <package directory>
- *     [--previous-platform <repository>] [--root <repository>] [--json]
+ *     [--previous-platform <repository>] [--root <repository>] [--deployment <file>] [--json]
  *   node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]
  *   node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]
  *
@@ -49,6 +49,14 @@
  *
  * A note covers a finding when it names the same item and its version is one this upgrade crosses:
  * above the version held to, and up to the version as it is.
+ *
+ * **A deployment's own layer over the kit**, given with `--deployment`, the export an administrator
+ * reads from a server, `GET /nuxeo/agentic-ui-apps/layer.json`: a layout or a queue an
+ * administrator changed in the layout designer and published there overrides the kit's file at the
+ * same path (docs/business-apps/app-definition-v2.md, section 10, "The deployment layer"). Each such
+ * file the upgrade adds, changes or removes is a warning: the override keeps winning, so the kit's
+ * change does not show on that server until someone takes it into the override or rolls the override
+ * back. A warning refuses nothing and leaves the exit code alone.
  *
  * What the platform registers is read where it says so: the IDs `docs/extension-reference.md`
  * documents, as its drift gate reads them; the registries the validator holds a kit to, by importing
@@ -93,9 +101,10 @@ const { compareVersions, parseVersion } = await import(
 );
 
 const USAGE =
-  'usage: node scripts/app-upgrade-check.mjs [<package directory>...] --since <git ref> [--root <repository>] [--json]\n' +
+  'usage: node scripts/app-upgrade-check.mjs [<package directory>...] --since <git ref> [--root <repository>]' +
+  ' [--deployment <file>] [--json]\n' +
   '       node scripts/app-upgrade-check.mjs <package directory> --previous <package directory>' +
-  ' [--previous-platform <repository>] [--root <repository>] [--json]\n' +
+  ' [--previous-platform <repository>] [--root <repository>] [--deployment <file>] [--json]\n' +
   '       node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]\n' +
   '       node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]';
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
@@ -161,6 +170,15 @@ const PLATFORM_KINDS = new Map([
   ['menu-prefix', true],
 ]);
 
+/**
+ * The files a deployment layer holds (`LayerPaths` in nuxeo-agentic-core), and how a warning names
+ * each: a record page, an edit or a create form, and a queue.
+ */
+const OVERRIDABLE = [
+  [/^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/, (match) => `layout ${match[1]}/${match[2]}`],
+  [/^queues\/([^/]+)\.json$/, (match) => `queue ${match[1]}`],
+];
+
 /** A run that cannot be made: the command, or an input it cannot read. Exit 2. */
 class Usage extends Error {}
 
@@ -190,7 +208,7 @@ function parse(argv) {
       if (!given(value) || !given(argv[index + 2]) || options[key]) return null;
       options[key] = { ref: value, path: argv[index + 2] };
       index += 2;
-    } else if (['--since', '--previous', '--previous-platform', '--root'].includes(arg)) {
+    } else if (['--since', '--previous', '--previous-platform', '--root', '--deployment'].includes(arg)) {
       const key = arg.slice(2);
       if (!given(value) || options[key] !== undefined) return null;
       options[key] = value;
@@ -205,7 +223,11 @@ function parse(argv) {
   if (options.previous !== undefined && options.packages.length !== 1) return null;
   if (options['previous-platform'] !== undefined && options.previous === undefined) return null;
   for (const mode of ['export', 'place-at'])
-    if (options[mode] !== undefined && (options.packages.length > 0 || options.json)) return null;
+    if (
+      options[mode] !== undefined &&
+      (options.packages.length > 0 || options.json || options.deployment !== undefined)
+    )
+      return null;
   return options;
 }
 
@@ -235,6 +257,8 @@ async function main(options) {
   }
   const current = await readPlatform(root);
   const notes = readNotes(root, PLATFORM_NOTES, PLATFORM_KINDS, PLATFORM_NOTES);
+  const deployment =
+    options.deployment === undefined ? null : readDeployment(options.deployment);
   if (options.previous !== undefined) {
     const previous =
       options['previous-platform'] === undefined
@@ -242,7 +266,7 @@ async function main(options) {
         : await readPlatform(directoryOf(options['previous-platform'], '--previous-platform'));
     const kit = readKit(directoryOf(options.packages[0], 'the package'));
     const before = readKit(directoryOf(options.previous, '--previous'));
-    return report([check(before, kit, { previous, current, notes })], options.json);
+    return report([check(before, kit, { previous, current, notes }, deployment)], options.json);
   }
 
   const commit = commitOf(root, options.since);
@@ -263,7 +287,7 @@ async function main(options) {
       if (place !== null) held.add(place);
       const before =
         place === null ? null : (extract(root, commit, [place], scratch), readKit(at(place)));
-      results.push(check(before, kit, { previous, current, notes }));
+      results.push(check(before, kit, { previous, current, notes }, deployment));
     }
     // A kit the ref had and the tree has not, under any folder, is gone, not upgraded: said.
     const gone =
@@ -287,11 +311,14 @@ async function main(options) {
  * The findings for one package: its own, as it was against as it is, and the platform's, for what
  * it names. `before` is `null` for a package the earlier version did not have, which is held to
  * nothing of its own, and `platform.previous` `null` when no earlier platform was given.
+ * `deployment` is a server's deployment layer, `--deployment`, or `null`: each file of the kit's
+ * app it overrides that the upgrade changes is a warning, which refuses nothing.
  */
-function check(before, kit, platform) {
+function check(before, kit, platform, deployment = null) {
   const findings = [];
   const covered = [];
   const said = [];
+  const warnings = overrideWarnings(before, kit, deployment, said);
   if (before !== null && before.name !== kit.name)
     findings.push({
       side: 'kit',
@@ -381,7 +408,94 @@ function check(before, kit, platform) {
     findings,
     covered,
     said,
+    warnings,
   };
+}
+
+// --- A deployment's own layer over the kit ---------------------------------------------------------
+
+/**
+ * A server's deployment layer, as `GET /nuxeo/agentic-ui-apps/layer.json` answers it to an
+ * administrator (`LayerService.export` in nuxeo-agentic-core): each app's files whose override is in
+ * force, by path, with the version in force. A file that is not one is a command that cannot be run.
+ */
+function readDeployment(path) {
+  const shown = shownPath(resolve(path));
+  if (!isFile(resolve(path))) throw new Usage(`--deployment ${shown} is not a file.`);
+  const content = json(readFileSync(resolve(path), 'utf8'));
+  const wrong = (what) =>
+    new Usage(
+      `--deployment ${shown}: ${what}. It is the deployment layer's export, as GET /nuxeo/agentic-ui-apps/layer.json answers it: ` +
+        '{ "format": "nuxeo-agentic-ui-layer/1", "apps": [{ "id", "files": [{ "path", "version" }] }] }.',
+    );
+  if (!isRecord(content) || content.format !== 'nuxeo-agentic-ui-layer/1' || !Array.isArray(content.apps))
+    throw wrong('it is not the export');
+  const apps = new Map();
+  for (const app of content.apps) {
+    if (!isRecord(app) || typeof app.id !== 'string' || !Array.isArray(app.files))
+      throw wrong('an app is { "id", "files" }');
+    const files = new Map();
+    for (const file of app.files) {
+      if (
+        !isRecord(file) ||
+        typeof file.path !== 'string' ||
+        !OVERRIDABLE.some(([pattern]) => pattern.test(file.path)) ||
+        !Number.isInteger(file.version) ||
+        file.version < 1
+      )
+        throw wrong(`a file of ${app.id} is { "path", "version" }, its path a layout or a queue`);
+      files.set(file.path, file.version);
+    }
+    apps.set(app.id, files);
+  }
+  return { shown, apps };
+}
+
+/**
+ * Each file of the kit's app that the deployment overrides and the upgrade adds, changes or
+ * removes. The override keeps winning over the kit's file after the upgrade, as it did before it,
+ * so the customer sees none of the kit's change until an administrator takes it into the override
+ * or rolls the override back: worth saying, never a refusal, since nothing the customer configured
+ * is lost. A file the upgrade leaves as it was says nothing.
+ */
+function overrideWarnings(before, kit, deployment, said) {
+  if (deployment === null) return [];
+  const app = text(kit.files.get('app.json')?.id);
+  const overridden = app === undefined ? undefined : deployment.apps.get(app);
+  if (overridden === undefined) {
+    said.push(
+      `${deployment.shown} overrides none of ${app === undefined ? 'this package' : `the app ${app}`}'s files.`,
+    );
+    return [];
+  }
+  const warnings = [];
+  for (const [path, version] of overridden) {
+    let item = path;
+    for (const [pattern, name] of OVERRIDABLE) {
+      const match = pattern.exec(path);
+      if (match) {
+        item = name(match);
+        break;
+      }
+    }
+    const was = before?.files.get(path);
+    const is = kit.files.get(path);
+    if (JSON.stringify(was) === JSON.stringify(is)) continue;
+    const change = was === undefined ? 'adds' : is === undefined ? 'removes' : 'changes';
+    warnings.push({
+      item,
+      path,
+      version,
+      what:
+        `${kit.name} ${kit.version} ${change} ${path}, which this deployment overrides at version ${version} of its ` +
+        `deployment layer (${deployment.shown}). The override still wins, so ${app}'s people see none of the kit's ` +
+        (change === 'removes'
+          ? 'removal: the override is then the only version of the file. '
+          : 'change until an administrator opens the file in the layout designer, takes the change into a new draft and has it approved. ') +
+        "Rolling the override back to the package's version shows the kit's instead.",
+    });
+  }
+  return warnings;
 }
 
 /**
@@ -1430,6 +1544,7 @@ function report(results, asJson, gone = []) {
       out(`  - ${finding.side}, ${finding.item}: ${finding.what}`);
     for (const [note, items] of byNote(result.covered))
       console.log(`  kept by the note for ${list(items)}, at ${note.version}: ${note.note}`);
+    for (const warning of result.warnings) console.log(`  warning: ${warning.item}: ${warning.what}`);
     for (const line of result.said) console.log(`  note: ${line}`);
   }
   if (results.length === 0) console.log('No package to check.');

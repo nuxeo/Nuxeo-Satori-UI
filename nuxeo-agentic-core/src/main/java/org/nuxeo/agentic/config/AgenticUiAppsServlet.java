@@ -1,6 +1,7 @@
 package org.nuxeo.agentic.config;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +18,8 @@ import org.nuxeo.runtime.api.Framework;
 
 /**
  * The app registry, at {@code /nuxeo/agentic-ui-apps/}: the apps a signed-in person may see, and
- * each one's files ({@link AppRegistryEndpoint}).
+ * each one's files ({@link AppRegistryEndpoint}), with each app's deployment layer in force; and,
+ * below it, the deployment layer's own addresses, for administrators ({@link LayerEndpoint}).
  *
  * After sign-in, unlike the configuration servlet: the deployment fragment maps Nuxeo's
  * authentication filter on this path, and {@code auth-config-agentic.xml} gives it the REST API's
@@ -27,26 +29,33 @@ import org.nuxeo.runtime.api.Framework;
  * of theirs, and gets an empty list. A request that reaches this servlet with no Nuxeo principal at
  * all, which the filter mapping rules out, is 401 too, and reads nothing.
  *
- * Which apps a person sees is not a security control ({@link AppRegistryEndpoint}). The servlet
- * reads only what packages contributed; it touches neither the repository nor the filesystem.
+ * Which apps a person sees is not a security control ({@link AppRegistryEndpoint}). The registry
+ * reads what packages contributed and, when the deployment layer is switched on, its live files;
+ * the layer's addresses read and write the layer, for administrators alone ({@link LayerService}).
  *
- * GET and HEAD only: every other method is answered 405.
+ * GET and HEAD, and POST to a deployment layer's file: every other method, and POST anywhere else,
+ * is answered 405.
  */
 public class AgenticUiAppsServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
+
+    static final String READ_METHODS = "GET, HEAD";
 
     private transient volatile AppRegistryEndpoint endpoint;
 
     @Override
     protected void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String method = request.getMethod();
-        boolean withBody = "GET".equals(method);
-        if (!withBody && !"HEAD".equals(method)) {
-            response.setHeader("Allow", AgenticUiConfigServlet.ALLOWED_METHODS);
-            response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            response.setContentLength(0);
-            return;
+        boolean read = "GET".equals(method) || "HEAD".equals(method);
+        if (!read) {
+            boolean layer = LayerEndpoint.answers(request.getPathInfo());
+            if (!layer || !"POST".equals(method)) {
+                response.setHeader("Allow", layer ? LayerEndpoint.ALLOWED : READ_METHODS);
+                response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                response.setContentLength(0);
+                return;
+            }
         }
         AppRegistryEndpoint.Viewer viewer = viewer(request.getUserPrincipal());
         if (viewer == null) {
@@ -55,8 +64,15 @@ public class AgenticUiAppsServlet extends HttpServlet {
             response.setContentLength(0);
             return;
         }
-        AppRegistryEndpoint.Response answer = endpoint().respond(request.getPathInfo(), viewer,
-                request.getHeader("If-None-Match"));
+        String path = request.getPathInfo();
+        AppRegistryEndpoint.Response answer;
+        if (LayerEndpoint.answers(path)) {
+            byte[] body = read ? new byte[0] : body(request);
+            answer = new LayerEndpoint(layer()).respond(method, path, viewer, request.getContentType(),
+                    request.getHeader(LayerEndpoint.CHANGE_HEADER), body);
+        } else {
+            answer = endpoint().respond(path, viewer, request.getHeader("If-None-Match"));
+        }
         response.setStatus(answer.status());
         for (Map.Entry<String, String> header : answer.headers().entrySet()) {
             if ("Content-Type".equals(header.getKey())) {
@@ -66,8 +82,21 @@ public class AgenticUiAppsServlet extends HttpServlet {
             }
         }
         response.setContentLength(answer.body().length);
-        if (withBody && answer.body().length > 0) {
+        if (!"HEAD".equals(method) && answer.body().length > 0) {
             response.getOutputStream().write(answer.body());
+        }
+    }
+
+    /**
+     * The request's body, read up to one byte over the limit, so that {@link LayerEndpoint} refuses
+     * one over it without this reading more; {@code null} when it says it is over the limit.
+     */
+    static byte[] body(HttpServletRequest request) throws IOException {
+        if (request.getContentLengthLong() > LayerEndpoint.MAX_BODY_BYTES) {
+            return null;
+        }
+        try (InputStream in = request.getInputStream()) {
+            return in.readNBytes(LayerEndpoint.MAX_BODY_BYTES + 1);
         }
     }
 
@@ -88,15 +117,26 @@ public class AgenticUiAppsServlet extends HttpServlet {
                 nuxeo.isAdministrator());
     }
 
-    /** Rendered once per snapshot, so file bodies and ETags change only when the snapshot does. */
+    /** The configuration component's deployment layer, or one switched off when there is none. */
+    private static LayerService layer() {
+        AgenticUiConfigService service = Framework.getService(AgenticUiConfigService.class);
+        return service instanceof AgenticUiConfigComponent component ? component.layerService()
+                : LayerService.SWITCHED_OFF;
+    }
+
+    /**
+     * Rendered once per snapshot and live layer, so file bodies and ETags change only when one of
+     * them does.
+     */
     private AppRegistryEndpoint endpoint() {
         ConfigSnapshot snapshot = Framework.getService(AgenticUiConfigService.class).getSnapshot();
+        LayerService.Live live = layer().live();
         AppRegistryEndpoint current = endpoint;
-        if (current == null || current.snapshot() != snapshot) {
+        if (current == null || current.snapshot() != snapshot || current.live() != live) {
             synchronized (this) {
                 current = endpoint;
-                if (current == null || current.snapshot() != snapshot) {
-                    current = new AppRegistryEndpoint(snapshot);
+                if (current == null || current.snapshot() != snapshot || current.live() != live) {
+                    current = new AppRegistryEndpoint(snapshot, live);
                     endpoint = current;
                 }
             }

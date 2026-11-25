@@ -1,7 +1,7 @@
 # Layout Designer
 
 The designer in the shell, phase 6 of the business apps
-[development plan](../../../docs/business-apps/development-plan.md), in two slices:
+[development plan](../../../docs/business-apps/development-plan.md), in three slices:
 
 - **Layout files**, [version 2](../../../docs/business-apps/layout-v2.md): an administrator opens a
   type's record page, edit form or create form, changes it, sees what it draws for a real record,
@@ -9,6 +9,10 @@ The designer in the shell, phase 6 of the business apps
 - **Queues**, [`queues/<id>.json`](../../../docs/business-apps/app-definition-v2.md): an administrator
   opens a queue, changes its name, columns, sort and facets, sees the queue page it draws against the
   server's page provider, and saves it as a download.
+- **Publishing**, the app's [deployment layer](#publishing-the-deployment-layer): on a server that
+  switches it on, an administrator saves either file as a draft, submits it, and a second
+  administrator approves it, which publishes it for everyone in the app's groups; any administrator
+  rolls it back. **This changes the app for every user of it from an administrator's screen.**
 
 It edits configuration only. It loads no customer code and builds no plugin: how customer code runs
 is decision 5, still open ([decision log](../../../docs/business-apps/decisions.md)).
@@ -22,8 +26,9 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
   users in once the session is read, and each route itself is behind `fullAdministratorGuard`, which
   lets administrators alone. Power users are not offered the menu entry, and are sent to their own
   administration page.
-- **Not a security control.** Hiding the page from everyone else protects nothing: the designer
-  writes nothing to the server, and the server's permissions decide what anyone may read or change.
+- **Not a security control.** Hiding the page from everyone else protects nothing: the server
+  decides what anyone may read or change. The designer writes only to the deployment layer, whose
+  every address refuses anyone the server does not count an administrator, whatever the page shows.
   A field a layout hides is still returned by the server to anyone who may read the record, and a
   queue's page provider returns only what each person may read.
 
@@ -81,7 +86,7 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
 5. **Saves** the file as a download, `<mode>.layout.json`, as a package holds it at
    `layouts/<Type>/<mode>.layout.json`, and as `npm run config:dev -- --layout <Type>/<mode>=<file>`
    serves it, given every other file served too, since that command writes the whole folder again.
-   Nothing is written to the server.
+   The download writes nothing to the server; the deployment layer, below the Save section, does.
 6. **Asks before a change is lost:** opening another file, leaving the page by the app's router, a
    link in the preview included, and reloading or closing the tab each ask first while the file has a
    change or a hidden field. A new file left as it was opened loses nothing. Signing out, and the idle
@@ -119,8 +124,160 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
    actions it then is not checked against, and the page says so. The validator does not hold a queue
    to the content model: its columns are other records'.
 5. **Saves** the file as a download, `<id>.json`, as a package holds it at `queues/<id>.json`, and as
-   `npm run config:dev -- --queue <file>` serves it, under its name.
+   `npm run config:dev -- --queue <file>` serves it, under its name; and, on a server that switches
+   it on, to the app's deployment layer, below.
 6. **Asks before a change is lost**, as for a layout file.
+
+## Publishing: the deployment layer
+
+**This changes the app for every user of it from an administrator's screen.** A file published here
+is what everyone in the app's groups sees on that server, on every page that draws it, until it is
+changed again or rolled back. It is built against the open decisions B and E
+([decision log](../../../docs/business-apps/decisions.md), notes), and the server side is
+`LayerService` in [`nuxeo-agentic-core`](../../../nuxeo-agentic-core/src/main/java/org/nuxeo/agentic/config/LayerService.java).
+
+### What it is
+
+- **An app's deployment layer** holds a customer's own versions of its layout files, a type's record
+  page, edit form and create form (`layouts/<Type>/<view|edit|create>.layout.json`), and its queues
+  (`queues/<id>.json`), stored in the server's repository. Nothing else: not the labels, the menu,
+  the home, the actions or `app.json` (`LayerPaths`).
+- **Precedence** ([app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), section
+  10, "The deployment layer"): above the package's file at the same path, the customer's overlay of
+  the architecture's "starter kit, then customer, then tenant, then environment"; and below the
+  manifest's labels, which it does not touch: a heading's `labelKey` is still looked up as before, so
+  a text the manifest gives a key wins over the app's own.
+- **Who sees it:** the app registry serves the live version, after sign-in, to the people in the
+  app's groups, in place of the package's file (decision E). The record page and the forms read a
+  layer layout first for the app open (`DocumentLayoutService`), and queues are read from the
+  registry already. **The configuration servlet, which everyone reads before sign-in, never reads a
+  layer**: its answers are the packages' alone, drafts and live versions both left out. Someone in
+  none of the app's groups keeps the package's file.
+
+### The panel
+
+Below the Save section of either page, for the file open:
+
+- **Package's version, live version and draft**, side by side, each as its JSON text, and their
+  differences: package to live, live (or package) to draft, and the newest of them to the file as
+  edited here. Nothing in a version is drawn as markup.
+- **Save draft** sends the file as edited, once the page's own check finds nothing in it. **Submit
+  for approval** puts the draft up. **Approve and publish** makes it live. **Roll back** makes what
+  was live before the live version live again, or the package's version when nothing was.
+  **Discard draft** drops it. **Open the newest version here** loads the draft, or the live version,
+  into the designer to edit.
+- **The buttons follow the server's answer** of what the person may do, and one that may do nothing
+  is turned off, with the server's reason for an approval, not hidden. That is not the control: the
+  server refuses whatever is sent.
+- **Approve, roll back and discard ask first.**
+
+### What the server enforces
+
+- **Who:** administrators alone, as Nuxeo counts them (`NuxeoPrincipal.isAdministrator`), read or
+  change a layer, its drafts, versions and trail included. Anyone else is 403 at every address,
+  before anything is read, so no one else learns whether an app or a file has a layer. Power users
+  are not administrators.
+- **Every write is validated on the server** with the app definition's own validator, against the
+  server's content model as it is then: `validateFile` from `libs/shared/app-definition`, the
+  pipeline's check of one file, built into a script (`npm run app-definition:server-validator`) that
+  the server runs in Nashorn 15.7, the engine Nuxeo LTS 2025 ships in `nxserver/lib`, with no access
+  to Java. A file with any finding, a path no layer holds, a model that cannot be read, or a
+  validator that cannot run refuses the write, 422, whatever the client checked. A queue is held to
+  the app's own `actions.json`. What the deployment registers in code beyond the platform comes from
+  `nuxeo.agentic.ui.layer.registered.rules`, `.rowActions` and `.bulkActions`.
+- **Draft and approval:** a change is first a draft, which the registry never serves. It goes live
+  when an administrator approves it who neither wrote any of the draft nor submitted it.
+  **The default is a second administrator**, because a change here reaches everyone in the app's
+  groups at once, and four eyes on it is the cheapest check there is; a server with one
+  administrator sets `nuxeo.agentic.ui.layer.selfApproval=true`, which lets the same one approve, and
+  the server log says so at startup. Approval checks the draft again against the model as it is
+  then, and refuses a draft made on a live version that has since changed.
+- **Every publish keeps the previous version:** each approval or rollback is a new version; the last
+  50 of a file are kept, and the live one always. A rollback is immediate, since each version it
+  restores was approved when it was published, and a rollback is what an incident needs at once; it
+  checks the restored version against the model first, and "roll back to the package's version"
+  needs no check.
+- **Concurrent edits:** every change names the file's revision, and one made on a revision that is
+  no longer the file's is refused, 409, with the file as it is now. The changes to one app are made
+  one at a time on a server, and across a cluster inside `ClusterService.runAtomically`; the
+  repository's change token refuses a write made on a stale read, and the change is applied again to
+  the layer as it then is, and refused if its own file moved.
+- **Audit:** every change is a line of the file's trail, kept with the layer, with who, when, the
+  action, the revision and the version and content digest it made, and a line in the server log.
+  Nuxeo's own audit log is not written to (below).
+- **A change** is a POST of `application/json` with the header `X-Agentic-Layer-Change`, which a
+  page on another site cannot send without a CORS preflight, and the registry answers no preflight;
+  at most 1 MiB and 64 KiB, nested at most 512 deep, with no repeated key. Every answer is
+  `no-store`.
+- **The switch:** `nuxeo.agentic.ui.layer.enabled`, off unless it is `true`, as new work is
+  (decision J). Off, every address of the layer is 404 and the registry serves the packages' files,
+  though the stored layer is kept. So turning it off also takes every customer change out at once.
+- **In the repository:** one `File` document per app under `/agentic-ui-layers`, a folder hidden in
+  navigation whose ACL blocks every permission and grants none, so only administrators, whom Nuxeo
+  lets past every ACL, and the system read it.
+- **The registry's copy** of the live layer is read again after a change on the server, and at most
+  10 seconds late for a change made on another server of a cluster.
+
+### Upgrades
+
+`npm run app-upgrade -- <kit> --previous <kit as it was> --deployment <file>` warns for each file the
+kit's new version adds, changes or removes that the deployment overrides: the override keeps winning,
+so the kit's change does not show there until it is taken into a new draft, or the override rolled
+back. The file is what `GET /nuxeo/agentic-ui-apps/layer.json` answers an administrator. The panel
+says so too: "The package's file has changed since this version was made on it."
+
+### Installing it
+
+**Not run here:** nothing was installed on, restarted or written to the local Nuxeo for this slice.
+What it relies on was read from that server's jars with `javap`, read only: Nashorn 15.7 and ASM 9.9
+in `nxserver/lib`; `CoreSession.CHANGE_TOKEN`, `CoreInstance.doPrivileged`,
+`TransactionHelper.runInNewTransaction`, `ClusterService.runAtomically` and `SchemaJsonWriter` in
+`nxserver/bundles`. The core module ships in the `nuxeo-agentic-ui` Marketplace package. On a local
+Docker Nuxeo, as the kits' READMEs install a package:
+
+1. **Build** from the repository's root: `mvn package`, which writes
+   `nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-*.zip`.
+2. **Switch the layer on** in `nuxeo.conf`, in the Docker image a file of `/etc/nuxeo/conf.d/`:
+
+   ```properties
+   nuxeo.agentic.ui.layer.enabled=true
+   # Only on a server with a single administrator:
+   # nuxeo.agentic.ui.layer.selfApproval=true
+   ```
+
+3. **Install** with `nuxeoctl mp-install <zip> --accept=true` while the server is stopped: in the
+   container, a one-off script in `/docker-entrypoint-initnuxeo.d/`, then `docker restart nuxeo`.
+4. **Check,** once `http://localhost:8080/nuxeo/runningstatus` answers 200: the server log says
+   `the DEPLOYMENT LAYER IS ON`; `GET /nuxeo/agentic-ui-apps/layer.json` answers an administrator
+   `{ "format": "nuxeo-agentic-ui-layer/1", "apps": [] }` and anyone else 403; and the designer's
+   panel shows the package's version of a file, with no live version and no draft.
+5. **The demo** (phase 6, step 2): one administrator adds a field to the Claim record page, saves the
+   draft and submits it; a second approves it; a claims adjuster opens a claim and sees the field.
+   **Roll back** puts the package's page back.
+
+**Removing it:** set `nuxeo.agentic.ui.layer.enabled=false` and restart: the packages' files are
+served again. The stored layer stays in `/agentic-ui-layers` until an administrator deletes it.
+
+### What a review must cover
+
+- **Who may write and approve:** `LayerService.refuse` and `approvalRefusal`; that Nuxeo's
+  administrators are the right people, and that `selfApproval` stays off where there are two.
+- **Server-side validation:** that `validator.js` is what `server-validator.ts` builds
+  (`server-validator.spec.ts`), that Nashorn answers as Node does (`DeploymentValidatorParityTest`),
+  and that the server's content model is the one the designer reads (`ServerContentModel`).
+- **XSS through labels or layout strings:** the validator lets a label be any text, `<img onerror>`
+  included (the parity corpus has one); the engines draw labels and a layout's strings through
+  Angular's text binding, the panel draws versions as text (`layer-panel.spec.ts` checks one), and
+  the registry answers JSON with `nosniff` and a `default-src 'none'` policy. **One HTML sink:** the
+  `rich-text` widget draws a record's value, not the layout's, as HTML through the record page's
+  sanitizer and its allow-list (`renderTrustedHtml`, `RICH_TEXT_HTML`), so a layer that gives a text
+  property that widget changes how that property's values are drawn for everyone.
+- **The rollback history:** 50 versions a file; what a rollback restores; a version no longer valid.
+- **Drafts leaking to readers:** the registry's `live()`, the configuration servlet, the repository
+  folder's ACL, and the REST API's reach into `/agentic-ui-layers`.
+- **The layer's precedence** against the package and the manifest.
+- **Audit:** the trail and the server log; whether Nuxeo's audit log should be written too.
+- **Concurrent edits:** revisions, the change token, the cluster lock.
 
 ## What it refuses
 
@@ -138,8 +295,12 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
 
 ## Not done yet
 
-- **Publishing** to a server is not built: the app registry has no write API, and a package is
-  installed with `nuxeoctl`. The plan's approval step before publishing is not built either.
+- **The deployment layer, not run on a server.** It is held by Java tests against fakes of the
+  repository's session and by the client's tests, and has not been installed on one (above). Not
+  built: Nuxeo's own audit log; a layer per tenant (decision G); the labels, the menu, the home and
+  the actions in a layer; a draft's review screen of its own, beyond the panel's differences; and an
+  export of a published layer as a package. A layer layout reaches only the people in the app's
+  groups with the app open: the record page of someone in no app's group keeps the package's.
 - **The rest of the plan's designer:** actions, the `metadata` mode and task forms; in a layout file,
   tabs, cards, columns, widgets and their parameters, checks across fields, computations and related
   lists are edited in the file, not here. A rule has no builder: it is written as its ID or its JSON.
@@ -181,8 +342,19 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
   the engines; `layout-designer-page.engine.spec.ts` holds the layout page with the real
   `DocumentLayoutService`, `lib-record-page` and `lib-document-layout-form`, and
   `queue-designer-page.engine.spec.ts` the queue page with the real `QueueService` and
-  `lib-queue-page`, the server answered by `HttpTestingController`; both check that every request is
-  a read.
+  `lib-queue-page`, the server answered by `HttpTestingController`; both check that every request the
+  engines make is a read. Each holds the deployment layer's panel as a stand-in, given the file open.
+- `layer/layer-panel.spec.ts` holds the panel with a stand-in for its service: the three versions
+  as text, a label that is markup drawn as text, each button following the server's permissions,
+  the questions before approving, rolling back and discarding, and the server's refusals.
+  `layer/deployment-layer.service.spec.ts` holds the requests: GET to read, POST of JSON with the
+  change header to change, and each answer read. `layer/layer-state.spec.ts` holds the reading of
+  the server's answers and the differences.
+- **The server's half** is `nuxeo-agentic-core`'s tests, `mvn -pl nuxeo-agentic-core test`:
+  `LayerServiceTest`, with the validator the server runs and the Payers kit, `LayerEndpointTest`,
+  `DeploymentValidatorParityTest`, `NashornDeploymentValidatorTest`, `ServerContentModelTest`,
+  `RepositoryLayerStoreTest` and `LayerSwitchTest`; and the record page's and forms' reading of a
+  layer layout first is `libs/shared/document-layouts`' `layer-layout.spec.ts`.
 - The route's guards are checked by identity, as `libs/features/administration` checks its own; the
   guards themselves are `libs/shared/nuxeo-client`'s and `apps/nuxeo-ui`'s, tested there.
 - **Every guard was broken on purpose and its test seen failing.** The first slice's: the save
