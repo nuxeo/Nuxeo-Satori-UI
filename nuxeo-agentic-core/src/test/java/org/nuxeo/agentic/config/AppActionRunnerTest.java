@@ -213,6 +213,80 @@ class AppActionRunnerTest {
     }
 
     @Test
+    void theRecordMustBeOfATypeAndInAStateTheAllowListNames() {
+        allowed = allowList(ActionFixtures.narrowed());
+        // A hand-crafted request on a paid claim, which the button's own rule would not offer.
+        reader.state = "paid";
+        assertEquals(Kind.NOT_FOR_THIS_RECORD, refusal(REQUEST, "{\"note\":\"x\"}"));
+        reader.state = "inReview";
+        reader.type = "Member";
+        assertEquals(Kind.NOT_FOR_THIS_RECORD, refusal(REQUEST, "{\"note\":\"x\"}"));
+        reader.type = "Claim";
+        run(REQUEST, "{\"note\":\"x\"}");
+        assertEquals(REQUEST_RECORDS, automation.runs.get(0).operation());
+    }
+
+    @Test
+    void aRequiredValueLeftEmptyIsRefused() {
+        allowed = allowList(ActionFixtures.narrowed());
+        assertEquals(Kind.INVALID_VALUE, refusal(REQUEST, "{\"urgent\":true}"));
+        assertEquals(Kind.INVALID_VALUE, refusal(REQUEST, "{\"note\":null}"));
+    }
+
+    @Test
+    void anAllowListNarrowedSinceTheRegistryWasBuiltIsHeldToo() {
+        // Built with no source named; the deployment since reads the provider from elsewhere only.
+        AllowedOperationDescriptor moved = ActionFixtures.narrowed();
+        moved.parameters.get(0).source = "field:claim:member";
+        allowed = allowList(moved);
+        assertEquals(Kind.NOT_ALLOWED, refusal(REQUEST, "{\"note\":\"x\"}"));
+        // Or for another app's buttons only.
+        AllowedOperationDescriptor elsewhere = ActionFixtures.narrowed();
+        elsewhere.apps = new ArrayList<>(List.of("staff-directory"));
+        allowed = allowList(elsewhere);
+        assertEquals(Kind.NOT_ALLOWED, refusal(REQUEST, "{\"note\":\"x\"}"));
+    }
+
+    @Test
+    void theOperationRunsMarkedForItsOwnGuardAndNothingElseIs() {
+        List<String> seen = new ArrayList<>();
+        AppActionRunner.Automation guarded = (session, input, operation, parameters) -> {
+            RequireRunActionOperation guard = new RequireRunActionOperation();
+            guard.operation = REQUEST_RECORDS + "\n      ";
+            if (operation.equals(REQUEST_RECORDS)) {
+                guard.check();
+                seen.add("ran " + operation);
+                // A chain meant for another button, run from inside this one, is refused.
+                RequireRunActionOperation other = new RequireRunActionOperation();
+                other.operation = "Payers.ReferToInvestigations";
+                assertEquals(Kind.NOT_THROUGH_A_BUTTON,
+                        assertThrows(AppActionException.class, other::check).getKind());
+            } else {
+                // The audit, after the operation: no longer marked.
+                assertThrows(AppActionException.class, guard::check);
+                seen.add("audit");
+            }
+            return null;
+        };
+        new AppActionRunner(registry(ACTIONS, allowList(requestRecords())), () -> allowed, guarded).run(
+                reader.session(), asRequested, APP, REQUEST, null);
+        assertEquals(List.of("ran " + REQUEST_RECORDS, "audit"), seen);
+        // Nuxeo's own endpoint, or RunOperation: the same chain, outside any button's run.
+        RequireRunActionOperation outside = new RequireRunActionOperation();
+        outside.operation = REQUEST_RECORDS;
+        assertEquals(Kind.NOT_THROUGH_A_BUTTON, assertThrows(AppActionException.class, outside::check).getKind());
+        assertFalse(AppActionRunner.running(REQUEST_RECORDS));
+        assertFalse(AppActionRunner.running(null));
+    }
+
+    @Test
+    void theMarkIsClearedWhenTheOperationFails() {
+        automation.failing = REQUEST_RECORDS;
+        assertThrows(NuxeoException.class, () -> run(REQUEST, null));
+        assertFalse(AppActionRunner.running(REQUEST_RECORDS));
+    }
+
+    @Test
     void aNameTheLogCannotHoldIsNotWrittenToIt() {
         assertEquals("payers.claim.requestRecords", AppActionRunner.loggable("payers.claim.requestRecords"));
         assertEquals("(not a name)", AppActionRunner.loggable("x\nAgentic UI action run: admin"));

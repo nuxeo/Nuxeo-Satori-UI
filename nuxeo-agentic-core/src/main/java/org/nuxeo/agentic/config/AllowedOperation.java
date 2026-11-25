@@ -17,9 +17,27 @@ import com.fasterxml.jackson.databind.JsonNode;
  * @param permission the permission the reader needs on the record, besides {@code Read}
  * @param groups the groups the reader must be in one of; none means any reader with the permission
  * @param parameters each parameter an app's action may give, by its name
+ * @param apps the apps whose buttons may run it; none means any app
+ * @param types the types of record it runs on; none means any
+ * @param states the lifecycle states the record must be in; none means any
  */
 public record AllowedOperation(String id, String permission, Set<String> groups,
-        Map<String, Parameter> parameters) {
+        Map<String, Parameter> parameters, Set<String> apps, Set<String> types, Set<String> states) {
+
+    /**
+     * Operations that run another operation, a script or as another user, by a name or a text they
+     * are given: on the allow-list, any of them would allow everything. Never allowed.
+     */
+    static final Set<String> NEVER = Set.of("RunOperation", "Context.RunOperation", "RunOperationOnList",
+            "Context.RunOperationOnList", "RunDocumentOperation", "Context.RunDocumentOperation",
+            "RunOperationOnProvider", "Context.RunOperationOnProvider", "RunInputScript", "Context.RunInputScript",
+            "RunScript", "Context.RunScript", "Auth.LoginAs", "Auth.Logout");
+
+    /** A name a record's type, a state or an app may have: letters, digits, `.`, `_` and `-`. */
+    static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
+
+    /** A field source: `field:<prefix>:<name>`, as a field reference writes the property. */
+    static final Pattern FIELD_SOURCE = Pattern.compile("field:([A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*)");
 
     /** As the validator and {@code actions.schema.json} write an operation's id. */
     static final Pattern ID = Pattern.compile("[A-Za-z][A-Za-z0-9_.-]{0,127}");
@@ -41,6 +59,14 @@ public record AllowedOperation(String id, String permission, Set<String> groups,
     public AllowedOperation {
         groups = Set.copyOf(groups);
         parameters = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(parameters));
+        apps = Set.copyOf(apps);
+        types = Set.copyOf(types);
+        states = Set.copyOf(states);
+    }
+
+    /** With no app, type or state to narrow it. */
+    public AllowedOperation(String id, String permission, Set<String> groups, Map<String, Parameter> parameters) {
+        this(id, permission, groups, parameters, Set.of(), Set.of(), Set.of());
     }
 
     /** The type of a parameter's value, as the operation is given it. */
@@ -68,8 +94,31 @@ public record AllowedOperation(String id, String permission, Set<String> groups,
         }
     }
 
-    /** A parameter an app may give the operation, and what its value must be. */
-    public record Parameter(String name, Type type, int maxLength) {
+    /**
+     * A parameter an app may give the operation, and what its value must be.
+     *
+     * @param source where its value may come from: `input`, `literal` or `field:<xpath>`; any,
+     *            when {@code null}
+     * @param required whether the operation must be given a value
+     */
+    public record Parameter(String name, Type type, int maxLength, String source, boolean required) {
+
+        /** From anywhere, and not required. */
+        public Parameter(String name, Type type, int maxLength) {
+            this(name, type, maxLength, null, false);
+        }
+
+        /** Whether its value may come from {@code from}, as an app's action gives it. */
+        boolean admits(RunnableAction.Source from) {
+            if (source == null) {
+                return true;
+            }
+            return switch (from) {
+                case RunnableAction.Input input -> "input".equals(source);
+                case RunnableAction.Literal literal -> "literal".equals(source);
+                case RunnableAction.Field field -> source.equals("field:" + field.xpath());
+            };
+        }
 
         /**
          * A value from JSON, an app's literal or what the person entered, as the operation is given
@@ -174,8 +223,12 @@ public record AllowedOperation(String id, String permission, Set<String> groups,
             throw new IllegalArgumentException(
                     "its id is not an operation's: 1 to 128 letters, digits, '.', '_' or '-', starting with a letter");
         }
-        if (RunAppActionOperation.ID.equals(id)) {
-            throw new IllegalArgumentException(id + " is the endpoint that runs the allow-list, not an operation on it");
+        if (id.startsWith("AgenticUi.")) {
+            throw new IllegalArgumentException(id + " is the platform's own, which runs the allow-list, not an operation on it");
+        }
+        if (NEVER.contains(id)) {
+            throw new IllegalArgumentException(
+                    id + " runs another operation, a script or as another user, so it would allow everything");
         }
         String permission = descriptor.permission == null || descriptor.permission.isBlank() ? DEFAULT_PERMISSION
                 : descriptor.permission;
@@ -189,6 +242,14 @@ public record AllowedOperation(String id, String permission, Set<String> groups,
             }
             groups.add(group);
         }
+        Set<String> apps = names(id, "an app", descriptor.apps);
+        for (String app : apps) {
+            if (!ConfigScope.APP_ID.matcher(app).matches()) {
+                throw new IllegalArgumentException(id + ": the app " + app + " is not an app's id");
+            }
+        }
+        Set<String> types = names(id, "a type", descriptor.types);
+        Set<String> states = names(id, "a state", descriptor.states);
         if (descriptor.parameters.size() > MAX_PARAMETERS) {
             throw new IllegalArgumentException(id + ": more than " + MAX_PARAMETERS + " parameters");
         }
@@ -222,8 +283,26 @@ public record AllowedOperation(String id, String permission, Set<String> groups,
                             id + ": the parameter " + name + "'s maxLength is not from 1 to " + MAX_LENGTH);
                 }
             }
-            parameters.put(name, new Parameter(name, type, maxLength));
+            String source = parameter.source == null || parameter.source.isBlank() ? null : parameter.source.strip();
+            if (source != null && !"input".equals(source) && !"literal".equals(source)
+                    && !FIELD_SOURCE.matcher(source).matches()) {
+                throw new IllegalArgumentException(id + ": the parameter " + name
+                        + "'s source is not input, literal or field:<prefix>:<name>");
+            }
+            parameters.put(name, new Parameter(name, type, maxLength, source, parameter.required));
         }
-        return new AllowedOperation(id, permission, groups, parameters);
+        return new AllowedOperation(id, permission, groups, parameters, apps, types, states);
+    }
+
+    /** Each of {@code values}, a name of the kind {@code what}, or a refusal naming the first that is not. */
+    private static Set<String> names(String id, String what, java.util.List<String> values) {
+        Set<String> names = new LinkedHashSet<>();
+        for (String value : values) {
+            if (value == null || !NAME.matcher(value).matches()) {
+                throw new IllegalArgumentException(id + ": " + what + " is empty, or not a name");
+            }
+            names.add(value);
+        }
+        return names;
     }
 }

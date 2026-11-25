@@ -860,8 +860,16 @@ function filesUnder(directory, prefix = '') {
  * allows it (nuxeo-agentic-core's README). A package that contributed to it would allow its own
  * buttons, and configuration could then widen the allow-list. Any extension whose target is the
  * component is refused, whatever its point, enabled or not: Nuxeo registers an extension by its
- * target, and a disabled entry still removes the deployment's. Called after `layoutContributions`,
- * which has refused any component path that leaves `bundle/`.
+ * target, and a disabled entry still removes the deployment's. The target is compared as Nuxeo
+ * reads a component's name: `service:org.nuxeo.agentic.ui.operations` is the same component, since a
+ * name with no type is a service's (`ComponentName`). The server refuses such a contribution too,
+ * from anywhere but its configuration directory (`OperationAllowListComponent`).
+ *
+ * Nor may a package contribute a chain whose id is the platform's, `AgenticUi.` and a name: a chain
+ * and an operation share one registry, and a chain with the id of `AgenticUi.RunAction` or
+ * `AgenticUi.RequireRunAction` would replace the endpoint, or the guard a button's chain begins
+ * with. Called after `layoutContributions`, which has refused any component path that leaves
+ * `bundle/`.
  */
 function allowListContributions(directory) {
   const manifest = join(directory, 'bundle', 'META-INF', 'MANIFEST.MF');
@@ -871,9 +879,20 @@ function allowListContributions(directory) {
     const file = componentFileOf(resolve(join(directory, 'bundle')), component);
     if (typeof file !== 'string' || file === '') continue;
     const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    for (const chain of xml.matchAll(new RegExp(`<chain${TAG}`, 'g'))) {
+      const { id } = attributesOf(chain[1]);
+      if (id?.trim().startsWith('AgenticUi.'))
+        return (
+          `${component} contributes the chain ${id.trim()}, an id of the platform's own operations: ` +
+          "a chain of that id would replace the operation that runs an app's buttons, or the guard " +
+          'their chains begin with. Name it after the package.'
+        );
+    }
     for (const extension of xml.matchAll(new RegExp(`<extension${TAG}`, 'g'))) {
       const { target, point } = attributesOf(extension[1]);
-      if (target?.trim() === ALLOW_LIST_COMPONENT)
+      // As Nuxeo reads a component's name: a name with no type is a service's.
+      const name = target?.trim().replace(/^service:/, '');
+      if (name === ALLOW_LIST_COMPONENT)
         return (
           `${component} contributes to ${ALLOW_LIST_COMPONENT}${point ? `'s "${point}" point` : ''}, the ` +
           "server's allow-list of the operations an app's buttons may run. The allow-list is the " +

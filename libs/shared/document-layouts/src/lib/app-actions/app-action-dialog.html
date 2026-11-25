@@ -29,7 +29,7 @@
     mat-flat-button
     data-app-action-run
     [attr.aria-describedby]="questionId"
-    [disabled]="running()"
+    [disabled]="running() || unanswered()"
     (click)="confirm()"
   >
     {{ data.title }}

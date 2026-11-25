@@ -115,6 +115,11 @@ class AllowListXmlTest {
         String operations = Files.readString(kit.resolve("OSGI-INF/payers-claims-demo-operations.xml"));
         for (String chain : List.of("Payers.RequestMedicalRecords", "Payers.ReferToInvestigations")) {
             assertTrue(operations.contains("<chain id=\"" + chain + "\">"), chain);
+            // Its first step refuses every run but AgenticUi.RunAction's, for itself.
+            assertTrue(Pattern.compile("<chain id=\"" + Pattern.quote(chain) + "\">\\s*(?:<!--.*?-->\\s*)?<operation id=\""
+                    + Pattern.quote(RequireRunActionOperation.ID) + "\">\\s*<param type=\"string\" name=\"operation\">"
+                    + Pattern.quote(chain) + "</param>", Pattern.DOTALL).matcher(operations).find(),
+                    chain + " does not begin with " + RequireRunActionOperation.ID + " for itself");
             assertTrue(Pattern.compile("<binding name=\"" + Pattern.quote(chain)
                     + "\" chain=\"true\">\\s*<administrator>true</administrator>\\s*</binding>")
                               .matcher(operations)

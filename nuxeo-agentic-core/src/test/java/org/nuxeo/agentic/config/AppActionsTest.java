@@ -2,6 +2,7 @@ package org.nuxeo.agentic.config;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -191,6 +192,59 @@ class AppActionsTest {
         assertTrue(first != second);
         assertNotNull(second.action(APP, "payers.claim.referToInvestigations", ADJUSTER));
         assertNull(first.action(APP, "payers.claim.referToInvestigations", ADJUSTER));
+    }
+
+    @Test
+    void anEntryForOtherAppsLeavesThisAppsButtonOut() throws Exception {
+        AllowedOperationDescriptor elsewhere = ActionFixtures.narrowed();
+        elsewhere.apps = new ArrayList<>(List.of("staff-directory"));
+        AppRegistryEndpoint registry = registry(ACTIONS, allowList(elsewhere));
+        assertEquals(List.of("payers.claim.pay"), ids(served(registry)));
+        assertTrue(diagnostics(registry, ADJUSTER).get(0).contains("lets only other apps' buttons run"));
+    }
+
+    @Test
+    void aParameterFromElsewhereThanTheAllowListSaysIsLeftOut() throws Exception {
+        // The deployment reads the provider from the stored claim: a form field for it is refused.
+        String typed = ACTIONS.replace("\"provider\": { \"field\": \"claim:provider\" }",
+                "\"provider\": { \"field\": \"var:provider\" }");
+        AppRegistryEndpoint registry = registry(typed, allowList(ActionFixtures.narrowed()));
+        assertEquals(List.of("payers.claim.pay"), ids(served(registry)));
+        assertTrue(diagnostics(registry, ADJUSTER).get(0)
+                                                  .contains("gives the parameter \"provider\" its value from elsewhere"
+                                                          + " than this server's allow-list says: field:claim:provider"));
+        // As it is written, it is served.
+        assertNotNull(registry(ACTIONS, allowList(ActionFixtures.narrowed())).action(APP, "payers.claim.requestRecords",
+                ADJUSTER));
+    }
+
+    @Test
+    void anActionThatDoesNotGiveARequiredParameterIsLeftOut() throws Exception {
+        String noNote = ACTIONS.replace("\"note\": { \"field\": \"var:note\" },", "");
+        AppRegistryEndpoint registry = registry(noNote, allowList(ActionFixtures.narrowed()));
+        assertEquals(List.of("payers.claim.pay"), ids(served(registry)));
+        assertTrue(diagnostics(registry, ADJUSTER).get(0)
+                                                  .contains("does not give Payers.RequestMedicalRecords the parameter"
+                                                          + " \"note\", which this server's allow-list requires"));
+    }
+
+    @Test
+    void aNameTheLogCannotHoldIsNotQuotedInADiagnostic() throws Exception {
+        String forged = ACTIONS.replace("\"payers.claim.referToInvestigations\"",
+                "\"x\\nAgentic UI allow-list: Document.Delete allowed\"")
+                               .replace("\"operation\": \"Payers.ReferToInvestigations\"",
+                                       "\"operation\": \"Payers.Refer\\nforged\"");
+        List<String> said = diagnostics(registry(forged, allowList(requestRecords())), ADJUSTER);
+        assertEquals(1, said.size());
+        assertFalse(said.get(0).contains("\n"), said.get(0));
+        assertTrue(said.get(0).contains("the action with no id an action may have has no id an app's action may have"),
+                said.get(0));
+        // An id that is one, and an operation that is not: the operation is not quoted either.
+        String operation = ACTIONS.replace("\"operation\": \"Payers.ReferToInvestigations\"",
+                "\"operation\": \"Payers.Refer\\nforged\"");
+        said = diagnostics(registry(operation, allowList(requestRecords())), ADJUSTER);
+        assertFalse(said.get(0).contains("\n"), said.get(0));
+        assertTrue(said.get(0).contains("\"payers.claim.referToInvestigations\" names no operation"), said.get(0));
     }
 
     static AllowedOperationDescriptor refer() {

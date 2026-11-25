@@ -6,8 +6,9 @@
   org.nuxeo.agentic.ui.operations (plan decision 3, on its recommendation: a per-deployment
   allow-list).
 
-  It allows one of the kit's two chains, Payers.RequestMedicalRecords, for claims adjusters who may
-  change the claim, with the three parameters the kit's button gives it. It leaves
+  It allows one of the kit's two chains, Payers.RequestMedicalRecords, for the Payers app's button,
+  for claims adjusters who may change the claim, on a claim in review or held, with the three
+  parameters the kit's button gives it, each from where it must come. It leaves
   Payers.ReferToInvestigations out on purpose: the kit's actions.json names it too, and the demo
   shows the app registry leaving that button out, and AgenticUi.RunAction refusing it.
 
@@ -18,11 +19,18 @@
 
   <extension target="org.nuxeo.agentic.ui.operations" point="allowList">
     <operation id="Payers.RequestMedicalRecords" permission="Write">
+      <!-- Only the Payers app's button, for adjusters, on a claim in review or held: the server
+           checks each, whatever the button's own rules said. -->
+      <app>payers-claims</app>
       <group>claims-adjusters</group>
-      <!-- The claim's provider, a document id, read from the stored claim. -->
-      <param name="provider" type="string" maxLength="64" />
-      <param name="urgent" type="boolean" />
-      <param name="note" type="string" maxLength="500" />
+      <type>Claim</type>
+      <state>inReview</state>
+      <state>pended</state>
+      <!-- The claim's provider, a document id, read from the stored claim and from nowhere else. -->
+      <param name="provider" type="string" maxLength="64" source="field:claim:provider" />
+      <!-- What the adjuster enters in the button's form; the note may not be left empty. -->
+      <param name="urgent" type="boolean" source="input" />
+      <param name="note" type="string" maxLength="500" source="input" required="true" />
     </operation>
   </extension>
 </component>

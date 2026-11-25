@@ -73,13 +73,27 @@ final class ActionFixtures {
         return parameter;
     }
 
-    /** The demo deployment's entry: Request medical records, with its four parameters. */
+    /** An entry for Request medical records, with its four parameters, from anywhere, none required. */
     static AllowedOperationDescriptor requestRecords() {
         AllowedOperationDescriptor d = new AllowedOperationDescriptor();
         d.id = REQUEST_RECORDS;
         d.parameters = new ArrayList<>(List.of(parameter("provider", "string", null),
                 parameter("urgent", "boolean", null), parameter("note", "string", "20"),
                 parameter("channel", "string", null)));
+        return d;
+    }
+
+    /** The same, narrowed as the demo deployment narrows it: app, type, states, sources, a required note. */
+    static AllowedOperationDescriptor narrowed() {
+        AllowedOperationDescriptor d = requestRecords();
+        d.apps = new ArrayList<>(List.of(APP));
+        d.types = new ArrayList<>(List.of("Claim"));
+        d.states = new ArrayList<>(List.of("inReview", "pended"));
+        d.parameters.get(0).source = "field:claim:provider";
+        d.parameters.get(1).source = "input";
+        d.parameters.get(2).source = "input";
+        d.parameters.get(2).required = true;
+        d.parameters.get(3).source = "literal";
         return d;
     }
 
@@ -120,10 +134,18 @@ final class ActionFixtures {
 
     /** A record holding {@code properties}, by xpath; reading any other is a property it does not have. */
     static DocumentModel record(DocumentRef ref, Map<String, Serializable> properties) {
+        return record(ref, properties, () -> "Claim", () -> "inReview");
+    }
+
+    /** A record of the type and in the lifecycle state the suppliers give when asked. */
+    static DocumentModel record(DocumentRef ref, Map<String, Serializable> properties,
+            java.util.function.Supplier<String> type, java.util.function.Supplier<String> state) {
         return (DocumentModel) Proxy.newProxyInstance(ActionFixtures.class.getClassLoader(),
                 new Class<?>[] { DocumentModel.class }, (proxy, method, args) -> switch (method.getName()) {
                 case "getRef" -> ref;
                 case "getId" -> ref == null ? null : ref.toString();
+                case "getType" -> type.get();
+                case "getCurrentLifeCycleState" -> state.get();
                 case "getPropertyValue" -> {
                     if (!properties.containsKey(args[0])) {
                         throw new PropertyNotFoundException((String) args[0]);
@@ -149,6 +171,10 @@ final class ActionFixtures {
         /** The record as the repository stores it. */
         final Map<String, Serializable> stored = new HashMap<>(Map.of("claim:provider", "provider-0042"));
 
+        String type = "Claim";
+
+        String state = "inReview";
+
         DocumentModel storedRecord;
 
         Session(NuxeoPrincipal principal, String... granted) {
@@ -157,7 +183,7 @@ final class ActionFixtures {
         }
 
         CoreSession session() {
-            storedRecord = record(REF, stored);
+            storedRecord = record(REF, stored, () -> type, () -> state);
             return (CoreSession) Proxy.newProxyInstance(ActionFixtures.class.getClassLoader(),
                     new Class<?>[] { CoreSession.class }, (proxy, method, args) -> switch (method.getName()) {
                     case "getPrincipal" -> principal;

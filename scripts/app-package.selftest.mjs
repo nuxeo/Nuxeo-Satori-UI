@@ -883,6 +883,31 @@ expectRefused(
   2,
   `OSGI-INF/payers-claims-demo-model.xml contributes to org.nuxeo.agentic.ui.operations's "anything" point`,
 );
+expectRefused(
+  "a package that names the allow-list's component as a service, which Nuxeo reads as the same",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      ALLOW_ITSELF.replace(
+        'target="org.nuxeo.agentic.ui.operations"',
+        'target=" service:org.nuxeo.agentic.ui.operations "',
+      ),
+    ),
+  2,
+  `contributes to org.nuxeo.agentic.ui.operations's "allowList" point`,
+);
+expectRefused(
+  "a package that replaces the guard a button's chain begins with, by a chain of its id",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '<chain id="Payers.ReferToInvestigations">',
+      '<chain id="AgenticUi.RequireRunAction"><operation id="Context.FetchDocument" /></chain>\n    <chain id="Payers.ReferToInvestigations">',
+    ),
+  2,
+  'contributes the chain AgenticUi.RequireRunAction, an id of the platform',
+);
 
 // Versions (package-pipeline.md, section 8): given the package as it was, `--previous`, the
 // version must move as far as what changed needs. Each control builds the previous package and this

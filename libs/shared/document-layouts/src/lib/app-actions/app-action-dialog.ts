@@ -23,7 +23,12 @@ let nextQuestionId = 0;
 export type AppActionOutcome =
   | { readonly kind: 'done' }
   /** It did not run, or the server refused it: the message says why, in the person's words. */
-  | { readonly kind: 'failed'; readonly message: string };
+  | { readonly kind: 'failed'; readonly message: string }
+  /**
+   * No answer came, in time or at all: it may have run on the server. The message says so, and the
+   * dialog runs nothing more, so that an operation that is not safe to repeat is not sent twice.
+   */
+  | { readonly kind: 'unknown'; readonly message: string };
 
 export interface AppActionDialogData {
   /** The action's name: the dialog's title, and its run button. */
@@ -42,7 +47,8 @@ export interface AppActionDialogData {
  * One operation button's confirmation step: the action's question, its form when it has one, and
  * the button that runs it. It runs only once the form's own checks pass, says while it runs, and
  * closes with `'done'` when the run has; a failure stays on screen, with the form as it was, so
- * that the person may correct a value or cancel. Cancel closes with nothing, and runs nothing.
+ * that the person may correct a value or cancel. When no answer comes, the run may have happened:
+ * the dialog says so and offers Cancel alone. Cancel closes with nothing, and runs nothing.
  *
  * Nothing here is a security control: the server checks the allow-list and the person's
  * permissions again, whatever the dialog let through.
@@ -75,9 +81,11 @@ export class AppActionDialogComponent {
 
   protected readonly running = signal(false);
   protected readonly failure = signal<string | null>(null);
+  /** No answer came: it may have run, so it is not offered again. */
+  protected readonly unanswered = signal(false);
 
   protected confirm(): void {
-    if (this.running()) return;
+    if (this.running() || this.unanswered()) return;
     const form = this.form();
     if (this.data.form && (!form || !form.validate())) return;
     const values = form?.taskVariables() ?? {};
@@ -91,7 +99,10 @@ export class AppActionDialogComponent {
         this.running.set(false);
         this.dialogRef.disableClose = false;
         if (outcome.kind === 'done') this.dialogRef.close('done');
-        else this.failure.set(outcome.message);
+        else {
+          if (outcome.kind === 'unknown') this.unanswered.set(true);
+          this.failure.set(outcome.message);
+        }
       });
   }
 }

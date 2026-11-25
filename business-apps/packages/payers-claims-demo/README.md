@@ -70,7 +70,7 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 | `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts, and the app with its files                |
 | `bundle/OSGI-INF/payers-claims-demo-model.xml`                 | **The stand-in model:** document types, the claim lifecycle, page providers                |
 | `bundle/OSGI-INF/payers-claims-demo-workflow.xml`              | The claims review workflow: its route model, variables, chains, vocabulary and filter      |
-| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two operation buttons' chains, and REST bindings closing Nuxeo's endpoint to them      |
+| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two buttons' chains, each guarded so that only a button runs it, and REST bindings     |
 | `deployment/payers-claims-demo-operations-config.xml`          | The demo server's allow-list, for `nxserver/config/`. Not packaged: the deployment's own   |
 | `deployment/build-allow-list.json`                             | The allow-list the pipeline builds the kit against, and CI with it. Not packaged           |
 | `bundle/data/PayersClaimReview.zip`                            | The route model, as the importer reads it: written from `workflow/PayersClaimReview/`      |
@@ -306,7 +306,7 @@ the platform serves, draws and runs them is
 
 | Button                          | Shows                                                    | Its form                     | Runs                           | On the demo server's allow-list |
 | ------------------------------- | -------------------------------------------------------- | ---------------------------- | ------------------------------ | ------------------------------- |
-| Request medical records         | To adjusters, on a claim in review or held; on My claims | Urgent, and a note, required | `Payers.RequestMedicalRecords` | Yes, for `claims-adjusters`     |
+| Request medical records         | To adjusters, on a claim in review or held; on My claims | Urgent, and a note, required | `Payers.RequestMedicalRecords` | Yes, the same, on the server    |
 | Refer to special investigations | To supervisors, on a claim                               | None                         | `Payers.ReferToInvestigations` | **No, on purpose**              |
 
 - **The chains are the kit's,** in `bundle/OSGI-INF/payers-claims-demo-operations.xml`, and
@@ -316,14 +316,20 @@ the platform serves, draws and runs them is
   note, which its comment writes as text.
 - **The right to run them from a button is the deployment's,** never the kit's:
   `deployment/payers-claims-demo-operations-config.xml` is the demo server's allow-list, which the
-  server's administrators put in `nxserver/config/`. It allows Request medical records for
-  `claims-adjusters` holding `Write` on the claim, with its three parameters and their types, and
-  leaves Refer to special investigations out, so that the demo shows the app registry leaving its
-  button out and `AgenticUi.RunAction` refusing it. The pipeline refuses a package that contributes
-  to the allow-list.
-- **Nuxeo's own Automation endpoint is closed to both chains,** by the kit: a REST binding each,
-  for administrators only, so that a person runs them through a button or not at all. Closing is
-  not widening, so the kit may do it; the allow-list is what it may not touch.
+  server's administrators put in `nxserver/config/`, the one place the server reads it from. It
+  allows Request medical records for the Payers app's button, for `claims-adjusters` holding
+  `Write` on a claim in review or held, with its three parameters, each of its type and from where
+  it must come: the provider from the stored claim, Urgent and the note from the form, the note
+  never empty. The server checks each itself, so a hand-crafted request for a paid claim is refused
+  whatever the button's rule. It leaves Refer to special investigations out, so that the demo shows
+  the app registry leaving its button out and `AgenticUi.RunAction` refusing it. The pipeline
+  refuses a package that contributes to the allow-list.
+- **Nuxeo's own Automation endpoint runs neither chain,** for anyone: each begins with
+  `AgenticUi.RequireRunAction`, naming itself, which lets it go on only while
+  `AgenticUi.RunAction` runs it for a button, and refuses a direct call and one through a
+  dispatcher such as `RunOperation` alike. A REST binding each, for administrators only, closes the
+  direct call as well, before the chain starts; a binding alone would not stop `RunOperation`.
+  Closing is not widening, so the kit may do both; the allow-list is what it may not touch.
 - **`enabledWhen` is `app.rules.canWrite`:** a reader who may not change the claim sees the button
   and cannot choose it. The server checks `Write` itself, whatever the button let through.
 
@@ -331,10 +337,11 @@ the platform serves, draws and runs them is
 
 - **Against the server's own classes:** `node workflow/platform-check.mjs` loads the operations
   component's two chains with `OperationChainContribution` and its bindings with `RestBinding`, from
-  the local container's jars, read-only; checks each binding is a chain's, for administrators only;
-  and runs each chain's comment, a template, with the server's MVEL and the chain parameters
+  the local container's jars, read-only; checks each binding is a chain's, for administrators only,
+  and that each chain begins with `AgenticUi.RequireRunAction` for itself; and runs each chain's
+  comment, a template, with the server's MVEL and the chain parameters
   `AgenticUi.RunAction` gives, a note holding a template among them, which comes back as text. Run
-  on 25 November 2026: 107 checks passed, 12 of them these.
+  on 25 November 2026: 109 checks passed, 14 of them these.
 - **In `nuxeo-agentic-core`'s tests:** `AllowListXmlTest` reads the demo deployment's contribution
   with XMap, registers it, and serves the kit's own `actions.json` through the registry with it:
   Request medical records served, with its three parameters' sources, Refer to special
@@ -591,7 +598,7 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 - as an adjuster, `GET /nuxeo/agentic-ui-apps/apps/payers-claims/actions.json` holds
   `payers.claim.requestRecords` and not `payers.claim.referToInvestigations`;
 - the rest is the steps file's, below: the button run, the chain's entry in the claim's history,
-  and each refusal, the REST binding's among them.
+  and each refusal, `RunOperation`'s among them.
 
 With no contribution in `nxserver/config/`, the registry serves neither button, and the server log
 says so: an allow-list nobody installed allows nothing.
@@ -906,10 +913,11 @@ run as an adjuster, `dana.lee`:
 Then, past the app, as a hand-crafted request would go, the negative checks: the registry serves
 the kit's `actions.json` without Refer to special investigations, and its diagnostics, which the
 adjuster may read, say why; `AgenticUi.RunAction` answers 404 for that action, 400 for a value the
-form does not send and for a note over the allow-list's 500 characters, and 403 to member
-services, `riley.brooks`, whom the allow-list's group leaves out; and Nuxeo's own Automation
-endpoint refuses the adjuster both chains, by the kit's REST bindings. None of the six writes to
-the claim's history.
+form does not send, for a note over the allow-list's 500 characters and for none, 403 to member
+services, `riley.brooks`, whom the allow-list's group leaves out, and 403 for the paid claim, a
+state the allow-list does not name; and Nuxeo's own Automation endpoint runs the adjuster neither
+chain, directly, which the REST bindings refuse, nor through `RunOperation`, which each chain's
+`AgenticUi.RequireRunAction` refuses. None of the ten writes to the claim's history.
 
 ```bash
 NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-operations
@@ -969,9 +977,9 @@ included, is shown no app. The demo itself still runs on a development server, a
 - **The operation buttons have not run on a server:** the kit 0.5.0, the deployment's allow-list
   and a `nuxeo-agentic-ui` that runs them are installed nowhere, so demo step 4's steps file has not
   run. The chains are held to the server's own classes and MVEL, and the registry and the run to
-  `nuxeo-agentic-core`'s tests, with fakes of the session and of Automation. An administrator may
-  still run both chains through Nuxeo's own Automation endpoint, which the REST bindings allow them;
-  the demo does not.
+  `nuxeo-agentic-core`'s tests, with fakes of the session and of Automation. Whether the server
+  gives `AgenticUi.RequireRunAction` its `operation` parameter as the chain's XML writes it, so that
+  the guard lets the button's own run through, is the steps file's first run to show.
 - **Refer to special investigations is a control, not a feature,** on the demo server: the demo's
   allow-list leaves it out on purpose. A deployment that wants it adds an entry for
   `Payers.ReferToInvestigations`, and supervisors are offered it.

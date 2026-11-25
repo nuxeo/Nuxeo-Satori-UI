@@ -105,12 +105,16 @@ final class AppActions {
                 continue;
             }
             String name = id != null && id.isTextual() ? id.asText() : null;
-            String refusal = refusal(entry, name, ids, allowList, runnable);
+            String refusal = refusal(app, entry, name, ids, allowList, runnable);
             if (refusal != null) {
                 leftOut = true;
+                // Only names an action or an operation may have are quoted: the message is logged, and
+                // the file is the package's, so a name with a line break would write a line of its own.
                 diagnostics.add(Diagnostic.error("action-refused", scope, provenance,
                         String.format("%s %s: the action %s %s; it is not served, and does not run.", app, FILE,
-                                name == null ? "with no id" : "\"" + name + "\"", refusal)));
+                                name == null || !ACTION_ID.matcher(name).matches() ? "with no id an action may have"
+                                        : "\"" + name + "\"",
+                                refusal)));
                 continue;
             }
             ids.add(name);
@@ -128,7 +132,7 @@ final class AppActions {
      * Why an action that runs an operation is not served, or {@code null}, having added it to
      * {@code runnable}, when it is.
      */
-    private static String refusal(JsonNode entry, String id, Set<String> ids, AllowList allowList,
+    private static String refusal(String app, JsonNode entry, String id, Set<String> ids, AllowList allowList,
             Map<String, RunnableAction> runnable) {
         if (id == null || !ACTION_ID.matcher(id).matches() || PLATFORM_ID.matcher(id).matches()) {
             return "has no id an app's action may have";
@@ -137,12 +141,15 @@ final class AppActions {
             return "has the id of an action before it";
         }
         JsonNode operation = entry.get("operation");
-        if (!operation.isTextual()) {
+        if (!operation.isTextual() || !AllowedOperation.ID.matcher(operation.asText()).matches()) {
             return "names no operation";
         }
         AllowedOperation allowed = allowList.get(operation.asText());
         if (allowed == null) {
             return "runs \"" + operation.asText() + "\", which this server's allow-list does not hold";
+        }
+        if (!allowed.apps().isEmpty() && !allowed.apps().contains(app)) {
+            return "runs \"" + allowed.id() + "\", which this server's allow-list lets only other apps' buttons run";
         }
         Set<String> placements = placements(entry.get("on"));
         if (placements == null) {
@@ -159,13 +166,19 @@ final class AppActions {
                 String name = parameter.getKey();
                 AllowedOperation.Parameter declared = allowed.parameters().get(name);
                 if (declared == null) {
-                    return "gives " + allowed.id() + " the parameter \"" + name
-                            + "\", which this server's allow-list does not let it be given";
+                    return AllowedOperation.PARAMETER.matcher(name).matches()
+                            ? "gives " + allowed.id() + " the parameter \"" + name
+                                    + "\", which this server's allow-list does not let it be given"
+                            : "gives " + allowed.id() + " a parameter whose name is not one";
                 }
                 RunnableAction.Source source = source(parameter.getValue());
                 if (source == null) {
                     return "gives the parameter \"" + name + "\" a value that is neither a literal, a field of the"
                             + " record, nor a field of its form: a computation is not run on the server";
+                }
+                if (!declared.admits(source)) {
+                    return "gives the parameter \"" + name + "\" its value from elsewhere than this server's"
+                            + " allow-list says: " + declared.source();
                 }
                 if (source instanceof RunnableAction.Literal literal) {
                     try {
@@ -179,6 +192,12 @@ final class AppActions {
                             + "\" a value that is not a literal";
                 }
                 sources.put(name, source);
+            }
+        }
+        for (AllowedOperation.Parameter declared : allowed.parameters().values()) {
+            if (declared.required() && !sources.containsKey(declared.name())) {
+                return "does not give " + allowed.id() + " the parameter \"" + declared.name()
+                        + "\", which this server's allow-list requires";
             }
         }
         runnable.put(id, new RunnableAction(id, allowed.id(), placements, sources));

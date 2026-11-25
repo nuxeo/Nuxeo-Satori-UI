@@ -362,6 +362,19 @@ public class PlatformCheck {
           && !bindingType.getField("isDisabled").getBoolean(binding) && !(boolean) bindingType.getMethod("hasGroups").invoke(binding),
           "Nuxeo's own Automation endpoint runs " + name + " for administrators only: binding id " + bindingType.getMethod("getId").invoke(binding));
     }
+    for (Map.Entry<String, Object> chain : chains.entrySet()) {
+      List<?> ops = items(chainType.getMethod("getOps").invoke(chain.getValue()));
+      Object first = ops.isEmpty() ? null : ops.get(0);
+      String guarded = null;
+      if (first != null && "AgenticUi.RequireRunAction".equals(first.getClass().getMethod("getId").invoke(first))) {
+        for (Object param : items(first.getClass().getMethod("getParams").invoke(first))) {
+          if ("operation".equals(param.getClass().getMethod("getName").invoke(param)))
+            guarded = (String) param.getClass().getMethod("getValue").invoke(param);
+        }
+      }
+      check(chain.getKey().equals(guarded == null ? null : guarded.strip()),
+          chain.getKey() + " begins with AgenticUi.RequireRunAction for itself, so only a button runs it: " + guarded);
+    }
     Map<String, String> comments = new TreeMap<>();
     for (Map.Entry<String, Object> chain : chains.entrySet()) {
       for (Object op : items(chainType.getMethod("getOps").invoke(chain.getValue()))) {

@@ -150,4 +150,18 @@ describe('AppActionDialogComponent', () => {
     expect(runButton()?.disabled).toBe(false);
     expect(ref.disableClose).toBe(false);
   });
+
+  it('offers no second run when no answer came, since the first may have run', async () => {
+    await open(false);
+    runButton()?.click();
+    await settle();
+    answers.next({ kind: 'unknown', message: 'The action may have run.' });
+    await settle();
+    expect(host().querySelector('nxs-banner')?.textContent).toContain('The action may have run.');
+    expect(runButton()?.disabled).toBe(true);
+    runButton()?.click();
+    await settle();
+    expect(runs).toHaveLength(1);
+    expect(close).not.toHaveBeenCalled();
+  });
 });

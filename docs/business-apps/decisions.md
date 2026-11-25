@@ -69,11 +69,14 @@ way.
   chain or operation, and only one the server's own allow-list holds
   ([app-definition-v2.md](app-definition-v2.md), section 5). The allow-list is a contribution to
   `org.nuxeo.agentic.ui.operations` in `nuxeo-agentic-core`, on B's recommendation that the runtime
-  essentials live there, which the server's administrators install, not a package: the pipeline
-  refuses a package that contributes to it. It names each chain, the permission and the groups that
-  run it, and each parameter an app may give it, with its type. The app registry serves an app's
-  `actions.json` with only what it allows, and `AgenticUi.RunAction` checks it again, with the
-  person's permissions, before it runs a chain as them; the request never names the chain. The
+  essentials live there, which the server's administrators install in `nxserver/config/`, never a
+  package: the server reads it from nowhere else, and the pipeline refuses a package that
+  contributes to it. It names each chain, the permission, and the apps, groups, record types and
+  states that run it, and each parameter an app may give it, with its type and its source. The app
+  registry serves an app's `actions.json` with only what it allows, and `AgenticUi.RunAction`
+  checks it again, with the person's permissions, before it runs a chain as them; the request never
+  names the chain. A chain meant only for buttons begins with `AgenticUi.RequireRunAction`, which
+  refuses any other run, Nuxeo's own Automation endpoint and `RunOperation` among them. The
   Payers kit's "Request medical records" runs on it, phase 2's demo step 4, from a steps file not
   run yet. The security review of operation buttons, which phase 2's "Done when" asks for, is not
   done. What changes if 3 goes another way:

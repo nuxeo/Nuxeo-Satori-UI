@@ -13,12 +13,14 @@
  * - **the app registry refuses an unlisted chain:** the kit's `actions.json` names a second button,
  *   Refer to special investigations, whose chain the demo server's allow-list leaves out on purpose.
  *   The registry serves the file without it, and its diagnostics say why;
- * - **the endpoint refuses it too:** `AgenticUi.RunAction` asked for that action answers 404, and
- *   asked for Request medical records with a value its form does not send, 400, one longer than the
- *   allow-list's, 400, and by someone the allow-list's groups leave out, 403. None of them writes to
- *   the claim's history;
- * - **Nuxeo's own Automation endpoint** refuses the adjuster the chain itself: the kit closes it to
- *   both its chains for everyone but administrators, with a REST binding.
+ * - **the endpoint refuses it too:** `AgenticUi.RunAction` asked for that action answers 404; and
+ *   asked for Request medical records with a value its form does not send, 400, with a note longer
+ *   than the allow-list's or with none, 400, by someone the allow-list's groups leave out, 403, and
+ *   on a paid claim, a state the allow-list does not name, 403, whatever the button's rule;
+ * - **Nuxeo's own Automation endpoint runs neither chain:** a direct call is refused by the kit's REST
+ *   bindings, and one through the `RunOperation` dispatcher, which no binding on a chain stops, by
+ *   each chain's first step, `AgenticUi.RequireRunAction`. None of the ten refused requests writes
+ *   to the claim's history.
  *
  * Each run writes two entries to the history of one seeded claim, the chain's marked by the run's id, and
  * changes nothing else: phase 1's and the workflow demo's figures do not read the history.
@@ -39,9 +41,9 @@
  * Load-bearing checks: the toolbar offering the button on a claim in review; its dialog asking the
  * kit's question with the form's two fields; the success message; the chain's and the endpoint's
  * entries in the claim's history, with the note entered and the run's marker. Negative ones: the
- * registry leaving the unlisted chain's button out, with a diagnostic; the endpoint's four
- * refusals, with nothing written; Nuxeo's own endpoint refusing the chain; and, in the browser, no
- * button on a claim no longer in review.
+ * registry leaving the unlisted chain's button out, with a diagnostic; the endpoint's six
+ * refusals; Nuxeo's own endpoint and `RunOperation` refusing both chains; nothing written by any of
+ * them; and, in the browser, no button on a claim no longer in review.
  *
  * Not covered, and said in notes: a row action on a queue (the kit's my-claims queue offers it, and
  * the client's specs run it), an administrator calling the chain directly, and the chain's effect
@@ -392,32 +394,61 @@ export default async function run(page, h) {
     outsider.status === 403,
     String(outsider.status),
   );
+  const emptyNote = await asAdjuster(
+    'POST',
+    `/api/v1/automation/${RUN_ACTION}`,
+    runAction(REQUEST, claim.uid, { urgent: true }),
+  );
+  h.check(
+    'asked with the note left empty, which the allow-list requires, it answers 400',
+    emptyNote.status === 400,
+    String(emptyNote.status),
+  );
+  const onPaid = await asAdjuster(
+    'POST',
+    `/api/v1/automation/${RUN_ACTION}`,
+    runAction(REQUEST, paid.uid, { note: RUN }),
+  );
+  h.check(
+    "asked for a paid claim, a state the allow-list does not name, it answers 403 whatever the button's rule",
+    onPaid.status === 403,
+    String(onPaid.status),
+  );
 
   // ── Nuxeo's own Automation endpoint, beside it ─────────────────────────────────────────────
-  await h.step("Nuxeo's own Automation endpoint refuses the adjuster the kit's chains");
-  const direct = await asAdjuster('POST', `/api/v1/automation/${REQUEST_CHAIN}`, {
-    input: `doc:${claim.uid}`,
-    params: { note: RUN },
-    context: {},
-  });
-  const directRefer = await asAdjuster('POST', `/api/v1/automation/${REFER_CHAIN}`, {
-    input: `doc:${claim.uid}`,
-    params: {},
-    context: {},
-  });
+  await h.step(
+    "Nuxeo's own Automation endpoint, and its dispatcher, run neither of the kit's chains",
+  );
+  const chainCall = (chain) =>
+    asAdjuster('POST', `/api/v1/automation/${chain}`, {
+      input: `doc:${claim.uid}`,
+      params: { note: RUN },
+      context: {},
+    });
+  const dispatched = (chain) =>
+    asAdjuster('POST', '/api/v1/automation/RunOperation', {
+      input: `doc:${claim.uid}`,
+      params: { id: chain },
+      context: { note: RUN },
+    });
+  const refusedStatus = (answer) => typeof answer.status === 'number' && answer.status >= 400;
+  const direct = [await chainCall(REQUEST_CHAIN), await chainCall(REFER_CHAIN)];
   h.check(
-    "the kit's REST bindings refuse both chains to anyone but an administrator",
-    typeof direct.status === 'number' &&
-      direct.status >= 400 &&
-      typeof directRefer.status === 'number' &&
-      directRefer.status >= 400,
-    `${REQUEST_CHAIN}: ${direct.status}, ${REFER_CHAIN}: ${directRefer.status}`,
+    "a direct call is refused, by the kit's REST bindings, to anyone but an administrator",
+    direct.every(refusedStatus),
+    direct.map((answer) => answer.status).join(', '),
+  );
+  const viaDispatcher = [await dispatched(REQUEST_CHAIN), await dispatched(REFER_CHAIN)];
+  h.check(
+    "RunOperation, which no REST binding on a chain stops, is refused by each chain's first step, AgenticUi.RequireRunAction",
+    viaDispatcher.every(refusedStatus),
+    viaDispatcher.map((answer) => answer.status).join(', '),
   );
   // The audit is written a moment after a change: wait as long as the run's own entries took.
   await page.waitForTimeout(3000);
   const after = await history();
   h.check(
-    "none of the six refused requests wrote to the claim's history",
+    "none of the ten refused requests wrote to the claim's history",
     after.length === before &&
       !after.some((entry) => entry.eventId === 'Referred to special investigations'),
     `${before} entries before, ${after.length} after`,

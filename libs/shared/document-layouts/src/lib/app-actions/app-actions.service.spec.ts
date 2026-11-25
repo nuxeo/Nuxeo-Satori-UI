@@ -231,6 +231,16 @@ describe('AppActionsService', () => {
     expect(await outcome).toEqual({ kind: 'failed', message: 'document-layouts.action.failed' });
   });
 
+  it('says it may have run when no answer comes, rather than offer to run it again', async () => {
+    choose(REQUEST, adjuster(claim('inReview')));
+    const { outcome } = await run({ note: 'x' }, claim('inReview'));
+    http.expectOne(RUN_URL).error(new ProgressEvent('error'), { status: 0, statusText: '' });
+    expect(await outcome).toEqual({
+      kind: 'unknown',
+      message: 'document-layouts.action.may-have-run',
+    });
+  });
+
   it('says nothing, and reads nothing again, when the dialog is cancelled', () => {
     choose(REQUEST, adjuster(claim('inReview')));
     const changes = vi.spyOn(TestBed.inject(DocumentChangesService), 'notify');

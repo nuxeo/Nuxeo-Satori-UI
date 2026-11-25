@@ -1,6 +1,7 @@
 package org.nuxeo.agentic.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -57,10 +58,60 @@ class AllowedOperationTest {
     }
 
     @Test
-    void refusesTheRunEndpointItself() {
+    void refusesThePlatformsOwnOperations() {
+        for (String id : new String[] { RunAppActionOperation.ID, RequireRunActionOperation.ID, "AgenticUi.Other" }) {
+            AllowedOperationDescriptor d = requestRecords();
+            d.id = id;
+            assertTrue(refusal(d).contains("is the platform's own, which runs the allow-list"), id);
+        }
+    }
+
+    @Test
+    void refusesWhatRunsAnotherOperationAScriptOrAsAnotherUser() {
+        for (String id : new String[] { "RunOperation", "Context.RunOperation", "RunDocumentOperation",
+                "Context.RunOperationOnList", "RunOperationOnProvider", "RunScript", "Context.RunInputScript",
+                "Auth.LoginAs" }) {
+            AllowedOperationDescriptor d = requestRecords();
+            d.id = id;
+            assertTrue(refusal(d).contains("so it would allow everything"), id);
+        }
+    }
+
+    @Test
+    void readsWhatNarrowsAnEntry() {
+        AllowedOperation operation = AllowedOperation.of(ActionFixtures.narrowed());
+        assertEquals(Set.of("payers-claims"), operation.apps());
+        assertEquals(Set.of("Claim"), operation.types());
+        assertEquals(Set.of("inReview", "pended"), operation.states());
+        assertEquals("field:claim:provider", operation.parameters().get("provider").source());
+        assertEquals("input", operation.parameters().get("note").source());
+        assertTrue(operation.parameters().get("note").required());
+        assertFalse(operation.parameters().get("urgent").required());
+        // A parameter's source admits a value from there alone.
+        AllowedOperation.Parameter provider = operation.parameters().get("provider");
+        assertTrue(provider.admits(new RunnableAction.Field("claim:provider")));
+        assertFalse(provider.admits(new RunnableAction.Field("claim:member")));
+        assertFalse(provider.admits(new RunnableAction.Input("provider")));
+        assertFalse(operation.parameters().get("note").admits(new RunnableAction.Literal(JSON.textNode("x"))));
+        assertTrue(operation.parameters().get("channel").admits(new RunnableAction.Literal(JSON.textNode("x"))));
+    }
+
+    @Test
+    void refusesAnAppATypeAStateOrASourceThatIsNotOne() {
         AllowedOperationDescriptor d = requestRecords();
-        d.id = RunAppActionOperation.ID;
-        assertTrue(refusal(d).contains("the endpoint that runs the allow-list"));
+        d.apps = new ArrayList<>(List.of("Payers.Claims"));
+        assertTrue(refusal(d).contains("is not an app's id"));
+        d = requestRecords();
+        d.types = new ArrayList<>(List.of("Claim\nAudit"));
+        assertTrue(refusal(d).contains("a type is empty, or not a name"));
+        d = requestRecords();
+        d.states = new ArrayList<>(List.of(""));
+        assertTrue(refusal(d).contains("a state is empty, or not a name"));
+        for (String source : new String[] { "request", "field:provider", "field:claim:provider;drop" }) {
+            d = requestRecords();
+            d.parameters.get(0).source = source;
+            assertTrue(refusal(d).contains("source is not input, literal or field:<prefix>:<name>"), source);
+        }
     }
 
     @Test

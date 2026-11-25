@@ -342,24 +342,40 @@ provider, for the development server.
 - **The allow-list is the deployment's** (plan decision 3, built on its recommendation, which is
   still open: [decisions.md](decisions.md), notes). It is a contribution to
   `org.nuxeo.agentic.ui.operations`'s `allowList` point that the server's administrators install,
-  such as a file in `nxserver/config/`, naming each operation or chain a button may run, the
-  permission the person needs on the record, `Write` by default, the groups they must be in one
-  of, when it names any, and each parameter an app may give it, with its type:
+  a file in `nxserver/config/`, naming each operation or chain a button may run, the permission
+  the person needs on the record, `Write` by default, and each parameter an app may give it, with
+  its type, where its value may come from, and whether it is required. It may narrow each further:
+  the apps whose buttons may run it, the groups the person must be in one of, and the types and the
+  lifecycle states of the records it runs on. The server checks every one of them itself, whatever
+  the button's own rules said:
 
   ```xml
   <extension target="org.nuxeo.agentic.ui.operations" point="allowList">
     <operation id="Payers.RequestMedicalRecords" permission="Write">
+      <app>payers-claims</app>
       <group>claims-adjusters</group>
-      <param name="provider" type="string" maxLength="64" />
-      <param name="note" type="string" maxLength="500" />
-      <param name="urgent" type="boolean" />
+      <type>Claim</type>
+      <state>inReview</state>
+      <param name="provider" type="string" maxLength="64" source="field:claim:provider" />
+      <param name="note" type="string" maxLength="500" source="input" required="true" />
+      <param name="urgent" type="boolean" source="input" />
     </operation>
   </extension>
   ```
 
-  A package never contributes it: the pipeline refuses one that does, so configuration cannot widen
-  it. A type is `string`, `boolean`, `long` or `double`; a string is at most `maxLength`
-  characters, 1000 by default, and holds no control character but a tab or a line break.
+  A type is `string`, `boolean`, `long` or `double`; a string is at most `maxLength`
+  characters, 1000 by default, and holds no control character but a tab or a line break. A source
+  is `input`, the action's form, `literal`, the app's file, or `field:` and a property of the
+  record as stored; any of them when left out.
+
+  **A package never contributes it.** The server reads it only from its configuration directory, in
+  whose context the runtime deploys that directory's files, and refuses, and logs, a contribution
+  from a bundle; the pipeline refuses a package that contributes to it, under any spelling of the
+  component's name, too. So configuration cannot widen it. Never allowed, whoever contributes them:
+  the platform's own `AgenticUi.` operations, and those that run another operation, a script or as
+  another user, such as `RunOperation` or `Auth.LoginAs`, any of which would allow everything. An
+  entry that fails a check is not registered, and takes an entry of its id that was before it out
+  with it, so that a narrowing with a typo does not leave the wider one in force.
 
 - **The pipeline holds a package to an allow-list too,** that of the deployment it is built for, as
   a file of operation ids, shown below: a package naming an operation it does not hold is refused,
@@ -373,11 +389,12 @@ provider, for the development server.
   `nuxeo-agentic-core` ([api-integrations.md](../api-integrations.md), section 40). The request
   names the app, the action, the record and what was entered in the form, never the operation. The
   server checks the person's `Read` on the record, that an app of theirs serves the action, the
-  allow-list again, its groups and its permission, then builds the parameters itself: literals from
-  the file, fields from the record as the repository stores it, and the form's values, each of the
-  allow-list's type. Anything else the request holds is refused, or never read. It runs the
-  operation as the person, in an Automation context of its own, then writes "App action run" to the
-  record's history.
+  allow-list again, its app, its groups and its permission, the record's type and state, then builds
+  the parameters itself: literals from the file, fields from the record as the repository stores
+  it, and the form's values, each from where and of the type the allow-list says, a required one
+  never empty. Anything else the request holds is refused, or never read. It runs the operation as
+  the person, in an Automation context of its own, then writes "App action run" to the record's
+  history.
 - **A computation is refused as a parameter:** it is worked out in the browser, and the server,
   which builds the parameters, does not run one.
 - **A bulk action's parameters are literals,** and it has no form: it runs on many records at once,
@@ -386,8 +403,13 @@ provider, for the development server.
 - **The server decides.** Nuxeo's permissions and the lifecycle gate every operation and every
   transition, and the allow-list every button. Hiding or disabling a button is not a security
   control, and the allow-list is not one over Nuxeo's own Automation endpoint, which still runs any
-  operation a person may run: a chain meant to run only through a button is closed there with a
-  REST binding, as the Payers kit does for its own.
+  operation a person may run, directly or through a dispatcher such as `RunOperation`, past any
+  REST binding the chain has. **A chain meant to run only through a button begins with
+  `AgenticUi.RequireRunAction`,** naming itself: the step lets the chain go on only while
+  `AgenticUi.RunAction` runs it, a mark the server sets for the run and nothing a request carries
+  can set, and refuses everyone else, administrators included. The Payers kit's two chains do. An
+  operation allow-listed as itself has no first step, and stays reachable through Nuxeo's endpoint,
+  so chains are what the allow-list should name.
 
 The allow-list the pipeline reads, for the deployment a package is built for:
 

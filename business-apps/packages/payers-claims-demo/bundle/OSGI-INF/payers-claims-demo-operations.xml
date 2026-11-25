@@ -12,10 +12,13 @@
   records and leaves Refer to special investigations out on purpose, so that the demo shows the
   registry and the endpoint refusing it.
 
-  What the kit does contribute narrows: Nuxeo's own Automation endpoint, /nuxeo/api/v1/automation/,
-  runs any chain a user may run, allow-listed or not, so a REST binding closes it to both chains for
-  everyone but administrators. A button runs a chain through AgenticUi.RunAction, which calls
-  Automation inside the server, where no REST binding applies.
+  What the kit does contribute narrows. Nuxeo's own Automation endpoint, /nuxeo/api/v1/automation/,
+  runs any chain a user may run, allow-listed or not, directly or through a dispatcher such as
+  RunOperation, which no REST binding on the chain stops. So each chain begins with
+  AgenticUi.RequireRunAction, from nuxeo-agentic-core, which lets it go on only while
+  AgenticUi.RunAction runs it for a button, and refuses everyone else, administrators included. The
+  REST bindings below close the endpoint's direct call to both chains as well, for everyone but
+  administrators, before the chain starts.
 
   Each chain's input is the claim, as AgenticUi.RunAction gives it: the record as the repository
   stores it. Its parameters are chain parameters, ChainParameters in an expression, and only those
@@ -28,6 +31,10 @@
     <!-- Request medical records from the claim's provider: in the demo, the request in the
          claim's history, with whether it is urgent and the adjuster's note. -->
     <chain id="Payers.RequestMedicalRecords">
+      <!-- First: no further unless AgenticUi.RunAction runs it, for a button. -->
+      <operation id="AgenticUi.RequireRunAction">
+        <param type="string" name="operation">Payers.RequestMedicalRecords</param>
+      </operation>
       <operation id="Context.FetchDocument" />
       <operation id="Audit.LogEvent">
         <param type="string" name="event">Medical records requested</param>
@@ -39,6 +46,9 @@
     <!-- Refer the claim to special investigations: in the demo, the referral in its history. Not on
          the demo server's allow-list, so no button runs it there. -->
     <chain id="Payers.ReferToInvestigations">
+      <operation id="AgenticUi.RequireRunAction">
+        <param type="string" name="operation">Payers.ReferToInvestigations</param>
+      </operation>
       <operation id="Context.FetchDocument" />
       <operation id="Audit.LogEvent">
         <param type="string" name="event">Referred to special investigations</param>

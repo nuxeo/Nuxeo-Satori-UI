@@ -2515,8 +2515,9 @@ serves the action, the registry having left it out or the file not having it; `4
 bulk only, when the values are not an object of texts, numbers, booleans and nulls, or are over
 64 KiB, when one names a field the action's form does not send, or when a value is not of the type
 the allow-list gives its parameter; `403` when the allow-list no longer holds the operation or one
-of its parameters, when it names groups the person is in none of, or without the permission it
-names on the record, `Write` by default. The message is a neutral sentence; the server log says
+of its parameters, or is for other apps, when it names groups the person is in none of, when the
+record is of a type or in a state it does not name, or without the permission it names on the
+record, `Write` by default. The message is a neutral sentence; the server log says
 which app, action and operation, and why, and never a value. The dialog says each in the person's
 words, and stays open.
 
@@ -2526,17 +2527,25 @@ words, and stays open.
   stores it as its input, and the parameters the app's file and the allow-list give: a literal from
   the file, a field from the stored record, and the form's values. The request's own `context` is
   never handed on. Afterwards `Audit.LogEvent` writes "App action run" to the record's history, with
-  who ran which action of which app and its operation, in the same transaction.
+  who ran which action of which app and its operation, and never a value. A chain's own entries may
+  hold what it is given: the Payers kit's writes the note entered. Whether an entry is undone with a
+  transaction rolled back after it was written depends on the server's audit backend, and is not
+  checked.
 - **CSRF:** the endpoint is Nuxeo's REST API, so `NuxeoCorsCsrfFilter` (mapped on `/*` in the
   server's `web.xml`) refuses a POST whose `Origin` or `Referer` is another site's, unless the
   server's CORS configuration allows it; `nuxeo.csrf.token.enabled` adds Nuxeo's token check. Read
   from the 2025.10.18 server's `nuxeo-platform-web-common` jar, not exercised from another origin.
 - **Nuxeo's own Automation endpoint is still there:** `/nuxeo/api/v1/automation/<chain>` runs any
-  operation the person may run, allow-listed or not, as Nuxeo's permissions allow. A deployment or a
-  kit that wants a chain run only through a button closes it there with a REST binding
-  (`org.nuxeo.ecm.automation.server.AutomationServer`, point `bindings`), which applies to REST
-  calls and not to `AgenticUi.RunAction`'s own call, inside the server. The Payers kit does so for
-  its two chains.
+  operation the person may run, allow-listed or not, as Nuxeo's permissions allow, and so does a
+  dispatcher such as `/nuxeo/api/v1/automation/RunOperation` given the chain's id. A REST binding
+  (`org.nuxeo.ecm.automation.server.AutomationServer`, point `bindings`) closes the direct call
+  only: it is checked against the operation the request names, `RunOperation` there. What closes
+  both is the chain's first step, `AgenticUi.RequireRunAction`, which refuses, `403`, every run but
+  `AgenticUi.RunAction`'s, for administrators too. The Payers kit's two chains begin with it, and
+  have REST bindings as well.
+- **The allow-list's own checks,** besides the permission: an entry may name the apps, the groups,
+  and the records' types and states it is for (`403`), and each parameter's source and whether it
+  is required (`400` for a required value left empty).
 - **Not run on a server yet.** The Java tests run the checks above with fakes of the session and
   of Automation (`AppActionRunnerTest`), and the steps file `payers-operations` runs them live once
   the kit and its allow-list are installed.

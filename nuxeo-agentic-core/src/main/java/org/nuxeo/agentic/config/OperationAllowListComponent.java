@@ -2,6 +2,7 @@ package org.nuxeo.agentic.config;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -12,14 +13,23 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.DefaultComponent;
+import org.nuxeo.runtime.model.RuntimeContext;
 
 /**
  * Holds this server's allow-list of the operations an app's buttons may run
  * ({@code org.nuxeo.agentic.ui.operations}), and runs them.
  *
- * An entry is registered only once {@link AllowedOperation#of} accepts it; one that does not is
- * logged and left out, and an entry registered earlier with the same id stays. A later valid
- * contribution with the same id replaces it whole, and {@code enabled="false"} removes it. Each
+ * <b>Only from the server's configuration directory.</b> A contribution is taken only from a file in
+ * {@code nxserver/config/}, which the runtime deploys in its own context
+ * ({@code OSGiRuntimeService.loadConfig}, Nuxeo 2025.10.18): one from a bundle, a package's among
+ * them, is refused and logged, whatever it says. So a package installed on the server cannot widen
+ * the allow-list, even one the package pipeline never checked; the pipeline refuses one that tries.
+ *
+ * An entry is registered only once {@link AllowedOperation#of} accepts it. One that does not is
+ * logged and left out, and takes an entry registered earlier with the same id out with it: a
+ * contribution that meant to narrow an entry and failed a check must not leave the wider one in
+ * force. A later valid contribution with the same id replaces it whole, and {@code enabled="false"}
+ * removes it. Each
  * change publishes a new {@link AllowList}, so the app registry, which serves an app's
  * {@code actions.json} with only the actions it allows, and the run, which checks it again, read
  * one version whole.
@@ -37,13 +47,30 @@ public class OperationAllowListComponent extends DefaultComponent implements Ope
 
     private volatile AllowList allowList = AllowList.EMPTY;
 
+    /**
+     * The context the runtime deploys the configuration directory's files in. Package-private for
+     * tests, which have no runtime.
+     */
+    Supplier<RuntimeContext> configuration = () -> Framework.getRuntime() == null ? null
+            : Framework.getRuntime().getContext();
+
     @Override
     public void registerContribution(Object contribution, String extensionPoint, ComponentInstance contributor) {
         if (!XP_ALLOW_LIST.equals(extensionPoint) || !(contribution instanceof AllowedOperationDescriptor descriptor)) {
             log.warn("Unknown contribution to {}: {}", extensionPoint, contribution);
             return;
         }
-        register(descriptor, contributor.getName().getName());
+        String component = contributor.getName().getName();
+        RuntimeContext context = contributor.getContext();
+        RuntimeContext expected = configuration.get();
+        if (context == null || context != expected) {
+            String bundle = context == null || context.getBundle() == null ? "no bundle"
+                    : context.getBundle().getSymbolicName();
+            log.error("Agentic UI allow-list: {}, from {}, is refused: the allow-list is the deployment's, and is "
+                    + "read only from a file in nxserver/config/, never from a bundle", component, bundle);
+            return;
+        }
+        register(descriptor, component);
     }
 
     /** Package-private for tests, which have no runtime to contribute through. */
@@ -62,6 +89,13 @@ public class OperationAllowListComponent extends DefaultComponent implements Ope
         } catch (IllegalArgumentException e) {
             log.error("Agentic UI allow-list: an operation contributed by {} is not allowed: {}", component,
                     e.getMessage());
+            // Fail closed: an entry meant to replace one, a narrower one, takes the earlier one with it.
+            if (descriptor.getId() != null && operations.remove(descriptor.getId()) != null) {
+                sources.remove(descriptor.getId());
+                log.error("Agentic UI allow-list: {} is removed, since the entry that replaced it is refused",
+                        descriptor.getId());
+                publish();
+            }
             return;
         }
         operations.put(operation.id(), operation);

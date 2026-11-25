@@ -17,7 +17,7 @@ import {
   NuxeoApiBase,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { type Observable, catchError, map, of, switchMap, timeout } from 'rxjs';
+import { type Observable, TimeoutError, catchError, map, of, switchMap, timeout } from 'rxjs';
 
 import { appActionForm } from './app-action-form';
 import {
@@ -227,7 +227,15 @@ export class AppActionsService {
             }),
             catchError((error: unknown) => {
               const status = error instanceof HttpErrorResponse ? error.status : 0;
-              warn(`"${action.id}" not run: ${status ? `HTTP ${status}` : String(error)}`);
+              // No answer, in time or at all: the server may have run it, so it is not offered again.
+              if (error instanceof TimeoutError || status === 0) {
+                warn(`"${action.id}": no answer from ${APP_ACTION_RUN_OPERATION}; it may have run`);
+                return of({
+                  kind: 'unknown',
+                  message: this.translate.instant('document-layouts.action.may-have-run'),
+                } satisfies AppActionOutcome);
+              }
+              warn(`"${action.id}" not run: HTTP ${status}`);
               return of(this.failed(FAILURE_KEYS[status] ?? 'document-layouts.action.failed'));
             }),
           );

@@ -36,19 +36,26 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
  * operation. The request names the app and the action, never the operation, so it can ask only for
  * what the registry serves.</li>
  * <li>That it runs on one record: {@code record} or {@code row}. Bulk actions do not run here.</li>
- * <li>The allow-list again, as it stands now: the operation on it, the reader in one of its groups
- * when it names any, and the reader holding its permission on the record.</li>
+ * <li>The allow-list again, as it stands now: the operation on it, for this app when it names apps,
+ * the reader in one of its groups when it names any, and the reader holding its permission on the
+ * record.</li>
  * <li>The record as the repository stores it, never the one the request gave: Automation builds an
- * input document from a JSON entity, and applies the entity's properties to it in memory.</li>
- * <li>The parameters: each one the allow-list still gives the operation, its value of the type it
- * gives it. A literal comes from the served file, a field from the stored record, and what the
- * person entered from the request, for the form's fields only: a value for any other is refused.</li>
+ * input document from a JSON entity, and applies the entity's properties to it in memory. Its type
+ * and its lifecycle state, when the allow-list names any, must be among them.</li>
+ * <li>The parameters: each one the allow-list still gives the operation, its value from where it
+ * says and of the type it gives it, and a value for each it requires. A literal comes from the
+ * served file, a field from the stored record, and what the person entered from the request, for
+ * the form's fields only: a value for any other is refused.</li>
  * <li>The operation, in an Automation context of its own, as the reader, with the stored record as
- * its input and those parameters, and nothing else from the request.</li>
+ * its input and those parameters, and nothing else from the request. While it runs, and only then,
+ * {@link #running} answers yes for it: {@code AgenticUi.RequireRunAction}, the first step of a
+ * chain meant for a button, refuses every other way of running the chain, Nuxeo's own Automation
+ * endpoint and its dispatchers such as {@code RunOperation} among them.</li>
  * <li>The record's history: {@code Audit.LogEvent} records who ran which action of which app, and
- * its operation. Never a value: they may be personal data. Recorded after the operation, in the same
- * transaction, so an operation that fails leaves no entry, and an entry that cannot be written fails
- * the run, which the transaction then undoes.</li>
+ * its operation. Never a value: they may be personal data. Recorded after the operation returns,
+ * so an operation that fails leaves no entry, and an entry that cannot be written fails the run.
+ * Whether an entry written is undone when the request's transaction is rolled back later depends
+ * on the server's audit backend, and is not checked.</li>
  * </ol>
  *
  * Nothing here is the only control. Nuxeo's permissions gate every operation the chain runs, as
@@ -68,6 +75,22 @@ final class AppActionRunner {
     static final String AUDIT_EVENT = "App action run";
 
     static final String AUDIT_CATEGORY = "Agentic UI";
+
+    /**
+     * The operation this thread is running for an app's button, or {@code null}. Server-side only:
+     * nothing a request carries can set it, as it could a context variable, which Automation's
+     * dispatchers copy from the request.
+     */
+    private static final ThreadLocal<String> RUNNING = new ThreadLocal<>();
+
+    /**
+     * Whether {@code operation} runs now, on this thread, for an app's button. Its surrounding white
+     * space is left out: a chain's XML parameter can carry the line break after its text, as the kit's
+     * platform check reads it with the server's own descriptor classes.
+     */
+    static boolean running(String operation) {
+        return operation != null && operation.strip().equals(RUNNING.get());
+    }
 
     /** Runs one Automation operation as the reader, on {@code input}, given {@code parameters} only. */
     @FunctionalInterface
@@ -124,22 +147,35 @@ final class AppActionRunner {
         if (allowed == null) {
             throw refused(Kind.NOT_ALLOWED, viewer, app, id, action.operation());
         }
+        if (!allowed.apps().isEmpty() && !allowed.apps().contains(app)) {
+            throw refused(Kind.NOT_ALLOWED, viewer, app, id, action.operation());
+        }
         if (!allowed.groups().isEmpty() && allowed.groups().stream().noneMatch(viewer.groups()::contains)) {
             throw refused(Kind.NOT_IN_GROUP, viewer, app, id, action.operation());
         }
         if (!session.hasPermission(ref, allowed.permission())) {
             log.warn("Agentic UI action refused: {} ran {} of the app {} ({}) without the {} permission on {}",
-                    viewer.name(), id, app, action.operation(), allowed.permission(), ref);
+                    loggable(viewer.name()), id, app, action.operation(), allowed.permission(), ref);
             throw new DocumentSecurityException(
                     "Running this action needs the " + allowed.permission() + " permission on the record");
         }
         DocumentModel stored = session.getDocument(ref);
+        if (!allowed.types().isEmpty() && !allowed.types().contains(stored.getType())
+                || !allowed.states().isEmpty() && !allowed.states().contains(stored.getCurrentLifeCycleState())) {
+            throw refused(Kind.NOT_FOR_THIS_RECORD, viewer, app, id, action.operation());
+        }
+        for (AllowedOperation.Parameter declared : allowed.parameters().values()) {
+            if (declared.required() && !action.parameters().containsKey(declared.name())) {
+                throw refused(Kind.NOT_ALLOWED, viewer, app, id,
+                        action.operation() + ", required parameter " + declared.name() + " not given");
+            }
+        }
         Map<String, JsonNode> entered = entered(values, action, viewer, app, id);
         Map<String, Object> parameters = new LinkedHashMap<>();
         for (Map.Entry<String, RunnableAction.Source> parameter : action.parameters().entrySet()) {
             String name = parameter.getKey();
             AllowedOperation.Parameter declared = allowed.parameters().get(name);
-            if (declared == null) {
+            if (declared == null || !declared.admits(parameter.getValue())) {
                 throw refused(Kind.NOT_ALLOWED, viewer, app, id, action.operation() + ", parameter " + name);
             }
             Object value;
@@ -155,10 +191,23 @@ final class AppActionRunner {
             }
             if (value != null) {
                 parameters.put(name, value);
+            } else if (declared.required()) {
+                throw refused(Kind.INVALID_VALUE, viewer, app, id,
+                        action.operation() + ", parameter " + name + " is required and has no value");
             }
         }
         try {
-            automation.run(session, stored, action.operation(), parameters);
+            String outer = RUNNING.get();
+            RUNNING.set(action.operation());
+            try {
+                automation.run(session, stored, action.operation(), parameters);
+            } finally {
+                if (outer == null) {
+                    RUNNING.remove();
+                } else {
+                    RUNNING.set(outer);
+                }
+            }
             automation.run(session, stored, AUDIT_OPERATION,
                     Map.of("event", AUDIT_EVENT, "category", AUDIT_CATEGORY, "comment",
                             String.format("%s ran the action %s of the app %s, which runs %s.", viewer.name(), id, app,
@@ -168,7 +217,7 @@ final class AppActionRunner {
         } catch (Exception e) {
             throw new org.nuxeo.ecm.core.api.NuxeoException(e);
         }
-        log.info("Agentic UI action run: {} ran {} of the app {} ({}) on {}", viewer.name(), id, app,
+        log.info("Agentic UI action run: {} ran {} of the app {} ({}) on {}", loggable(viewer.name()), id, app,
                 action.operation(), stored.getId());
         return new Result(app, id, action.operation());
     }

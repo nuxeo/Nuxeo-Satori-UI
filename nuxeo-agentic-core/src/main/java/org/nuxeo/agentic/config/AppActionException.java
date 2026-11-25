@@ -25,6 +25,14 @@ public class AppActionException extends NuxeoException {
         NOT_ON_A_RECORD(400, "This action runs on a selection of records, not on one"),
         /** Its operation, or one of its parameters, is not on this server's allow-list now. */
         NOT_ALLOWED(403, "This server's allow-list does not let this action run"),
+        /** The record is not of a type, or not in a lifecycle state, the allow-list names. */
+        NOT_FOR_THIS_RECORD(403, "This server's allow-list does not let this action run on this record"),
+        /**
+         * A chain meant for an app's button, which begins with {@code AgenticUi.RequireRunAction}, was
+         * run some other way: through Nuxeo's own Automation endpoint, or a dispatcher such as
+         * {@code RunOperation}.
+         */
+        NOT_THROUGH_A_BUTTON(403, "This chain runs only from an app's button"),
         /** The allow-list names groups for its operation, and the reader is in none of them. */
         NOT_IN_GROUP(403, "This server lets only some groups run this action, and you are in none of them"),
         /** What the person entered is not a JSON object of values, or is too large. */
