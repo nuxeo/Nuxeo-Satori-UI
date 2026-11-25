@@ -228,7 +228,7 @@
                       data-action="up"
                       [disabled]="first"
                       [attr.aria-label]="
-                        'layout-designer.move-up' | translate: { field: sort.field }
+                        'layout-designer.queue.move-sort-up' | translate: { field: sort.field }
                       "
                       (click)="move('sort', sort.index, -1)"
                     >
@@ -240,7 +240,7 @@
                       data-action="down"
                       [disabled]="last"
                       [attr.aria-label]="
-                        'layout-designer.move-down' | translate: { field: sort.field }
+                        'layout-designer.queue.move-sort-down' | translate: { field: sort.field }
                       "
                       (click)="move('sort', sort.index, 1)"
                     >
@@ -334,7 +334,8 @@
                       data-action="up"
                       [disabled]="first"
                       [attr.aria-label]="
-                        'layout-designer.move-up' | translate: { field: facet.aggregate }
+                        'layout-designer.queue.move-facet-up'
+                          | translate: { field: facet.aggregate }
                       "
                       (click)="move('facets', facet.index, -1)"
                     >
@@ -346,7 +347,8 @@
                       data-action="down"
                       [disabled]="last"
                       [attr.aria-label]="
-                        'layout-designer.move-down' | translate: { field: facet.aggregate }
+                        'layout-designer.queue.move-facet-down'
+                          | translate: { field: facet.aggregate }
                       "
                       (click)="move('facets', facet.index, 1)"
                     >

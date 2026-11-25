@@ -416,6 +416,25 @@ describe('QueueDesignerPageComponent', () => {
     );
   });
 
+  it('names every button of the editor apart, a sort on a column and a facet included', async () => {
+    // The sort is on contract:end, which is a column too: its buttons must not be the column's.
+    await open({ ...RENEWALS, facets: [{ aggregate: 'contract_status' }, { aggregate: 'other' }] });
+    const names = [
+      ...root().querySelectorAll<HTMLButtonElement>('.layout-designer__editor button[aria-label]'),
+    ].map((each) => each.getAttribute('aria-label'));
+    expect(names.length).toBeGreaterThan(10);
+    expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
+    const named = (list: string, action: string): string | null | undefined =>
+      root()
+        .querySelector(`[data-list="${list}"] > li:first-child [data-action="${action}"]`)
+        ?.getAttribute('aria-label');
+    expect(named('columns', 'up')).toBe('Move contract:number up');
+    expect(named('sort', 'up')).toBe('Move the sort on contract:end up');
+    expect(named('sort', 'down')).toBe('Move the sort on contract:end down');
+    expect(named('facets', 'up')).toBe('Move the facet contract_status up');
+    expect(named('facets', 'down')).toBe('Move the facet contract_status down');
+  });
+
   it('moves the focus to the next Remove when a sort or a facet is removed, or to adding one', async () => {
     await open({
       ...RENEWALS,
