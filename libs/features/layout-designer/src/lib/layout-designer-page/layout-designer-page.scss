@@ -180,3 +180,43 @@
   color: var(--mat-sys-on-surface-variant);
   overflow-wrap: anywhere;
 }
+
+.layout-designer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.layout-designer__nav-link {
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-title-small);
+}
+
+.layout-designer__nav-link[aria-current='page'] {
+  color: var(--mat-sys-on-surface);
+  text-decoration: none;
+}
+
+/* A card's field, a queue's sort or one of its facets: its row, then what is set below it. */
+.layout-designer__entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layout-designer__rules {
+  margin-inline-start: 8px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.layout-designer__rules-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 8px;
+}
+
+.layout-designer__rules-body textarea {
+  font-family: monospace;
+}

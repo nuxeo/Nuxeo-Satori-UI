@@ -145,6 +145,25 @@ export interface RecordExternalEntry {
   readonly fields: readonly RecordExternalField[];
 }
 
+/** One required item of a checklist, as the file lists it. */
+export interface RecordChecklistItem {
+  /** What the property's `item` subfield holds for it. */
+  readonly id: string;
+  /** Its words. A key with no text in the reader's language shows its id, made readable. */
+  readonly label: LayoutLabel;
+}
+
+/**
+ * A card's checklist (layout-v2.md, section 7): the items the file requires, in its order, and
+ * the record's property that says how far each has got, a list of complex values whose subfields
+ * are `CHECKLIST_SUBFIELDS`.
+ */
+export interface RecordChecklistEntry {
+  /** `<prefix>:<name>`. */
+  readonly field: string;
+  readonly items: readonly RecordChecklistItem[];
+}
+
 export interface RecordCardEntry {
   readonly id: string;
   readonly place: string;
@@ -157,7 +176,10 @@ export interface RecordCardEntry {
   /** How many columns it takes, at least 1 and at most the file's `columns`. */
   readonly span: number;
   readonly visibleWhen: RecordRule | null;
-  /** Its fields; empty for a card of related records, a timeline, comments or another system's. */
+  /**
+   * Its fields; empty for a card of related records, a timeline, comments, another system's or a
+   * checklist.
+   */
   readonly fields: readonly RecordFieldEntry[];
   /** For a card of related records, the list it shows; `null` for any other card. */
   readonly related: RecordListEntry | null;
@@ -167,6 +189,8 @@ export interface RecordCardEntry {
   readonly comments: RecordCommentsEntry | null;
   /** For a card from another system, its connector and fields; `null` for any other card. */
   readonly external: RecordExternalEntry | null;
+  /** For a checklist's card, its property and items; `null` for any other card. */
+  readonly checklist: RecordChecklistEntry | null;
 }
 
 export interface RecordTabEntry {
@@ -614,6 +638,17 @@ function readExternal(
 const pageSizeOf = (raw: Json): number =>
   typeof raw['pageSize'] === 'number' ? raw['pageSize'] : DEFAULT_LIST_PAGE_SIZE;
 
+/** A checklist as the file writes it: the validator has refused one of any other shape. */
+function checklistOf(raw: Json): RecordChecklistEntry {
+  const items = (Array.isArray(raw['items']) ? raw['items'] : [])
+    .filter(isRecord)
+    .map((item): RecordChecklistItem => {
+      const id = String(item['id']);
+      return { id, label: labelOf(item, [], humanize(id)) };
+    });
+  return { field: String(raw['field']), items };
+}
+
 /** A timeline as the file writes it, its defaults filled in and its events each named once. */
 function timelineOf(raw: Json): RecordTimelineEntry {
   const events = Array.isArray(raw['events'])
@@ -706,7 +741,14 @@ export function readRecordLayout(
         span: typeof card['span'] === 'number' ? card['span'] : 1,
         visibleWhen: (card['visibleWhen'] as RecordRule | undefined) ?? null,
       };
-      const none = { fields: [], related: null, timeline: null, comments: null, external: null };
+      const none = {
+        fields: [],
+        related: null,
+        timeline: null,
+        comments: null,
+        external: null,
+        checklist: null,
+      };
       if (isRecord(card['related'])) {
         const related = readRecordList(card['related'], `${place}.related`, place, reading);
         return related ? [{ ...common, ...none, related }] : [];
@@ -715,7 +757,11 @@ export function readRecordLayout(
         const external = readExternal(card['external'], `${place}.external`, place, reading);
         return external ? [{ ...common, ...none, external }] : [];
       }
-      // Any finding inside a timeline or comments left their card out above, so what is here is sound.
+      // Any finding inside a timeline, comments or a checklist left their card out above, so what
+      // is here is sound.
+      if (isRecord(card['checklist'])) {
+        return [{ ...common, ...none, checklist: checklistOf(card['checklist']) }];
+      }
       if (isRecord(card['timeline'])) {
         return [{ ...common, ...none, timeline: timelineOf(card['timeline']) }];
       }

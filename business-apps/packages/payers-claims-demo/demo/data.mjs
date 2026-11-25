@@ -2,7 +2,8 @@
  * The Payers kit's demo records. **Everything here is fictional:** the people, providers, numbers,
  * addresses and documents. The people, claims and cases are the business-apps prototype's
  * (docs/prototype/business-apps/src/data.js), with one member and one case more, so the kit and
- * the prototype tell the same story. The numbers below are this file's own.
+ * the prototype tell the same story; since 0.4.1, one denied claim and its appeal more again, for
+ * phase 2's appeals demo. The numbers below are this file's own.
  *
  * - Social security numbers are in 987-65-4320 to 987-65-4329, a range set aside for
  *   advertising and never issued.
@@ -68,6 +69,12 @@ export const USERS = [
 /** The workflow demo's two people, by what they do in it. */
 export const WORKFLOW_ADJUSTER = 'alex.rivera';
 export const WORKFLOW_SUPERVISOR = 'jordan.kim';
+
+/**
+ * The appeals demo's person (`scripts/beta-harness/steps/payers-appeals.mjs`): the case specialist
+ * the appeals below are assigned to, in member services, who reads them and changes nothing.
+ */
+export const APPEALS_SPECIALIST = 'sam.patel';
 
 export const MEMBERS = [
   {
@@ -250,8 +257,29 @@ export const CLAIMS = [
     adjuster: 'dana.lee',
     diagnosis: 'S83.511A',
   },
+  // Denied, and appealed in CASE-2043, whose decision upheld the denial. Morgan Chen's, so none of
+  // what phase 1's demo counts as Dana Lee or as member services changes.
+  {
+    number: 'CLAIM-000145',
+    member: 'MEMBER-100052',
+    provider: 'PRV-202',
+    serviceDate: '2026-07-14',
+    received: '2026-07-20',
+    billedAmount: 1860,
+    allowedAmount: 0,
+    status: 'denied',
+    adjuster: 'morgan.chen',
+    diagnosis: 'M54.50',
+  },
 ];
 
+/**
+ * The cases. An appeal (`category: 'appeal'`) is opened against a denied claim, and holds its
+ * checklist: one entry per item done or under way, by the item's id in the Case page's checklist
+ * card (`layouts/Case/view.layout.json`), which says what an appeal requires; `appeals.mjs` holds
+ * the two to each other. An item the card lists and the appeal has no entry for is not done. Who
+ * did an item is one of `USERS`, and when is a day. A grievance has no checklist.
+ */
 export const CASES = [
   {
     number: 'CASE-2030',
@@ -278,6 +306,15 @@ export const CASES = [
     summary:
       'The member appeals the denial of claim CLAIM-000144 as not medically necessary. Medical ' +
       'records were requested from the provider.',
+    // Under way: two items done, the medical records requested and not received, and the
+    // provider's statement and the decision letter not started. Written in another order than
+    // the Case page's, which the page follows; and the medical records' entry, not done, still
+    // names who asked for them and when, which the page does not show for an item not done.
+    checklist: [
+      { item: 'reviewerAssigned', done: true, doneBy: 'morgan.chen', doneOn: '2026-11-05' },
+      { item: 'medicalRecords', done: false, doneBy: 'sam.patel', doneOn: '2026-11-12' },
+      { item: 'appealLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-11-02' },
+    ],
   },
   {
     number: 'CASE-2042',
@@ -290,6 +327,28 @@ export const CASES = [
     due: '2026-12-15',
     assignee: 'riley.brooks',
     summary: 'The member called about the January pharmacy charge on claim CLAIM-000132.',
+  },
+  {
+    number: 'CASE-2043',
+    title: 'Appeal of denied physical therapy visits',
+    member: 'MEMBER-100052',
+    claim: 'CLAIM-000145',
+    category: 'appeal',
+    state: 'decided',
+    received: '2026-08-04',
+    due: '2026-09-03',
+    assignee: 'sam.patel',
+    summary:
+      'The member appealed the denial of claim CLAIM-000145 for physical therapy visits. A ' +
+      'clinical review upheld the denial, and the decision letter was sent.',
+    // Decided: every item done.
+    checklist: [
+      { item: 'appealLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-08-04' },
+      { item: 'reviewerAssigned', done: true, doneBy: 'morgan.chen', doneOn: '2026-08-05' },
+      { item: 'medicalRecords', done: true, doneBy: 'sam.patel', doneOn: '2026-08-12' },
+      { item: 'providerStatement', done: true, doneBy: 'riley.brooks', doneOn: '2026-08-14' },
+      { item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-08-28' },
+    ],
   },
 ];
 

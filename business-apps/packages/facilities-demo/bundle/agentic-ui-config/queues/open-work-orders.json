@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "facilities.queue.open-work-orders",
+  "pageProvider": "facilities_open_work_orders",
+  "columns": [
+    "wo:number",
+    "dc:title",
+    { "field": "wo:building", "widget": "document-link" },
+    "wo:priority",
+    { "field": "wo:assignee", "widget": "user" },
+    { "field": "wo:due", "widget": "relative-date" }
+  ],
+  "sort": [
+    {
+      "field": "wo:due",
+      "order": "asc"
+    }
+  ],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "wo_priority_agg", "labelKey": "facilities.facet.priority" },
+    { "aggregate": "wo_category_agg", "labelKey": "facilities.facet.category" }
+  ]
+}

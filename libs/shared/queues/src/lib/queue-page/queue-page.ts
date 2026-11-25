@@ -45,7 +45,17 @@ import {
   type NuxeoDocument,
   type PageProviderResults,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { Subject, type Subscription, filter, map, merge, startWith, switchMap, timer } from 'rxjs';
+import {
+  Subject,
+  type Subscription,
+  filter,
+  map,
+  merge,
+  of,
+  startWith,
+  switchMap,
+  timer,
+} from 'rxjs';
 
 import { facetBuckets } from '../facets';
 import { readQueue, type QueueFile } from '../queue-file';
@@ -145,6 +155,20 @@ function warn(message: string): void {
 export class QueuePageComponent {
   /** The queue's id, from the address: `/queues/<id>`. */
   readonly id = input('');
+  /**
+   * A queue file to draw in place of the one served at `id`: the layout designer's preview of a
+   * file it edits, read as a served one is. With one, nothing is read for `id`, and the console is
+   * not told what the file leaves out: the designer lists that itself, with `readQueue`.
+   */
+  readonly content = input<unknown>(undefined);
+  /**
+   * Draws the queue for reading only, as the layout designer's preview does: no row can be
+   * selected, and no row action, bulk action or action over the whole query is offered, so nothing
+   * on the page can change a record. The page provider is still asked for its records, and a facet
+   * still filters them. The app's selection, and what its selection bar offers, are left as the
+   * page around it has them.
+   */
+  readonly readOnly = input(false);
 
   private readonly queues = inject(QueueService);
   private readonly rules = inject(ExtensionRuleRegistry);
@@ -166,13 +190,18 @@ export class QueuePageComponent {
   /** Bumped when the language or a catalogue changes, so names resolved with `instant` follow. */
   private readonly translations = signal(0);
 
+  /** What the page draws: the file served at `id`, or the one it is given. */
+  private readonly source = computed(() => ({ id: this.id(), content: this.content() }));
+
   protected readonly state = toSignal(
-    toObservable(this.id).pipe(
-      switchMap((id) =>
-        this.queues.load(id).pipe(
-          map((load) => this.read(id, load)),
-          startWith(LOADING),
-        ),
+    toObservable(this.source).pipe(
+      switchMap(({ id, content }) =>
+        content !== undefined
+          ? of(this.read(id, { kind: 'file', content }, false))
+          : this.queues.load(id).pipe(
+              map((load) => this.read(id, load)),
+              startWith(LOADING),
+            ),
       ),
     ),
     { initialValue: LOADING },
@@ -194,7 +223,7 @@ export class QueuePageComponent {
   /**
    * The queue's list as this person sees it: each column's rule answered, as the record page
    * answers a related list's, with the same context as the queue's own. The list draws no column
-   * whose rule it was not given an answer for.
+   * whose rule it was not given an answer for. Read-only, it offers no row action.
    */
   private readonly list = computed<RecordListEntry | null>(() => {
     const queue = this.queue();
@@ -202,6 +231,7 @@ export class QueuePageComponent {
     const context = this.context();
     return {
       ...queue.list,
+      rowActions: this.readOnly() ? [] : queue.list.rowActions,
       columns: queue.list.columns
         .filter(
           (column) =>
@@ -292,11 +322,12 @@ export class QueuePageComponent {
    * The queue's bulk actions that a selection may offer: those the `bulk-actions` slot resolves for
    * a selection of one row or of several, and that have a handler here. The selection bar then
    * offers those of them whose rules pass for the rows actually selected. One with nothing to run
-   * it would do nothing when chosen, so it is not offered, and the console says so once.
+   * it would do nothing when chosen, so it is not offered, and the console says so once. None
+   * while the page is read-only.
    */
   protected readonly bulkActions = computed<readonly string[]>(() => {
     const queue = this.queue();
-    if (queue === null || queue.bulkActions.length === 0) return [];
+    if (queue === null || queue.bulkActions.length === 0 || this.readOnly()) return [];
     const base = this.ruleContext.context();
     const count = this.selection.selectedCount();
     // Both: a rule may ask for a single row, or for several, and rows must be selectable for
@@ -350,12 +381,14 @@ export class QueuePageComponent {
    * maps to would not be what it does on a selection: its descriptor hands its work to another
    * action's handler, or the handler that answers for it does not declare the mapping its own
    * (`ExtensionActionHandler.wholeQuery`), as a customer's replacing the platform's does not.
+   * None while the page is read-only.
    */
   protected readonly wholeQueryActions = computed<readonly WholeQueryAction[]>(() => {
     this.translations();
     const queue = this.queue();
     const total = this.total();
-    if (queue === null || queue.bulkActions.length === 0 || total <= 0) return [];
+    if (queue === null || queue.bulkActions.length === 0 || total <= 0 || this.readOnly())
+      return [];
     const context: ExtensionRuleContext = {
       ...this.ruleContext.context(),
       document: null,
@@ -422,7 +455,10 @@ export class QueuePageComponent {
     () => this.allResults() && this.wholeQueryActions().length > 0,
   );
 
-  /** Whether the rows of the page can be selected: not while every result is, or an action runs. */
+  /**
+   * Whether the rows of the page can be selected: not while every result is, or an action runs,
+   * nor while the page is read-only, which offers no bulk action.
+   */
   protected readonly rowsSelectable = computed(
     () => this.bulkActions().length > 0 && !this.selectingAll() && this.running() === false,
   );
@@ -501,13 +537,15 @@ export class QueuePageComponent {
       .subscribe(() => this.translations.update((n) => n + 1));
 
     // The selection bar offers this queue's bulk actions while the page is shown, and every one
-    // again once it goes.
+    // again once it goes. A read-only page, a preview inside another page, leaves the app's
+    // selection bar as that page has it: it selects nothing, so it has nothing to offer there.
     effect(() => {
+      if (this.readOnly()) return;
       const offered = this.view() === 'queue' ? this.bulkActions() : [];
       untracked(() => this.selection.offeredBulkActions.set(offered));
     });
     this.destroyRef.onDestroy(() => {
-      this.selection.offeredBulkActions.set(null);
+      if (!this.readOnly()) this.selection.offeredBulkActions.set(null);
       // Following the command stops with the page; the command goes on on the server.
       this.following?.unsubscribe();
       this.reindexing?.unsubscribe();
@@ -764,7 +802,8 @@ export class QueuePageComponent {
 
   /**
    * Chooses a bucket, or clears it. The list is another one then, so the selection is cleared too:
-   * rows it held may no longer be in it.
+   * rows it held may no longer be in it. Not on a read-only page, whose rows cannot be selected:
+   * the app's selection is another page's.
    */
   protected toggle(aggregate: string, key: string): void {
     this.chosen.update((chosen) => {
@@ -772,7 +811,7 @@ export class QueuePageComponent {
       const next = keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
       return { ...chosen, [aggregate]: next };
     });
-    this.selection.clear();
+    if (!this.readOnly()) this.selection.clear();
     this.allResults.set(false);
     // The count is the last page's, for the buckets it was read with: none until the next page.
     this.total.set(-1);
@@ -792,7 +831,8 @@ export class QueuePageComponent {
     }
   }
 
-  private read(id: string, load: QueueLoad): State {
+  /** The file read, refused or not. `tell`: whether the console is told what it leaves out. */
+  private read(id: string, load: QueueLoad, tell = true): State {
     const file = `queues/${id}.json`;
     if (load.kind === 'none') {
       warn(`${file}: no queue is served there`);
@@ -808,10 +848,10 @@ export class QueuePageComponent {
       bulkActions: this.slots.registeredIds(EXTENSION_SLOTS['bulk-actions']),
     });
     if ('refused' in read) {
-      for (const problem of read.refused) warn(`${file} refused: ${problem}`);
+      if (tell) for (const problem of read.refused) warn(`${file} refused: ${problem}`);
       return { kind: 'refused' };
     }
-    for (const problem of read.problems) warn(`${file} ${problem}`);
+    if (tell) for (const problem of read.problems) warn(`${file} ${problem}`);
     return { kind: 'queue', id, queue: read.queue };
   }
 

@@ -170,9 +170,12 @@
         },
         "external": {
           "$ref": "#/$defs/external"
+        },
+        "checklist": {
+          "$ref": "#/$defs/checklist"
         }
       },
-      "description": "A card shows one of fields, related records, a timeline, comments or fields from another system.",
+      "description": "A card shows one of fields, related records, a timeline, comments, fields from another system or a checklist.",
       "oneOf": [
         {
           "required": ["fields"]
@@ -188,6 +191,9 @@
         },
         {
           "required": ["external"]
+        },
+        {
+          "required": ["checklist"]
         }
       ]
     },
@@ -563,6 +569,51 @@
         },
         "visibleWhen": {
           "$ref": "#/$defs/rule"
+        }
+      }
+    },
+    "checklist": {
+      "type": "object",
+      "required": ["field", "items"],
+      "additionalProperties": false,
+      "description": "View mode only. The items a record must have done, in order, each shown done or not, with who and when, from one of the record's properties. Read-only: the card ticks nothing.",
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/xpath",
+          "description": "The record's property that holds each item's state: a list of complex values with the subfields item (text), done (boolean), doneBy (a user name) and doneOn (a date). Never an ecm: or var: name."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/checklistItem"
+          }
+        }
+      }
+    },
+    "checklistItem": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "description": "One required item. It needs a label or a labelKey.",
+      "anyOf": [
+        {
+          "required": ["label"]
+        },
+        {
+          "required": ["labelKey"]
+        }
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "What the property's item subfield holds for this item. Unique in its checklist."
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelKey": {
+          "type": "string"
         }
       }
     }

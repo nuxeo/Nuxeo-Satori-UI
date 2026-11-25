@@ -67,6 +67,13 @@ list (`libs/shared/document-layouts`) and the home's rule check (`libs/shared/ho
   handler declares the mapping (`ExtensionActionRegistry.runsOverWholeQuery`), so a customer's
   replacement for Delete's handler takes Delete off the whole query.
 
+**In the layout designer's preview** (`libs/features/layout-designer`), the page is given the file it
+draws, `content`, instead of reading `queues/<id>.json`, and drawn `readOnly`: it asks the page
+provider for its records and a facet still filters them, but no row can be selected, no row action,
+bulk action or action over the whole query is offered, and the console is not told what the file
+leaves out, which the designer lists itself with `readQueue`. Its title is then a heading under the
+designer's, not the page's own `h1`.
+
 Nothing here is a security control. The page provider returns only what the person may read,
 hiding a queue hides the page and not the address, and offering fewer actions decides nothing
 Nuxeo's permissions do not.
@@ -98,6 +105,9 @@ npx ngc -p libs/shared/queues/tsconfig.lib.json
   a reserved or dotted aggregate; a repeated facet; an unregistered rule, a rule this build was made
   without, and one nested past the registry's depth; a person outside the queue's group; a bulk
   action with no handler; no file, and a file that cannot be read.
+- The designer's preview (`queue-page.preview.spec.ts`): the file given is drawn and none read, the
+  console is not told what it leaves out, and read-only offers no row action, no selectable row, no
+  bulk action and no action over the whole query, each against a control drawn as the app draws it.
 - Over the whole query, against a stand-in server: the offer and its total, the confirmation and its
   cancel, the request (the queue's parameters, no bucket, the platform's action and parameters),
   progress, the end and the list read again, a stop, more records than agreed, a refusal, and no

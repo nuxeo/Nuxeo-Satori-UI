@@ -19,6 +19,7 @@ no expression language and no code in configuration.
   - fields and cards shown or hidden by a rule;
   - related records;
   - the record's timeline and its comments;
+  - a checklist of the items a record must have done, from configuration;
   - banners above the cards, each shown by a rule, such as a picture's rights ending;
   - in forms, fields that are required or read-only by rule, and checks across fields.
 - **Version 1 files keep working**, unchanged. A file says which version it is, and nothing turns
@@ -204,8 +205,9 @@ rounds. `{}` turns it on; it takes no option yet:
 | `timeline`          | Or the record's history (section 7), in `view` mode only                                                                                                                                                      |
 | `comments`          | Or the record's comments (section 7), in `view` mode only                                                                                                                                                     |
 | `external`          | Or fields of a record in another system (section 7), in `view` mode only                                                                                                                                      |
+| `checklist`         | Or the items a record must have done, each done or not, with who and when (section 7), in `view` mode only                                                                                                    |
 
-A card has one of `fields`, `related`, `timeline`, `comments` and `external`.
+A card has one of `fields`, `related`, `timeline`, `comments`, `external` and `checklist`.
 
 In `metadata`, `edit` and `create` modes, cards show as the sections of the panel or the form.
 
@@ -526,6 +528,54 @@ package contributes, by a key the open record holds, such as a claim's number
 - **Not a security control,** as nothing in a layout is. A field hidden by its rule is hidden from
   this page; the operation returns every allowed field to anyone who may read the record.
 
+### A checklist
+
+**Built on 25 November 2026, for phase 2's demo step 6** ([development plan](development-plan.md)):
+an appeal case with its checklist and timeline. A card can show the items a record must have done,
+each done or not, with who did it and when, in `view` mode:
+
+```json
+{
+  "id": "checklist",
+  "labelKey": "payers.appeal.checklist",
+  "visibleWhen": {
+    "type": "app.rules.fieldIn",
+    "parameters": [{ "field": "case:category" }, "appeal"]
+  },
+  "checklist": {
+    "field": "case:checklist",
+    "items": [
+      { "id": "medicalRecords", "labelKey": "payers.appeal.medicalRecords" },
+      { "id": "reviewerAssigned", "labelKey": "payers.appeal.reviewerAssigned" },
+      { "id": "decisionLetter", "label": "Decision letter sent" }
+    ]
+  }
+}
+```
+
+| Key     | Meaning                                                                                                                                        |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field` | Required: the record's property that holds the items' state, `"<prefix>:<name>"`, never an `ecm:` or `var:` name                               |
+| `items` | Required: the items, in order, at least one: `{ "id", "label"?, "labelKey"? }`, with a `label` or a `labelKey`, and an `id` unique in the card |
+
+- **The file says what is required, and the record how far it has got.** The items, their order
+  and their words are the file's, so every record of the type is held to the same list. The
+  property holds one entry per item done or under way: a list of complex values with four
+  subfields, `item`, the item's `id` as text; `done`, a boolean; `doneBy`, a user name; and
+  `doneOn`, a date. A schema written for a checklist uses those names; given the content model,
+  the validator refuses a property of another shape (section 11).
+- **Each item shows done or not.** It is done when the record's first entry for it has `done`
+  `true`. An item with no entry, or whose entry is not done, shows as not done, without anyone or
+  any day, whatever the entry still holds. A done item shows who, as a `user` field shows a name,
+  and when, as the `date` widget shows a day. Above the items, a count says how many are done.
+- **An entry the file does not list is not shown.** A record's entry for an item the file has
+  dropped stays on the record, and the page says nothing of it.
+- **The card ticks nothing.** It is read-only: an item's state is the record's, changed wherever
+  the record is, by the Edit form, a workflow's chain or an import. Who and when are what the
+  entry holds, written by whoever wrote it; nothing here stamps them.
+- **Not a security control,** as nothing in a layout is. The server's permissions decide who may
+  change the property, and so tick an item.
+
 ## 8. What is refused, and when
 
 | When                                     | A structural error                                                   | An ID the platform does not have                                                          |
@@ -535,8 +585,9 @@ package contributes, by a key the open record holds, such as a claim's number
 
 - **In a list of related records,** a finding about one column or one row action leaves out that
   one. A finding about the list itself, such as a key version 2 does not have, leaves out its card,
-  and so does one about a timeline or comments. In a card from another system, a finding about one
-  field leaves out that field, and one about the card's own keys leaves out the card.
+  and so does one about a timeline, comments or a checklist. In a card from another system, a
+  finding about one field leaves out that field, and one about the card's own keys leaves out the
+  card.
 - **A finding about a banner,** such as a rule this build does not register, leaves out that
   banner, and **one about the review,** such as an option this build does not have, leaves out the
   review: the picture shows its views alone.
@@ -550,15 +601,18 @@ What counts as structural:
 - not version 2;
 - `cards` and `tabs` together;
 - an `id` that is missing, malformed or used twice;
-- a card with more than one of `fields`, `related`, `timeline`, `comments` and `external`, or
-  none;
+- a card with more than one of `fields`, `related`, `timeline`, `comments`, `external` and
+  `checklist`, or none;
 - a card from another system with no connector, no field, a name that is not one, or a text that
   looks like an address;
+- a checklist with no property, a property that is not one or is an `ecm:` or `var:` name, no
+  item, or an item that is not an object, has no `label` or `labelKey`, or whose `id` is missing,
+  malformed or listed twice;
 - a banner with no `label` or `labelKey`, or a `tone` other than its three;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `banners`, `review`, `related`, `timeline`, `comments` or
-  `external` outside it;
+- form-only keys in `view` mode, or `banners`, `review`, `related`, `timeline`, `comments`,
+  `external` or `checklist` outside it;
 - a `review` that is not an object;
 - a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
@@ -844,6 +898,20 @@ becomes. In version 2's terms:
   - an answer not of the operation's shape is an error, and a value in it that is not a text, a
     number or a boolean is dropped. Not checked on a server: the operation is proven by the add-on's
     own tests, against a stub of the other system, and nothing is installed yet.
+- **A checklist's card** is drawn by the record page itself, from `record-checklist.ts` in the same
+  library:
+  - it reads the open record's property, already loaded, and asks the server for nothing of its
+    own: the names of the people who did the items done are read with the page's other users, as a
+    `user` field's are, and show as stored until they are;
+  - its property is held to the type's schemas when the page loads, as a field is. One that neither
+    the type nor the record's facets have, or that is not a list of complex values with the four
+    subfields, each of its type, leaves the card out, and the console says why; one whose schema
+    lists no subfields is taken as written, as a table's is;
+  - above the items, "2 of 5 done"; then each item, in the file's order, with an icon, its words,
+    "Done" or "Not done", and, for one done, who and the day. The icon is decorative: the words
+    say the same;
+  - it draws the same on a read-only page, the designer's preview, since it ticks nothing anyway.
+    Not seen on a server yet: the Payers kit's appeals, its first user, are not installed.
 - **The date rules read the page's clock**, `RECORD_PAGE_TODAY` and `RECORD_PAGE_TIME_ZONE` in
   `record-clock.ts`, as its computations and dates do: on the record page, its banners, cards,
   tabs, fields and a related list's columns, and in a version 2 form, its fields' rules. The page
@@ -960,11 +1028,14 @@ becomes. In version 2's terms:
   widget does not show its property. The model reader, `readContentModel` in
   `libs/shared/app-definition`, reads the same model for the others: `validateLayoutV2`, given it
   and the type, finds a field whose property is on neither the type nor a facet it declares, a
-  widget that does not show its property's type, and a table column naming a subfield its property
-  lacks. Each is `unknown` or `parameter`, so loading stays tolerant. The pipeline holds a package
+  widget that does not show its property's type, a table column naming a subfield its property
+  lacks, and a checklist whose property the type lacks, is not a list of complex values, or lacks
+  one of `item`, `done`, `doneBy` and `doneOn` or has it of another type. Each is `unknown` or
+  `parameter`, so loading stays tolerant. The pipeline holds a package
   to a model when it is given one ([package-pipeline.md](package-pipeline.md), section 4), and the
-  layout designer holds the file it edits to the server's model when it can read it, and saves none
-  with a finding ([its README](../../libs/features/layout-designer/README.md)); the migration server
+  layout designer holds the file it edits, a record page or an edit or create form, to the server's
+  model when it can read it, and saves none with a finding
+  ([its README](../../libs/features/layout-designer/README.md)); the migration server
   is still to call it. Its limits:
   - a property that only a facet given at run time brings is refused, though the record page shows
     it on a record with that facet;

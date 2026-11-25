@@ -1,8 +1,8 @@
 /**
- * The designer with the record page engine itself, not a stand-in: the real `LayoutDesignerService`,
- * `DocumentLayoutService` and `lib-record-page`, the server answered by `HttpTestingController`.
- * What it holds: the page the preview draws is the engine's, from the file as edited, and every
- * request the designer makes is a read.
+ * The designer with the engines themselves, not stand-ins: the real `LayoutDesignerService`,
+ * `DocumentLayoutService`, `lib-record-page` and `lib-document-layout-form`, the server answered by
+ * `HttpTestingController`. What it holds: the page or form the preview draws is the engine's, from
+ * the file as edited, the form's inputs are read-only, and every request the designer makes is a read.
  */
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -35,6 +35,21 @@ const VIEW = {
   ],
 };
 
+const EDIT = {
+  version: 2,
+  cards: [
+    {
+      id: 'member',
+      label: 'Member',
+      fields: [
+        { field: 'member:firstName', required: true },
+        'member:lastName',
+        { field: 'member:phone', widget: 'phone' },
+      ],
+    },
+  ],
+};
+
 const MEMBER_SCHEMA = {
   name: 'member',
   '@prefix': 'member',
@@ -55,7 +70,7 @@ const RECORD = {
   },
 } as NuxeoDocument;
 
-describe('LayoutDesignerPageComponent, with the record page engine', () => {
+describe('LayoutDesignerPageComponent, with the record page and form engines', () => {
   let fixture: ComponentFixture<LayoutDesignerPageComponent>;
   let http: HttpTestingController;
 
@@ -105,7 +120,10 @@ describe('LayoutDesignerPageComponent, with the record page engine', () => {
         request.flush({
           format: FORMAT,
           layer: 'layouts',
-          layouts: [{ type: 'Member', mode: 'view', component: 'payers' }],
+          layouts: [
+            { type: 'Member', mode: 'view', component: 'payers' },
+            { type: 'Member', mode: 'edit', component: 'payers' },
+          ],
           diagnostics: [],
         });
       } else if (url === `${CONFIG}/layouts/Member/view.layout.json`) {
@@ -115,6 +133,14 @@ describe('LayoutDesignerPageComponent, with the record page engine', () => {
           type: 'Member',
           mode: 'view',
           content: VIEW,
+        });
+      } else if (url === `${CONFIG}/layouts/Member/edit.layout.json`) {
+        request.flush({
+          format: FORMAT,
+          layer: 'layout',
+          type: 'Member',
+          mode: 'edit',
+          content: EDIT,
         });
       } else if (url === '/nuxeo/api/v1/config/types') {
         request.flush({
@@ -152,7 +178,7 @@ describe('LayoutDesignerPageComponent, with the record page engine', () => {
 
   it('draws the edited file with the record page, reading only', async () => {
     await settleAndAnswer();
-    fixture.componentInstance.open('Member');
+    fixture.componentInstance.open('Member/view');
     await settleAndAnswer();
     expect(drawn()).toEqual(['member:firstName', 'member:lastName', 'member:phone']);
     expect(
@@ -179,7 +205,7 @@ describe('LayoutDesignerPageComponent, with the record page engine', () => {
   it('draws nothing for a file the engine refuses, and says why', async () => {
     await settleAndAnswer();
     const page = fixture.componentInstance;
-    page.open('Member');
+    page.open('Member/view');
     await settleAndAnswer();
     page.setText(page.cards()[0], 'id', 'not an id');
     await settleAndAnswer();
@@ -188,5 +214,60 @@ describe('LayoutDesignerPageComponent, with the record page engine', () => {
       'cards[0].id: an id is 1 to 64 letters',
     );
     expect(page.saveState()).toBe('refused');
+  });
+
+  describe('the edit form, with the form engine', () => {
+    /** The inputs the form draws, by property, in its order. */
+    const inputs = (): HTMLInputElement[] => [
+      ...root().querySelectorAll<HTMLInputElement>('lib-document-layout-form input[data-xpath]'),
+    ];
+    const drawnInputs = (): (string | null)[] =>
+      inputs().map((input) => input.getAttribute('data-xpath'));
+
+    it('draws the edited file with the form engine, for the record, every input read-only', async () => {
+      await settleAndAnswer();
+      const page = fixture.componentInstance;
+      page.open('Member/edit');
+      await settleAndAnswer();
+      expect(root().querySelector('lib-record-page')).toBeNull();
+      expect(drawnInputs()).toEqual(['member:firstName', 'member:lastName', 'member:phone']);
+      expect(inputs().map((input) => input.value)).toEqual(['Jane', 'Doe', '(916) 555-0152']);
+      // Read-only: nothing can be typed, so there is nothing a Save could send.
+      expect(inputs().every((input) => input.disabled)).toBe(true);
+
+      page.moveUp(page.cards()[0], page.cards()[0].fields[2]);
+      page.choose(page.cards()[0], 'member:email');
+      page.add(page.cards()[0]);
+      await settleAndAnswer();
+      expect(drawnInputs()).toEqual([
+        'member:firstName',
+        'member:phone',
+        'member:lastName',
+        'member:email',
+      ]);
+      expect(page.saveState()).toBe('saveable');
+    });
+
+    it('follows a required rule as configuration, and refuses a rule that is not one', async () => {
+      await settleAndAnswer();
+      const page = fixture.componentInstance;
+      page.open('Member/edit');
+      await settleAndAnswer();
+      const lastName = (): HTMLInputElement | undefined =>
+        inputs().find((input) => input.getAttribute('data-xpath') === 'member:lastName');
+      expect(lastName()?.required).toBe(false);
+      page.setRequired(page.cards()[0], page.cards()[0].fields[1], 'always');
+      await settleAndAnswer();
+      expect(lastName()?.required).toBe(true);
+
+      page.setRule(page.cards()[0], page.cards()[0].fields[1], 'visibleWhen', 'not a rule!');
+      await settleAndAnswer();
+      expect(page.saveState()).toBe('refused');
+      // The form engine refuses it too, and draws nothing.
+      expect(drawnInputs()).toEqual([]);
+      expect(root().querySelector('[data-preview="refused"]')?.textContent).toContain(
+        'The form refuses this file',
+      );
+    });
   });
 });

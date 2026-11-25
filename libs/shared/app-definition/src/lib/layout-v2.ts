@@ -19,6 +19,7 @@ import {
   CHECK_KEYS,
   createChecker,
   FIELD_KEYS,
+  ID,
   join,
   MAX_NESTING,
   NAME,
@@ -59,7 +60,14 @@ const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen'];
 export const BANNER_TONES = ['info', 'warning', 'negative'] as const;
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
 /** What a card shows: exactly one of these. Every one but `fields` is for `view` mode only. */
-const CARD_CONTENTS = ['fields', 'related', 'timeline', 'comments', 'external'] as const;
+const CARD_CONTENTS = [
+  'fields',
+  'related',
+  'timeline',
+  'comments',
+  'external',
+  'checklist',
+] as const;
 const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', ...CARD_CONTENTS];
 const RELATED_KEYS = ['pageProvider', 'parameters', 'columns', 'sort', 'pageSize', 'rowActions'];
 const TIMELINE_KEYS = ['events', 'filter', 'pageSize'];
@@ -68,6 +76,8 @@ const COMMENTS_KEYS = ['pageSize'];
 const REVIEW_KEYS: readonly string[] = [];
 const EXTERNAL_KEYS = ['connector', 'fields'];
 const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters', 'visibleWhen'];
+const CHECKLIST_KEYS = ['field', 'items'];
+const CHECKLIST_ITEM_KEYS = ['id', 'label', 'labelKey'];
 
 /** A connector's id, as `nuxeo-agentic-connectors` registers one: a name, never an address. */
 export const CONNECTOR_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
@@ -95,6 +105,8 @@ export const LAYOUT_V2_KEYS = {
   comments: COMMENTS_KEYS,
   external: EXTERNAL_KEYS,
   externalField: EXTERNAL_FIELD_KEYS,
+  checklist: CHECKLIST_KEYS,
+  checklistItem: CHECKLIST_ITEM_KEYS,
   check: CHECK_KEYS,
 } as const;
 
@@ -165,7 +177,7 @@ function layout(
       c.add(
         path,
         'structure',
-        'a card has one of "fields", "related", "timeline", "comments" or "external"',
+        'a card has one of "fields", "related", "timeline", "comments", "external" or "checklist"',
       );
     if ('fields' in item) {
       const fields = item['fields'];
@@ -194,6 +206,11 @@ function layout(
           'a card from another system belongs in view mode only',
         );
       else external(c, item['external'], join(path, 'external'));
+    }
+    if ('checklist' in item) {
+      if (!view)
+        c.add(join(path, 'checklist'), 'structure', 'a checklist belongs in view mode only');
+      else checklist(c, item['checklist'], join(path, 'checklist'));
     }
   };
 
@@ -441,6 +458,60 @@ function addresses(c: Checker, item: Record<string, unknown>, path: string): voi
         queue.push([inner, join(at, key), depth + 1]);
       }
   }
+}
+
+/**
+ * A card's checklist (layout-v2.md, section 7): the items a record must have done, which the file
+ * lists, each read as done or not, with who and when, from one property of the record. The file
+ * says what is required, and the record only how far it has got. An item's id is what the
+ * property's `item` subfield holds for it: a value on the record, not an entry of the file, so it
+ * is unique in its checklist rather than among the file's ids. The property's own shape is the
+ * content model's to check (`layout-model.ts`).
+ */
+function checklist(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'checklist is an object');
+    return;
+  }
+  c.unknownKeys(item, CHECKLIST_KEYS, path);
+  const field = item['field'];
+  if (
+    typeof field !== 'string' ||
+    !XPATH.test(field) ||
+    field.startsWith('ecm:') ||
+    field.startsWith('var:')
+  ) {
+    c.add(
+      join(path, 'field'),
+      'structure',
+      "needs the record's property that holds its items, <prefix>:<name>, never an ecm: or var: name",
+    );
+  }
+  const items = item['items'];
+  if (!Array.isArray(items) || items.length === 0) {
+    c.add(join(path, 'items'), 'structure', 'needs a list of at least one item');
+    return;
+  }
+  const listed = new Map<string, string>();
+  items.forEach((entry: unknown, index) => {
+    const at = join(join(path, 'items'), index);
+    if (!isRecord(entry)) {
+      c.add(at, 'structure', 'an item is { "id", "label" or "labelKey" }');
+      return;
+    }
+    c.unknownKeys(entry, CHECKLIST_ITEM_KEYS, at);
+    const id = entry['id'];
+    if (typeof id !== 'string' || !ID.test(id)) {
+      c.add(
+        join(at, 'id'),
+        'structure',
+        'an item\'s id is what the property\'s item holds for it: 1 to 64 letters, digits, ".", "_" or "-", starting with a letter or digit',
+      );
+    } else if (listed.has(id)) {
+      c.add(join(at, 'id'), 'structure', `the item "${id}" is already listed at ${listed.get(id)}`);
+    } else listed.set(id, at);
+    c.named(entry, at);
+  });
 }
 
 /** `pageSize`, where a card may give one: 1 to 100, as a list's is. */

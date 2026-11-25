@@ -57,6 +57,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
    `app.json`, queues, actions, task forms, labels, module settings, the menu and the home.
 10. [package-pipeline.md](package-pipeline.md): the package pipeline's first stage, which checks,
     signs and publishes an app definition package.
+11. [tutorial.md](tutorial.md): build a small app from an empty package in a day, by hand and with
+    the agent, and the feedback its first run found.
 
 ## Facts that hold
 

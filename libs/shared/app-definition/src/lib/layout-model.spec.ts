@@ -52,6 +52,11 @@ function memberModel(): ContentModel {
           },
           claims: { type: 'complex[]', fields: { code: 'string', amount: 'double', paid: 'date' } },
           attachments: 'complex[]',
+          checklist: {
+            type: 'complex[]',
+            fields: { item: 'string', done: 'boolean', doneBy: 'string', doneOn: 'date' },
+          },
+          steps: { type: 'complex[]', fields: { item: 'string', done: 'string', doneOn: 'date' } },
         },
       },
     ],
@@ -201,6 +206,57 @@ describe('validateLayoutV2, given the content model', () => {
     ).toEqual([
       'cards[0].fields[0].parameters.parts: parts must give each part a subfield name [parameter]',
     ]);
+  });
+
+  describe("a checklist's property", () => {
+    const checklist = (field: string, where: 'cards' | 'tabs' = 'cards') => {
+      const card = {
+        id: 'checklist',
+        label: 'Checklist',
+        checklist: { field, items: [{ id: 'reviewerAssigned', label: 'Reviewer assigned' }] },
+      };
+      return where === 'cards'
+        ? { version: 2, cards: [card] }
+        : { version: 2, tabs: [{ id: 't', label: 'T', cards: [card] }] };
+    };
+
+    it('passes a list of complex values with item, done, doneBy and doneOn, each of its type', () => {
+      expect(messages(checklist('member:checklist'))).toEqual([]);
+      expect(messages(checklist('member:checklist', 'tabs'))).toEqual([]);
+    });
+
+    it('refuses one the type lacks, as a field is refused', () => {
+      expect(messages(checklist('member:todo'))).toEqual([
+        'cards[0].checklist.field: "member:todo" is not a property of the type "Member" or of its facets [unknown]',
+      ]);
+      expect(messages(checklist('member:todo', 'tabs'))).toEqual([
+        'tabs[0].cards[0].checklist.field: "member:todo" is not a property of the type "Member" or of its facets [unknown]',
+      ]);
+    });
+
+    it('refuses one that is not a list of complex values', () => {
+      expect(messages(checklist('member:plans'))).toEqual([
+        'cards[0].checklist.field: a checklist reads a list of complex values, and "member:plans" is a string[] property [parameter]',
+      ]);
+      expect(messages(checklist('member:address'))).toEqual([
+        'cards[0].checklist.field: a checklist reads a list of complex values, and "member:address" is a complex property [parameter]',
+      ]);
+    });
+
+    it('refuses a subfield it lacks, and one of another type', () => {
+      expect(messages(checklist('member:steps'))).toEqual([
+        'cards[0].checklist.field: "done" of "member:steps" is a string value, and a checklist reads it as a boolean [parameter]',
+        'cards[0].checklist.field: "member:steps" has no subfield "doneBy", which a checklist reads [unknown]',
+      ]);
+    });
+
+    it('takes one whose subfields the model did not read as written, as a table does', () => {
+      expect(messages(checklist('member:attachments'))).toEqual([]);
+    });
+
+    it('checks nothing against the model when none is given', () => {
+      expect(messages(checklist('member:todo'), { given: null })).toEqual([]);
+    });
   });
 
   it('checks the fields of every tab, in every mode', () => {

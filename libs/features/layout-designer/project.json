@@ -5,7 +5,7 @@
   "prefix": "lib",
   "projectType": "library",
   "tags": ["scope:features", "type:feature"],
-  "$tagsComment": "Tier 6 of docs/business-apps/architecture.md, the designer in the shell: phase 6's first slice. A feature, not an engine: it draws with the record page engine (libs/shared/document-layouts) and checks with the app definition's validator (libs/shared/app-definition), and nothing depends on it but the app.",
+  "$tagsComment": "Tier 6 of docs/business-apps/architecture.md, the designer in the shell: phase 6's first two slices. A feature, not an engine: it draws with the record page and form engines (libs/shared/document-layouts) and the queue engine (libs/shared/queues), and checks with the app definition's validator (libs/shared/app-definition), and nothing depends on it but the app.",
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",

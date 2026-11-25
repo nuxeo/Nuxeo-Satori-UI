@@ -305,7 +305,104 @@ describe('readRecordLayout', () => {
         ),
       ).toEqual({
         invalid:
-          'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external"',
+          'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist"',
+      });
+    });
+  });
+
+  describe('a checklist', () => {
+    const appeal = (checklist: Record<string, unknown>, more: Record<string, unknown> = {}) => ({
+      version: 2,
+      cards: [
+        { id: 'case', fields: ['dc:title'] },
+        { id: 'checklist', label: 'Checklist', checklist, ...more },
+      ],
+    });
+    const items = [
+      { id: 'medicalRecords', labelKey: 'payers.appeal.medicalRecords' },
+      { id: 'reviewer-assigned', label: 'Reviewer assigned' },
+    ];
+
+    it('reads its property and its items, in order, each with its words', () => {
+      const file = read(
+        appeal({ field: 'case:checklist', items }, { visibleWhen: 'app.rules.canWrite', span: 1 }),
+      );
+      expect(file.problems).toEqual([]);
+      expect(file.cards[1]).toMatchObject({
+        id: 'checklist',
+        visibleWhen: 'app.rules.canWrite',
+        fields: [],
+        related: null,
+        timeline: null,
+        comments: null,
+        external: null,
+        checklist: {
+          field: 'case:checklist',
+          items: [
+            {
+              id: 'medicalRecords',
+              label: { keys: ['payers.appeal.medicalRecords'], fallback: 'Medical records' },
+            },
+            {
+              id: 'reviewer-assigned',
+              label: { literal: 'Reviewer assigned', keys: [], fallback: 'Reviewer assigned' },
+            },
+          ],
+        },
+      });
+      expect(file.cards[0].checklist).toBeNull();
+    });
+
+    it('leaves out only its card for a key this build lacks, in it or in an item', () => {
+      const file = read({
+        version: 2,
+        cards: [
+          { id: 'a', fields: ['dc:title'] },
+          { id: 'b', checklist: { field: 'case:checklist', items, editable: true } },
+          {
+            id: 'c',
+            checklist: { field: 'case:checklist', items: [{ id: 'x', label: 'X', due: 3 }] },
+          },
+          { id: 'd', checklist: { field: 'case:checklist', items } },
+        ],
+      });
+      expect(file.cards.map((card) => card.id)).toEqual(['a', 'd']);
+      expect(file.problems).toEqual([
+        'cards[1].checklist.editable: "editable" is not a key version 2 has; cards[1] left out',
+        'cards[2].checklist.items[0].due: "due" is not a key version 2 has; cards[2] left out',
+      ]);
+    });
+
+    it('leaves out a card shown by a rule this build does not register', () => {
+      const file = read(
+        appeal(
+          { field: 'case:checklist', items },
+          {
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'case:category' }, 'appeal'],
+            },
+          },
+        ),
+      );
+      expect(file.cards.map((card) => card.id)).toEqual(['case']);
+      expect(file.problems).toEqual([
+        'cards[1] names the rule "app.rules.fieldIn", which this build does not register; left out',
+      ]);
+    });
+
+    it('refuses the whole file for an item listed twice, as a structural error', () => {
+      expect(
+        readRecordLayout(
+          appeal({
+            field: 'case:checklist',
+            items: [...items, { id: 'medicalRecords', label: 'Again' }],
+          }),
+          { rules: known },
+        ),
+      ).toEqual({
+        invalid:
+          'cards[1].checklist.items[2].id: the item "medicalRecords" is already listed at cards[1].checklist.items[0]',
       });
     });
   });

@@ -7,6 +7,8 @@
  * - **A widget shows its property's type**, as its `accepts` in the registries says.
  * - **A table's columns** name subfields of its property, and each column's widget shows its
  *   subfield's type, as a field's does. An address's `parts` name subfields of its property too.
+ * - **A checklist's property** is on the type, a list of complex values, with the subfields
+ *   {@link CHECKLIST_SUBFIELDS} names, each of its type.
  * - **A review** is for a type with the `picture` schema and without the `video` one, the records
  *   whose page shows a picture.
  *
@@ -34,6 +36,19 @@ import { isRecord, XPATH, type Registries } from './registries';
 
 /** A task form's variables, `var:<name>`, are not the record's properties. */
 const VARIABLE = 'var:';
+
+/**
+ * What each entry of a checklist's property holds (layout-v2.md, section 7), by subfield, with
+ * its type: the item's id, whether it is done, who did it, and the day. The record page reads them
+ * by these names, held to this object's keys by its types (`record-checklist.ts`), so a schema
+ * written for a checklist uses them.
+ */
+export const CHECKLIST_SUBFIELDS = {
+  item: 'string',
+  done: 'boolean',
+  doneBy: 'string',
+  doneOn: 'date',
+} as const;
 
 /** Where a field's name is looked up: the type's properties, or a complex property's subfields. */
 interface Scope {
@@ -140,9 +155,46 @@ export function againstModel(
     }
   };
 
+  /** A checklist's property: a list of complex values, each entry one item's state. */
+  const checklist = (entry: Record<string, unknown>, path: string): void => {
+    const name = entry['field'];
+    // A malformed name has its finding already.
+    if (typeof name !== 'string' || !XPATH.test(name)) return;
+    const at = join(path, 'field');
+    const property = properties.get(name);
+    if (!property) {
+      add(at, 'unknown', whyMissing(model, type, name));
+      return;
+    }
+    const shown = propertyTypeOf(property);
+    if (shown !== 'complex[]') {
+      add(
+        at,
+        'parameter',
+        `a checklist reads a list of complex values, and "${name}" is a ${shown} property`,
+      );
+      return;
+    }
+    // With no subfields read, as for a table, the property is taken as written.
+    if (!property.fields || property.fields.size === 0) return;
+    for (const [subfield, wanted] of Object.entries(CHECKLIST_SUBFIELDS)) {
+      const read = property.fields.get(subfield);
+      if (!read)
+        add(at, 'unknown', `"${name}" has no subfield "${subfield}", which a checklist reads`);
+      else if (propertyTypeOf(read) !== wanted)
+        add(
+          at,
+          'parameter',
+          `"${subfield}" of "${name}" is a ${propertyTypeOf(read)} value, and a checklist reads it as a ${wanted}`,
+        );
+    }
+  };
+
   const cards = (list: unknown, path: string): void => {
     if (!Array.isArray(list)) return;
     list.forEach((card, index) => {
+      if (isRecord(card) && isRecord(card['checklist']))
+        checklist(card['checklist'], join(join(path, index), 'checklist'));
       // A card of related records lists other records, whose type this file does not say.
       if (!isRecord(card) || !Array.isArray(card['fields'])) return;
       const fields = join(join(path, index), 'fields');
