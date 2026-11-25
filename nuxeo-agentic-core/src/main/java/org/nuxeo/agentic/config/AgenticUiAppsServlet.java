@@ -42,8 +42,6 @@ public class AgenticUiAppsServlet extends HttpServlet {
 
     static final String READ_METHODS = "GET, HEAD";
 
-    private transient volatile AppRegistryEndpoint endpoint;
-
     @Override
     protected void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String method = request.getMethod();
@@ -121,29 +119,30 @@ public class AgenticUiAppsServlet extends HttpServlet {
     }
 
     /** The configuration component's deployment layer, or one switched off when there is none. */
-    private static LayerService layer() {
+    static LayerService layer() {
         AgenticUiConfigService service = Framework.getService(AgenticUiConfigService.class);
         return service instanceof AgenticUiConfigComponent component ? component.layerService()
                 : LayerService.SWITCHED_OFF;
     }
 
     /**
-     * Rendered once per snapshot and live layer, so file bodies and ETags change only when one of
-     * them does.
+     * Rendered once per snapshot, allow-list and live deployment layer, so file bodies and ETags
+     * change only when one of them does. The one {@code AgenticUi.RunAction} reads too, so that it
+     * runs only what this serves.
      */
-    private AppRegistryEndpoint endpoint() {
+    private static AppRegistryEndpoint endpoint() {
         ConfigSnapshot snapshot = Framework.getService(AgenticUiConfigService.class).getSnapshot();
-        LayerService.Live live = layer().live();
-        AppRegistryEndpoint current = endpoint;
-        if (current == null || current.snapshot() != snapshot || current.live() != live) {
-            synchronized (this) {
-                current = endpoint;
-                if (current == null || current.snapshot() != snapshot || current.live() != live) {
-                    current = new AppRegistryEndpoint(snapshot, live);
-                    endpoint = current;
-                }
-            }
-        }
-        return current;
+        return AppRegistryEndpoint.current(snapshot, allowList(), layer().live());
+    }
+
+    /**
+     * The allow-list in force, or none when its component is not there, or when the platform's own
+     * operations have been replaced on this server: an app's actions that run an operation are then
+     * left out, rather than served unchecked. A deployment layer's queues are checked against the
+     * actions it serves ({@link LayerService}).
+     */
+    static AllowList allowList() {
+        OperationAllowListService service = Framework.getService(OperationAllowListService.class);
+        return service == null || !service.intact() ? AllowList.EMPTY : service.getAllowList();
     }
 }

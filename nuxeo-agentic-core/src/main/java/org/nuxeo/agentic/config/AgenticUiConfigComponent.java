@@ -145,7 +145,7 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
             return;
         }
         layer = new LayerService(settings, store, new NashornDeploymentValidator(model, settings), this::getSnapshot,
-                Clock.systemUTC(), lock);
+                AgenticUiAppsServlet::allowList, Clock.systemUTC(), lock);
         log.warn("Agentic UI configuration: the DEPLOYMENT LAYER IS ON ({}=true). Administrators may change an app's "
                 + "layouts and queues for everyone in its groups from the designer; {}. Every change is in the "
                 + "server's log and in the layer's trail.", LayerSettings.ENABLED_PROPERTY,

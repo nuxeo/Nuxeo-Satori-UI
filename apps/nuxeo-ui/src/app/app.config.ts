@@ -24,6 +24,7 @@ import { routes } from './app.routes';
 import { AppTranslateLoader } from './i18n/app-translate-loader';
 import { registerShippedLocaleData } from './i18n/register-locale-data';
 import { AppThemeService } from './theme/app-theme.service';
+import { startAppActions } from './business-apps.actions-start';
 import { startAppMenu } from './business-apps.menu-start';
 import { provideAppRegistry } from './business-apps.registry';
 
@@ -68,6 +69,10 @@ export const appConfig: ApplicationConfig = {
     // engine it uses is in the first bundle, and it never rejects, not even when that code cannot
     // be fetched: a menu that cannot be read leaves the platform's.
     provideAppInitializer(() => startAppMenu(inject(Injector))),
+    // The app's operation buttons, actions.json, as the app registry serves them: registered for
+    // the document page's toolbar and the queues' rows before either is drawn
+    // (docs/business-apps/app-definition-v2.md, section 5). Lazily loaded, and never rejects.
+    provideAppInitializer(() => startAppActions(inject(Injector))),
     provideAnimations(),
     provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding(), withHashLocation()),

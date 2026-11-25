@@ -1129,7 +1129,7 @@ var agenticUiValidator = (function () {
             else
                 signed(registries.checks[type], parameters2, join(path, "parameters"), "the check \"".concat(type, "\""));
         };
-        var widget = function (entry2, path, form) {
+        var widget = function (entry2, path, form2) {
             var e_20, _h, e_21, _j;
             var _a;
             var id = entry2["widget"];
@@ -1189,14 +1189,14 @@ var agenticUiValidator = (function () {
                 finally { if (e_21) throw e_21.error; }
             }
             if (id === "table" && Array.isArray(given["columns"])) {
-                given["columns"].forEach(function (column, index) { return field(column, join(join(join(path, "parameters"), "columns"), index), form, false); });
+                given["columns"].forEach(function (column, index) { return field(column, join(join(join(path, "parameters"), "columns"), index), form2, false); });
             }
         };
-        var field = function (entry2, path, form, inForm) {
-            if (inForm === void 0) { inForm = form; }
-            return nested(path, function () { return fieldAt(entry2, path, form, inForm); });
+        var field = function (entry2, path, form2, inForm) {
+            if (inForm === void 0) { inForm = form2; }
+            return nested(path, function () { return fieldAt(entry2, path, form2, inForm); });
         };
-        var fieldAt = function (entry2, path, form, inForm) {
+        var fieldAt = function (entry2, path, form2, inForm) {
             var e_22, _h;
             if (typeof entry2 === "string") {
                 if (!XPATH.test(entry2))
@@ -1234,7 +1234,7 @@ var agenticUiValidator = (function () {
             }
             if ("id" in entry2)
                 claim(entry2["id"], join(path, "id"));
-            widget(entry2, path, form);
+            widget(entry2, path, form2);
             if ("visibleWhen" in entry2)
                 rule(entry2["visibleWhen"], join(path, "visibleWhen"));
             var editable = typeof entry2["field"] === "string" && entry2["field"].startsWith(VARIABLE);
@@ -1351,686 +1351,6 @@ var agenticUiValidator = (function () {
             list: list
         };
     }
-    // libs/shared/app-definition/src/lib/actions.ts
-    var FILE_KEYS = ["$schema", "version", "actions"];
-    var ACTION_KEYS = [
-        "id",
-        "label",
-        "labelKey",
-        "icon",
-        "order",
-        "on",
-        "visibleWhen",
-        "transition",
-        "operation",
-        "parameters",
-        "confirm",
-        "success",
-        "refresh"
-    ];
-    var MESSAGE_KEYS = ["label", "labelKey"];
-    var PLACEMENTS = ["record", "row", "bulk"];
-    var PARAMETER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
-    var PLATFORM_ID = /^(?:app|core)\./;
-    function validateActions(content, options) {
-        if (options === void 0) { options = {}; }
-        var _a, _b;
-        var stop = unreadable(content, "an actions file");
-        if (stop)
-            return stop;
-        var file = content;
-        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES);
-        c.unknownKeys(file, FILE_KEYS, "");
-        c.schemaKey(file);
-        var actions = file["actions"];
-        if (!Array.isArray(actions)) {
-            c.add("actions", "structure", "actions must be a list");
-            return c.findings;
-        }
-        var operations = (_b = options.operations) != null ? _b : /* @__PURE__ */ new Set();
-        actions.forEach(function (item, index) { return action(c, item, join("actions", index), operations); });
-        return c.findings;
-    }
-    function placementsOf(action2) {
-        return Array.isArray(action2["on"]) ? action2["on"] : ["record"];
-    }
-    function action(c, item, path, operations) {
-        var e_23, _h;
-        if (!isRecord(item)) {
-            c.add(path, "structure", "an action is an object");
-            return;
-        }
-        c.unknownKeys(item, ACTION_KEYS, path);
-        c.claim(item["id"], join(path, "id"));
-        var id = item["id"];
-        if (typeof id === "string" && PLATFORM_ID.test(id))
-            c.add(join(path, "id"), "structure", "the id \"".concat(id, "\" belongs to the platform: actions.json adds actions of its own"));
-        else if (typeof id === "string" && (c.registries.rowActions.has(id) || c.registries.bulkActions.has(id) || c.registries.actions.has(id)))
-            c.add(join(path, "id"), "structure", "the id \"".concat(id, "\" is registered in code, and a manifest cannot rebind it"));
-        c.named(item, path);
-        if ("icon" in item && (typeof item["icon"] !== "string" || !ICON.test(item["icon"])))
-            c.add(join(path, "icon"), "structure", 'icon is the name of a Material Symbols icon, such as "check"');
-        if ("order" in item && !Number.isInteger(item["order"]))
-            c.add(join(path, "order"), "structure", "order is a whole number");
-        var on = placements(c, item, path);
-        if ("visibleWhen" in item)
-            c.rule(item["visibleWhen"], join(path, "visibleWhen"));
-        var hasTransition = "transition" in item;
-        var hasOperation = "operation" in item;
-        if (hasTransition === hasOperation)
-            c.add(path, "structure", 'an action has "transition" or "operation", one of the two');
-        if (hasTransition && (typeof item["transition"] !== "string" || !NAME.test(item["transition"])))
-            c.add(join(path, "transition"), "structure", "transition is the name of a lifecycle transition");
-        if (hasOperation) {
-            var operation = item["operation"];
-            if (typeof operation !== "string" || !NAME.test(operation))
-                c.add(join(path, "operation"), "structure", "operation is the ID of an Automation operation or chain");
-            else if (!operations.has(operation))
-                c.add(join(path, "operation"), "unknown", "the operation \"".concat(operation, "\" is not on this deployment's allow-list"));
-        }
-        if ("parameters" in item) {
-            if (!hasOperation)
-                c.add(join(path, "parameters"), "structure", "parameters belong to an operation");
-            else
-                parameters(c, item["parameters"], join(path, "parameters"), on);
-        }
-        try {
-            for (var _j = __values(["confirm", "success"]), _k = _j.next(); !_k.done; _k = _j.next()) {
-                var key = _k.value;
-                if (key in item)
-                    message(c, item[key], join(path, key));
-            }
-        }
-        catch (e_23_1) { e_23 = { error: e_23_1 }; }
-        finally {
-            try {
-                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
-            }
-            finally { if (e_23) throw e_23.error; }
-        }
-        if ("refresh" in item && typeof item["refresh"] !== "boolean")
-            c.add(join(path, "refresh"), "structure", "refresh is true or false");
-    }
-    function placements(c, item, path) {
-        if (!("on" in item))
-            return ["record"];
-        var on = item["on"];
-        if (!Array.isArray(on) || on.length === 0) {
-            c.add(join(path, "on"), "structure", 'on lists where it shows: "record", "row" or "bulk"');
-            return [];
-        }
-        var seen = [];
-        on.forEach(function (place, index) {
-            var at2 = join(join(path, "on"), index);
-            if (!PLACEMENTS.includes(place))
-                c.add(at2, "structure", "".concat(shown(place), " is not \"record\", \"row\" or \"bulk\""));
-            else if (seen.includes(place))
-                c.add(at2, "structure", "\"".concat(place, "\" is listed twice"));
-            else
-                seen.push(place);
-        });
-        return seen;
-    }
-    function parameters(c, value, path, on) {
-        var e_24, _h;
-        if (!isRecord(value)) {
-            c.add(path, "structure", "parameters must be an object");
-            return;
-        }
-        try {
-            for (var _j = __values(Object.entries(value)), _k = _j.next(); !_k.done; _k = _j.next()) {
-                var _l = __read(_k.value, 2), name = _l[0], item = _l[1];
-                var at2 = join(path, name);
-                if (!PARAMETER.test(name))
-                    c.add(at2, "structure", "\"".concat(name, "\" is not a parameter name"));
-                else if (on.includes("bulk") && !isLiteral(item))
-                    c.add(at2, "structure", "a bulk action runs on many records at once, so its parameters are literals");
-                else
-                    c.value(item, at2);
-            }
-        }
-        catch (e_24_1) { e_24 = { error: e_24_1 }; }
-        finally {
-            try {
-                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
-            }
-            finally { if (e_24) throw e_24.error; }
-        }
-    }
-    function message(c, value, path) {
-        if (!isRecord(value)) {
-            c.add(path, "structure", 'a message is { "label" } or { "labelKey" }');
-            return;
-        }
-        c.unknownKeys(value, MESSAGE_KEYS, path);
-        c.named(value, path);
-    }
-    // libs/shared/app-definition/src/lib/image-source.ts
-    function describeLogoSrcForm(src) {
-        var _a, _b;
-        if (src.trim() === "") {
-            return "it is blank, so it names no file";
-        }
-        if (src.includes("\\")) {
-            return "it contains a backslash, which the URL parser rewrites as a path separator";
-        }
-        if (__spreadArray([], __read(src), false).some(function (char) { return char < " " || char === "\x7F"; })) {
-            return "it contains a control character, which the URL parser drops, so the value is not what it looks like";
-        }
-        if (/^data:/i.test(src)) {
-            return /^data:image\/[a-z0-9.+-]+(?:;[^,#]*)?,[^#]/i.test(src) ? null : "it is a data: URI that is not an image, or that carries no payload";
-        }
-        var scheme = (_a = /^([a-z][a-z0-9+.-]*):/i.exec(src)) == null ? void 0 : _a[1];
-        if (scheme !== void 0) {
-            if (scheme.toLowerCase() !== "https") {
-                return "only https: is allowed for an absolute address, and this one uses \"".concat(scheme.toLowerCase(), ":\"");
-            }
-            if (!/^https:\/\/[^/]/i.test(src)) {
-                return "an absolute https: address must name a host";
-            }
-            try {
-                new URL(src);
-                return null;
-            }
-            catch (e) {
-                return "it is not a valid URL";
-            }
-        }
-        if (src.startsWith("/")) {
-            return "an absolute path is not allowed; use a path relative to the configuration directory";
-        }
-        var path = (_b = src.split(/[?#]/, 1)[0]) != null ? _b : "";
-        if (!path) {
-            return "it has no path, so it would load bootstrap.json itself";
-        }
-        return path.replace(/%2e/gi, ".").split("/").includes("..") ? 'it contains a parent-directory segment (".."), which is not allowed in a relative path however it resolves' : null;
-    }
-    // libs/shared/app-definition/src/lib/platform-routes.ts
-    var PLATFORM_ROUTES = [
-        "administration",
-        "browse",
-        "browse-adf-hx",
-        "clipboard",
-        "collections",
-        "contracts",
-        "dashboard",
-        "doc",
-        "documents",
-        "expired-queue",
-        "favorites",
-        "home",
-        "knowledge-discovery",
-        "login",
-        "personal-space",
-        "queues",
-        "recently-viewed",
-        "search",
-        "search-adf-hx",
-        "settings",
-        "tasks",
-        "trash"
-    ];
-    // libs/shared/app-definition/src/lib/semver.ts
-    var VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-    var COMPARATOR = /^(>=|<=|>|<|=|\^|~)?(.+)$/;
-    function parseVersion(text2) {
-        var match = VERSION.exec(text2);
-        if (!match)
-            return null;
-        var _h = __read([match[1], match[2], match[3]].map(Number), 3), major = _h[0], minor = _h[1], patch = _h[2];
-        if (![major, minor, patch].every(Number.isSafeInteger))
-            return null;
-        return { major: major, minor: minor, patch: patch, prerelease: match[4] ? match[4].split(".") : [] };
-    }
-    function compareVersions(a, b) {
-        var e_25, _h;
-        try {
-            for (var _j = __values(["major", "minor", "patch"]), _k = _j.next(); !_k.done; _k = _j.next()) {
-                var part = _k.value;
-                if (a[part] !== b[part])
-                    return a[part] < b[part] ? -1 : 1;
-            }
-        }
-        catch (e_25_1) { e_25 = { error: e_25_1 }; }
-        finally {
-            try {
-                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
-            }
-            finally { if (e_25) throw e_25.error; }
-        }
-        if (a.prerelease.length === 0 || b.prerelease.length === 0)
-            return b.prerelease.length - a.prerelease.length;
-        for (var index = 0; index < Math.max(a.prerelease.length, b.prerelease.length); index++) {
-            var _l = __read([a.prerelease[index], b.prerelease[index]], 2), x = _l[0], y = _l[1];
-            if (x === void 0)
-                return -1;
-            if (y === void 0)
-                return 1;
-            if (x === y)
-                continue;
-            var _m = __read([/^\d+$/.test(x), /^\d+$/.test(y)], 2), m = _m[0], n = _m[1];
-            if (m && n)
-                return x.length !== y.length ? x.length < y.length ? -1 : 1 : x < y ? -1 : 1;
-            if (m !== n)
-                return m ? -1 : 1;
-            return x < y ? -1 : 1;
-        }
-        return 0;
-    }
-    function parseRange(text2) {
-        var e_26, _h;
-        var _a;
-        var parts2 = text2.trim().split(/\s+/);
-        var comparators = [];
-        try {
-            for (var parts2_1 = __values(parts2), parts2_1_1 = parts2_1.next(); !parts2_1_1.done; parts2_1_1 = parts2_1.next()) {
-                var part = parts2_1_1.value;
-                var match = COMPARATOR.exec(part);
-                var version = match ? parseVersion(match[2]) : null;
-                if (!match || !version)
-                    return null;
-                var operator = (_a = match[1]) != null ? _a : "=";
-                if (operator === "^" || operator === "~") {
-                    var upper = operator === "~" || version.major === 0 && version.minor > 0 ? { major: version.major, minor: version.minor + 1, patch: 0 } : version.major > 0 ? { major: version.major + 1, minor: 0, patch: 0 } : { major: 0, minor: 0, patch: version.patch + 1 };
-                    comparators.push({ operator: ">=", version: version }, { operator: "<", version: __spreadProps(__spreadValues({}, upper), { prerelease: ["0"] }) });
-                }
-                else
-                    comparators.push({ operator: operator, version: version });
-            }
-        }
-        catch (e_26_1) { e_26 = { error: e_26_1 }; }
-        finally {
-            try {
-                if (parts2_1_1 && !parts2_1_1.done && (_h = parts2_1.return)) _h.call(parts2_1);
-            }
-            finally { if (e_26) throw e_26.error; }
-        }
-        return text2.trim() === "" ? null : comparators;
-    }
-    function satisfies(version, range) {
-        var same = function (a, b) { return a.major === b.major && a.minor === b.minor && a.patch === b.patch; };
-        if (version.prerelease.length > 0 && !range.some(function (_h) {
-            var bound = _h.version;
-            return bound.prerelease.length > 0 && same(bound, version);
-        }))
-            return false;
-        return range.every(function (_h) {
-            var operator = _h.operator, bound = _h.version;
-            var order = compareVersions(version, bound);
-            switch (operator) {
-                case ">=":
-                    return order >= 0;
-                case "<=":
-                    return order <= 0;
-                case ">":
-                    return order > 0;
-                case "<":
-                    return order < 0;
-                case "=":
-                    return order === 0;
-            }
-        });
-    }
-    // libs/shared/app-definition/src/lib/app.ts
-    var APP_ID = /^[a-z][a-z0-9-]{0,62}$/;
-    var APP_KEYS = [
-        "$schema",
-        "version",
-        "id",
-        "label",
-        "labelKey",
-        "packageVersion",
-        "platform",
-        "address",
-        "groups",
-        "modules",
-        "branding"
-    ];
-    var BRANDING_KEYS = ["applicationTitle", "documentTitle", "theme", "logo", "favicon"];
-    var IMAGE_KEYS = ["src", "alt"];
-    function validateApp(content, options) {
-        if (options === void 0) { options = {}; }
-        var _a;
-        var stop = unreadable(content, "an app.json");
-        if (stop)
-            return stop;
-        var app = content;
-        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES);
-        c.unknownKeys(app, APP_KEYS, "");
-        c.schemaKey(app);
-        c.named(app, "");
-        if (typeof app["id"] !== "string" || !APP_ID.test(app["id"]))
-            c.add("id", "structure", 'needs an id: lower-case letters, digits and "-", starting with a letter');
-        if ("address" in app && (typeof app["address"] !== "string" || !APP_ID.test(app["address"])))
-            c.add("address", "structure", 'an address is lower-case letters, digits and "-", starting with a letter');
-        else
-            address(c, app);
-        if (typeof app["packageVersion"] !== "string" || !parseVersion(app["packageVersion"]))
-            c.add("packageVersion", "structure", "needs the package's semantic version, such as \"1.4.0\"");
-        platform(c, app["platform"], options.platformVersion);
-        groups(c, app["groups"]);
-        if ("modules" in app)
-            modules(c, app["modules"]);
-        if ("branding" in app)
-            branding(c, app["branding"]);
-        return c.findings;
-    }
-    function address(c, app) {
-        var value = app["address"];
-        if (typeof value !== "string" || !PLATFORM_ROUTES.includes(value))
-            return;
-        c.add("address", "structure", "the address \"".concat(value, "\" is the platform's own page, /").concat(value, ": choose one no platform route has"));
-    }
-    function platform(c, range, version) {
-        var comparators = typeof range === "string" ? parseRange(range) : null;
-        if (!comparators) {
-            c.add("platform", "structure", 'needs the range of platform versions it runs on, such as ">=1.0.0 <2.0.0", "^1.2.0" or "~1.2.0"');
-            return;
-        }
-        if (version === void 0)
-            return;
-        var parsed = parseVersion(version);
-        if (!parsed)
-            throw new Error("The platform version \"".concat(version, "\" is not a semantic version."));
-        if (!satisfies(parsed, comparators))
-            c.add("platform", "unknown", "this platform is ".concat(version, ", outside \"").concat(range, "\""));
-    }
-    function groups(c, value) {
-        if (!Array.isArray(value) || value.length === 0) {
-            c.add("groups", "structure", 'needs the groups the app is for: "members" is everyone');
-            return;
-        }
-        var seen = /* @__PURE__ */ new Set();
-        value.forEach(function (group, index) {
-            var at2 = join("groups", index);
-            if (typeof group !== "string" || group.trim() === "" || group !== group.trim())
-                c.add(at2, "structure", "a group is the name of a Nuxeo group");
-            else if (seen.has(group))
-                c.add(at2, "structure", "the group \"".concat(group, "\" is listed twice"));
-            else
-                seen.add(group);
-        });
-    }
-    function modules(c, value) {
-        if (!Array.isArray(value)) {
-            c.add("modules", "structure", "modules must be a list");
-            return;
-        }
-        var seen = /* @__PURE__ */ new Set();
-        value.forEach(function (module, index) {
-            var at2 = join("modules", index);
-            if (typeof module !== "string" || !APP_ID.test(module))
-                c.add(at2, "structure", "a module is named by its id");
-            else if (seen.has(module))
-                c.add(at2, "structure", "the module \"".concat(module, "\" is listed twice"));
-            else {
-                seen.add(module);
-                if (!c.registries.modules.has(module))
-                    c.add(at2, "unknown", "the module \"".concat(module, "\" is not registered"));
-            }
-        });
-    }
-    function branding(c, value) {
-        var e_27, _h, e_28, _j;
-        if (!isRecord(value)) {
-            c.add("branding", "structure", "branding is an object");
-            return;
-        }
-        c.unknownKeys(value, BRANDING_KEYS, "branding");
-        try {
-            for (var _k = __values(["applicationTitle", "documentTitle"]), _l = _k.next(); !_l.done; _l = _k.next()) {
-                var key = _l.value;
-                if (key in value && (typeof value[key] !== "string" || value[key].trim() === ""))
-                    c.add(join("branding", key), "structure", "must be a text");
-            }
-        }
-        catch (e_27_1) { e_27 = { error: e_27_1 }; }
-        finally {
-            try {
-                if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
-            }
-            finally { if (e_27) throw e_27.error; }
-        }
-        if ("theme" in value && (typeof value["theme"] !== "string" || !ID.test(value["theme"])))
-            c.add("branding.theme", "structure", "theme is the id of one of the server's themes");
-        try {
-            for (var _m = __values(["logo", "favicon"]), _o = _m.next(); !_o.done; _o = _m.next()) {
-                var key = _o.value;
-                if (key in value)
-                    image(c, value[key], join("branding", key));
-            }
-        }
-        catch (e_28_1) { e_28 = { error: e_28_1 }; }
-        finally {
-            try {
-                if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
-            }
-            finally { if (e_28) throw e_28.error; }
-        }
-    }
-    function image(c, value, path) {
-        var _a;
-        if (value === null)
-            return;
-        if (!isRecord(value)) {
-            c.add(path, "structure", 'an image is { "src": <source>, "alt": <text> }, or null');
-            return;
-        }
-        c.unknownKeys(value, IMAGE_KEYS, path);
-        var src = value["src"];
-        var problem = typeof src !== "string" ? "it is not a text" : (_a = describeLogoSrcForm(src)) != null ? _a : isRelative(src) && !src.startsWith("assets/") ? "it is a relative path outside assets/, where a package keeps its images" : null;
-        if (problem)
-            c.add(join(path, "src"), "structure", "the source is refused: ".concat(problem));
-        if ("alt" in value && typeof value["alt"] !== "string")
-            c.add(join(path, "alt"), "structure", "must be a text");
-    }
-    function isRelative(src) {
-        return !/^[a-z][a-z0-9+.-]*:/i.test(src);
-    }
-    function assetFile(src) {
-        if (!isRelative(src) || !src.startsWith("assets/"))
-            return null;
-        var path;
-        try {
-            path = new URL(src, "https://package.invalid/").pathname.slice(1);
-        }
-        catch (e) {
-            return null;
-        }
-        try {
-            path = decodeURIComponent(path);
-        }
-        catch (e) {
-        }
-        return path.startsWith("assets/") ? path : null;
-    }
-    // libs/shared/app-definition/src/lib/home.ts
-    var HOME_KEYS = ["$schema", "version", "label", "labelKey", "cards"];
-    var CARD_KEYS = ["id", "label", "labelKey", "kpi", "queue", "visibleWhen"];
-    var KPI_KEYS = ["pageProvider", "parameters", "aggregate", "bucket"];
-    var NAVIGATION_KEYS = ["$schema", "version", "entries"];
-    var ENTRY_KEYS = ["id", "label", "labelKey", "icon", "order", "queue", "page", "visibleWhen"];
-    var HOME_PAGE = "home";
-    function validateHome(content, options) {
-        if (options === void 0) { options = {}; }
-        var _a;
-        var stop = unreadable(content, "a home file");
-        if (stop)
-            return stop;
-        var home = content;
-        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES, { record: false });
-        c.unknownKeys(home, HOME_KEYS, "");
-        c.schemaKey(home);
-        c.label(home, "");
-        var cards = home["cards"];
-        if (!Array.isArray(cards) || cards.length === 0) {
-            c.add("cards", "structure", "needs a list of cards");
-            return c.findings;
-        }
-        cards.forEach(function (item, index) { return card(c, item, join("cards", index), options.queues); });
-        return c.findings;
-    }
-    function validateNavigation(content, options) {
-        if (options === void 0) { options = {}; }
-        var _a;
-        var stop = unreadable(content, "a navigation file");
-        if (stop)
-            return stop;
-        var navigation = content;
-        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES, { record: false });
-        c.unknownKeys(navigation, NAVIGATION_KEYS, "");
-        c.schemaKey(navigation);
-        var entries = navigation["entries"];
-        if (!Array.isArray(entries) || entries.length === 0) {
-            c.add("entries", "structure", "needs a list of entries");
-            return c.findings;
-        }
-        entries.forEach(function (item, index) { return entry(c, item, join("entries", index), options.queues); });
-        return c.findings;
-    }
-    function card(c, item, path, queues) {
-        if (!isRecord(item)) {
-            c.add(path, "structure", "a card is an object");
-            return;
-        }
-        c.unknownKeys(item, CARD_KEYS, path);
-        c.claim(item["id"], join(path, "id"));
-        var hasKpi = "kpi" in item;
-        var hasQueue = "queue" in item;
-        if (!hasKpi && !hasQueue)
-            c.add(path, "structure", 'a card has a "kpi", a "queue", or both');
-        if (hasKpi) {
-            c.named(item, path);
-            kpi(c, item["kpi"], join(path, "kpi"));
-        }
-        else
-            c.label(item, path);
-        if (hasQueue)
-            queue(c, item["queue"], join(path, "queue"), queues);
-        if ("visibleWhen" in item)
-            c.rule(item["visibleWhen"], join(path, "visibleWhen"));
-    }
-    function kpi(c, item, path) {
-        if (!isRecord(item)) {
-            c.add(path, "structure", 'a KPI is { "pageProvider", "parameters", "aggregate", "bucket" }, a page provider at least');
-            return;
-        }
-        c.unknownKeys(item, KPI_KEYS, path);
-        if (typeof item["pageProvider"] !== "string" || !NAME.test(item["pageProvider"]))
-            c.add(join(path, "pageProvider"), "structure", "needs the name of a page provider defined on the server");
-        if ("parameters" in item) {
-            var parameters2 = item["parameters"];
-            if (!Array.isArray(parameters2))
-                c.add(join(path, "parameters"), "structure", "parameters must be a list");
-            else
-                parameters2.forEach(function (parameter, index) {
-                    if (!isLiteral(parameter))
-                        c.add(join(join(path, "parameters"), index), "structure", "no record is open on the home, so a page provider parameter is a literal");
-                });
-        }
-        if ("aggregate" in item && (typeof item["aggregate"] !== "string" || !NAME.test(item["aggregate"])))
-            c.add(join(path, "aggregate"), "structure", "needs the name of one of the page provider's aggregates");
-        if ("bucket" in item) {
-            if (typeof item["bucket"] !== "string" || item["bucket"] === "")
-                c.add(join(path, "bucket"), "structure", "a bucket is the key of one of the aggregate's buckets");
-            else if (!("aggregate" in item))
-                c.add(join(path, "bucket"), "structure", "a bucket is counted in an aggregate: name it too");
-        }
-    }
-    function entry(c, item, path, queues) {
-        if (!isRecord(item)) {
-            c.add(path, "structure", "an entry is an object");
-            return;
-        }
-        c.unknownKeys(item, ENTRY_KEYS, path);
-        c.claim(item["id"], join(path, "id"));
-        var hasQueue = "queue" in item;
-        var hasPage = "page" in item;
-        if (hasQueue === hasPage)
-            c.add(path, "structure", 'an entry opens a "queue" or a "page": one of the two');
-        if (hasQueue) {
-            c.label(item, path);
-            queue(c, item["queue"], join(path, "queue"), queues);
-        }
-        else
-            c.named(item, path);
-        if (hasPage)
-            page(c, item["page"], join(path, "page"));
-        if ("icon" in item && (typeof item["icon"] !== "string" || !ICON.test(item["icon"])))
-            c.add(join(path, "icon"), "structure", 'icon is the name of a Material Symbols icon, such as "inbox"');
-        if ("order" in item && !Number.isInteger(item["order"]))
-            c.add(join(path, "order"), "structure", "order is a whole number");
-        if ("visibleWhen" in item)
-            c.rule(item["visibleWhen"], join(path, "visibleWhen"));
-    }
-    function queue(c, item, path, queues) {
-        if (typeof item !== "string" || !ID.test(item)) {
-            c.add(path, "structure", "names a queue by its id, its file's name in queues/");
-            return;
-        }
-        if (queues && !queues.has(item))
-            c.add(path, "unknown", "the queue \"".concat(item, "\" is not in the package: no queues/").concat(item, ".json"));
-    }
-    function page(c, item, path) {
-        if (typeof item !== "string" || item === "") {
-            c.add(path, "structure", "a page is \"".concat(HOME_PAGE, "\" or the ID of a page's menu entry"));
-            return;
-        }
-        if (item !== HOME_PAGE && !c.registries.pages.has(item))
-            c.add(path, "unknown", "the page \"".concat(item, "\" is not registered"));
-    }
-    // libs/shared/app-definition/src/lib/labels.ts
-    var LABEL_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
-    var LABELS_KEYS = ["$schema", "version", "labels"];
-    var MODULE_KEYS = ["$schema", "version", "settings"];
-    function validateLabels(content) {
-        var e_29, _h;
-        var stop = unreadable(content, "a labels file");
-        if (stop)
-            return stop;
-        var file = content;
-        var c = createChecker(PACKAGED_REGISTRIES);
-        c.unknownKeys(file, LABELS_KEYS, "");
-        c.schemaKey(file);
-        var labels = file["labels"];
-        if (!isRecord(labels)) {
-            c.add("labels", "structure", "labels maps each key to its text");
-            return c.findings;
-        }
-        try {
-            for (var _j = __values(Object.entries(labels)), _k = _j.next(); !_k.done; _k = _j.next()) {
-                var _l = __read(_k.value, 2), key = _l[0], text2 = _l[1];
-                var at2 = "labels[".concat(JSON.stringify(key), "]");
-                if (!LABEL_KEY.test(key))
-                    c.add(at2, "structure", 'a label key is letters, digits, ".", "_", ":" and "-", starting with a letter or digit');
-                else if (typeof text2 !== "string" || text2.trim() === "")
-                    c.add(at2, "structure", "must be a text");
-            }
-        }
-        catch (e_29_1) { e_29 = { error: e_29_1 }; }
-        finally {
-            try {
-                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
-            }
-            finally { if (e_29) throw e_29.error; }
-        }
-        return c.findings;
-    }
-    function validateModuleSettings(content, options) {
-        var _a;
-        var stop = unreadable(content, "a module settings file");
-        if (stop)
-            return stop;
-        var file = content;
-        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES);
-        c.unknownKeys(file, MODULE_KEYS, "");
-        c.schemaKey(file);
-        if (!c.registries.modules.has(options.module))
-            c.add("", "unknown", "the module \"".concat(options.module, "\" is not registered"));
-        if (!isRecord(file["settings"]))
-            c.add("settings", "structure", "settings must be an object");
-        return c.findings;
-    }
     // libs/shared/app-definition/src/lib/layout-model.ts
     var VARIABLE2 = "var:";
     var CHECKLIST_SUBFIELDS = {
@@ -2070,7 +1390,7 @@ var agenticUiValidator = (function () {
             };
         };
         var field = function (entry2, path, scope) {
-            var e_30, _h;
+            var e_23, _h;
             var name;
             var at2 = path;
             var widget;
@@ -2118,17 +1438,17 @@ var agenticUiValidator = (function () {
                             add(join(parameter("parts"), part), "unknown", subfields.missing(written));
                     }
                 }
-                catch (e_30_1) { e_30 = { error: e_30_1 }; }
+                catch (e_23_1) { e_23 = { error: e_23_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_30) throw e_30.error; }
+                    finally { if (e_23) throw e_23.error; }
                 }
             }
         };
         var checklist2 = function (entry2, path) {
-            var e_31, _h;
+            var e_24, _h;
             var name = entry2["field"];
             if (typeof name !== "string" || !XPATH.test(name))
                 return;
@@ -2155,12 +1475,12 @@ var agenticUiValidator = (function () {
                         add(at2, "parameter", "\"".concat(subfield, "\" of \"").concat(name, "\" is a ").concat(propertyTypeOf(read), " value, and a checklist reads it as a ").concat(wanted));
                 }
             }
-            catch (e_31_1) { e_31 = { error: e_31_1 }; }
+            catch (e_24_1) { e_24 = { error: e_24_1 }; }
             finally {
                 try {
                     if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                 }
-                finally { if (e_31) throw e_31.error; }
+                finally { if (e_24) throw e_24.error; }
             }
         };
         var cards = function (list, path) {
@@ -2192,33 +1512,33 @@ var agenticUiValidator = (function () {
         return findings;
     }
     function schemasOf(model, type) {
-        var e_32, _h, e_33, _j;
+        var e_25, _h, e_26, _j;
         var _a, _b, _c, _d, _e, _f;
         var names = new Set((_b = (_a = model.types.get(type)) == null ? void 0 : _a.schemas) != null ? _b : []);
         try {
             for (var _k = __values((_d = (_c = model.types.get(type)) == null ? void 0 : _c.facets) != null ? _d : []), _l = _k.next(); !_l.done; _l = _k.next()) {
                 var facet = _l.value;
                 try {
-                    for (var _m = (e_33 = void 0, __values((_f = (_e = model.facets.get(facet)) == null ? void 0 : _e.schemas) != null ? _f : [])), _o = _m.next(); !_o.done; _o = _m.next()) {
+                    for (var _m = (e_26 = void 0, __values((_f = (_e = model.facets.get(facet)) == null ? void 0 : _e.schemas) != null ? _f : [])), _o = _m.next(); !_o.done; _o = _m.next()) {
                         var schema = _o.value;
                         names.add(schema);
                     }
                 }
-                catch (e_33_1) { e_33 = { error: e_33_1 }; }
+                catch (e_26_1) { e_26 = { error: e_26_1 }; }
                 finally {
                     try {
                         if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
                     }
-                    finally { if (e_33) throw e_33.error; }
+                    finally { if (e_26) throw e_26.error; }
                 }
             }
         }
-        catch (e_32_1) { e_32 = { error: e_32_1 }; }
+        catch (e_25_1) { e_25 = { error: e_25_1 }; }
         finally {
             try {
                 if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
             }
-            finally { if (e_32) throw e_32.error; }
+            finally { if (e_25) throw e_25.error; }
         }
         return names;
     }
@@ -2244,7 +1564,7 @@ var agenticUiValidator = (function () {
     }
     // libs/shared/app-definition/src/lib/layout-v2.ts
     var LAYOUT_MODES = ["view", "metadata", "edit", "create"];
-    var FILE_KEYS2 = ["$schema", "version", "columns", "banners", "review", "cards", "tabs"];
+    var FILE_KEYS = ["$schema", "version", "columns", "banners", "review", "cards", "tabs"];
     var BANNER_KEYS = ["id", "label", "labelKey", "tone", "visibleWhen"];
     var BANNER_TONES = ["info", "warning", "negative"];
     var TAB_KEYS = ["id", "label", "labelKey", "visibleWhen", "cards"];
@@ -2256,7 +1576,7 @@ var agenticUiValidator = (function () {
         "external",
         "checklist"
     ];
-    var CARD_KEYS2 = __spreadArray(["id", "label", "labelKey", "span", "visibleWhen"], __read(CARD_CONTENTS), false);
+    var CARD_KEYS = __spreadArray(["id", "label", "labelKey", "span", "visibleWhen"], __read(CARD_CONTENTS), false);
     var RELATED_KEYS = ["pageProvider", "parameters", "columns", "sort", "pageSize", "rowActions"];
     var TIMELINE_KEYS = ["events", "filter", "pageSize"];
     var COMMENTS_KEYS = ["pageSize"];
@@ -2296,13 +1616,13 @@ var agenticUiValidator = (function () {
         }
         var c = createChecker(registries, { task: task });
         var view = mode === "view";
-        var form = mode === "edit" || mode === "create";
+        var form2 = mode === "edit" || mode === "create";
         var card2 = function (item, path, columns3) {
             if (!isRecord(item)) {
                 c.add(path, "structure", "a card is an object");
                 return;
             }
-            c.unknownKeys(item, CARD_KEYS2, path);
+            c.unknownKeys(item, CARD_KEYS, path);
             c.claim(item["id"], join(path, "id"));
             c.label(item, path);
             if ("span" in item) {
@@ -2321,7 +1641,7 @@ var agenticUiValidator = (function () {
                 if (!Array.isArray(fields))
                     c.add(join(path, "fields"), "structure", "fields must be a list");
                 else
-                    fields.forEach(function (entry2, index) { return c.field(entry2, join(join(path, "fields"), index), form); });
+                    fields.forEach(function (entry2, index) { return c.field(entry2, join(join(path, "fields"), index), form2); });
             }
             if ("related" in item) {
                 if (!view)
@@ -2361,7 +1681,7 @@ var agenticUiValidator = (function () {
             }
             list.forEach(function (item, index) { return card2(item, join(path, index), columns3); });
         };
-        c.unknownKeys(file, FILE_KEYS2, "");
+        c.unknownKeys(file, FILE_KEYS, "");
         c.schemaKey(file);
         var columns2 = 1;
         if ("columns" in file) {
@@ -2533,7 +1853,7 @@ var agenticUiValidator = (function () {
         var found = function (at2) { return c.add(at2, "structure", "an address is never written in a layout: a connector's address is the server's configuration"); };
         var queue2 = [[item, path, 0]];
         var _loop_2 = function (next) {
-            var e_34, _h;
+            var e_27, _h;
             var _j = __read(queue2[next], 3), value = _j[0], at2 = _j[1], depth = _j[2];
             if (typeof value === "string") {
                 if (ADDRESS.test(value) && !XPATH.test(value))
@@ -2546,19 +1866,19 @@ var agenticUiValidator = (function () {
                 value.forEach(function (inner, index) { return queue2.push([inner, join(at2, index), depth + 1]); });
             else if (isRecord(value))
                 try {
-                    for (var _k = (e_34 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
+                    for (var _k = (e_27 = void 0, __values(Object.entries(value))), _l = _k.next(); !_l.done; _l = _k.next()) {
                         var _m = __read(_l.value, 2), key = _m[0], inner = _m[1];
                         if (ADDRESS.test(key))
                             found(join(at2, key));
                         queue2.push([inner, join(at2, key), depth + 1]);
                     }
                 }
-                catch (e_34_1) { e_34 = { error: e_34_1 }; }
+                catch (e_27_1) { e_27 = { error: e_27_1 }; }
                 finally {
                     try {
                         if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
                     }
-                    finally { if (e_34) throw e_34.error; }
+                    finally { if (e_27) throw e_27.error; }
                 }
         };
         for (var next = 0; next < queue2.length; next++) {
@@ -2604,6 +1924,739 @@ var agenticUiValidator = (function () {
         var size = item["pageSize"];
         if ("pageSize" in item && !(Number.isInteger(size) && size >= 1 && size <= 100))
             c.add(join(path, "pageSize"), "structure", "pageSize is a whole number from 1 to 100");
+    }
+    // libs/shared/app-definition/src/lib/actions.ts
+    var FILE_KEYS2 = ["$schema", "version", "actions"];
+    var ACTION_KEYS = [
+        "id",
+        "label",
+        "labelKey",
+        "icon",
+        "order",
+        "on",
+        "visibleWhen",
+        "enabledWhen",
+        "transition",
+        "operation",
+        "parameters",
+        "form",
+        "confirm",
+        "success",
+        "refresh"
+    ];
+    var FORM_FIELD = /^var:([A-Za-z][A-Za-z0-9_]{0,63})$/;
+    var MESSAGE_KEYS = ["label", "labelKey"];
+    var PLACEMENTS = ["record", "row", "bulk"];
+    var PARAMETER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+    var PLATFORM_ID = /^(?:app|core)\./;
+    function validateActions(content, options) {
+        if (options === void 0) { options = {}; }
+        var _a, _b;
+        var stop = unreadable(content, "an actions file");
+        if (stop)
+            return stop;
+        var file = content;
+        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES);
+        c.unknownKeys(file, FILE_KEYS2, "");
+        c.schemaKey(file);
+        var actions = file["actions"];
+        if (!Array.isArray(actions)) {
+            c.add("actions", "structure", "actions must be a list");
+            return c.findings;
+        }
+        var operations = (_b = options.operations) != null ? _b : /* @__PURE__ */ new Set();
+        actions.forEach(function (item, index) { return action(c, item, join("actions", index), operations); });
+        return c.findings;
+    }
+    function placementsOf(action2) {
+        return Array.isArray(action2["on"]) ? action2["on"] : ["record"];
+    }
+    function action(c, item, path, operations) {
+        var e_28, _h;
+        if (!isRecord(item)) {
+            c.add(path, "structure", "an action is an object");
+            return;
+        }
+        c.unknownKeys(item, ACTION_KEYS, path);
+        c.claim(item["id"], join(path, "id"));
+        var id = item["id"];
+        if (typeof id === "string" && PLATFORM_ID.test(id))
+            c.add(join(path, "id"), "structure", "the id \"".concat(id, "\" belongs to the platform: actions.json adds actions of its own"));
+        else if (typeof id === "string" && (c.registries.rowActions.has(id) || c.registries.bulkActions.has(id) || c.registries.actions.has(id)))
+            c.add(join(path, "id"), "structure", "the id \"".concat(id, "\" is registered in code, and a manifest cannot rebind it"));
+        c.named(item, path);
+        if ("icon" in item && (typeof item["icon"] !== "string" || !ICON.test(item["icon"])))
+            c.add(join(path, "icon"), "structure", 'icon is the name of a Material Symbols icon, such as "check"');
+        if ("order" in item && !Number.isInteger(item["order"]))
+            c.add(join(path, "order"), "structure", "order is a whole number");
+        var on = placements(c, item, path);
+        if ("visibleWhen" in item)
+            c.rule(item["visibleWhen"], join(path, "visibleWhen"));
+        if ("enabledWhen" in item)
+            c.rule(item["enabledWhen"], join(path, "enabledWhen"));
+        var hasTransition = "transition" in item;
+        var hasOperation = "operation" in item;
+        if (hasTransition === hasOperation)
+            c.add(path, "structure", 'an action has "transition" or "operation", one of the two');
+        if (hasTransition && (typeof item["transition"] !== "string" || !NAME.test(item["transition"])))
+            c.add(join(path, "transition"), "structure", "transition is the name of a lifecycle transition");
+        if (hasOperation) {
+            var operation = item["operation"];
+            if (typeof operation !== "string" || !NAME.test(operation))
+                c.add(join(path, "operation"), "structure", "operation is the ID of an Automation operation or chain");
+            else if (!operations.has(operation))
+                c.add(join(path, "operation"), "unknown", "the operation \"".concat(operation, "\" is not on this deployment's allow-list"));
+        }
+        var fields = "form" in item ? form(c, item["form"], join(path, "form"), hasOperation, on) : [];
+        var sent = /* @__PURE__ */ new Set();
+        if ("parameters" in item) {
+            if (!hasOperation)
+                c.add(join(path, "parameters"), "structure", "parameters belong to an operation");
+            else
+                parameters(c, item["parameters"], join(path, "parameters"), on, fields, sent);
+        }
+        fields.forEach(function (field, index) {
+            if (field !== null && !sent.has(field))
+                c.add(join(join(join(path, "form"), index), "field"), "structure", "no parameter sends \"".concat(field, "\": give one { \"field\": \"").concat(field, "\" }"));
+        });
+        try {
+            for (var _j = __values(["confirm", "success"]), _k = _j.next(); !_k.done; _k = _j.next()) {
+                var key = _k.value;
+                if (key in item)
+                    message(c, item[key], join(path, key));
+            }
+        }
+        catch (e_28_1) { e_28 = { error: e_28_1 }; }
+        finally {
+            try {
+                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
+            }
+            finally { if (e_28) throw e_28.error; }
+        }
+        if ("refresh" in item && typeof item["refresh"] !== "boolean")
+            c.add(join(path, "refresh"), "structure", "refresh is true or false");
+    }
+    function placements(c, item, path) {
+        if (!("on" in item))
+            return ["record"];
+        var on = item["on"];
+        if (!Array.isArray(on) || on.length === 0) {
+            c.add(join(path, "on"), "structure", 'on lists where it shows: "record", "row" or "bulk"');
+            return [];
+        }
+        var seen = [];
+        on.forEach(function (place, index) {
+            var at2 = join(join(path, "on"), index);
+            if (!PLACEMENTS.includes(place))
+                c.add(at2, "structure", "".concat(shown(place), " is not \"record\", \"row\" or \"bulk\""));
+            else if (seen.includes(place))
+                c.add(at2, "structure", "\"".concat(place, "\" is listed twice"));
+            else
+                seen.push(place);
+        });
+        return seen;
+    }
+    function parameters(c, value, path, on, fields, sent) {
+        var e_29, _h;
+        if (!isRecord(value)) {
+            c.add(path, "structure", "parameters must be an object");
+            return;
+        }
+        try {
+            for (var _j = __values(Object.entries(value)), _k = _j.next(); !_k.done; _k = _j.next()) {
+                var _l = __read(_k.value, 2), name = _l[0], item = _l[1];
+                var at2 = join(path, name);
+                if (!PARAMETER.test(name))
+                    c.add(at2, "structure", "\"".concat(name, "\" is not a parameter name"));
+                else if (on.includes("bulk") && !isLiteral(item))
+                    c.add(at2, "structure", "a bulk action runs on many records at once, so its parameters are literals");
+                else if (isFieldReference(item) && item.field.startsWith("var:")) {
+                    if (!fields.includes(item.field))
+                        c.add(join(at2, "field"), "structure", "\"".concat(item.field, "\" is a field of the action's form, and its form has no such field"));
+                    else
+                        sent.add(item.field);
+                }
+                else if (isRecord(item) && "computed" in item)
+                    c.add(at2, "structure", "a computation is worked out in the browser, which the server does not trust: a parameter is a literal, a field of the record or a field of the form");
+                else
+                    c.value(item, at2);
+            }
+        }
+        catch (e_29_1) { e_29 = { error: e_29_1 }; }
+        finally {
+            try {
+                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
+            }
+            finally { if (e_29) throw e_29.error; }
+        }
+    }
+    function form(c, value, path, hasOperation, on) {
+        var e_30, _h;
+        if (!Array.isArray(value) || value.length === 0) {
+            c.add(path, "structure", "a form is a list of the fields it asks for");
+            return [];
+        }
+        if (!hasOperation)
+            c.add(path, "structure", "a form gives values to an operation");
+        if (on.includes("bulk"))
+            c.add(path, "structure", "a bulk action runs on many records at once, so it has no form");
+        var card2 = "cards[0].fields";
+        try {
+            for (var _j = __values(validateTaskForm({ version: 2, cards: [{ id: "form", fields: value }] }, { registries: c.registries })), _k = _j.next(); !_k.done; _k = _j.next()) {
+                var finding = _k.value;
+                c.add(finding.path.startsWith(card2) ? "".concat(path).concat(finding.path.slice(card2.length)) : path, finding.kind, finding.message);
+            }
+        }
+        catch (e_30_1) { e_30 = { error: e_30_1 }; }
+        finally {
+            try {
+                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
+            }
+            finally { if (e_30) throw e_30.error; }
+        }
+        return value.map(function (entry2, index) {
+            var field = isRecord(entry2) ? entry2["field"] : entry2;
+            var named = typeof field === "string" ? FORM_FIELD.exec(field) : null;
+            if (!named) {
+                c.add(isRecord(entry2) ? join(join(path, index), "field") : join(path, index), "structure", "an action's form asks for values: each field is \"var:<name>\", a letter then letters, digits or \"_\"");
+                return null;
+            }
+            return field;
+        });
+    }
+    function message(c, value, path) {
+        if (!isRecord(value)) {
+            c.add(path, "structure", 'a message is { "label" } or { "labelKey" }');
+            return;
+        }
+        c.unknownKeys(value, MESSAGE_KEYS, path);
+        c.named(value, path);
+    }
+    // libs/shared/app-definition/src/lib/image-source.ts
+    function describeLogoSrcForm(src) {
+        var _a, _b;
+        if (src.trim() === "") {
+            return "it is blank, so it names no file";
+        }
+        if (src.includes("\\")) {
+            return "it contains a backslash, which the URL parser rewrites as a path separator";
+        }
+        if (__spreadArray([], __read(src), false).some(function (char) { return char < " " || char === "\x7F"; })) {
+            return "it contains a control character, which the URL parser drops, so the value is not what it looks like";
+        }
+        if (/^data:/i.test(src)) {
+            return /^data:image\/[a-z0-9.+-]+(?:;[^,#]*)?,[^#]/i.test(src) ? null : "it is a data: URI that is not an image, or that carries no payload";
+        }
+        var scheme = (_a = /^([a-z][a-z0-9+.-]*):/i.exec(src)) == null ? void 0 : _a[1];
+        if (scheme !== void 0) {
+            if (scheme.toLowerCase() !== "https") {
+                return "only https: is allowed for an absolute address, and this one uses \"".concat(scheme.toLowerCase(), ":\"");
+            }
+            if (!/^https:\/\/[^/]/i.test(src)) {
+                return "an absolute https: address must name a host";
+            }
+            try {
+                new URL(src);
+                return null;
+            }
+            catch (e) {
+                return "it is not a valid URL";
+            }
+        }
+        if (src.startsWith("/")) {
+            return "an absolute path is not allowed; use a path relative to the configuration directory";
+        }
+        var path = (_b = src.split(/[?#]/, 1)[0]) != null ? _b : "";
+        if (!path) {
+            return "it has no path, so it would load bootstrap.json itself";
+        }
+        return path.replace(/%2e/gi, ".").split("/").includes("..") ? 'it contains a parent-directory segment (".."), which is not allowed in a relative path however it resolves' : null;
+    }
+    // libs/shared/app-definition/src/lib/platform-routes.ts
+    var PLATFORM_ROUTES = [
+        "administration",
+        "browse",
+        "browse-adf-hx",
+        "clipboard",
+        "collections",
+        "contracts",
+        "dashboard",
+        "doc",
+        "documents",
+        "expired-queue",
+        "favorites",
+        "home",
+        "knowledge-discovery",
+        "login",
+        "personal-space",
+        "queues",
+        "recently-viewed",
+        "search",
+        "search-adf-hx",
+        "settings",
+        "tasks",
+        "trash"
+    ];
+    // libs/shared/app-definition/src/lib/semver.ts
+    var VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+    var COMPARATOR = /^(>=|<=|>|<|=|\^|~)?(.+)$/;
+    function parseVersion(text2) {
+        var match = VERSION.exec(text2);
+        if (!match)
+            return null;
+        var _h = __read([match[1], match[2], match[3]].map(Number), 3), major = _h[0], minor = _h[1], patch = _h[2];
+        if (![major, minor, patch].every(Number.isSafeInteger))
+            return null;
+        return { major: major, minor: minor, patch: patch, prerelease: match[4] ? match[4].split(".") : [] };
+    }
+    function compareVersions(a, b) {
+        var e_31, _h;
+        try {
+            for (var _j = __values(["major", "minor", "patch"]), _k = _j.next(); !_k.done; _k = _j.next()) {
+                var part = _k.value;
+                if (a[part] !== b[part])
+                    return a[part] < b[part] ? -1 : 1;
+            }
+        }
+        catch (e_31_1) { e_31 = { error: e_31_1 }; }
+        finally {
+            try {
+                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
+            }
+            finally { if (e_31) throw e_31.error; }
+        }
+        if (a.prerelease.length === 0 || b.prerelease.length === 0)
+            return b.prerelease.length - a.prerelease.length;
+        for (var index = 0; index < Math.max(a.prerelease.length, b.prerelease.length); index++) {
+            var _l = __read([a.prerelease[index], b.prerelease[index]], 2), x = _l[0], y = _l[1];
+            if (x === void 0)
+                return -1;
+            if (y === void 0)
+                return 1;
+            if (x === y)
+                continue;
+            var _m = __read([/^\d+$/.test(x), /^\d+$/.test(y)], 2), m = _m[0], n = _m[1];
+            if (m && n)
+                return x.length !== y.length ? x.length < y.length ? -1 : 1 : x < y ? -1 : 1;
+            if (m !== n)
+                return m ? -1 : 1;
+            return x < y ? -1 : 1;
+        }
+        return 0;
+    }
+    function parseRange(text2) {
+        var e_32, _h;
+        var _a;
+        var parts2 = text2.trim().split(/\s+/);
+        var comparators = [];
+        try {
+            for (var parts2_1 = __values(parts2), parts2_1_1 = parts2_1.next(); !parts2_1_1.done; parts2_1_1 = parts2_1.next()) {
+                var part = parts2_1_1.value;
+                var match = COMPARATOR.exec(part);
+                var version = match ? parseVersion(match[2]) : null;
+                if (!match || !version)
+                    return null;
+                var operator = (_a = match[1]) != null ? _a : "=";
+                if (operator === "^" || operator === "~") {
+                    var upper = operator === "~" || version.major === 0 && version.minor > 0 ? { major: version.major, minor: version.minor + 1, patch: 0 } : version.major > 0 ? { major: version.major + 1, minor: 0, patch: 0 } : { major: 0, minor: 0, patch: version.patch + 1 };
+                    comparators.push({ operator: ">=", version: version }, { operator: "<", version: __spreadProps(__spreadValues({}, upper), { prerelease: ["0"] }) });
+                }
+                else
+                    comparators.push({ operator: operator, version: version });
+            }
+        }
+        catch (e_32_1) { e_32 = { error: e_32_1 }; }
+        finally {
+            try {
+                if (parts2_1_1 && !parts2_1_1.done && (_h = parts2_1.return)) _h.call(parts2_1);
+            }
+            finally { if (e_32) throw e_32.error; }
+        }
+        return text2.trim() === "" ? null : comparators;
+    }
+    function satisfies(version, range) {
+        var same = function (a, b) { return a.major === b.major && a.minor === b.minor && a.patch === b.patch; };
+        if (version.prerelease.length > 0 && !range.some(function (_h) {
+            var bound = _h.version;
+            return bound.prerelease.length > 0 && same(bound, version);
+        }))
+            return false;
+        return range.every(function (_h) {
+            var operator = _h.operator, bound = _h.version;
+            var order = compareVersions(version, bound);
+            switch (operator) {
+                case ">=":
+                    return order >= 0;
+                case "<=":
+                    return order <= 0;
+                case ">":
+                    return order > 0;
+                case "<":
+                    return order < 0;
+                case "=":
+                    return order === 0;
+            }
+        });
+    }
+    // libs/shared/app-definition/src/lib/app.ts
+    var APP_ID = /^[a-z][a-z0-9-]{0,62}$/;
+    var APP_KEYS = [
+        "$schema",
+        "version",
+        "id",
+        "label",
+        "labelKey",
+        "packageVersion",
+        "platform",
+        "address",
+        "groups",
+        "modules",
+        "branding"
+    ];
+    var BRANDING_KEYS = ["applicationTitle", "documentTitle", "theme", "logo", "favicon"];
+    var IMAGE_KEYS = ["src", "alt"];
+    function validateApp(content, options) {
+        if (options === void 0) { options = {}; }
+        var _a;
+        var stop = unreadable(content, "an app.json");
+        if (stop)
+            return stop;
+        var app = content;
+        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES);
+        c.unknownKeys(app, APP_KEYS, "");
+        c.schemaKey(app);
+        c.named(app, "");
+        if (typeof app["id"] !== "string" || !APP_ID.test(app["id"]))
+            c.add("id", "structure", 'needs an id: lower-case letters, digits and "-", starting with a letter');
+        if ("address" in app && (typeof app["address"] !== "string" || !APP_ID.test(app["address"])))
+            c.add("address", "structure", 'an address is lower-case letters, digits and "-", starting with a letter');
+        else
+            address(c, app);
+        if (typeof app["packageVersion"] !== "string" || !parseVersion(app["packageVersion"]))
+            c.add("packageVersion", "structure", "needs the package's semantic version, such as \"1.4.0\"");
+        platform(c, app["platform"], options.platformVersion);
+        groups(c, app["groups"]);
+        if ("modules" in app)
+            modules(c, app["modules"]);
+        if ("branding" in app)
+            branding(c, app["branding"]);
+        return c.findings;
+    }
+    function address(c, app) {
+        var value = app["address"];
+        if (typeof value !== "string" || !PLATFORM_ROUTES.includes(value))
+            return;
+        c.add("address", "structure", "the address \"".concat(value, "\" is the platform's own page, /").concat(value, ": choose one no platform route has"));
+    }
+    function platform(c, range, version) {
+        var comparators = typeof range === "string" ? parseRange(range) : null;
+        if (!comparators) {
+            c.add("platform", "structure", 'needs the range of platform versions it runs on, such as ">=1.0.0 <2.0.0", "^1.2.0" or "~1.2.0"');
+            return;
+        }
+        if (version === void 0)
+            return;
+        var parsed = parseVersion(version);
+        if (!parsed)
+            throw new Error("The platform version \"".concat(version, "\" is not a semantic version."));
+        if (!satisfies(parsed, comparators))
+            c.add("platform", "unknown", "this platform is ".concat(version, ", outside \"").concat(range, "\""));
+    }
+    function groups(c, value) {
+        if (!Array.isArray(value) || value.length === 0) {
+            c.add("groups", "structure", 'needs the groups the app is for: "members" is everyone');
+            return;
+        }
+        var seen = /* @__PURE__ */ new Set();
+        value.forEach(function (group, index) {
+            var at2 = join("groups", index);
+            if (typeof group !== "string" || group.trim() === "" || group !== group.trim())
+                c.add(at2, "structure", "a group is the name of a Nuxeo group");
+            else if (seen.has(group))
+                c.add(at2, "structure", "the group \"".concat(group, "\" is listed twice"));
+            else
+                seen.add(group);
+        });
+    }
+    function modules(c, value) {
+        if (!Array.isArray(value)) {
+            c.add("modules", "structure", "modules must be a list");
+            return;
+        }
+        var seen = /* @__PURE__ */ new Set();
+        value.forEach(function (module, index) {
+            var at2 = join("modules", index);
+            if (typeof module !== "string" || !APP_ID.test(module))
+                c.add(at2, "structure", "a module is named by its id");
+            else if (seen.has(module))
+                c.add(at2, "structure", "the module \"".concat(module, "\" is listed twice"));
+            else {
+                seen.add(module);
+                if (!c.registries.modules.has(module))
+                    c.add(at2, "unknown", "the module \"".concat(module, "\" is not registered"));
+            }
+        });
+    }
+    function branding(c, value) {
+        var e_33, _h, e_34, _j;
+        if (!isRecord(value)) {
+            c.add("branding", "structure", "branding is an object");
+            return;
+        }
+        c.unknownKeys(value, BRANDING_KEYS, "branding");
+        try {
+            for (var _k = __values(["applicationTitle", "documentTitle"]), _l = _k.next(); !_l.done; _l = _k.next()) {
+                var key = _l.value;
+                if (key in value && (typeof value[key] !== "string" || value[key].trim() === ""))
+                    c.add(join("branding", key), "structure", "must be a text");
+            }
+        }
+        catch (e_33_1) { e_33 = { error: e_33_1 }; }
+        finally {
+            try {
+                if (_l && !_l.done && (_h = _k.return)) _h.call(_k);
+            }
+            finally { if (e_33) throw e_33.error; }
+        }
+        if ("theme" in value && (typeof value["theme"] !== "string" || !ID.test(value["theme"])))
+            c.add("branding.theme", "structure", "theme is the id of one of the server's themes");
+        try {
+            for (var _m = __values(["logo", "favicon"]), _o = _m.next(); !_o.done; _o = _m.next()) {
+                var key = _o.value;
+                if (key in value)
+                    image(c, value[key], join("branding", key));
+            }
+        }
+        catch (e_34_1) { e_34 = { error: e_34_1 }; }
+        finally {
+            try {
+                if (_o && !_o.done && (_j = _m.return)) _j.call(_m);
+            }
+            finally { if (e_34) throw e_34.error; }
+        }
+    }
+    function image(c, value, path) {
+        var _a;
+        if (value === null)
+            return;
+        if (!isRecord(value)) {
+            c.add(path, "structure", 'an image is { "src": <source>, "alt": <text> }, or null');
+            return;
+        }
+        c.unknownKeys(value, IMAGE_KEYS, path);
+        var src = value["src"];
+        var problem = typeof src !== "string" ? "it is not a text" : (_a = describeLogoSrcForm(src)) != null ? _a : isRelative(src) && !src.startsWith("assets/") ? "it is a relative path outside assets/, where a package keeps its images" : null;
+        if (problem)
+            c.add(join(path, "src"), "structure", "the source is refused: ".concat(problem));
+        if ("alt" in value && typeof value["alt"] !== "string")
+            c.add(join(path, "alt"), "structure", "must be a text");
+    }
+    function isRelative(src) {
+        return !/^[a-z][a-z0-9+.-]*:/i.test(src);
+    }
+    function assetFile(src) {
+        if (!isRelative(src) || !src.startsWith("assets/"))
+            return null;
+        var path;
+        try {
+            path = new URL(src, "https://package.invalid/").pathname.slice(1);
+        }
+        catch (e) {
+            return null;
+        }
+        try {
+            path = decodeURIComponent(path);
+        }
+        catch (e) {
+        }
+        return path.startsWith("assets/") ? path : null;
+    }
+    // libs/shared/app-definition/src/lib/home.ts
+    var HOME_KEYS = ["$schema", "version", "label", "labelKey", "cards"];
+    var CARD_KEYS2 = ["id", "label", "labelKey", "kpi", "queue", "visibleWhen"];
+    var KPI_KEYS = ["pageProvider", "parameters", "aggregate", "bucket"];
+    var NAVIGATION_KEYS = ["$schema", "version", "entries"];
+    var ENTRY_KEYS = ["id", "label", "labelKey", "icon", "order", "queue", "page", "visibleWhen"];
+    var HOME_PAGE = "home";
+    function validateHome(content, options) {
+        if (options === void 0) { options = {}; }
+        var _a;
+        var stop = unreadable(content, "a home file");
+        if (stop)
+            return stop;
+        var home = content;
+        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES, { record: false });
+        c.unknownKeys(home, HOME_KEYS, "");
+        c.schemaKey(home);
+        c.label(home, "");
+        var cards = home["cards"];
+        if (!Array.isArray(cards) || cards.length === 0) {
+            c.add("cards", "structure", "needs a list of cards");
+            return c.findings;
+        }
+        cards.forEach(function (item, index) { return card(c, item, join("cards", index), options.queues); });
+        return c.findings;
+    }
+    function validateNavigation(content, options) {
+        if (options === void 0) { options = {}; }
+        var _a;
+        var stop = unreadable(content, "a navigation file");
+        if (stop)
+            return stop;
+        var navigation = content;
+        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES, { record: false });
+        c.unknownKeys(navigation, NAVIGATION_KEYS, "");
+        c.schemaKey(navigation);
+        var entries = navigation["entries"];
+        if (!Array.isArray(entries) || entries.length === 0) {
+            c.add("entries", "structure", "needs a list of entries");
+            return c.findings;
+        }
+        entries.forEach(function (item, index) { return entry(c, item, join("entries", index), options.queues); });
+        return c.findings;
+    }
+    function card(c, item, path, queues) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", "a card is an object");
+            return;
+        }
+        c.unknownKeys(item, CARD_KEYS2, path);
+        c.claim(item["id"], join(path, "id"));
+        var hasKpi = "kpi" in item;
+        var hasQueue = "queue" in item;
+        if (!hasKpi && !hasQueue)
+            c.add(path, "structure", 'a card has a "kpi", a "queue", or both');
+        if (hasKpi) {
+            c.named(item, path);
+            kpi(c, item["kpi"], join(path, "kpi"));
+        }
+        else
+            c.label(item, path);
+        if (hasQueue)
+            queue(c, item["queue"], join(path, "queue"), queues);
+        if ("visibleWhen" in item)
+            c.rule(item["visibleWhen"], join(path, "visibleWhen"));
+    }
+    function kpi(c, item, path) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", 'a KPI is { "pageProvider", "parameters", "aggregate", "bucket" }, a page provider at least');
+            return;
+        }
+        c.unknownKeys(item, KPI_KEYS, path);
+        if (typeof item["pageProvider"] !== "string" || !NAME.test(item["pageProvider"]))
+            c.add(join(path, "pageProvider"), "structure", "needs the name of a page provider defined on the server");
+        if ("parameters" in item) {
+            var parameters2 = item["parameters"];
+            if (!Array.isArray(parameters2))
+                c.add(join(path, "parameters"), "structure", "parameters must be a list");
+            else
+                parameters2.forEach(function (parameter, index) {
+                    if (!isLiteral(parameter))
+                        c.add(join(join(path, "parameters"), index), "structure", "no record is open on the home, so a page provider parameter is a literal");
+                });
+        }
+        if ("aggregate" in item && (typeof item["aggregate"] !== "string" || !NAME.test(item["aggregate"])))
+            c.add(join(path, "aggregate"), "structure", "needs the name of one of the page provider's aggregates");
+        if ("bucket" in item) {
+            if (typeof item["bucket"] !== "string" || item["bucket"] === "")
+                c.add(join(path, "bucket"), "structure", "a bucket is the key of one of the aggregate's buckets");
+            else if (!("aggregate" in item))
+                c.add(join(path, "bucket"), "structure", "a bucket is counted in an aggregate: name it too");
+        }
+    }
+    function entry(c, item, path, queues) {
+        if (!isRecord(item)) {
+            c.add(path, "structure", "an entry is an object");
+            return;
+        }
+        c.unknownKeys(item, ENTRY_KEYS, path);
+        c.claim(item["id"], join(path, "id"));
+        var hasQueue = "queue" in item;
+        var hasPage = "page" in item;
+        if (hasQueue === hasPage)
+            c.add(path, "structure", 'an entry opens a "queue" or a "page": one of the two');
+        if (hasQueue) {
+            c.label(item, path);
+            queue(c, item["queue"], join(path, "queue"), queues);
+        }
+        else
+            c.named(item, path);
+        if (hasPage)
+            page(c, item["page"], join(path, "page"));
+        if ("icon" in item && (typeof item["icon"] !== "string" || !ICON.test(item["icon"])))
+            c.add(join(path, "icon"), "structure", 'icon is the name of a Material Symbols icon, such as "inbox"');
+        if ("order" in item && !Number.isInteger(item["order"]))
+            c.add(join(path, "order"), "structure", "order is a whole number");
+        if ("visibleWhen" in item)
+            c.rule(item["visibleWhen"], join(path, "visibleWhen"));
+    }
+    function queue(c, item, path, queues) {
+        if (typeof item !== "string" || !ID.test(item)) {
+            c.add(path, "structure", "names a queue by its id, its file's name in queues/");
+            return;
+        }
+        if (queues && !queues.has(item))
+            c.add(path, "unknown", "the queue \"".concat(item, "\" is not in the package: no queues/").concat(item, ".json"));
+    }
+    function page(c, item, path) {
+        if (typeof item !== "string" || item === "") {
+            c.add(path, "structure", "a page is \"".concat(HOME_PAGE, "\" or the ID of a page's menu entry"));
+            return;
+        }
+        if (item !== HOME_PAGE && !c.registries.pages.has(item))
+            c.add(path, "unknown", "the page \"".concat(item, "\" is not registered"));
+    }
+    // libs/shared/app-definition/src/lib/labels.ts
+    var LABEL_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
+    var LABELS_KEYS = ["$schema", "version", "labels"];
+    var MODULE_KEYS = ["$schema", "version", "settings"];
+    function validateLabels(content) {
+        var e_35, _h;
+        var stop = unreadable(content, "a labels file");
+        if (stop)
+            return stop;
+        var file = content;
+        var c = createChecker(PACKAGED_REGISTRIES);
+        c.unknownKeys(file, LABELS_KEYS, "");
+        c.schemaKey(file);
+        var labels = file["labels"];
+        if (!isRecord(labels)) {
+            c.add("labels", "structure", "labels maps each key to its text");
+            return c.findings;
+        }
+        try {
+            for (var _j = __values(Object.entries(labels)), _k = _j.next(); !_k.done; _k = _j.next()) {
+                var _l = __read(_k.value, 2), key = _l[0], text2 = _l[1];
+                var at2 = "labels[".concat(JSON.stringify(key), "]");
+                if (!LABEL_KEY.test(key))
+                    c.add(at2, "structure", 'a label key is letters, digits, ".", "_", ":" and "-", starting with a letter or digit');
+                else if (typeof text2 !== "string" || text2.trim() === "")
+                    c.add(at2, "structure", "must be a text");
+            }
+        }
+        catch (e_35_1) { e_35 = { error: e_35_1 }; }
+        finally {
+            try {
+                if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
+            }
+            finally { if (e_35) throw e_35.error; }
+        }
+        return c.findings;
+    }
+    function validateModuleSettings(content, options) {
+        var _a;
+        var stop = unreadable(content, "a module settings file");
+        if (stop)
+            return stop;
+        var file = content;
+        var c = createChecker((_a = options.registries) != null ? _a : PACKAGED_REGISTRIES);
+        c.unknownKeys(file, MODULE_KEYS, "");
+        c.schemaKey(file);
+        if (!c.registries.modules.has(options.module))
+            c.add("", "unknown", "the module \"".concat(options.module, "\" is not registered"));
+        if (!isRecord(file["settings"]))
+            c.add("settings", "structure", "settings must be an object");
+        return c.findings;
     }
     // libs/shared/app-definition/src/lib/queue.ts
     var QUEUE_KEYS = [
@@ -2678,7 +2731,7 @@ var agenticUiValidator = (function () {
         [at(String.raw(__makeTemplateObject(["home.json"], ["home\\.json"]))), function () { return ({ kind: "home" }); }]
     ];
     function placeFile(path, hasApp) {
-        var e_35, _h;
+        var e_36, _h;
         if (hasApp === void 0) { hasApp = function () { return false; }; }
         var _a, _b, _c;
         var candidates = [];
@@ -2691,12 +2744,12 @@ var agenticUiValidator = (function () {
                     candidates.push({ file: placed, root: (_a = match[1]) != null ? _a : "" });
             }
         }
-        catch (e_35_1) { e_35 = { error: e_35_1 }; }
+        catch (e_36_1) { e_36 = { error: e_36_1 }; }
         finally {
             try {
                 if (PLACES_1_1 && !PLACES_1_1.done && (_h = PLACES_1.return)) _h.call(PLACES_1);
             }
-            finally { if (e_35) throw e_35.error; }
+            finally { if (e_36) throw e_36.error; }
         }
         return (_c = (_b = candidates.find(function (candidate) { return hasApp(candidate.root); })) != null ? _b : candidates[0]) != null ? _c : null;
     }
@@ -2712,7 +2765,7 @@ var agenticUiValidator = (function () {
     function untranslated(content, labels, catalogue) {
         var findings = [];
         var visit = function (value, path) {
-            var e_36, _h;
+            var e_37, _h;
             if (Array.isArray(value))
                 value.forEach(function (item, index) { return visit(item, join(path, index)); });
             else if (isRecord(value))
@@ -2733,12 +2786,12 @@ var agenticUiValidator = (function () {
                             visit(item, at2);
                     }
                 }
-                catch (e_36_1) { e_36 = { error: e_36_1 }; }
+                catch (e_37_1) { e_37 = { error: e_37_1 }; }
                 finally {
                     try {
                         if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
                     }
-                    finally { if (e_36) throw e_36.error; }
+                    finally { if (e_37) throw e_37.error; }
                 }
         };
         visit(content, "");
@@ -2777,7 +2830,7 @@ var agenticUiValidator = (function () {
         }
     }
     function withPackageActions(registries, actions) {
-        var e_37, _h;
+        var e_38, _h;
         if (!isRecord(actions) || !Array.isArray(actions["actions"]))
             return registries;
         var row = [];
@@ -2794,17 +2847,17 @@ var agenticUiValidator = (function () {
                     bulk.push(action2["id"]);
             }
         }
-        catch (e_37_1) { e_37 = { error: e_37_1 }; }
+        catch (e_38_1) { e_38 = { error: e_38_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_37) throw e_37.error; }
+            finally { if (e_38) throw e_38.error; }
         }
         return withRegistered(registries, { rowActions: row, bulkActions: bulk });
     }
     function missingAssets(content, context) {
-        var e_38, _h;
+        var e_39, _h;
         if (!isRecord(content) || !isRecord(content["branding"]))
             return [];
         var branding2 = content["branding"];
@@ -2823,12 +2876,12 @@ var agenticUiValidator = (function () {
                     });
             }
         }
-        catch (e_38_1) { e_38 = { error: e_38_1 }; }
+        catch (e_39_1) { e_39 = { error: e_39_1 }; }
         finally {
             try {
                 if (_k && !_k.done && (_h = _j.return)) _h.call(_j);
             }
-            finally { if (e_38) throw e_38.error; }
+            finally { if (e_39) throw e_39.error; }
         }
         return findings;
     }

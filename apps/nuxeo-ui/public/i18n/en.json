@@ -1514,6 +1514,19 @@
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."
   },
   "document-layouts": {
+    "action": {
+      "cancel": "Cancel",
+      "confirm": "Run {{action}} on {{record}}?",
+      "done": "{{action}}: done.",
+      "failed": "The action could not be run.",
+      "invalid": "A value entered cannot be used for this action. Correct it, or cancel.",
+      "may-have-run": "The server did not answer, and the action may have run. Look at the record before you run it again.",
+      "no-longer-available": "This action is no longer available for this record, which has changed. Cancel, and look at the record again.",
+      "not-available": "This action is not available for this record.",
+      "refused": "You may not run this action on this record.",
+      "running": "Running the action",
+      "unknown": "This server does not offer this action."
+    },
     "checklist": {
       "count": "{{done}} of {{total}} done",
       "done": "Done",

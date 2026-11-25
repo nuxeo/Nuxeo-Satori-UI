@@ -48,6 +48,12 @@ final class LayerFixtures {
 
     static final LayerSettings ON = new LayerSettings(true, false, List.of(), List.of(), List.of());
 
+    /**
+     * The allow-list the Payers demo deployment contributes: its Request medical records operation,
+     * which the kit's {@code my-claims} queue names as a row action.
+     */
+    static final AllowList PAYERS_OPERATIONS = ActionFixtures.allowList(ActionFixtures.requestRecords());
+
     static final LayerSettings ON_SELF_APPROVAL = new LayerSettings(true, true, List.of(), List.of(), List.of());
 
     private static JsonNode corpus;
@@ -205,7 +211,8 @@ final class LayerFixtures {
 
     static LayerService service(LayerSettings settings, MemoryStore store, Supplier<ConfigSnapshot> snapshot,
             Clock clock) {
-        return new LayerService(settings, store, validator(settings), snapshot, clock, LayerService.AppLock.NONE);
+        return new LayerService(settings, store, validator(settings), snapshot, () -> PAYERS_OPERATIONS, clock,
+                LayerService.AppLock.NONE);
     }
 
     static LayerService service(LayerSettings settings, MemoryStore store) {

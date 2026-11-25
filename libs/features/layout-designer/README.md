@@ -185,7 +185,13 @@ Below the Save section of either page, for the file open:
   to Java and none of the host's own functions (`load`, `exit` and the rest). A file with any
   finding, a path no layer holds, a model that cannot be read, or a validator that cannot run
   refuses the write, 422, whatever the client checked. A queue is held to the app's own
-  `actions.json`. What the deployment registers in code beyond the platform comes from
+  `actions.json` **as the registry serves it**, after the server's allow-list of operations
+  (`org.nuxeo.agentic.ui.operations`, the operation buttons'): a layer's queue can name an action
+  that runs an operation only while the allow-list lets that operation run. One it no longer lets
+  run refuses the write, and a live queue that names it is no longer served, since the live layer
+  is checked again whenever the allow-list changes; the queue page and `AgenticUi.RunAction` would
+  leave the action out anyway. A layer cannot hold `actions.json`, so it can name only the
+  package's actions, never add one. What the deployment registers in code beyond the platform comes from
   `nuxeo.agentic.ui.layer.registered.rules`, `.rowActions` and `.bulkActions`, set alike on every
   server of a cluster, as `selfApproval` must be.
 - **Checked again when served:** each live file is held to the validator once more when the

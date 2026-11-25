@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:nuxeo-satori:app-definition:actions:2",
   "title": "actions.json, app definition version 2",
-  "description": "docs/business-apps/app-definition-v2.md, section 5. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that ids are unique, that each operation is on the deployment's allow-list, and that a bulk action's parameters are literals.",
+  "description": "docs/business-apps/app-definition-v2.md, section 5. The validator in libs/shared/app-definition is what refuses a package. It also checks what a schema cannot: that ids are unique, that each operation is on the deployment's allow-list, that a bulk action's parameters are literals, that each var: parameter names a field of the action's form and each field of the form is sent, and each form field as a task form's (layout-v2.md). On a server, the app registry serves only the actions the server's own allow-list lets run.",
   "type": "object",
   "required": ["version", "actions"],
   "additionalProperties": false,
@@ -63,6 +63,10 @@
         "visibleWhen": {
           "$ref": "#/$defs/rule"
         },
+        "enabledWhen": {
+          "$ref": "#/$defs/rule",
+          "description": "While it does not pass, the button shows and cannot be chosen. Checked again before the action runs."
+        },
         "transition": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
@@ -78,7 +82,15 @@
             "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
           },
           "additionalProperties": {
-            "$ref": "#/$defs/value"
+            "$ref": "#/$defs/parameterValue"
+          }
+        },
+        "form": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The fields the person fills in before it runs, each var:<name>, drawn as a task form's (layout-v2.md). A parameter { \"field\": \"var:<name>\" } sends what is entered.",
+          "items": {
+            "$ref": "#/$defs/formField"
           }
         },
         "confirm": {
@@ -113,6 +125,9 @@
                   },
                   {
                     "required": ["parameters"]
+                  },
+                  {
+                    "required": ["form"]
                   }
                 ]
               }
@@ -188,7 +203,8 @@
         }
       }
     },
-    "value": {
+    "parameterValue": {
+      "description": "A literal, a field of the record, or a field of the action's form, var:<name>. Not a computation: it is worked out in the browser, which the server does not trust.",
       "oneOf": [
         {
           "type": "string"
@@ -201,38 +217,65 @@
         },
         {
           "$ref": "#/$defs/fieldReference"
+        }
+      ]
+    },
+    "formFieldName": {
+      "type": "string",
+      "pattern": "^var:[A-Za-z][A-Za-z0-9_]{0,63}$"
+    },
+    "formField": {
+      "description": "A field of a task form (layout-v2.md, section 5) whose field is var:<name>.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/formFieldName"
         },
         {
           "type": "object",
-          "required": ["computed"],
+          "required": ["field"],
           "additionalProperties": false,
           "properties": {
-            "computed": {
-              "$ref": "#/$defs/computation"
+            "field": {
+              "$ref": "#/$defs/formFieldName"
+            },
+            "label": {
+              "type": "string"
+            },
+            "labelKey": {
+              "type": "string"
+            },
+            "widget": {
+              "type": "string"
+            },
+            "parameters": {
+              "type": "object",
+              "description": "The widget's parameters (layout-v2.md, section 3)."
+            },
+            "visibleWhen": {
+              "$ref": "#/$defs/rule"
+            },
+            "required": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "#/$defs/rule"
+                }
+              ]
+            },
+            "readOnlyWhen": {
+              "$ref": "#/$defs/rule"
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
             }
           }
         }
       ]
-    },
-    "computation": {
-      "type": "object",
-      "required": ["type"],
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "enum": [
-            "core.age",
-            "core.template",
-            "core.sum",
-            "core.count",
-            "core.dateDiff",
-            "core.choose"
-          ]
-        },
-        "parameters": {
-          "type": "array"
-        }
-      }
     }
   }
 }

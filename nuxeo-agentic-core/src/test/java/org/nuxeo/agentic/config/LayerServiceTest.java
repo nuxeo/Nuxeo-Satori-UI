@@ -136,6 +136,61 @@ class LayerServiceTest {
         assertEquals(422, service.act(APP, MY_CLAIMS, ADA, save(1, unknown)).status());
     }
 
+    /**
+     * A layer's queue names the app's actions as the registry serves them, after the allow-list of
+     * operations (#717): the kit's {@code my-claims} names Request medical records, which runs an
+     * operation, and that is written, published and served only while the allow-list lets it run.
+     */
+    @Test
+    void aQueuesActionThatRunsAnOperationPassesTheAllowListOrTheQueueIsNeitherWrittenNorServed() throws Exception {
+        AtomicReference<AllowList> allowed = new AtomicReference<>(AllowList.EMPTY);
+        ConfigSnapshot snapshot = LayerFixtures.snapshot();
+        LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
+        LayerService service = new LayerService(ON_SELF_APPROVAL, store, LayerFixtures.validator(ON_SELF_APPROVAL),
+                () -> snapshot, allowed::get, new LayerFixtures.TestClock(), LayerService.AppLock.NONE);
+        ObjectNode queue = kitFile(MY_CLAIMS);
+        queue.put("label", "Mine, with records requested");
+
+        // With no operation allowed, the action is not served, so the queue naming it is refused.
+        LayerService.Outcome refused = service.act(APP, MY_CLAIMS, ADA, save(0, queue));
+        assertEquals(422, refused.status());
+        assertTrue(text(refused.body().get("findings")).contains("payers.claim.requestRecords"));
+
+        // Allowed, it is written and published, and served with the actions the registry serves.
+        allowed.set(LayerFixtures.PAYERS_OPERATIONS);
+        assertEquals(200, publish(service, MY_CLAIMS, queue).status());
+        AppRegistryEndpoint registry = new AppRegistryEndpoint(snapshot, allowed.get(), service.live());
+        assertEquals(text(queue), text(json(registry.respond("/apps/payers-claims/" + MY_CLAIMS, DANA, null))));
+        assertTrue(body(registry.respond("/apps/payers-claims/actions.json", DANA, null))
+                .contains("payers.claim.requestRecords"));
+        assertTrue(registry.action(APP, "payers.claim.requestRecords", DANA) != null);
+
+        // The deployment takes the operation off its allow-list: the live queue is checked again,
+        // and the package's queue is served in its place, as the action no longer is.
+        allowed.set(AllowList.EMPTY);
+        LayerService.Live live = service.live();
+        assertFalse(live.of(APP).containsKey(MY_CLAIMS));
+        AppRegistryEndpoint after = new AppRegistryEndpoint(snapshot, allowed.get(), live);
+        assertEquals(text(kitFile(MY_CLAIMS)), text(json(after.respond("/apps/payers-claims/" + MY_CLAIMS, DANA, null))));
+        assertFalse(body(after.respond("/apps/payers-claims/actions.json", DANA, null))
+                .contains("payers.claim.requestRecords"));
+        assertFalse(service.state(APP, MY_CLAIMS, ADA).body().get("served").asBoolean());
+    }
+
+    @Test
+    void theRegistryAndTheRunShareOneEndpointWithTheLayerInForce() {
+        ConfigSnapshot snapshot = LayerFixtures.snapshot();
+        LayerService service = service(ON, new LayerFixtures.MemoryStore(), () -> snapshot,
+                new LayerFixtures.TestClock());
+        assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("Shared")).status());
+        LayerService.Live live = service.live();
+        AppRegistryEndpoint first = AppRegistryEndpoint.current(snapshot, LayerFixtures.PAYERS_OPERATIONS, live);
+        assertSame(first, AppRegistryEndpoint.current(snapshot, LayerFixtures.PAYERS_OPERATIONS, live));
+        assertSame(live, first.live());
+        assertNotEquals(first, AppRegistryEndpoint.current(snapshot, LayerFixtures.PAYERS_OPERATIONS,
+                LayerService.Live.NONE));
+    }
+
     @Test
     void aChangeThatIsNotOneIsRefused() {
         LayerService service = service(ON, new LayerFixtures.MemoryStore());
@@ -170,7 +225,7 @@ class LayerServiceTest {
         queue.put("label", marker);
         assertEquals(200, service.act(APP, MY_CLAIMS, ADA, save(0, queue)).status());
 
-        AppRegistryEndpoint registry = new AppRegistryEndpoint(snapshot, service.live());
+        AppRegistryEndpoint registry = new AppRegistryEndpoint(snapshot, LayerFixtures.PAYERS_OPERATIONS, service.live());
         for (AppRegistryEndpoint.Viewer viewer : List.of(DANA, SAM, ADA, BEN)) {
             for (String path : List.of("/apps.json", "/apps/payers-claims/" + CLAIM_VIEW, "/apps/payers-claims/" + MY_CLAIMS)) {
                 assertFalse(body(registry.respond(path, viewer, null)).contains(marker), viewer.name() + " " + path);
@@ -238,7 +293,7 @@ class LayerServiceTest {
         assertEquals("ada", live.get("submittedBy").asText());
         assertTrue(approved.body().get("draft").isNull());
 
-        AppRegistryEndpoint registry = new AppRegistryEndpoint(snapshot, service.live());
+        AppRegistryEndpoint registry = new AppRegistryEndpoint(snapshot, LayerFixtures.PAYERS_OPERATIONS, service.live());
         AppRegistryEndpoint.Response served = registry.respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null);
         assertEquals(200, served.status());
         assertEquals(text(file), text(json(served)));
@@ -317,7 +372,7 @@ class LayerServiceTest {
         assertEquals("rollback", live.get("kind").asText());
         assertEquals(1, live.get("from").asInt());
         assertEquals(text(first), text(live.get("content")));
-        assertEquals(text(first), text(json(new AppRegistryEndpoint(snapshot, service.live())
+        assertEquals(text(first), text(json(new AppRegistryEndpoint(snapshot, LayerFixtures.PAYERS_OPERATIONS, service.live())
                 .respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null))));
         // Every version is kept, and none has its content in the history the state lists.
         assertEquals(3, back.body().get("versions").size());
@@ -345,7 +400,7 @@ class LayerServiceTest {
         LayerService.Outcome packaged = service.act(APP, CLAIM_VIEW, ADA, change("rollback", 7));
         assertEquals(200, packaged.status());
         assertTrue(packaged.body().get("live").isNull());
-        assertEquals(404, new AppRegistryEndpoint(snapshot, service.live())
+        assertEquals(404, new AppRegistryEndpoint(snapshot, LayerFixtures.PAYERS_OPERATIONS, service.live())
                 .respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null).status());
         assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, change("rollback", 8)).status());
         ObjectNode back3 = change("rollback", 8);
@@ -371,7 +426,7 @@ class LayerServiceTest {
         snapshot.set(LayerFixtures.snapshot());
 
         assertTrue(service.live().of(APP).isEmpty());
-        assertEquals(404, new AppRegistryEndpoint(snapshot.get(), service.live())
+        assertEquals(404, new AppRegistryEndpoint(snapshot.get(), LayerFixtures.PAYERS_OPERATIONS, service.live())
                 .respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null).status());
     }
 

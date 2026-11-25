@@ -138,6 +138,8 @@ final class LayerService {
 
     private final Supplier<ConfigSnapshot> snapshot;
 
+    private final Supplier<AllowList> allowList;
+
     private final Clock clock;
 
     private final AppLock appLock;
@@ -152,6 +154,9 @@ final class LayerService {
 
     /** The configuration {@link #live} was checked against. */
     private volatile ConfigSnapshot liveSnapshot;
+
+    /** The allow-list {@link #live} was checked against. */
+    private volatile AllowList liveAllowList;
 
     private volatile long liveReadAt;
 
@@ -171,12 +176,25 @@ final class LayerService {
         void run(String key, Runnable work);
     }
 
+    /** With no allow-list: a queue may name none of the app's actions that run an operation. */
     LayerService(LayerSettings settings, LayerStore store, DeploymentValidator validator,
             Supplier<ConfigSnapshot> snapshot, Clock clock, AppLock appLock) {
+        this(settings, store, validator, snapshot, () -> AllowList.EMPTY, clock, appLock);
+    }
+
+    /**
+     * @param allowList the operations this server lets run ({@code org.nuxeo.agentic.ui.operations}),
+     *            as the registry serves an app's {@code actions.json} with it: a queue of the layer is
+     *            checked against the actions served, so it can name an action that runs an operation
+     *            only while the allow-list lets that operation run
+     */
+    LayerService(LayerSettings settings, LayerStore store, DeploymentValidator validator,
+            Supplier<ConfigSnapshot> snapshot, Supplier<AllowList> allowList, Clock clock, AppLock appLock) {
         this.settings = settings;
         this.store = store;
         this.validator = validator;
         this.snapshot = snapshot;
+        this.allowList = allowList;
         this.clock = clock;
         this.appLock = appLock;
     }
@@ -209,19 +227,23 @@ final class LayerService {
             return Live.NONE;
         }
         ConfigSnapshot in = snapshot.get();
+        AllowList allowed = allowList.get();
         Live current = live;
-        if (current != null && liveSnapshot == in && clock.millis() - liveReadAt < REFRESH_MILLIS) {
+        if (current != null && liveSnapshot == in && liveAllowList == allowed
+                && clock.millis() - liveReadAt < REFRESH_MILLIS) {
             return current;
         }
         synchronized (this) {
             current = live;
-            if (current != null && liveSnapshot == in && clock.millis() - liveReadAt < REFRESH_MILLIS) {
+            if (current != null && liveSnapshot == in && liveAllowList == allowed
+                    && clock.millis() - liveReadAt < REFRESH_MILLIS) {
                 return current;
             }
             long started = generation.get();
             Map<String, LayerStore.Stored> stored;
             try {
-                if (current != null && liveSnapshot == in && current.stamp().equals(stampsOf(store.stamps()))) {
+                if (current != null && liveSnapshot == in && liveAllowList == allowed
+                        && current.stamp().equals(stampsOf(store.stamps()))) {
                     liveReadAt = clock.millis();
                     return current;
                 }
@@ -233,16 +255,18 @@ final class LayerService {
                 Live kept = current == null ? Live.NONE : current;
                 live = kept;
                 liveSnapshot = in;
+                liveAllowList = allowed;
                 liveReadAt = clock.millis();
                 return kept;
             }
             Map<String, String> stamps = new TreeMap<>();
             stored.forEach((app, each) -> stamps.put(app, each.stamp()));
-            Live built = build(in, stored, stampsOf(stamps));
+            Live built = build(in, allowed, stored, stampsOf(stamps));
             // A change made here while this was read leaves it unkept, so the next read sees it.
             if (generation.get() == started) {
                 live = built;
                 liveSnapshot = in;
+                liveAllowList = allowed;
                 liveReadAt = clock.millis();
             }
             return built;
@@ -255,7 +279,7 @@ final class LayerService {
      * for now and checked again at the next read: the layer is then built with no stamp, which no
      * read matches.
      */
-    private Live build(ConfigSnapshot in, Map<String, LayerStore.Stored> stored, String stamp) {
+    private Live build(ConfigSnapshot in, AllowList allowed, Map<String, LayerStore.Stored> stored, String stamp) {
         boolean[] unchecked = { false };
         Map<String, Map<String, LiveFile>> apps = new LinkedHashMap<>();
         for (Map.Entry<String, LayerStore.Stored> entry : new TreeMap<>(stored).entrySet()) {
@@ -273,7 +297,7 @@ final class LayerService {
                     return;
                 }
                 DeploymentValidator.Answer answer = validator.validate(path, version.get("content"), definition.app(),
-                        actionsOf(definition));
+                        actionsOf(definition, allowed));
                 if (!answer.passes()) {
                     unchecked[0] |= answer.refused() != null;
                     log.error("Agentic UI deployment layer: {}/{} version {} is not served, and the package's file is: {}",
@@ -717,7 +741,7 @@ final class LayerService {
     private Outcome check(String app, String path, JsonNode content) {
         ConfigSnapshot.App definition = appOf(app);
         DeploymentValidator.Answer answer = validator.validate(path, content, definition == null ? null : definition.app(),
-                actionsOf(definition));
+                actionsOf(definition, allowList.get()));
         if (answer.passes()) {
             return null;
         }
@@ -801,14 +825,22 @@ final class LayerService {
         return null;
     }
 
-    /** The app's {@code actions.json} in force, parsed, or {@code null} when its package has none. */
-    private static JsonNode actionsOf(ConfigSnapshot.App definition) {
-        ConfigSnapshot.AppFile file = definition == null ? null : definition.files().get("actions.json");
+    /**
+     * The app's {@code actions.json} as the registry serves it with this allow-list, parsed, or
+     * {@code null} when its package has none: an action that runs an operation the allow-list does
+     * not let run is not in it, so a queue that names one is refused, as the queue page would leave
+     * it out ({@link AppActions}).
+     */
+    private static JsonNode actionsOf(ConfigSnapshot.App definition, AllowList allowed) {
+        ConfigSnapshot.AppFile file = definition == null ? null : definition.files().get(AppActions.FILE);
         if (file == null) {
             return null;
         }
+        AppActions.Served served = AppActions.serve(definition.id(), new Provenance(
+                definition.provenance().component(), definition.provenance().bundle(), file.source()), file.bytes(),
+                allowed);
         try {
-            return ConfigSnapshot.JSON.readTree(file.bytes());
+            return ConfigSnapshot.JSON.readTree(served.bytes());
         } catch (IOException e) {
             return null;
         }
