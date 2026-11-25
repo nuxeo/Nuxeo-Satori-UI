@@ -16,7 +16,7 @@ import { DocumentLayoutService } from '../document-layout.service';
 import { readLayoutFile } from '../layout-file';
 import { DocumentTypeDefinition, LayoutSection, ResolvedLayout } from '../layout.model';
 import type { LinkedRecord } from '../record-page/linked-record';
-import { applyLayoutFile, readDocumentType } from '../resolve-layout';
+import { applyLayoutFile, generateLayout, readDocumentType } from '../resolve-layout';
 import { DOCUMENT_LAYOUT_TIME_ZONE, DocumentLayoutComponent } from './document-layout';
 
 const TITLES: Readonly<Record<string, string>> = {
@@ -271,6 +271,39 @@ describe('DocumentLayoutComponent', () => {
   it('falls back to the readable name when no key resolves', async () => {
     await render(claimDocument());
     expect(labelOf('claim:serviceDate')).toBe('serviceDate');
+  });
+
+  describe("a generated section's heading", () => {
+    // The brand-assets kit's product, as the Properties panel generates it: one section for the
+    // kit's schema, `acmeproduct`, whose name made readable is "Acmeproduct".
+    const product = {
+      ...claimDocument(),
+      uid: 'p1',
+      type: 'AcmeProduct',
+      properties: { 'acmeproduct:style': 'TR-100' },
+    } as NuxeoDocument;
+    const productType: DocumentTypeDefinition = {
+      name: 'AcmeProduct',
+      schemas: [
+        { name: 'acmeproduct', prefix: 'acmeproduct', fields: { style: { type: 'string' } } },
+      ],
+    };
+    const heading = () => text('[data-section-id="acmeproduct"] .document-layout__heading');
+
+    it("is the kit's label for the schema, layout.schema.<schema>, when it has one", async () => {
+      TestBed.inject(TranslateService).setTranslation(
+        'en',
+        { 'layout.schema.acmeproduct': 'Product' },
+        true,
+      );
+      await render(product, generateLayout(productType, 'metadata'));
+      expect(heading()).toBe('Product');
+    });
+
+    it("is the schema's name made readable when no label names it", async () => {
+      await render(product, generateLayout(productType, 'metadata'));
+      expect(heading()).toBe('Acmeproduct');
+    });
   });
 
   it('leaves out the heading of a contributed section with no label', async () => {

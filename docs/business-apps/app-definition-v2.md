@@ -564,6 +564,7 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
     "payers.queue.unassigned": "Unassigned claims",
     "payers.action.requestRecords": "Request medical records",
     "payers.action.requestRecords.sent": "Medical records requested",
+    "layout.schema.claim": "Claim",
     "layout.field.claim:memberId": "Member ID"
   }
 }
@@ -574,6 +575,14 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
 - **A key** is the app's own, best begun with the app's name, or the platform's, such as
   `layout.field.claim:memberId`, which this replaces in this language. Version 1's manifest
   `labels` replace a key in every language at once.
+- **The generated Properties panel's names** are two of the platform's keys, for a type with no
+  `metadata` layout file (layout-v2.md, section 1). `layout.schema.<schema>` heads a schema's
+  section, by the schema's name, not its prefix: the facilities kit's `layout.schema.workorder`
+  names the schema `workorder`, whose prefix is `wo`. `layout.field.<prefix>:<field>` names a
+  field. With no text, a heading is the schema's name made readable, so a kit's own schema shows
+  as a raw name: `acmeproduct` is "Acmeproduct". Give each schema of a kit's own types a heading:
+  `kit-schema-labels.spec.ts`, in `libs/shared/document-layouts`, holds the kits under
+  `business-apps/packages/` to it, from each kit's `content-model.json`.
 - **A text** is not empty.
 - **Every key a package names has a text** in its `labels/en.json` or in the platform's English
   catalogue: the pipeline refuses one with neither, by its key and its file
