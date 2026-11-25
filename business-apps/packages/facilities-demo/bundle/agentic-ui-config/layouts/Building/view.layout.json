@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "building",
+      "labelKey": "facilities.card.building.building",
+      "fields": [
+        "bldg:code",
+        { "field": "dc:title", "labelKey": "facilities.field.buildingName" },
+        "bldg:campus",
+        { "field": "bldg:floors", "widget": "number" }
+      ]
+    },
+    {
+      "id": "contact",
+      "labelKey": "facilities.card.building.contact",
+      "fields": [
+        { "field": "bldg:manager", "widget": "user" },
+        { "field": "bldg:phone", "widget": "phone" }
+      ]
+    },
+    {
+      "id": "work-orders",
+      "labelKey": "facilities.card.building.workOrders",
+      "span": 2,
+      "related": {
+        "pageProvider": "facilities_building_work_orders",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "wo:number",
+          "dc:title",
+          "wo:category",
+          "wo:priority",
+          "wo:status",
+          { "field": "wo:due", "widget": "date" }
+        ],
+        "sort": [{ "field": "wo:due", "order": "desc" }],
+        "pageSize": 10
+      }
+    }
+  ]
+}

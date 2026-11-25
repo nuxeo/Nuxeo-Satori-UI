@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, until a real model arrives: the fictional workorder schema of the WorkOrder type,
+     written by the app-model generator. Replace it with the real one, and the layouts and the
+     queues follow its property names. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/facilities-demo/workorder"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/facilities-demo/workorder">
+
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="building" type="xs:string" />
+  <xs:element name="category">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Electrical" />
+        <xs:enumeration value="Plumbing" />
+        <xs:enumeration value="HVAC" />
+        <xs:enumeration value="Cleaning" />
+        <xs:enumeration value="Grounds" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="priority">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="Low" />
+        <xs:enumeration value="Normal" />
+        <xs:enumeration value="High" />
+        <xs:enumeration value="Urgent" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="status">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="New" />
+        <xs:enumeration value="Assigned" />
+        <xs:enumeration value="Completed" />
+        <xs:enumeration value="Cancelled" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="assignee" type="xs:string" />
+  <xs:element name="due" type="xs:date" />
+  <xs:element name="estimate" type="xs:double" />
+  <xs:element name="completed" type="xs:date" />
+  <xs:element name="resolution" type="xs:string" />
+</xs:schema>
