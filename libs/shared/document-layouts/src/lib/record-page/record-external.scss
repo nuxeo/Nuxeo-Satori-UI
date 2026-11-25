@@ -1,0 +1,41 @@
+:host {
+  display: block;
+}
+
+.record-external__fields {
+  margin: 0;
+}
+
+.record-external__field {
+  margin-bottom: 14px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.record-external__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 2px;
+}
+
+.record-external__value {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.record-external__multiline {
+  white-space: pre-line;
+}
+
+.record-external__loading {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}

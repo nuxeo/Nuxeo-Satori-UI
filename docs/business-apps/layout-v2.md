@@ -137,8 +137,9 @@ picture whose rights are ending. It shows above the cards, or above the tabs, wh
 | `related`           | Or a list of related records (section 7), in `view` mode only                                                                                                                                                 |
 | `timeline`          | Or the record's history (section 7), in `view` mode only                                                                                                                                                      |
 | `comments`          | Or the record's comments (section 7), in `view` mode only                                                                                                                                                     |
+| `external`          | Or fields of a record in another system (section 7), in `view` mode only                                                                                                                                      |
 
-A card has one of `fields`, `related`, `timeline` and `comments`.
+A card has one of `fields`, `related`, `timeline`, `comments` and `external`.
 
 In `metadata`, `edit` and `create` modes, cards show as the sections of the panel or the form.
 
@@ -396,6 +397,69 @@ A card can show the record's comments and their replies, in `view` mode:
   one. The server's permissions still decide.
 - It is the record's one thread, the one the Comments panel beside the page shows.
 
+### Fields from another system
+
+**Built on 24 November 2026, as the first slice of phase 7** ([development plan](development-plan.md)).
+A card can show fields of a record that lives in another system, a system of record such as a core
+claims system, in `view` mode. The server reads the record through a connector that a kit's
+package contributes, by a key the open record holds, such as a claim's number
+([`nuxeo-agentic-connectors`](../../nuxeo-agentic-connectors/README.md)):
+
+```json
+{
+  "id": "payment",
+  "labelKey": "payers.claim.payment",
+  "external": {
+    "connector": "payers.claimPayments",
+    "fields": [
+      {
+        "name": "paymentStatus",
+        "widget": "status-badge",
+        "parameters": {
+          "tones": { "Paid": "positive", "Pending": "warning", "Denied": "negative" }
+        }
+      },
+      { "name": "paidAmount", "widget": "currency", "parameters": { "currency": "USD" } },
+      { "name": "paidOn", "widget": "date" },
+      "policyNumber"
+    ]
+  }
+}
+```
+
+| Key         | Meaning                                                                                                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connector` | Required: the id of a connector the server registers                                                                                               |
+| `fields`    | Required: the connector's fields to show, in order, each its name or `{ "name", "label"?, "labelKey"?, "widget"?, "parameters"?, "visibleWhen"? }` |
+
+- **The file names the connector and its fields, and nothing else.** The other system's address,
+  the record's key, the credential and the fields the server may return are the connector's, in
+  the server's configuration. A text anywhere in the card, or a key, that looks like an address is
+  a structural error, and the file is refused: `//` or `\\` anywhere, a scheme at its start, a word
+  and a colon with no space after it such as `https:` or `ldap:`, or a host with a port such as
+  `core.internal:8443`. A property, `claim:currency`, is not one, nor is "Status: paid". This keeps
+  layouts honest; it is not what guards the server, since only the connector's id leaves the
+  browser, held to a name at both ends.
+- **The server's allow-list decides what leaves it.** The connector returns only the fields it
+  lists. A field the file names and the connector does not return shows nothing. Given the
+  connectors a server registers, through `--registered`, the validator refuses such a field and an
+  unknown connector. Without them, as when the app loads the file, a connector is the server's to
+  define, as a page provider is, and its names are held to their form only: a connector's id, and
+  field names of letters, digits and `_`, never a property's `<prefix>:<name>`.
+- **Its widgets show one value as text:** `text`, `long-text`, `number`, `currency`, `percent`,
+  `date`, `relative-date`, `boolean` and `status-badge`. Without one, a number shows as `number`
+  shows it, a boolean as `boolean`, and a text as it is. A widget that does not show the value the
+  system answered, `date` given a number, leaves that field out, and the console says why.
+- **The reader's permission comes first.** The server checks that the reader may read the open
+  record, and holds the stronger permission the connector names if it names one, before it calls
+  the other system, and reads the key from the record as stored. A record of a type the connector
+  does not read, or with no key it can send, is answered "nothing to look up", and nothing is sent.
+- **Its states:** loading; the fields; "nothing found" when the other system has no such record,
+  or none of the fields has a value; "nothing to look up" when the record holds no key; and an
+  error, with Retry for a server error, a timeout or an unreachable system.
+- **Not a security control,** as nothing in a layout is. A field hidden by its rule is hidden from
+  this page; the operation returns every allowed field to anyone who may read the record.
+
 ## 8. What is refused, and when
 
 | When                                     | A structural error                                                   | An ID the platform does not have                                                          |
@@ -405,7 +469,8 @@ A card can show the record's comments and their replies, in `view` mode:
 
 - **In a list of related records,** a finding about one column or one row action leaves out that
   one. A finding about the list itself, such as a key version 2 does not have, leaves out its card,
-  and so does one about a timeline or comments.
+  and so does one about a timeline or comments. In a card from another system, a finding about one
+  field leaves out that field, and one about the card's own keys leaves out the card.
 - **A finding about a banner,** such as a rule this build does not register, leaves out that
   banner.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
@@ -418,11 +483,15 @@ What counts as structural:
 - not version 2;
 - `cards` and `tabs` together;
 - an `id` that is missing, malformed or used twice;
-- a card with more than one of `fields`, `related`, `timeline` and `comments`, or none;
+- a card with more than one of `fields`, `related`, `timeline`, `comments` and `external`, or
+  none;
+- a card from another system with no connector, no field, a name that is not one, or a text that
+  looks like an address;
 - a banner with no `label` or `labelKey`, or a `tone` other than its three;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `banners`, `related`, `timeline` or `comments` outside it;
+- form-only keys in `view` mode, or `banners`, `related`, `timeline`, `comments` or `external`
+  outside it;
 - a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
 - a `var:` property, which only a task form has
@@ -695,6 +764,18 @@ becomes. In version 2's terms:
   reference's stored id: naming the `document-link` widget is what shows its title there.
 - **A card of comments** draws the platform's `nxs-comments`, the thread the Comments panel beside
   the page shows, with the card's `pageSize`.
+- **A card from another system** draws `RecordExternalComponent`, in the same library:
+  - it asks the server once, through `ConnectorRecordService`, with the Automation operation
+    `Connector.Read`, the open record as its input and the connector's id as its one parameter;
+  - it shows, in the file's order, the fields whose rules pass for the open record and the user and
+    that the answer gives a value, each through its widget as one line of text, or a tag for a
+    `status-badge`; the rest of the answer is not drawn, and the server has already left out
+    whatever the connector's allow-list does not name;
+  - it asks again when it is given another record, the same record with another modification date,
+    since an edit may change the key, or another connector, and on Retry;
+  - an answer not of the operation's shape is an error, and a value in it that is not a text, a
+    number or a boolean is dropped. Not checked on a server: the operation is proven by the add-on's
+    own tests, against a stub of the other system, and nothing is installed yet.
 - **The date rules read the page's clock**, `RECORD_PAGE_TODAY` and `RECORD_PAGE_TIME_ZONE` in
   `record-clock.ts`, as its computations and dates do: on the record page, its banners, cards,
   tabs, fields and a related list's columns, and in a version 2 form, its fields' rules. The page

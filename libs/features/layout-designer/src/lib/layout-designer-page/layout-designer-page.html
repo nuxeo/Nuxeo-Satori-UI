@@ -264,6 +264,11 @@
                   {{ 'layout-designer.shows-comments' | translate }}
                 </p>
               }
+              @case ('external') {
+                <p class="layout-designer__message">
+                  {{ 'layout-designer.shows-external' | translate }}
+                </p>
+              }
             }
           </section>
         }

@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.connectors" version="1.0">
+
+  <documentation>
+    Connectors to systems of record: live data from another system on a record page.
+
+    A kit's package contributes a connector here, and its component requires
+    org.nuxeo.agentic.connectors. The Connector.Read operation then reads one record through it, for a
+    document the user may read, and returns only the fields the connector allows. The client names
+    the connector and the document, and nothing else.
+
+    What each server sets, never a contribution, a document, a layout or the client: the system's
+    address, in the server property the connector's address element names, https only unless
+    nuxeo.agentic.connectors.(the connector's id).http.allowed is true; and its credential, in the
+    server property or the environment variable its credential element names.
+  </documentation>
+
+  <implementation class="org.nuxeo.agentic.connectors.ConnectorComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.connectors.ConnectorService" />
+  </service>
+
+  <extension-point name="connectors">
+    <documentation>
+      One connector per element. Only id, at least one type, address, path, key and at least one
+      field are required. The server properties it names are its own: nuxeo.agentic.connectors.,
+      its id, a dot and one name; an environment variable is NUXEO_CONNECTOR_, its id in capitals
+      with dots and dashes as underscores, an underscore and one name of capitals and digits.
+
+      <code>
+        <connector id="payers.claimPayments">
+          <type>Claim</type>
+          <address property="nuxeo.agentic.connectors.payers.claimPayments.address" />
+          <path>/claims/{key}</path>
+          <key xpath="claim:number" />
+          <permission>Read</permission>
+          <credential header="Authorization" prefix="Bearer " property="nuxeo.agentic.connectors.payers.claimPayments.token"
+                      env="NUXEO_CONNECTOR_PAYERS_CLAIMPAYMENTS_TOKEN" />
+          <connectTimeout>2000</connectTimeout>
+          <timeout>5000</timeout>
+          <maxBytes>262144</maxBytes>
+          <maxConcurrent>8</maxConcurrent>
+          <field name="paymentStatus" />
+          <field name="paidAmount" pointer="/payment/amount" />
+        </connector>
+      </code>
+
+      The path is appended to the address, with the document's key, one path segment, in place of
+      the key placeholder. The timeouts are in milliseconds, up to 10000 to connect and 30000 for the
+      whole call; maxBytes is up to 1048576, and maxConcurrent, the calls running at once, up to 64.
+      The key is read only from documents of its types. A field's pointer is a JSON pointer into the system's
+      answer, its name by default; only a text, a number or a boolean there is returned. A connector
+      that fails a check is not registered, and the log says why. A later contribution with the same
+      id replaces it whole, and enabled="false" removes it.
+    </documentation>
+    <object class="org.nuxeo.agentic.connectors.ConnectorDescriptor" />
+  </extension-point>
+
+</component>

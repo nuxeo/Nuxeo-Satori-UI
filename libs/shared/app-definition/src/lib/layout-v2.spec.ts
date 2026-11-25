@@ -57,10 +57,16 @@ describe('the proposal and the validator agree', () => {
     expect(examples.filter((example) => 'comments' in example)).toHaveLength(1);
   });
 
+  it("finds the card from another system's example among them", () => {
+    expect(examples.filter((example) => 'external' in example)).toHaveLength(1);
+  });
+
   examples.forEach((example, index) => {
     it(`example ${index + 1} has no finding`, () => {
       const form = JSON.stringify(example).includes('"checks"');
-      const card = ['fields', 'related', 'timeline', 'comments'].some((key) => key in example);
+      const card = ['fields', 'related', 'timeline', 'comments', 'external'].some(
+        (key) => key in example,
+      );
       const file =
         'version' in example
           ? example
@@ -619,7 +625,7 @@ describe('a timeline and comments', () => {
 
   it('are refused beside fields, related records or each other', () => {
     const twice =
-      'cards[0]: a card has one of "fields", "related", "timeline" or "comments" [structure]';
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external" [structure]';
     expect(messages(card({ timeline: {}, comments: {} }))).toEqual([twice]);
     expect(messages(card({ timeline: {}, fields: ['dc:title'] }))).toEqual([twice]);
     expect(
@@ -637,6 +643,194 @@ describe('a timeline and comments', () => {
     ]);
     expect(messages(card({ comments: { readOnly: true } }))).toEqual([
       'cards[0].comments.readOnly: "readOnly" is not a key version 2 has [unknown]',
+    ]);
+  });
+});
+
+describe('a card from another system', () => {
+  const card = (external: unknown, more: Record<string, unknown> = {}) => ({
+    version: 2,
+    cards: [{ id: 'payment', label: 'Payment', external, ...more }],
+  });
+  const payments = (fields: unknown[]) => card({ connector: 'payers.claimPayments', fields });
+  /** The connectors a server registers, as the pipeline is given them with `--registered`. */
+  const registered = withRegistered(PACKAGED_REGISTRIES, {
+    connectors: { 'payers.claimPayments': ['paymentStatus', 'paidAmount', 'paidOn'] },
+  });
+  const against = (content: unknown): string[] =>
+    validateLayoutV2(content, { mode: 'view', registries: registered }).map(
+      (finding) => `${finding.path}: ${finding.message} [${finding.kind}]`,
+    );
+
+  it('names a connector and its fields, by name or with a label, a widget and a rule', () => {
+    const file = payments([
+      'paymentStatus',
+      {
+        name: 'paidAmount',
+        labelKey: 'payers.claim.paid',
+        widget: 'currency',
+        parameters: { currency: 'USD' },
+      },
+      {
+        name: 'paidOn',
+        label: 'Paid on',
+        widget: 'date',
+        visibleWhen: { type: 'app.rules.inGroup', parameters: ['claims-supervisors'] },
+      },
+    ]);
+    expect(messages(file)).toEqual([]);
+    expect(against(file)).toEqual([]);
+  });
+
+  it('is refused outside view mode, and beside any other content', () => {
+    expect(messages(payments(['paymentStatus']), 'edit')).toEqual([
+      'cards[0].external: a card from another system belongs in view mode only [structure]',
+    ]);
+    expect(
+      messages(
+        card(
+          { connector: 'payers.claimPayments', fields: ['paymentStatus'] },
+          { fields: ['dc:title'] },
+        ),
+      ),
+    ).toEqual([
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external" [structure]',
+    ]);
+  });
+
+  it('never holds an address: a text that looks like one anywhere in it refuses the file', () => {
+    const refusal =
+      "an address is never written in a layout: a connector's address is the server's configuration";
+    expect(
+      messages(
+        card({ connector: 'https://core.example.invalid/claims', fields: ['paymentStatus'] }),
+      ),
+    ).toEqual([
+      `cards[0].external.connector: ${refusal} [structure]`,
+      'cards[0].external.connector: needs the id of a connector the server registers: 1 to 64 letters, digits, ".", "_" or "-", starting with a letter [structure]',
+    ]);
+    expect(
+      messages(
+        card({
+          connector: 'payers.claimPayments',
+          url: 'http://10.0.0.7:8080',
+          fields: ['paymentStatus'],
+        }),
+      ),
+    ).toEqual([
+      `cards[0].external.url: ${refusal} [structure]`,
+      'cards[0].external.url: "url" is not a key version 2 has [unknown]',
+    ]);
+    for (const label of [
+      '//core.example.invalid',
+      'See https://core.example.invalid',
+      'javascript:alert(1)',
+      'FILE:/etc',
+      'ldap:core.internal',
+      'Paid at core.internal:8443/claims',
+      '\\\\core\\share',
+    ]) {
+      expect(messages(payments([{ name: 'paymentStatus', label }])), label).toEqual([
+        `cards[0].external.fields[0].label: ${refusal} [structure]`,
+      ]);
+    }
+    expect(
+      messages(
+        payments([
+          {
+            name: 'paymentStatus',
+            widget: 'status-badge',
+            parameters: { tones: { 'https://x': 'positive', Paid: 'positive' } },
+          },
+        ]),
+      ),
+    ).toEqual([`cards[0].external.fields[0].parameters.tones.https://x: ${refusal} [structure]`]);
+    // A label with a colon and a space is not an address, nor is a property a parameter names.
+    for (const label of [
+      'Status: as paid',
+      'Data: synced nightly',
+      'File: on the claim',
+      'Paid 10:30',
+    ]) {
+      expect(messages(payments([{ name: 'paymentStatus', label }])), label).toEqual([]);
+    }
+    expect(
+      messages(
+        payments([
+          {
+            name: 'paidAmount',
+            widget: 'currency',
+            parameters: { currency: { field: 'claim:currency' } },
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'claim:status' }, 'approved'],
+            },
+          },
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  it('names its connector and fields as the server does, never as properties', () => {
+    expect(messages(card({ fields: ['paymentStatus'] }))).toEqual([
+      'cards[0].external.connector: needs the id of a connector the server registers: 1 to 64 letters, digits, ".", "_" or "-", starting with a letter [structure]',
+    ]);
+    expect(messages(card({ connector: 'payers.claimPayments' }))).toEqual([
+      "cards[0].external.fields: needs a list of at least one of the connector's fields [structure]",
+    ]);
+    expect(messages(payments([]))).toEqual([
+      "cards[0].external.fields: needs a list of at least one of the connector's fields [structure]",
+    ]);
+    const naming =
+      'a field of another system is named as its connector names it: 1 to 64 letters, digits or "_", starting with a letter [structure]';
+    expect(messages(payments(['claim:number', { name: 'paid-amount' }, { label: 'x' }]))).toEqual([
+      `cards[0].external.fields[0]: ${naming}`,
+      `cards[0].external.fields[1].name: ${naming}`,
+      `cards[0].external.fields[2].name: ${naming}`,
+    ]);
+    expect(messages(payments([3]))).toEqual([
+      'cards[0].external.fields[0]: a field of another system is its name, or { "name", ... } [structure]',
+    ]);
+  });
+
+  it("holds each field to its connector's allow-list when the server's connectors are given", () => {
+    expect(against(payments(['paymentStatus', 'bankAccount', { name: 'memberSsn' }]))).toEqual([
+      'cards[0].external.fields[1]: the connector "payers.claimPayments" does not return the field "bankAccount" [unknown]',
+      'cards[0].external.fields[2].name: the connector "payers.claimPayments" does not return the field "memberSsn" [unknown]',
+    ]);
+    expect(against(card({ connector: 'payers.policy', fields: ['paymentStatus'] }))).toEqual([
+      'cards[0].external.connector: the connector "payers.policy" is not registered [unknown]',
+    ]);
+    // Without them, as in the app, the names are held to their form only.
+    expect(messages(payments(['bankAccount']))).toEqual([]);
+  });
+
+  it('takes only the widgets that show one value as text, with their parameters', () => {
+    for (const widget of [
+      'rich-text',
+      'phone',
+      'email',
+      'document-link',
+      'user',
+      'vocabulary',
+      'table',
+    ]) {
+      expect(messages(payments([{ name: 'paymentStatus', widget }])), widget).toEqual([
+        `cards[0].external.fields[0].widget: the widget "${widget}" does not show a value from another system: one of text, long-text, number, currency, percent, date, relative-date, boolean, status-badge does [parameter]`,
+      ]);
+    }
+    expect(messages(payments([{ name: 'paidAmount', widget: 'currency' }]))).toEqual([
+      'cards[0].external.fields[0].parameters: the widget "currency" needs "currency" [parameter]',
+    ]);
+    expect(messages(payments([{ name: 'paidAmount', widget: 'calendar' }]))).toEqual([
+      'cards[0].external.fields[0].widget: the widget "calendar" is not registered [unknown]',
+    ]);
+    expect(messages(payments([{ name: 'paidAmount', id: 'x', field: 'claim:number' }]))).toEqual([
+      'cards[0].external.fields[0].id: "id" is not a key version 2 has [unknown]',
+      'cards[0].external.fields[0].field: "field" is not a key version 2 has [unknown]',
+    ]);
+    expect(messages(payments([{ name: 'paidOn', visibleWhen: 'acme.rules.unknown' }]))).toEqual([
+      'cards[0].external.fields[0].visibleWhen: the rule "acme.rules.unknown" is not registered [unknown]',
     ]);
   });
 });
@@ -800,9 +994,10 @@ const refusals: readonly { what: string; file: unknown; mode?: LayoutMode; found
     found: 'cards[0].span: span belongs in view mode only [structure]',
   },
   {
-    what: 'a card with neither fields, related records, a timeline nor comments',
+    what: 'a card with neither fields, related records, a timeline, comments nor another system',
     file: { version: 2, cards: [{ id: 'c' }] },
-    found: 'cards[0]: a card has one of "fields", "related", "timeline" or "comments" [structure]',
+    found:
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external" [structure]',
   },
   {
     what: 'a timeline that is not an object',
@@ -855,6 +1050,11 @@ const refusals: readonly { what: string; file: unknown; mode?: LayoutMode; found
     what: "comments' page size of 0",
     file: { version: 2, cards: [{ id: 'c', comments: { pageSize: 0 } }] },
     found: 'cards[0].comments.pageSize: pageSize is a whole number from 1 to 100 [structure]',
+  },
+  {
+    what: 'a card from another system that is not an object',
+    file: { version: 2, cards: [{ id: 'e', external: 'payers.claimPayments' }] },
+    found: 'cards[0].external: external is an object [structure]',
   },
   {
     what: 'fields that are not a list',

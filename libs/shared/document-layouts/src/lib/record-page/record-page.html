@@ -95,6 +95,14 @@
           [pageSize]="comments.pageSize"
           [readOnly]="readOnly()"
         />
+      } @else if (card.external; as external) {
+        <lib-record-external
+          class="record-page__external"
+          [document]="document()"
+          [external]="external.external"
+          [source]="external.source"
+          [stateHeadingLevel]="4"
+        />
       } @else {
         <dl class="record-page__fields">
           @for (field of card.fields; track field.place) {

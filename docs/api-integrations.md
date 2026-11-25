@@ -2333,7 +2333,7 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 | Field           | Value                                                                                                                                                    |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Service**     | `LayoutDesignerService` (`libs/features/layout-designer/src/lib/layout-designer.service.ts`), with `DocumentLayoutService` and `ContentModelService`     |
-| **HTTP Method** | `GET` only: the designer writes nothing to the server, and saves the file as a download                                                                  |
+| **HTTP Method** | `GET`, and a `POST` that reads for a card from another system (section 38): the designer writes nothing, and saves the file as a download                |
 | **Endpoints**   | `<config>/layouts.json` and `<config>/layouts/<Type>/view.layout.json` — the record pages served, and one of them, each read anew, past the interceptors |
 |                 | `/nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas` — the content model the file is held to, read once per session                      |
 |                 | `/nuxeo/api/v1/config/types/<Type>` — the type the preview resolves the file against, as the record page reads it                                        |
@@ -2356,13 +2356,55 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 - **Administrators only, and not a security control.** The route is behind the administrator gate,
   and every read is the person's own, so Nuxeo's permissions decide what it returns.
 - **The preview draws the record page read-only:** no comment box and no row action, so drawing it
-  writes nothing. Its related lists, timeline and lookups read what they read on the View tab.
+  writes nothing. Its related lists, timeline and lookups read what they read on the View tab, and
+  a card from another system asks `Connector.Read` (section 38): a `POST` that reads, and writes
+  nothing on the server.
 - **Measured on the local server** (Nuxeo 2025.10.18, 24 November 2026, with the Payers kit served by
   `npm run config:dev`): the Member page opened with its first member previewed, every request a
   `GET`. The shell's own notification bell still posts its `Repository.Query` and
   `Audit.QueryWithPageProvider` reads, as on every page.
 
 **Used by:** `LayoutDesignerPageComponent`, at `/#/administration/layout-designer`.
+
+---
+
+## 38. Record Page — a Record of Another System, through a Connector
+
+| Field           | Value                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `ConnectorRecordService` (`libs/shared/document-layouts/src/lib/record-page/connector-record.service.ts`)                              |
+| **Method**      | `read(connector, uid)`, once for each `external` card drawn, and again when the record is reloaded with another modification date      |
+| **HTTP Method** | `POST`                                                                                                                                 |
+| **Endpoint**    | `/nuxeo/api/v1/automation/Connector.Read`                                                                                              |
+| **Server side** | `ReadConnectorOperation` in `nuxeo-agentic-connectors` (its [README](../nuxeo-agentic-connectors/README.md)), not installed by default |
+
+**Request Payload:** the open record and the connector's id, and nothing else. The address of the
+other system, the key, the credential and the fields that may come back are the connector's, on
+the server.
+
+```json
+{ "params": { "connector": "payers.claimPayments" }, "context": {}, "input": "doc:<uid>" }
+```
+
+**Response (200 OK):** `status` is `found`, `not-found` (the other system has no such record) or
+`no-key` (the record holds no key the connector can send, so nothing was asked). `fields` holds the
+connector's allowed fields that have a text, number or boolean value:
+
+```json
+{
+  "connector": "payers.claimPayments",
+  "status": "found",
+  "fields": { "paymentStatus": "Paid", "paidAmount": 412.5 }
+}
+```
+
+**Errors:** the operation throws `403` without `Read` on the record, or the stronger permission its
+connector names, `404` for an unknown connector, `503` when the server's address or credential for
+it is missing or as many of its calls as it allows are running, `502` when the other system
+refuses, redirects, answers too much or not JSON, and `504`
+when it does not answer in time. The card shows the error state, with Retry for all but `401`,
+`403` and `404`. That Automation answers with these statuses is not checked on a server yet; an
+answer of another shape is treated as a `500`.
 
 ---
 

@@ -20,6 +20,7 @@ import {
   createChecker,
   FIELD_KEYS,
   join,
+  MAX_NESTING,
   NAME,
   unreadable,
   type Checker,
@@ -27,7 +28,13 @@ import {
 } from './checker';
 import type { ContentModel } from './content-model';
 import { againstModel } from './layout-model';
-import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
+import {
+  EXTERNAL_WIDGETS,
+  isRecord,
+  PACKAGED_REGISTRIES,
+  XPATH,
+  type Registries,
+} from './registries';
 
 export type { Finding } from './checker';
 
@@ -52,11 +59,26 @@ const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen'];
 export const BANNER_TONES = ['info', 'warning', 'negative'] as const;
 const TAB_KEYS = ['id', 'label', 'labelKey', 'visibleWhen', 'cards'];
 /** What a card shows: exactly one of these. Every one but `fields` is for `view` mode only. */
-const CARD_CONTENTS = ['fields', 'related', 'timeline', 'comments'] as const;
+const CARD_CONTENTS = ['fields', 'related', 'timeline', 'comments', 'external'] as const;
 const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', ...CARD_CONTENTS];
 const RELATED_KEYS = ['pageProvider', 'parameters', 'columns', 'sort', 'pageSize', 'rowActions'];
 const TIMELINE_KEYS = ['events', 'filter', 'pageSize'];
 const COMMENTS_KEYS = ['pageSize'];
+const EXTERNAL_KEYS = ['connector', 'fields'];
+const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters', 'visibleWhen'];
+
+/** A connector's id, as `nuxeo-agentic-connectors` registers one: a name, never an address. */
+export const CONNECTOR_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+/** A field of a connector's answer, as its allow-list names it: never a property's `<prefix>:<name>`. */
+export const CONNECTOR_FIELD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+/**
+ * What an address looks like in a text: `//` or `\\` anywhere; a scheme at its start, a word and a
+ * colon with no space after it, as `https:` or `ldap:`; or a host with a port, as
+ * `core.internal:8443`. "Status: paid" is not one. Only the connector's id leaves the browser, and
+ * both ends hold it to a name, so this keeps layouts honest rather than guarding the server.
+ */
+const ADDRESS =
+  /\/\/|\\\\|^\s*[A-Za-z][A-Za-z0-9+.-]*:(?!\s|$)|(?:^|[\s(])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+:\d{1,5}(?:[/\s)]|$)/;
 
 /** The keys each part of a file may hold, which the JSON Schema must list too (its own test checks). */
 export const LAYOUT_V2_KEYS = {
@@ -68,6 +90,8 @@ export const LAYOUT_V2_KEYS = {
   related: RELATED_KEYS,
   timeline: TIMELINE_KEYS,
   comments: COMMENTS_KEYS,
+  external: EXTERNAL_KEYS,
+  externalField: EXTERNAL_FIELD_KEYS,
   check: CHECK_KEYS,
 } as const;
 
@@ -135,7 +159,11 @@ function layout(
     }
     if ('visibleWhen' in item) c.rule(item['visibleWhen'], join(path, 'visibleWhen'));
     if (CARD_CONTENTS.filter((key) => key in item).length !== 1)
-      c.add(path, 'structure', 'a card has one of "fields", "related", "timeline" or "comments"');
+      c.add(
+        path,
+        'structure',
+        'a card has one of "fields", "related", "timeline", "comments" or "external"',
+      );
     if ('fields' in item) {
       const fields = item['fields'];
       if (!Array.isArray(fields)) c.add(join(path, 'fields'), 'structure', 'fields must be a list');
@@ -154,6 +182,15 @@ function layout(
     if ('comments' in item) {
       if (!view) c.add(join(path, 'comments'), 'structure', 'comments belong in view mode only');
       else comments(c, item['comments'], join(path, 'comments'));
+    }
+    if ('external' in item) {
+      if (!view)
+        c.add(
+          join(path, 'external'),
+          'structure',
+          'a card from another system belongs in view mode only',
+        );
+      else external(c, item['external'], join(path, 'external'));
     }
   };
 
@@ -280,6 +317,110 @@ function comments(c: Checker, item: unknown, path: string): void {
   }
   c.unknownKeys(item, COMMENTS_KEYS, path);
   pageSize(c, item, path);
+}
+
+/**
+ * A card of fields from another system, a system of record, read through one of the server's
+ * connectors (layout-v2.md, section 7). The file names the connector and the fields, and nothing
+ * else: the address, the record's key and the credential are the server's configuration, so a text
+ * anywhere in the card that looks like an address refuses the file. Given the connectors a server
+ * registers, each field is held to its connector's allow-list; without them, a connector is the
+ * server's to define, as a page provider is, and its names are held to their form only.
+ */
+function external(c: Checker, item: unknown, path: string): void {
+  if (!isRecord(item)) {
+    c.add(path, 'structure', 'external is an object');
+    return;
+  }
+  addresses(c, item, path);
+  c.unknownKeys(item, EXTERNAL_KEYS, path);
+  const id = item['connector'];
+  const known = c.registries.connectors;
+  let allowed: ReadonlySet<string> | null = null;
+  if (typeof id !== 'string' || !CONNECTOR_ID.test(id)) {
+    c.add(
+      join(path, 'connector'),
+      'structure',
+      'needs the id of a connector the server registers: 1 to 64 letters, digits, ".", "_" or "-", starting with a letter',
+    );
+  } else if (known !== null) {
+    if (Object.hasOwn(known, id)) allowed = known[id];
+    else c.add(join(path, 'connector'), 'unknown', `the connector "${id}" is not registered`);
+  }
+  const fields = item['fields'];
+  if (!Array.isArray(fields) || fields.length === 0) {
+    c.add(
+      join(path, 'fields'),
+      'structure',
+      "needs a list of at least one of the connector's fields",
+    );
+    return;
+  }
+  fields.forEach((entry: unknown, index) => {
+    const at = join(join(path, 'fields'), index);
+    if (typeof entry !== 'string' && !isRecord(entry)) {
+      c.add(at, 'structure', 'a field of another system is its name, or { "name", ... }');
+      return;
+    }
+    const name = typeof entry === 'string' ? entry : entry['name'];
+    const nameAt = typeof entry === 'string' ? at : join(at, 'name');
+    if (typeof name !== 'string' || !CONNECTOR_FIELD.test(name)) {
+      c.add(
+        nameAt,
+        'structure',
+        'a field of another system is named as its connector names it: 1 to 64 letters, digits or "_", starting with a letter',
+      );
+    } else if (allowed !== null && !allowed.has(name)) {
+      c.add(nameAt, 'unknown', `the connector "${String(id)}" does not return the field "${name}"`);
+    }
+    if (typeof entry === 'string') return;
+    c.unknownKeys(entry, EXTERNAL_FIELD_KEYS, at);
+    c.label(entry, at);
+    const widget = entry['widget'];
+    if (
+      typeof widget === 'string' &&
+      Object.hasOwn(c.registries.widgets, widget) &&
+      !EXTERNAL_WIDGETS.has(widget)
+    ) {
+      c.add(
+        join(at, 'widget'),
+        'parameter',
+        `the widget "${widget}" does not show a value from another system: one of ${[...EXTERNAL_WIDGETS].join(', ')} does`,
+      );
+    } else c.widget(entry, at, false);
+    if ('visibleWhen' in entry) c.rule(entry['visibleWhen'], join(at, 'visibleWhen'));
+  });
+}
+
+/**
+ * Every text in an `external` card, and every key, that looks like an address: a `structure`
+ * finding each, so that the file is refused rather than read. A card from another system never
+ * says where that system is. The walk is breadth first, and stops {@link MAX_NESTING} levels down.
+ */
+function addresses(c: Checker, item: Record<string, unknown>, path: string): void {
+  const found = (at: string): void =>
+    c.add(
+      at,
+      'structure',
+      "an address is never written in a layout: a connector's address is the server's configuration",
+    );
+  const queue: [unknown, string, number][] = [[item, path, 0]];
+  for (let next = 0; next < queue.length; next++) {
+    const [value, at, depth] = queue[next];
+    if (typeof value === 'string') {
+      // A property, `claim:currency`, is a name, not an address.
+      if (ADDRESS.test(value) && !XPATH.test(value)) found(at);
+      continue;
+    }
+    if (depth >= MAX_NESTING) continue;
+    if (Array.isArray(value))
+      value.forEach((inner, index) => queue.push([inner, join(at, index), depth + 1]));
+    else if (isRecord(value))
+      for (const [key, inner] of Object.entries(value)) {
+        if (ADDRESS.test(key)) found(join(at, key));
+        queue.push([inner, join(at, key), depth + 1]);
+      }
+  }
 }
 
 /** `pageSize`, where a card may give one: 1 to 100, as a list's is. */

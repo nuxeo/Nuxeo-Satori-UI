@@ -1514,6 +1514,12 @@
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."
   },
   "document-layouts": {
+    "external": {
+      "empty": "Nothing found in the other system",
+      "failed": "The other system's information could not be loaded",
+      "loading": "Loading from the other system",
+      "no-key": "This record names nothing to look up in the other system"
+    },
     "form": {
       "check": {
         "at-most": "{{label}} cannot be more than {{bound}}.",
@@ -1773,6 +1779,7 @@
     "show": "Show {{field}} again",
     "show-button": "Show",
     "shows-comments": "This card shows the record's comments.",
+    "shows-external": "This card shows a record of another system. Its fields are edited in the file.",
     "shows-related": "This card lists related records. Its columns are edited in the file.",
     "shows-timeline": "This card shows the record's timeline.",
     "source-failed": "The {{type}} layout file could not be opened: {{problem}}",
