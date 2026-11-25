@@ -148,6 +148,11 @@ Clear while the unavailable page/all actions stay disabled.
 Header, page and individual checkbox selection changes cancel an earlier pending Select all, so its
 late response cannot overwrite the user's newer choice.
 
+Unicode title highlighting maps lowercase match offsets back to the original text. Twelve
+regression cases cover expanding lowercase characters, expanded queries, repeated matches,
+astral characters and contextual Greek lowercase behavior. Ten cases failed before the fix;
+all preserve the exact original title afterward, without changing search matching semantics.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:

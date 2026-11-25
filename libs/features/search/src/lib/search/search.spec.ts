@@ -837,6 +837,30 @@ describe('SearchComponent', () => {
       ]);
       expect(component.highlightedTitle('other')).toEqual([{ text: 'other', matched: false }]);
     });
+    it.each([
+      { title: 'İfoo', term: 'foo', matches: ['foo'] },
+      { title: 'İFOO İfoo', term: 'foo', matches: ['FOO', 'foo'] },
+      { title: 'aİb aİb', term: 'aİb', matches: ['aİb', 'aİb'] },
+      { title: 'i\u0307X i\u0307x', term: 'İx', matches: ['i\u0307X', 'i\u0307x'] },
+      { title: 'İx İX', term: 'i\u0307x', matches: ['İx', 'İX'] },
+      { title: 'İİ', term: 'İ', matches: ['İ', 'İ'] },
+      { title: '😀İfoo𐐀foo', term: 'foo', matches: ['foo', 'foo'] },
+      { title: 'İ😀x İ😀X', term: '😀x', matches: ['😀x', '😀X'] },
+      { title: 'İ 𐐀 𐐨', term: '𐐨', matches: ['𐐀', '𐐨'] },
+      { title: 'İstanbul', term: 'i', matches: ['İ'] },
+      { title: 'İ ΟΣ', term: 'ος', matches: ['ΟΣ'] },
+      { title: 'ΟΣ', term: 'οσ', matches: [] },
+    ])(
+      'maps Unicode highlights back to the original title: $title / $term',
+      ({ title, term, matches }) => {
+        const session = TestBed.inject(SearchSession);
+        session.setFilters({ ...session.filters(), fulltext: term });
+        const parts = component.highlightedTitle(title);
+        expect(parts.map((part) => part.text).join('')).toBe(title);
+        expect(parts.filter((part) => part.matched).map((part) => part.text)).toEqual(matches);
+      },
+    );
+
     it('clears the saved filter set through its clear button and restores Default', async () => {
       TestBed.resetTestingModule();
       await configure({}, { rendered: true });

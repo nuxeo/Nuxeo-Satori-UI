@@ -343,14 +343,31 @@ export class SearchComponent {
   highlightedTitle(title: string): { text: string; matched: boolean }[] {
     const term = this.session.filters().fulltext.trim();
     if (!term) return [{ text: title, matched: false }];
+    const foldedTitle = title.toLowerCase();
+    const foldedTerm = term.toLowerCase();
+    let index = foldedTitle.indexOf(foldedTerm);
+    if (index === -1) return [{ text: title, matched: false }];
+
+    // Lowercasing can expand a code point (İ → i + combining dot). Match in the folded
+    // string, but map every matched UTF-16 position back to its original code point.
+    const ranges: { start: number; end: number }[] = [];
+    let originalOffset = 0;
+    for (const character of title) {
+      const range = { start: originalOffset, end: originalOffset + character.length };
+      for (let unit = 0; unit < character.toLowerCase().length; unit++) ranges.push(range);
+      originalOffset = range.end;
+    }
     const parts: { text: string; matched: boolean }[] = [];
     let offset = 0;
-    let index = title.toLowerCase().indexOf(term.toLowerCase());
     while (index !== -1) {
-      if (index > offset) parts.push({ text: title.slice(offset, index), matched: false });
-      parts.push({ text: title.slice(index, index + term.length), matched: true });
-      offset = index + term.length;
-      index = title.toLowerCase().indexOf(term.toLowerCase(), offset);
+      const start = ranges[index].start;
+      const end = ranges[index + foldedTerm.length - 1].end;
+      if (start > offset) parts.push({ text: title.slice(offset, start), matched: false });
+      if (end > offset) {
+        parts.push({ text: title.slice(Math.max(start, offset), end), matched: true });
+        offset = end;
+      }
+      index = foldedTitle.indexOf(foldedTerm, index + foldedTerm.length);
     }
     if (offset < title.length) parts.push({ text: title.slice(offset), matched: false });
     return parts;
