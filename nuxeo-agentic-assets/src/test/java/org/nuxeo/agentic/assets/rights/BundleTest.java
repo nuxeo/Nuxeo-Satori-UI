@@ -72,7 +72,8 @@ class BundleTest {
     void everyComponentTheManifestNamesIsInTheBundleAndWellFormed() throws Exception {
         List<String> components = components();
         assertEquals(List.of("OSGI-INF/asset-rights-service.xml", "OSGI-INF/asset-rights-download-permission.xml",
-                "OSGI-INF/asset-rights-enricher-contrib.xml"), components);
+                "OSGI-INF/asset-rights-enricher-contrib.xml", "OSGI-INF/share-links-directories.xml",
+                "OSGI-INF/share-links-service.xml", "OSGI-INF/share-links-operations-contrib.xml"), components);
         for (String component : components) {
             byte[] xml = resource(component);
             assertDoesNotThrow(() -> parse(xml),
@@ -90,8 +91,9 @@ class BundleTest {
             collect(xml.getElementsByTagName("provide"), "interface", classes);
             collect(xml.getElementsByTagName("object"), "class", classes);
             collect(xml.getElementsByTagName("register"), "class", classes);
+            collect(xml.getElementsByTagName("operation"), "class", classes);
         }
-        assertEquals(4, classes.size(), classes::toString);
+        assertEquals(10, classes.size(), classes::toString);
         for (String name : classes) {
             assertDoesNotThrow(() -> Class.forName(name), name);
         }
@@ -130,5 +132,83 @@ class BundleTest {
         String packageXml = Files.readString(Path.of("src", "main", "package", "package.xml"));
         assertTrue(packageXml.contains("name=\"nuxeo-agentic-assets\" version=\"@assets.package.version@\""),
                 packageXml);
+    }
+
+    /**
+     * The share links' servlet is mapped on /agentic-share/* with no authentication filter: the
+     * fragment maps no filter at all, and its servlet is the class that serves the links.
+     */
+    @Test
+    void theShareLinksServletIsMappedWithNoAuthenticationFilter() throws Exception {
+        org.w3c.dom.Document xml = parse(resource("OSGI-INF/deployment-fragment.xml"));
+        assertEquals(0, xml.getElementsByTagName("filter-mapping").getLength());
+        assertEquals(0, xml.getElementsByTagName("filter").getLength());
+        NodeList servlets = xml.getElementsByTagName("servlet");
+        assertEquals(1, servlets.getLength());
+        String servletClass = ((Element) servlets.item(0)).getElementsByTagName("servlet-class")
+                                                          .item(0)
+                                                          .getTextContent();
+        assertEquals("org.nuxeo.agentic.assets.share.ShareLinkServlet", servletClass);
+        assertDoesNotThrow(() -> Class.forName(servletClass));
+        NodeList patterns = xml.getElementsByTagName("url-pattern");
+        assertEquals(1, patterns.getLength());
+        assertEquals("/agentic-share/*", patterns.item(0).getTextContent());
+    }
+
+    /**
+     * The two directories, as Nuxeo keeps its own tokens: of the system type, readable by
+     * __Nobody__ only, with no cache, and no field that could hold a token or the visitor.
+     */
+    @Test
+    void theShareLinksDirectoriesAreReadableByNobodyAndCacheNothing() throws Exception {
+        org.w3c.dom.Document xml = parse(resource("OSGI-INF/share-links-directories.xml"));
+        NodeList directories = xml.getElementsByTagName("directory");
+        assertEquals(2, directories.getLength());
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < directories.getLength(); i++) {
+            Element directory = (Element) directories.item(i);
+            names.add(directory.getAttribute("name"));
+            assertEquals("template-directory", directory.getAttribute("extends"));
+            assertEquals("system", directory.getElementsByTagName("type").item(0).getTextContent());
+            NodeList permissions = directory.getElementsByTagName("permission");
+            assertEquals(1, permissions.getLength());
+            Element read = (Element) permissions.item(0);
+            assertEquals("Read", read.getAttribute("name"));
+            NodeList groups = read.getElementsByTagName("group");
+            assertEquals(1, groups.getLength());
+            assertEquals("__Nobody__", groups.item(0).getTextContent());
+            assertEquals(0, read.getElementsByTagName("user").getLength());
+            for (String cache : List.of("cacheTimeout", "cacheMaxSize", "cacheEntryName",
+                    "cacheEntryWithoutReferencesName")) {
+                assertEquals(0, directory.getElementsByTagName(cache).getLength(), cache);
+            }
+        }
+        assertEquals(List.of("agenticShareLinks", "agenticShareDownloads"), names);
+        assertEquals(List.of("id", "repository", "document", "items", "lastDay", "created", "createdBy", "revoked",
+                "revokedBy"), fields("schemas/agenticsharelink.xsd"));
+        assertEquals(List.of("id", "time", "link", "document", "item"), fields("schemas/agenticsharedownload.xsd"));
+    }
+
+    private static List<String> fields(String schema) throws Exception {
+        NodeList elements = parse(resource(schema)).getElementsByTagNameNS("http://www.w3.org/2001/XMLSchema",
+                "element");
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < elements.getLength(); i++) {
+            names.add(((Element) elements.item(i)).getAttribute("name"));
+        }
+        return names;
+    }
+
+    /** The four operations the asset page calls, each the class the contribution names. */
+    @Test
+    void theShareLinksOperationsAreTheFourThePageCalls() throws Exception {
+        org.w3c.dom.Document xml = parse(resource("OSGI-INF/share-links-operations-contrib.xml"));
+        List<String> ids = new ArrayList<>();
+        NodeList operations = xml.getElementsByTagName("operation");
+        for (int i = 0; i < operations.getLength(); i++) {
+            Class<?> type = Class.forName(((Element) operations.item(i)).getAttribute("class"));
+            ids.add(type.getAnnotation(org.nuxeo.ecm.automation.core.annotations.Operation.class).id());
+        }
+        assertEquals(List.of("ShareLink.Create", "ShareLink.List", "ShareLink.Revoke", "ShareLink.Downloads"), ids);
     }
 }

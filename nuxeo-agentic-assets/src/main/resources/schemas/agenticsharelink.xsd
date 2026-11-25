@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- A share link, as the agenticShareLinks directory keeps it. No field holds the token: id is its
+     SHA-256. Every value is text: instants in UTC to the millisecond, the last day as yyyy-MM-dd,
+     the items as a JSON array. -->
+<xs:schema targetNamespace="http://www.nuxeo.org/agentic/schemas/sharelink"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="id" type="xs:string" />
+  <xs:element name="repository" type="xs:string" />
+  <xs:element name="document" type="xs:string" />
+  <xs:element name="items" type="xs:string" />
+  <xs:element name="lastDay" type="xs:string" />
+  <xs:element name="created" type="xs:string" />
+  <xs:element name="createdBy" type="xs:string" />
+  <xs:element name="revoked" type="xs:string" />
+  <xs:element name="revokedBy" type="xs:string" />
+
+</xs:schema>

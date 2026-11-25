@@ -1,0 +1,77 @@
+/*
+ * Licensed under the Apache License, Version 2.0
+ */
+package org.nuxeo.agentic.assets.share;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * A share link as the server keeps it: bound to one document, the items it lists and its last
+ * day. Its token is not here: only the token's hash, which is its id.
+ *
+ * @param id the SHA-256 of its token, in lowercase hexadecimal
+ * @param repository the repository its document is in
+ * @param document its document's id: the live document, never a version or a proxy
+ * @param items what it lists, as {@link ShareItem} writes them, in the order they were chosen
+ * @param lastDay the last day it opens, in UTC: it stops at the first instant of the next day
+ * @param created when it was made
+ * @param createdBy who made it: asked again, at each opening, whether they may still share the
+ *            document
+ * @param revoked when it was revoked, or {@code null}
+ * @param revokedBy who revoked it, or {@code null}
+ */
+public record ShareLink(String id, String repository, String document, List<String> items, LocalDate lastDay,
+        Instant created, String createdBy, Instant revoked, String revokedBy) {
+
+    /** What a link is at a given instant. The wire names are the operations'. */
+    public enum State {
+        ACTIVE("active"), EXPIRED("expired"), REVOKED("revoked");
+
+        private final String code;
+
+        State(String code) {
+            this.code = code;
+        }
+
+        public String code() {
+            return code;
+        }
+    }
+
+    public ShareLink {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(repository, "repository");
+        Objects.requireNonNull(document, "document");
+        items = List.copyOf(items);
+        Objects.requireNonNull(lastDay, "lastDay");
+        Objects.requireNonNull(created, "created");
+        Objects.requireNonNull(createdBy, "createdBy");
+    }
+
+    /** The first instant the link no longer opens: the start of the day after its last, in UTC. */
+    public Instant endsAt() {
+        return lastDay.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    /** Revoked, whenever that was; otherwise expired from {@link #endsAt()}; otherwise active. */
+    public State state(Instant now) {
+        if (revoked != null) {
+            return State.REVOKED;
+        }
+        return now.isBefore(endsAt()) ? State.ACTIVE : State.EXPIRED;
+    }
+
+    /** The link as people name it: the first 8 characters of its id, which its watermark prints too. */
+    public String label() {
+        return id.substring(0, 8);
+    }
+
+    /** The same link, revoked. */
+    public ShareLink revokedAt(Instant at, String by) {
+        return new ShareLink(id, repository, document, items, lastDay, created, createdBy, at, by);
+    }
+}
