@@ -1100,6 +1100,14 @@ Not run: registering the server with `claude mcp add-json`, which changes the pe
 configuration, and a fresh Claude Code session taking the prompts below. Those are the plan's
 "outside builder's day".
 
+**Every write goes through the MCP server now.** The skill has the agent write each file with
+`write_package_file`, run each generator with `apply_generator`, and make the steps that are each
+refused alone, such as `app-package`, `app-model` and `app-layout` for a new kit, in one
+`apply_package_changes` call. Each writes to the package only what passes the pipeline, and
+otherwise answers the findings and changes nothing ([`tools/builder-mcp`](../../tools/builder-mcp/README.md),
+"Writing a package"). The reference answer below was written before those tools, with part 1's
+commands, and has not been written again through them.
+
 ## Register the MCP server, once
 
 From the repository's root, in a shell with `NUXEO_USER` and `NUXEO_PASS` exported. The single
@@ -1109,7 +1117,7 @@ quotes keep the password out of the configuration: it holds the variables' names
 claude mcp add-json nuxeo-builder --scope local '{"type":"stdio","command":"node","args":["tools/builder-mcp/src/main.ts"],"env":{"NUXEO_URL":"${NUXEO_URL:-http://localhost:8080}","NUXEO_USER":"${NUXEO_USER}","NUXEO_PASS":"${NUXEO_PASS}"}}'
 ```
 
-Then `claude mcp list` should list `nuxeo-builder`, and `/mcp` in Claude Code its 13 tools. For
+Then `claude mcp list` should list `nuxeo-builder`, and `/mcp` in Claude Code its 16 tools. For
 `preview_package` to reach a dev server on port 4299, add `"DEV_SERVER_URL":"http://localhost:4299"`
 to `env`; its default is `http://localhost:4200`. Start the dev server as in step 9.
 

@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { DEFAULT_DEV_SERVER_URL, DEFAULT_NUXEO_URL, readDevServer, readTarget } from './config.ts';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, dirname, join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
+import {
+  DEFAULT_DEV_SERVER_URL,
+  DEFAULT_NUXEO_URL,
+  readDevServer,
+  readPackageRoots,
+  readTarget,
+} from './config.ts';
 
 const CREDENTIALS = { NUXEO_USER: 'builder', NUXEO_PASS: 'not-a-real-password' };
 
@@ -93,5 +102,44 @@ describe('readDevServer', () => {
       expect(readDevServer({ DEV_SERVER_URL: url }), url).toHaveProperty('problem');
     const elsewhere = readDevServer({ DEV_SERVER_URL: 'http://dev.example.com:4200' });
     expect(typeof elsewhere !== 'string' && elsewhere.problem).toContain('not this machine');
+  });
+});
+
+describe('readPackageRoots', () => {
+  const repository = mkdtempSync(join(tmpdir(), 'builder-mcp-roots-'));
+  const fallback = join(repository, 'business-apps', 'packages');
+  mkdirSync(fallback, { recursive: true });
+  mkdirSync(join(repository, 'customer-apps'));
+  afterAll(() => rmSync(repository, { recursive: true, force: true }));
+
+  it('is business-apps/packages/ alone when unset or empty', () => {
+    expect(readPackageRoots({}, repository, fallback)).toEqual([fallback]);
+    expect(readPackageRoots({ BUILDER_PACKAGE_ROOTS: ' ' }, repository, fallback)).toEqual([
+      fallback,
+    ]);
+  });
+
+  it('replaces it with the folders it names, from the repository unless absolute', () => {
+    expect(
+      readPackageRoots({ BUILDER_PACKAGE_ROOTS: 'customer-apps' }, repository, fallback),
+    ).toEqual([join(repository, 'customer-apps')]);
+    expect(
+      readPackageRoots(
+        { BUILDER_PACKAGE_ROOTS: ['customer-apps', fallback].join(delimiter) },
+        repository,
+        fallback,
+      ),
+    ).toEqual([join(repository, 'customer-apps'), fallback]);
+  });
+
+  it('refuses a folder that does not exist, and one that holds the repository', () => {
+    for (const [value, why] of [
+      ['no-such-folder', 'is not a folder'],
+      [repository, 'holds the repository'],
+      [dirname(repository), 'holds the repository'],
+    ]) {
+      const result = readPackageRoots({ BUILDER_PACKAGE_ROOTS: value }, repository, fallback);
+      expect('problem' in result && result.problem, value).toContain(why);
+    }
   });
 });

@@ -9,8 +9,11 @@
  *   needs neither, and still answers.
  *
  * Plain `http` is accepted for this machine only: Basic authentication over it to another host
- * would send the password in clear text.
+ * would send the password in clear text. `DEV_SERVER_URL` is the dev server `preview_package`
+ * serves to, and `BUILDER_PACKAGE_ROOTS` the folders the write tools may write a package in.
  */
+import { lstatSync } from 'node:fs';
+import { delimiter, isAbsolute, relative, resolve } from 'node:path';
 
 export const DEFAULT_NUXEO_URL = 'http://localhost:8080';
 export const NUXEO_URL_ENV = 'NUXEO_URL';
@@ -106,4 +109,36 @@ export function readDevServer(env: Environment): string | { readonly problem: st
  */
 export function isThisMachine(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+export const PACKAGE_ROOTS_ENV = 'BUILDER_PACKAGE_ROOTS';
+
+/**
+ * The folders the write tools may write a package in, from `BUILDER_PACKAGE_ROOTS`, or why there
+ * are none. Unset, it is `business-apps/packages/` alone. Set, its folders replace that one: each
+ * a path, absolute or from the repository's root, separated as `PATH` separates them (`:`, or `;`
+ * on Windows). Each must be a folder that exists, and none may hold the repository itself, so
+ * that a package is never the checkout or a folder above it.
+ */
+export function readPackageRoots(
+  env: Environment,
+  repository: string,
+  fallback: string,
+): readonly string[] | { readonly problem: string } {
+  const value = env[PACKAGE_ROOTS_ENV];
+  if (value === undefined || value.trim() === '') return [fallback];
+  const roots: string[] = [];
+  for (const given of value.split(delimiter).filter((part) => part.trim() !== '')) {
+    const root = resolve(repository, given);
+    const refuse = (why: string) => ({
+      problem: `${PACKAGE_ROOTS_ENV}: ${given} ${why}. The write tools refuse until it is fixed.`,
+    });
+    if (!lstatSync(root, { throwIfNoEntry: false })?.isDirectory())
+      return refuse('is not a folder, or is a link to one');
+    const toRepository = relative(root, repository);
+    if (toRepository === '' || (!toRepository.startsWith('..') && !isAbsolute(toRepository)))
+      return refuse('holds the repository, so a package there could be the checkout itself');
+    roots.push(root);
+  }
+  return roots;
 }

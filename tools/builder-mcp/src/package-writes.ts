@@ -1,0 +1,882 @@
+/**
+ * Validated writes: `write_package_file`, `apply_generator` and `apply_package_changes`. Each
+ * writes to a package only what passes the package pipeline, and otherwise changes nothing. Phase
+ * 3 of docs/business-apps/development-plan.md: "every write by the agent passes validation; an
+ * agent asked to use an unregistered ID is refused".
+ *
+ * 1. **The package is one folder directly inside a package root:** `business-apps/packages/`, or
+ *    the roots `BUILDER_PACKAGE_ROOTS` names instead (config.ts). It is reached through no link,
+ *    holds no link, symbolic or hard, and is named as a Marketplace package is, in kebab case.
+ * 2. **Each file is one a writer may write** (`fileKind`): the app definition's files, for
+ *    `write_package_file`; those and the files the generators write, for a generator. Anything
+ *    else is refused before anything runs: a path that leaves the package, a hidden file, code, an
+ *    asset, the build allow-list, the pipeline's own output.
+ * 3. **The changes are made to a staging copy,** a private temporary folder: each write, and each
+ *    generator run in a process of its own (`run-generator.ts`) on a tree that reads the staging
+ *    copy and writes nothing.
+ * 4. **The staging copy is validated as `validate_package` validates a folder alone, as CI does:**
+ *    the pipeline's steps 1 to 6, with the package's own build allow-list when it names one, the
+ *    platform's version, and its own `content-model.json` when it ships a stand-in model. No other
+ *    allow-list, registered file or platform version is taken, so nothing the agent gives can
+ *    register an id. Every app definition file the changes touch must be of version 2, since the
+ *    validator does not check a layout of version 1.
+ * 5. **Only with no finding and no refusing step** are the changes committed: each file is
+ *    written beside its place, inside the package's own `dist/`, then renamed into it. A failure
+ *    part way puts back every file already moved, so the package is as it was. A package that
+ *    changed since the staging copy was taken is not written at all.
+ *
+ * What it never does: run package code (the generators are this repository's, and the pipeline
+ * runs `build.mjs` only once step 1 found it the generator's, byte for byte); write outside the
+ * package, but for its own temporary folder; follow a link; give a credential to anything it runs.
+ */
+import { randomBytes } from 'node:crypto';
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { GeneratedChange, GeneratorAnswer, GeneratorRequest } from './run-generator.ts';
+import {
+  REPO_ROOT,
+  inRepository,
+  linkInside,
+  pipelineEnvironment,
+  runNode,
+  validatePackage,
+  within,
+  type PackageCheck,
+} from './validate-package.ts';
+
+export const DEFAULT_PACKAGE_ROOT = join(REPO_ROOT, 'business-apps', 'packages');
+export const GENERATORS_SOURCE = join(REPO_ROOT, 'tools', 'satori-generators', 'src');
+/** The generators a package write may run: the app definition's, and nothing else. */
+export const APP_GENERATORS = [
+  'app-package',
+  'app-layout',
+  'app-form',
+  'app-queue',
+  'app-action',
+  'app-registry',
+  'app-model',
+] as const;
+export type AppGenerator = (typeof APP_GENERATORS)[number];
+export const MAX_CHANGES = 32;
+/** The server refuses a fragment or a layout over 1 MiB (`build.mjs`'s `MAX_JSON_BYTES`). */
+export const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_PACKAGE_BYTES = 64 * 1024 * 1024;
+const GENERATOR_TIMEOUT_MS = 120_000;
+const RUNNER = fileURLToPath(new URL('./run-generator.ts', import.meta.url));
+/** `app-package`'s rule for a package's name, which is its folder's. */
+const PACKAGE_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+const CONFIG = 'bundle/agentic-ui-config';
+
+export type Change =
+  | { readonly kind: 'write'; readonly path: string; readonly content: string }
+  | {
+      readonly kind: 'generator';
+      readonly generator: string;
+      readonly options?: Readonly<Record<string, unknown>>;
+    };
+
+export interface WriteRequest {
+  /** The package folder, relative to the repository unless absolute. */
+  readonly package: string;
+  readonly changes: readonly Change[];
+}
+
+/** A run of a generator, as the server asks for one. */
+export interface GeneratorRun {
+  readonly generator: AppGenerator;
+  readonly request: Omit<GeneratorRequest, 'answer'>;
+  readonly work: string;
+  readonly timeoutMs: number;
+}
+
+export interface WriteOptions {
+  /** The folders a package may be directly inside. Default: `business-apps/packages/`. */
+  readonly packageRoots?: readonly string[];
+  /** Where a content model given to a generator may be. Default: the repository and the roots. */
+  readonly modelRoots?: readonly string[];
+  /** Where the staging copy is made. Default: the system's temporary folder. */
+  readonly workIn?: string;
+  readonly timeoutMs?: number;
+  /** The pipeline, as `validate_package` runs it on a folder alone. Replaced in some tests. */
+  readonly validate?: (
+    directory: string,
+    roots: readonly string[],
+    workIn: string,
+  ) => Promise<PackageCheck>;
+  /** The generator's process. Replaced in some tests. */
+  readonly generate?: (run: GeneratorRun) => Promise<GeneratorAnswer>;
+  /** Called once the changes passed, before the package is read again and written. Tests only. */
+  readonly beforeCommit?: () => void;
+  /** Called before each file is moved into the package. Tests only. */
+  readonly beforeMove?: (path: string, index: number) => void;
+}
+
+export interface FileChange {
+  /** The file, relative to the package, with `/`. */
+  readonly path: string;
+  readonly change: 'created' | 'updated' | 'removed';
+}
+
+export interface WriteResult {
+  readonly package: string;
+  /** Whether the package now holds the changes. */
+  readonly written: boolean;
+  /** What was written, or would have been. */
+  readonly changes: readonly FileChange[];
+  /** The pipeline's answer on the staging copy; `null` when there was nothing to check. */
+  readonly validation: PackageCheck | null;
+  /** What each generator printed, in order. */
+  readonly generatorOutput: readonly string[];
+  readonly note: string;
+}
+
+// ------------------------------------------------------------------------------- what is written
+
+/** Who may write a file: `write_package_file` and the generators, or the generators only. */
+export type FileKind = 'definition' | 'generated';
+
+const PART = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const DEFINITION = [
+  /^app\.json$/,
+  /^(?:home|navigation|actions)\.json$/,
+  /^queues\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json$/,
+  /^labels\/[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\.json$/,
+  /^tasks\/[A-Za-z][A-Za-z0-9_-]{0,127}\.[A-Za-z][A-Za-z0-9_-]{0,127}\.layout\.json$/,
+  /^layouts\/[A-Za-z][A-Za-z0-9_-]{0,127}\/[a-z][a-z0-9-]{0,31}\.layout\.json$/,
+];
+const GENERATED = [
+  /^\.gitignore$/,
+  /^README\.md$/,
+  /^build\.mjs$/,
+  /^content-model\.json$/,
+  /^package\/(?:package|install)\.xml$/,
+  /^bundle\/META-INF\/MANIFEST\.MF$/,
+  /^bundle\/OSGI-INF\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.xml$/,
+  /^bundle\/schemas\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.xsd$/,
+];
+/** The names Windows keeps for devices, which no file there may have. */
+const DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
+
+const WRITABLE =
+  'app.json, home.json, navigation.json, actions.json, queues/<id>.json, labels/<language>.json,' +
+  ' tasks/<workflow>.<step>.layout.json or layouts/<Type>/<mode>.layout.json, under' +
+  ` ${CONFIG}/`;
+
+/**
+ * What a path inside a package is, or why no writer here may write it. The path is the one given,
+ * relative to the package with `/`, judged as a string before the file system is asked anything.
+ */
+export function fileKind(path: string): FileKind | { readonly problem: string } {
+  const refuse = (why: string) => ({ problem: `${JSON.stringify(path)} ${why}` });
+  if (path.length === 0 || path.length > 512) return refuse('is not a file path.');
+  if (path.includes('\\') || path.includes('\0') || path.includes(':'))
+    return refuse('is not a path inside the package: write it with "/" between its parts.');
+  if (path.startsWith('/') || isAbsolute(path))
+    return refuse(
+      'is absolute. Give it relative to the package, such as bundle/agentic-ui-config/app.json.',
+    );
+  const parts = path.split('/');
+  if (parts.some((part) => part === '..' || part === '.' || part === ''))
+    return refuse(
+      'leaves the package, or has an empty or "." part. Nothing outside it is written.',
+    );
+  if (path === '.gitignore') return 'generated';
+  if (parts.some((part) => part.startsWith('.')))
+    return refuse('is a hidden file, or in a hidden folder, and is not written.');
+  const bad = parts.find((part) => !PART.test(part) || DEVICE.test(part));
+  if (bad !== undefined)
+    return refuse(
+      `has the part "${bad}", which is not a file name of letters, digits, ".", "_" and "-".`,
+    );
+  if (path.startsWith(`${CONFIG}/`)) {
+    const inside = path.slice(CONFIG.length + 1);
+    if (DEFINITION.some((place) => place.test(inside))) return 'definition';
+    if (inside.startsWith('assets/'))
+      return refuse(
+        'is an asset. These tools write no asset: one is served without authentication, and its' +
+          ' bytes are not something the validator checks. A person adds it.',
+      );
+    return refuse(`is not a file of the app definition the pipeline accepts. One is ${WRITABLE}.`);
+  }
+  if (GENERATED.some((place) => place.test(path))) return 'generated';
+  if (parts[0] === 'deployment')
+    return refuse(
+      "is the deployment's: the build allow-list there is what CI gives the pipeline, and an" +
+        ' agent that wrote it could allow its own operations (decision 3). A person writes it.',
+    );
+  if (parts[0] === 'dist') return refuse("is the pipeline's output, which is never written here.");
+  if (/\.(?:[cm]?[jt]sx?|java|sh|ps1|py|rb|groovy|jar|class)$/i.test(path))
+    return refuse('is code. A package is configuration only, and these tools write no code.');
+  return refuse(
+    `is not a file these tools write. write_package_file writes ${WRITABLE}; the generators` +
+      ' also write the component, the manifest, package/, build.mjs, the schemas and' +
+      ' content-model.json.',
+  );
+}
+
+/** Where a file the generators alone write comes from, for the refusal. */
+function writtenBy(path: string): string {
+  if (path === 'content-model.json' || path.startsWith('bundle/schemas/'))
+    return 'app-model writes it, for a demo kit';
+  if (path.startsWith('bundle/OSGI-INF/'))
+    return 'the generator of what it contributes writes it: app-layout, app-form, app-queue, app-action, app-registry or app-model';
+  return 'app-package writes it. A version is raised by a person, in package.xml, app.json and the manifest together';
+}
+
+// ------------------------------------------------------------------------------- the package
+
+interface Target {
+  readonly directory: string;
+  readonly name: string;
+  /** As the answers name it: from the repository when inside it. */
+  readonly shown: string;
+  /** Its path in the generators' tree, from the repository's root. */
+  readonly treePath: string;
+  readonly exists: boolean;
+}
+
+function fromRepository(path: string): string | null {
+  const from = relative(REPO_ROOT, path);
+  return from === '' || from.startsWith('..') || isAbsolute(from)
+    ? null
+    : from.split(sep).join('/');
+}
+
+/** The package folder a request names, or why it is not one the tools write. */
+function packageFolder(path: string, roots: readonly string[]): Target {
+  const absolute = inRepository(path);
+  const shownRoots = roots.map((root) => fromRepository(root) ?? root).join(', ');
+  for (const root of roots.map((candidate) => resolve(candidate))) {
+    const from = relative(root, absolute);
+    if (from === '' || from.startsWith('..') || isAbsolute(from) || from.includes(sep)) continue;
+    if (!PACKAGE_NAME.test(from))
+      throw new Error(
+        `package: ${path} is not a package's name: lower-case letters and digits, in parts joined by "-", as app-package names one.`,
+      );
+    // The root itself, when it is in the repository, is reached through no link and no hidden folder.
+    const inside = fromRepository(root);
+    if (inside !== null) {
+      const reached = within(root, [REPO_ROOT]);
+      if (typeof reached !== 'string') throw new Error(`package: ${reached.problem}`);
+    }
+    const rootEntry = lstatSync(root, { throwIfNoEntry: false });
+    if (!rootEntry?.isDirectory())
+      throw new Error(`package: the package root ${fromRepository(root) ?? root} is not a folder.`);
+    const entry = lstatSync(absolute, { throwIfNoEntry: false });
+    if (entry?.isSymbolicLink())
+      throw new Error(`package: ${path} is a link, which is not followed. A package is a folder.`);
+    if (entry && !entry.isDirectory()) throw new Error(`package: ${path} is not a folder.`);
+    if (entry) {
+      const link = linkInside(absolute);
+      if (link)
+        throw new Error(
+          `package: ${path} holds a link, ${relative(absolute, link).split(sep).join('/')}, which is not followed. A package holds its files; nothing is written to one that holds a link.`,
+        );
+    }
+    const repositoryPath = fromRepository(absolute);
+    return {
+      directory: absolute,
+      name: from,
+      shown: repositoryPath ?? absolute,
+      // A package outside the repository is shown to the generators where one would be inside it.
+      treePath: repositoryPath ?? `business-apps/packages/${from}`,
+      exists: entry !== undefined,
+    };
+  }
+  throw new Error(
+    `package: ${path} is not a package folder directly inside ${shownRoots}, the folders the` +
+      ' write tools are scoped to, such as business-apps/packages/acme-contracts. Nothing outside' +
+      ' them is written.',
+  );
+}
+
+/** Every file of a package, by its path with `/`, but for the pipeline's own `dist/`. */
+type Files = ReadonlyMap<string, Buffer>;
+
+/**
+ * The package's files. A link, a file with a second name, or anything that is neither a file nor a
+ * folder is refused rather than read: the copy holds only what the package holds.
+ */
+function readFiles(directory: string): Files {
+  const files = new Map<string, Buffer>();
+  let total = 0;
+  const walk = (folder: string, prefix: string) => {
+    for (const name of readdirSync(folder).sort()) {
+      if (prefix === '' && name === 'dist') continue;
+      const path = join(folder, name);
+      const shown = `${prefix}${name}`;
+      const entry = lstatSync(path);
+      if (entry.isSymbolicLink())
+        throw new Error(`${shown} is a symbolic link, which is not followed.`);
+      if (entry.isDirectory()) {
+        walk(path, `${shown}/`);
+        continue;
+      }
+      if (!entry.isFile()) throw new Error(`${shown} is neither a file nor a folder.`);
+      if (entry.nlink > 1)
+        throw new Error(`${shown} has a second name, a hard link, which is not followed.`);
+      total += entry.size;
+      if (total > MAX_PACKAGE_BYTES)
+        throw new Error(`the package holds more than ${MAX_PACKAGE_BYTES} bytes.`);
+      files.set(shown, readFileSync(path));
+    }
+  };
+  walk(directory, '');
+  return files;
+}
+
+function sameFiles(a: Files, b: Files): boolean {
+  if (a.size !== b.size) return false;
+  for (const [path, data] of a) {
+    const other = b.get(path);
+    if (!other || !other.equals(data)) return false;
+  }
+  return true;
+}
+
+/**
+ * The file a package path names inside `directory`, or an error. `fileKind` has already refused
+ * any path that could leave it; this holds every write and removal to it a second time, since a
+ * path that left the staging copy would be written outside the package and then missed by the
+ * comparison of the copy with the package.
+ */
+function inside(directory: string, path: string): string {
+  const file = resolve(directory, ...path.split('/'));
+  const from = relative(directory, file);
+  if (from === '' || from.startsWith('..') || isAbsolute(from))
+    throw new Error(`${path} is not inside the package.`);
+  return file;
+}
+
+function writeInto(directory: string, path: string, data: Buffer | string): void {
+  const file = inside(directory, path);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, data);
+}
+
+// ------------------------------------------------------------------------------- a generator
+
+/** A generator's options, checked against its schema, with the package's own put in. */
+function generatorOptions(
+  generator: AppGenerator,
+  given: Readonly<Record<string, unknown>>,
+  target: Target,
+  staging: string,
+  modelRoots: readonly string[],
+): Record<string, unknown> {
+  const schema = JSON.parse(
+    readFileSync(join(GENERATORS_SOURCE, generator, 'schema.json'), 'utf8'),
+  ) as {
+    properties: Record<string, { type?: string; enum?: unknown[]; default?: unknown }>;
+    required?: string[];
+  };
+  const own = generator === 'app-package' ? ['name', 'directory'] : ['package'];
+  const options: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(given)) {
+    const property = Object.hasOwn(schema.properties, key) ? schema.properties[key] : undefined;
+    if (property === undefined)
+      throw new Error(
+        `options.${key}: ${generator} has no such option. It takes ${Object.keys(schema.properties)
+          .filter((name) => !own.includes(name) && name !== 'modelServer')
+          .join(', ')}.`,
+      );
+    if (own.includes(key))
+      throw new Error(
+        `options.${key}: the package argument names the package; leave ${key} out of the options.`,
+      );
+    if (key === 'modelServer')
+      throw new Error(
+        "options.modelServer: the write tools read no server: the generator would send NUXEO_USER and NUXEO_PASS to the address it is given. Give the model as a file, the package's own content-model.json or one `npm run app-package:model` exported into the repository (its tmp/ is ignored by git).",
+      );
+    const type = property.type;
+    const fits =
+      type === 'string'
+        ? typeof value === 'string'
+        : type === 'boolean'
+          ? typeof value === 'boolean'
+          : type === 'integer'
+            ? Number.isInteger(value)
+            : type === 'number'
+              ? typeof value === 'number' && Number.isFinite(value)
+              : false;
+    if (!fits) throw new Error(`options.${key}: ${generator} takes a ${type ?? 'value'} here.`);
+    if (property.enum && !property.enum.includes(value))
+      throw new Error(`options.${key}: one of ${property.enum.join(', ')}.`);
+    options[key] =
+      key === 'model' ? modelFile(value as string, target, staging, modelRoots) : value;
+  }
+  for (const [key, property] of Object.entries(schema.properties))
+    if (options[key] === undefined && property.default !== undefined)
+      options[key] = property.default;
+  if (generator === 'app-package') {
+    options['name'] = target.name;
+    options['directory'] = target.treePath.slice(0, target.treePath.lastIndexOf('/'));
+  } else options['package'] = target.treePath;
+  const missing = (schema.required ?? []).filter((key) => options[key] === undefined);
+  if (missing.length > 0) throw new Error(`options: ${generator} needs ${missing.join(', ')}.`);
+  return options;
+}
+
+/**
+ * The content model a generator reads, as a path it can open: the staging copy's, for one inside
+ * the package, so that a model an earlier step wrote is the one read; otherwise a JSON file inside
+ * the repository or a package root, through no link and no hidden folder, as `validate_package`
+ * reads its allow-list. A generator can quote what it read, and that goes to the agent.
+ */
+function modelFile(
+  path: string,
+  target: Target,
+  staging: string,
+  roots: readonly string[],
+): string {
+  const absolute = inRepository(path);
+  const inPackage = relative(target.directory, absolute);
+  if (inPackage !== '' && !inPackage.startsWith('..') && !isAbsolute(inPackage)) {
+    const parts = inPackage.split(sep);
+    if (parts.some((part) => part.startsWith('.')) || !inPackage.endsWith('.json'))
+      throw new Error(`options.model: ${path} is not a JSON file of the package.`);
+    return join(staging, ...parts);
+  }
+  const found = within(path, roots);
+  if (typeof found !== 'string') throw new Error(`options.model: ${found.problem}`);
+  if (!found.endsWith('.json') || !lstatSync(found).isFile())
+    throw new Error(`options.model: ${path} is not a JSON file.`);
+  return found;
+}
+
+/** The generator, run in a process of its own (`run-generator.ts`), with no credential. */
+async function runGenerator(run: GeneratorRun): Promise<GeneratorAnswer> {
+  const answer = join(run.work, `answer-${randomBytes(6).toString('hex')}.json`);
+  const requestFile = join(run.work, `request-${randomBytes(6).toString('hex')}.json`);
+  writeFileSync(requestFile, JSON.stringify({ ...run.request, answer }));
+  const temporary = mkdtempSync(join(run.work, 'tmp-'));
+  const result = await runNode(
+    [RUNNER, requestFile],
+    run.timeoutMs,
+    pipelineEnvironment(process.env, temporary),
+  );
+  const printed = [result.stdout, result.stderr].join('\n');
+  let read: GeneratorAnswer | null = null;
+  try {
+    read = JSON.parse(readFileSync(answer, 'utf8')) as GeneratorAnswer;
+  } catch {
+    // Said below.
+  }
+  if (result.failure !== null || read === null)
+    throw new Error(
+      `${run.generator} did not answer (${result.failure ?? `exit ${result.exitCode}`}):\n${printed.trim()}`,
+    );
+  return read;
+}
+
+/** A generator's changes, each one checked, as the files to write into the staging copy. */
+function generatedFiles(
+  generator: string,
+  changes: readonly GeneratedChange[],
+  target: Target,
+): { path: string; data: Buffer | null }[] {
+  return changes.map((change) => {
+    const prefix = `${target.treePath}/`;
+    if (typeof change.path !== 'string' || !change.path.startsWith(prefix))
+      throw new Error(`${generator} wrote ${String(change.path)}, which is outside the package.`);
+    const path = change.path.slice(prefix.length);
+    const kind = fileKind(path);
+    if (typeof kind !== 'string') throw new Error(`${generator} wrote ${kind.problem}`);
+    if (change.type === 'DELETE') return { path, data: null };
+    if (
+      (change.type !== 'CREATE' && change.type !== 'UPDATE') ||
+      typeof change.content !== 'string'
+    )
+      throw new Error(`${generator} answered a change to ${path} that is not one.`);
+    return { path, data: Buffer.from(change.content, 'base64') };
+  });
+}
+
+// ------------------------------------------------------------------------------- the write
+
+/** One write at a time: two would each be validated against a package the other then changed. */
+let writing: Promise<unknown> = Promise.resolve();
+
+export function writePackage(
+  request: WriteRequest,
+  options: WriteOptions = {},
+): Promise<WriteResult> {
+  const run = writing.then(() => write(request, options));
+  writing = run.catch(() => undefined);
+  return run;
+}
+
+async function write(request: WriteRequest, options: WriteOptions): Promise<WriteResult> {
+  const roots = options.packageRoots ?? [DEFAULT_PACKAGE_ROOT];
+  if (request.changes.length === 0) throw new Error('changes: there is nothing to write.');
+  if (request.changes.length > MAX_CHANGES)
+    throw new Error(`changes: at most ${MAX_CHANGES} in one call.`);
+  const target = packageFolder(request.package, roots);
+  // Everything that can be judged from the request alone, before anything is copied or run.
+  for (const [index, change] of request.changes.entries()) {
+    const at = `changes[${index}]`;
+    if (change.kind === 'write') {
+      const kind = fileKind(change.path);
+      if (typeof kind !== 'string') throw new Error(`${at}.path: ${kind.problem}`);
+      if (kind === 'generated')
+        throw new Error(
+          `${at}.path: ${change.path} is written by the generators only: ${writtenBy(change.path)}. Use apply_generator.`,
+        );
+      if (Buffer.byteLength(change.content) > MAX_FILE_BYTES)
+        throw new Error(
+          `${at}.content: more than ${MAX_FILE_BYTES} bytes, which the server refuses for a file of the app definition.`,
+        );
+    } else if (!(APP_GENERATORS as readonly string[]).includes(change.generator))
+      throw new Error(
+        `${at}.generator: ${change.generator} is not one the write tools run. They run ${APP_GENERATORS.join(', ')}.`,
+      );
+  }
+  const first = request.changes[0];
+  if (!target.exists && !(first.kind === 'generator' && first.generator === 'app-package'))
+    throw new Error(
+      `package: ${target.shown} does not exist. A new package starts with apply_generator's app-package.`,
+    );
+
+  const work = mkdtempSync(join(options.workIn ?? tmpdir(), 'builder-mcp-write-'));
+  try {
+    const stagingRoot = join(work, 'staging');
+    const staging = join(stagingRoot, target.name);
+    mkdirSync(stagingRoot);
+    let before: Files;
+    try {
+      before = target.exists ? readFiles(target.directory) : new Map();
+    } catch (error) {
+      throw new Error(`package: ${target.shown}: ${(error as Error).message}`);
+    }
+    if (target.exists) mkdirSync(staging);
+    for (const [path, data] of before) writeInto(staging, path, data);
+
+    const said: string[] = [];
+    const shownPaths = (text: string) =>
+      text.split(staging).join(target.shown).split(work).join('<temporary>');
+    /** A change that cannot be made to the staging copy, said of the package. */
+    const unmade = (index: number, error: unknown) =>
+      new Error(`changes[${index}]: ${shownPaths((error as Error).message)} Nothing was written.`);
+    for (const [index, change] of request.changes.entries()) {
+      if (change.kind === 'write') {
+        try {
+          writeInto(staging, change.path, change.content);
+        } catch (error) {
+          throw unmade(index, error);
+        }
+        continue;
+      }
+      const generator = change.generator as AppGenerator;
+      let given: Record<string, unknown>;
+      try {
+        given = generatorOptions(
+          generator,
+          change.options ?? {},
+          target,
+          staging,
+          options.modelRoots ?? [REPO_ROOT, ...roots],
+        );
+      } catch (error) {
+        throw new Error(`changes[${index}].${(error as Error).message}`);
+      }
+      const answer = await (options.generate ?? runGenerator)({
+        generator,
+        request: {
+          factory: join(GENERATORS_SOURCE, generator, 'generator.ts'),
+          options: given,
+          root: REPO_ROOT,
+          packagePath: target.treePath,
+          staging,
+        },
+        work,
+        timeoutMs: options.timeoutMs ?? GENERATOR_TIMEOUT_MS,
+      });
+      const printed = answer.said.map((line) => shownPaths(withoutColour(line)));
+      if ('error' in answer)
+        throw new Error(
+          `changes[${index}]: ${generator} refused: ${shownPaths(answer.error)}${
+            printed.length ? `\n${printed.join('\n')}` : ''
+          }\nNothing was written.`,
+        );
+      said.push(...printed);
+      try {
+        for (const file of generatedFiles(generator, answer.changes, target)) {
+          if (file.data === null) rmSync(inside(staging, file.path), { force: true });
+          else writeInto(staging, file.path, file.data);
+        }
+      } catch (error) {
+        throw unmade(index, error);
+      }
+    }
+
+    const after = readFiles(staging);
+    const changes = differences(before, after);
+    if (changes.length === 0)
+      return {
+        package: target.shown,
+        written: false,
+        changes,
+        validation: null,
+        generatorOutput: said,
+        note: 'Nothing to write: the package already holds exactly this.',
+      };
+    // Checked again on what the changes came to: what a generator wrote is held to the same rules.
+    for (const { path } of changes) {
+      const kind = fileKind(path);
+      if (typeof kind !== 'string') throw new Error(`${kind.problem} Nothing was written.`);
+    }
+    const versionOne = changes.filter(
+      ({ path, change }) => change !== 'removed' && !isVersionTwo(after.get(path), path),
+    );
+    if (versionOne.length > 0)
+      throw new Error(
+        `${versionOne.map(({ path }) => path).join(', ')} ${versionOne.length === 1 ? 'is' : 'are'} not a JSON object of "version": 2. The validator does not check a file of version 1, so a write to one could not be validated; nothing was written.`,
+      );
+
+    const check = shownCheck(
+      await (options.validate ?? defaultValidate(options.timeoutMs))(staging, [stagingRoot], work),
+      target.shown,
+      shownPaths,
+    );
+    if (!check.passed || check.findings.length > 0)
+      return {
+        package: target.shown,
+        written: false,
+        changes,
+        validation: check,
+        generatorOutput: said,
+        note:
+          'Refused: the package would not pass the pipeline, so nothing was written, and the' +
+          ' package is as it was. Fix what the findings and the refusing step name, and write again.',
+      };
+
+    options.beforeCommit?.();
+    // What was validated is what is written: a package that changed meanwhile is not written.
+    let again: Target;
+    let now: Files;
+    try {
+      again = packageFolder(request.package, roots);
+    } catch (error) {
+      throw new Error(`${(error as Error).message} Nothing was written.`);
+    }
+    try {
+      now = again.exists ? readFiles(target.directory) : new Map();
+    } catch (error) {
+      throw new Error(`package: ${target.shown}: ${(error as Error).message} Nothing was written.`);
+    }
+    if (again.exists !== target.exists || !sameFiles(before, now))
+      return {
+        package: target.shown,
+        written: false,
+        changes,
+        validation: check,
+        generatorOutput: said,
+        note:
+          'Not written: the package changed while the changes were being checked, so what passed' +
+          ' is not what would be written. Nothing was written; read it again and write again.',
+      };
+    commit(target, changes, after, before, options.beforeMove);
+    return {
+      package: target.shown,
+      written: true,
+      changes,
+      validation: check,
+      generatorOutput: said,
+      note:
+        `Written: ${changes.length} ${changes.length === 1 ? 'file' : 'files'}, after the pipeline's` +
+        ' steps 1 to 6 passed on the package as it now is, as CI runs them. Nothing was published.',
+    };
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+function defaultValidate(timeoutMs: number | undefined): NonNullable<WriteOptions['validate']> {
+  return (directory, roots, workIn) => validatePackage({ directory }, { roots, workIn, timeoutMs });
+}
+
+function differences(before: Files, after: Files): FileChange[] {
+  const changes: FileChange[] = [];
+  for (const [path, data] of after) {
+    const was = before.get(path);
+    if (!was) changes.push({ path, change: 'created' });
+    else if (!was.equals(data)) changes.push({ path, change: 'updated' });
+  }
+  for (const path of before.keys()) if (!after.has(path)) changes.push({ path, change: 'removed' });
+  return changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/** A file of the app definition is a JSON object of version 2; any other file is not held to it. */
+function isVersionTwo(data: Buffer | undefined, path: string): boolean {
+  if (fileKind(path) !== 'definition') return true;
+  try {
+    const text = (data ?? Buffer.alloc(0)).toString('utf8').replace(/^\uFEFF/, '');
+    const value: unknown = JSON.parse(text);
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      (value as { version?: unknown }).version === 2
+    );
+  } catch {
+    // Not JSON: the validator refuses it, naming why.
+    return true;
+  }
+}
+
+/** The pipeline's answer, naming the package rather than its staging copy. */
+function shownCheck(
+  check: PackageCheck,
+  shown: string,
+  shownPaths: (text: string) => string,
+): PackageCheck {
+  return {
+    ...check,
+    package: shown,
+    stdout: check.stdout.map(shownPaths),
+    stderr: check.stderr.map(shownPaths),
+    refusedAt: check.refusedAt && {
+      ...check.refusedAt,
+      reason: shownPaths(check.refusedAt.reason),
+    },
+    findings: check.findings.map((finding) => ({ ...finding, file: shownPaths(finding.file) })),
+    note: check.passed
+      ? "The pipeline's steps 1 to 6 passed on the staging copy, as CI runs them."
+      : check.note,
+  };
+}
+
+function withoutColour(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+// ------------------------------------------------------------------------------- the commit
+
+/**
+ * The changes, into the package. Each new file is written first into a folder of the write's own
+ * inside the package's `dist/`, which is on the package's volume and which git and the builder
+ * leave out; then each is renamed into its place, which replaces a file whole. Should a move fail,
+ * every file already moved is put back as it was, and every folder made is removed, so that the
+ * package is left as it was. A process killed outright part way cannot do that.
+ */
+function commit(
+  target: Target,
+  changes: readonly FileChange[],
+  after: Files,
+  before: Files,
+  beforeMove: WriteOptions['beforeMove'],
+): void {
+  const made: string[] = [];
+  const makeFolder = (folder: string) => {
+    mkdirSync(folder);
+    made.push(folder);
+  };
+  if (!target.exists) makeFolder(target.directory);
+  const dist = join(target.directory, 'dist');
+  const distEntry = lstatSync(dist, { throwIfNoEntry: false });
+  if (distEntry && !distEntry.isDirectory())
+    throw new Error(
+      `${target.shown}/dist is not a folder, and the write works in it. Nothing was written.`,
+    );
+  if (!distEntry) makeFolder(dist);
+  const scratch = mkdtempSync(join(dist, 'builder-mcp-commit-'));
+  const moved: FileChange[] = [];
+  let failure: unknown = null;
+  try {
+    const prepared = changes.map((change, index) => {
+      if (change.change === 'removed') return null;
+      const file = join(scratch, String(index));
+      writeFileSync(file, after.get(change.path) as Buffer, { flag: 'wx' });
+      return file;
+    });
+    for (const [index, change] of changes.entries()) {
+      beforeMove?.(change.path, index);
+      const file = placeOf(target.directory, change.path, makeFolder);
+      if (change.change === 'removed') unlinkSync(file);
+      else renameSync(prepared[index] as string, file);
+      moved.push(change);
+    }
+  } catch (error) {
+    failure = error;
+  }
+  const unrestored = failure === null ? [] : putBack(target.directory, moved, before, scratch);
+  rmSync(scratch, { recursive: true, force: true });
+  // The folders made, deepest first, when they are empty again: `dist/` once the scratch is gone,
+  // and on a failure every folder a move made.
+  for (const folder of made.reverse()) {
+    if (failure === null && folder !== dist) continue;
+    try {
+      rmdirSync(folder);
+    } catch {
+      // Not empty: something else is in it, and it stays.
+    }
+  }
+  if (failure !== null)
+    throw new Error(
+      `Writing ${target.shown} failed part way (${(failure as Error).message}). ` +
+        (unrestored.length === 0
+          ? 'Every file already written was put back, so the package is as it was.'
+          : `These could not be put back, and must be restored by hand, from git: ${unrestored.join(', ')}.`),
+    );
+}
+
+/**
+ * The file a change goes to, making the folders it needs: each part of the way is a folder, not a
+ * link, as it was when the package was read.
+ */
+function placeOf(directory: string, path: string, makeFolder: (folder: string) => void): string {
+  inside(directory, path);
+  const parts = path.split('/');
+  let current = directory;
+  for (const part of parts.slice(0, -1)) {
+    current = join(current, part);
+    const entry = lstatSync(current, { throwIfNoEntry: false });
+    if (!entry) makeFolder(current);
+    else if (entry.isSymbolicLink() || !entry.isDirectory())
+      throw new Error(`${path} goes through ${part}, which is not a folder`);
+  }
+  const file = join(current, parts[parts.length - 1]);
+  const entry = lstatSync(file, { throwIfNoEntry: false });
+  if (entry && (entry.isSymbolicLink() || !entry.isFile() || entry.nlink > 1))
+    throw new Error(`${path} is no longer a plain file`);
+  return file;
+}
+
+/** Puts back each file already moved, as it was; the paths that could not be. */
+function putBack(
+  directory: string,
+  moved: readonly FileChange[],
+  before: Files,
+  scratch: string,
+): string[] {
+  const unrestored: string[] = [];
+  for (const [index, change] of [...moved].reverse().entries()) {
+    const file = inside(directory, change.path);
+    try {
+      const was = before.get(change.path);
+      if (was === undefined) unlinkSync(file);
+      else {
+        const back = join(scratch, `back-${index}`);
+        writeFileSync(back, was, { flag: 'wx' });
+        renameSync(back, file);
+      }
+    } catch {
+      unrestored.push(change.path);
+    }
+  }
+  return unrestored;
+}
