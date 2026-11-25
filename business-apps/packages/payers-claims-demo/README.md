@@ -95,6 +95,11 @@ three demo steps and its sixth are written for it, and the pipeline's controls
   case before reads it differently, and a patch is enough. One thing does break, which the rule
   cannot see: a platform built before the checklist card refuses the new Case page ("Not done
   yet", below).
+- **Migration notes:** `upgrade-notes.json`, outside the zip. The upgrade check refuses a removal
+  that a customer's configuration may rely on without one
+  ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 10), and found
+  0.4.0's: the approve action and its three labels. Its note says what a configuration made on
+  0.3.0 names instead, and the changelog carries it.
 
 ## The stand-in model
 

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "notes": [
+    {
+      "version": "0.4.0",
+      "items": [
+        "action payers.claim.approve",
+        "label en payers.action.approve",
+        "label en payers.action.approve.confirm",
+        "label en payers.action.approve.done"
+      ],
+      "note": "The Approve button, payers.claim.approve, is gone with its three labels: since 0.4.0 an adjuster approves a claim through the claims review workflow's determine step, and a supervisor through supervisorApproval. The record's button is now Mark as paid, payers.claim.pay, for a supervisor on an approved claim. A queue or record page that named payers.claim.approve names payers.claim.pay, or nothing; a manifest that overrode it, or gave payers.action.approve, payers.action.approve.confirm or payers.action.approve.done another text, does so for payers.claim.pay and payers.action.pay, payers.action.pay.confirm and payers.action.pay.done, or drops the override."
+    }
+  ]
+}

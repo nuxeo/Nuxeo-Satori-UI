@@ -34,6 +34,8 @@
     "app-package": "node scripts/app-package.mjs",
     "app-package:model": "node scripts/app-package-model.mjs",
     "app-package:selftest": "node scripts/app-package.selftest.mjs",
+    "app-upgrade": "node scripts/app-upgrade-check.mjs",
+    "app-upgrade:selftest": "node scripts/app-upgrade-check.selftest.mjs",
     "beta:evidence": "node scripts/beta-harness/phase-runner.mjs",
     "beta:fork": "node scripts/beta-harness/fork-simulation.mjs",
     "beta:gate": "node scripts/beta-harness/verify-gate.mjs",

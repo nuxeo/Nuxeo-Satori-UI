@@ -53,7 +53,9 @@ step, its result and each departure is [below](#how-it-was-built-the-log).
 - **Its address is `contract-desk`,** not its id: `contracts` is the platform's own page,
   `/contracts`, the component showcase (`PLATFORM_ROUTES` in `libs/shared/app-definition`). 0.1.0
   had no address, so the pipeline noted the clash; 0.2.0 gives one, and a changed address is a
-  breaking change, a minor below 1.0.0 (package-pipeline.md, section 8).
+  breaking change, a minor below 1.0.0 (package-pipeline.md, section 8). It also needs a migration
+  note, which the upgrade check asks for (section 10): `upgrade-notes.json` says that a link to the
+  old address names `contract-desk` instead.
 
 ## The stand-in model
 

@@ -11,7 +11,9 @@ name: App definition packages
 #   is also compared with what it was: a pull request's base, the commit before a push, or for a
 #   tag the package's last release below it. Its version must have moved as far as its changes need
 #   (package-pipeline.md, section 8), and what changed is written beside the zip and in the job's
-#   summary.
+#   summary. The upgrade is checked against the same commit (section 10): what a customer may
+#   override or name in the package, and what the package names of the platform, is removed only
+#   with a migration note and the version it needs, so the platform's sources are paths here too.
 # - `sign-and-publish`, only for a tag `app-package/<name>/<version>`, which someone pushes on
 #   purpose: a build provenance attestation for the zip, then Nuxeo Marketplace preprod, the way
 #   build-marketplace.yml publishes the platform's own package. Nothing publishes on a merge,
@@ -38,6 +40,12 @@ on:
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
+      - 'scripts/app-upgrade-check.mjs'
+      - 'scripts/app-upgrade-check.selftest.mjs'
+      - 'docs/extension-reference.md'
+      - 'docs/business-apps/platform-upgrade-notes.json'
+      - 'nuxeo-agentic-core/src/main/**'
+      - 'apps/nuxeo-ui/src/app/business-apps.menu.ts'
       - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
       - '.github/workflows/app-packages.yml'
   push:
@@ -55,6 +63,12 @@ on:
       - 'scripts/nuxeo-content-model.mjs'
       - 'scripts/beta-harness/nuxeo-credentials.mjs'
       - 'scripts/verify-package-zip.mjs'
+      - 'scripts/app-upgrade-check.mjs'
+      - 'scripts/app-upgrade-check.selftest.mjs'
+      - 'docs/extension-reference.md'
+      - 'docs/business-apps/platform-upgrade-notes.json'
+      - 'nuxeo-agentic-core/src/main/**'
+      - 'apps/nuxeo-ui/src/app/business-apps.menu.ts'
       - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
       - '.github/workflows/app-packages.yml'
 
@@ -104,7 +118,10 @@ jobs:
           echo "No node_modules, no token and no stored credential. Node $(node --version)."
 
       - name: Controls for the pipeline
-        run: node scripts/app-package.selftest.mjs
+        run: |
+          set -euo pipefail
+          node scripts/app-package.selftest.mjs
+          node scripts/app-upgrade-check.selftest.mjs
 
       - name: Check, build and verify each package
         env:
@@ -146,10 +163,17 @@ jobs:
               base=$(git -c versionsort.suffix=- tag --list "app-package/$name/*" --sort=-v:refname \
                 | awk -v tag="$tag" 'seen && $0 !~ /\/[^\/+]*-[^\/]*$/ { print; exit } $0 == tag { seen = 1 }')
             fi
-            if [ -n "$base" ] && git cat-file -e "$base:$dir/package/package.xml" 2>/dev/null; then
-              git archive "$base" "$dir" | tar -x -C "$previous_root"
-              args+=(--previous "$previous_root/$dir")
-              echo "$name: its version is held to $dir at $base."
+            # Where the package was at the base: its own folder, or the folder of the package of the
+            # same name, so that renaming a kit's folder does not make it a new package held to nothing.
+            was=''
+            if [ -n "$base" ]; then was=$(node scripts/app-upgrade-check.mjs --place-at "$base" "$dir"); fi
+            if [ -n "$was" ]; then
+              git archive "$base" "$was" | tar -x -C "$previous_root"
+              # And the platform as it was at the same commit, for the upgrade check's platform side.
+              platform_root="$previous_root/platform-$name"
+              node scripts/app-upgrade-check.mjs --export "$base" "$platform_root"
+              args+=(--previous "$previous_root/$was" --previous-platform "$platform_root")
+              echo "$name: its version and its upgrade are held to $was at $base."
             else
               echo "$name: nothing to hold its version to${base:+ at $base}, so it is a new package."
             fi

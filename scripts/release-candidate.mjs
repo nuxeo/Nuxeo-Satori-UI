@@ -14,9 +14,13 @@
  *      version `.nvmrc` pins, and Maven and `unzip` are there.
  *   2. Every kit under `business-apps/packages/`, through the pipeline (`app-package.mjs`, steps 1
  *      to 6), with the candidate's platform version, `libs/platform`'s, so a kit whose platform range
- *      leaves it out is refused at the pipeline's step 2; and held with `--previous` to the kit as it
- *      was at `--since`, so a version that did not move as far as its changes need is refused at
- *      step 3. A kit `--since` does not have is new, and held to nothing.
+ *      leaves it out is refused at the pipeline's step 2; and held, as app-packages.yml holds it,
+ *      with `--previous` to the package of its name as it was at `--since`, which the upgrade check
+ *      (`app-upgrade-check.mjs --place-at`) finds, and with `--previous-platform` to the platform
+ *      as it was there (`--export`). So step 3 refuses a version that did not move as far as its
+ *      changes need, and an upgrade that does not keep every customer configuration, on the kit's
+ *      side or the platform's (package-pipeline.md, section 10). A kit `--since` does not have is
+ *      new, and held to nothing.
  *   3. The kits as a set, read from the zips the pipeline wrote: no two contribute the same package
  *      name, app id, address, queue, action, component, document type, facet, schema, lifecycle,
  *      page provider, automation chain or operation, directory, workflow, layout, rights policy, or
@@ -106,6 +110,7 @@ import { withoutCommentsOrInstructions } from './verify-package-zip.mjs';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGES = join(REPO, 'business-apps', 'packages');
 const APP_PACKAGE = join(REPO, 'scripts', 'app-package.mjs');
+const UPGRADE_CHECK = join(REPO, 'scripts', 'app-upgrade-check.mjs');
 const STEPS = join(REPO, 'scripts', 'beta-harness', 'steps');
 /** The Maven module that builds the client with its own Node: stage 4 builds it instead. */
 const CLIENT_MODULE = 'apps/nuxeo-ui';
@@ -393,13 +398,43 @@ function buildKits() {
   mkdirSync(kitsOut);
   const refused = [];
   const kits = [];
+  /** The platform as it was at `--since`, exported once for the upgrade check's platform side. */
+  let platformBefore = null;
   for (const name of directories) {
     const directory = join(PACKAGES, name);
-    const previous = kitAt(sinceCommit, `business-apps/packages/${name}`);
+    // Where the package of this name was, as app-packages.yml asks the upgrade check: a kit whose
+    // folder was renamed is held to what it was, not called new.
+    const placed = run(process.execPath, [
+      UPGRADE_CHECK,
+      '--place-at',
+      sinceCommit,
+      `business-apps/packages/${name}`,
+    ]);
+    if (stopped(placed))
+      throw new Refused(
+        `stage 2: the upgrade check could not say where ${name} was at ${options.since}: ${(placed.stderr || placed.stdout).trim()}`,
+      );
+    const was = placed.stdout.trim();
+    const previous = was === '' ? null : kitAt(sinceCommit, was);
     const args = [APP_PACKAGE, directory, '--out', kitsOut, '--platform', platform.version];
-    if (previous !== null) args.push('--previous', previous.directory);
+    if (previous !== null) {
+      if (platformBefore === null) {
+        platformBefore = join(scratch, 'platform-before');
+        const exported = run(process.execPath, [
+          UPGRADE_CHECK,
+          '--export',
+          sinceCommit,
+          platformBefore,
+        ]);
+        if (stopped(exported))
+          throw new Refused(
+            `stage 2: the upgrade check could not export the platform at ${options.since}: ${(exported.stderr || exported.stdout).trim()}`,
+          );
+      }
+      args.push('--previous', previous.directory, '--previous-platform', platformBefore);
+    }
     process.stdout.write(
-      `\n${name}: ${previous === null ? `not in ${options.since}, so it is new and held to nothing` : `held to ${previous.version}, as it was in ${options.since}`}.\n`,
+      `\n${name}: ${previous === null ? `not in ${options.since}, so it is new and held to nothing` : `its version and its upgrade held to ${previous.version}, as it was in ${options.since}${was === `business-apps/packages/${name}` ? '' : ` at ${was}`}, and to the platform there`}.\n`,
     );
     const result = spawnSync(process.execPath, args, {
       cwd: REPO,

@@ -594,6 +594,21 @@ files itself.
 - `@nuxeo/satori-platform` 1.0, with each module's entry point, published;
 - every add-on and kit on the Marketplace.
 
+**Built so far,** 25 November 2026: the upgrade tests' offline half, the upgrade check
+([package-pipeline.md](package-pipeline.md), section 10). On every pull request, with no server,
+the pipeline's step 3 compares each kit, and the platform under it, with what they were at the
+commit its version is held to. It refuses an upgrade that removes or renames, without a migration
+note, a layout, queue, home, menu entry, label key, task form, component, property or page provider
+a customer may override or name; that changes a configuration layer's precedence; that drops a
+label key, property, page provider or document type the kit still names; that raises the version
+less than these need; or that takes from the platform an ID, widget, component, extension point or
+descriptor a kit names. Against each kit's version before, it found two upgrades the version rules
+had passed, payers 0.4.0's removed approve action and contracts 0.2.0's new address; both kits now
+carry their notes. Not built: the server-side half, which installs a kit's version before with a
+customer's package, upgrades both, and checks that the configuration served and the records made
+before are as they were (the pipeline's section 10 lists what it would add); and holding every
+documented ID, not only those a kit names, to the platform's version.
+
 **Demo:**
 
 1. A release-candidate tour across every kit, on fresh servers installed from the Marketplace.
