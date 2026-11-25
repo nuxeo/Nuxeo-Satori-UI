@@ -34,8 +34,9 @@ anywhere: it was built, tested, and checked against the server's own jars, read 
 - **It enforces nothing on its own.** A package contributes a rights policy for its document type;
   the brand assets kit contributes one for `AcmeAsset`
   ([its README](../business-apps/packages/brand-assets-demo/README.md), "Rights on the server").
-- **Share links** (below, "Share links"): a user who holds `WriteSecurity` on an asset makes a link
-  to some of its picture views, and its original where its rights allow, until a last day in UTC.
+- **Share links** (below, "Share links"): a user who holds `WriteSecurity` on an asset, and is an
+  administrator or in a group the server names, makes a link to some of its picture views, and its
+  original where its rights allow, until a last day in UTC.
   Anyone with the address opens it, without signing in, at `/nuxeo/agentic-share/`, and gets those
   items only, watermarked on the server, while the link is neither revoked nor past its day and the
   asset's rights still allow each one. Every download is logged, with the time, the link and the
@@ -249,8 +250,12 @@ add-on's rights policy.
 
 - **Who may:** whoever holds `WriteSecurity` on the asset, "Manage permissions", the permission
   Nuxeo itself asks of anyone who gives someone else access to a document, an outside person by
-  email included. `Write` was the other candidate: it lets a user change the asset, not say who
-  else may see it. The same permission lists the links, revokes them, and reads their downloads.
+  email included, **and** is an administrator or a member of a group the server's
+  `nuxeo.agentic.share.groups` names, in `nuxeo.conf`, comma-separated; unset, administrators only.
+  `WriteSecurity` alone is not enough: every user holds it on their own workspace, and so on a copy
+  there of any asset they may read, whose rights fields they may then write. `Write` was the other
+  candidate: it lets a user change the asset, not say who else may see it. `WriteSecurity` alone
+  lists the links, revokes them, and reads their downloads: stopping a link is not sharing.
 - **What it lists:** 1 to 10 items, each the asset's `original`, or one of its picture views by its
   exact title, `view:<title>`. Not a rendition of the rendition service, not another blob, not a
   view by its place.
@@ -260,8 +265,12 @@ add-on's rights policy.
   download of it would be, and refused when the rights have ended, a preview's included. A request
   with any item refused makes no link, and says which and why: `{"refused": [{"rendition",
 "reason"}]}`, with the rights' codes and `no-such-rendition`.
+- **Bound to the files:** each item's file digest is recorded with the link, and an item is
+  served only while the document's file for it still has that digest. A view renamed onto another
+  file, a picture replaced, or its views made again as other files, ends the link for that item; a
+  file with no digest is not shared, answered `no-such-rendition`.
 - **Not for** a version, a proxy, a document in the trash or a type no rights policy covers; a
-  document has at most 100 open links.
+  document has at most 100 open links, and keeps at most 1000 in all.
 - **The token:** 32 bytes from `SecureRandom`, 256 bits, written as 43 characters of base64url.
   The answer carries it once, with the path the link opens at, `/nuxeo/agentic-share/<token>/`;
   the server keeps its SHA-256 only, as the link's id. A lost address cannot be shown again: the
@@ -280,14 +289,17 @@ hold, in this order:
 2. the link is not revoked, and its last day has not passed, in UTC;
 3. the link lists the item;
 4. the link's creator, as the user directory has them now, with their groups, still holds
-   `WriteSecurity` on the document;
+   `WriteSecurity` on the document, and is still an administrator or in a group
+   `nuxeo.agentic.share.groups` names;
 5. the document, read by the id the link holds, is that document, live, and not in the trash;
 6. a rights policy covers its type, the asset's rights have not ended, a preview included, and the
    policy allows the item's use: so an ended right, a channel taken off the asset, or a use the
    policy no longer lists ends the link for that item;
-7. the document has the item: its first view of that title, or its original;
-8. the item is a JPEG or a PNG of at most 64 MiB and 24 million pixels, read from its header before
-   its pixels, and the watermark is drawn on it;
+7. the document has the item with the file the link was made for: a view of that title, or its
+   original, with the digest the link recorded;
+8. the item is a JPEG or a PNG of at most 64 MiB and 24 million pixels, whose decoded pixels and
+   marked copy take at most 200 MiB, all read from its header before its pixels, and the watermark
+   is drawn on it;
 9. the download is logged.
 
 - **Nothing in a request names a document.** The document is the link's; the path names only an
@@ -305,8 +317,9 @@ hold, in this order:
   from memory, never a temporary file, the link's label and last day, `SHARED ab12cd34 UNTIL
 2026-12-14 UTC`, tiled across all of it at -30 degrees, light over dark, and the result written as
   a new JPEG. Nothing of the file but its pixels goes through: its metadata, colour profile and any
-  embedded image are left behind. At most two are drawn at once, each holding a decoded picture; a
-  request that waits two seconds for its turn is answered 503, never with the file. A file that
+  embedded image are left behind. At most two are drawn at once, each holding a decoded picture, and
+  one at a time for any one link; a request that waits two seconds for a turn, or whose link has one
+  being drawn, is answered 503, never with the file. A file that
   cannot be marked is not served. A copy carries the label of the link it came from.
 - **Every answer** is sent with `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, a content
   security policy that runs no script and frames nothing, `X-Frame-Options: DENY`, `X-Robots-Tag:
@@ -343,14 +356,23 @@ links"). The brand assets kit turns it on in 0.2.1. The operations:
 | Operation             | Input     | Parameters                           | Answers                                                                            |
 | --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
 | `ShareLink.Create`    | the asset | `renditions` (a list), `end` (a day) | `{ link, token, path }`, or `{ refused: [{ rendition, reason }] }` and no link     |
-| `ShareLink.List`      | the asset |                                      | `{ links }`, newest first, at most 200                                             |
+| `ShareLink.List`      | the asset |                                      | `{ links }`, newest first: every open link, then closed ones up to 200 in all      |
 | `ShareLink.Revoke`    | the asset | `link` (its id)                      | `{ link }`; 404 for a link of another document                                     |
 | `ShareLink.Downloads` | the asset |                                      | `{ downloads: [{ time, link, rendition }], truncated }`, newest first, at most 200 |
 
 A link is `{ id, document, renditions, end, created, createdBy, revoked, revokedBy, state }`, its
-`state` `active`, `expired` or `revoked`. Each needs `WriteSecurity`: 403 otherwise.
+`state` `active`, `expired` or `revoked`. Each needs `WriteSecurity`, and Create a sharer too: 403
+otherwise.
 
 ### What share links do not cover
+
+- **Who may write the rights.** A link is decided by the asset's rights fields as the document
+  holds them, and anyone who may write the asset may write those: move `dc:expired` on, and a link
+  its rights had ended opens again; add a channel, and an item it refused is served. And a sharer
+  who may read an asset can copy it where they manage permissions, write the copy's rights, and
+  share the copy. The sharing group narrows who can do the second; neither is closed until the
+  rights fields are written by a rights manager only, copies included (above, "What it does not
+  cover").
 
 - **A copy taken before revocation.** Whoever opened the link has the watermarked bytes. Revoking
   stops the next request, not what was saved. The watermark names the link; it does not stop a
@@ -475,6 +497,11 @@ docker cp /tmp/zz-asset-rights-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ 
   list them; Revoke it, reload the private window, and see "This link is not available". A link
   to asset 503's original, or to anything of asset 505, is refused when it is made.
 
+**Who may make links:** with nothing set, administrators only. To let a group make them, set
+`nuxeo.agentic.share.groups=<group>[,<group>...]` in the container's `nuxeo.conf` before the
+restart, for one through the image's `NUXEO_CUSTOM_PARAM`; the demo above runs as an administrator
+and needs none.
+
 **Before anyone outside the company has a link,** whatever reaches the server from outside must:
 rate-limit `/nuxeo/agentic-share/` per client, as the architecture's deployment table has it;
 keep and cache nothing of it, honouring `no-store`; and log no full request path, or keep such logs
@@ -568,9 +595,16 @@ condition for phase 5 being done:
     permission is not what refuses a link's item: this decision is. Whether a link should also be
     refused when the asset's rights would refuse a download for another reason the policy adds
     later.
-22. **The creator's permission:** asked again at every request, through the user manager, with the
-    creator's groups; a user no longer there refuses. Whether `WriteSecurity` is the right
-    permission to make a link, rather than `Write` or one of its own.
-23. **Denial of service:** at most two pictures marked at once, each at most 64 MiB and 24 million
-    pixels, read from the header first; a request waiting two seconds answered 503. Every page view
-    marks and logs each picture it shows.
+22. **Who may make a link:** `WriteSecurity` and an administrator or a member of a group
+    `nuxeo.agentic.share.groups` names, asked again of the creator at every request, through the
+    user manager, with their groups; a user no longer there refuses. Whether that is the right
+    pair, rather than a permission of its own, given that `Everything` grants every permission on
+    a user's own workspace; and the rights fields, which whoever may write an asset may write, and
+    which decide its links.
+23. **Denial of service:** at most two pictures marked at once, and one per link, each at most
+    64 MiB, 24 million pixels and 200 MiB decoded and marked, read from the header first; a request
+    waiting two seconds answered 503. Every page view marks and logs each picture it shows.
+24. **Binding to the files:** an item is served only while its file has the digest recorded when
+    the link was made, compared as text; whether a view's digest is stable enough on the release
+    it runs on for a link not to end by itself, and whether ending it when a picture is replaced is
+    what customers want.

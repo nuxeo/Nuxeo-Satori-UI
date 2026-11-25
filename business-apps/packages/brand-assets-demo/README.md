@@ -121,8 +121,9 @@ contributes nothing of its own to them.
 
 - **Who sees them:** the page asks the server for the asset's links, and draws nothing of them for
   a user it refuses, with 403: one without the asset's `WriteSecurity`, Nuxeo's permission to
-  give anyone else access. Hiding the section is not the control: the server refuses the same
-  user's every call.
+  give anyone else access. Making a link needs more: an administrator, or a member of a group the
+  server's `nuxeo.agentic.share.groups` names, none unless it is set; the kit sets none. Hiding the
+  section is not the control: the server refuses the same user's every call.
 - **A new link** lists the original or some of the asset's views, by their titles, and a last
   day, in UTC, from today to 90 days on. The server refuses an item the asset's rights do not
   allow now, and the page says which and why, in the rights' words. Its address is shown once,

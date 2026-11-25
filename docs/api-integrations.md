@@ -2560,11 +2560,15 @@ server, beginning with a single `/`, holding its token, so that its address is t
 and that path, and never one on another origin. The token is shown once, with Copy, and stored,
 logged or announced nowhere.
 
+**Who may:** `WriteSecurity` on the asset lists, revokes and reads the downloads; creating needs it
+too, and an administrator or a member of a group the server's `nuxeo.agentic.share.groups` names,
+administrators only when it is unset.
+
 **Errors:** a `403` on `ShareLink.List`, the user lacking `WriteSecurity` on the asset, draws
 nothing of the share links; any other failure shows the error state, with Retry for a server error.
 A refused create or revoke (`403`), an invalid one (`400`) and any other failure are each said where
 they were asked. That Automation answers with these statuses, and the operations at all, is not
-checked on a server: the add-on is installed nowhere.
+checked on a server: the add-on's 0.2.0, which has them, is installed nowhere.
 
 ---
 

@@ -404,7 +404,7 @@ describe('RecordShareLinksComponent', () => {
     await settle();
     await fail(creates as Call<CreatedShareLink>[], 403);
     expect(root.querySelector('[data-share-links-error]')?.textContent).toContain(
-      'You may not create share links for this asset.',
+      'Only an administrator, or a member of a group the server lets share, creates share links.',
     );
     (button(root, 'Create link') as HTMLButtonElement).click();
     await settle();

@@ -216,7 +216,8 @@ a last day. `{}` turns them on; they take no option yet:
   ([its README](../../nuxeo-agentic-assets/README.md)) and its Automation operations
   `ShareLink.Create`, `ShareLink.List`, `ShareLink.Revoke` and `ShareLink.Downloads`
   ([api-integrations.md](../api-integrations.md), section 40): who may manage a picture's links,
-  `WriteSecurity` on it; what a link may list; and that it serves its items watermarked, and only
+  `WriteSecurity` on it, and who may make one, an administrator or a member of a group the server
+  names too; what a link may list; and that it serves its items watermarked, and only
   while it is neither revoked nor past its last day and while the asset's rights allow each one.
 - **Drawn only for those the server lets manage them.** The page asks for the links, checking no
   permission first, and on a 403 draws nothing of them: no heading, no frame. Any other failure is
