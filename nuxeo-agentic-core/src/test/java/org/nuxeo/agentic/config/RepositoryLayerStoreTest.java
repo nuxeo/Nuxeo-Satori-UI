@@ -70,6 +70,8 @@ class RepositoryLayerStoreTest {
 
     int saves;
 
+    int aclsSet;
+
     private DocumentModel model(Stored stored, String parent, String name, String type) {
         Map<String, Serializable> properties = new HashMap<>(stored == null ? Map.of() : stored.properties);
         Map<String, Serializable> context = new HashMap<>();
@@ -143,8 +145,10 @@ class RepositoryLayerStoreTest {
                 }
                 case "setACP" -> {
                     documents.get(((PathRef) args[0]).value).acp = (ACP) args[1];
+                    aclsSet++;
                     yield null;
                 }
+                case "getACP" -> documents.get(((PathRef) args[0]).value).acp;
                 case "save" -> {
                     saves++;
                     yield null;
@@ -252,6 +256,43 @@ class RepositoryLayerStoreTest {
         });
         assertFalse(racing.write("payers-claims", bytes("{\"v\":2}"), stamp));
         assertArrayEquals(bytes("{\"v\":1}"), store.read("payers-claims").json());
+    }
+
+    @Test
+    void aFolderWhoseAclWasChangedIsBlockedAgainBeforeAnythingIsRead() {
+        RepositoryLayerStore store = store();
+        assertTrue(store.write("payers-claims", bytes("{}"), null));
+        Stored root = documents.get(RepositoryLayerStore.ROOT);
+        assertTrue(RepositoryLayerStore.isBlocked(root.acp));
+        int set = aclsSet;
+
+        // Shared with members, as the Share dialog would: drafts would be theirs to read.
+        ACP shared = new org.nuxeo.ecm.core.api.security.impl.ACPImpl();
+        ACL local = new org.nuxeo.ecm.core.api.security.impl.ACLImpl(ACL.LOCAL_ACL);
+        local.add(new ACE("members", "Read", true));
+        local.add(ACE.BLOCK);
+        shared.addACL(local);
+        root.acp = shared;
+        assertFalse(RepositoryLayerStore.isBlocked(shared));
+
+        assertEquals(Set.of("payers-claims"), store.stamps().keySet());
+        assertTrue(RepositoryLayerStore.isBlocked(root.acp));
+        assertEquals(set + 1, aclsSet);
+
+        // Inheritance given up, with no grant: blocked again too.
+        root.acp = new org.nuxeo.ecm.core.api.security.impl.ACPImpl();
+        assertEquals(Set.of("payers-claims"), store.readAll().keySet());
+        assertTrue(RepositoryLayerStore.isBlocked(root.acp));
+        store.read("payers-claims");
+        assertEquals(set + 2, aclsSet);
+    }
+
+    @Test
+    void theStampsAreTheDocumentsChangeTokens() {
+        RepositoryLayerStore store = store();
+        assertTrue(store.stamps().isEmpty());
+        assertTrue(store.write("payers-claims", bytes("{}"), null));
+        assertEquals(Map.of("payers-claims", store.read("payers-claims").stamp()), store.stamps());
     }
 
     @Test

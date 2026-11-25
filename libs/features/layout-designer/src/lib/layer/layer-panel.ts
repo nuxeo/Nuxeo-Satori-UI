@@ -116,9 +116,17 @@ export class LayerPanelComponent {
 
   readonly canApprove = computed(() => !this.busy() && this.state()?.permissions.approve === true);
 
+  /**
+   * A rollback undoes the last change to what is live: something live to take out, or a version
+   * the package's file was put back over.
+   */
   readonly canRollBack = computed(() => {
     const state = this.state();
-    return !this.busy() && state?.permissions.write === true && state.live !== null;
+    return (
+      !this.busy() &&
+      state?.permissions.write === true &&
+      (state.live !== null || state.previous > 0)
+    );
   });
 
   readonly canDiscard = computed(() => {

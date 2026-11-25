@@ -26,6 +26,12 @@ interface LayerStore {
     Map<String, Stored> readAll();
 
     /**
+     * Every app's stamp, by app id, without its layer: what tells the registry whether anything
+     * changed since it last read them all.
+     */
+    Map<String, String> stamps();
+
+    /**
      * Stores an app's layer, when it is still the one {@code expected} stamps: {@code null} for an
      * app with none stored yet.
      *

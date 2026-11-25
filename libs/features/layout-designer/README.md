@@ -175,16 +175,22 @@ Below the Save section of either page, for the file open:
 
 - **Who:** administrators alone, as Nuxeo counts them (`NuxeoPrincipal.isAdministrator`), read or
   change a layer, its drafts, versions and trail included. Anyone else is 403 at every address,
-  before anything is read, so no one else learns whether an app or a file has a layer. Power users
-  are not administrators.
+  before anything is read, the body of a change included, so no one else learns whether an app or a
+  file has a layer, or whether the layer is switched on. Power users are not administrators.
 - **Every write is validated on the server** with the app definition's own validator, against the
   server's content model as it is then: `validateFile` from `libs/shared/app-definition`, the
   pipeline's check of one file, built into a script (`npm run app-definition:server-validator`) that
   the server runs in Nashorn 15.7, the engine Nuxeo LTS 2025 ships in `nxserver/lib`, with no access
-  to Java. A file with any finding, a path no layer holds, a model that cannot be read, or a
-  validator that cannot run refuses the write, 422, whatever the client checked. A queue is held to
-  the app's own `actions.json`. What the deployment registers in code beyond the platform comes from
-  `nuxeo.agentic.ui.layer.registered.rules`, `.rowActions` and `.bulkActions`.
+  to Java and none of the host's own functions (`load`, `exit` and the rest). A file with any
+  finding, a path no layer holds, a model that cannot be read, or a validator that cannot run
+  refuses the write, 422, whatever the client checked. A queue is held to the app's own
+  `actions.json`. What the deployment registers in code beyond the platform comes from
+  `nuxeo.agentic.ui.layer.registered.rules`, `.rowActions` and `.bulkActions`, set alike on every
+  server of a cluster, as `selfApproval` must be.
+- **Checked again when served:** each live file is held to the validator once more when the
+  registry reads the layer, against the configuration in force, and one it finds anything in is not
+  served, and logged, so the package's file shows. That covers a model or `actions.json` changed by
+  an upgrade, and a stored layer written around the service.
 - **Draft and approval:** a change is first a draft, which the registry never serves. It goes live
   when an administrator approves it who neither wrote any of the draft nor submitted it.
   **The default is a second administrator**, because a change here reaches everyone in the app's
@@ -193,18 +199,30 @@ Below the Save section of either page, for the file open:
   the server log says so at startup. Approval checks the draft again against the model as it is
   then, and refuses a draft made on a live version that has since changed.
 - **Every publish keeps the previous version:** each approval or rollback is a new version; the last
-  50 of a file are kept, and the live one always. A rollback is immediate, since each version it
-  restores was approved when it was published, and a rollback is what an incident needs at once; it
-  checks the restored version against the model first, and "roll back to the package's version"
-  needs no check.
+  50 of a file are kept, and the live one always. **A rollback undoes the last change to what is
+  live**, at once and by one administrator: it puts back the version live just before, or the
+  package's file, and nothing else; any older version goes live again only as a draft a second
+  administrator approves. Undoing at once is what an incident needs, and what it puts back was live
+  a moment before, approved. It checks the restored version against the model first; the package's
+  file needs no check. A rolled-back version keeps the makers and approver of the one it restores,
+  and names who put it back.
 - **Concurrent edits:** every change names the file's revision, and one made on a revision that is
-  no longer the file's is refused, 409, with the file as it is now. The changes to one app are made
-  one at a time on a server, and across a cluster inside `ClusterService.runAtomically`; the
-  repository's change token refuses a write made on a stale read, and the change is applied again to
-  the layer as it then is, and refused if its own file moved.
+  no longer the file's is refused, 409, with the file as it is now. Every change, to any app, is
+  made one at a time: on a server by the service's lock, and across a cluster inside
+  `ClusterService.runAtomically`, one lock for the layer; the repository's change token refuses a
+  write made on a stale read, and the change is applied again to the layer as it then is, and
+  refused if its own file moved. A read of the layer made while a change is written is not kept.
 - **Audit:** every change is a line of the file's trail, kept with the layer, with who, when, the
-  action, the revision and the version and content digest it made, and a line in the server log.
-  Nuxeo's own audit log is not written to (below).
+  action, the revision and the version and content digest it made, and a line in the server log;
+  every refused change is a warning in the log with who asked and why. Nuxeo's own audit log records
+  the layer document's changes as the system's, the service writing with a privileged session.
+- **Not a control against administrators:** a Nuxeo administrator can write the stored document
+  directly, through the REST API, as they can install a package or change what the server runs.
+  Nuxeo's audit log records such a write under their name, not the system's, and the registry
+  serves none of its live files the validator does not pass; but the trail in it can be rewritten,
+  and an approval forged, by whoever does that.
+- **Limits:** a layer holds at most 500 files and 64 MiB, versions and trail included; a change
+  over either is refused, 413.
 - **A change** is a POST of `application/json` with the header `X-Agentic-Layer-Change`, which a
   page on another site cannot send without a CORS preflight, and the registry answers no preflight;
   at most 1 MiB and 64 KiB, nested at most 512 deep, with no repeated key. Every answer is
@@ -214,7 +232,12 @@ Below the Save section of either page, for the file open:
   though the stored layer is kept. So turning it off also takes every customer change out at once.
 - **In the repository:** one `File` document per app under `/agentic-ui-layers`, a folder hidden in
   navigation whose ACL blocks every permission and grants none, so only administrators, whom Nuxeo
-  lets past every ACL, and the system read it.
+  lets past every ACL, and the system read it. The ACL is checked each time the layer is read or
+  written, and set back, with a warning in the log, when someone has changed it, as by sharing the
+  folder.
+- **CORS:** the change header holds only while no CORS configuration of the server
+  (`nuxeo.cors.urls`, or a `corsConfig` contribution) lets another origin send it to
+  `/nuxeo/agentic-ui-apps/`.
 - **The registry's copy** of the live layer is read again after a change on the server, and at most
   10 seconds late for a change made on another server of a cluster.
 
@@ -260,8 +283,9 @@ served again. The stored layer stays in `/agentic-ui-layers` until an administra
 
 ### What a review must cover
 
-- **Who may write and approve:** `LayerService.refuse` and `approvalRefusal`; that Nuxeo's
-  administrators are the right people, and that `selfApproval` stays off where there are two.
+- **Who may write and approve:** `LayerService.refusal` and `approvalRefusal`; that Nuxeo's
+  administrators are the right people, that `selfApproval` stays off where there are two, and that
+  a shared `Administrator` account, which makes two people one, is not used for it.
 - **Server-side validation:** that `validator.js` is what `server-validator.ts` builds
   (`server-validator.spec.ts`), that Nashorn answers as Node does (`DeploymentValidatorParityTest`),
   and that the server's content model is the one the designer reads (`ServerContentModel`).
@@ -272,12 +296,17 @@ served again. The stored layer stays in `/agentic-ui-layers` until an administra
   `rich-text` widget draws a record's value, not the layout's, as HTML through the record page's
   sanitizer and its allow-list (`renderTrustedHtml`, `RICH_TEXT_HTML`), so a layer that gives a text
   property that widget changes how that property's values are drawn for everyone.
-- **The rollback history:** 50 versions a file; what a rollback restores; a version no longer valid.
+- **The rollback history:** 50 versions a file; that a rollback puts back only the version live
+  just before, or the package's file; a version no longer valid.
 - **Drafts leaking to readers:** the registry's `live()`, the configuration servlet, the repository
-  folder's ACL, and the REST API's reach into `/agentic-ui-layers`.
-- **The layer's precedence** against the package and the manifest.
-- **Audit:** the trail and the server log; whether Nuxeo's audit log should be written too.
-- **Concurrent edits:** revisions, the change token, the cluster lock.
+  folder's ACL and its repair, and the REST API's reach into `/agentic-ui-layers`.
+- **The layer's precedence** against the package and the manifest; and that a layer may add a
+  layout or a queue the package has none of, which the validator holds as any other.
+- **Audit:** the trail, the server log's lines and warnings, and Nuxeo's audit log, which records
+  the service's writes as the system's and a direct write under its maker's name; whether an audit
+  event under the administrator's name should be written too.
+- **Concurrent edits:** revisions, the change token, the cluster's one lock, and the registry's copy
+  of the live layer.
 
 ## What it refuses
 
@@ -297,7 +326,9 @@ served again. The stored layer stays in `/agentic-ui-layers` until an administra
 
 - **The deployment layer, not run on a server.** It is held by Java tests against fakes of the
   repository's session and by the client's tests, and has not been installed on one (above). Not
-  built: Nuxeo's own audit log; a layer per tenant (decision G); the labels, the menu, the home and
+  built: an event in Nuxeo's audit log under the administrator's name, beyond the trail, the server
+  log and the system's write of the document; restoring an older version at once, which goes
+  through a draft; a layer per tenant (decision G); the labels, the menu, the home and
   the actions in a layer; a draft's review screen of its own, beyond the panel's differences; and an
   export of a published layer as a package. A layer layout reaches only the people in the app's
   groups with the app open: the record page of someone in no app's group keeps the package's.

@@ -67,7 +67,10 @@
                     }
             }}
             @if (live.kind === 'rollback') {
-              {{ 'layout-designer.layer.live-rollback' | translate: { from: live.from ?? 0 } }}
+              {{
+                'layout-designer.layer.live-rollback'
+                  | translate: { from: live.from ?? 0, by: live.restoredBy ?? '' }
+              }}
             }
           </p>
           <pre class="layer-panel__json">{{ json(live.content) }}</pre>

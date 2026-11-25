@@ -13,7 +13,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
@@ -41,10 +42,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * the draft nor submitted it, unless {@link LayerSettings#selfApproval()} lets them. It is checked
  * again, against the model as it is then, and becomes a new version, live: the registry serves it
  * to the app's groups in place of the package's file.</li>
- * <li><b>Rolled back</b> ({@code rollback}): what was live before the live version, or a version
- * named, is made live again, as a new version, once it passes the validator as it is now; with
- * nothing before it, the package's file is in force again. Immediate: each version it restores was
- * approved when it was published, and a rollback is what an incident needs at once.</li>
+ * <li><b>Rolled back</b> ({@code rollback}): the last change to what is live is undone. The version
+ * live just before is made live again, as a new version that keeps its makers and approver and
+ * names who put it back, once it passes the validator as it is now; or the package's file is put
+ * back in force. Nothing else: any older version goes live again only as a draft, approved.
+ * Immediate, and by one administrator: what it puts back was live a moment before, approved, and
+ * undoing at once is what an incident needs.</li>
  * <li>A draft may be <b>discarded</b> ({@code discard}).</li>
  * </ol>
  * The last {@value #MAX_VERSIONS} versions of a file are kept, and the live one always.
@@ -78,6 +81,12 @@ final class LayerService {
     static final String FORMAT = "nuxeo-agentic-ui-layer/1";
 
     static final int MAX_VERSIONS = 50;
+
+    /** The most files an app's layer holds. */
+    static final int MAX_FILES = 500;
+
+    /** The most an app's layer weighs, stored, its versions and trail included. */
+    static final int MAX_LAYER_BYTES = 64 * 1024 * 1024;
 
     /** How old the registry's copy of the live layer may be, for a change made on another server. */
     static final long REFRESH_MILLIS = 10_000;
@@ -129,22 +138,33 @@ final class LayerService {
 
     private final AppLock appLock;
 
-    private final Map<String, Object> locks = new ConcurrentHashMap<>();
+    /** Held by every change on this server, so that changes are made one at a time. */
+    private final Object changing = new Object();
+
+    /** Raised by every change written here, so that a read of the layer made meanwhile is not kept. */
+    private final AtomicLong generation = new AtomicLong();
 
     private volatile Live live;
 
+    /** The configuration {@link #live} was checked against. */
+    private volatile ConfigSnapshot liveSnapshot;
+
     private volatile long liveReadAt;
 
+    /** The key of the cluster's lock every change to any app's layer is made in. */
+    static final String LOCK_KEY = "agentic-ui-layer";
+
     /**
-     * Holds the changes to one app to one at a time across a cluster: the server's is
-     * {@code ClusterService.runAtomically}, which runs the work at once on a server that is not in
-     * one. Within a server, the service's own lock does.
+     * Holds the changes to the layer, every app's, to one at a time across a cluster: the server's
+     * is {@code ClusterService.runAtomically}, which runs the work at once on a server that is not
+     * in one. Within a server, the service's own lock does. One lock for every app, so that the
+     * first changes of two apps cannot make the repository's folder twice; changes are few.
      */
     interface AppLock {
 
-        AppLock NONE = (app, work) -> work.run();
+        AppLock NONE = (key, work) -> work.run();
 
-        void run(String app, Runnable work);
+        void run(String key, Runnable work);
     }
 
     LayerService(LayerSettings settings, LayerStore store, DeploymentValidator validator,
@@ -165,72 +185,112 @@ final class LayerService {
 
     /**
      * Every app's live files, for the registry: {@link Live#NONE} when the layer is switched off, so
-     * that turning it off serves every package's file again. Read from the store at most every
-     * {@value #REFRESH_MILLIS} ms, and anew after a change made here. A store that cannot be read
-     * keeps what was read last, or none: the packages' files are served rather than an error.
-     * Drafts are never read into it.
+     * that turning it off serves every package's file again. Drafts are never read into it.
+     *
+     * <ul>
+     * <li><b>Read again</b> after a change made here, when the configuration in force changes, and at
+     * most every {@value #REFRESH_MILLIS} ms for a change made on another server, which costs one
+     * read of each app's stamp, not of its layer, when nothing changed.</li>
+     * <li><b>Checked again:</b> each live file is held to the validator as it is when the layer is
+     * read, with the app's {@code actions.json} in force, and one it finds anything in is not
+     * served, and logged: the package's file shows. So a file is never served that the validator
+     * has not passed against the configuration it is served with, whoever wrote the stored
+     * layer.</li>
+     * <li><b>A store that cannot be read</b> keeps what was read last, or none: the packages' files
+     * are served rather than an error.</li>
+     * </ul>
      */
     Live live() {
         if (!settings.enabled()) {
             return Live.NONE;
         }
+        ConfigSnapshot in = snapshot.get();
         Live current = live;
-        long now = clock.millis();
-        if (current != null && now - liveReadAt < REFRESH_MILLIS) {
+        if (current != null && liveSnapshot == in && clock.millis() - liveReadAt < REFRESH_MILLIS) {
             return current;
         }
         synchronized (this) {
             current = live;
-            if (current != null && clock.millis() - liveReadAt < REFRESH_MILLIS) {
+            if (current != null && liveSnapshot == in && clock.millis() - liveReadAt < REFRESH_MILLIS) {
                 return current;
             }
+            long started = generation.get();
             Map<String, LayerStore.Stored> stored;
             try {
+                if (current != null && liveSnapshot == in && current.stamp().equals(stampsOf(store.stamps()))) {
+                    liveReadAt = clock.millis();
+                    return current;
+                }
                 stored = store.readAll();
             } catch (RuntimeException e) {
                 log.warn("Agentic UI deployment layer: the layer could not be read, so the packages' files are served: {}",
                         e.toString());
                 liveReadAt = clock.millis();
-                live = current == null ? Live.NONE : current;
+                if (current == null) {
+                    live = Live.NONE;
+                    liveSnapshot = in;
+                }
                 return live;
             }
-            StringBuilder stamps = new StringBuilder();
-            new TreeMap<>(stored).forEach((app, each) -> stamps.append(app).append('=').append(each.stamp()).append(';'));
-            if (current != null && current.stamp().contentEquals(stamps)) {
+            Map<String, String> stamps = new TreeMap<>();
+            stored.forEach((app, each) -> stamps.put(app, each.stamp()));
+            Live built = build(in, stored, stampsOf(stamps));
+            // A change made here while this was read leaves it unkept, so the next read sees it.
+            if (generation.get() == started) {
+                live = built;
+                liveSnapshot = in;
                 liveReadAt = clock.millis();
-                return current;
             }
-            Map<String, Map<String, LiveFile>> apps = new LinkedHashMap<>();
-            for (Map.Entry<String, LayerStore.Stored> entry : new TreeMap<>(stored).entrySet()) {
-                ObjectNode layer = parse(entry.getKey(), entry.getValue());
-                if (layer == null) {
-                    continue;
-                }
-                Map<String, LiveFile> files = new LinkedHashMap<>();
-                layer.path("files").fields().forEachRemaining(file -> {
-                    if (!LayerPaths.isLayerPath(file.getKey())) {
-                        return;
-                    }
-                    JsonNode version = versionOf(file.getValue(), file.getValue().path("live").asInt(0));
-                    if (version != null && version.path("content").isObject()) {
-                        files.put(file.getKey(), new LiveFile(render(version.get("content")), version.path("version").asInt()));
-                    }
-                });
-                if (!files.isEmpty()) {
-                    apps.put(entry.getKey(), Collections.unmodifiableMap(files));
-                }
-            }
-            live = new Live(Collections.unmodifiableMap(apps), stamps.toString());
-            liveReadAt = clock.millis();
-            return live;
+            return built;
         }
+    }
+
+    /** The live files of every app the configuration in force has, each that the validator passes. */
+    private Live build(ConfigSnapshot in, Map<String, LayerStore.Stored> stored, String stamp) {
+        Map<String, Map<String, LiveFile>> apps = new LinkedHashMap<>();
+        for (Map.Entry<String, LayerStore.Stored> entry : new TreeMap<>(stored).entrySet()) {
+            String app = entry.getKey();
+            ConfigSnapshot.App definition = appOf(in, app);
+            ObjectNode layer = definition == null ? null : parse(app, entry.getValue());
+            if (layer == null) {
+                continue;
+            }
+            Map<String, LiveFile> files = new LinkedHashMap<>();
+            layer.path("files").fields().forEachRemaining(file -> {
+                String path = file.getKey();
+                JsonNode version = versionOf(file.getValue(), file.getValue().path("live").asInt(0));
+                if (!LayerPaths.isLayerPath(path) || version == null || !version.path("content").isObject()) {
+                    return;
+                }
+                DeploymentValidator.Answer answer = validator.validate(path, version.get("content"), definition.app(),
+                        actionsOf(definition));
+                if (!answer.passes()) {
+                    log.error("Agentic UI deployment layer: {}/{} version {} is not served, and the package's file is: {}",
+                            app, path, version.path("version").asInt(),
+                            answer.refused() != null ? answer.refused()
+                                    : answer.findings().size() + " finding(s) of the validator");
+                    return;
+                }
+                files.put(path, new LiveFile(render(version.get("content")), version.path("version").asInt()));
+            });
+            if (!files.isEmpty()) {
+                apps.put(app, Collections.unmodifiableMap(files));
+            }
+        }
+        return new Live(Collections.unmodifiableMap(apps), stamp);
+    }
+
+    private static String stampsOf(Map<String, String> stamps) {
+        StringBuilder text = new StringBuilder();
+        new TreeMap<>(stamps).forEach((app, stamp) -> text.append(app).append('=').append(stamp).append(';'));
+        return text.toString();
     }
 
     // --- What administrators read ------------------------------------------------------------------
 
     /** Every app's overrides in force, by path, with their versions: what the upgrade check reads. */
     Outcome export(AppRegistryEndpoint.Viewer viewer) {
-        Outcome refused = refuse(viewer, null, null);
+        Outcome refused = refusal(viewer, null, null);
         if (refused != null) {
             return refused;
         }
@@ -268,7 +328,7 @@ final class LayerService {
 
     /** One app's layer, file by file: what is live, and what is drafted. */
     Outcome summary(String app, AppRegistryEndpoint.Viewer viewer) {
-        Outcome refused = refuse(viewer, app, null);
+        Outcome refused = refusal(viewer, app, null);
         if (refused != null) {
             return refused;
         }
@@ -297,7 +357,7 @@ final class LayerService {
 
     /** One file of an app's layer: the package's, the live and the draft versions, and its history. */
     Outcome state(String app, String path, AppRegistryEndpoint.Viewer viewer) {
-        Outcome refused = refuse(viewer, app, path);
+        Outcome refused = refusal(viewer, app, path);
         if (refused != null) {
             return refused;
         }
@@ -319,7 +379,19 @@ final class LayerService {
      * state does not allow; 422 for a file the validator finds anything in.
      */
     Outcome act(String app, String path, AppRegistryEndpoint.Viewer viewer, JsonNode request) {
-        Outcome refused = refuse(viewer, app, path);
+        String action = request != null && request.path("action").isTextual() ? request.get("action").asText() : "?";
+        Outcome outcome = attempt(app, path, viewer, request);
+        if (outcome.status() >= 400) {
+            // Every refusal of a change is said, with who asked: an audit of what was tried, too.
+            log.warn("Agentic UI deployment layer: {} refused {} of {}/{}: {} {}",
+                    viewer == null ? "nobody" : viewer.name(), action, app, path, outcome.status(),
+                    outcome.body().path("error").asText());
+        }
+        return outcome;
+    }
+
+    private Outcome attempt(String app, String path, AppRegistryEndpoint.Viewer viewer, JsonNode request) {
+        Outcome refused = refusal(viewer, app, path);
         if (refused != null) {
             return refused;
         }
@@ -333,14 +405,26 @@ final class LayerService {
                 || revision.asLong() > Integer.MAX_VALUE) {
             return error(400, "bad-request", "A change names the revision of the file it was made on.");
         }
-        Object lock = locks.computeIfAbsent(app, key -> new Object());
-        synchronized (lock) {
+        synchronized (changing) {
             Outcome[] outcome = new Outcome[1];
+            RuntimeException[] failed = new RuntimeException[1];
             try {
-                appLock.run(app, () -> outcome[0] = change(app, path, viewer, request, revision.asInt()));
+                appLock.run(LOCK_KEY, () -> {
+                    try {
+                        outcome[0] = change(app, path, viewer, request, revision.asInt());
+                    } catch (RuntimeException e) {
+                        failed[0] = e;
+                    }
+                });
             } catch (RuntimeException e) {
-                log.warn("Agentic UI deployment layer: the cluster's lock for {} was not given: {}", app, e.toString());
-                return error(409, "busy", "Another server is changing the app; read the file again and retry.");
+                log.warn("Agentic UI deployment layer: the cluster's lock was not given: {}", e.toString());
+                return error(409, "busy", "Another server is changing the layer; read the file again and retry.");
+            }
+            if (failed[0] != null) {
+                log.error("Agentic UI deployment layer: a change of {}/{} by {} failed", app, path, viewer.name(),
+                        failed[0]);
+                return error(500, "failed",
+                        "The change could not be made. Read the file again: it says whether it was written.");
             }
             return outcome[0];
         }
@@ -369,6 +453,9 @@ final class LayerService {
                 body.set("state", describe(app, path, fileOf(layer, path), viewer));
                 return new Outcome(409, body);
             }
+            if (!layer.get("files").has(path) && layer.get("files").size() >= MAX_FILES) {
+                return error(413, "too-many-files", "An app's deployment layer holds at most " + MAX_FILES + " files.");
+            }
             Outcome applied = apply(app, path, viewer, request, file);
             if (applied != null) {
                 return applied;
@@ -380,6 +467,11 @@ final class LayerService {
             } catch (JsonProcessingException e) {
                 return error(500, "unwritable", "The change could not be written; nothing is changed.");
             }
+            if (json.length > MAX_LAYER_BYTES) {
+                return error(413, "layer-too-large", String.format(
+                        "The app's deployment layer would be %d bytes; the limit is %d. Discard drafts, or roll files "
+                                + "back to the package's.", json.length, MAX_LAYER_BYTES));
+            }
             boolean written;
             try {
                 written = store.write(app, json, stored == null ? null : stored.stamp());
@@ -388,6 +480,7 @@ final class LayerService {
                 return error(500, "unwritable", "The change could not be written; nothing is changed.");
             }
             if (written) {
+                generation.incrementAndGet();
                 live = null;
                 JsonNode last = file.path("trail").path(file.path("trail").size() - 1);
                 log.info("Agentic UI deployment layer: {} {} {}/{}, now revision {}{}", viewer.name(),
@@ -478,19 +571,21 @@ final class LayerService {
             version.put("approvedBy", viewer.name());
             version.set("packageSha256", draft.path("packageSha256"));
             file.remove("draft");
+            file.put("previous", liveNumber);
             file.put("live", version.get("version").asInt());
             line.put("version", version.get("version").asInt()).put("sha256", version.get("sha256").asText());
         }
         case "rollback" -> {
-            JsonNode current = versionOf(file, liveNumber);
+            // At once, and by one administrator: undoing the last change to what is live, or putting
+            // the package's file back. Any other version goes live again only as a draft, approved.
+            int previous = file.path("previous").asInt(0);
             JsonNode to = request.get("to");
             int target;
             if (to == null || to.isNull()) {
-                if (liveNumber == 0) {
-                    return error(409, "nothing-live",
-                            "The package's file is in force: there is nothing to roll back. Name a version to restore it.");
+                if (liveNumber == 0 && previous == 0) {
+                    return error(409, "nothing-live", "The package's file is in force: there is nothing to roll back.");
                 }
-                target = current == null ? 0 : current.path("replaced").asInt(0);
+                target = previous;
             } else if (to.isIntegralNumber() && to.asLong() >= 0 && to.asLong() <= Integer.MAX_VALUE) {
                 target = to.asInt();
             } else {
@@ -499,7 +594,13 @@ final class LayerService {
             if (target == liveNumber) {
                 return error(409, "already-live", "Version " + target + " is the live version.");
             }
+            if (target != 0 && target != previous) {
+                return error(409, "not-restorable", "A rollback puts back what was live before, version " + previous
+                        + ", or the package's file, 0. Version " + target + " goes live again only as a draft that a "
+                        + "second administrator approves.");
+            }
             if (target == 0) {
+                file.put("previous", liveNumber);
                 file.put("live", 0);
                 line.put("version", 0);
             } else {
@@ -511,11 +612,15 @@ final class LayerService {
                 if (invalid != null) {
                     return invalid;
                 }
+                // The restored version's own makers and approver: the rollback approves nothing.
                 ObjectNode version = newVersion(file, restored.get("content"), "rollback", liveNumber, now);
                 version.put("from", target);
-                version.putArray("authors").add(viewer.name());
-                version.put("approvedBy", viewer.name());
+                version.set("authors", restored.path("authors"));
+                version.set("submittedBy", restored.path("submittedBy"));
+                version.set("approvedBy", restored.path("approvedBy"));
+                version.put("restoredBy", viewer.name());
                 version.set("packageSha256", restored.path("packageSha256"));
+                file.put("previous", liveNumber);
                 file.put("live", version.get("version").asInt());
                 line.put("version", version.get("version").asInt()).put("from", target);
             }
@@ -544,15 +649,18 @@ final class LayerService {
         if (settings.selfApproval()) {
             return null;
         }
+        // Names compared without their case: two sign-ins of one person in a directory that ignores
+        // case are one person, and two people whose names differ only by case are refused, which is
+        // the safe way to be wrong.
         boolean authored = false;
         for (JsonNode author : draft.path("authors")) {
-            authored |= author.asText().equals(viewer.name());
+            authored |= author.asText().equalsIgnoreCase(viewer.name());
         }
         if (authored) {
             return "You wrote this draft, so a second administrator approves it. "
                     + LayerSettings.SELF_APPROVAL_PROPERTY + "=true lets an administrator approve their own change.";
         }
-        if (draft.path("submittedBy").asText().equals(viewer.name())) {
+        if (draft.path("submittedBy").asText().equalsIgnoreCase(viewer.name())) {
             return "You submitted this draft, so a second administrator approves it. "
                     + LayerSettings.SELF_APPROVAL_PROPERTY + "=true lets an administrator approve their own change.";
         }
@@ -562,17 +670,8 @@ final class LayerService {
     /** The validator's refusal of {@code content} at {@code path}, 422, or {@code null} when it passes. */
     private Outcome check(String app, String path, JsonNode content) {
         ConfigSnapshot.App definition = appOf(app);
-        JsonNode actions = null;
-        ConfigSnapshot.AppFile actionsFile = definition == null ? null : definition.files().get("actions.json");
-        if (actionsFile != null) {
-            try {
-                actions = ConfigSnapshot.JSON.readTree(actionsFile.bytes());
-            } catch (IOException e) {
-                actions = null;
-            }
-        }
         DeploymentValidator.Answer answer = validator.validate(path, content, definition == null ? null : definition.app(),
-                actions);
+                actionsOf(definition));
         if (answer.passes()) {
             return null;
         }
@@ -617,15 +716,16 @@ final class LayerService {
 
     /**
      * Refuses anyone but an administrator, before anything is read, so that no one else learns
-     * whether an app or a file has a layer; then an app the server does not have, and a path no layer
-     * holds. {@code null} when the request may go on.
+     * whether an app or a file has a layer, or whether the layer is switched on; then a layer
+     * switched off, an app the server does not have, and a path no layer holds. {@code null} when
+     * the request may go on.
      */
-    private Outcome refuse(AppRegistryEndpoint.Viewer viewer, String app, String path) {
-        if (!settings.enabled()) {
-            return error(404, "not-found", "The deployment layer is switched off on this server.");
-        }
+    Outcome refusal(AppRegistryEndpoint.Viewer viewer, String app, String path) {
         if (viewer == null || !viewer.administrator()) {
             return error(403, "forbidden", "Only an administrator may read or change a deployment layer.");
+        }
+        if (!settings.enabled()) {
+            return error(404, "not-found", "The deployment layer is switched off on this server.");
         }
         if (app != null && appOf(app) == null) {
             return error(404, "not-found", "The server has no app \"" + app + "\".");
@@ -638,12 +738,29 @@ final class LayerService {
     }
 
     private ConfigSnapshot.App appOf(String app) {
-        for (ConfigSnapshot.App each : snapshot.get().apps()) {
+        return appOf(snapshot.get(), app);
+    }
+
+    private static ConfigSnapshot.App appOf(ConfigSnapshot in, String app) {
+        for (ConfigSnapshot.App each : in.apps()) {
             if (each.id().equals(app)) {
                 return each;
             }
         }
         return null;
+    }
+
+    /** The app's {@code actions.json} in force, parsed, or {@code null} when its package has none. */
+    private static JsonNode actionsOf(ConfigSnapshot.App definition) {
+        ConfigSnapshot.AppFile file = definition == null ? null : definition.files().get("actions.json");
+        if (file == null) {
+            return null;
+        }
+        try {
+            return ConfigSnapshot.JSON.readTree(file.bytes());
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     private ObjectNode readLayer(String app) {
@@ -719,6 +836,8 @@ final class LayerService {
         } else {
             body.set("live", liveVersion.deepCopy());
         }
+        // What a rollback puts back at once: 0, the package's file, when nothing was live before.
+        body.put("previous", file.path("previous").asInt(0));
         JsonNode draft = file.get("draft");
         body.set("draft", draft != null && draft.isObject() ? draft.deepCopy() : NODES.nullNode());
         ArrayNode versions = body.putArray("versions");

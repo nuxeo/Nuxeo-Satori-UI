@@ -1835,7 +1835,7 @@
       "live": "Live version",
       "live-meta": "Version {{version}}, approved by {{by}} at {{at}}.",
       "live-none": "None: the package's version is in force.",
-      "live-rollback": "It restores version {{from}}.",
+      "live-rollback": "It restores version {{from}}, put back by {{by}}.",
       "open": "Open the newest version here",
       "package": "Package's version",
       "package-changed": "The package's file has changed since this version was made on it, as after an upgrade of the package. The live version keeps winning until it is changed or rolled back.",

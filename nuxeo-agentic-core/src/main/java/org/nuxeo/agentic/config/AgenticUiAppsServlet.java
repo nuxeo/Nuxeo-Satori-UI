@@ -67,8 +67,11 @@ public class AgenticUiAppsServlet extends HttpServlet {
         String path = request.getPathInfo();
         AppRegistryEndpoint.Response answer;
         if (LayerEndpoint.answers(path)) {
-            byte[] body = read ? new byte[0] : body(request);
-            answer = new LayerEndpoint(layer()).respond(method, path, viewer, request.getContentType(),
+            LayerService layer = layer();
+            // The body is read only for an administrator, on a server whose layer is switched on:
+            // anyone else is refused before the server reads or parses a byte of it.
+            byte[] body = read || !viewer.administrator() || !layer.enabled() ? new byte[0] : body(request);
+            answer = new LayerEndpoint(layer).respond(method, path, viewer, request.getContentType(),
                     request.getHeader(LayerEndpoint.CHANGE_HEADER), body);
         } else {
             answer = endpoint().respond(path, viewer, request.getHeader("If-None-Match"));

@@ -90,6 +90,11 @@ final class LayerEndpoint {
         if (read) {
             return answer(service.state(app, file, viewer));
         }
+        // Who may change, and what, before the body is looked at: `act` refuses it again, the same
+        // way, and logs the refusal with who asked.
+        if (service.refusal(viewer, app, file) != null) {
+            return answer(service.act(app, file, viewer, null));
+        }
         if (!isJson(contentType)) {
             return answer(LayerService.error(415, "not-json", "A change is sent as application/json."));
         }

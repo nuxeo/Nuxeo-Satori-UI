@@ -27,7 +27,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <li><b>The engine</b> is Nashorn 15.7, which Nuxeo LTS 2025 ships in {@code nxserver/lib}, with
  * {@code --language=es6}. The script reaches no Java: {@code --no-java} takes {@code Java} and the
  * packages away, and the class filter refuses every class, so even an engine option that put them
- * back would find none. It is given JSON text and gives JSON text back.</li>
+ * back would find none; and the host's own functions, such as {@code load} and {@code exit}, are
+ * taken away before the script runs ({@link #HOST_GLOBALS}). It is given JSON text and gives JSON
+ * text back.</li>
+ * <li><b>No time limit:</b> a file is at most 1 MiB, nested at most 512 deep, and the validator
+ * reads it in one pass of each check, so a check is bounded by the file; checks are made one at a
+ * time.</li>
  * <li><b>The content model</b> is the server's own, read when a file is checked
  * ({@link ServerContentModel}), so a file is held to the types, schemas and facets the server has
  * now, as the designer holds it to what {@code /api/v1/config} answers.</li>
@@ -98,6 +103,33 @@ final class NashornDeploymentValidator implements DeploymentValidator {
         return read(answer);
     }
 
+    /**
+     * The host's own functions Nashorn gives every script, even with {@code --no-java}: reading and
+     * running a file ({@code load}, {@code loadWithNewGlobal}), stopping the JVM ({@code exit},
+     * {@code quit}), printing, and the adapters. The validator calls none, and nothing it is given
+     * reaches one, since a file is only ever {@code JSON.parse}d; they are taken away all the same.
+     */
+    static final String[] HOST_GLOBALS = { "load", "loadWithNewGlobal", "exit", "quit", "print", "echo", "readFully",
+            "readLine", "JavaImporter", "JSAdapter" };
+
+    /** An engine for the script: ES6, no Java, no class at all, and none of {@link #HOST_GLOBALS}. */
+    static ScriptEngine newEngine() throws Exception {
+        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine(ENGINE_OPTIONS,
+                NashornDeploymentValidator.class.getClassLoader(), className -> false);
+        StringBuilder strip = new StringBuilder("(function (g) {");
+        for (String name : HOST_GLOBALS) {
+            strip.append("delete g['").append(name).append("'];");
+        }
+        strip.append("})(this);");
+        engine.eval(strip.toString());
+        for (String name : HOST_GLOBALS) {
+            if (!"undefined".equals(engine.eval("typeof " + name))) {
+                throw new IllegalStateException("the script engine still gives scripts " + name);
+            }
+        }
+        return engine;
+    }
+
     private void start() throws Exception {
         String script;
         try (InputStream in = NashornDeploymentValidator.class.getClassLoader().getResourceAsStream(SCRIPT)) {
@@ -106,8 +138,7 @@ final class NashornDeploymentValidator implements DeploymentValidator {
             }
             script = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
-        ScriptEngine created = new NashornScriptEngineFactory().getScriptEngine(ENGINE_OPTIONS,
-                NashornDeploymentValidator.class.getClassLoader(), className -> false);
+        ScriptEngine created = newEngine();
         created.eval(script);
         Object entry = created.get(GLOBAL_NAME);
         if (entry == null) {

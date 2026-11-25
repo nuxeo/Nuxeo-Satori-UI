@@ -19,17 +19,20 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 /** The engine the validator runs in, and what it does with an answer that is not the validator's. */
 class NashornDeploymentValidatorTest {
 
-    private static ScriptEngine engine() {
-        return new NashornScriptEngineFactory().getScriptEngine(NashornDeploymentValidator.ENGINE_OPTIONS,
-                NashornDeploymentValidatorTest.class.getClassLoader(), className -> false);
-    }
-
     @Test
-    void theScriptReachesNoJava() throws Exception {
-        ScriptEngine engine = engine();
+    void theScriptReachesNoJavaAndNoneOfTheHostsFunctions() throws Exception {
+        ScriptEngine engine = NashornDeploymentValidator.newEngine();
         assertEquals("undefined", engine.eval("typeof Java"));
         assertEquals("undefined", engine.eval("typeof Packages"));
         assertEquals("undefined", engine.eval("typeof java"));
+        for (String name : new String[] { "load", "loadWithNewGlobal", "exit", "quit", "print", "JavaImporter",
+                "JSAdapter" }) {
+            assertEquals("undefined", engine.eval("typeof " + name), name);
+        }
+        // An engine with the same options and the functions left in has them: the test sees the difference.
+        ScriptEngine plain = new NashornScriptEngineFactory().getScriptEngine(NashornDeploymentValidator.ENGINE_OPTIONS,
+                NashornDeploymentValidatorTest.class.getClassLoader(), className -> false);
+        assertEquals("function", plain.eval("typeof load"));
         assertThrows(Exception.class, () -> engine.eval("Java.type('java.lang.System').exit(1)"));
         // The engine the options name is the one the script is built for: ES6's let and Map.
         assertEquals(2, ((Number) engine.eval("let m = new Map([[1, 2]]); m.get(1)")).intValue());

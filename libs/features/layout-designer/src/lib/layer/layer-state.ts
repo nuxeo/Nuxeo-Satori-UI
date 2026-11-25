@@ -23,6 +23,8 @@ export interface LayerVersion {
   readonly approvedBy: string | null;
   /** The version a rollback restored, or `null`. */
   readonly from: number | null;
+  /** Who rolled back to it, for a rollback; its makers and approver are the version it restores. */
+  readonly restoredBy: string | null;
 }
 
 export interface LayerLive extends LayerVersion {
@@ -65,6 +67,8 @@ export interface LayerState {
   /** The package's file at this path, or `null` when the package has none. */
   readonly package: { readonly content: unknown } | null;
   readonly live: LayerLive | null;
+  /** What a rollback puts back at once: the version live before this one, or 0 for the package. */
+  readonly previous: number;
   readonly draft: LayerDraft | null;
   readonly versions: readonly LayerVersion[];
   readonly trail: readonly LayerTrailLine[];
@@ -107,6 +111,7 @@ function readVersion(raw: unknown): LayerVersion | null {
     submittedBy: text(raw['submittedBy']),
     approvedBy: text(raw['approvedBy']),
     from: whole(raw['from']),
+    restoredBy: text(raw['restoredBy']),
   };
 }
 
@@ -157,6 +162,7 @@ export function readLayerState(raw: unknown): LayerState | null {
     revision,
     package: isRecord(packaged) && 'content' in packaged ? { content: packaged['content'] } : null,
     live,
+    previous: whole(raw['previous']) ?? 0,
     draft: readDraft(raw['draft']),
     versions: (Array.isArray(raw['versions']) ? raw['versions'] : []).flatMap((each) => {
       const version = readVersion(each);

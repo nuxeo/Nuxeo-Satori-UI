@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.Blobs;
 import org.nuxeo.ecm.core.api.ConcurrentUpdateException;
@@ -18,6 +20,7 @@ import org.nuxeo.ecm.core.api.repository.RepositoryManager;
 import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
 import org.nuxeo.ecm.core.api.security.ACP;
+import org.nuxeo.ecm.core.api.security.SecurityConstants;
 import org.nuxeo.ecm.core.api.security.impl.ACLImpl;
 import org.nuxeo.ecm.core.api.security.impl.ACPImpl;
 import org.nuxeo.runtime.api.Framework;
@@ -31,20 +34,27 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * <ul>
  * <li><b>Who may read it through Nuxeo:</b> the folder's own ACL blocks every permission inherited
  * and grants none, so only administrators, whom Nuxeo lets past every ACL, and the system read it.
- * A reader cannot list, search or fetch a draft through the REST API. The layer is read and
- * written here with a privileged session, after {@link LayerService} has checked that the person
- * is an administrator.</li>
+ * A reader cannot list, search or fetch a draft through the REST API. The ACL is checked each time
+ * the layer is read or written, and set back, with a warning in the log, when anyone has changed
+ * it, as by sharing the folder. The layer is read and written here with a privileged session,
+ * after {@link LayerService} has checked that the person is an administrator.</li>
+ * <li><b>Not a control against administrators:</b> an administrator may write the document through
+ * the REST API as any other. Nuxeo's audit records such a change under their name, where this
+ * store's are the system's; the registry serves no live file of it that the validator does not
+ * pass ({@link LayerService#live}).</li>
  * <li><b>Hidden:</b> the folder has the {@code HiddenInNavigation} facet.</li>
  * <li><b>A write</b> names the change token it read; the repository refuses a save on another,
  * {@code ConcurrentUpdateException}, which is a write that lost, {@code false}. The first write of
  * an app creates its document, and is a write that lost when the app has one already. Two servers
- * never make an app's first write at once: {@link LayerService} makes its changes to one app inside
- * the cluster's lock for it ({@code ClusterService.runAtomically}).</li>
+ * never write at once, nor make the folder twice: {@link LayerService} makes every change inside
+ * the cluster's one lock for the layer ({@code ClusterService.runAtomically}).</li>
  * <li><b>Each operation</b> runs in a transaction of its own, so a write is committed, or not,
  * before the answer is given.</li>
  * </ul>
  */
 final class RepositoryLayerStore implements LayerStore {
+
+    private static final Logger log = LogManager.getLogger(RepositoryLayerStore.class);
 
     static final String ROOT_NAME = "agentic-ui-layers";
 
@@ -78,7 +88,7 @@ final class RepositoryLayerStore implements LayerStore {
     public Stored read(String app) {
         return sessions.run(session -> {
             DocumentRef ref = new PathRef(ROOT + "/" + app);
-            if (!session.exists(new PathRef(ROOT)) || !session.exists(ref)) {
+            if (!guarded(session) || !session.exists(ref)) {
                 return null;
             }
             return stored(session.getDocument(ref));
@@ -89,13 +99,12 @@ final class RepositoryLayerStore implements LayerStore {
     public Map<String, Stored> readAll() {
         return sessions.run(session -> {
             Map<String, Stored> all = new LinkedHashMap<>();
-            DocumentRef root = new PathRef(ROOT);
-            if (!session.exists(root)) {
+            if (!guarded(session)) {
                 return all;
             }
-            for (DocumentModel document : session.getChildren(root)) {
-                Stored stored = stored(document);
-                if (stored != null && ConfigScope.APP_ID.matcher(document.getName()).matches()) {
+            for (DocumentModel document : session.getChildren(new PathRef(ROOT))) {
+                Stored stored = ConfigScope.APP_ID.matcher(document.getName()).matches() ? stored(document) : null;
+                if (stored != null) {
                     all.put(document.getName(), stored);
                 }
             }
@@ -104,9 +113,26 @@ final class RepositoryLayerStore implements LayerStore {
     }
 
     @Override
+    public Map<String, String> stamps() {
+        return sessions.run(session -> {
+            Map<String, String> stamps = new LinkedHashMap<>();
+            if (!guarded(session)) {
+                return stamps;
+            }
+            for (DocumentModel document : session.getChildren(new PathRef(ROOT))) {
+                if (ConfigScope.APP_ID.matcher(document.getName()).matches()) {
+                    stamps.put(document.getName(), document.getChangeToken());
+                }
+            }
+            return stamps;
+        });
+    }
+
+    @Override
     public boolean write(String app, byte[] json, String expected) {
         return sessions.run(session -> {
             root(session);
+            guarded(session);
             DocumentRef ref = new PathRef(ROOT + "/" + app);
             Blob blob = blob(app, json);
             if (expected == null) {
@@ -152,6 +178,52 @@ final class RepositoryLayerStore implements LayerStore {
         session.setACP(folder.getRef(), blocked(), true);
         session.save();
         return folder.getRef();
+    }
+
+    /**
+     * Whether the folder is there, its ACL set back to {@link #blocked} first when anyone has changed
+     * it: a grant on it, or one of its own given up, would let readers list, search and fetch drafts.
+     */
+    private static boolean guarded(CoreSession session) {
+        DocumentRef root = new PathRef(ROOT);
+        if (!session.exists(root)) {
+            return false;
+        }
+        if (!isBlocked(session.getACP(root))) {
+            log.warn("Agentic UI deployment layer: the ACL of {} grants a permission, or no longer blocks those it "
+                    + "inherits; it is set back to blocking every one, so that no reader reaches a draft.", ROOT);
+            session.setACP(root, blocked(), true);
+            session.save();
+        }
+        return true;
+    }
+
+    /** Whether an ACP is {@link #blocked}'s: its local ACL the block alone, and no other of its own. */
+    static boolean isBlocked(ACP acp) {
+        if (acp == null) {
+            return false;
+        }
+        boolean local = false;
+        for (ACL acl : acp.getACLs()) {
+            if (ACL.INHERITED_ACL.equals(acl.getName())) {
+                continue;
+            }
+            if (ACL.LOCAL_ACL.equals(acl.getName())) {
+                local = acl.size() == 1 && isBlock(acl.get(0));
+                if (!local) {
+                    return false;
+                }
+            } else if (!acl.isEmpty()) {
+                return false;
+            }
+        }
+        return local;
+    }
+
+    /** Whether an entry is {@link ACE#BLOCK}'s: everything denied to everyone, by its fields. */
+    private static boolean isBlock(ACE ace) {
+        return ace != null && SecurityConstants.EVERYONE.equals(ace.getUsername())
+                && SecurityConstants.EVERYTHING.equals(ace.getPermission()) && !ace.isGranted();
     }
 
     /** An ACP that blocks every inherited permission and grants none. */

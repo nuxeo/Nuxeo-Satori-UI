@@ -83,6 +83,8 @@ class LayerServiceTest {
 
         LayerService off = service(LayerSettings.OFF, store);
         assertEquals(404, off.state(APP, CLAIM_VIEW, ADA).status());
+        // Someone else learns nothing, not even whether the layer is on: 403, as when it is.
+        assertEquals(403, off.state(APP, CLAIM_VIEW, DANA).status());
         assertEquals(404, off.act(APP, CLAIM_VIEW, ADA, save(3, claimViewWith("Again"))).status());
         assertEquals(404, off.export(ADA).status());
         assertSame(LayerService.Live.NONE, off.live());
@@ -321,6 +323,22 @@ class LayerServiceTest {
         assertEquals(3, back.body().get("versions").size());
         assertFalse(back.body().get("versions").get(0).has("content"));
 
+        // The rollback approved nothing: the version keeps the makers of the one it restores.
+        assertEquals("ben", live.get("approvedBy").asText());
+        assertEquals("ada", live.get("submittedBy").asText());
+        assertEquals("ben", live.get("restoredBy").asText());
+        assertEquals(2, back.body().get("previous").asInt());
+
+        // One administrator puts back only what was live just before, or the package's file.
+        ObjectNode older = change("rollback", 7);
+        older.put("to", 1);
+        LayerService.Outcome refused = service.act(APP, CLAIM_VIEW, ADA, older);
+        assertEquals(409, refused.status());
+        assertEquals("not-restorable", refused.body().get("error").asText());
+        ObjectNode unknown = change("rollback", 7);
+        unknown.put("to", 99);
+        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, unknown).status());
+
         ObjectNode toPackage = change("rollback", 7);
         toPackage.put("to", 0);
         LayerService.Outcome packaged = service.act(APP, CLAIM_VIEW, ADA, toPackage);
@@ -328,14 +346,109 @@ class LayerServiceTest {
         assertTrue(packaged.body().get("live").isNull());
         assertEquals(404, new AppRegistryEndpoint(snapshot, service.live())
                 .respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null).status());
-        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, change("rollback", 8)).status());
 
-        ObjectNode toSecond = change("rollback", 8);
-        toSecond.put("to", 2);
-        assertEquals(200, service.act(APP, CLAIM_VIEW, ADA, toSecond).status());
-        ObjectNode unknown = change("rollback", 9);
-        unknown.put("to", 99);
-        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, unknown).status());
+        // And undoes the rollback to the package: version 3, the first file, goes live again.
+        LayerService.Outcome undone = service.act(APP, CLAIM_VIEW, ADA, change("rollback", 8));
+        assertEquals(200, undone.status());
+        assertEquals(3, undone.body().get("live").get("from").asInt());
+        assertEquals(text(first), text(undone.body().get("live").get("content")));
+    }
+
+    @Test
+    void aLiveFileTheValidatorNoLongerPassesIsNotServedAndThePackagesIs() throws Exception {
+        AtomicReference<JsonNode> model = new AtomicReference<>(LayerFixtures.kit("model"));
+        AtomicReference<ConfigSnapshot> snapshot = new AtomicReference<>(LayerFixtures.snapshot());
+        LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
+        LayerService service = new LayerService(ON, store, LayerFixtures.validator(ON, model::get), snapshot::get,
+                new LayerFixtures.TestClock(), LayerService.AppLock.NONE);
+        assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("Live")).status());
+        assertEquals(1, service.live().of(APP).size());
+
+        // A new configuration, with a model whose Claim type has lost its schemas: the live file
+        // names properties the type no longer has.
+        ObjectNode changed = model.get().deepCopy();
+        ((ObjectNode) changed.get("doctypes").get("Claim")).putArray("schemas").add("dublincore");
+        model.set(changed);
+        snapshot.set(LayerFixtures.snapshot());
+
+        assertTrue(service.live().of(APP).isEmpty());
+        assertEquals(404, new AppRegistryEndpoint(snapshot.get(), service.live())
+                .respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null).status());
+    }
+
+    @Test
+    void aStoredLayerWrittenAroundTheServiceIsServedOnlyWhereTheValidatorPassesIt() throws Exception {
+        LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
+        LayerService service = service(ON, store);
+        assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("Approved")).status());
+        ObjectNode queue = kitFile(MY_CLAIMS);
+        queue.put("label", "Approved queue");
+        assertEquals(200, publish(service, MY_CLAIMS, queue).status());
+
+        // An administrator rewrites the stored document through the REST API: the record page's
+        // live version now names a property no type has, and nobody approved it.
+        ObjectNode forged = (ObjectNode) ConfigSnapshot.JSON.readTree(store.stored.get(APP).json());
+        ObjectNode version = (ObjectNode) forged.get("files").get(CLAIM_VIEW).get("versions").get(0);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) version.get("content").get("cards").get(0).get("fields"))
+                .add("zz:forged");
+        store.stored.put(APP, new LayerStore.Stored(ConfigSnapshot.JSON.writeValueAsBytes(forged), "forged"));
+
+        LayerService.Live live = service(ON, store).live();
+        assertEquals(java.util.Set.of(MY_CLAIMS), live.of(APP).keySet());
+    }
+
+    @Test
+    void aReadOfTheLiveLayerMadeWhileAChangeIsWrittenIsNotKept() {
+        LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
+        LayerService service = service(ON, store);
+        assertTrue(service.live().apps().isEmpty());
+        assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("First")).status());
+
+        store.afterReadAll.set(() -> assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("Second")).status()));
+        LayerService.Live during = service.live();
+        assertEquals(1, during.of(APP).get(CLAIM_VIEW).version());
+        // Not kept: the next read sees the change at once, not ten seconds later.
+        assertEquals(2, service.live().of(APP).get(CLAIM_VIEW).version());
+    }
+
+    @Test
+    void namesAreComparedWithoutTheirCaseForTheSecondPairOfEyes() {
+        LayerService service = service(ON, new LayerFixtures.MemoryStore());
+        AppRegistryEndpoint.Viewer shouting = new AppRegistryEndpoint.Viewer("ADA", java.util.Set.of(), true);
+        assertEquals(200, service.act(APP, CLAIM_VIEW, ADA, save(0, claimViewWith("Mine"))).status());
+        assertEquals(200, service.act(APP, CLAIM_VIEW, ADA, change("submit", 1)).status());
+        assertEquals(403, service.act(APP, CLAIM_VIEW, shouting, change("approve", 2)).status());
+    }
+
+    @Test
+    void aLayerHoldsAtMostItsLimitOfFiles() throws Exception {
+        LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
+        ObjectNode layer = ConfigSnapshot.JSON.createObjectNode().put("format", LayerService.FORMAT).put("app", APP);
+        ObjectNode files = layer.putObject("files");
+        for (int index = 0; index < LayerService.MAX_FILES; index++) {
+            files.putObject("queues/q" + index + ".json").put("revision", 1).put("live", 0);
+        }
+        store.stored.put(APP, new LayerStore.Stored(ConfigSnapshot.JSON.writeValueAsBytes(layer), "full"));
+        LayerService.Outcome refused = service(ON, store).act(APP, CLAIM_VIEW, ADA, save(0, claimViewWith("One more")));
+        assertEquals(413, refused.status());
+        assertEquals("too-many-files", refused.body().get("error").asText());
+    }
+
+    @Test
+    void aChangeThatFailsInsideTheLockIsAFailureNotABusyServer() {
+        ConfigSnapshot snapshot = LayerFixtures.snapshot();
+        LayerService service = new LayerService(ON, new LayerFixtures.MemoryStore(), (path, content, app, actions) -> {
+            throw new IllegalStateException("broken");
+        }, () -> snapshot, new LayerFixtures.TestClock(), LayerService.AppLock.NONE);
+        LayerService.Outcome failed = service.act(APP, CLAIM_VIEW, ADA, save(0, claimViewWith("x")));
+        assertEquals(500, failed.status());
+        assertEquals("failed", failed.body().get("error").asText());
+    }
+
+    @Test
+    void nothingToRollBackIsRefused() {
+        LayerService service = service(ON, new LayerFixtures.MemoryStore());
+        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, change("rollback", 0)).status());
     }
 
     @Test

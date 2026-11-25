@@ -33,11 +33,13 @@ function state(change: Partial<LayerState> = {}): LayerState {
       submittedBy: 'ada',
       approvedBy: 'ben',
       from: null,
+      restoredBy: null,
       content: LIVE,
     },
     draft: null,
     versions: [],
     trail: [],
+    previous: 0,
     packageChanged: false,
     permissions: { write: true, approve: false, approveRefused: null, selfApproval: false },
     ...change,
@@ -228,6 +230,20 @@ describe('LayerPanelComponent', () => {
     agreed = true;
     button('approve').click();
     expect(sent).toEqual([['layouts/Claim/view.layout.json', { action: 'approve', revision: 3 }]]);
+  });
+
+  it("offers a rollback while there is a change to undo: a live version, or one the package's file replaced", async () => {
+    await show({ kind: 'state', state: state({ live: null, previous: 0 }) });
+    expect(button('rollback').disabled).toBe(true);
+    await show({ kind: 'state', state: state({ live: null, previous: 2 }) });
+    expect(button('rollback').disabled).toBe(false);
+    await show({
+      kind: 'state',
+      state: state({
+        live: { ...(state().live as LayerLive), kind: 'rollback', from: 1, restoredBy: 'ada' },
+      }),
+    });
+    expect(root().querySelector('[data-version="live"]')?.textContent).toContain('put back by ada');
   });
 
   it('asks before a rollback and before a draft is discarded', async () => {

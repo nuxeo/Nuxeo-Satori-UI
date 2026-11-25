@@ -89,6 +89,16 @@ class LayerEndpointTest {
     }
 
     @Test
+    void whoMayChangeIsDecidedBeforeTheBodyIsLookedAt() {
+        // Not JSON, not even a change: a reader is refused as a reader, and an administrator on a
+        // server whose layer is off is told it is off, before either body is parsed.
+        assertEquals(403, endpoint.respond("POST", FILE, DANA, "text/plain", null, bytes("[[[")).status());
+        LayerEndpoint off = new LayerEndpoint(LayerFixtures.service(LayerSettings.OFF, store));
+        assertEquals(404, off.respond("POST", FILE, ADA, "text/plain", null, bytes("[[[")).status());
+        assertEquals(403, off.respond("POST", FILE, DANA, "text/plain", null, bytes("[[[")).status());
+    }
+
+    @Test
     void aNonAdministratorIsRefusedAtTheAddressToo() {
         AppRegistryEndpoint.Response refused = endpoint.respond("POST", FILE, DANA, "application/json", "1",
                 bytes(text(save(0, claimViewWith("Mine")))));

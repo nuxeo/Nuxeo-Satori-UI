@@ -162,10 +162,28 @@ final class LayerFixtures {
             return stored.get(app);
         }
 
+        /** Run after a read of every layer, before it is answered: a change made while it is read. */
+        final AtomicReference<Runnable> afterReadAll = new AtomicReference<>();
+
         @Override
         public synchronized Map<String, Stored> readAll() {
             reads++;
-            return new LinkedHashMap<>(stored);
+            Map<String, Stored> read = new LinkedHashMap<>(stored);
+            Runnable hook = afterReadAll.getAndSet(null);
+            if (hook != null) {
+                hook.run();
+            }
+            return read;
+        }
+
+        int stampReads;
+
+        @Override
+        public synchronized Map<String, String> stamps() {
+            stampReads++;
+            Map<String, String> stamps = new LinkedHashMap<>();
+            stored.forEach((app, each) -> stamps.put(app, each.stamp()));
+            return stamps;
         }
 
         @Override
