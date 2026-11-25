@@ -267,23 +267,11 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   // locale here that has no catalogue would advertise a language the application cannot
   // render, which `checkAdvertisedLocalesShip` fails.
   //
-  // Seven of Nuxeo Web UI's ten target languages ship approved application catalogues.
-  // Italian and Swedish landed with their shipped-catalogue and date-adapter entries
-  // (NXSAT-754). Arabic and Hebrew are approved but need placeholder corrections;
-  // Spanish awaits catalogue integration. Do not advertise a language ahead of a valid
-  // catalogue, or it renders English fallback throughout (D8e-webui).
-  //
-  // Arabic and Hebrew already have RTL support from NXSAT-752. Once their catalogues and
-  // date-adapter entries land, the accepted language drives the document direction.
-  //
-  // Neither is reachable today, and that is deliberate: since NXSAT-733 `resolveStringLanguage`
-  // refuses a `defaultLanguage` this build ships no catalogue for, so `ar` and `he` fall back to
-  // `en` and the application runs left-to-right in English. `<html lang="ar">` over English text
-  // was the WCAG 3.1.1 defect that ticket fixed, so the refusal is the correct behaviour and the
-  // RTL work is not bypassed by it — the two land together. The moment `ar.json` exists the
-  // language is accepted, `syncDocumentDirection` sees it on `onLangChange`, and the layout
-  // mirrors with no further change. `LOCALE_ID` needs its own `DATE_FNS_LOCALES` entry at the
-  // same time, or dates stay English while strings and direction do not.
+  // Arabic and Hebrew ship approved application catalogues and date-adapter entries
+  // (NXSAT-754). The active language drives both document and CDK direction through
+  // syncDocumentDirection, so these two languages now activate the existing RTL support.
+  // Spanish remains outside this branch's shipped set until its separate integration lands.
+  // Italian and Swedish ship alongside the RTL languages. Do not advertise a locale ahead of its catalogue.
   //
   // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
   // gaps, and a Crowdin pull fills every unapproved string with its English source.
@@ -292,7 +280,7 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'it', 'sv'],
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'ar', 'he', 'it', 'sv'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},

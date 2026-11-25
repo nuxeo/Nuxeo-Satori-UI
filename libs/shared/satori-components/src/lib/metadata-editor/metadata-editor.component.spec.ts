@@ -944,10 +944,10 @@ describe('NxsMetadataEditorComponent, typed dates', () => {
 const EXPIRES = '2026-04-03T10:30:00.000Z';
 
 /**
- * The calendar day `EXPIRES` names, as `CalendarDayAdapter` writes it. The **UTC** day, spelled
- * out rather than derived from the host's local fields: a date field edits a calendar day anchored
- * in UTC (NXSAT-727), so this is the same string on every machine — and `10:30Z` is a different
- * local day in UTC+14, which is what made the derived form host-dependent.
+ * The calendar day `EXPIRES` opens on, as `CalendarDayAdapter` writes it, spelled out rather than
+ * derived from the host's local fields. `EXPIRES` is an instant, not a stored day, so it opens on
+ * the reader's day, as the layout view shows it. `10:30Z` is 3 April from UTC−10:30 to UTC+13:29,
+ * the pinned zone and New York included, and the next day in UTC+14.
  */
 const EXPIRES_DAY = '2026-04-03';
 
@@ -1039,8 +1039,85 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     expect(fifteenth).toBeDefined();
     fifteenth?.click();
     await render();
-    // The calendar opened on the property's UTC day, so the 15th is the 15th of that month.
+    // The calendar opened on the day the property opens on, so the 15th is the 15th of its month.
     expect(expires().value).toBe('2026-04-15');
     expect(editor().dirtyProperties()).toEqual({ 'dc:expired': '2026-04-15T00:00:00.000Z' });
   });
+});
+
+/**
+ * An instant whose day where the reader is differs from its UTC day, per zone this suite is run
+ * in: the pin, and New York for the deliberate west-of-UTC run. The layout `date` view shows it on
+ * the reader's day, so the field must open there too. It opened on its UTC day until the form
+ * followed the view's rule. Proving a field opens on the reader's day means naming the reader's
+ * zone, as `properties-panel.component.spec.ts` does for Created, so the literals are per zone.
+ */
+const READER_DAY: Readonly<
+  Record<string, { readonly value: string; readonly shows: string; readonly writes: string }>
+> = {
+  // 01:30 on the 24th at +05:30; its UTC day is the 23rd.
+  'Asia/Calcutta': {
+    value: '2026-11-23T20:00:00Z',
+    shows: '2026-11-24',
+    writes: '2026-11-23T20:00:00.000Z',
+  },
+  // 22:00 on the 23rd at −05:00; its UTC day is the 24th.
+  'America/New_York': {
+    value: '2026-11-24T03:00:00Z',
+    shows: '2026-11-23',
+    writes: '2026-11-24T03:00:00.000Z',
+  },
+};
+const READER_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const readerDay = READER_DAY[READER_ZONE];
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class ReaderDayHostComponent {
+  readonly values: NxsEditorValues = { 'dc:title': 'Report', 'dc:expired': readerDay?.value };
+  readonly editor = viewChild.required(NxsMetadataEditorComponent);
+}
+
+describe('NxsMetadataEditorComponent, opening an instant on the reader’s day', () => {
+  it('reports whether this run can assert anything, rather than passing silently', () => {
+    expect(typeof READER_ZONE).toBe('string');
+    if (!readerDay) {
+      console.warn(
+        `zone ${READER_ZONE} has no literal here; the reader's-day case does not run. ` +
+          'It runs under the pin, and with SATORI_TEST_TZ=America/New_York.',
+      );
+    }
+  });
+
+  if (readerDay) {
+    it(`shows ${readerDay.value} on ${readerDay.shows}, the day the view shows, and writes it back untouched`, async () => {
+      await TestBed.configureTestingModule({
+        imports: [ReaderDayHostComponent],
+        providers: [
+          provideZonelessChangeDetection(),
+          provideNoopAnimations(),
+          {
+            provide: DirectoryService,
+            useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+          },
+        ],
+      }).compileComponents();
+      const fixture = TestBed.createComponent(ReaderDayHostComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-xpath="dc:expired"] input',
+      ) as HTMLInputElement;
+      expect(input.value).toBe(readerDay.shows);
+      const editor = fixture.componentInstance.editor();
+      expect(editor.properties()['dc:expired']).toBe(readerDay.writes);
+      expect(editor.dirtyProperties()).toEqual({});
+    });
+  }
 });

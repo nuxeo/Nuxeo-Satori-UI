@@ -3,27 +3,34 @@ import { RTL_LANGUAGES, textDirectionForLanguage } from './text-direction';
 
 describe('textDirectionForLanguage', () => {
   /**
-   * The two right-to-left languages the application **targets** — neither of which is selectable
-   * today: they are out of `availableLanguages` (D8e-webui) and refused by `resolveStringLanguage`
-   * for want of a catalogue (NXSAT-733).
-   *
-   * That is the point rather than a caveat. This mapping is deliberately not coupled to which
-   * languages are shipped, advertised or selectable, because those three lists each changed during
-   * October while `he` → `rtl` did not. When `he.json` lands the language becomes selectable and
-   * mirrors with no edit here.
+   * Direction belongs to the script, independently of whether a catalogue is advertised.
+   * Enabling Arabic and Hebrew must preserve this mapping rather than forcing them to LTR.
    */
   it('answers rtl for Arabic and Hebrew', () => {
     expect(textDirectionForLanguage('ar')).toBe('rtl');
     expect(textDirectionForLanguage('he')).toBe('rtl');
   });
 
-  it('answers ltr for every language the application advertises', () => {
+  it('answers the expected direction for every advertised language', () => {
+    // Product expectations, independent of RTL_LANGUAGES: reading the implementation's own
+    // set here would pass if the set and the mapping were wrong together.
+    const expectedDirections: Readonly<Record<string, 'ltr' | 'rtl'>> = {
+      ar: 'rtl',
+      de: 'ltr',
+      en: 'ltr',
+      es: 'ltr',
+      fr: 'ltr',
+      he: 'rtl',
+      it: 'ltr',
+      ja: 'ltr',
+      nl: 'ltr',
+      sv: 'ltr',
+    };
     const advertised = DEFAULT_APP_BOOTSTRAP_CONFIG.availableLanguages;
-    // Guards the assertion itself: an empty list would pass over nothing and claim something it
-    // had not checked.
     expect(advertised.length).toBeGreaterThan(0);
     for (const language of advertised) {
-      expect(textDirectionForLanguage(language)).toBe('ltr');
+      expect(expectedDirections).toHaveProperty(language);
+      expect(textDirectionForLanguage(language)).toBe(expectedDirections[language]);
     }
   });
 

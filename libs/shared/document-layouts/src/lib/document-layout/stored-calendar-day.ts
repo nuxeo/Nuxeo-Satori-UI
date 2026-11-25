@@ -18,10 +18,14 @@
  * stamped at `00:00:00.000Z`, is taken for a stored day and shown on its UTC day. West of UTC that
  * is a day later than the reader's own. Nothing in the value tells the two apart.
  *
- * The same rule as `isStoredCalendarDay` in `libs/shared/computations`, which layout version 2's
- * record page formats with (PR 632, into `integration/enterprise-grade-app`). That library is not
- * on `main`, so the rule is repeated here, with the same cases in its spec. When both are on one
- * branch, this copy should go and `field-view.ts` should import that one.
+ * **The same rule as two copies elsewhere.** `nxs-metadata-editor` opens a date on its day by the
+ * one in `satori-components/…/stored-calendar-day.ts`, so the edit form agrees with this view. This
+ * library depends on that one, but it cannot be imported without exporting it from the published
+ * platform API, which is an API decision for a human. Both specs run one case list,
+ * `stored-calendar-day-cases.ts` in `libs/shared/testing`. The other copy is `isStoredCalendarDay`
+ * in `libs/shared/computations`, which layout version 2's record page formats with (PR 632, into
+ * `integration/enterprise-grade-app`). That library is not on `main`; when both are on one branch,
+ * this copy should go and `field-view.ts` should import that one.
  */
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;

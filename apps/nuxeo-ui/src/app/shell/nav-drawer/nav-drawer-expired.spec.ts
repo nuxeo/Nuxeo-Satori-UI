@@ -22,6 +22,17 @@ describe('drawerExpiredLabel', () => {
     expect(drawerExpiredLabel('2024-03-06T23:59:00.000Z', 'en-US')).toBe('Mar 6, 2024');
   });
 
+  /**
+   * The Expired queue reads every \`dc:expired\` on its UTC day, as the Properties panel's Expires
+   * row does. The edit form opens an instant on the reader's day, so for a \`dc:expired\` that is
+   * not a stored day the two can name different days (\`docs/extension-reference.md\`,
+   * "\`dc:expired\` is read two ways"). 6 March picked in Web UI at +05:30 is stored as 18:30Z on the
+   * 5th: this label says the 5th, and the form opens the 6th at +05:30.
+   */
+  it('labels a day Web UI wrote at local midnight at +05:30 by its UTC day', () => {
+    expect(drawerExpiredLabel('2024-03-05T18:30:00.000Z', 'en-US')).toBe('Mar 5, 2024');
+  });
+
   it('shows nothing for an absent, empty or unparseable value', () => {
     expect(drawerExpiredLabel(undefined, 'en-US')).toBe('');
     expect(drawerExpiredLabel(null, 'en-US')).toBe('');

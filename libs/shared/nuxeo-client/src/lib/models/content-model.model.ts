@@ -48,9 +48,17 @@ export interface NuxeoSchemaDefinition {
 export interface NuxeoDoctypeDefinition {
   /** The doctype this one extends, e.g. `Document` for `File`. */
   parent?: string;
-  /** Facet names — Nuxeo's mixins. Their schemas come from `/config/facets`. */
+  /**
+   * Facet names — Nuxeo's mixins — its ancestors' included. What each facet contributes comes
+   * from `/config/facets`.
+   */
   facets?: string[];
-  /** Schema names contributed directly by this doctype. */
+  /**
+   * Every schema a document of this type carries: its own, its ancestors' and its declared
+   * facets'. Measured on the local instance: every doctype lists every schema of its parent (108
+   * of 108 pairs) and of each facet it declares (67 of 67). A dynamic facet, added to one
+   * document, is not here — the document's own read lists it.
+   */
   schemas?: string[];
 }
 

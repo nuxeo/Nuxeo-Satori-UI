@@ -61,8 +61,9 @@ import localeSv from '@angular/common/locales/sv';
  *
  * A language sits between the two steps for as long as translation takes. That is the normal
  * state, not an unfinished one: nine non-English languages are registered here, the set Nuxeo
- * Web UI supports — `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv` — and **three remain mid-flight**: `ar` and `he` require placeholder corrections, while
- * `es` awaits catalogue integration. Italian and Swedish ship approved catalogues (NXSAT-754).
+ * Web UI supports — `ar`, `de`, `es`, `fr`, `he`, `it`, `ja`, `nl`, `sv` — and **Spanish remains mid-flight**
+ * pending its separate integration.
+ * Arabic, Hebrew, Italian and Swedish ship approved catalogues.
  *
  * Registration leading is the harmless direction, which is the whole reason step 1 can run
  * early: `checkLocaleDataRegistered` only *warns* about locale data with no catalogue behind it,

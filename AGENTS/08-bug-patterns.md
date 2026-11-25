@@ -1134,7 +1134,13 @@ Narrow correctness does not generalise; check what the values actually are.
 a picked day and belongs in UTC. Formatting them alike is a second bug wearing consistency's
 clothes. The layout `date` view had it until 2026-11-23, formatting every value in UTC; it now asks
 `isStoredCalendarDay` (`document-layouts/…/stored-calendar-day.ts`) and formats only a stored day
-there.
+there. The edit form opens a value by the same rule, through its own copy in
+`satori-components/…/stored-calendar-day.ts`, so the form opens on the day the view shows. Both
+copies run one case list, `libs/shared/testing/…/stored-calendar-day-cases.ts`. Every other
+`dc:expired` reader — the Expires row, the collection and Browse edit dialogs, the Expired queue
+label and the version comparison — still reads every value on its UTC day, so for a value that is
+not a stored day (Web UI's local midnight) the form and they name different days. One exported
+predicate would close that; it is a published-API decision and is deferred.
 
 Regression test pattern — and this is the part that is easy to get wrong:
 
@@ -1150,6 +1156,13 @@ Regression test pattern — and this is the part that is easy to get wrong:
   the derived form is the buggy behaviour restated, so it passes either way.
 - Use an instant whose UTC and local days actually differ (`20:00Z` at +05:30, `00:00Z` west of
   UTC). `09:00Z` is the same day in most zones and proves nothing.
+- **An east-of-UTC pin cannot see the stored-day half of a reader's-day rule.** East of UTC, a
+  stored day's UTC midnight falls on the same local day, so under `Asia/Calcutta` "a stored day on
+  its UTC day, an instant on the reader's" and "everything on the reader's day" pass the same cases.
+  Measured: with the stored-day branch deleted from the edit form's `openingDay`, every case in the
+  pinned zone passed except two that name a zone west of UTC through its `offset` parameter. Give the
+  rule a zone parameter a case can set, as `openingDay`'s `offset` and the view's `timeZone` are, so
+  CI covers both sides.
 - Angular's `DatePipe` memoises on (value, pattern, timezone, locale). Re-asserting a value an
   earlier render in the same file used returns the cached string and passes unfixed.
 - **A pin in a config file is an unenforced guarantee.** Delete it and the suite goes quietly green

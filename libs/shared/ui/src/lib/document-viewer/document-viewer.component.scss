@@ -445,7 +445,9 @@
   }
 }
 
-.picture-card-title {
+/* Scoped under the card: the theme's `html[data-app-theme] .mat-typography h4` outranks a single
+   class, and drew every card title as a 32px display title. */
+.picture-card > .picture-card-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--document-viewer-on-light-strip);

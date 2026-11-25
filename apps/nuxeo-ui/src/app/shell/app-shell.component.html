@@ -33,10 +33,34 @@
       }
     </sat-platform-nav-menu>
 
+    <!--
+      WCAG 2.5.3 Label in Name. On the collapsed rail the avatar initials are the only text this
+      control shows. The upstream directive names the control after its label, the display name,
+      and hides that label there. It also owns `aria-label`, so `aria-labelledby`, which takes
+      precedence, names the control with the initials followed by the display name. That name
+      contains what the control shows on either rail. `aria-hidden` keeps the avatar away from
+      assistive technology. It does not hide the initials from sight, so they still count.
+      The name's source is `hidden`. The directive builds its `aria-label` and tooltip from the
+      label's innerText, which skips hidden text, so both stay the display name. When the label
+      changes the directive re-reads only the first node that changed, so the span stays last.
+      Pinned by platform-nav-user-profile-label-in-name.spec.ts.
+    -->
     <sat-platform-nav-user>
-      <button satPlatformNavUserProfile (click)="toggleSettingsDrawer()">
-        <sat-avatar [initials]="displayName()" size="28" [borderless]="true" aria-hidden="true" />
+      <button
+        satPlatformNavUserProfile
+        aria-labelledby="app-shell-user-profile-name"
+        (click)="toggleSettingsDrawer()"
+      >
+        <sat-avatar
+          [initials]="profileInitials()"
+          size="28"
+          [borderless]="true"
+          aria-hidden="true"
+        />
         {{ displayName() }}
+        <span id="app-shell-user-profile-name" hidden
+          >{{ profileInitials() }} {{ displayName() }}</span
+        >
       </button>
     </sat-platform-nav-user>
   </sat-platform-nav>

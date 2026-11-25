@@ -3,6 +3,11 @@ import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
 import { MAT_DATE_LOCALE } from '@angular/material/core';
 import type { Locale } from 'date-fns';
 import {
+  ar,
+  arDZ,
+  arEG,
+  arMA,
+  arSA,
   de,
   enAU,
   enCA,
@@ -15,6 +20,7 @@ import {
   fr,
   frCA,
   frCH,
+  he,
   it,
   itCH,
   ja,
@@ -27,19 +33,16 @@ import {
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
  * variants date-fns ships for those languages.
  *
- * Keyed by the Angular locale id, lowercased. The seven bare language ids are the ones this
+ * Keyed by the Angular locale id, lowercased. The nine bare language ids are the ones this
  * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to locales
  * that are both registered and in `availableLanguages` — and a test asserts they match
  * `availableLanguages`, so adding a language cannot quietly leave its dates being parsed as
  * English. That clamp used to read `REGISTERED_LOCALES` alone, and registering `es` ahead of its
  * catalogue was enough to admit a locale this map has no entry for (#522).
  *
- * That test is why this map holds seven rather than the ten the application targets. `ar`, `es`
- * and `he` have Angular locale data registered, but
- * they are not advertised until their catalogues land — so they do not belong here yet either.
- * Each arrives with its catalogue, and `ar` brings the regional variants with it: date-fns'
- * `ar-DZ`, `ar-MA` and `ar-SA` are month-first while bare `ar` is day-first, so they need their
- * own entries by the rule below or they would parse day-first through the fallback.
+ * Arabic, Hebrew, Italian and Swedish ship with their catalogues. Spanish remains pending
+ * its separate integration. Arabic regional variants are explicit because
+ * ar-DZ, ar-MA and ar-SA are month-first while bare ar is day-first; ar-EG differs in padding.
  *
  * The regional entries are here for the **published** provider rather than for us. These
  * dialogs are exported from `@nuxeo/satori-platform/ui`, so a customer's `LOCALE_ID` reaches
@@ -59,6 +62,8 @@ import {
  * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
  * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
  * | `it-CH` | `dd.MM.y` | `dd/MM/y` |
+ * | `ar-DZ` `ar-MA` `ar-SA` | `MM/dd/yyyy` | `dd/MM/yyyy` |
+ * | `ar-EG` | `d/MM/y` | `dd/MM/yyyy` |
  *
  * `de-AT`, `zh-HK` and `zh-TW` are deliberately **absent**: their `P` is identical to their
  * base, so an entry would add a locale to every consumer's bundle and change no behaviour. They
@@ -91,6 +96,12 @@ const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   ja,
   nl,
   'nl-be': nlBE,
+  ar,
+  'ar-dz': arDZ,
+  'ar-eg': arEG,
+  'ar-ma': arMA,
+  'ar-sa': arSA,
+  he,
   it,
   'it-ch': itCH,
   sv,

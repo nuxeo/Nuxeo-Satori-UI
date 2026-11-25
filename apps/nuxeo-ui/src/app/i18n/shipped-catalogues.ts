@@ -26,18 +26,20 @@
  *
  * None of them answers "will the text actually render in this language?", and substituting one
  * that nearly does is how a check ends up testing a proxy for the thing in its own name.
- * `REGISTERED_LOCALES` is the closest and still wrong: `ar`, `es` and `he` are
- * registered ahead of their catalogues (`D8e-webui`), so it would admit three languages that
- * render English throughout.
+ * `REGISTERED_LOCALES` is the closest and still wrong: `es` is
+ * registered ahead of its catalogue (`D8e-webui`), so registration alone would admit a language
+ * whose text renders in English.
  *
  * `en` is listed, unlike in `REGISTERED_LOCALES`: `en.json` really does ship, it is the fallback
  * language, and `EN_FALLBACK_TRANSLATIONS` is compiled in besides. A consumer may therefore treat
  * membership here as the whole answer rather than having to special-case English.
  */
 export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [
+  'ar',
   'de',
   'en',
   'fr',
+  'he',
   'it',
   'ja',
   'nl',
