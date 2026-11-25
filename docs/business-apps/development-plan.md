@@ -392,7 +392,8 @@ be confirmed account by account in phase 0.
 
 - a presales engineer rebuilds the product and asset pages in two days or less (the plan's second
   acceptance test);
-- a library of 100,000 synthetic assets stays within the performance budget;
+- a library of 100,000 synthetic assets stays within the performance budget
+  ([performance-budget.md](performance-budget.md));
 - the share links' security review is done.
 
 **Needs:**
