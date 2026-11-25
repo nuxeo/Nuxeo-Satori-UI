@@ -24,7 +24,9 @@
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <nuxeo.version>11.5.154</nuxeo.version>
-    <node.version>v20.0.0</node.version>
+    <!-- The Node the frontend module's Maven build installs. Its major must be .nvmrc's: Angular 22
+         refuses Node 20, and scripts/beta-harness/node-version.mjs fails when the two differ. -->
+    <node.version>v24.22.3</node.version>
     <npm.version>11.6.2</npm.version>
   </properties>
 

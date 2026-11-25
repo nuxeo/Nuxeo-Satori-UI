@@ -9,7 +9,7 @@
  */
 export { ACTIONS_V2_KEYS, PLACEMENTS, validateActions, type ActionsOptions } from './lib/actions';
 export { addressTakenById, APP_ID, APP_V2_KEYS, validateApp, type AppOptions } from './lib/app';
-export { DATE_RULE_MAX_DAYS, MAX_NESTING, type Finding } from './lib/checker';
+export { DATE_RULE_MAX_DAYS, MAX_NESTING, TEMPLATE_MAX_LENGTH, type Finding } from './lib/checker';
 export {
   propertiesOf,
   propertyTypeOf,

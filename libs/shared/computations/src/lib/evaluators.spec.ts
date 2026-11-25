@@ -1,5 +1,6 @@
 import { compute } from './compute';
 import { TODAY, recordOf } from './record.testing';
+import { TEMPLATE_MAX_LENGTH } from '@agentic-ui/shared/app-definition';
 import { MAX_TEMPLATE_LENGTH } from './types';
 import { inZone } from './zones.testing';
 
@@ -225,6 +226,8 @@ describe('core.template', () => {
 
   it(`takes a text of up to ${MAX_TEMPLATE_LENGTH} characters, and refuses a longer one`, () => {
     expect(MAX_TEMPLATE_LENGTH).toBe(1000);
+    // The validator refuses a longer one when the file is written, with the same limit.
+    expect(TEMPLATE_MAX_LENGTH).toBe(MAX_TEMPLATE_LENGTH);
     expect(fill('x'.repeat(1000))).toEqual({ ok: true, value: 'x'.repeat(1000) });
     expect(fill('x'.repeat(1001))).toEqual({
       ok: false,

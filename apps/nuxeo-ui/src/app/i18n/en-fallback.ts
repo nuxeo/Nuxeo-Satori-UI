@@ -376,6 +376,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'queues.filters': 'Filters',
   'layout-designer.card': 'Card {{id}}',
   'layout-designer.hide': 'Hide {{field}}',
+  'layout-designer.layer.reading': 'Reading the deployment layer',
   'layout-designer.move-down': 'Move {{field}} down',
   'layout-designer.move-up': 'Move {{field}} up',
   'layout-designer.nav': 'What to design',

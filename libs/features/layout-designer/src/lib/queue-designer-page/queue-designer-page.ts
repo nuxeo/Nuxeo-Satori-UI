@@ -37,6 +37,7 @@ import {
 import { type Observable, map, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
+import { LayerPanelComponent } from '../layer/layer-panel';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import { layoutFileText, type DesignerField, type LayoutJson } from '../layout-edits';
 import {
@@ -98,6 +99,7 @@ const isObject = (value: unknown): value is LayoutJson =>
   selector: 'lib-queue-designer-page',
   standalone: true,
   imports: [
+    LayerPanelComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
@@ -432,6 +434,12 @@ export class QueueDesignerPageComponent {
   /** The name the download and a package give the file: `<id>.json`. */
   readonly fileName = computed(() => queueFileName(this.id() ?? 'queue'));
 
+  /** Where the app's deployment layer holds the queue open: `queues/<id>.json`. */
+  readonly layerPath = computed(() => {
+    const id = this.id();
+    return id ? `queues/${this.fileName()}` : null;
+  });
+
   /**
    * Saves the queue to the browser's downloads, as a package holds it. Refused, whatever the button
    * shows, unless the validator finds nothing.
@@ -440,6 +448,15 @@ export class QueueDesignerPageComponent {
     const file = this.file();
     if (!file || this.saveState() !== 'saveable') return;
     downloadJson(this.fileName(), layoutFileText(file), this.document);
+  }
+
+  /**
+   * Opens a version of the queue from the app's deployment layer, its draft or its live version, as
+   * the file being edited, which the page then checks and previews as any other change.
+   */
+  openFromLayer(content: unknown): void {
+    if (typeof content === 'object' && content !== null && !Array.isArray(content))
+      this.file.set(content as LayoutJson);
   }
 
   readonly fileText = computed(() => {

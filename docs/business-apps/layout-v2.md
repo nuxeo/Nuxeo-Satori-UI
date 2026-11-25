@@ -295,7 +295,7 @@ A parameter is one of:
 | Computation     | Parameters                                                               | Result                                                                                           |
 | --------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | `core.age`      | A date                                                                   | The whole years from that date to today                                                          |
-| `core.template` | A text with `{<prefix>:<name>}` placeholders                             | The text with each placeholder replaced by the property's display value. Always text, never HTML |
+| `core.template` | A text of at most 1000 characters with `{<prefix>:<name>}` placeholders  | The text with each placeholder replaced by the property's display value. Always text, never HTML |
 | `core.sum`      | A list, and for a list of complex values, the subfield                   | The sum of its numbers                                                                           |
 | `core.count`    | A list                                                                   | How many items it holds                                                                          |
 | `core.dateDiff` | Two dates (the second may be `"today"`), and `days`, `months` or `years` | The difference, in that unit                                                                     |

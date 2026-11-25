@@ -42,6 +42,7 @@ import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, combineLatest, map, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
+import { LayerPanelComponent } from '../layer/layer-panel';
 import {
   DESIGNED_MODES,
   LayoutDesignerService,
@@ -162,6 +163,7 @@ const isForm = (mode: DesignedMode): mode is 'edit' | 'create' => mode !== 'view
   standalone: true,
   imports: [
     DocumentLayoutFormComponent,
+    LayerPanelComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
@@ -255,6 +257,12 @@ export class LayoutDesignerPageComponent {
 
   /** The file's name, as a package holds it under `layouts/<Type>/`. */
   readonly fileName = computed(() => layoutFileName(this.mode()));
+
+  /** Where the app's deployment layer holds the file open: `layouts/<Type>/<mode>.layout.json`. */
+  readonly layerPath = computed(() => {
+    const type = this.type();
+    return type ? `layouts/${type}/${this.fileName()}` : null;
+  });
 
   /** Why the file could not be opened: it could not be read, or what came is no file. */
   readonly sourceProblem = computed<string | null>(() => {
@@ -594,6 +602,16 @@ export class LayoutDesignerPageComponent {
     const file = this.file();
     if (!file || this.saveState() !== 'saveable') return;
     downloadJson(this.fileName(), layoutFileText(file), this.document);
+  }
+
+  /**
+   * Opens a version of the file from the app's deployment layer, its draft or its live version, as
+   * the file being edited: a change to the one opened from the server, which the page then checks
+   * and previews as any other, and asks before losing.
+   */
+  openFromLayer(content: unknown): void {
+    if (typeof content === 'object' && content !== null && !Array.isArray(content))
+      this.file.set(content as LayoutJson);
   }
 
   /** The file as the download writes it, for the page to show. */
