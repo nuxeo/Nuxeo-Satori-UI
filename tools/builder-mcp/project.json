@@ -4,12 +4,12 @@
   "sourceRoot": "tools/builder-mcp/src",
   "projectType": "library",
   "tags": [],
-  "$tagsComment": "No tags, and none needed: this tool imports no project of the workspace, only Node, the MCP SDK, zod and the identity guard in scripts/beta-harness (allowed by exact path in eslint.config.mjs). It runs the package pipeline as a command, scripts/app-package.mjs, as CI does, rather than importing libs/shared/app-definition. Nothing may import it. A dependency on a workspace project would make the module-boundary rule report it, which is the intended alarm.",
+  "$tagsComment": "No tags, and none needed: this tool imports no project of the workspace, only Node, the MCP SDK, zod and the identity guard in scripts/beta-harness (allowed by exact path in eslint.config.mjs). It runs the package pipeline as a command, scripts/app-package.mjs, as CI does, rather than importing libs/shared/app-definition; and the write tools run an app generator of tools/satori-generators by its path, in a process of its own (src/run-generator.ts, which loads it with tsx and gives it Nx's FsTree), rather than importing that project. Nothing may import it. A dependency on a workspace project would make the module-boundary rule report it, which is the intended alarm.",
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo package it validates, the identity guard, and config:dev's script with the defaults it serves. Without them an edit to any would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus what the tests run as commands rather than import: the package pipeline, its validator, the demo packages it validates and writes copies of, the identity guard, config:dev's script with the defaults it serves, and the app generators the write tools run in a process of their own. Without them an edit to any would replay a cached pass.",
       "inputs": [
         "default",
         "^production",
@@ -20,8 +20,9 @@
         "{workspaceRoot}/scripts/dev-config.mjs",
         "{workspaceRoot}/nuxeo-agentic-core/src/main/resources/agentic-ui-config/*.defaults.json",
         "{workspaceRoot}/libs/shared/app-definition/src/**/*",
-        "{workspaceRoot}/tools/satori-generators/src/config-package/files/build.mjs__tmpl__",
+        "{workspaceRoot}/tools/satori-generators/src/**/*",
         "{workspaceRoot}/business-apps/packages/payers-claims-demo/**/*",
+        "{workspaceRoot}/business-apps/packages/contracts-demo/**/*",
         "{workspaceRoot}/libs/platform/package.json"
       ],
       "options": { "reportsDirectory": "coverage/tools/builder-mcp" }

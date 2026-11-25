@@ -289,7 +289,10 @@ faxes wait for capture, in phase 7.
 - **The MCP server:** reads the model, page providers, workflows, vocabularies and operations
   with their parameters; validates a package; previews it in dev mode; publishes to
   pre-production. The reads, the validation and the preview, on the local development server, are
-  in [`tools/builder-mcp`](../../tools/builder-mcp/README.md); publishing is not built yet.
+  in [`tools/builder-mcp`](../../tools/builder-mcp/README.md); publishing is not built yet. So are
+  the agent's writes: `write_package_file`, `apply_generator` and `apply_package_changes` write to
+  a package only what the pipeline passes, as CI runs it, and otherwise change nothing, so an id
+  the platform does not register is refused when it is written.
 - **The app builder skill**, written under `.cursor/skills/` and mirrored. It is
   [`.cursor/skills/app-builder/SKILL.md`](../../.cursor/skills/app-builder/SKILL.md), and says
   which of its steps are not built: publishing is a person's tag.

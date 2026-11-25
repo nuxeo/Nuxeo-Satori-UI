@@ -2,8 +2,9 @@
 
 Phase 3 of the [development plan](../../docs/business-apps/development-plan.md): the MCP server of
 the Builder kit. An agent building an app definition package uses it to read a Nuxeo server's
-content model, page providers, workflows, vocabularies and Automation operations, and to run the
-package pipeline's checks on what it wrote.
+content model, page providers, workflows, vocabularies and Automation operations, to write the
+package's files, each write committed only when the package pipeline passes the package as it
+would be, and to run the pipeline's checks on the package as it is.
 
 It runs beside the developer's tools, against a development server, and never in production
 ([architecture.md](../../docs/business-apps/architecture.md), section 8).
@@ -13,7 +14,8 @@ It runs beside the developer's tools, against a development server, and never in
 The plan gives the server four jobs. Three are here:
 
 - **Here:** reading the server, validating a package, and previewing it in dev mode on the local
-  development server.
+  development server. Writing a package goes with validating it: the write tools commit a change
+  only when it validates ([Writing a package](#writing-a-package)).
 - **Not here:** publishing it to pre-production. It waits for signatures and promotion after a
   person approves, which [package-pipeline.md](../../docs/business-apps/package-pipeline.md),
   section 9, proposes and nobody has decided. Until then a package is published by a tag, in CI,
@@ -36,6 +38,9 @@ The plan gives the server four jobs. Three are here:
 | `describe_operation`     | One operation or chain, by id or alias: signature and parameters                                                                                            | `/automation`                                                                      |
 | `validate_package`       | Whether a package folder passes the package pipeline, its findings with file and place, and the step that refused it                                        | none                                                                               |
 | `preview_package`        | A package validated, then served to the local dev server: the address to open, each page, what could not be served and why, and what the dev server answers | none                                                                               |
+| `write_package_file`     | One app definition file written whole, if the package then passes the pipeline; otherwise the findings, and nothing written                                 | none                                                                               |
+| `apply_generator`        | One app generator run on the package, its files written if the package then passes; otherwise the findings, and nothing written                             | none                                                                               |
+| `apply_package_changes`  | Several writes and generator runs, in order, checked once at the end: all written, or none                                                                  | none                                                                               |
 
 Some things about them are worth knowing before relying on them:
 
@@ -104,8 +109,124 @@ Some things about them are worth knowing before relying on them:
   environment, so no credential reaches it. Past three minutes it is stopped, with every process
   it started, and so it is when the server exits or is stopped by a signal it can catch. On
   Windows only the pipeline's own process is stopped, and only on a timeout; a server killed
-  outright cannot stop anything. Because it builds a zip, it is the one tool not marked read-only,
-  so a client may ask before running it.
+  outright cannot stop anything. Because it builds a zip, it is not marked read-only, so a client
+  may ask before running it.
+
+## Writing a package
+
+The agent writes a package with these three tools, and never with its own file tools: the app
+builder skill says so. Each takes the package folder and what to change, and writes it only when
+the package pipeline passes the package as it would then be:
+
+- `write_package_file`, `{ package, path, content }`: one file of the app definition, whole;
+- `apply_generator`, `{ package, generator, options }`: one of `app-package`, `app-layout`,
+  `app-form`, `app-queue`, `app-action`, `app-registry` and `app-model`, with its options named as
+  `npx nx g ./tools/satori-generators:<generator>` takes them;
+- `apply_package_changes`, `{ package, changes }`: up to 32 of either, in order, each
+  `{ "kind": "write", "path", "content" }` or `{ "kind": "generator", "generator", "options" }`,
+  checked once at the end. It is for steps each refused alone: a new demo kit is refused until it
+  has a model and a record page (`app-package`, `app-model`, `app-layout`), and a hand-written
+  `home.json` until `app-registry` has the component name it.
+
+What each does:
+
+1. **It refuses, before anything runs, what it may not write:**
+   - a package that is not one folder directly inside `business-apps/packages/`, or inside the
+     folders `BUILDER_PACKAGE_ROOTS` names instead; named with a `.` or `..` part, since the file
+     system follows a link before a `..` and the text does not; whose name is not in kebab case,
+     as `app-package` names one; that is a link, whose real path is not its root's, or that holds a
+     symbolic or hard link anywhere. A package that does not exist, unless the first change is
+     `app-package`;
+   - a path that leaves the package: absolute, with a `..`, `.` or empty part, a backslash or a
+     colon. A hidden file or folder;
+   - a file no writer here writes. `write_package_file` writes the app definition's files under
+     `bundle/agentic-ui-config/`, at the places the pipeline reads them: `app.json`, `home.json`,
+     `navigation.json`, `actions.json`, `queues/<id>.json`, `labels/<language>.json`,
+     `tasks/<workflow>.<step>.layout.json` and `layouts/<Type>/<mode>.layout.json`. A generator
+     also writes the component (`bundle/OSGI-INF/*.xml`), the manifest, `package/package.xml` and
+     `install.xml`, `build.mjs`, `bundle/schemas/*.xsd`, `content-model.json`, `README.md` and
+     `.gitignore`. Nothing writes `deployment/`, whose build allow-list is what CI gives the
+     pipeline, so an agent could otherwise allow its own operations (decision 3); an asset; code,
+     such as `demo/*.mjs`; or `dist/`;
+   - a path one of whose folders, or itself, differs from one the package holds only in case:
+     where case is ignored it is that one, under a name it was not given;
+   - a generator other than those seven; an option its schema does not have, or not of its type,
+     its values or its pattern; `package`, `name` or `directory` among the options, which the
+     package argument gives; and `modelServer`, since a generator given an address sends
+     `NUXEO_USER` and `NUXEO_PASS` there. `app-model` runs only for a demo kit: a package the same
+     call makes, or one that ships its own `content-model.json` already, which only `app-model`
+     writes. On a customer's package it would add types and page providers that, installed,
+     replace the server's, and hold the package to a model the agent wrote. A `model` is a JSON
+     file of the package, or one inside the repository or a package root, through no link and no
+     hidden folder, as `validate_package` reads an allow-list; that one must be a file, not a FIFO
+     that would hold every write waiting, is read by the tool without following a link, and the
+     generator is given the copy. A customer's model can be exported into the checkout's `tmp/`,
+     which git ignores: `npm run app-package:model -- --server <address> --out tmp/content-model.json`.
+2. **It makes the changes to a staging copy:** the package's files, but for its `dist/`, in a
+   folder of its own in the system's temporary directory. A file is written there. A generator runs
+   in a process of its own, `src/run-generator.ts`, which loads it with `tsx` and gives it Nx's
+   tree, whose reads under the package's path go to the staging copy and whose writes stay in
+   memory and come back to the server. The tree is rooted in a folder of its own that holds only
+   the repository's `.prettierrc` and `.editorconfig`: Nx's `formatFiles` looks for a prettier
+   configuration upwards from the tree's root joined with each file, and loads the nearest, so
+   rooted at the repository it would load a `prettier.config.mjs` the package held, and run it.
+   Each file it would write must be inside the package and one a generator writes, or nothing is
+   written. Its process gets from the environment what the pipeline does: no credential.
+3. **It validates the staging copy as `validate_package` validates a folder alone, as CI does:**
+   steps 1 to 6, with the package's own `deployment/build-allow-list.json` when it has one,
+   `libs/platform`'s version, and its own `content-model.json` when it ships a stand-in model. It
+   takes no other allow-list, registered file or platform version, so nothing the agent passes can
+   register an id: an unregistered widget, rule or operation is refused at write time. Each app
+   definition file the changes touch must be a JSON object of `"version": 2`, since the validator
+   does not check a layout of version 1, which the pipeline alone would pass whatever it named.
+4. **It writes only with no finding and no refusing step.** Otherwise the answer says
+   `written: false`, with the findings, the step that refused it and what would have changed, and
+   the package is byte for byte as it was. With none, a new package's folder is made, only when
+   there is none, and the write takes the package's lock, `dist/builder-mcp-write.lock`, which a
+   write by another process, such as a second server on the same checkout, takes too. The lock is
+   made whole or not at all: the process's id is written to a file of its own, then linked to the
+   lock's name, which a link takes only when it is free. A lock a running process holds refuses
+   the write; one whose holder is gone is moved aside and taken over, unless what was moved is not
+   the lock judged stale, which is then put back. Then the package is read again, and one that
+   changed since the staging copy was taken, or gained a link, or a name that differs from another
+   only in case, is not written. Then each file is written into a folder of the write's own in the
+   package's `dist/`, which git and the builder leave out, and renamed into its place, which
+   replaces a file whole and keeps its mode, once the folder it goes in is found to be where the
+   package's real path says. A failure part way puts back every file already moved and removes
+   every folder made, a new package's own included, so the package is as it was. The lock, and
+   `dist/` when the write made it, are removed afterwards; one that cannot be is named in the
+   note, and the write stands.
+
+The answer holds `written`; `changes`, each file `created`, `updated` or `removed`; `validation`,
+the pipeline's answer, naming the package rather than its copy; `generatorOutput`, what each
+generator printed, such as what to run next; and a `note`. One write runs at a time in a server,
+and one commit at a time in a package. "As CI does" is on the files the package holds here: a
+local file git ignores is checked here too, and CI, which checks out only what is committed, is
+the stricter.
+
+**What it never does:**
+
+- **Run package code.** The generators are this repository's, loaded by their path, and their
+  tree is rooted where formatting finds the repository's configuration and nothing of the
+  package. The pipeline runs a package's `build.mjs` only once step 1 has found it the
+  generator's, byte for byte, as for `validate_package`.
+- **Write outside the package**, but for its staging folder, which is removed. A server killed
+  outright part way through a commit cannot put files back, and can leave its folder and its lock
+  in `dist/`; the lock is taken over by the next write, since its holder is gone.
+- **Read a server, publish, sign or tag.** None of the three sends a request.
+
+**What it cannot stop:** a process that writes into the package at the same moment as a commit,
+outside the lock, such as an editor or the agent's own file tools. Each folder is checked just
+before its file is moved, not held, so such a process could still swap a folder for a link in
+between; and three writes at once on one stale lock could each take it, in the moment between
+moving a live lock aside and putting it back. The skill keeps the agent's writes to these tools.
+
+**What it does not do yet:**
+
+- **Hold a package to a server's model.** Like CI, it gives the pipeline no content model, so a
+  package on a customer's server is held to none, and a misspelt field there still passes. Run
+  `npm run app-package -- <package> --model <file>` as well, as the skill says.
+- **Compare with the version before** (`--previous`): raising a version is a person's step.
 
 ## Previewing a package
 
@@ -181,6 +302,8 @@ only place it sends anything is the Nuxeo server it is configured with:
   `unzip` on this machine, needs no network, and reads only inside the repository.
   `preview_package` does the same, then sends `GET`s for the files it served to the dev server,
   `DEV_SERVER_URL`, which must be on this machine, with no credential and no redirect followed.
+  The write tools run Node, the generators and the pipeline on this machine, send nothing, and
+  refuse a generator's `modelServer`.
 - **Definitions, not records.** The tools read the model, searches, workflow models, vocabularies
   and operations. None reads a document's content, a group, an audit entry or a file. A workflow
   model's own documents are read for their steps, with the workflow's schemas only, and a
@@ -193,12 +316,13 @@ only place it sends anything is the Nuxeo server it is configured with:
 
 From the environment only, read once when the server starts:
 
-| Variable         | Meaning                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------- |
-| `NUXEO_URL`      | The server's origin, such as `http://localhost:8080`. Default: that. `http` only for this machine             |
-| `NUXEO_USER`     | Required. No default                                                                                          |
-| `NUXEO_PASS`     | Required. No default                                                                                          |
-| `DEV_SERVER_URL` | The dev server `preview_package` serves to. Default: `http://localhost:4200`, `nx serve`'s. This machine only |
+| Variable                | Meaning                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NUXEO_URL`             | The server's origin, such as `http://localhost:8080`. Default: that. `http` only for this machine                                                                                                                                                                                        |
+| `NUXEO_USER`            | Required. No default                                                                                                                                                                                                                                                                     |
+| `NUXEO_PASS`            | Required. No default                                                                                                                                                                                                                                                                     |
+| `DEV_SERVER_URL`        | The dev server `preview_package` serves to. Default: `http://localhost:4200`, `nx serve`'s. This machine only                                                                                                                                                                            |
+| `BUILDER_PACKAGE_ROOTS` | The folders the write tools write a package in, replacing `business-apps/packages/`: absolute or from the repository, separated as `PATH` separates. Each must exist; none may hold the repository, or reach one of its folders by another spelling or through a link. Default: that one |
 
 - **No default account.** `scripts/beta-harness/nuxeo-credentials.mjs` says why. Without the pair
   the server still starts, `validate_package` and `preview_package` still answer, and each Nuxeo
@@ -210,7 +334,8 @@ From the environment only, read once when the server starts:
   and a model read as the guest looks complete and is not. The harness's identity guard,
   `scripts/beta-harness/identity-guard.mjs`, judges the answer.
 - **The password goes in the `Authorization` header, and nowhere else.** No message includes it,
-  and the processes `validate_package` starts do not get it.
+  and the processes `validate_package`, `preview_package` and the write tools start do not get it.
+- **A package root that is wrong** stops the write tools, each saying why, and nothing else.
 
 ## Registering it with Claude Code
 
@@ -223,7 +348,9 @@ claude mcp add-json nuxeo-builder --scope local '{"type":"stdio","command":"node
 Then `claude mcp list` shows `nuxeo-builder`, and `/mcp` inside Claude Code shows its tools.
 
 - **Node 24 runs it as it is.** It strips the types from the TypeScript; there is no build step and
-  no `tsx`. The repository's `node_modules` must be installed, for the MCP SDK and `zod`.
+  no `tsx` for the server. The repository's `node_modules` must be installed, for the MCP SDK and
+  `zod`, and for the generators the write tools run: `tsx` loads them, and Nx gives them its tree.
+- **For packages elsewhere,** add `"BUILDER_PACKAGE_ROOTS":"customer-apps"` to `env`.
 - **Run it from the repository's root**, or give `args` an absolute path. `validate_package` reads
   package paths relative to the repository either way.
 - **The single quotes matter.** They keep the shell from expanding `${NUXEO_PASS}`, so the
@@ -245,7 +372,23 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
   CI image that lost it is not mistaken for a pass. Nothing here has been run on Windows.
 - **`src/main.spec.ts`** starts the real entry point over stdio, as Claude Code does: with no
   credentials, with a server that answers as its guest, with one that stops accepting the account
-  after the first call, and validating the demo package.
+  after the first call, validating the demo package, and running a generator for a write in the
+  package root `BUILDER_PACKAGE_ROOTS` names.
+- **`src/package-writes.spec.ts`** writes copies of the kits in a scratch package root, never the
+  kits: each path, link and file type refused before anything runs; a write that would leave a
+  finding, an unregistered rule, a layout of version 1 with an unregistered widget, which the
+  pipeline alone passes, and an operation off the build allow-list, each refused with the package
+  unchanged; a move that fails part way, and one the file system refuses, each put back; a package
+  that changed or gained a link while it was checked, and a new one made meanwhile; a lock held,
+  and one left behind; a path or a folder that differs only in case; a file's mode kept; a `..`
+  in the package path after a link; a FIFO as the model; `app-model` on a package with no
+  stand-in model; generators run on the staging copy, a generator writing outside the package, a
+  `prettier.config.mjs` at the package's path that formatting must not load, and a new package
+  made in one call. The checks against a write with a finding, a path that leaves the package, a
+  link, a file of version 1, a package changed meanwhile, a move that fails part way, the lock,
+  case, a mode, an option's pattern, that configuration, a `..` package path, a FIFO model and
+  `app-model` outside a demo kit were each removed or undone once, and their tests seen failing,
+  before they were trusted. The lock's two-process races are not reproduced by a test.
 - **`src/preview-package.spec.ts`** runs the real pipeline and a byte copy of
   `scripts/dev-config.mjs` in a scratch checkout of its own, so the tests never write this
   checkout's dev folder, against a stand-in dev server: the files served and not, a refused
