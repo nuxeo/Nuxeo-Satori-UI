@@ -239,6 +239,25 @@ A migrated package is ready when checks 1 to 10 pass, a person has accepted or r
 - **6:** the labels of tabs, task forms and blocks.
 - **10:** the task forms, through the validator's own rules for them.
 
+**Lab mode**, the first slice against a real server (`lab`, in the
+[tool's README](../../tools/studio-migration/README.md), **Lab mode**): it opens documents in Web
+UI and in the new app in Chromium, as the same user, refusing anything that may write, records the
+requests each sends, and holds them to **the request-log rule**, check 7's server half on a
+document's page:
+
+1. **The document:** the new app asks for it, as Web UI does, and is answered as Web UI is.
+2. **Its schemas:** every schema Web UI asks for it with, the new app asks for too.
+3. **Its properties: every property Web UI fetches and shows, the new app fetches and can show.**
+   Web UI shows what a document layout it loaded binds outside every condition; the new app can
+   show what its page holds a field of, what a layout file it loaded lists, and what its page draws
+   itself.
+
+The enrichers, page providers and other requests are listed side by side, and held to nothing yet.
+Given a package and its conversion, lab mode also runs check 3's server half whole, on the server's
+model, and says whether checks 5, 6 and 7 can run there: 6 and 7 stand on the documents only
+when Web UI serves the package's own files and the new app its conversion, which needs the package
+installed; 5 also needs test users, which lab mode, writing nothing, never creates.
+
 **In phase M0**:
 
 - **What runs:** the harness runs checks 1, 4 and 8, which need no server. Each other check says
@@ -379,7 +398,8 @@ file.
 
 **Printed,** with the `report` command: the header, the summary by kind and outcome with the
 coverage, what the harness found, every reported item with its owner and decision, every proposal,
-and each file with what it became. The screenshots wait for the migration server.
+and each file with what it became. Lab mode takes the screenshots, beside its own report (section
+6); this report does not take them in yet.
 
 **Not yet:** accepting or rejecting a proposal, which needs the converter to write what a person
 accepts; recording a reviewer's approval of the report; what the harness found, per file, since

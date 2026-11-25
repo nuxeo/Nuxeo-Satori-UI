@@ -25,6 +25,7 @@ npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
 npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+npx tsx tools/studio-migration/src/cli.ts lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 ```
 
 `npm run studio-migration -- <command> …` runs the same, from the repository's root.
@@ -39,6 +40,9 @@ npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-direc
 - `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, in that
   order, keeps what each prints in a file of `--out`, and says what to do next (below, **The
   guided migration**).
+- `lab` opens documents in Web UI and in the new app on a real server, compares the requests each
+  sends, and runs the server halves it can (below, **Lab mode**). It is the only command that
+  talks to a server.
 - `--allow-list` names the deployment's operations, `{ "operations": [...] }`, as the app
   definition's validator reads them (decision 3). A button becomes an action only when its
   operation is on it. `check` and `report` use the list the conversion was made with, unless they
@@ -51,11 +55,11 @@ npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-direc
 - **0:** done, and for `check` and `migrate`, no check failed. A check that ran only in part has
   not failed. `report` exits 0 once it has printed the report, whatever the report says.
 - **1:** a check failed, or something could not be read or written; the reason is printed.
-- **2:** the command was wrong.
+- **2:** the command was wrong; for `lab`, also its environment (below, **Lab mode**).
 
 `convert` and `mutate` write only into a new or empty directory, `decisions` only a
-`decisions.json` the conversion does not hold yet, and `migrate` only into a new or empty `--out`,
-so none of them writes over anything.
+`decisions.json` the conversion does not hold yet, and `migrate` and `lab` only into a new or
+empty `--out`, so none of them writes over anything.
 
 ## The guided migration
 
@@ -598,7 +602,9 @@ check that did not run does.
     does not export it, so the pipeline checks nothing in them. This check holds them to version
     1's documented contract ([extension-reference.md](../../docs/extension-reference.md), section
     9b) instead.
-- **Run in part: what needs no server runs, and the rest needs the migration server:**
+- **Run in part: what needs no server runs, and the rest needs the migration server.** Lab mode
+  (below) runs check 3's server half on a server, and those of checks 6 and 7 on the pages of the
+  documents it is given; checks 5, 6 and 7 need the package installed there:
   - **3, model.** Every field, type, vocabulary and page provider the conversion names exists, and
     every widget shows its property's type. A task form's variable is held to its step's and its
     workflow's variables schemas, when the package holds them. The package's own model is read from its contributions
@@ -804,8 +810,136 @@ nothing.
   found is not split by file: its findings name the conversion's files rather than the package's,
   and are given whole, above.
 
-Screenshots and the request logs wait for the migration server. The reviewer's approval is the
-reviewer's: no command records it.
+Screenshots and request logs are lab mode's, below, which writes them beside its own report; this
+report does not take them in yet. The reviewer's approval is the reviewer's: no command records it.
+
+## Lab mode
+
+Step 4 of phase 4's demo (development plan): Web UI and the new app side by side on the same
+documents, with their request logs compared. `lab` ([`src/lab-cli.ts`](src/lab-cli.ts)) is its
+first slice, against a real server:
+
+```bash
+export NUXEO_USER=<user> NUXEO_PASS=<password>
+npm run studio-migration -- lab <document>... --out <new-directory> --app http://localhost:4297/ \
+  [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
+```
+
+- **What it opens.** Each document, by its id or its path, in Web UI (`--web-ui`, by default
+  `<nuxeo>/nuxeo/ui/`, `--nuxeo` being `http://localhost:8080` by default) and in the new app
+  (`--app`, by default `http://localhost:4200/`: `npx nx serve nuxeo-ui`, with what it should show
+  served by `npm run config:dev`), each in a fresh Chromium context, as the user `NUXEO_USER` and
+  `NUXEO_PASS` name. They have no default. Playwright is not a dependency, as for the Beta harness:
+  `npm install --no-save @playwright/test`, then `npx playwright install chromium`.
+- **What it records**, of each request either app sends to Nuxeo
+  ([`src/lab-browser.ts`](src/lab-browser.ts)): its method, path and query; the schemas
+  (`properties`, `X-NXproperties`, `X-NXDocumentProperties`), enrichers and fetch headers it asks
+  with; and its status. Of the answers: the names of the properties the document's own answer
+  holds, a page's result count, and who `/me` and Web UI's sign-in say the requests ran as. Of the
+  pages: the document layouts Web UI loaded for the document's type, read by the inventory's own
+  reader as a package's are; the layout files the new app loaded for it; and which page the new app
+  showed, with the `data-field` of each field on it. Never a credential, and never a value.
+- **Read only.** A request either app sends is refused before it leaves the browser, and listed,
+  unless it is a `GET`, `HEAD` or `OPTIONS`, or a `POST` of an operation that only reads: Web UI's
+  sign-in (`login`), `Repository.Query`, `Repository.PageProvider`, `Directory.SuggestEntries`,
+  `Audit.QueryWithPageProvider` and `NuxeoDrive.GetRoots`. Downloads (`@blob`, `@rendition`,
+  `@preview`, `@convert`, `nxfile` and the like) are refused too: the server may write them to its
+  audit log. From Node it only reads, with `GET`s to the server's origin that follow no redirect.
+- **As the same user.** Before anything opens, `/me` must answer as the user, judged by the Beta
+  harness's identity guard (`judgeMe`). Web UI is sent the user's `Authorization` on every request
+  to the server's origin, and nowhere else. The new app is given the session its sign-in writes,
+  as `h.login()` writes it, before its first script runs, and every request it sends to Nuxeo's
+  API must carry that header. Each `/me` either app reads, and Web UI's sign-in, must name the
+  user; a document where one does not is not compared, and the run exits 2. Under automation, Web
+  UI waits for an `automation-ready` event unless `window.automationReady` is set, so lab mode
+  sets it.
+- **The request-log rule** ([`src/lab.ts`](src/lab.ts)), check 7's server half on a document's
+  page. The harness defined none before. For each document:
+  1. **The document.** Web UI's page asks for it, with a `GET` by id or by path; the new app's must
+     too, and be answered as Web UI was: both read it, or neither.
+  2. **Its schemas.** Every schema Web UI asks for it with, `*` being every one, the new app asks
+     for too, read as each browser sent the request. The new app's development server adds
+     `X-NXproperties: *` to everything it proxies (`apps/nuxeo-ui/proxy.conf.json`), so there it
+     receives every schema whatever it asks: only what it asks says what a server would send it.
+  3. **Its properties: every property Web UI fetches and shows, the new app fetches and can
+     show.** Web UI shows a property when a document layout it loaded for the document binds it in
+     a field outside every condition, and fetched it when its answer for the document holds it.
+     The new app fetches it when an answer for the document it received holds it, and can show it
+     when its page holds a field of it, when a layout file it loaded for the type lists it, as on a
+     tab not opened, or when its page draws it itself: the document page's Properties panel, or the
+     info panel of Browse, where the new app opens a folder (`DRAWN_BY_THE_PAGE`). That table is a
+     copy of those components, which `lab.spec.ts` holds to their source files. A field under a
+     condition is listed, not held: whether it shows is the condition's, which check 5 holds.
+
+  Listed side by side, and held to nothing yet: the enrichers each app asks the document with, the
+  page providers each asks with their parameters and result counts, the other endpoints, and what
+  lab mode refused.
+
+- **The report**, in the harness's format: for each document, checks 6 and 7 on its page, then
+  what each app asked; given `--package` and `--conversion`, the server halves of checks 3, 5, 6
+  and 7; and the verdict, how many documents differ. `--out`, new or empty, gets `lab.txt`, what
+  it prints; `lab.json`, the same with the recordings, as data; and a screenshot of each app on
+  each document, for the reviewer. Check 6 on a document is never more than `partial`: the
+  screenshots are taken, and the values are not compared yet.
+- **The server halves**, given a package and its conversion:
+  - **3 runs whole:** the package's own model as `check` holds it, and each name that rests on the
+    platform confirmed on the server: a property against `/config/types`, `/config/facets` and
+    `/config/schemas`, read with the app definition's `readContentModel`, its widget held to the
+    property's type there and a layout's type to its schemas; a type; a vocabulary, at
+    `/directory/<name>`; a page provider, by its definition at `/search/pp/<name>`, never a page of
+    it; and a task's variable, against its step's and its workflow's variables schemas.
+  - **6 and 7 stand on the documents** only when Web UI serves the package's own files byte for
+    byte, which it does once the package is installed, and the new app is served the conversion's
+    layout files where `config:dev` serves them. Otherwise each says which of the two it needs, and
+    how many files are served as the package and the conversion hold them.
+  - **5 does not run in lab mode:** evaluating each condition in Web UI needs the package installed
+    and test users in and out of each group, which lab mode never creates: it writes nothing. A
+    package with no condition passes, as in `check`.
+- **Exit codes:** 0, no document differs and no check failed; 1, a difference or a failed check,
+  or something could not be read or written; 2, the command was wrong, or the environment is: the
+  credentials, Playwright, a server that does not answer as the user, or a document that could not
+  be compared as the user.
+
+**Its controls**, `--control`, each put into the new app's side alone, in the browser, for the
+rule to report:
+
+| Control                           | Breaks                                                                   | The rule must report                           |
+| --------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
+| `withhold-property=<prefix:name>` | Takes the property out of every answer for the document the new app gets | Web UI shows it; the new app does not fetch it |
+| `narrow-schemas=<schema,...>`     | Makes the new app ask for the document with those schemas alone          | A schema Web UI asks for that it does not      |
+
+**On the local server**, 25 November 2026: Nuxeo LTS 2025.10.18 in Docker, with Web UI at
+`/nuxeo/ui/`, and the new app's development server on port 4297 serving the Payers kit's files; as
+the administrator, on a File, a Folder, a Note and a Payers Member:
+
+- **The Folder differs, five times.** Web UI's folder metadata layout, under its Details, shows
+  the description, nature, subjects, coverage and expiry date. The new app opens a folder in
+  Browse, whose info panel shows none of them. The other three documents do not differ.
+- **The Member:** Web UI has no layout for Member, as nothing installed gives it one (both answered
+  404), so it shows none of its properties, and the rule holds none.
+- **Listed:** on the File, the Note and the Member, Web UI asks for the document with eleven
+  enrichers the new app does not, `audit`, `breadcrumb` and `pendingTasks` among them, and the new
+  app with two Web UI does not, `acls` and `allowedTransitions`; on the Folder, nine and three.
+  Lab mode refused Web UI's `User.GetUserWorkspace`, which creates the user's workspace when there
+  is none, and both apps' downloads of the file and of a thumbnail. Nothing was written: none of
+  the four documents' audit trails holds an entry from that day, where earlier days' hold
+  `download` entries, the kind lab mode refuses to cause.
+- **The controls, each seen reported**, on the Note: `withhold-property=dc:description`, as "Web
+  UI shows dc:description (nuxeo-note-metadata-layout.html); the new app does not fetch it"; and
+  `narrow-schemas=dublincore`, as "Web UI asks for the document with every schema (\*), the new app
+  only with dublincore". The second was not also reported as a property the new app did not fetch:
+  the proxy's `X-NXproperties: *` still brought it every schema, which is why the rule's second part
+  reads what the browser sent.
+- **The made-up Acme-Claims package with M2's corpus**, and its conversion: check 3 confirmed
+  `dc:title` on the server, and failed on "the server has no vocabulary claim_decision", which the
+  package names and does not define. Web UI serves none of its 21 files and the new app none of
+  its 6 layout files as they are held, so checks 5, 6 and 7 said they need the package installed
+  and the conversion served.
+
+**A layout of the new app that leaves out a property Web UI shows** is reported: `lab.spec.ts`
+holds it. On this server it cannot be seen live: Web UI's stock layouts show Dublin Core and a
+note's format alone, which the new app's Properties panel draws whatever its layout files say. It
+needs a package's Web UI layouts on the server, as the lab server will have them.
 
 ## Tests
 
@@ -1064,15 +1198,52 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
+- **For lab mode, 46 guards**, broken one at a time by a script that runs its four specs and
+  restores the file, each seen turning them red:
+  - **The rule:** a field under a condition not held, and only what Web UI fetched; a property
+    the new app does not fetch, or cannot show; the page's fields, a layout file it loaded, and
+    the rows the page draws itself, each as what it can show; the schemas, every one and by name;
+    a new app that never asks, or is answered otherwise; Web UI never asking; identity; a read by
+    path; Web UI's conditions; the servlet's envelope; a Web UI layout that did not load.
+  - **The browser:** downloads through the API and through the servlets; only reads, and only the
+    operations that only read, by `POST`; the header to the server's origin alone; controls on
+    the new app alone; an unsigned request, an answer naming another, and none naming the user; a
+    refused request recorded.
+  - **The server's reads:** one origin, no redirect; a field, a widget's type and a type's
+    schemas, a vocabulary, a page provider and a task's variable, each against the server's
+    model; a model that cannot be read; the package byte for byte, and the conversion as JSON.
+  - **The command:** the credentials, a new or empty `--out`, who the credentials are, exit 2 on
+    identity and 1 on a difference, the package installed and the conversion served, and check 3
+    failing.
+
+  Three rounds ran. The first, of 46, found three no test reached: a field on the new app's page
+  that no layout file lists, as its generated layout shows one; a layout Web UI was refused whose
+  answer has a body; and the control kept to the new app, which a second test of the same thing
+  hid, now gone. The script did not find a fourth, whose text formatting had changed. The second
+  round found that one reached by no test either, the package served without its conversion. Each
+  now has its test, and the third round found none. A spec drives `recordApp` through a small
+  stand-in for Playwright, so the browser half is held too: what is refused, sent and recorded.
+
 ## Not done yet
 
 - **The rest of migration M4:** the upload, which validates a package sent to a service and returns
   its report; many packages in one run; the support playbook. `migrate` runs on a copy of this
   repository, so a customer needs `npm ci`, and with it a read token for the Hyland packages on
   GitHub Packages.
-- **The server halves of checks 3, 5, 6 and 7** need the migration lab server, with the Studio
-  package installed and Web UI beside the new app (development plan, phase 4). Neither local server
-  has it, and no code reads a server yet: those halves say they did not run.
+- **The rest of the server halves.** Lab mode runs check 3's whole, and checks 6 and 7 on the
+  pages of the documents it is given. Still to come, on the migration lab server, with the Studio
+  package installed and Web UI beside the new app (development plan, phase 4), which neither local
+  server has:
+  - check 5, the conditions evaluated in Web UI, with test users that lab mode, writing nothing,
+    does not create;
+  - check 6's values, compared as each app shows them, and its labels as each page shows them;
+  - check 7's lists and buttons, with their result counts: a button runs an operation, which lab
+    mode refuses unless it only reads;
+  - another user than one, and the app registry's files: lab mode signs one user in, and finds the
+    conversion only where `config:dev` serves it.
+- **What lab mode shares with the app.** What the new app's pages draw themselves outside a layout
+  file is a table in `lab.ts`, a copy that a test holds to those components' sources, rather than
+  something read from the page.
 - **Check 9** needs plugins, in M3.
 - **Conditions that do not travel yet:** on a version 1 field, on a list's column and on a search
   screen's table. The server half of check 5 needs the migration server.

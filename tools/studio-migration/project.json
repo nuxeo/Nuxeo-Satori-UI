@@ -9,12 +9,16 @@
     "test": {
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
-      "$inputsComment": "nx.json's test inputs, plus the extension reference: a test holds the catalogue's app slots against its slot table, and without it here an edit to the reference would replay a cached pass.",
+      "$inputsComment": "nx.json's test inputs, plus the files a test holds this tool to, so that an edit to one reruns the test rather than replaying a cached pass: the extension reference, whose slot table the catalogue's app slots are held to, and the new app's pages whose own rows lab mode's table copies (lab.spec.ts).",
       "inputs": [
         "default",
         "^production",
         { "env": "SATORI_TEST_TZ" },
-        "{workspaceRoot}/docs/extension-reference.md"
+        "{workspaceRoot}/docs/extension-reference.md",
+        "{workspaceRoot}/libs/shared/satori-components/src/lib/properties-panel/properties-panel.component.ts",
+        "{workspaceRoot}/libs/features/document-detail/src/lib/document-detail/document-detail.html",
+        "{workspaceRoot}/libs/features/browse/src/lib/browse/browse.html",
+        "{workspaceRoot}/libs/features/browse/src/lib/browse/browse.ts"
       ],
       "options": { "reportsDirectory": "coverage/tools/studio-migration" }
     },

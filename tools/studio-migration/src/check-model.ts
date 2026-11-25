@@ -9,18 +9,84 @@
  * schema lacks fails here. What the package does not define rests on the platform's own model,
  * Dublin Core and the stock types, vocabularies and page providers, which only the migration
  * server can confirm, through `/config/types`, `/config/schemas`, the directories and the page
- * provider definitions. Those names are listed, and the check counts as run in part.
+ * provider definitions. Those names are listed, and the check counts as run in part. Lab mode
+ * (`lab-server.ts`) confirms them on a server: {@link checkModelParts} gives them as data.
  */
 import { PACKAGED_WIDGETS, isRecord } from '@agentic-ui/shared/app-definition';
 import { fieldOf, layoutFields, listColumns, parametersOf, widgetOf } from './app-walk';
 import { own } from './catalogue';
 import type { CheckOutcome, HarnessInput } from './harness';
-import { packageModel, schemasOfType } from './model';
+import { packageModel, schemasOfType, type PackageModel } from './model';
 
-export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckOutcome {
+/**
+ * A name the conversion rests on that the package does not define, so the platform's, which only a
+ * server can confirm: a property of a schema the package does not hold, with the widget that shows
+ * it and the type whose layout names it; a type; a vocabulary; a page provider; or a task's
+ * variable that only one of its step's and its workflow's variables schemas could hold.
+ */
+export type PlatformName =
+  | {
+      readonly kind: 'property';
+      readonly xpath: string;
+      readonly widget: string | null;
+      readonly type: string | null;
+      readonly where: string;
+    }
+  | { readonly kind: 'type'; readonly name: string }
+  | { readonly kind: 'vocabulary'; readonly name: string }
+  | { readonly kind: 'page provider'; readonly name: string }
+  | {
+      readonly kind: 'variable';
+      readonly xpath: string;
+      readonly workflow: string;
+      readonly step: string;
+      readonly widget: string | null;
+      readonly where: string;
+    };
+
+/** How check 3 names a platform name in its list: as it has always printed it. */
+export function platformLabel(name: PlatformName): string {
+  switch (name.kind) {
+    case 'property':
+      return name.xpath;
+    case 'variable':
+      return `${name.xpath} of ${name.workflow}.${name.step}`;
+    default:
+      return `the ${name.kind} ${name.name}`;
+  }
+}
+
+/** What check 3 finds without a server, and the platform's names it could not confirm. */
+export interface ModelParts {
+  readonly findings: readonly string[];
+  /** Each name in the order first met; a property once for each widget and type that name it. */
+  readonly platform: readonly PlatformName[];
+  readonly model: PackageModel;
+}
+
+export function checkModel(input: HarnessInput): CheckOutcome {
+  const { findings, platform } = checkModelParts(input);
+  const labels = [...new Set(platform.map(platformLabel))];
+  return {
+    findings,
+    ...(labels.length > 0
+      ? {
+          rest: `${labels.length} ${labels.length === 1 ? 'name rests' : 'names rest'} on the platform's own model, which only the migration server can confirm: ${listed(labels)}`,
+        }
+      : {}),
+  };
+}
+
+export function checkModelParts({ pkg, inventory, conversion }: HarnessInput): ModelParts {
   const model = packageModel(pkg, inventory);
   const findings: string[] = [];
-  const platform = new Set<string>();
+  const platformNames = new Map<string, PlatformName>();
+  const platform = {
+    add: (name: PlatformName): void => {
+      const key = JSON.stringify({ ...name, where: undefined });
+      if (!platformNames.has(key)) platformNames.set(key, name);
+    },
+  };
   const facetSchemas = new Set([...model.facets.values()].flat());
 
   const property = (
@@ -34,7 +100,7 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
     const name = xpath.slice(colon + 1);
     const schema = model.schemas.get(prefix);
     if (!schema) {
-      platform.add(xpath);
+      platform.add({ kind: 'property', xpath, widget, type, where });
       return;
     }
     if (!schema.read) {
@@ -74,11 +140,11 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
     if (widget === 'vocabulary' && typeof directory === 'string') vocabulary(directory);
   };
   const vocabulary = (name: string): void => {
-    if (!model.directories.has(name)) platform.add(`the vocabulary ${name}`);
+    if (!model.directories.has(name)) platform.add({ kind: 'vocabulary', name });
   };
   const provider = (where: string, name: unknown): void => {
     if (typeof name !== 'string') return;
-    if (!model.pageProviders.has(name)) platform.add(`the page provider ${name}`);
+    if (!model.pageProviders.has(name)) platform.add({ kind: 'page provider', name });
   };
 
   /**
@@ -107,7 +173,8 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
         findings.push(
           `${where}: neither var_${step} nor var_${workflow} has a variable ${name}, so ${xpath} does not exist`,
         );
-      else platform.add(`${xpath} of ${workflow}.${step}`);
+      else
+        platform.add({ kind: 'variable', xpath, workflow, step, widget: widgetOf(value), where });
       return;
     }
     const widget = widgetOf(value);
@@ -131,7 +198,7 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
     const layout = /^layouts\/([^/]+)\/[^/]+\.layout\.json$/.exec(path);
     if (layout) {
       const type = layout[1];
-      if (!model.types.has(type)) platform.add(`the type ${type}`);
+      if (!model.types.has(type)) platform.add({ kind: 'type', name: type });
       for (const field of layoutFields(file)) entry(`${path} ${field.at}`, field.entry, type);
       continue;
     }
@@ -154,14 +221,7 @@ export function checkModel({ pkg, inventory, conversion }: HarnessInput): CheckO
   // A contribution or schema that cannot be read leaves its part of the model unknown, and what it
   // would have defined would otherwise be taken for the platform's.
   findings.push(...model.problems.map((problem) => `the model: ${problem}`));
-  return {
-    findings,
-    ...(platform.size > 0
-      ? {
-          rest: `${platform.size} ${platform.size === 1 ? 'name rests' : 'names rest'} on the platform's own model, which only the migration server can confirm: ${listed([...platform])}`,
-        }
-      : {}),
-  };
+  return { findings, platform: [...platformNames.values()], model };
 }
 
 /** A list for a line of text: the first few, and how many more. */
