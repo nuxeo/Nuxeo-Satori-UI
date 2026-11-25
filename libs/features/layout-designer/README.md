@@ -162,8 +162,9 @@ Below the Save section of either page, for the file open:
   differences: package to live, live (or package) to draft, and the newest of them to the file as
   edited here. Nothing in a version is drawn as markup.
 - **Save draft** sends the file as edited, once the page's own check finds nothing in it. **Submit
-  for approval** puts the draft up. **Approve and publish** makes it live. **Roll back** makes what
-  was live before the live version live again, or the package's version when nothing was.
+  for approval** puts the draft up. **Approve and publish** makes it live. **Roll back** undoes the
+  last change to what is live: it makes what was live just before live again, or the package's
+  version when nothing was. **Put the package's version back** does that whatever is live.
   **Discard draft** drops it. **Open the newest version here** loads the draft, or the live version,
   into the designer to edit.
 - **The buttons follow the server's answer** of what the person may do, and one that may do nothing
@@ -416,3 +417,12 @@ npx nx run-many -t lint,typecheck,test -p layout-designer
     page's words, the verdict saying a file or a queue can be saved while what it is checked with is
     still read, an `actions.json` with no actions claimed as the app's, and the administration menu
     not marking Layout Designer on its queues page.
+
+  The third slice's, publishing, on the server: a non-administrator's write let through, an
+  invalid file stored, a draft served by the registry, an approval by the draft's maker or
+  submitter, a change on a stale revision, a change without its header, the switch on by default,
+  a polyfill that differs from the library method it stands in for, the script given Java, the
+  change token not passed to the repository, and the layer folder's ACL granting members; and in
+  the client and the tools: the panel ignoring the approval permission, a change sent without its
+  header, the record page not reading the layer first, the upgrade check not warning, and the
+  committed script out of date.

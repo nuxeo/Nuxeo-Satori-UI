@@ -246,6 +246,21 @@ describe('LayerPanelComponent', () => {
     expect(root().querySelector('[data-version="live"]')?.textContent).toContain('put back by ada');
   });
 
+  it("puts the package's version back, after asking, while something overrides it", async () => {
+    await show({ kind: 'state', state: state({ live: null, previous: 1 }) });
+    expect(button('rollback-package').disabled).toBe(true);
+    await show({ kind: 'state', state: state() });
+    button('rollback-package').click();
+    expect(asked).toHaveLength(1);
+    expect(sent).toEqual([
+      ['layouts/Claim/view.layout.json', { action: 'rollback', revision: 3, to: 0 }],
+    ]);
+    fixture.detectChanges();
+    expect(root().querySelector('[data-layer="done"]')?.textContent).toContain(
+      "package's version is in force again",
+    );
+  });
+
   it('asks before a rollback and before a draft is discarded', async () => {
     await show({ kind: 'state', state: state({ draft: submittedDraft() }) });
     // The rollback leaves the draft, which may then be discarded.

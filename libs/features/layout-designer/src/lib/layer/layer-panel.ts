@@ -89,7 +89,7 @@ export class LayerPanelComponent {
   readonly refusal = signal<LayerRefusal | null>(null);
 
   /** The change the server last made, announced. */
-  readonly done = signal<LayerAction | null>(null);
+  readonly done = signal<LayerAction | 'rollback-package' | null>(null);
 
   /** Whether a change is on its way to the server. */
   readonly busy = signal(false);
@@ -127,6 +127,12 @@ export class LayerPanelComponent {
       state?.permissions.write === true &&
       (state.live !== null || state.previous > 0)
     );
+  });
+
+  /** The package's file may be put back while something overrides it. */
+  readonly canRestorePackage = computed(() => {
+    const state = this.state();
+    return !this.busy() && state?.permissions.write === true && state.live !== null;
   });
 
   readonly canDiscard = computed(() => {
@@ -209,6 +215,15 @@ export class LayerPanelComponent {
     });
   }
 
+  /** Puts the package's file back in force, whatever is live: a rollback to version 0. */
+  restorePackage(): void {
+    const state = this.state();
+    if (!state || !this.canRestorePackage()) return;
+    this.confirm('rollback-package').subscribe((agreed) => {
+      if (agreed) this.send({ action: 'rollback', revision: state.revision, to: 0 });
+    });
+  }
+
   discard(): void {
     const state = this.state();
     if (!state || !this.canDiscard()) return;
@@ -229,7 +244,9 @@ export class LayerPanelComponent {
     return { key, differences, total };
   }
 
-  private confirm(action: 'approve' | 'rollback' | 'discard'): Observable<boolean> {
+  private confirm(
+    action: 'approve' | 'rollback' | 'rollback-package' | 'discard',
+  ): Observable<boolean> {
     const data: NxsConfirmDialogData = {
       title: this.translate.instant(`layout-designer.layer.confirm-${action}-title`),
       message: this.translate.instant(`layout-designer.layer.confirm-${action}-message`, {
@@ -264,7 +281,10 @@ export class LayerPanelComponent {
           return;
         }
         this.reading.set(reading);
-        if (reading.kind === 'state') this.done.set(change.action);
+        if (reading.kind === 'state')
+          this.done.set(
+            change.action === 'rollback' && change.to === 0 ? 'rollback-package' : change.action,
+          );
       });
   }
 }

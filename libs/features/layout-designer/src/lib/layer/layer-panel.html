@@ -163,6 +163,15 @@
       <button
         mat-stroked-button
         type="button"
+        data-layer-action="rollback-package"
+        [disabled]="!canRestorePackage()"
+        (click)="restorePackage()"
+      >
+        {{ 'layout-designer.layer.rollback-package' | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
         data-layer-action="discard"
         [disabled]="!canDiscard()"
         (click)="discard()"
