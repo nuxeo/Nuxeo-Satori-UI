@@ -24,11 +24,13 @@
  *   4. The client app's production bundle, as the Maven module `apps/nuxeo-ui` and
  *      `build-marketplace.yml` build it, `nx build nuxeo-ui --configuration=production
  *      --base-href=/nuxeo/agentic-ui/`, with Node 24 and without Nx's cache.
- *   5. The server packages: `mvn package` at the root, every module but `apps/nuxeo-ui`, whose own
- *      build stage 4 is, in a scratch copy whose version is the candidate's, set as
+ *   5. The server packages: `mvn package` at the root, tests included, every module but
+ *      `apps/nuxeo-ui`, whose own build stage 4 is. It runs in a scratch copy of the working tree,
+ *      every file git does not ignore, whose version is set to the candidate's as
  *      `build-marketplace.yml` sets it: `versions:set`, and `@VERSION@` in a package's
- *      `package.xml`. The `nuxeo-agentic-ui` package must carry the bundle stage 4 built, file for
- *      file and byte for byte: its assembly skips a missing bundle without a word.
+ *      `package.xml`. So the repository's poms are never edited. The `nuxeo-agentic-ui` package
+ *      must carry the bundle stage 4 built, file for file and byte for byte: its assembly skips a
+ *      missing bundle without a word.
  *   6. The packages as a set: each one's dependencies are in the candidate at a version Nuxeo counts
  *      as meeting them, no two conflict, and each one's target platform is one its dependencies
  *      install on (`release-candidate-set.mjs`, Nuxeo's rules, ported).
@@ -58,6 +60,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  copyFileSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -65,7 +68,9 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,7 +80,13 @@ import { fileURLToPath } from 'node:url';
 import { spawnToolSync } from './beta-harness/package-command.mjs';
 import { withoutCredentials } from './nuxeo-content-model.mjs';
 import { demoSteps, demoStepsMarkdown } from './release-candidate-demo.mjs';
-import { descriptorOf, duplicatesAcross, readKit, setProblems, unpack } from './release-candidate-set.mjs';
+import {
+  descriptorOf,
+  duplicatesAcross,
+  readKit,
+  setProblems,
+  unpack,
+} from './release-candidate-set.mjs';
 import { withoutCommentsOrInstructions } from './verify-package-zip.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -180,7 +191,13 @@ if (out === PACKAGES || out.startsWith(PACKAGES + sep)) {
   );
   process.exit(2);
 }
-const sinceCommit = git(['rev-parse', '--verify', '--quiet', '--end-of-options', `${options.since}^{commit}`])?.trim();
+const sinceCommit = git([
+  'rev-parse',
+  '--verify',
+  '--quiet',
+  '--end-of-options',
+  `${options.since}^{commit}`,
+])?.trim();
 if (!sinceCommit) {
   console.error(`--since ${options.since} is not a commit this clone has.\n${USAGE}`);
   process.exit(2);
@@ -196,7 +213,10 @@ for (const [tool, args, why] of [
 }
 const rootPom = withoutCommentsOrInstructions(readFileSync(join(REPO, 'pom.xml'), 'utf8'));
 const pomVersion = /<version>\s*([^<\s]+)\s*<\/version>/.exec(
-  rootPom.replace(/<(parent|dependencyManagement|dependencies|build|properties|repositories|pluginRepositories|profiles)>[\s\S]*?<\/\1>/g, ''),
+  rootPom.replace(
+    /<(parent|dependencyManagement|dependencies|build|properties|repositories|pluginRepositories|profiles)>[\s\S]*?<\/\1>/g,
+    '',
+  ),
 )?.[1];
 const version = options.version ?? pomVersion?.replace(/-SNAPSHOT$/, '');
 if (!version || !VERSION.test(version)) {
@@ -206,7 +226,9 @@ if (!version || !VERSION.test(version)) {
   process.exit(2);
 }
 const modules = [
-  ...(/<modules>([\s\S]*?)<\/modules>/.exec(rootPom)?.[1] ?? '').matchAll(/<module>\s*([^<\s]+)\s*<\/module>/g),
+  ...(/<modules>([\s\S]*?)<\/modules>/.exec(rootPom)?.[1] ?? '').matchAll(
+    /<module>\s*([^<\s]+)\s*<\/module>/g,
+  ),
 ].map(([, module]) => module);
 const platform = JSON.parse(readFileSync(join(REPO, 'libs', 'platform', 'package.json'), 'utf8'));
 const head = git(['rev-parse', 'HEAD'])?.trim() ?? null;
@@ -274,7 +296,9 @@ async function build() {
     for (const problem of problems) console.error(`  - ${problem}`);
     throw new Refused(`stage 6: ${problems.length} problem(s) between the packages, listed above.`);
   }
-  process.stdout.write('Every dependency is met in the candidate, none conflict, and every target platform is one its dependencies install on.\n');
+  process.stdout.write(
+    'Every dependency is met in the candidate, none conflict, and every target platform is one its dependencies install on.\n',
+  );
 
   stage(7, 'The demo steps a server run would execute, listed, not run');
   const demo = await listDemoSteps(kits);
@@ -312,9 +336,12 @@ function buildKits() {
       refused.push(`${name} (exit ${result.status})`);
       continue;
     }
-    const descriptor = descriptorOf(readFileSync(join(directory, 'package', 'package.xml'), 'utf8'));
+    const descriptor = descriptorOf(
+      readFileSync(join(directory, 'package', 'package.xml'), 'utf8'),
+    );
     const zip = join(kitsOut, `${descriptor.name}-${descriptor.version}.zip`);
-    if (!existsSync(zip)) throw new Refused(`stage 2: the pipeline passed ${name} and wrote no ${basename(zip)}.`);
+    if (!existsSync(zip))
+      throw new Refused(`stage 2: the pipeline passed ${name} and wrote no ${basename(zip)}.`);
     const changes = join(kitsOut, `${descriptor.name}-${descriptor.version}.changes.md`);
     kits.push({
       directory,
@@ -329,7 +356,8 @@ function buildKits() {
     throw new Refused(`stage 2: the pipeline refused ${refused.join(', ')}, as above.`);
   // A kit the last release had and this candidate has not: the release note says so.
   const listed = git(['ls-tree', '-d', '--name-only', sinceCommit, 'business-apps/packages/']);
-  if (listed === null) throw new Refused(`stage 2: git could not list business-apps/packages/ at ${options.since}.`);
+  if (listed === null)
+    throw new Refused(`stage 2: git could not list business-apps/packages/ at ${options.since}.`);
   kits.removed = listed
     .split('\n')
     .filter(Boolean)
@@ -347,7 +375,8 @@ function buildKits() {
  */
 function kitAt(commit, path) {
   const listed = run('git', ['ls-tree', '-r', '-z', '--full-tree', commit, '--', path]);
-  if (listed.status !== 0) throw new Refused(`stage 2: git ls-tree ${commit} ${path} failed: ${listed.stderr.trim()}`);
+  if (listed.status !== 0)
+    throw new Refused(`stage 2: git ls-tree ${commit} ${path} failed: ${listed.stderr.trim()}`);
   const entries = listed.stdout
     .split('\0')
     .filter(Boolean)
@@ -367,7 +396,8 @@ function kitAt(commit, path) {
     input: `${entries.map((entry) => entry.object).join('\n')}\n`,
     maxBuffer: OUTPUT_LIMIT * 4,
   });
-  if (batch.status !== 0) throw new Refused(`stage 2: git cat-file could not read ${path} at ${options.since}.`);
+  if (batch.status !== 0)
+    throw new Refused(`stage 2: git cat-file could not read ${path} at ${options.since}.`);
   const into = join(scratch, 'previous');
   let at = 0;
   for (const entry of entries) {
@@ -396,8 +426,11 @@ function checkKits(kits) {
     );
   }
   const unknown = kits.flatMap((kit) => kit.read.unknown.map((point) => `${kit.name}: ${point}`));
-  for (const point of unknown) process.stdout.write(`  not compared, a point this check does not know: ${point}\n`);
-  const duplicates = duplicatesAcross(kits.map((kit) => ({ name: kit.name, contributes: kit.read.contributes })));
+  for (const point of unknown)
+    process.stdout.write(`  not compared, a point this check does not know: ${point}\n`);
+  const duplicates = duplicatesAcross(
+    kits.map((kit) => ({ name: kit.name, contributes: kit.read.contributes })),
+  );
   if (duplicates.length > 0) {
     for (const { kind, key, kits: owners } of duplicates)
       console.error(`  - the ${kind} ${key} is contributed by ${owners.join(' and ')}`);
@@ -426,21 +459,28 @@ function buildClient() {
     { cwd: REPO, stdio: ['ignore', 'inherit', 'inherit'], env: withoutCredentials(process.env) },
   );
   if (result.status !== 0)
-    throw new Refused(`stage 4: the production build exited ${result.status ?? result.error?.message}.`);
+    throw new Refused(
+      `stage 4: the production build exited ${result.status ?? result.error?.message}.`,
+    );
   const browser = join(output, 'browser');
   if (!existsSync(join(browser, 'index.html')))
-    throw new Refused(`stage 4: the production build wrote no ${fromRepo(join(browser, 'index.html'))}.`);
+    throw new Refused(
+      `stage 4: the production build wrote no ${fromRepo(join(browser, 'index.html'))}.`,
+    );
   // What the package carries: the assembly leaves a developer's local configuration out.
   const files = filesUnder(browser).filter(
     (file) => file !== NOT_PACKAGED && !file.startsWith(`${NOT_PACKAGED}/`),
   );
   const left = filesUnder(browser).length - files.length;
   const copy = join(out, 'client', 'nuxeo-ui', 'browser');
-  for (const file of files) cpSync(join(browser, ...file.split('/')), join(copy, ...file.split('/')));
+  for (const file of files)
+    cpSync(join(browser, ...file.split('/')), join(copy, ...file.split('/')));
   const listing = join(out, 'client', `nuxeo-ui-${version}.sha256`);
   writeFileSync(
     listing,
-    files.map((file) => `${sha256(join(copy, ...file.split('/')))}  nuxeo-ui/browser/${file}\n`).join(''),
+    files
+      .map((file) => `${sha256(join(copy, ...file.split('/')))}  nuxeo-ui/browser/${file}\n`)
+      .join(''),
   );
   process.stdout.write(
     `${files.length} files${left > 0 ? `, and ${left} of ${NOT_PACKAGED}/ left out, as the package leaves them` : ''}; their digests in ${fromOut(listing)}.\n`,
@@ -451,27 +491,36 @@ function buildClient() {
 // ── 5. The server packages ────────────────────────────────────────────────────────────────────
 function buildServer(bundle) {
   stage(5, `The server packages: mvn package at the root, at ${version}`);
+  // The whole working tree, every file git does not ignore, and so no `target/`, `dist/` or
+  // `node_modules/`: a module's tests may read beyond it, as nuxeo-agentic-assets' read the brand
+  // kit's policy, and a copy of the modules alone fails them.
   const root = join(scratch, 'maven');
-  cpSync(join(REPO, 'pom.xml'), join(root, 'pom.xml'));
-  for (const module of modules) {
-    if (module === CLIENT_MODULE) {
-      cpSync(join(REPO, module, 'pom.xml'), join(root, module, 'pom.xml'));
-      continue;
-    }
-    if (!existsSync(join(REPO, module, 'pom.xml')))
-      throw new Refused(`stage 5: the root pom names the module ${module}, which has no pom.xml.`);
-    cpSync(join(REPO, module), join(root, module), {
-      recursive: true,
-      filter: (source) => !/(^|[\\/])(target|node_modules)([\\/]|$)/.test(relative(join(REPO, module), source)),
-    });
+  const listed = run('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
+  if (listed.status !== 0)
+    throw new Refused(`stage 5: git ls-files failed: ${listed.stderr.trim()}`);
+  for (const file of new Set(listed.stdout.split('\0').filter(Boolean))) {
+    const source = join(REPO, ...file.split('/'));
+    const entry = lstatSync(source, { throwIfNoEntry: false });
+    // A file deleted from the working tree, but not from the index, is not built.
+    if (!entry || entry.isDirectory()) continue;
+    const copy = join(root, ...file.split('/'));
+    mkdirSync(dirname(copy), { recursive: true });
+    if (entry.isSymbolicLink()) symlinkSync(readlinkSync(source), copy);
+    else copyFileSync(source, copy);
   }
+  for (const module of modules)
+    if (!existsSync(join(root, module, 'pom.xml')))
+      throw new Refused(`stage 5: the root pom names the module ${module}, which has no pom.xml.`);
   const maven = (args) => {
     const result = spawnSync('mvn', ['-B', '-nsu', '--no-transfer-progress', ...args], {
       cwd: root,
       stdio: ['ignore', 'inherit', 'inherit'],
       env: withoutCredentials(process.env),
     });
-    if (result.status !== 0) throw new Refused(`stage 5: mvn ${args[0]} exited ${result.status ?? result.error?.message}.`);
+    if (result.status !== 0)
+      throw new Refused(
+        `stage 5: mvn ${args[0]} exited ${result.status ?? result.error?.message}.`,
+      );
   };
   maven(['versions:set', `-DnewVersion=${version}`, '-DgenerateBackupPoms=false']);
   // build-marketplace.yml stamps nuxeo-agentic-ui-package's package.xml with sed; its assembly takes
@@ -504,7 +553,9 @@ function buildServer(bundle) {
         )
       : [];
     if (built.length === 0)
-      throw new Refused(`stage 5: ${module} built nothing with the candidate's version in target/.`);
+      throw new Refused(
+        `stage 5: ${module} built nothing with the candidate's version in target/.`,
+      );
     for (const name of built.sort()) {
       cpSync(join(target, name), join(serverOut, name));
       artifacts.push({ module, file: join(serverOut, name) });
@@ -515,7 +566,9 @@ function buildServer(bundle) {
     const unpacked = unpack(artifact.file, join(scratch, 'server', basename(artifact.file)));
     const descriptorFile = join(unpacked, 'package.xml');
     if (!existsSync(descriptorFile))
-      throw new Refused(`stage 5: ${basename(artifact.file)} has no package.xml, so it is not a Nuxeo package.`);
+      throw new Refused(
+        `stage 5: ${basename(artifact.file)} has no package.xml, so it is not a Nuxeo package.`,
+      );
     packages.push({
       module: artifact.module,
       path: fromOut(artifact.file),
@@ -526,7 +579,9 @@ function buildServer(bundle) {
   // The package that deploys the client must deploy this bundle, and nothing else there.
   const carriers = packages.filter((each) => existsSync(join(each.unpacked, ...DEPLOYED_BUNDLE)));
   if (carriers.length === 0)
-    throw new Refused(`stage 5: no server package deploys the client into ${DEPLOYED_BUNDLE.join('/')}/.`);
+    throw new Refused(
+      `stage 5: no server package deploys the client into ${DEPLOYED_BUNDLE.join('/')}/.`,
+    );
   for (const carrier of carriers) {
     const deployed = join(carrier.unpacked, ...DEPLOYED_BUNDLE);
     const shipped = filesUnder(deployed);
@@ -535,7 +590,8 @@ function buildServer(bundle) {
     const differing = bundle.files.filter(
       (file) =>
         shipped.includes(file) &&
-        sha256(join(deployed, ...file.split('/'))) !== sha256(join(bundle.browser, ...file.split('/'))),
+        sha256(join(deployed, ...file.split('/'))) !==
+          sha256(join(bundle.browser, ...file.split('/'))),
     );
     if (missing.length + extra.length + differing.length > 0)
       throw new Refused(
@@ -555,7 +611,11 @@ async function listDemoSteps(kits) {
   const { problems, listing } = await demoSteps({
     repo: REPO,
     stepsDir: STEPS,
-    kits: kits.map(({ name, version: kitVersion, directory }) => ({ name, version: kitVersion, directory })),
+    kits: kits.map(({ name, version: kitVersion, directory }) => ({
+      name,
+      version: kitVersion,
+      directory,
+    })),
   });
   if (problems.length > 0) {
     for (const problem of problems) console.error(`  - ${problem}`);
@@ -586,12 +646,28 @@ function write({ kits, bundle, server, demo }) {
     ...server.artifacts.map(({ module, file }) => {
       const held = server.packages.find((each) => each.path === fromOut(file));
       return held
-        ? artifact('server package', { name: held.descriptor.name, version: held.descriptor.version, module }, file)
-        : artifact('bundle', { name: basename(file).slice(0, -`-${version}.jar`.length), version, module }, file);
+        ? artifact(
+            'server package',
+            { name: held.descriptor.name, version: held.descriptor.version, module },
+            file,
+          )
+        : artifact(
+            'bundle',
+            { name: basename(file).slice(0, -`-${version}.jar`.length), version, module },
+            file,
+          );
     }),
     ...kits.flatMap((kit) => [
       artifact('kit', { name: kit.name, version: kit.version }, join(out, kit.path)),
-      ...(kit.changes ? [artifact('kit changes', { name: kit.name, version: kit.version }, join(out, kit.changes))] : []),
+      ...(kit.changes
+        ? [
+            artifact(
+              'kit changes',
+              { name: kit.name, version: kit.version },
+              join(out, kit.changes),
+            ),
+          ]
+        : []),
     ]),
   ];
 
@@ -652,7 +728,10 @@ function releaseNotes({ kits, bundle, server }) {
     ),
     '',
     `The client app's production bundle, ${bundle.files.length} files, ships in ` +
-      `${server.packages.filter((each) => existsSync(join(each.unpacked, ...DEPLOYED_BUNDLE))).map((each) => `${each.descriptor.name} ${each.descriptor.version}`).join(' and ')}, ` +
+      `${server.packages
+        .filter((each) => existsSync(join(each.unpacked, ...DEPLOYED_BUNDLE)))
+        .map((each) => `${each.descriptor.name} ${each.descriptor.version}`)
+        .join(' and ')}, ` +
       `on ${platform.name} ${platform.version}.`,
     '',
     `## The kits, and what changed in each since ${options.since}`,
@@ -661,7 +740,10 @@ function releaseNotes({ kits, bundle, server }) {
   for (const kit of kits) {
     lines.push(`### ${kit.name} ${kit.version}`, '');
     if (kit.previous === null) {
-      lines.push(`New: ${options.since} has no business-apps/packages/${basename(kit.directory)}, so nothing is compared.`, '');
+      lines.push(
+        `New: ${options.since} has no business-apps/packages/${basename(kit.directory)}, so nothing is compared.`,
+        '',
+      );
       continue;
     }
     const changes = kit.changes ? readFileSync(join(out, kit.changes), 'utf8') : '';

@@ -28,7 +28,16 @@
  * Usage: node scripts/release-candidate.selftest.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,7 +89,9 @@ try {
   rmSync(scratch, { recursive: true, force: true });
 }
 
-process.stdout.write(`\n${negative} negative and ${positive} positive controls, ${failures.length} failed.\n`);
+process.stdout.write(
+  `\n${negative} negative and ${positive} positive controls, ${failures.length} failed.\n`,
+);
 if (failures.length > 0) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
@@ -113,7 +124,9 @@ function nuxeoRules() {
     ['x:1.0.0', '1', true],
     ['x: 1.0.0 ', '1.0.0', false],
   ];
-  const wrong = answered.filter(([dependency, version, met]) => dependencyMatches(parseDependency(dependency), version) !== met);
+  const wrong = answered.filter(
+    ([dependency, version, met]) => dependencyMatches(parseDependency(dependency), version) !== met,
+  );
   check(
     `the ${answered.length} dependency cases Nuxeo answered, a snapshot and an rc below the release among them`,
     wrong.length === 0,
@@ -128,7 +141,9 @@ function nuxeoRules() {
     ['2026.0.2-SNAPSHOT', '2026.0.1', 1],
     ['2026.0.2-PR-12-BUILD-3-SNAPSHOT', '2026.0.2', 1],
   ];
-  const misordered = ordered.filter(([a, b, sign]) => Math.sign(compareNuxeoVersions(nuxeoVersion(a), nuxeoVersion(b))) !== sign);
+  const misordered = ordered.filter(
+    ([a, b, sign]) => Math.sign(compareNuxeoVersions(nuxeoVersion(a), nuxeoVersion(b))) !== sign,
+  );
   check('the version orders Nuxeo answered', misordered.length === 0, JSON.stringify(misordered));
   check(
     'an unstamped @VERSION@ is 0.0.0 to Nuxeo, and meets nothing',
@@ -141,18 +156,42 @@ function platformRules() {
   // `PlatformVersionRange.fromRangeSpec(range).containsVersion(new PlatformVersion(v))`, run against
   // the jar. A bare version is the range of that version alone, so containing one is `rangeWithin`.
   const answered = {
-    '[2025.0,2026.0)': { '2025.0': true, '2025.0.0': true, '2025.12': true, '2025.99.1': true, '2026.0': false, '2024.9': false, '2025.0-RC1': true, 2025: true, 2026: false, '2025.0.1-HF02': true },
-    '[2025.0,2026.0]': { '2026.0': true, 2026: true, '2024.9': false },
-    '(2025.0,2026.0)': { '2025.0': false, '2025.0.0': false, '2025.12': true, '2025.0-RC1': true, 2025: false, '2026.0': false },
-    '[2025.0,)': { '2026.0': true, '2024.9': false, 2026: true },
-    '(,2026.0)': { '2024.9': true, '2026.0': false },
-    '2025.0': { '2025.0': true, '2025.0.0': true, '2025.12': false, '2025.0-RC1': false, 2025: true },
-    '[2025.3,2026.0)': { '2025.0': false, '2025.12': true, '2025.0-RC1': false, '2025.0.1-HF02': false },
+    '[2025.0,2026.0)': {
+      '2025.0': true,
+      '2025.0.0': true,
+      2025.12: true,
+      '2025.99.1': true,
+      '2026.0': false,
+      2024.9: false,
+      '2025.0-RC1': true,
+      2025: true,
+      2026: false,
+      '2025.0.1-HF02': true,
+    },
+    '[2025.0,2026.0]': { '2026.0': true, 2026: true, 2024.9: false },
+    '(2025.0,2026.0)': {
+      '2025.0': false,
+      '2025.0.0': false,
+      2025.12: true,
+      '2025.0-RC1': true,
+      2025: false,
+      '2026.0': false,
+    },
+    '[2025.0,)': { '2026.0': true, 2024.9: false, 2026: true },
+    '(,2026.0)': { 2024.9: true, '2026.0': false },
+    '2025.0': { '2025.0': true, '2025.0.0': true, 2025.12: false, '2025.0-RC1': false, 2025: true },
+    '[2025.3,2026.0)': {
+      '2025.0': false,
+      2025.12: true,
+      '2025.0-RC1': false,
+      '2025.0.1-HF02': false,
+    },
   };
   const wrong = [];
   for (const [range, versions] of Object.entries(answered))
     for (const [version, contained] of Object.entries(versions))
-      if (rangeWithin(platformRange(version), platformRange(range)) !== contained) wrong.push(`${version} in ${range}`);
+      if (rangeWithin(platformRange(version), platformRange(range)) !== contained)
+        wrong.push(`${version} in ${range}`);
   check('the target platform cases Nuxeo answered', wrong.length === 0, wrong.join('; '));
   const within = [
     ['[2025.3,2026.0)', '[2025.0,2026.0)', true],
@@ -163,9 +202,18 @@ function platformRules() {
     ['[2025.0,)', '[2025.0,2026.0)', false],
     ['[2024.0,2026.0)', '[2025.0,2026.0)', false],
   ];
-  const misjudged = within.filter(([inner, outer, held]) => rangeWithin(platformRange(inner), platformRange(outer)) !== held);
-  check('a range wider than its dependency is outside it, a narrower one within', misjudged.length === 0, JSON.stringify(misjudged));
-  check('a range this port cannot read is not read', platformRange('2025.x') === null && platformRange('[a,b)') === null);
+  const misjudged = within.filter(
+    ([inner, outer, held]) => rangeWithin(platformRange(inner), platformRange(outer)) !== held,
+  );
+  check(
+    'a range wider than its dependency is outside it, a narrower one within',
+    misjudged.length === 0,
+    JSON.stringify(misjudged),
+  );
+  check(
+    'a range this port cannot read is not read',
+    platformRange('2025.x') === null && platformRange('[a,b)') === null,
+  );
 }
 
 // ── What a component registers ────────────────────────────────────────────────────────────────
@@ -174,11 +222,22 @@ function registrations() {
     registrationsOf(componentXmlOf(readFileSync(join(PAYERS, 'bundle', 'OSGI-INF', file), 'utf8')));
   const model = component('payers-claims-demo-model.xml');
   const workflow = component('payers-claims-demo-workflow.xml');
-  const keys = (read, kind) => read.registrations.filter((each) => each.kind === kind).map((each) => each.key).sort();
+  const keys = (read, kind) =>
+    read.registrations
+      .filter((each) => each.kind === kind)
+      .map((each) => each.key)
+      .sort();
   check(
     "the Payers model's document types, and none of the schemas and facets a doctype only names",
     JSON.stringify(keys(model, 'document type')) ===
-      JSON.stringify(['Case', 'Claim', 'ClaimDocument', 'Member', 'PayersClaimSearch', 'Provider']) &&
+      JSON.stringify([
+        'Case',
+        'Claim',
+        'ClaimDocument',
+        'Member',
+        'PayersClaimSearch',
+        'Provider',
+      ]) &&
       !keys(model, 'schema').includes('common') &&
       !keys(model, 'facet').includes('HiddenInNavigation'),
     JSON.stringify(model.registrations),
@@ -247,24 +306,69 @@ function theSet() {
     ...extra,
   });
   const sound = setProblems([ui('2026.0.2'), kit()]);
-  check('a kit whose dependency and platform the candidate meets', sound.length === 0, sound.join('; '), false);
+  check(
+    'a kit whose dependency and platform the candidate meets',
+    sound.length === 0,
+    sound.join('; '),
+    false,
+  );
   const cases = [
-    ['a dependency at a snapshot of its release', [ui('2026.0.2-SNAPSHOT'), kit()], /2026\.0\.2-SNAPSHOT, which Nuxeo puts below 2026\.0\.2: a snapshot/],
-    ['a dependency at an rc of its release', [ui('2026.0.2-rc.1'), kit()], /classifier starting rc/],
+    [
+      'a dependency at a snapshot of its release',
+      [ui('2026.0.2-SNAPSHOT'), kit()],
+      /2026\.0\.2-SNAPSHOT, which Nuxeo puts below 2026\.0\.2: a snapshot/,
+    ],
+    [
+      'a dependency at an rc of its release',
+      [ui('2026.0.2-rc.1'), kit()],
+      /classifier starting rc/,
+    ],
     ['a dependency below its least', [ui('2026.0.1'), kit()], /which is below 2026\.0\.2/],
-    ['a dependency above its most', [ui('2026.0.9'), kit({ dependencies: ['nuxeo-agentic-ui:2026.0.2:2026.0.5'] })], /above its most, 2026\.0\.5/],
-    ['a dependency the candidate does not hold', [ui('2026.0.2'), kit({ dependencies: ['nuxeo-agentic-assets:0.1.0'] })], /has no package nuxeo-agentic-assets/],
-    ['a package named twice', [ui('2026.0.2'), kit(), kit({ artifact: 'kits/other.zip' })], /are both the package kit/],
+    [
+      'a dependency above its most',
+      [ui('2026.0.9'), kit({ dependencies: ['nuxeo-agentic-ui:2026.0.2:2026.0.5'] })],
+      /above its most, 2026\.0\.5/,
+    ],
+    [
+      'a dependency the candidate does not hold',
+      [ui('2026.0.2'), kit({ dependencies: ['nuxeo-agentic-assets:0.1.0'] })],
+      /has no package nuxeo-agentic-assets/,
+    ],
+    [
+      'a package named twice',
+      [ui('2026.0.2'), kit(), kit({ artifact: 'kits/other.zip' })],
+      /are both the package kit/,
+    ],
     // Alone: a kit depending on it would add the unmet dependency as a second problem.
     ['a version never stamped', [ui('@VERSION@')], /no version Nuxeo can read/],
-    ['two packages that conflict', [ui('2026.0.2'), kit({ conflicts: ['nuxeo-agentic-ui'] })], /cannot be installed together/],
-    ['a target platform wider than its dependency', [ui('2026.0.2'), kit({ targetPlatform: { name: 'lts', version: '[2025.0,2027.0)' } })], /claims platforms its dependency does not install on/],
-    ['a target platform of another name', [ui('2026.0.2'), kit({ targetPlatform: { name: 'cap', version: '[2025.0,2026.0)' } })], /targets the platform cap/],
-    ['no target platform, under a dependency with one', [ui('2026.0.2'), kit({ targetPlatform: null })], /names no target platform/],
+    [
+      'two packages that conflict',
+      [ui('2026.0.2'), kit({ conflicts: ['nuxeo-agentic-ui'] })],
+      /cannot be installed together/,
+    ],
+    [
+      'a target platform wider than its dependency',
+      [ui('2026.0.2'), kit({ targetPlatform: { name: 'lts', version: '[2025.0,2027.0)' } })],
+      /claims platforms its dependency does not install on/,
+    ],
+    [
+      'a target platform of another name',
+      [ui('2026.0.2'), kit({ targetPlatform: { name: 'cap', version: '[2025.0,2026.0)' } })],
+      /targets the platform cap/,
+    ],
+    [
+      'no target platform, under a dependency with one',
+      [ui('2026.0.2'), kit({ targetPlatform: null })],
+      /names no target platform/,
+    ],
   ];
   for (const [name, packages, says] of cases) {
     const problems = setProblems(packages);
-    check(`refused: ${name}`, problems.length === 1 && says.test(problems[0]), problems.join('; ') || 'no problem');
+    check(
+      `refused: ${name}`,
+      problems.length === 1 && says.test(problems[0]),
+      problems.join('; ') || 'no problem',
+    );
   }
   const descriptor = descriptorOf(
     '<?xml version="1.0"?><!-- <package name="commented" version="9"/> --><package type="addon" name="k" version="1.2.3">' +
@@ -276,7 +380,8 @@ function theSet() {
     "a package.xml's name, version, dependencies, conflicts and target platform, its comments left out",
     descriptor.name === 'k' &&
       descriptor.version === '1.2.3' &&
-      JSON.stringify(descriptor.dependencies) === JSON.stringify(['nuxeo-agentic-ui:2026.0.2', 'other']) &&
+      JSON.stringify(descriptor.dependencies) ===
+        JSON.stringify(['nuxeo-agentic-ui:2026.0.2', 'other']) &&
       JSON.stringify(descriptor.conflicts) === JSON.stringify(['old-kit']) &&
       descriptor.targetPlatform?.name === 'lts' &&
       descriptor.targetPlatform?.version === '[2025.0,2026.0)',
@@ -293,7 +398,8 @@ function kitCopy(source, label, change) {
   change?.((file, from, to) => {
     const path = join(directory, file);
     const text = readFileSync(path, 'utf8');
-    if (!text.includes(from)) throw new Error(`the control's edit does not apply to ${file}: ${from}`);
+    if (!text.includes(from))
+      throw new Error(`the control's edit does not apply to ${file}: ${from}`);
     writeFileSync(path, text.replace(from, to));
   });
   return directory;
@@ -302,11 +408,23 @@ function kitCopy(source, label, change) {
 /** A kit through the pipeline and read back as the candidate reads it, or why it was not. */
 function builtKit(directory, label) {
   const out = join(scratch, 'zips', label);
-  const built = spawnSync(process.execPath, [join(REPO, 'scripts', 'app-package.mjs'), directory, '--out', out, '--platform', platformVersion()], {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (built.status !== 0) return { problem: `the pipeline refused ${label}: ${built.stdout}${built.stderr}` };
+  const built = spawnSync(
+    process.execPath,
+    [
+      join(REPO, 'scripts', 'app-package.mjs'),
+      directory,
+      '--out',
+      out,
+      '--platform',
+      platformVersion(),
+    ],
+    {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
+  if (built.status !== 0)
+    return { problem: `the pipeline refused ${label}: ${built.stdout}${built.stderr}` };
   const zip = readdirSync(out).find((name) => name.endsWith('.zip'));
   return { name: basename(directory), read: readKit(join(out, zip), join(scratch, 'read', label)) };
 }
@@ -319,24 +437,40 @@ function kitsFromZips() {
   const payers = builtKit(PAYERS, 'payers');
   const contracts = builtKit(CONTRACTS, 'contracts');
   if (payers.problem || contracts.problem) {
-    check('the Payers and Contracts kits through the pipeline', false, payers.problem ?? contracts.problem, false);
+    check(
+      'the Payers and Contracts kits through the pipeline',
+      false,
+      payers.problem ?? contracts.problem,
+      false,
+    );
     return;
   }
-  const sets = (...kits) => duplicatesAcross(kits.map((kit) => ({ name: kit.name, contributes: kit.read.contributes })));
+  const sets = (...kits) =>
+    duplicatesAcross(kits.map((kit) => ({ name: kit.name, contributes: kit.read.contributes })));
   const sound = sets(payers, contracts);
   check(
     'two kits from the repository, read from their zips, contribute no name in common',
     sound.length === 0 &&
-      payers.read.contributes.some((each) => each.kind === 'queue' && each.key === 'unassigned-claims') &&
-      payers.read.contributes.some((each) => each.kind === 'action' && each.key === 'payers.claim.pay') &&
-      contracts.read.contributes.some((each) => each.kind === 'address' && each.key === 'contract-desk'),
+      payers.read.contributes.some(
+        (each) => each.kind === 'queue' && each.key === 'unassigned-claims',
+      ) &&
+      payers.read.contributes.some(
+        (each) => each.kind === 'action' && each.key === 'payers.claim.pay',
+      ) &&
+      contracts.read.contributes.some(
+        (each) => each.kind === 'address' && each.key === 'contract-desk',
+      ),
     JSON.stringify(sound),
     false,
   );
   const sameApp = builtKit(
     kitCopy(CONTRACTS, 'same-app', (edit) => {
       edit('bundle/agentic-ui-config/app.json', '"id": "contracts"', '"id": "payers-claims"');
-      edit('bundle/OSGI-INF/contracts-demo-config.xml', '<app id="contracts"', '<app id="payers-claims"');
+      edit(
+        'bundle/OSGI-INF/contracts-demo-config.xml',
+        '<app id="contracts"',
+        '<app id="payers-claims"',
+      );
     }),
     'same-app',
   );
@@ -372,12 +506,20 @@ function kitsFromZips() {
 
 // ── The command's refusals ────────────────────────────────────────────────────────────────────
 function command(args) {
-  return spawnSync(process.execPath, [SCRIPT, ...args], { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return spawnSync(process.execPath, [SCRIPT, ...args], {
+    cwd: REPO,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
 }
 
 function theCommand() {
   const usage = command([]);
-  check('refused: no --out and no --since, exit 2', usage.status === 2 && /usage:/.test(usage.stderr), usage.stderr);
+  check(
+    'refused: no --out and no --since, exit 2',
+    usage.status === 2 && /usage:/.test(usage.stderr),
+    usage.stderr,
+  );
 
   const earlier = join(scratch, 'earlier');
   mkdirSync(earlier);
@@ -394,7 +536,13 @@ function theCommand() {
   const file = join(scratch, 'a-file');
   writeFileSync(file, 'x');
   const onFile = command(['--out', file, '--since', 'HEAD']);
-  check('refused: an output that is a file, exit 2', onFile.status === 2 && /never overwrites/.test(onFile.stderr) && readFileSync(file, 'utf8') === 'x', onFile.stderr);
+  check(
+    'refused: an output that is a file, exit 2',
+    onFile.status === 2 &&
+      /never overwrites/.test(onFile.stderr) &&
+      readFileSync(file, 'utf8') === 'x',
+    onFile.stderr,
+  );
 
   const asKit = join(PACKAGES, `release-candidate-selftest-${process.pid}`);
   const underPackages = command(['--out', asKit, '--since', 'HEAD']);
@@ -404,18 +552,29 @@ function theCommand() {
     underPackages.stderr,
   );
   const fresh = join(scratch, 'fresh');
-  const noCommit = command(['--out', fresh, '--since', 'refs/heads/no-such-branch-for-the-selftest']);
+  const noCommit = command([
+    '--out',
+    fresh,
+    '--since',
+    'refs/heads/no-such-branch-for-the-selftest',
+  ]);
   check(
     'refused: a --since that is no commit, exit 2, nothing made',
     noCommit.status === 2 && /is not a commit/.test(noCommit.stderr) && !existsSync(fresh),
     noCommit.stderr,
   );
   const twice = command(['--out', fresh, '--out', join(scratch, 'other'), '--since', 'HEAD']);
-  check('refused: --out given twice, exit 2', twice.status === 2 && /usage:/.test(twice.stderr) && !existsSync(fresh), twice.stderr);
+  check(
+    'refused: --out given twice, exit 2',
+    twice.status === 2 && /usage:/.test(twice.stderr) && !existsSync(fresh),
+    twice.stderr,
+  );
   const badVersion = command(['--out', fresh, '--since', 'HEAD', '--version', '../2026']);
   check(
     'refused: a version a candidate cannot carry, exit 2, nothing made',
-    badVersion.status === 2 && /is not a version a release candidate can carry/.test(badVersion.stderr) && !existsSync(fresh),
+    badVersion.status === 2 &&
+      /is not a version a release candidate can carry/.test(badVersion.stderr) &&
+      !existsSync(fresh),
     badVersion.stderr,
   );
 }
@@ -425,14 +584,20 @@ async function theDemoListing() {
   const kits = readdirSync(PACKAGES)
     .sort()
     .map((name) => ({ name, version: 'x', directory: join(PACKAGES, name) }));
-  const { problems, listing } = await demoSteps({ repo: REPO, stepsDir: join(REPO, 'scripts', 'beta-harness', 'steps'), kits });
+  const { problems, listing } = await demoSteps({
+    repo: REPO,
+    stepsDir: join(REPO, 'scripts', 'beta-harness', 'steps'),
+    kits,
+  });
   const of = (kit) => listing.find((each) => each.kit === kit)?.files ?? [];
-  const demo = of('payers-claims-demo').find((each) => each.file.endsWith('/payers-claims-demo.mjs'));
+  const demo = of('payers-claims-demo').find((each) =>
+    each.file.endsWith('/payers-claims-demo.mjs'),
+  );
   check(
     "the repository's kit demos listed, with their people, seeds and environment",
     problems.length === 0 &&
       of('payers-claims-demo').length === 3 &&
-      of('brand-assets-demo').length === 2 &&
+      of('brand-assets-demo').length === 3 &&
       demo?.runAs.users.includes('dana.lee') &&
       demo?.signsInAs.length === 1 &&
       demo?.environment.includes('PAYERS_DEMO_PASSWORD') &&
@@ -469,7 +634,10 @@ async function theDemoListing() {
   mkdirSync(steps);
   const kitPath = "join('', 'business-apps', 'packages', 'payers-claims-demo')";
   const write = (name, body) =>
-    writeFileSync(join(steps, name), `import { join } from 'node:path';\nconst KIT = ${kitPath};\n${body}\nexport default async function run(page, h) { await h.step('One'); }\n`);
+    writeFileSync(
+      join(steps, name),
+      `import { join } from 'node:path';\nconst KIT = ${kitPath};\n${body}\nexport default async function run(page, h) { await h.step('One'); }\n`,
+    );
   write('no-declaration.mjs', '');
   const undeclared = await demoSteps({ repo: REPO, stepsDir: steps, kits });
   check(
@@ -496,7 +664,8 @@ async function theDemoListing() {
   const noSeed = await demoSteps({ repo: REPO, stepsDir: steps, kits });
   check(
     'refused: a steps file that needs a seed its kit does not have',
-    noSeed.problems.length === 1 && /needs the seed demo\/no-such-seed\.mjs/.test(noSeed.problems[0]),
+    noSeed.problems.length === 1 &&
+      /needs the seed demo\/no-such-seed\.mjs/.test(noSeed.problems[0]),
     noSeed.problems.join('; '),
   );
 }

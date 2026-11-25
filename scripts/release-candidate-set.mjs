@@ -57,11 +57,20 @@ function javaCompare(a, b) {
  * `@VERSION@`, is to Nuxeo.
  */
 export function nuxeoVersion(text) {
-  const version = { major: 0, minor: 0, patch: 0, classifier: null, snapshot: false, special: false };
+  const version = {
+    major: 0,
+    minor: 0,
+    patch: 0,
+    classifier: null,
+    snapshot: false,
+    special: false,
+  };
   const found = VERSION_PATTERN.exec(text);
   if (found === null) return version;
   const numbers = found[0].match(/[0-9]+/g);
-  [version.major = 0, version.minor = 0, version.patch = 0] = numbers.map((n) => Number.parseInt(n, 10));
+  [version.major = 0, version.minor = 0, version.patch = 0] = numbers.map((n) =>
+    Number.parseInt(n, 10),
+  );
   let rest = text.substring(found[0].length);
   if (rest.includes('-SNAPSHOT')) {
     version.snapshot = true;
@@ -224,17 +233,75 @@ const REGISTRATIONS = [
   ['org.nuxeo.ecm.core.schema.TypeService', 'doctype', [], 'doctype', 'name', 'document type'],
   ['org.nuxeo.ecm.core.schema.TypeService', 'doctype', [], 'facet', 'name', 'facet'],
   ['org.nuxeo.ecm.core.schema.TypeService', 'schema', [], 'schema', 'name', 'schema'],
-  ['org.nuxeo.ecm.core.lifecycle.LifeCycleService', 'lifecycle', [], 'lifecycle', 'name', 'lifecycle'],
-  ['org.nuxeo.ecm.core.lifecycle.LifeCycleService', 'types', ['types'], 'type', 'name', "document type's lifecycle"],
-  ['org.nuxeo.ecm.platform.query.api.PageProviderService', 'providers', [], 'coreQueryPageProvider', 'name', 'page provider'],
-  ['org.nuxeo.ecm.platform.query.api.PageProviderService', 'providers', [], 'genericPageProvider', 'name', 'page provider'],
-  ['org.nuxeo.ecm.core.operation.OperationServiceComponent', 'chains', [], 'chain', 'id', 'automation chain'],
-  ['org.nuxeo.automation.scripting.internals.AutomationScriptingComponent', 'operation', [], 'scriptedOperation', 'id', 'automation operation'],
+  [
+    'org.nuxeo.ecm.core.lifecycle.LifeCycleService',
+    'lifecycle',
+    [],
+    'lifecycle',
+    'name',
+    'lifecycle',
+  ],
+  [
+    'org.nuxeo.ecm.core.lifecycle.LifeCycleService',
+    'types',
+    ['types'],
+    'type',
+    'name',
+    "document type's lifecycle",
+  ],
+  [
+    'org.nuxeo.ecm.platform.query.api.PageProviderService',
+    'providers',
+    [],
+    'coreQueryPageProvider',
+    'name',
+    'page provider',
+  ],
+  [
+    'org.nuxeo.ecm.platform.query.api.PageProviderService',
+    'providers',
+    [],
+    'genericPageProvider',
+    'name',
+    'page provider',
+  ],
+  [
+    'org.nuxeo.ecm.core.operation.OperationServiceComponent',
+    'chains',
+    [],
+    'chain',
+    'id',
+    'automation chain',
+  ],
+  [
+    'org.nuxeo.automation.scripting.internals.AutomationScriptingComponent',
+    'operation',
+    [],
+    'scriptedOperation',
+    'id',
+    'automation operation',
+  ],
   ['org.nuxeo.ecm.directory.GenericDirectory', 'directories', [], 'directory', 'name', 'directory'],
   ['org.nuxeo.ecm.platform.actions.ActionService', 'filters', [], 'filter', 'id', 'action filter'],
   ['org.nuxeo.ecm.platform.actions.ActionService', 'actions', [], 'action', 'id', 'action'],
-  ['org.nuxeo.ecm.platform.routing.service', 'routeModelImporter', [], 'template-resource', 'id', 'workflow'],
-  ['org.nuxeo.ecm.core.event.EventServiceComponent', 'listener', [], 'listener', 'name', 'event listener'],
+  [
+    'org.nuxeo.ecm.platform.routing.service',
+    'routeModelImporter',
+    [],
+    'template-resource',
+    'id',
+    'workflow',
+  ],
+  [
+    'org.nuxeo.ecm.core.event.EventServiceComponent',
+    'listener',
+    [],
+    'listener',
+    'name',
+    'event listener',
+  ],
+  // nuxeo-agentic-assets: one policy per document type, and a later one replaces it whole.
+  ['org.nuxeo.agentic.assets.rights', 'policies', [], 'policy', 'type', 'rights policy'],
 ];
 
 /**
@@ -262,8 +329,11 @@ export function registrationsOf(componentXml) {
       extension = { target: attributes.target ?? '', point: attributes.point ?? '', depth: 2 };
       const known =
         KEYLESS.has(`${extension.target}#${extension.point}`) ||
-        (extension.target === 'org.nuxeo.agentic.ui.config' && extension.point === 'configuration') ||
-        REGISTRATIONS.some(([target, point]) => target === extension.target && point === extension.point);
+        (extension.target === 'org.nuxeo.agentic.ui.config' &&
+          extension.point === 'configuration') ||
+        REGISTRATIONS.some(
+          ([target, point]) => target === extension.target && point === extension.point,
+        );
       if (!known) unknown.add(`${extension.target}#${extension.point}`);
       continue;
     }
@@ -297,7 +367,13 @@ export function registrationsOf(componentXml) {
  * is trimmed, as Nuxeo's XML reader trims it.
  */
 export function readDescriptor(xml) {
-  const descriptor = { name: null, version: null, dependencies: [], conflicts: [], targetPlatform: null };
+  const descriptor = {
+    name: null,
+    version: null,
+    dependencies: [],
+    conflicts: [],
+    targetPlatform: null,
+  };
   const root = /<package(?=[ \t\r\n/>])((?:[^>"']|"[^"]*"|'[^']*')*)>/.exec(xml);
   if (root !== null) {
     const attributes = attributesOf(root[1]);
@@ -306,16 +382,24 @@ export function readDescriptor(xml) {
   }
   const texts = (list) =>
     [
-      ...(new RegExp(`<${list}(?=[ \\t\\r\\n>])[^>]*>([\\s\\S]*?)</${list}[ \\t\\r\\n]*>`).exec(xml)?.[1] ?? '').matchAll(
-        /<package(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/package[ \t\r\n]*>/g,
-      ),
+      ...(
+        new RegExp(`<${list}(?=[ \\t\\r\\n>])[^>]*>([\\s\\S]*?)</${list}[ \\t\\r\\n]*>`).exec(
+          xml,
+        )?.[1] ?? ''
+      ).matchAll(/<package(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/package[ \t\r\n]*>/g),
     ].map(([, text]) => text.trim());
   descriptor.dependencies = texts('dependencies');
   descriptor.conflicts = texts('conflicts');
-  const target = /<target-platform(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/target-platform[ \t\r\n]*>/.exec(xml);
+  const target = /<target-platform(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/target-platform[ \t\r\n]*>/.exec(
+    xml,
+  );
   if (target !== null) {
-    const name = /<name(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/name[ \t\r\n]*>/.exec(target[1])?.[1]?.trim();
-    const version = /<version(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/version[ \t\r\n]*>/.exec(target[1])?.[1]?.trim();
+    const name = /<name(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/name[ \t\r\n]*>/
+      .exec(target[1])?.[1]
+      ?.trim();
+    const version = /<version(?=[ \t\r\n>])[^>]*>([\s\S]*?)<\/version[ \t\r\n]*>/
+      .exec(target[1])?.[1]
+      ?.trim();
     descriptor.targetPlatform = { name: name ?? null, version: version ?? null };
   }
   return descriptor;
@@ -459,13 +543,18 @@ export function readKit(zip, scratch) {
   const root = unpack(zip, join(scratch, 'zip'));
   const descriptor = descriptorOf(readFileSync(join(root, 'package.xml'), 'utf8'));
   const bundles = join(root, 'install', 'bundles');
-  const jars = existsSync(bundles) ? readdirSync(bundles).filter((name) => name.endsWith('.jar')) : [];
+  const jars = existsSync(bundles)
+    ? readdirSync(bundles).filter((name) => name.endsWith('.jar'))
+    : [];
   if (jars.length !== 1)
     throw new Error(`${zip} carries ${jars.length} bundles in install/bundles/, and a kit is one.`);
   const bundle = unpack(join(bundles, jars[0]), join(scratch, 'bundle'));
   const contributes = [{ kind: 'package', key: descriptor.name }];
   const unknown = [];
-  const manifest = readFileSync(join(bundle, 'META-INF', 'MANIFEST.MF'), 'utf8').replace(/^\uFEFF/, '');
+  const manifest = readFileSync(join(bundle, 'META-INF', 'MANIFEST.MF'), 'utf8').replace(
+    /^\uFEFF/,
+    '',
+  );
   for (const component of componentPathsOf(manifest)) {
     const read = registrationsOf(componentXmlOf(readFileSync(join(bundle, component), 'utf8')));
     contributes.push(...read.registrations);
@@ -480,7 +569,8 @@ export function readKit(zip, scratch) {
   const queues = join(config, 'queues');
   if (existsSync(queues))
     for (const file of readdirSync(queues).sort())
-      if (file.endsWith('.json')) contributes.push({ kind: 'queue', key: file.slice(0, -'.json'.length) });
+      if (file.endsWith('.json'))
+        contributes.push({ kind: 'queue', key: file.slice(0, -'.json'.length) });
   for (const action of jsonIn(join(config, 'actions.json'))?.actions ?? [])
     if (typeof action?.id === 'string') contributes.push({ kind: 'action', key: action.id });
   return {

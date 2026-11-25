@@ -35,8 +35,8 @@ export function kitStepsFiles(stepsDir, kits) {
   for (const name of readdirSync(stepsDir).sort()) {
     if (!name.endsWith('.mjs') || name.endsWith('.selftest.mjs') || name.startsWith('_')) continue;
     const source = readFileSync(join(stepsDir, name), 'utf8');
-    const named = [...new Set([...source.matchAll(NAMED_KIT)].map(([, kit]) => kit))].filter((kit) =>
-      kits.includes(kit),
+    const named = [...new Set([...source.matchAll(NAMED_KIT)].map(([, kit]) => kit))].filter(
+      (kit) => kits.includes(kit),
     );
     if (named.length > 0) files.push({ file: join(stepsDir, name), source, kits: named });
   }
@@ -104,14 +104,22 @@ export function readSource(source, parse) {
         credentials = true;
     }
     if (node.type === 'MemberExpression' && isProcessEnv(node.object)) {
-      if (node.computed && node.property.type === 'Literal' && typeof node.property.value === 'string')
+      if (
+        node.computed &&
+        node.property.type === 'Literal' &&
+        typeof node.property.value === 'string'
+      )
         environment.add(node.property.value);
       else if (!node.computed && node.property.type === 'Identifier')
         environment.add(node.property.name);
     }
   }
   steps.sort((a, b) => a.at - b.at);
-  return { steps: steps.map((step) => step.label), environment: [...environment].sort(), credentials };
+  return {
+    steps: steps.map((step) => step.label),
+    environment: [...environment].sort(),
+    credentials,
+  };
 }
 
 /** Why a declared `serverRun` cannot be listed, or `null`. */
@@ -127,7 +135,10 @@ function declarationProblem(serverRun, named) {
     !serverRun.runAs.users.every((user) => typeof user === 'string' && user !== '')
   )
     return 'declares no runAs: { users, who }';
-  if (!Array.isArray(serverRun.signsInAs) || !serverRun.signsInAs.every((user) => typeof user === 'string' && user !== ''))
+  if (
+    !Array.isArray(serverRun.signsInAs) ||
+    !serverRun.signsInAs.every((user) => typeof user === 'string' && user !== '')
+  )
     return 'declares no list of users it signs in as';
   if (!Array.isArray(serverRun.needs)) return 'declares no list of what it needs';
   return null;
@@ -175,10 +186,15 @@ export async function demoSteps({ repo, stepsDir, kits }) {
     for (const seed of serverRun.seeds) {
       const path = join(kit.directory, seed);
       if (!existsSync(path)) {
-        problems.push(`${shown(file)} needs the seed ${seed}, and ${shown(kit.directory)} has none.`);
+        problems.push(
+          `${shown(file)} needs the seed ${seed}, and ${shown(kit.directory)} has none.`,
+        );
         continue;
       }
-      seeds.push({ file: shown(path), environment: readSource(readFileSync(path, 'utf8'), parse).environment });
+      seeds.push({
+        file: shown(path),
+        environment: readSource(readFileSync(path, 'utf8'), parse).environment,
+      });
     }
     const environment = new Set(read.environment);
     if (read.credentials) for (const name of ['NUXEO_USER', 'NUXEO_PASS']) environment.add(name);
@@ -214,7 +230,10 @@ export function demoStepsMarkdown(listing) {
   for (const kit of listing) {
     lines.push(`## ${kit.name} ${kit.version}`, '');
     if (kit.files.length === 0) {
-      lines.push(`No steps file names this kit, so a server run executes no demo steps for it.`, '');
+      lines.push(
+        `No steps file names this kit, so a server run executes no demo steps for it.`,
+        '',
+      );
       continue;
     }
     for (const each of kit.files) {
@@ -225,7 +244,10 @@ export function demoStepsMarkdown(listing) {
           each.seeds.length === 0
             ? 'none'
             : each.seeds
-                .map((seed) => `\`node ${seed.file}\`, which reads ${seed.environment.join(', ') || 'no environment'}`)
+                .map(
+                  (seed) =>
+                    `\`node ${seed.file}\`, which reads ${seed.environment.join(', ') || 'no environment'}`,
+                )
                 .join('; ')
         }`,
       );

@@ -51,7 +51,7 @@
  * cover"); the layouts come from `config:dev`, not the package.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -60,6 +60,26 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'brand-assets-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { ASSETS, MARKER, WORKSPACE } = await import(join(KIT, 'demo', 'data.mjs'));
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. The kit has no
+ * demo people of its own, so no user is named.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: {
+    users: [],
+    who: "anyone who may read the kit's workspace; an administrator is refused as anyone else is",
+  },
+  signsInAs: [],
+  needs: [
+    'nuxeo-agentic-assets and the kit 0.2.0 or later installed, and the kit seeded on the day of the demo',
+    "each of the three assets' Medium, FullHD and OriginalJpeg views made",
+    "the dev server with `npm run config:dev` serving the kit's asset layout",
+  ],
+};
 
 const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
 /** The assets the demo opens: one with no Print channel, one whose rights have ended, one cleared. */
@@ -121,7 +141,9 @@ function decisionFor(rights, kind, name) {
 export default async function run(page, h) {
   // ── Preconditions ──────────────────────────────────────────────────────────────────────────
   await h.step('Preconditions: the add-on and the kit installed, seeded, and the layout served');
-  const { username, password } = requireStepCredentials('read the seeded assets and call the REST API');
+  const { username, password } = requireStepCredentials(
+    'read the seeded assets and call the REST API',
+  );
   const basic = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 
   /** A GET of Nuxeo itself, as any client of the REST API sends one: its status, type and size. */
@@ -169,7 +191,8 @@ export default async function run(page, h) {
   const seeded = new Map();
   for (const asset of [NO_PRINT, ENDED, CLEARED]) {
     const doc = await readAsset(asset);
-    if (doc?.type === 'AcmeAsset' && doc.properties?.['dc:source'] === MARKER) seeded.set(asset.id, doc);
+    if (doc?.type === 'AcmeAsset' && doc.properties?.['dc:source'] === MARKER)
+      seeded.set(asset.id, doc);
   }
   h.requirePrecondition(
     "the seeded assets are there, each carrying the seed's marker",
@@ -211,8 +234,12 @@ export default async function run(page, h) {
   );
 
   const layoutPath = 'layouts/AcmeAsset/view.layout.json';
-  const servedLayout = await page.request.get(`${h.baseUrl}/agentic-ui-config/${layoutPath}`).catch(unread);
-  const { content, source } = unwrap(servedLayout?.ok() ? await servedLayout.json().catch(unread) : null);
+  const servedLayout = await page.request
+    .get(`${h.baseUrl}/agentic-ui-config/${layoutPath}`)
+    .catch(unread);
+  const { content, source } = unwrap(
+    servedLayout?.ok() ? await servedLayout.json().catch(unread) : null,
+  );
   h.requirePrecondition(
     "the dev server serves the kit's asset layout",
     sameJson(content, kitFile(layoutPath)) &&
@@ -232,7 +259,8 @@ export default async function run(page, h) {
       .evaluate(() => {
         const refusal = document.querySelector('lib-record-picture-views nxs-banner[data-refusal]');
         return {
-          view: document.querySelector('.record-picture__figure')?.getAttribute('data-view') ?? null,
+          view:
+            document.querySelector('.record-picture__figure')?.getAttribute('data-view') ?? null,
           src: document.querySelector('.record-picture__image')?.getAttribute('src') ?? null,
           refusal: refusal?.getAttribute('data-refusal') ?? null,
           text: refusal?.querySelector('.nxs-banner__message')?.textContent?.trim() ?? null,
@@ -256,7 +284,9 @@ export default async function run(page, h) {
       )
       .catch(deferred);
     const answered = page
-      .waitForResponse((response) => response.url().includes(viewPath(asset, title)), { timeout: 30_000 })
+      .waitForResponse((response) => response.url().includes(viewPath(asset, title)), {
+        timeout: 30_000,
+      })
       .catch(unread);
     await page
       .locator(`.record-picture__view[data-view="${title}"]`)
@@ -323,7 +353,10 @@ export default async function run(page, h) {
   const noPrintUid = seeded.get(NO_PRINT.id).uid;
   const refusals = [
     ['the print view through @blob', viewPath(NO_PRINT, PRINT)],
-    [`the print rendition through @rendition/${PRINT}`, `/api/v1/id/${noPrintUid}/@rendition/${PRINT}`],
+    [
+      `the print rendition through @rendition/${PRINT}`,
+      `/api/v1/id/${noPrintUid}/@rendition/${PRINT}`,
+    ],
     [
       'the same file through /nxfile/',
       `/nxfile/default/${noPrintUid}/picture:views/${placeOf(NO_PRINT, PRINT)}/content`,
@@ -333,7 +366,11 @@ export default async function run(page, h) {
   ];
   for (const [what, path] of refusals) {
     const answer = await direct(path);
-    h.check(`${NO_PRINT.id}, ${what}: 403`, answer?.status === 403, `GET ${path}: ${answer?.status ?? 'no answer'}`);
+    h.check(
+      `${NO_PRINT.id}, ${what}: 403`,
+      answer?.status === 403,
+      `GET ${path}: ${answer?.status ?? 'no answer'}`,
+    );
   }
   const endedUid = seeded.get(ENDED.id).uid;
   for (const [what, path] of [
@@ -358,7 +395,8 @@ export default async function run(page, h) {
       reason: 'channel-not-covered',
       channel: 'Print',
     }) &&
-      decisionFor(endedFresh?.contextParameters?.assetRights, 'view', WEB)?.reason === 'rights-ended',
+      decisionFor(endedFresh?.contextParameters?.assetRights, 'view', WEB)?.reason ===
+        'rights-ended',
     JSON.stringify([
       decisionFor(fresh?.contextParameters?.assetRights, 'view', PRINT),
       decisionFor(endedFresh?.contextParameters?.assetRights, 'view', WEB),
@@ -374,7 +412,11 @@ export default async function run(page, h) {
   await h.step('3. What the rights cover is still served');
   const clearedUid = seeded.get(CLEARED.id).uid;
   const served = [
-    [`${CLEARED.id}, cleared on every channel, its print view`, viewPath(CLEARED, PRINT), 'image/jpeg'],
+    [
+      `${CLEARED.id}, cleared on every channel, its print view`,
+      viewPath(CLEARED, PRINT),
+      'image/jpeg',
+    ],
     [
       `${CLEARED.id}, its print rendition through @rendition/${PRINT}`,
       `/api/v1/id/${clearedUid}/@rendition/${PRINT}`,
@@ -383,7 +425,11 @@ export default async function run(page, h) {
     [`${CLEARED.id}, its original`, `/api/v1/id/${clearedUid}/@blob/file:content`, 'image/'],
     [`${NO_PRINT.id}, its web view, covered by E-commerce`, viewPath(NO_PRINT, WEB), 'image/jpeg'],
     [`${NO_PRINT.id}, its preview, ${PREVIEW}`, viewPath(NO_PRINT, PREVIEW), 'image/jpeg'],
-    [`${ENDED.id}, whose rights have ended, its preview, ${PREVIEW}`, viewPath(ENDED, PREVIEW), 'image/jpeg'],
+    [
+      `${ENDED.id}, whose rights have ended, its preview, ${PREVIEW}`,
+      viewPath(ENDED, PREVIEW),
+      'image/jpeg',
+    ],
   ];
   for (const [what, path, kind] of served) {
     const answer = await direct(path);
@@ -416,13 +462,16 @@ export default async function run(page, h) {
 
   // ── Health ─────────────────────────────────────────────────────────────────────────────────
   await h.step('Health');
-  h.expectNoConsoleErrors('no unexpected browser console errors', [...ENVIRONMENTAL_ERRORS, refusedInApp]);
+  h.expectNoConsoleErrors('no unexpected browser console errors', [
+    ...ENVIRONMENTAL_ERRORS,
+    refusedInApp,
+  ]);
   h.note(
     'the add-on refuses at the platform download endpoints this run calls; the server paths it does ' +
       'not cover yet are listed in nuxeo-agentic-assets/README.md and are for its security review',
   );
   h.note(
-    "the asset layout comes from config:dev under the dev server, not from the package: the app " +
+    'the asset layout comes from config:dev under the dev server, not from the package: the app ' +
       'registry serves it from a package',
   );
 }

@@ -66,7 +66,8 @@ const { CASES, CLAIMS, MEMBERS, USERS } = await import(join(KIT, 'demo', 'data.m
 const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
 
 /** A demo adjuster and nothing else, as the run's own user must be: step 1 signs in as them. */
-const adjustersOnly = (user) => JSON.stringify(user?.groups) === JSON.stringify(['claims-adjusters']);
+const adjustersOnly = (user) =>
+  JSON.stringify(user?.groups) === JSON.stringify(['claims-adjusters']);
 /** The member services person step 4 signs the browser in as. */
 const SERVICES = USERS.find((user) => user.groups.includes('member-services'));
 
