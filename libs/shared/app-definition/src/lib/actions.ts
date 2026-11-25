@@ -1,11 +1,14 @@
 /**
  * The validator of `actions.json` (docs/business-apps/app-definition-v2.md, section 5): lifecycle
- * buttons, and buttons that run an Automation operation with parameters.
+ * buttons, and buttons that run an Automation operation with parameters, some of them entered in a
+ * small form.
  *
- * An operation must be on the deployment's allow-list (plan decision 3, still open), which the
- * caller passes in. With none, every operation is refused: a package cannot reach a server
- * operation that nobody allowed. Showing or hiding a button is never the control: Nuxeo's
- * permissions and the lifecycle still gate what runs.
+ * An operation must be on the deployment's allow-list (plan decision 3, open, built on its
+ * recommendation: a per-deployment allow-list), which the caller passes in. With none, every
+ * operation is refused: a package cannot reach a server operation that nobody allowed. On a server
+ * the allow-list is the deployment's contribution to `org.nuxeo.agentic.ui.operations`, and the
+ * app registry serves only the actions it allows. Showing or hiding a button is never the control:
+ * Nuxeo's permissions, the lifecycle and the server's allow-list still gate what runs.
  */
 import {
   createChecker,
@@ -18,7 +21,8 @@ import {
   type Checker,
   type Finding,
 } from './checker';
-import { isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
+import { validateTaskForm } from './layout-v2';
+import { isFieldReference, isRecord, PACKAGED_REGISTRIES, type Registries } from './registries';
 
 const FILE_KEYS = ['$schema', 'version', 'actions'];
 const ACTION_KEYS = [
@@ -29,13 +33,18 @@ const ACTION_KEYS = [
   'order',
   'on',
   'visibleWhen',
+  'enabledWhen',
   'transition',
   'operation',
   'parameters',
+  'form',
   'confirm',
   'success',
   'refresh',
 ];
+
+/** A field of an action's form, as a parameter names it: `var:<name>`, what the person enters. */
+const FORM_FIELD = /^var:([A-Za-z][A-Za-z0-9_]{0,63})$/;
 const MESSAGE_KEYS = ['label', 'labelKey'];
 
 /** The keys each part of `actions.json` may hold, which its JSON Schema must list too. */
@@ -119,6 +128,7 @@ function action(c: Checker, item: unknown, path: string, operations: ReadonlySet
     c.add(join(path, 'order'), 'structure', 'order is a whole number');
   const on = placements(c, item, path);
   if ('visibleWhen' in item) c.rule(item['visibleWhen'], join(path, 'visibleWhen'));
+  if ('enabledWhen' in item) c.rule(item['enabledWhen'], join(path, 'enabledWhen'));
 
   const hasTransition = 'transition' in item;
   const hasOperation = 'operation' in item;
@@ -145,11 +155,22 @@ function action(c: Checker, item: unknown, path: string, operations: ReadonlySet
         `the operation "${operation}" is not on this deployment's allow-list`,
       );
   }
+  const fields = 'form' in item ? form(c, item['form'], join(path, 'form'), hasOperation, on) : [];
+  const sent = new Set<string>();
   if ('parameters' in item) {
     if (!hasOperation)
       c.add(join(path, 'parameters'), 'structure', 'parameters belong to an operation');
-    else parameters(c, item['parameters'], join(path, 'parameters'), on);
+    else parameters(c, item['parameters'], join(path, 'parameters'), on, fields, sent);
   }
+  // A field the form asks for and no parameter sends would be entered for nothing.
+  fields.forEach((field, index) => {
+    if (field !== null && !sent.has(field))
+      c.add(
+        join(join(join(path, 'form'), index), 'field'),
+        'structure',
+        `no parameter sends "${field}": give one { "field": "${field}" }`,
+      );
+  });
   for (const key of ['confirm', 'success']) {
     if (key in item) message(c, item[key], join(path, key));
   }
@@ -176,8 +197,23 @@ function placements(c: Checker, item: Record<string, unknown>, path: string): Pl
   return seen;
 }
 
-/** An operation's parameters, name to value. One record's fields cannot feed a bulk action. */
-function parameters(c: Checker, value: unknown, path: string, on: readonly Placement[]): void {
+/**
+ * An operation's parameters, name to value: a literal, a field of the record, or a field of the
+ * action's form, `{ "field": "var:<name>" }`, which the person enters. One record's fields cannot
+ * feed a bulk action. A computation is refused: it is worked out in the browser, and the server,
+ * which builds the parameters itself, does not run it.
+ *
+ * @param fields the form's fields, `var:<name>`, by place; `null` for one that is not one
+ * @param sent filled with each form field a parameter sends
+ */
+function parameters(
+  c: Checker,
+  value: unknown,
+  path: string,
+  on: readonly Placement[],
+  fields: readonly (string | null)[],
+  sent: Set<string>,
+): void {
   if (!isRecord(value)) {
     c.add(path, 'structure', 'parameters must be an object');
     return;
@@ -191,8 +227,67 @@ function parameters(c: Checker, value: unknown, path: string, on: readonly Place
         'structure',
         'a bulk action runs on many records at once, so its parameters are literals',
       );
+    else if (isFieldReference(item) && item.field.startsWith('var:')) {
+      if (!fields.includes(item.field))
+        c.add(
+          join(at, 'field'),
+          'structure',
+          `"${item.field}" is a field of the action's form, and its form has no such field`,
+        );
+      else sent.add(item.field);
+    } else if (isRecord(item) && 'computed' in item)
+      c.add(
+        at,
+        'structure',
+        'a computation is worked out in the browser, which the server does not trust: a parameter is a literal, a field of the record or a field of the form',
+      );
     else c.value(item, at);
   }
+}
+
+/**
+ * The action's form: the fields the person fills in before it runs, each `var:<name>`, drawn by
+ * the version 2 form engine as a task form's are, with its widgets, rules and checks. An action on
+ * one record only: a bulk action's parameters are literals. Its findings are a task form's, at
+ * their place in the action. Answers each field's `var:<name>`, or `null` where it has none.
+ */
+function form(
+  c: Checker,
+  value: unknown,
+  path: string,
+  hasOperation: boolean,
+  on: readonly Placement[],
+): (string | null)[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    c.add(path, 'structure', 'a form is a list of the fields it asks for');
+    return [];
+  }
+  if (!hasOperation) c.add(path, 'structure', 'a form gives values to an operation');
+  if (on.includes('bulk'))
+    c.add(path, 'structure', 'a bulk action runs on many records at once, so it has no form');
+  const card = 'cards[0].fields';
+  for (const finding of validateTaskForm(
+    { version: 2, cards: [{ id: 'form', fields: value }] },
+    { registries: c.registries },
+  ))
+    c.add(
+      finding.path.startsWith(card) ? `${path}${finding.path.slice(card.length)}` : path,
+      finding.kind,
+      finding.message,
+    );
+  return value.map((entry, index) => {
+    const field = isRecord(entry) ? entry['field'] : entry;
+    const named = typeof field === 'string' ? FORM_FIELD.exec(field) : null;
+    if (!named) {
+      c.add(
+        isRecord(entry) ? join(join(path, index), 'field') : join(path, index),
+        'structure',
+        `an action's form asks for values: each field is "var:<name>", a letter then letters, digits or "_"`,
+      );
+      return null;
+    }
+    return field as string;
+  });
 }
 
 /** A confirmation or a success message: a text, or a key to look it up by. */

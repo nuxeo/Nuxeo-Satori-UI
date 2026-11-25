@@ -36,6 +36,20 @@
  * 3. Computes that workspace's project graph with nx, and checks nx sees exactly the probes.
  * 4. Lints the control files with the real `@nx/enforce-module-boundaries` and those options.
  *
+ * Two probes stand for something other than a tier. `probe-publishable` is the published
+ * package, `libs/platform`. `probe-spike` is decision 5's spike, `tools/plugin-spike`, which must be
+ * reachable from no app, library or package, and must reach nothing itself: no rule lists
+ * `type:spike`, and no rule has it as its source, which Nx reads as "may depend on nothing". That
+ * probe stands for a project that exists, so before anything else the gate checks the project
+ * still carries exactly the probe's tags (`realProjectMismatches`), and asks Nx for every target it
+ * resolves for the project, the ones its plugins infer included, and fails on one that could build
+ * it (`realProjectTargetProblems`).
+ *
+ * The rule is applied to the file types `eslint.config.mjs` gives it, which do not include `.mjs`.
+ * The spike's own `.mjs` sources are held to importing nothing of the workspace by
+ * `checkPluginSpikeIsolated` in `scripts/review-guardrails.mjs`, which also fails on any file
+ * outside the spike, `.mjs` included, that names or links into it.
+ *
  * Every forbidden import must be reported by that rule, and every allowed one must stay quiet.
  * The negative controls are what make a skipped or permissive rule fail here: a rule that reports
  * nothing passes every positive control and fails every negative one.
@@ -75,6 +89,39 @@ export const PROBES = [
     application: true,
   },
   { name: 'probe-app', root: 'apps/probe-app', tags: ['scope:app', 'type:app'], application: true },
+  // The published package, `libs/platform`: what a customer installs.
+  {
+    name: 'probe-publishable',
+    root: 'libs/probe-publishable',
+    tags: ['scope:shared', 'type:publishable'],
+  },
+  // Decision 5's spike (docs/business-apps/spikes/plugins-decision-5.md), a loader for code fetched
+  // at run time that must stay out of every app and package. Unlike the tiers' probes, this one
+  // stands for a project that exists today, so `realProject` names it and the gate refuses to run
+  // unless that project carries exactly these tags: a probe with the right tags proves nothing
+  // about a real project tagged otherwise.
+  {
+    name: 'probe-spike',
+    root: 'tools/probe-spike',
+    tags: ['type:spike'],
+    realProject: 'tools/plugin-spike/project.json',
+    // Every target Nx resolves for the real project, inferred ones included, by name and by what
+    // it runs: tests, lint and the type check, and nothing that builds, serves or publishes it. A
+    // target of an allowed name running anything else fails as well.
+    allowedTargets: [
+      { name: /^test$/, executor: '@nx/vitest:test' },
+      { name: /^lint$/, executor: '@nx/eslint:lint' },
+      { name: /^typecheck$/, executor: 'nx:run-commands', command: /^tsc -p \S+ --noEmit$/ },
+      { name: /^eslint:lint$/, executor: 'nx:run-commands', command: /^eslint \.$/ },
+      { name: /^vitest:test$/, executor: 'nx:run-commands', command: /^vitest run$/ },
+      { name: /^test-ci$/, executor: 'nx:noop' },
+      {
+        name: /^test-ci--.+$/,
+        executor: 'nx:run-commands',
+        command: /^vitest run \S+ --coverage\.reportsDirectory=\S+$/,
+      },
+    ],
+  },
 ];
 
 /** A file in `from` importing `to`, and whether the rule must report it. */
@@ -151,7 +198,91 @@ export const CONTROLS = [
     forbidden: false,
     why: "an app uses a module through the module's type tag",
   },
+  {
+    from: 'probe-publishable',
+    to: 'probe-foundation',
+    forbidden: false,
+    why: 'the published package wraps the shared libraries',
+  },
+  // Nothing reaches the spike, and the spike reaches nothing.
+  {
+    from: 'probe-app',
+    to: 'probe-spike',
+    forbidden: true,
+    why: 'an app, the shell or the template, does not load the plugin spike',
+  },
+  {
+    from: 'probe-experience',
+    to: 'probe-spike',
+    forbidden: true,
+    why: 'an experience does not load the plugin spike',
+  },
+  {
+    from: 'probe-feature',
+    to: 'probe-spike',
+    forbidden: true,
+    why: "the current app's features do not use the plugin spike",
+  },
+  {
+    from: 'probe-module-a',
+    to: 'probe-spike',
+    forbidden: true,
+    why: 'a module does not use the plugin spike',
+  },
+  {
+    from: 'probe-engine',
+    to: 'probe-spike',
+    forbidden: true,
+    why: 'an engine does not use the plugin spike',
+  },
+  {
+    from: 'probe-foundation',
+    to: 'probe-spike',
+    forbidden: true,
+    why: 'shared code does not use the plugin spike',
+  },
+  {
+    from: 'probe-publishable',
+    to: 'probe-spike',
+    forbidden: true,
+    why: 'the published package does not export the plugin spike',
+  },
+  {
+    from: 'probe-spike',
+    to: 'probe-foundation',
+    forbidden: true,
+    why: 'the plugin spike uses nothing of the workspace',
+  },
 ];
+
+/**
+ * A probe that stands for a real project is proof about it only while the two carry the same tags.
+ *
+ * @returns {string[]} One problem per probe whose real project is missing or tagged otherwise.
+ */
+export function realProjectMismatches(root = ROOT) {
+  const problems = [];
+  for (const probe of PROBES.filter((candidate) => candidate.realProject)) {
+    let project;
+    try {
+      project = JSON.parse(readFileSync(join(root, probe.realProject), 'utf8'));
+    } catch (error) {
+      problems.push(
+        `${probe.name} stands for ${probe.realProject}, which cannot be read (${error.code ?? error.message}). ` +
+          'If the project was removed, remove its probe and controls with it.',
+      );
+      continue;
+    }
+    const tags = Array.isArray(project.tags) ? [...project.tags].sort() : project.tags;
+    if (JSON.stringify(tags) !== JSON.stringify([...probe.tags].sort())) {
+      problems.push(
+        `${probe.realProject} has tags ${JSON.stringify(project.tags)}, but ${probe.name}, which ` +
+          `stands for it, has ${JSON.stringify(probe.tags)}: the controls would prove nothing about it`,
+      );
+    }
+  }
+  return problems;
+}
 
 /** Ends the run with an exit code and a reason, after the probe workspace is cleaned up. */
 class GateStop extends Error {
@@ -263,7 +394,83 @@ function writeProbeWorkspace(directory, options) {
   );
 }
 
+/**
+ * Every target Nx resolves for each real project a probe stands for that its `allowedTargets` does
+ * not allow. Read from Nx rather than `project.json`, because a plugin in `nx.json` can infer a
+ * target that no file declares.
+ *
+ * @returns {{ code: 0 | 1 | 2, problems: string[], checked: string[] }}
+ */
+function realProjectTargetProblems() {
+  const problems = [];
+  const checked = [];
+  for (const probe of PROBES.filter(
+    (candidate) => candidate.realProject && candidate.allowedTargets,
+  )) {
+    const { name } = JSON.parse(readFileSync(join(ROOT, probe.realProject), 'utf8'));
+    const shown = spawnToolSync('nx', ['show', 'project', name, '--json'], {
+      cwd: ROOT,
+      env: { ...process.env, NX_DAEMON: 'false', NX_NO_CLOUD: 'true', NX_TUI: 'false' },
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    let targets;
+    try {
+      if (shown.status !== 0) throw new Error(shown.stderr || shown.error?.message);
+      const json = shown.stdout.slice(shown.stdout.indexOf('{'), shown.stdout.lastIndexOf('}') + 1);
+      targets = Object.entries(JSON.parse(json).targets ?? {});
+    } catch (error) {
+      return {
+        code: 2,
+        problems: [
+          `nx could not show the project ${name}: ${String(error.message ?? error).trim()}`,
+        ],
+        checked,
+      };
+    }
+    checked.push(`${name}'s ${targets.length} resolved targets`);
+    if (targets.length === 0)
+      problems.push(`nx resolves no target at all for ${name}, so none was checked`);
+    for (const [target, config] of targets) {
+      const command = config?.options?.command ?? '';
+      const rule = probe.allowedTargets.find((candidate) => candidate.name.test(target));
+      if (!rule) {
+        problems.push(
+          `nx resolves a \`${target}\` target for ${name} (${probe.realProject}), which only tests, ` +
+            'lints and type-checks; something could build or publish it',
+        );
+      } else if (
+        config?.executor !== rule.executor ||
+        (rule.command && !rule.command.test(command))
+      ) {
+        problems.push(
+          `nx resolves ${name}'s \`${target}\` target as ${JSON.stringify(config?.executor)}` +
+            `${command ? ` (${JSON.stringify(command)})` : ''}, not ${rule.executor}` +
+            `${rule.command ? ` with ${rule.command}` : ''}: a target of an allowed name could build it`,
+        );
+      }
+    }
+  }
+  return { code: problems.length > 0 ? 1 : 0, problems, checked };
+}
+
 async function main() {
+  const mismatches = realProjectMismatches();
+  if (mismatches.length > 0) {
+    console.error('module-boundaries: FAIL — a probe no longer stands for its real project:');
+    for (const problem of mismatches) console.error(`  - ${problem}`);
+    process.exitCode = 1;
+    return;
+  }
+  const targets = realProjectTargetProblems();
+  if (targets.code !== 0) {
+    console.error(
+      'module-boundaries: FAIL — a real project a probe stands for has a target it may not:',
+    );
+    for (const problem of targets.problems) console.error(`  - ${problem}`);
+    process.exitCode = targets.code;
+    return;
+  }
   let options;
   try {
     options = await ruleFromConfig();
@@ -379,7 +586,8 @@ async function main() {
     ).version;
     console.log(
       `module-boundaries: PASS — ${negative} forbidden imports reported and ${positive} allowed imports quiet, ` +
-        `by ${RULE} (@nx/eslint-plugin ${pluginVersion}) with the ${options.depConstraints.length} depConstraints of eslint.config.mjs.`,
+        `by ${RULE} (@nx/eslint-plugin ${pluginVersion}) with the ${options.depConstraints.length} depConstraints of eslint.config.mjs. ` +
+        `Checked ${targets.checked.join(', ')}: tests, lint and type checks only.`,
     );
   } catch (error) {
     if (!(error instanceof GateStop)) throw error;

@@ -140,8 +140,9 @@ Path helpers: `libs/shared/nuxeo-client/src/lib/utils/browse-path.utils.ts`
 ## DocumentChangesService (`document-changes.service.ts`)
 
 Says that documents changed, so the lists following it read their page again: browse's listing
-and each `RecordListComponent`, a record page's related records and a queue's. The platform's row
-actions notify it after a rename, copy, move or delete, since they run from one app-wide
+and each `RecordListComponent`, a record page's related records and a queue's. The document page
+reads its record again on it, and a record page's timeline its history. The platform's row
+actions notify it after a rename, copy, move or delete, and an app's operation button after it runs, since they run from one app-wide
 registration and cannot reload the list they came from. Every list follows every change. Each follower hears of it before `notify()` returns: browse
 reloads at once, a record list on the next change detection. `BrowseContextService
 .requestContentRefresh()` instead asks browse alone, through an effect.
@@ -719,7 +720,7 @@ read(connector: string, uid: string): Observable<ConnectorAnswer>
 
 An asset's share links, through `nuxeo-agentic-assets`' Automation operations
 (`docs/business-apps/layout-v2.md`, section 2, "Share links"; `docs/api-integrations.md`,
-section 40). Exported from `@nuxeo/satori-platform/nuxeo-client`; the record page's
+section 41). Exported from `@nuxeo/satori-platform/nuxeo-client`; the record page's
 `lib-record-share-links` is its caller. It checks nothing the server decides.
 
 ```typescript
@@ -733,6 +734,24 @@ downloads(uid: string): Observable<ShareLinkDownloads>
   // { downloads: [{ time, link, rendition }], truncated }
 // every answer held to its shape: another one errors with status 500; a created link's path must be
 // on this server (shareLinkUrl gives null for any other origin)
+```
+
+---
+
+## AppActionsService (`libs/shared/document-layouts/src/lib/app-actions/app-actions.service.ts`)
+
+An app's operation buttons, its `actions.json` (`docs/business-apps/app-definition-v2.md`, section
+5): each action that runs an operation on one record, in the `toolbar` slot for `record` and the
+`rowActions` slot for `row`, with a handler under its id. Registered once, at startup, by the app
+(`business-apps.actions.ts`), from the app registry's file. Chosen, its rules are checked again, a
+dialog asks its question with its form, the record is read again and its rules checked a third
+time, then the server runs it.
+
+```typescript
+register(app: string, content: unknown): readonly string[]  // the ids registered; the console says what is left out
+  // chosen: GET /id/<uid> (permissions), then
+  // POST /automation/AgenticUi.RunAction, { input: 'doc:<uid>', params: { app, action, values: '<JSON>' }, context: {} }
+  // never the operation or its other parameters: the server reads them from the app's served file
 ```
 
 ---

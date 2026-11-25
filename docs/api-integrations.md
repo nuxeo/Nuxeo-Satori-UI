@@ -2293,6 +2293,11 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   decide what they show.
 - **An app the person may not see is 404**, and so is a file its package does not name, a path the
   listing does not give, and any other address under `/nuxeo/agentic-ui-apps/`.
+- **`actions.json` is served with only the actions the server's allow-list lets run**
+  (`AppActions` in `nuxeo-agentic-core`): an action whose operation the deployment's
+  `org.nuxeo.agentic.ui.operations` contribution does not hold, or that gives it a parameter it
+  does not allow, is left out, and a diagnostic, `action-refused`, says why. A file with nothing
+  left out is served as the package wrote it. Section 40 runs what it serves.
 - **A 200, a 304 and a 404 are `Cache-Control: private, no-cache`** with
   `X-Content-Type-Options: nosniff`, so the browser revalidates and a shared cache keeps nothing; a
   200 and a 304 also carry an ETag, `Vary: Cookie, Authorization` and the configuration servlet's
@@ -2498,7 +2503,93 @@ round.
 
 ---
 
-## 40. Record Page — a Picture's Share Links, through `nuxeo-agentic-assets`
+## 40. Operation Buttons — an App's Action, through `AgenticUi.RunAction`
+
+| Field           | Value                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `AppActionsService` (`libs/shared/document-layouts/src/lib/app-actions/app-actions.service.ts`), registered at startup by `apps/nuxeo-ui/src/app/business-apps.actions.ts`             |
+| **Method**      | `register(app, content)`, once per page, with the app registry's `actions.json` for the app open (section 36); then, each time a button is confirmed, a read of the record and the run |
+| **HTTP Method** | `GET` the record again, then `POST`                                                                                                                                                    |
+| **Endpoints**   | `/nuxeo/api/v1/id/<uid>` with `properties: *` and `enrichers.document: permissions`, for the action's rules to read the record as it is now                                            |
+|                 | `/nuxeo/api/v1/automation/AgenticUi.RunAction`                                                                                                                                         |
+| **Server side** | `RunAppActionOperation` and `AppActionRunner` in `nuxeo-agentic-core`, with the deployment's allow-list, `org.nuxeo.agentic.ui.operations` (app-definition-v2.md, section 5)           |
+
+**Request Payload:** the record, the app and the action, and what the person entered in the
+action's form, as a JSON object in a text, each `var:` field by its name. Never the operation, nor
+its other parameters: the server reads those from the app's `actions.json` as the registry serves
+it, and checks the allow-list again.
+
+```json
+{
+  "input": "doc:<uid>",
+  "params": {
+    "app": "payers-claims",
+    "action": "payers.claim.requestRecords",
+    "values": "{\"urgent\":true,\"note\":\"Before Friday\"}"
+  },
+  "context": {}
+}
+```
+
+**Response (200 OK):** what ran. The operation's own output is not returned.
+
+```json
+{ "app": "payers-claims", "action": "payers.claim.requestRecords", "status": "done" }
+```
+
+**Errors:** `403` without `Read` on the record, checked first; `404` when no app the person may see
+serves the action, the registry having left it out or the file not having it; `400` when it runs in
+bulk only, when the values are not an object of texts, numbers, booleans and nulls, or are over
+64 KiB, when one names a field the action's form does not send, or when a value is not of the type
+the allow-list gives its parameter; `403` when the allow-list no longer holds the operation or one
+of its parameters, or is for other apps, when it names groups the person is in none of, when the
+record is of a type or in a state it does not name, or without the permission it names on the
+record, `Write` by default. The message is a neutral sentence; the server log says
+which app, action and operation, and why, and never a value. The dialog says each in the person's
+words, and stays open.
+
+**Notes:**
+
+- **Run as the person,** in an Automation context of its own, with the record as the repository
+  stores it as its input, and the parameters the app's file and the allow-list give: a literal from
+  the file, a field from the stored record, and the form's values. The request's own `context` is
+  never handed on. Afterwards `Audit.LogEvent` writes "App action run" to the record's history, with
+  who ran which action of which app and its operation, and never a value. A chain's own entries may
+  hold what it is given: the Payers kit's writes the note entered. Whether an entry is undone with a
+  transaction rolled back after it was written depends on the server's audit backend, and is not
+  checked.
+- **CSRF:** the endpoint is Nuxeo's REST API, so `NuxeoCorsCsrfFilter` (mapped on `/*` in the
+  server's `web.xml`) refuses a POST whose `Origin` or `Referer` is another site's, unless the
+  server's CORS configuration allows it; `nuxeo.csrf.token.enabled` adds Nuxeo's token check. Read
+  from the 2025.10.18 server's `nuxeo-platform-web-common` jar, not exercised from another origin.
+- **Nuxeo's own Automation endpoint is still there:** `/nuxeo/api/v1/automation/<chain>` runs any
+  operation the person may run, allow-listed or not, as Nuxeo's permissions allow, and so does a
+  dispatcher such as `/nuxeo/api/v1/automation/RunOperation` given the chain's id. A REST binding
+  (`org.nuxeo.ecm.automation.server.AutomationServer`, point `bindings`) closes the direct call
+  only: it is checked against the operation the request names, `RunOperation` there. What closes
+  both is the chain's first step, `AgenticUi.RequireRunAction`, which refuses, `403`, every run but
+  `AgenticUi.RunAction`'s, for administrators too. The Payers kit's two chains begin with it.
+- **REST bindings apply to buttons too:** `AgenticUi.RunAction` refuses, `403`, an operation whose
+  binding is disabled, or kept to administrators or to groups the person is not in, as Nuxeo's
+  endpoint does (`AutomationServerComponent.accept`); its `secure` flag is the request's, not
+  checked. So a chain meant for a button has no binding of its own.
+- **The platform's own operations, checked:** when `AgenticUi.RunAction` or
+  `AgenticUi.RequireRunAction` is no longer `nuxeo-agentic-core`'s class on the server, a chain or
+  an alias of its id having replaced it, the registry serves no button that runs an operation, the
+  run answers `503`, and the server log says so.
+- **The allow-list's own checks,** besides the permission: an entry may name the apps, the groups,
+  and the records' types and states it is for (`403`), and each parameter's source and whether it
+  is required (`400` for a required value left empty).
+- **Not run on a server yet.** The Java tests run the checks above with fakes of the session and
+  of Automation (`AppActionRunnerTest`), and the steps file `payers-operations` runs them live once
+  the kit and its allow-list are installed.
+
+**Used by:** the document page's toolbar (an action on `record`) and every list's row menu, a
+queue's among them (an action on `row`).
+
+---
+
+## 41. Record Page — a Picture's Share Links, through `nuxeo-agentic-assets`
 
 | Field           | Value                                                                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -26,3 +26,9 @@ export {
 } from './lib/record-page/record-layout';
 export type { ResolvedRecordLayout } from './lib/record-page/resolve-record-layout';
 export { readValidationFailure } from './lib/validation-failure';
+export { APP_ACTION_RUN_OPERATION, AppActionsService } from './lib/app-actions/app-actions.service';
+export {
+  readAppActions,
+  type AppActionDefinition,
+  type AppActionsRegistered,
+} from './lib/app-actions/app-actions-file';

@@ -49,7 +49,7 @@
  * pipeline (the dev server reads the layout from `config:dev`).
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -58,6 +58,25 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'brand-assets-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { picturePng } = await import(join(KIT, 'demo', 'png.mjs'));
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. It needs no
+ * seed: it creates the asset it reviews, and trashes it at the end.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: [],
+  runAs: {
+    users: [],
+    who: 'someone who may create a folder and a picture in the workspace, comment on the picture and change it',
+  },
+  signsInAs: [],
+  needs: [
+    'picture conversion on the server',
+    "the dev server with `npm run config:dev` serving the kit's asset layout for the type used",
+  ],
+};
 
 /** The review's own annotations, as `picture-review.ts` writes them. */
 const REVIEW_XPATH = 'picture:views';

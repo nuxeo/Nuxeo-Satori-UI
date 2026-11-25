@@ -1,0 +1,170 @@
+name: Release candidate
+
+# Phase 10's release candidate across all kits (docs/business-apps/package-pipeline.md, section 11),
+# assembled offline by scripts/release-candidate.mjs: no Nuxeo server, no signature, no tag and no
+# publishing.
+#
+# - `controls`, on a pull request that touches the candidate or what its controls read, and on
+#   every push to a `staging/**` branch: release-candidate.selftest.mjs, which breaks each of its
+#   checks once and must see each refused. A check only ever seen green is an assertion.
+# - `candidate`, on a push to a `staging/**` branch only: the whole candidate. Every kit through
+#   the pipeline; the kits as a set; the demo steps a server run would execute, listed and not run;
+#   the client's production bundle; `mvn package` at the root; the packages as a set. Its release
+#   note and demo steps go into the job's summary, and its record, the manifest with every
+#   artifact's version and SHA-256, the checksums and the two notes, into the run's artifacts.
+#
+# **What each kit is held to.** `--since` is the last release. A kit is released by a tag
+# `app-package/<name>/<version>` (app-packages.yml), and none has been pushed, so no kit has a
+# release to be held to. So the job holds every kit to the commit before the push, as
+# app-packages.yml holds a push, so that a version that did not move with its kit's changes is
+# refused here too, and the release note lists what the push changed. A new branch, or a commit
+# before that this clone cannot fetch, is held to `origin/main` instead, and the log says so.
+# Nothing here moves to a kit's release tag once one is pushed: that is a change to this step, by
+# hand. And a push whose run a later push cancelled is not held to anything of its own, since the
+# later run is held to that push's tip, as in app-packages.yml.
+#
+# **The packages and the bundle are not uploaded.** This repository is public, so anyone signed in
+# to GitHub can download a run's artifacts, and the bundle carries the `@hylandsoftware` packages,
+# which GitHub Packages serves only with a token: uploading it would publish them. So nothing
+# installable leaves the runner, and nothing reaches a Marketplace.
+#
+# **One secret, and only for the install.** The client app cannot be built without the
+# `@hylandsoftware` packages, so `npm ci` reads the read-only SATORI_GH_READONLY_TOKEN in its own
+# step's environment, as every ci.yml job does. There is no `registry-url:`, which would write a
+# second `.npmrc` and export NODE_AUTH_TOKEN to every later step; the repository's `.npmrc` names
+# the variable instead. The candidate's step runs with no token in its environment and checks so,
+# and the script takes every token out of what it starts besides. No signing key, Marketplace
+# credential or write permission is in this workflow.
+#
+# The `paths` list is what the controls read: the candidate's scripts, the pipeline they run and
+# its validator, the kits, the steps files and the helpers those import.
+
+on:
+  push:
+    branches: ['staging/**']
+  pull_request:
+    paths:
+      - 'scripts/release-candidate.mjs'
+      - 'scripts/release-candidate-set.mjs'
+      - 'scripts/release-candidate-demo.mjs'
+      - 'scripts/release-candidate.selftest.mjs'
+      - 'scripts/app-package.mjs'
+      - 'scripts/verify-package-zip.mjs'
+      - 'scripts/nuxeo-content-model.mjs'
+      - 'scripts/beta-harness/helpers.mjs'
+      - 'scripts/beta-harness/identity-guard.mjs'
+      - 'scripts/beta-harness/nuxeo-credentials.mjs'
+      - 'scripts/beta-harness/package-command.mjs'
+      - 'scripts/beta-harness/steps/**'
+      - 'business-apps/packages/**'
+      - 'libs/shared/app-definition/src/**'
+      - 'libs/platform/package.json'
+      - 'apps/nuxeo-ui/public/i18n/en.json'
+      - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
+      - '.nvmrc'
+      - '.github/workflows/release-candidate.yml'
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  controls:
+    name: Release candidate controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The token is not kept in .git/config, where what this job runs could reach it.
+          persist-credentials: false
+
+      # No `registry-url:`: the repository's `.npmrc` maps the scope and names the token variable.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # Node, git and unzip, which the runner has, and acorn from the install, for the demo listing.
+      # The command's own refusals it runs need Maven on the PATH, which the runner has too.
+      - name: Controls for the release candidate
+        run: node scripts/release-candidate.selftest.mjs
+
+  candidate:
+    name: Assemble the release candidate
+    if: github.event_name == 'push'
+    needs: controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every branch and its history, so that the commit before the push, or `main`, is there.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # Asserted rather than described, as app-packages.yml does.
+      - name: Check the candidate's step has no credential
+        run: |
+          set -euo pipefail
+          for var in NODE_AUTH_TOKEN NPM_TOKEN SATORI_GH_READONLY_TOKEN NPM_PACKAGES_TOKEN GITHUB_PACKAGES_TOKEN GITHUB_TOKEN GH_TOKEN NUXEO_USER NUXEO_PASS; do
+            if [ -n "${!var:-}" ]; then
+              echo "::error::$var is set; the candidate is assembled with no credential in scope"; exit 1
+            fi
+          done
+          if git config --get-regexp '^http\..*\.extraheader$' >/dev/null; then
+            echo "::error::the checkout left a credential in .git/config"; exit 1
+          fi
+          echo "No token and no stored credential. Node $(node --version), $(mvn -v | head -n 1)."
+
+      - name: Assemble the release candidate
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          since=origin/main
+          if [[ ! "${BEFORE:-0}" =~ ^0+$ ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            since="$BEFORE"
+          else
+            echo "::warning::the commit before this push is not in this clone, so each kit is held to origin/main."
+          fi
+          out="$RUNNER_TEMP/release-candidate"
+          node scripts/release-candidate.mjs --out "$out" --since "$since"
+          cat "$out/RELEASE-NOTES.md" "$out/DEMO-STEPS.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # The record only, as the header says: no zip, jar or bundle file.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-record
+          path: |
+            ${{ runner.temp }}/release-candidate/manifest.json
+            ${{ runner.temp }}/release-candidate/SHA256SUMS
+            ${{ runner.temp }}/release-candidate/RELEASE-NOTES.md
+            ${{ runner.temp }}/release-candidate/DEMO-STEPS.md
+          retention-days: 30
+          if-no-files-found: error

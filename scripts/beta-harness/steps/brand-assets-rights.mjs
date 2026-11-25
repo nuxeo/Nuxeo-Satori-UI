@@ -51,7 +51,7 @@
  * cover"); the layouts come from `config:dev`, not the package.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -60,6 +60,26 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'brand-assets-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { ASSETS, MARKER, WORKSPACE } = await import(join(KIT, 'demo', 'data.mjs'));
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. The kit has no
+ * demo people of its own, so no user is named.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: {
+    users: [],
+    who: "anyone who may read the kit's workspace; an administrator is refused as anyone else is",
+  },
+  signsInAs: [],
+  needs: [
+    'nuxeo-agentic-assets and the kit 0.2.0 or later installed, and the kit seeded on the day of the demo',
+    "each of the three assets' Medium, FullHD and OriginalJpeg views made",
+    "the dev server with `npm run config:dev` serving the kit's asset layout",
+  ],
+};
 
 const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
 /** The assets the demo opens: one with no Print channel, one whose rights have ended, one cleared. */

@@ -88,6 +88,7 @@ import {
   isFolderishDocument,
   isCollectionDocument,
   BrowseContextService,
+  DocumentChangesService,
   decodeNuxeoPathSegment,
   noteFormatLabel,
   parentNuxeoFolderPath,
@@ -359,6 +360,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly browseService = inject(BrowseService);
   private readonly detailService = inject(DocumentDetailService);
+  private readonly documentChanges = inject(DocumentChangesService);
   private readonly browseContext = inject(BrowseContextService);
   private readonly directoryService = inject(DirectoryService);
   private readonly http = inject(HttpClient);
@@ -1162,6 +1164,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.registerToolbarHandlers();
+    // A change made from the page by something other than this component, a related list's row
+    // action or an app's operation button on the toolbar, reads the record again, as an edit or a
+    // transition here does: what it changed shows, and the record page stays drawn while it loads.
+    this.documentChanges.changes.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      const uid = this.docUid;
+      if (uid && this.doc()?.uid === uid) this.loadDocument(uid);
+    });
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const uid = params.get('uid');
       if (!uid) {

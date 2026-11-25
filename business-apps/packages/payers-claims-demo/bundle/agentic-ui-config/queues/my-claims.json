@@ -27,7 +27,7 @@
   "sort": [{ "field": "claim:serviceDate", "order": "desc" }],
   "pageSize": 50,
   "facets": [{ "aggregate": "claim_status_agg", "labelKey": "payers.facet.status" }],
-  "rowActions": ["payers.claim.pay", "app.rowActions.download"],
+  "rowActions": ["payers.claim.pay", "payers.claim.requestRecords", "app.rowActions.download"],
   "bulkActions": ["app.bulkActions.downloadZip"],
   "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
 }

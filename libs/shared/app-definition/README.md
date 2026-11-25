@@ -38,8 +38,10 @@ install and no transpiler, through `src/typescript-hook.mjs`, which the pipeline
   `assets/`, `queues/` and `labels/en.json`, whether or not they were named. One of them that
   cannot be read is reported, and fails the run.
 - **What the deployment gives it:**
-  - **`--allow-list`:** the operations it allows, `{ "operations": [...] }`. Without one, every
-    operation is refused. Decision 3 settles where the real allow-list lives.
+  - **`--allow-list`:** the operations the deployment the package is built for allows,
+    `{ "operations": [...] }`. Without one, every operation is refused. This is the build's check:
+    on a server the allow-list is the deployment's contribution to `org.nuxeo.agentic.ui.operations`,
+    which the app registry serves `actions.json` by (app-definition-v2.md, section 5).
   - **`--registered`:** what it registers in code beyond the platform's own, as
     `{ "rules", "rowActions", "bulkActions", "actions", "modules", "pages" }`, each a list of ids. A
     customer's Layer 2 rules and actions go here: `actions` are those in any other slot, a
@@ -332,5 +334,5 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   `{ "field" }` value in a rule, and still pass a rule that reads a record.
 - **The menu** is joined to the platform's by the app, and **the home** is drawn by
   `libs/shared/home`. Whether an app's menu replaces the platform's is still open.
-- **The allow-list's real home and format** (decision 3), and each module's settings schema, which
-  comes with the module.
+- **Decision 3,** on whose recommendation the server's allow-list is built, and each module's
+  settings schema, which comes with the module.

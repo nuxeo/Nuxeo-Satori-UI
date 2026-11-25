@@ -215,7 +215,7 @@ a last day. `{}` turns them on; they take no option yet:
 - **The server holds every rule,** through `nuxeo-agentic-assets`
   ([its README](../../nuxeo-agentic-assets/README.md)) and its Automation operations
   `ShareLink.Create`, `ShareLink.List`, `ShareLink.Revoke` and `ShareLink.Downloads`
-  ([api-integrations.md](../api-integrations.md), section 40): who may manage a picture's links,
+  ([api-integrations.md](../api-integrations.md), section 41): who may manage a picture's links,
   `WriteSecurity` on it, and who may make one, an administrator or a member of a group the server
   names too; what a link may list; and that it serves its items watermarked, and only
   while it is neither revoked nor past its last day and while the asset's rights allow each one.

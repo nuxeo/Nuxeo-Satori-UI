@@ -28,6 +28,7 @@ import {
 import {
   type AuditEntry,
   type AuditLogList,
+  DocumentChangesService,
   DocumentDetailService,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -139,6 +140,8 @@ const sameList = (a: TimelineQuery, b: TimelineQuery): boolean =>
  * and once more {@link RECORD_TIMELINE_AUDIT_DELAY} later, since Nuxeo writes its audit a moment
  * after the change. A timeline drawn anew, or given another record, is asked once more after that
  * delay too, as its host may have drawn it for a change; another kind chosen in the filter is not.
+ * So is one shown when the page says documents changed (`DocumentChangesService`), as a row action
+ * or an app's operation button does after it runs: what it did may be in the history alone.
  * What a refresh brings joins the entries shown, which stay, unless more was recorded than a page
  * holds: the timeline then starts again from that first page.
  *
@@ -332,6 +335,16 @@ export class RecordTimelineComponent {
         const anotherKind =
           previous !== null && previous.uid === query.uid && previous.revision === query.revision;
         this.refreshes.next(anotherKind ? null : { query, now: false });
+      });
+
+    // A change made on the page, by a list's row action or an app's operation button, may be in
+    // the history alone: a chain that records a request changes nothing the revision reads. So the
+    // timeline is refreshed in place, as after a change to the record.
+    inject(DocumentChangesService)
+      .changes.pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        const query = this.asked;
+        if (query && this.state().status === 'loaded') this.refreshes.next({ query, now: true });
       });
   }
 
