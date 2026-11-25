@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.1.1 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.0 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, not photographed or
@@ -13,6 +13,11 @@ downloaded.
   while its rights end within 30 days, one once they have ended
   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), "Banners"). Its rights end on
   `dc:expired`.
+- **Rights the server enforces:** the kit's rights policy for `AcmeAsset`, which the assets
+  module's server add-on, [`nuxeo-agentic-assets`](../../../nuxeo-agentic-assets/README.md),
+  enforces for every user at the platform's download endpoints: a print view or rendition refused to an asset whose channels hold no
+  Print, every use but a preview refused once its rights have ended, and the server's reason on
+  the asset page (below, "Rights on the server"). The package depends on the add-on.
 - **A creative review on the asset page,** turned on by the layout file's `"review": {}`, with no
   code: a reviewer pins a note to a point of the picture, the pins are listed beside it, and the
   review goes in rounds, the earlier rounds' pins marked as past. The pins are Nuxeo's own
@@ -28,13 +33,15 @@ downloaded.
   own workspace, and nowhere else. Run it twice and nothing is added the second time. With
   `--preview`, before the package is installed, it writes the six pictures as the platform's own
   `Picture`, for a look at the asset page in dev mode.
-- **The demo script,** as a steps file of the beta harness:
-  [`scripts/beta-harness/steps/brand-assets-demo.mjs`](../../../scripts/beta-harness/steps/brand-assets-demo.mjs).
+- **The demo script,** as two steps files of the beta harness:
+  [`brand-assets-demo.mjs`](../../../scripts/beta-harness/steps/brand-assets-demo.mjs), and the
+  plan's demo step 2,
+  [`brand-assets-rights.mjs`](../../../scripts/beta-harness/steps/brand-assets-rights.mjs).
 - **On no shared server.** The package is built and checked by the pipeline. When its first
   checks ran, no server had it, and its asset layout was seen in dev mode on Pictures of the
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
-  there; 0.1.1 is installed nowhere. The product page, the queues and the demo script have not run
+  there; 0.1.1 and 0.2.0 are installed nowhere. The product page, the queues and the demo script have not run
   on a shared server.
 
 ## What is in it
@@ -51,6 +58,7 @@ downloaded.
 | `bundle/agentic-ui-config/labels/en.json`                       | Its labels, in English: every key the files above name, and its fields' labels                     |
 | `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the three layouts and the app                                       |
 | `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers                                 |
+| `bundle/OSGI-INF/brand-assets-demo-rights.xml`                  | The rights policy for `AcmeAsset`, which `nuxeo-agentic-assets` enforces                           |
 | `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                                   |
 | `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged                    |
 | `demo/seed.selftest.mjs`                                        | The seed's controls, against a stand-in for the REST API it calls. Not packaged                    |
@@ -64,6 +72,39 @@ downloaded.
   operation, and a lifecycle button for an asset waits for an asset lifecycle, with its approval.
 - **One version in three places:** `package.xml`'s, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`. The pipeline's step 3 refuses any of them that differs.
+
+## Rights on the server
+
+`bundle/OSGI-INF/brand-assets-demo-rights.xml` contributes the kit's rights policy to
+[`nuxeo-agentic-assets`](../../../nuxeo-agentic-assets/README.md), on the stand-in model's fields:
+the rights end on `dc:expired`, and `acmeasset:channels` holds the channels they cover. Which
+channel covers each use is the prototype's renditions table, on the platform's stock picture
+views:
+
+| Use                                                                    | Covered by |
+| ---------------------------------------------------------------------- | ---------- |
+| The original file (`file:content`, the `mainBlob` rendition)           | Print      |
+| `OriginalJpeg`, the picture at its own size: the kit's print rendition | Print      |
+| `FullHD`: the web view                                                 | E-commerce |
+| `Thumbnail`, `Small` and `Medium`, and the `thumbnail` rendition       | A preview  |
+
+Each view is listed as a view and as the rendition of the same name. The add-on refuses, with
+403, a use whose channel the asset's channels do not hold, every use but a preview from the day
+after its rights end, in UTC, and any use the policy does not list, such as the `pdf` or
+`zipExport` rendition. A preview is served whatever the rights, so the asset page and the lists
+still show an ended asset's picture. Nothing here exempts an administrator. The add-on decides the
+platform's download endpoints, `/nxfile/` and the REST API's `@blob`, `@rendition` and
+`@preview`, not yet Automation operations that return a blob: its README, "What it does not
+cover".
+
+**On the seeded assets:** asset 503 holds E-commerce and Social, so its print view and its
+original are refused and its web view served; asset 505's rights have ended, so everything but its
+previews is refused; the others hold every channel and are served everything listed.
+
+**On the asset page,** choosing a view the server refuses shows the server's reason in its place,
+asked of the add-on's `assetRights` enricher after the 403. No view is hidden or disabled: each is
+asked for, and the server decides. The Annotations tab's viewer asks for the original, which the
+server refuses on assets 503 and 505.
 
 ## The stand-in model
 
@@ -131,7 +172,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.1.1.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.0.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -149,10 +190,17 @@ and cut it down to the kit's types, once the package is installed.
 ## Installing it on a local Nuxeo
 
 **Not run yet.** These steps are the Payers kit's, which were run, for this package; whoever runs
-them first should check each step's outcome as step 3 says. The local Nuxeo is the Docker
-container `nuxeo`, on port 8080, with `nuxeo-agentic-ui` already installed: this package depends
-on it (`package/package.xml`), and it serves the layouts. If it is not, install it first, as the
+them first should check each step's outcome as step 3 says. The local Nuxeo is the Docker container
+`nuxeo`, on port 8080, with `nuxeo-agentic-ui` already installed: this package depends on it
+(`package/package.xml`), and it serves the layouts. If it is not, install it first, as the
 [Payers kit's README](../payers-claims-demo/README.md#installing-it-on-a-local-nuxeo) says.
+
+**From 0.2.0 it also depends on `nuxeo-agentic-assets` 0.1.0,** the add-on that enforces its rights
+policy. Install the two in one restart, as the
+[add-on's README](../../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo) says:
+build the add-on with `mvn -pl nuxeo-agentic-assets -am package`, copy both zips in, and name both
+in the one-off script's `nuxeoctl mp-install`, the add-on first. The steps below install the kit
+alone, onto a server that already has the add-on.
 
 **1. Build it,** from the repository's root:
 
@@ -166,11 +214,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.1.1.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.1.1.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.0.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -182,7 +230,9 @@ docker cp /tmp/zz-brand-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && 
 - `/var/log/nuxeo/brand-kit-install.log` in the container lists the package installed;
 - the server log's `Component Loading Status` has nothing pending or missing;
 - `/nuxeo/api/v1/config/types/AcmeAsset` answers, with `Picture` among its facets;
-- `/nuxeo/agentic-ui-config/layouts.json` lists the three `view` layouts.
+- `/nuxeo/agentic-ui-config/layouts.json` lists the three `view` layouts;
+- the server log names `nuxeo.config.brand-assets-demo.rights` among the components started, and
+  has no `Asset rights:` error.
 
 A rebuild of a version already installed is skipped as unchanged: in the one-off script, run
 `nuxeoctl mp-remove brand-assets-demo --accept=true` before `mp-install`.
@@ -218,7 +268,9 @@ node business-apps/packages/brand-assets-demo/demo/seed.mjs
   warning banner; one's ended 10 days ago; the others are clear. Run it again on the day of a demo.
 - **Safe to run twice.** A record already there is put back to `data.mjs`'s values, dates
   included, and a trashed one at its place is restored. A picture already holding the same bytes is
-  not uploaded again.
+  not uploaded again. With `nuxeo-agentic-assets` installed, the kit's own rights refuse the
+  originals of assets 503 and 505 to every user, the seed's included: it cannot read them back to
+  compare, so it says so and uploads those two again, and Nuxeo makes their views again.
 - **It checks what it wrote:** last, that Nuxeo made each picture's views, which proves
   `AcmeAsset` is a Picture to it, and that the four page providers return what it seeded, the
   library's aggregates included. Views and the index come a moment after the repository, so the
@@ -281,14 +333,34 @@ As a steps file of the beta harness
 
 1. a rights-ending banner on a live asset, above its picture views, the original file not
    downloaded: phase 5's demo step 1;
-2. the other banner on an asset whose rights have ended, and none on cleared rights;
+2. the other banner on an asset whose rights have ended, and none on cleared rights; then the
+   cleared asset's Annotations tab, which downloads its original once, the control for "not
+   downloaded";
 3. the library, its Rights facet counted from the aggregate, and narrowed by it on the server;
 4. a product page: its shots, and the shot it is still missing;
 5. the layout files behind the pages: configuration, no code.
 
-The plan's demo steps 2 and 3, the print rendition refused by the server and a share link, are
-not this kit's yet: rights the server enforces and decision C are out of its scope. Step 4, the
-review, is the next section's.
+**The plan's demo step 2, the print rendition refused by the server,** is its own steps file,
+[`brand-assets-rights.mjs`](../../../scripts/beta-harness/steps/brand-assets-rights.mjs), since
+it needs `nuxeo-agentic-assets` installed with the kit:
+
+1. in the app, asset 503's print view chosen: the server answers 403, and the page says the
+   server's reason, with no view hidden or disabled;
+2. the REST API called directly, outside the app: the print view, the print rendition, the same
+   file through `/nxfile/` and the original refused, and asset 505's web view, its rights ended;
+3. what the rights cover still served: the cleared asset's print view, print rendition and
+   original, asset 503's web view and preview, asset 505's preview, and the cleared asset's print
+   view shown in the app.
+
+```bash
+NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-rights
+```
+
+`NUXEO_URL` names Nuxeo if it is not on `http://localhost:8080`: the REST API is called there,
+not through the dev server. **Not run:** nothing installs the add-on or the kit yet.
+
+The plan's demo step 3, a share link, is not this kit's yet: decision C is out of its scope.
+Step 4, the review, is the next section's.
 
 **What it needs:** the package installed and seeded today (above), the dev server serving the
 kit's files (above), Playwright (`scripts/beta-harness/README.md`, "Prerequisites"), and no asset,
@@ -337,7 +409,13 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 ## What was checked, and how
 
 - **The package pipeline** builds it, with and without its content model, and refuses a copy whose
-  asset layout puts a `date` widget on a text property, given the model.
+  asset layout puts a `date` widget on a text property, given the model. Version 0.2.0 was held to
+  0.1.1 on the staging branch with `--previous`: its three changes, the rights component, the
+  manifest and `package.xml`'s new dependency, are "to judge", which the pipeline sees as a patch,
+  and 0.2.0 raises the minor, as a package newly needing an add-on should.
+- **The rights policy,** `brand-assets-demo-rights.xml`, is read by `nuxeo-agentic-assets`'s own
+  tests, through XMap as the runtime reads a contribution, and decides the demo's uses as this
+  README's table says; giving `OriginalJpeg` another channel turns them red.
 - **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in.
 - **On the local Nuxeo 2025.10.18, before it had the package:** the seed stops with exit 2 and writes
   nothing; `--preview` wrote the six pictures into the kit's workspace, twice, the second time
@@ -351,7 +429,7 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Version 0.1.1 is not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
+- **Versions 0.1.1 and 0.2.0 are not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
   the review was seen with its layout from `config:dev`, and the product page, the queues, the full
   seed and the demo have not run on a shared server.
 - **A reference shows its stored value:** a shot's asset is its document id, until the
@@ -359,9 +437,11 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   the product.
 - **The library is a list, not a grid of previews,** as the prototype draws it: a queue's cells are
   one line of text.
-- **No home, no video, no share links, and rights the server does not enforce:** each is out of
-  this version's scope. A banner is not a control: refusing a download whose rights have
-  ended is the server's, and the server does not refuse it yet.
+- **No home, no video and no share links:** each is out of this version's scope. A
+  banner is not a control: refusing a download whose rights have ended is the server's, which
+  `nuxeo-agentic-assets` does at the platform's download endpoints, not installed yet, and waiting
+  for its security review.
+- **Regions are not weighed:** `acmeasset:regions` is free text, and no rule reads it.
 - **The review is not held to who may review on the server:** Nuxeo 2025 takes a pin, or a round's
   close, from anyone who may read the asset, whatever the page offers.
 - **The review moves or removes nothing, and reopens no round.** Each pin is also one of the
