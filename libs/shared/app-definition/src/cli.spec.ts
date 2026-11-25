@@ -733,6 +733,22 @@ describe('app-definition validate', () => {
       expect(code).toBe(1);
     });
 
+    it('passes a key beside a literal label, which wins, and leaves a file of another version alone', () => {
+      const shown = structuredClone(page);
+      shown.cards[0] = { ...shown.cards[0], label: 'Claim', labelKey: 'claims.card.claimz' };
+      const { code, out, root } = check({
+        'pkg/app.json': app,
+        'pkg/labels/en.json': labels,
+        'pkg/layouts/Claim/view.layout.json': shown,
+        'pkg/queues/open.json': { version: 3, labelKey: 'claims.queue.open' },
+      });
+      expect(out).not.toContain('claims.card.claimz');
+      // The queue is refused for its version alone: nothing else in it is read.
+      expect(out).toContain(`${join(root, 'pkg', 'queues/open.json')}: version: version must be 2`);
+      expect(out).not.toContain('claims.queue.open');
+      expect(code).toBe(1);
+    });
+
     it('holds a package with no labels/en.json to the catalogue alone', () => {
       const { code, out } = check({
         'pkg/app.json': app,

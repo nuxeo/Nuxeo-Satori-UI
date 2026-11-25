@@ -31,8 +31,9 @@
  *   The run says how many layouts it held to the model, and says so when there were none.
  * - **Label keys,** given the platform's English catalogue with `--catalogue`, such as
  *   `apps/nuxeo-ui/public/i18n/en.json`: every `labelKey` a package's file names must have a text
- *   in its `labels/en.json` or in the catalogue, and the finding names the key. The catalogue is
- *   read as the app reads it, its nested keys joined with dots. Without it, keys are not checked,
+ *   in its `labels/en.json` or in the catalogue, and the finding names the key; one beside a
+ *   literal `label`, which wins, is not looked up. The catalogue is read as the app reads it, its
+ *   nested keys joined with dots. Without it, keys are not checked,
  *   since a key the platform gives a text would otherwise be refused.
  * - **`model <file>`** reads a content model alone, as `--model` does, and exits 0 when the whole
  *   of it can be read, 1 with every problem when it cannot: the export checks its file with it.

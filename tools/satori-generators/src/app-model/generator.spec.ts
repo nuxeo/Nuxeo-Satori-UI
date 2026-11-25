@@ -351,6 +351,18 @@ describe('app-model generator', () => {
       });
     }
 
+    it("refuses a search schema whose file is another schema's", async () => {
+      await contract();
+      await generate({ type: 'ContractLog', properties: 'entry', schema: 'contractsearch' });
+      const before = read(tree, MODEL);
+      const xsd = read(tree, SEARCH_XSD);
+      await expect(open()).rejects.toThrow(
+        "schemas/contractsearch.xsd, where the search document's schema contract_search goes, is another schema's",
+      );
+      expect(read(tree, MODEL)).toBe(before);
+      expect(read(tree, SEARCH_XSD)).toBe(xsd);
+    });
+
     it('refuses an aggregate on a type the content model does not describe', async () => {
       await expect(generate({ pageProvider: 'p', aggregates: 'contract:status' })).rejects.toThrow(
         'write its --properties first',

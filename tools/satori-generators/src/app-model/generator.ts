@@ -691,6 +691,23 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   let xml = tree.read(modelFile, 'utf-8') ?? modelComponent(modelName);
   const markup = markupOnly(xml);
   const written: string[] = [];
+  // The search schema's file is the search document's alone: another schema read from it, such as
+  // a type's own schema that happens to be named so, would be written over.
+  const taken = search
+    ? [...markup.matchAll(/<schema(?=[ \t\r\n/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g)].find(
+        ([tag]) =>
+          attribute(tag, 'src') === `schemas/${search.file}` &&
+          attribute(tag, 'name') !== search.schema,
+      )
+    : undefined;
+  if (
+    search &&
+    (taken !== undefined || schemaPath === `${pkg.root}/bundle/schemas/${search.file}`)
+  ) {
+    throw new Error(
+      `schemas/${search.file}, where the search document's schema ${search.schema} goes, is another schema's: give the type another --schema.`,
+    );
+  }
 
   if (properties.length > 0) {
     const hasType = named(markup, 'doctype', type).length > 0;

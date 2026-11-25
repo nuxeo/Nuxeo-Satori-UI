@@ -14,7 +14,7 @@
  */
 import { validateActions, placementsOf } from './actions';
 import { APP_ID, assetFile, validateApp } from './app';
-import { ID, join, type Finding } from './checker';
+import { ID, join, unreadable, type Finding } from './checker';
 import type { ContentModel } from './content-model';
 import { validateHome, validateNavigation } from './home';
 import { describeLogoSrcForm } from './image-source';
@@ -132,12 +132,14 @@ export function validateFile(
   options: PackageOptions = {},
 ): Finding[] {
   const findings = findingsOf(file, content, context, options);
-  // A labels file and a module's settings name no label key.
+  // A labels file and a module's settings name no label key; a file that is not a version 2 object
+  // is read no further (section 2), so its keys are not looked up either.
   if (
     options.catalogue === undefined ||
     context.labels === undefined ||
     file.kind === 'labels' ||
-    file.kind === 'module'
+    file.kind === 'module' ||
+    unreadable(content, 'a file') !== null
   )
     return findings;
   return [...findings, ...untranslated(content, context.labels, options.catalogue)];
@@ -146,7 +148,8 @@ export function validateFile(
 /**
  * Every `labelKey` in a file, wherever it is, that has a text in neither the package's English
  * labels nor the platform's catalogue: looked up in the package first, then in the platform's
- * (section 7), English being the language every other falls back to.
+ * (section 7), English being the language every other falls back to. One beside a literal `label`
+ * is never looked up, since the `label` wins (section 2), so it is not held to a text.
  */
 function untranslated(
   content: unknown,
@@ -160,7 +163,8 @@ function untranslated(
       for (const [key, item] of Object.entries(value)) {
         const at = join(path, key);
         if (key === 'labelKey' && typeof item === 'string') {
-          if (!labels.has(item) && !catalogue.has(item))
+          const shown = typeof value['label'] === 'string';
+          if (!shown && !labels.has(item) && !catalogue.has(item))
             findings.push({
               path: at,
               kind: 'unknown',

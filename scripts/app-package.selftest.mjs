@@ -1302,6 +1302,15 @@ expectRefused(
 expectBuilt("a label key the platform's catalogue gives a text, nested as it is", ({ edit }) =>
   edit(LAYOUT, '"labelKey": "payers.card.claim"', '"labelKey": "home.title"'),
 );
+expectBuilt(
+  'a label key with no text beside a literal label, which wins and is shown',
+  ({ edit }) =>
+    edit(
+      LAYOUT,
+      '"labelKey": "payers.card.claim"',
+      '"label": "Claim", "labelKey": "payers.card.claimz"',
+    ),
+);
 
 // The content model, given as a file (package-pipeline.md, section 4). The demo's is beside it,
 // and these controls copy the package with it, so each is held to the model it carries.
@@ -1401,13 +1410,44 @@ expectBuilt(
   undefined,
   OWN_MODEL_SAID,
 );
-// Given another model, that one is used, and the package's own is not.
+// A type the package only adds to, `append="true"`, is the server's: no stand-in model of its own.
 expectBuilt(
-  "a --model given, which the package's own does not replace",
-  unchanged,
-  withModel,
+  'a widget that does not show its property, beside a content-model.json, in a package that only appends to types',
+  ({ directory, edit }) => {
+    BOOLEAN_RECEIVED({ edit });
+    for (const component of ['payers-claims-demo-model.xml', 'payers-claims-demo-workflow.xml']) {
+      const file = join(directory, 'bundle', 'OSGI-INF', component);
+      writeFileSync(
+        file,
+        readFileSync(file, 'utf8').replaceAll('<doctype name=', '<doctype append="true" name='),
+      );
+    }
+  },
+  [],
   undefined,
   OWN_MODEL_SAID,
+);
+// Given another model, that one is used, and the package's own is not read: here its own is broken.
+expectBuilt(
+  "a --model given, which the package's own, broken, does not replace",
+  ({ directory, edit }) => {
+    writeFileSync(
+      join(dirname(directory), 'given-model.json'),
+      readFileSync(join(directory, MODEL)),
+    );
+    edit(MODEL, '"Claim": {', '"Claims": {');
+  },
+  (scratch) => ['--model', join(scratch, 'given-model.json')],
+  undefined,
+  OWN_MODEL_SAID,
+);
+// The package's own model that cannot be read is the package's defect, refused at step 2 with no
+// zip, not the command's, which a --model file that cannot be read is (exit 2, below).
+expectRefused(
+  "a package's own content-model.json that cannot be read",
+  ({ edit }) => edit(MODEL, '},\n  "facets": [', '},\n  "facet": ['),
+  2,
+  "the package's own content-model.json, which describes its stand-in model, cannot be read as a content model",
 );
 
 // A model the validator cannot read stops the run, as a wrong allow-list does: exit 2, neither

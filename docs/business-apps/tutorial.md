@@ -26,13 +26,15 @@ byte, but for its README. Then the tools changed, after the run's feedback (the 
 the pipeline now refuses a label key with no text and a facet its page provider cannot answer, and
 holds a package that ships a stand-in model to its own `content-model.json`. So steps 2 to 8 were
 followed again from an empty package the same day, by a script that ran each command and wrote
-each file and each label from this page, and part 2's `validate_package` was asked again over
-stdio: the outputs those steps quote are that run's, and the package it built is the reference
-answer's again, byte for byte but for its README, with the same digest. Steps 1 and 9, and part 2's
-`preview_package`, whose outputs the change does not touch, were not run again. Three things were
-not run at all, and each place says so: registering the MCP server with Claude Code, installing the
-package on a server, and a person outside the team doing all of it. The times are estimates for a person new to the repository, not measurements: measuring
-them is the plan's acceptance test, still to run.
+each file and each label from this page. It took step 5's hand path: the step's refusal and its
+`app-model --aggregates` command it ran first, then put the package back as it was before them.
+Part 2's `validate_package` was asked again over stdio. The outputs those steps quote are that
+run's, and the package it built is the reference answer's again, byte for byte but for its README,
+with the same digest. Steps 1 and 9, and part 2's `preview_package`, whose outputs the change does
+not touch, were not run again. Three things were not run at all, and each place says so:
+registering the MCP server with Claude Code, installing the package on a server, and a person
+outside the team doing all of it. The times are estimates for a person new to the repository, not
+measurements: measuring them is the plan's acceptance test, still to run.
 
 ## What you build
 
@@ -577,7 +579,8 @@ with columns, a sort and facets. **A facet is an aggregate of the page provider'
 only the search index answers aggregates: the page provider step 2 wrote reads the repository and
 returns none. On a server, the queue would leave the facet out, saying so only in the browser's
 console ([app-definition-v2.md](app-definition-v2.md), section 4). So the pipeline refuses a facet
-on it. Tried, with the queue and its facets below written first:
+on it. Tried, with the queue and its facets below written first, and the facets' keys given their
+texts:
 
 ```text
 3 layouts were held to the content model in business-apps/packages/facilities-demo/content-model.json.

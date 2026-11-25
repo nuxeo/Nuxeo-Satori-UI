@@ -301,10 +301,26 @@ function run({
   // it, so that a property it does not have is refused in CI as well.
   const own = model === undefined ? ownModel(directory) : null;
   const heldTo = model ?? own;
-  if (own !== null)
+  if (own !== null) {
     process.stdout.write(
       `The content model is the package's own ${OWN_MODEL}, since the package ships a stand-in model and no --model was given.\n`,
     );
+    // Read first, as the validator would: the package's own file that cannot be read is the
+    // package's defect, refused here, not a command given wrongly, which --model's would be.
+    const read = spawnSync(process.execPath, [VALIDATOR, 'model', own], {
+      encoding: 'utf8',
+      env: withoutCredentials(process.env),
+      maxBuffer: OUTPUT_LIMIT,
+    });
+    if (read.status !== 0) {
+      process.stderr.write(read.stdout ?? '');
+      process.stderr.write(read.stderr ?? '');
+      return refuse(
+        2,
+        `the package's own ${OWN_MODEL}, which describes its stand-in model, cannot be read as a content model, as above. Write it again with app-model, or mend it.`,
+      );
+    }
+  }
   const flags = [
     ...(allowList ? ['--allow-list', allowList] : []),
     ...(registered ? ['--registered', registered] : []),
@@ -652,15 +668,18 @@ function componentsOf(directory) {
 /**
  * The package's own content model, when no other is given: `content-model.json` beside `bundle/`,
  * as `app-model` writes it, when the package ships a stand-in model, a component that registers
- * document types. `null` otherwise: a package on a customer's model ships no types, and a file
- * there with no stand-in behind it describes a server, which may have changed since.
+ * document types of its own. `null` otherwise: a package on a customer's model ships no types, and
+ * a file there with no stand-in behind it describes a server, which may have changed since. A
+ * `<doctype append="true">` adds to a type the server has, and is not one of the package's own.
  */
 function ownModel(directory) {
   const file = join(directory, OWN_MODEL);
   if (!existsSync(file) || !lstatSync(file).isFile()) return null;
   const standIn = componentsOf(directory).some(({ xml }) =>
     extensionsOf(xml, 'org.nuxeo.ecm.core.schema.TypeService', 'doctype').some(([from, to]) =>
-      new RegExp(`<doctype${TAG}`).test(xml.slice(from, to)),
+      [...xml.slice(from, to).matchAll(new RegExp(`<doctype${TAG}`, 'g'))].some(
+        ([, attributes]) => attributesOf(attributes).append?.toLowerCase() !== 'true',
+      ),
     ),
   );
   return standIn ? file : null;

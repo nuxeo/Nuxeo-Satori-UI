@@ -603,6 +603,8 @@ describe.skipIf(process.platform === 'win32')(
       const directory = copy();
       const file = join(directory, 'bundle/agentic-ui-config/home.json');
       const home = JSON.parse(readFileSync(file, 'utf8'));
+      // Its literal label would win over the key, so the key alone names the card.
+      delete home.cards[1].label;
       home.cards[1].labelKey = 'acme-desk.home.open';
       writeFileSync(file, JSON.stringify(home));
       const run = pipeline(directory, flags(directory));
