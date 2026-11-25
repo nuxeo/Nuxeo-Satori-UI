@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { CURRENT_USERNAME } from '../current-user.token';
 import { NUXEO_API_ORIGIN } from '../nuxeo-api.config';
-import { DocumentDetailService } from './document-detail.service';
+import { ANNOTATION_DOCUMENTS_QUERY, DocumentDetailService } from './document-detail.service';
 
 describe('DocumentDetailService permissions', () => {
   let service: DocumentDetailService;
@@ -402,19 +402,57 @@ describe('DocumentDetailService permissions', () => {
     await expect(blob$).resolves.toBeInstanceOf(Blob);
   });
 
-  it('getAnnotations asks @annotation for the one file its xpath names', async () => {
-    const list$ = firstValueFrom(service.getAnnotations('doc-uid', 'picture:views'));
+  describe('getAnnotationDocuments', () => {
+    type Query = { params: { currentPageIndex: number } };
+    const isQuery = (index: number) => (r: { url: string; body: unknown }) =>
+      r.url === '/nuxeo/api/v1/automation/Repository.Query' &&
+      (r.body as Query | null)?.params?.currentPageIndex === index;
 
-    const req = httpMock.expectOne(
-      (r) =>
-        r.url === '/nuxeo/api/v1/id/doc-uid/@annotation' &&
-        r.params.get('xpath') === 'picture:views' &&
-        r.params.keys().length === 1,
-    );
-    expect(req.request.method).toBe('GET');
-    req.flush({ 'entity-type': 'annotations', entries: [] });
+    it('asks the repository, not the index, for one file and one origin, oldest first by the server date', async () => {
+      const docs$ = firstValueFrom(
+        service.getAnnotationDocuments('doc-uid', 'picture:views', 'nuxeo-satori.review'),
+      );
+      const req = httpMock.expectOne(isQuery(0));
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        params: {
+          query: ANNOTATION_DOCUMENTS_QUERY,
+          queryParams: ['doc-uid', 'picture:views', 'nuxeo-satori.review'],
+          pageSize: 1000,
+          currentPageIndex: 0,
+        },
+        context: {},
+      });
+      expect(ANNOTATION_DOCUMENTS_QUERY).toContain('ORDER BY dc:created ASC');
+      expect(req.request.headers.get('properties')).toBe(
+        'dublincore,comment,annotation,externalEntity',
+      );
+      req.flush({ entries: [{ uid: 'a1' }], isNextPageAvailable: false });
+      await expect(docs$).resolves.toEqual([{ uid: 'a1' }]);
+    });
 
-    await expect(list$).resolves.toEqual({ 'entity-type': 'annotations', entries: [] });
+    it('reads every page, in order', async () => {
+      const docs$ = firstValueFrom(service.getAnnotationDocuments('doc-uid', 'x:y', 'o'));
+      httpMock.expectOne(isQuery(0)).flush({ entries: [{ uid: 'a1' }], isNextPageAvailable: true });
+      httpMock.expectOne(isQuery(1)).flush({ entries: [{ uid: 'a2' }], isNextPageAvailable: true });
+      httpMock
+        .expectOne(isQuery(2))
+        .flush({ entries: [{ uid: 'a3' }], isNextPageAvailable: false });
+      await expect(docs$).resolves.toEqual([{ uid: 'a1' }, { uid: 'a2' }, { uid: 'a3' }]);
+    });
+
+    it('errors, rather than answer part of a review, on an answer that is not a list or on too many pages', async () => {
+      const odd$ = firstValueFrom(service.getAnnotationDocuments('doc-uid', 'x:y', 'o'));
+      httpMock.expectOne(isQuery(0)).flush({ 'entity-type': 'exception' });
+      await expect(odd$).rejects.toMatchObject({ status: 500 });
+
+      const many$ = firstValueFrom(service.getAnnotationDocuments('doc-uid', 'x:y', 'o'));
+      for (let index = 0; index < 20; index++)
+        httpMock
+          .expectOne(isQuery(index))
+          .flush({ entries: [{ uid: `a${index}` }], isNextPageAvailable: true });
+      await expect(many$).rejects.toMatchObject({ status: 500 });
+    });
   });
 
   it('createAnnotation posts the file, the text and the payload, and no author', async () => {

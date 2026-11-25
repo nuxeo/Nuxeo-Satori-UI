@@ -1560,6 +1560,7 @@
       "failed": "The review could not be loaded",
       "heading": "Review",
       "hint": "Click the picture where the pin goes, or set how far across and down it is.",
+      "keys": "Use the arrow keys to move between the pins.",
       "loading": "Loading the review",
       "new-pin": "New pin in round {{round}}",
       "no-pins": "No pins in this round yet",

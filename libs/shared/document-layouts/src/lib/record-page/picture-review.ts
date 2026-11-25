@@ -5,6 +5,25 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
+ * One annotation as the review reads it: from the repository, by
+ * `DocumentDetailService.getAnnotationDocuments`, or from the answer to one just written.
+ */
+export interface ReviewAnnotation {
+  readonly id: string;
+  readonly author: string;
+  readonly text: string;
+  /**
+   * When the repository wrote it, `dc:created`: the order the review reads in. For one just
+   * written, the answer's `creationDate`, which the server fills when the request sends none, as
+   * the review's never does, until the record's annotations are read again.
+   */
+  readonly written: string;
+  readonly xpath: string | null;
+  readonly origin: string | null;
+  readonly entity: string | null;
+}
+
+/**
  * A picture's review, on Nuxeo's own annotations (layout-v2.md, section 2, "Review"): each pin is
  * an annotation on the record, and so is each round's close. No schema and no add-on: the record
  * needs only to be one that may be commented on, as every document is.
@@ -14,12 +33,22 @@ import {
  *   Annotations tab's viewer's, ARender's, which are on `file:content`.
  * - **A place survives a view of another size.** A pin is where it is as fractions of the view's
  *   width and height, from its top left: Nuxeo makes every view of a picture at its proportions.
- * - **Rounds move one at a time.** A round's close names the round it closes, and only the round
- *   open then closes: a second close of the same round, or of one not open, changes nothing. A
- *   pin is in the round it says, or in the open one if it names a later one.
+ * - **In the order they were written.** The annotations are read oldest first, by `dc:created`,
+ *   which the repository stamps when each is written and no field of the request can set. A pin is
+ *   in the round open when it was written, whatever round its payload names: a page that had not
+ *   yet seen a round closed writes the round before, and its pin goes into the next one all the
+ *   same.
+ * - **Rounds move one at a time.** Each close closes the round open then, and opens the next. One
+ *   that names a round already closed, as a second person closing the same round at once writes,
+ *   changes nothing; one that names a later round still closes only the open one. So a close
+ *   deleted from the record's comments renumbers the rounds after it, and merges none. Past
+ *   {@link MAX_ROUNDS}, a close changes nothing.
  * - **What it reads is anyone's.** Whoever may comment on the record may write an annotation of
  *   this origin, with any payload, so each one is held to its form here, and one that is not a pin
- *   or a close is left out and counted.
+ *   or a close is left out and counted. Nuxeo 2025 makes the signed-in user its author whatever the
+ *   request says, and keeps a `creationDate` the request sends, which is why the order is not read
+ *   from it. A holder of `Write` on the record, which its annotations inherit, can still change an
+ *   annotation's `dc:created` or its author afterwards, as they can change the record.
  */
 
 /** The file a review's annotations are on: the picture's views, whichever one is shown. */
@@ -31,7 +60,7 @@ export const REVIEW_ORIGIN = 'nuxeo-satori.review';
 /** The version of the payload the review writes, and the only one it reads. */
 const PAYLOAD_VERSION = 1;
 
-/** The most rounds a review reads: a bound on what a payload may claim. */
+/** The most rounds a review counts, and the highest a payload may name. */
 export const MAX_ROUNDS = 999;
 
 /** The longest note the form takes. A convenience: the server stores longer ones, and they show. */
@@ -42,6 +71,7 @@ export interface ReviewPin {
   readonly id: string;
   /** Its number on the picture: the order the pins were placed in, across rounds, 1 first. */
   readonly number: number;
+  /** The round open when it was written. */
   readonly round: number;
   /** Where it is, as fractions of the view's width and height from its top left: 0 to 1. */
   readonly x: number;
@@ -82,8 +112,38 @@ const isRound = (value: unknown): value is number =>
 const isFraction = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 
+const textOf = (value: unknown): string => (typeof value === 'string' ? value : '');
+const textOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** An `Annotation` document, as `getAnnotationDocuments` answers it. */
+export function fromAnnotationDocument(document: NuxeoDocument): ReviewAnnotation {
+  const properties = document.properties ?? {};
+  return {
+    id: document.uid,
+    author: textOf(properties['comment:author']),
+    text: textOf(properties['comment:text']),
+    written: textOf(properties['dc:created']),
+    xpath: textOrNull(properties['annotation:xpath']),
+    origin: textOrNull(properties['externalEntity:origin']),
+    entity: textOrNull(properties['externalEntity:entity']),
+  };
+}
+
+/** The answer to an annotation just written, until the record's annotations are read again. */
+export function fromCreatedAnnotation(annotation: NuxeoAnnotation): ReviewAnnotation {
+  return {
+    id: annotation.id,
+    author: textOf(annotation.author),
+    text: textOf(annotation.text),
+    written: textOf(annotation.creationDate),
+    xpath: textOrNull(annotation.xpath),
+    origin: textOrNull(annotation.origin),
+    entity: textOrNull(annotation.entity),
+  };
+}
+
 /** An annotation's payload, held to the review's form; `null` for anything else. */
-function payloadOf(annotation: NuxeoAnnotation): Payload | null {
+function payloadOf(annotation: ReviewAnnotation): Payload | null {
   if (typeof annotation.entity !== 'string') return null;
   let parsed: unknown;
   try {
@@ -99,9 +159,9 @@ function payloadOf(annotation: NuxeoAnnotation): Payload | null {
   return null;
 }
 
-/** When it was written, as a number to sort by; one with no date the server gave sorts first. */
-function writtenAt(annotation: NuxeoAnnotation): number {
-  const time = Date.parse(annotation.creationDate);
+/** When it was written, as a number to sort by; one with no date sorts first. */
+function writtenAt(annotation: ReviewAnnotation): number {
+  const time = Date.parse(annotation.written);
   return Number.isNaN(time) ? 0 : time;
 }
 
@@ -109,7 +169,7 @@ function writtenAt(annotation: NuxeoAnnotation): number {
  * The review the record's annotations on {@link REVIEW_XPATH} hold. Annotations of another origin,
  * someone else's on the same file, are not the review's, and are passed over without a count.
  */
-export function readPictureReview(annotations: readonly NuxeoAnnotation[]): PictureReview {
+export function readPictureReview(annotations: readonly ReviewAnnotation[]): PictureReview {
   const ours = annotations
     .filter(
       (annotation) => annotation.origin === REVIEW_ORIGIN && annotation.xpath === REVIEW_XPATH,
@@ -122,28 +182,27 @@ export function readPictureReview(annotations: readonly NuxeoAnnotation[]): Pict
     );
 
   const rounds: ReviewRound[] = [];
+  const pins: ReviewPin[] = [];
   let round = 1;
   for (const { annotation, payload } of ours) {
-    if (payload?.kind !== 'round-closed' || payload.round !== round) continue;
-    rounds.push({ number: round, closedBy: annotation.author, closedAt: annotation.creationDate });
-    round++;
+    if (payload?.kind === 'round-closed') {
+      if (payload.round < round || round >= MAX_ROUNDS) continue;
+      rounds.push({ number: round, closedBy: annotation.author, closedAt: annotation.written });
+      round++;
+    } else if (payload?.kind === 'pin') {
+      pins.push({
+        id: annotation.id,
+        number: pins.length + 1,
+        round,
+        x: payload.x,
+        y: payload.y,
+        note: annotation.text,
+        author: annotation.author,
+        created: annotation.written,
+      });
+    }
   }
   rounds.push({ number: round, closedBy: null, closedAt: null });
-
-  const pins: ReviewPin[] = [];
-  for (const { annotation, payload } of ours) {
-    if (payload?.kind !== 'pin') continue;
-    pins.push({
-      id: annotation.id,
-      number: pins.length + 1,
-      round: Math.min(payload.round, round),
-      x: payload.x,
-      y: payload.y,
-      note: typeof annotation.text === 'string' ? annotation.text : '',
-      author: annotation.author,
-      created: annotation.creationDate,
-    });
-  }
   const unreadable = ours.filter(({ payload }) => payload === null).length;
   return { pins, round, rounds, unreadable };
 }

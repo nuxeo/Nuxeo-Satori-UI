@@ -117,7 +117,9 @@ works on any boundary. `TaskService.getUserTasks` relies on both to return the n
 An annotation is a comment that names one of the document's files by `xpath`, with its writer's
 own `origin` and `entity` as text, so `@comment` lists annotations too. On Nuxeo 2025 either is
 accepted from anyone who may **read** the document: the `Comment` permission exists, and is not
-checked (docs/api-integrations.md, section 39).
+checked. The server sets the author, but keeps a `creationDate` the request sends: order
+annotations by their document's `dc:created`, asked of the repository with `Repository.Query`, not by it (docs/api-integrations.md,
+section 39).
 
 ---
 

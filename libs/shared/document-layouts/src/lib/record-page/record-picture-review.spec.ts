@@ -6,12 +6,17 @@ import {
   DocumentDetailService,
   type NuxeoAnnotation,
   type NuxeoAnnotationDraft,
-  type NuxeoAnnotationList,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, type Observable } from 'rxjs';
 
-import { REVIEW_ORIGIN, REVIEW_XPATH, pinPayload, roundClosedPayload } from './picture-review';
+import {
+  MAX_ROUNDS,
+  REVIEW_ORIGIN,
+  REVIEW_XPATH,
+  pinPayload,
+  roundClosedPayload,
+} from './picture-review';
 import { RecordPictureReviewComponent } from './record-picture-review';
 
 function picture(permissions: string[] | undefined, uid = 'p1'): NuxeoDocument {
@@ -47,7 +52,7 @@ function stored(entity: string, overrides: Partial<NuxeoAnnotation> = {}): Nuxeo
     parentId: 'p1',
     author: 'reviewer1',
     text: `Note ${made}`,
-    creationDate: `2026-11-25T10:00:${String(made).padStart(2, '0')}.000Z`,
+    creationDate: new Date(Date.UTC(2026, 10, 25, 10) + made * 1000).toISOString(),
     xpath: REVIEW_XPATH,
     origin: REVIEW_ORIGIN,
     entity,
@@ -55,9 +60,30 @@ function stored(entity: string, overrides: Partial<NuxeoAnnotation> = {}): Nuxeo
   };
 }
 
+/** An annotation as the repository holds it: what `getAnnotationDocuments` answers. */
+function asDocument(annotation: NuxeoAnnotation): NuxeoDocument {
+  return {
+    uid: annotation.id,
+    title: 'comment',
+    type: 'Annotation',
+    path: `/assets/p1/Comments/${annotation.id}`,
+    lastModified: annotation.creationDate,
+    properties: {
+      'dc:created': annotation.creationDate,
+      'comment:author': annotation.author,
+      'comment:text': annotation.text,
+      'annotation:xpath': annotation.xpath,
+      'externalEntity:origin': annotation.origin,
+      'externalEntity:entity': annotation.entity,
+    },
+  };
+}
+
 describe('RecordPictureReviewComponent', () => {
   let fixture: ComponentFixture<RecordPictureReviewComponent> | null;
-  let reads: { uid: string; xpath: string; answer: Subject<NuxeoAnnotationList> }[];
+  let reads: { uid: string; xpath: string; origin: string; answer: Subject<NuxeoDocument[]> }[];
+  /** What the picture's view answers: at once, unless a test holds it back. */
+  let view: () => Observable<Blob>;
   let writes: { uid: string; draft: NuxeoAnnotationDraft; answer: Subject<NuxeoAnnotation> }[];
   let announced: string[];
 
@@ -67,6 +93,7 @@ describe('RecordPictureReviewComponent', () => {
     reads = [];
     writes = [];
     announced = [];
+    view = () => of(new Blob(['jpeg'], { type: 'image/jpeg' }));
     Object.assign(URL, {
       createObjectURL: vi.fn(() => 'blob:view-1'),
       revokeObjectURL: vi.fn(),
@@ -77,11 +104,14 @@ describe('RecordPictureReviewComponent', () => {
         {
           provide: DocumentDetailService,
           useValue: {
-            fetchBlobByXpath: (): Observable<Blob> =>
-              of(new Blob(['jpeg'], { type: 'image/jpeg' })),
-            getAnnotations: (uid: string, xpath: string): Observable<NuxeoAnnotationList> => {
-              const answer = new Subject<NuxeoAnnotationList>();
-              reads.push({ uid, xpath, answer });
+            fetchBlobByXpath: (): Observable<Blob> => view(),
+            getAnnotationDocuments: (
+              uid: string,
+              xpath: string,
+              origin: string,
+            ): Observable<NuxeoDocument[]> => {
+              const answer = new Subject<NuxeoDocument[]>();
+              reads.push({ uid, xpath, origin, answer });
               return answer;
             },
             createAnnotation: (
@@ -123,7 +153,7 @@ describe('RecordPictureReviewComponent', () => {
   }
 
   async function answerRead(entries: NuxeoAnnotation[], index = reads.length - 1) {
-    reads[index].answer.next({ entries });
+    reads[index].answer.next(entries.map(asDocument));
     reads[index].answer.complete();
     return settle();
   }
@@ -163,7 +193,9 @@ describe('RecordPictureReviewComponent', () => {
 
   it("reads the record's annotations on its views, and draws each pin on the picture at its place", async () => {
     const root = await render(picture(REVIEWER));
-    expect(reads.map((read) => [read.uid, read.xpath])).toEqual([['p1', 'picture:views']]);
+    expect(reads.map((read) => [read.uid, read.xpath, read.origin])).toEqual([
+      ['p1', 'picture:views', 'nuxeo-satori.review'],
+    ]);
     expect(root.querySelector('.record-review nxs-spinner')).not.toBeNull();
 
     await answerRead([
@@ -297,7 +329,7 @@ describe('RecordPictureReviewComponent', () => {
     expect(root.querySelector<HTMLElement>('.record-review__pin--draft')?.style.top).toBe('50%');
   });
 
-  it('places a pin by keyboard alone: Add a pin, how far across and down, a note', async () => {
+  it('places a pin with the form alone: Add a pin, how far across and down, a note', async () => {
     const root = await render(picture(REVIEWER));
     await answerRead([]);
     button(root, 'Add a pin')?.click();
@@ -308,7 +340,7 @@ describe('RecordPictureReviewComponent', () => {
     expect(root.querySelector<HTMLElement>('.record-review__pin--draft')?.style.left).toBe('50%');
     type(across, '30');
     type(root.querySelector<HTMLInputElement>('input[id$="-down"]'), '70');
-    // A value out of range is held to the picture; an empty one moves nothing.
+    // An empty value moves nothing.
     type(root.querySelector<HTMLInputElement>('input[id$="-down"]'), '');
     type(root.querySelector('textarea'), 'Sleeve colour is off');
     await settle();
@@ -487,6 +519,152 @@ describe('RecordPictureReviewComponent', () => {
     await answerWrite(stored(writes[0].draft.entity as string));
     expect(marks(root)).toHaveLength(0);
     expect(root.querySelector('.record-review__form')).toBeNull();
+  });
+
+  it('reads the record again after a write, and files a pin by the round open when it was written', async () => {
+    const root = await render(picture(REVIEWER));
+    // This page has not seen round 1 closed by someone else.
+    await answerRead([stored(pinPayload(1, 0.2, 0.2))]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    type(root.querySelector('textarea'), 'Late');
+    await settle();
+    root.querySelector('form')?.dispatchEvent(new Event('submit'));
+    await settle();
+    expect(JSON.parse(writes[0].draft.entity as string).round).toBe(1);
+    const late = stored(writes[0].draft.entity as string, {
+      id: 'late',
+      text: 'Late',
+      creationDate: '2026-11-25T10:10:00.000Z',
+    });
+    await answerWrite(late);
+    expect(reads).toHaveLength(2);
+    // The server's answer: the close came first, so the pin is round 2's.
+    const close = stored(roundClosedPayload(1), {
+      author: 'lead1',
+      creationDate: '2026-11-25T10:05:00.000Z',
+    });
+    await answerRead([stored(pinPayload(1, 0.2, 0.2)), close, late]);
+    expect(root.querySelector('.record-review__status')?.textContent?.trim()).toBe(
+      'Round 2 is open',
+    );
+    expect(marks(root).map((each) => each.getAttribute('data-round'))).toEqual(['1', '2']);
+  });
+
+  it('keeps what it shows when the read after a write fails', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    type(root.querySelector('textarea'), 'Kept');
+    await settle();
+    root.querySelector('form')?.dispatchEvent(new Event('submit'));
+    await settle();
+    await answerWrite(stored(writes[0].draft.entity as string, { text: 'Kept' }));
+    reads[1].answer.error(new HttpErrorResponse({ status: 500 }));
+    await settle();
+    expect(marks(root)).toHaveLength(1);
+    expect(root.querySelector('.record-review nxs-error-state')).toBeNull();
+  });
+
+  it('offers no pin until a view of the picture is shown', async () => {
+    const held = new Subject<Blob>();
+    view = () => held;
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    expect(root.querySelector('.record-review__status')).not.toBeNull();
+    expect(button(root, 'Add a pin')).toBeNull();
+    expect(surface(root)).toBeNull();
+    held.next(new Blob(['jpeg'], { type: 'image/jpeg' }));
+    held.complete();
+    await settle();
+    expect(button(root, 'Add a pin')).not.toBeNull();
+  });
+
+  it('says a pin the server saved but the review cannot read, and keeps what was typed', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    type(root.querySelector('textarea'), 'Odd');
+    await settle();
+    root.querySelector('form')?.dispatchEvent(new Event('submit'));
+    await settle();
+    await answerWrite(stored('not json', { text: 'Odd' }));
+    expect(root.querySelector('.record-review__error')?.textContent?.trim()).toBe(
+      'The pin could not be placed',
+    );
+    expect(root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Odd');
+    expect(announced).toEqual([]);
+  });
+
+  it('says a close that opened no round, as one past the last round counted', async () => {
+    const closes = Array.from({ length: MAX_ROUNDS - 1 }, (_, index) =>
+      stored(roundClosedPayload(index + 1)),
+    );
+    const root = await render(picture(LEAD));
+    await answerRead([...closes, stored(pinPayload(MAX_ROUNDS, 0.5, 0.5))]);
+    button(root, `Close round ${MAX_ROUNDS}`)?.click();
+    await settle();
+    await answerWrite(stored(roundClosedPayload(MAX_ROUNDS)));
+    expect(root.querySelector('.record-review__error')?.textContent?.trim()).toBe(
+      'The round could not be closed',
+    );
+    expect(announced).toEqual([]);
+  });
+
+  it('says a write the server ended the session for as a failure, not a refusal', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    type(root.querySelector('textarea'), 'Expired');
+    await settle();
+    root.querySelector('form')?.dispatchEvent(new Event('submit'));
+    await settle();
+    writes[0].answer.error(new HttpErrorResponse({ status: 401 }));
+    await settle();
+    expect(root.querySelector('.record-review__error')?.textContent?.trim()).toBe(
+      'The pin could not be placed',
+    );
+  });
+
+  it('chooses no pin when the chosen one is pressed again', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([stored(pinPayload(1, 0.2, 0.2))]);
+    marks(root)[0].click();
+    await settle();
+    expect(marks(root)[0].getAttribute('aria-pressed')).toBe('true');
+    marks(root)[0].click();
+    await settle();
+    expect(marks(root)[0].getAttribute('aria-pressed')).toBe('false');
+    expect(entries(root)[0].getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('names the pins on the picture a toolbar, and says how the arrow keys move in it', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([stored(pinPayload(1, 0.2, 0.2))]);
+    const toolbar = root.querySelector('.record-review__marks');
+    expect(toolbar?.getAttribute('role')).toBe('toolbar');
+    const hint = root.querySelector(`[id="${toolbar?.getAttribute('aria-describedby')}"]`);
+    expect(hint?.textContent?.trim()).toBe('Use the arrow keys to move between the pins.');
+  });
+
+  it('writes the place a pin will have back into a field once it is left, and leaves validation to it', async () => {
+    const root = await render(picture(REVIEWER));
+    await answerRead([]);
+    button(root, 'Add a pin')?.click();
+    await settle();
+    expect(root.querySelector('form')?.hasAttribute('novalidate')).toBe(true);
+    const across = root.querySelector<HTMLInputElement>('input[id$="-across"]') as HTMLInputElement;
+    type(across, '140');
+    across.dispatchEvent(new Event('change'));
+    await settle();
+    expect(across.value).toBe('100');
+    type(across, '');
+    across.dispatchEvent(new Event('change'));
+    await settle();
+    expect(across.value).toBe('100');
   });
 
   it('asks nothing again when the same record is reloaded, as after an edit', async () => {

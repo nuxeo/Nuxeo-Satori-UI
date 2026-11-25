@@ -23,10 +23,14 @@
         ></button>
       }
       @if (pins().length > 0) {
+        <span class="cdk-visually-hidden" [id]="id + '-keys'">{{
+          'document-layouts.review.keys' | translate
+        }}</span>
         <div
           class="record-review__marks"
-          role="group"
+          role="toolbar"
           [attr.aria-label]="'document-layouts.review.on-picture' | translate"
+          [attr.aria-describedby]="id + '-keys'"
         >
           @for (pin of pins(); track pin.id) {
             <button
@@ -81,7 +85,7 @@
           {{ 'document-layouts.review.round-open' | translate: { round: round() } }}
         </p>
         <div class="record-review__actions">
-          @if (may.pin && !shownDraft) {
+          @if (may.pin && pictureShown() && !shownDraft) {
             <button
               mat-flat-button
               type="button"
@@ -111,7 +115,9 @@
           </p>
         }
         @if (shownDraft) {
+          <!-- novalidate: the fields are held to the picture as they are typed in, not by the browser. -->
           <form
+            novalidate
             class="record-review__form"
             [attr.aria-labelledby]="id + '-form-heading'"
             (submit)="$event.preventDefault(); placePin()"
@@ -133,6 +139,7 @@
                   [id]="id + '-across'"
                   [value]="(shownDraft.x * 100).toFixed(0)"
                   (input)="moveDraft('x', $event)"
+                  (change)="settleDraft('x', $event)"
                 />
               </mat-form-field>
               <mat-form-field appearance="outline" subscriptSizing="dynamic">
@@ -146,6 +153,7 @@
                   [id]="id + '-down'"
                   [value]="(shownDraft.y * 100).toFixed(0)"
                   (input)="moveDraft('y', $event)"
+                  (change)="settleDraft('y', $event)"
                 />
               </mat-form-field>
             </div>

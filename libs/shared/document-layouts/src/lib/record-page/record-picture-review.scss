@@ -63,10 +63,19 @@
   cursor: pointer;
   box-shadow: var(--mat-sys-level2);
 
-  /* `:focus` on its own, not in a list with `:focus-visible`: AGENTS/08-bug-patterns.md, 17. */
+  /*
+    `:focus` on its own, not in a list with `:focus-visible`: AGENTS/08-bug-patterns.md, 17. The
+    ring sits on the pin's own surface-coloured border, with no offset, and a surface halo outside
+    it, so that both its sides are the theme's surface whatever the picture is under it: an offset
+    ring lay on the picture, at about 2.3:1 on the kit's navy and 1.1:1 on its pale grey in a dark
+    theme.
+  */
   &:focus {
     outline: 3px solid var(--mat-sys-on-surface);
-    outline-offset: 2px;
+    outline-offset: 0;
+    box-shadow:
+      0 0 0 6px var(--mat-sys-surface),
+      var(--mat-sys-level2);
   }
 
   &:focus:not(:focus-visible) {

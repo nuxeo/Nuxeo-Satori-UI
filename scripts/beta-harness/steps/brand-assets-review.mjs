@@ -116,6 +116,22 @@ function unwrap(body) {
 
 const close = (a, b, within) => typeof a === 'number' && Math.abs(a - b) <= within;
 
+/** WCAG's contrast ratio of two `rgb()` or `rgba()` colours, as computed styles write them. */
+function contrast(a, b) {
+  const luminance = (css) => {
+    const parts = /rgba?\(([^)]*)\)/.exec(css)?.[1].split(',').map(Number);
+    if (!parts || parts.length < 3 || parts.slice(0, 3).some(Number.isNaN)) return null;
+    const [r, g, b2] = parts
+      .slice(0, 3)
+      .map((value) => value / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b2;
+  };
+  const [one, two] = [luminance(a), luminance(b)];
+  if (one === null || two === null) return null;
+  return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
+}
+
 /** The review as drawn: its round, its pins on the picture, its list, and its offers. */
 function readReview(page) {
   return page
@@ -445,7 +461,12 @@ export default async function run(page, h) {
         if (window.__reviewPointer) window.__reviewPointer.count = 0;
       })
       .catch(deferred);
-    await page.locator('.record-review__add').focus().catch(deferred);
+    // From the review's heading, which is focusable from script only: Tab reaches Add a pin.
+    await page.locator('.record-review__heading').focus().catch(deferred);
+    await page.keyboard.press('Tab');
+    const onAdd = await page
+      .evaluate(() => document.activeElement?.classList.contains('record-review__add'))
+      .catch(unread);
     await page.keyboard.press('Enter');
     await page
       .waitForFunction(() => document.activeElement?.id?.endsWith('-across'), undefined, {
@@ -469,9 +490,9 @@ export default async function run(page, h) {
     const pointer = await page.evaluate(() => window.__reviewPointer?.count ?? null).catch(unread);
     const third = typed?.pins.find((pin) => pin.number === 3);
     h.check(
-      'the form is filled and sent with the keyboard alone: Tab reaches Place pin, and no pointerdown or mousedown is fired',
-      onPlace === true && pointer === 0,
-      `Place pin focused: ${onPlace}, pointer events: ${pointer}`,
+      'Tab reaches Add a pin from the heading and Place pin from the note, and no pointerdown or mousedown is fired',
+      onAdd === true && onPlace === true && pointer === 0,
+      `Add a pin focused: ${onAdd}, Place pin focused: ${onPlace}, pointer events: ${pointer}`,
     );
     h.check(
       'the keyboard pin is pin 3, in round 2, at the place typed',
@@ -482,23 +503,74 @@ export default async function run(page, h) {
         typed.rounds[0]?.entries.map((entry) => entry.note).join() === TYPED.note,
       JSON.stringify(third),
     );
-    // The pins on the picture are one stop: the one Tab reaches is the chosen one, the new pin.
-    await page
-      .locator('.record-review__marks .record-review__pin[tabindex="0"]')
-      .focus()
-      .catch(deferred);
+    // The pins on the picture are one Tab stop, the chosen pin, the new one: Shift+Tab from the
+    // first view button reaches it, and a second Shift+Tab leaves the picture.
+    await page.locator('.record-picture__view').first().focus().catch(deferred);
+    await page.keyboard.press('Shift+Tab');
+    const stop = await page
+      .evaluate(() => document.activeElement?.getAttribute('data-pin') ?? null)
+      .catch(unread);
+    await page.keyboard.press('Shift+Tab');
+    const before = await page
+      .evaluate(() =>
+        document.activeElement?.closest('.record-review__marks') ? 'a pin' : 'out of the pins',
+      )
+      .catch(unread);
+    await page.keyboard.press('Tab');
+    h.check(
+      'Shift+Tab from the views reaches one pin on the picture, the one just placed, and the next leaves the pins',
+      stop === '3' && before === 'out of the pins',
+      `reached pin ${stop}, then ${before}`,
+    );
     await page.keyboard.press('Home');
     const reached = await readReview(page);
     const focused = await page
       .evaluate(() => document.activeElement?.getAttribute('data-pin'))
       .catch(unread);
     h.check(
-      'the pins on the picture are one keyboard stop, and Home moves to pin 1 and chooses it',
+      'Home moves to pin 1 and chooses it, and pin 1 is then the one Tab stop',
       focused === '1' &&
         reached?.pins.filter((pin) => pin.tabIndex === 0).length === 1 &&
         reached.pins[0]?.tabIndex === 0 &&
         reached.pins[0]?.pressed === 'true',
       JSON.stringify(reached?.pins.map((pin) => [pin.number, pin.tabIndex, pin.pressed])),
+    );
+    // The focused pin's ring, as drawn: no offset, so that it does not lie on the picture, and a
+    // halo of the theme's surface outside it, against which its contrast is measured. Its style
+    // and width first: a ring with none computes its colour to the text's (AGENTS/08, pattern 17).
+    const ring = await page
+      .evaluate(() => {
+        const pin = document.activeElement;
+        if (!pin?.classList.contains('record-review__pin')) return null;
+        const style = getComputedStyle(pin);
+        const probe = document.createElement('div');
+        probe.style.background = 'var(--mat-sys-surface)';
+        pin.parentElement?.appendChild(probe);
+        const surface = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return {
+          style: style.outlineStyle,
+          width: parseFloat(style.outlineWidth),
+          offset: style.outlineOffset,
+          color: style.outlineColor,
+          shadow: style.boxShadow,
+          surface,
+        };
+      })
+      .catch(unread);
+    const halo = /^(rgba?\([^)]*\)) 0px 0px 0px (\d+(?:\.\d+)?)px/.exec(ring?.shadow ?? '');
+    const ratio = ring && contrast(ring.color, ring.surface);
+    h.check(
+      "the focused pin's ring has no offset and a surface halo outside it, at 3:1 or more against it",
+      ring !== null &&
+        ring.style !== 'none' &&
+        ring.width >= 2 &&
+        ring.offset === '0px' &&
+        halo?.[1] === ring.surface &&
+        Number(halo?.[2]) > ring.width &&
+        ratio !== null &&
+        ratio >= 3,
+      JSON.stringify({ ...ring, ratio: ratio === null ? null : Number(ratio.toFixed(2)) }),
     );
     await page.keyboard.press('ArrowRight');
     const moved = await page
@@ -609,6 +681,16 @@ export default async function run(page, h) {
       )
       .catch(deferred);
     const small = await readReview(page);
+    // A place as fractions holds only if every view has the picture's proportions.
+    const ratios = views
+      .filter((each) => Number(each.width) > 0 && Number(each.height) > 0)
+      .map((each) => Number(each.width) / Number(each.height));
+    h.check(
+      "every view Nuxeo made has the picture's proportions, within 2%",
+      ratios.length === views.length &&
+        ratios.every((ratio) => close(ratio, ratios[0], 0.02 * ratios[0])),
+      JSON.stringify(views.map((each) => `${each.title} ${each.width}x${each.height}`)),
+    );
     h.check(
       `on the Thumbnail view, drawn at another size than ${shownView}, each pin is on the same point`,
       small?.view === 'Thumbnail' &&
@@ -625,21 +707,24 @@ export default async function run(page, h) {
     await h.screenshot('review-thumbnail-view-same-points');
 
     // ── 4.5 A reader ───────────────────────────────────────────────────────────────────────────
-    await h.step('4.5 A reader who may not comment sees the pins and is offered no pin');
+    await h.step(
+      '4.5 A reader sees the pins and is offered no pin; a holder of Comment, a pin only',
+    );
     // The record's own answer, with the permissions a reader has: a check of the page, not of the
     // server, which is said in a note.
     const isRecord = (url) => new URL(url).pathname === `/nuxeo/api/v1/id/${asset.uid}`;
-    await page.route(isRecord, async (route) => {
+    const asReader = async (route) => {
       const answer = await route.fetch();
       const body = await answer.json().catch(unread);
       if (body?.contextParameters)
         body.contextParameters.permissions = ['Read', 'Browse', 'ReadProperties', 'ReadChildren'];
       await route.fulfill({ response: answer, json: body });
-    });
+    };
+    await page.route(isRecord, asReader);
     await page.reload({ waitUntil: 'networkidle' }).catch(deferred);
     await reviewSettled(page, { pins: 3 });
     const reader = await readReview(page);
-    await page.unroute(isRecord);
+    await page.unroute(isRecord, asReader);
     h.check(
       'a reader sees the three pins and their list, with no Add a pin and no Close round',
       reader?.pins.length === 3 &&
@@ -650,6 +735,33 @@ export default async function run(page, h) {
       JSON.stringify({ add: reader?.add, close: reader?.close, readOnly: reader?.readOnly }),
     );
     await h.screenshot('review-reader-no-pin-offered');
+
+    // And a holder of Comment, not Write: offered a pin, not Close round. The same edit of the
+    // record's answer in the browser, a check of the page alone.
+    const asCommenter = async (route) => {
+      const answer = await route.fetch();
+      const body = await answer.json().catch(unread);
+      if (body?.contextParameters)
+        body.contextParameters.permissions = ['Read', 'Browse', 'ReadProperties', 'Comment'];
+      await route.fulfill({ response: answer, json: body });
+    };
+    await page.route(isRecord, asCommenter);
+    await page.reload({ waitUntil: 'networkidle' }).catch(deferred);
+    await reviewSettled(page, { pins: 3 });
+    const commenter = await readReview(page);
+    await page.unroute(isRecord, asCommenter);
+    h.check(
+      'a holder of Comment, not Write, is offered Add a pin and not Close round',
+      commenter?.pins.length === 3 &&
+        commenter.add &&
+        commenter.close === null &&
+        commenter.readOnly === null,
+      JSON.stringify({
+        add: commenter?.add,
+        close: commenter?.close,
+        readOnly: commenter?.readOnly,
+      }),
+    );
 
     // ── Health ─────────────────────────────────────────────────────────────────────────────────
     await h.step('Health');
@@ -667,11 +779,16 @@ export default async function run(page, h) {
       `the asset was of the type ${type}, and its layout came from config:dev, not from an installed package`,
     );
   } finally {
-    // Whatever happened above: the run leaves nothing behind but the trash.
+    // Whatever happened above: the run leaves nothing behind but the trash, or says what it left.
     if (scratch) {
-      await page.request
+      const trashed = await page.request
         .post(api('/automation/Document.Trash'), { data: { input: scratch, params: {} } })
-        .catch(deferred);
+        .catch(unread);
+      if (trashed?.status() !== 200)
+        h.note(
+          `the run's ${ownWorkspace ? 'workspace' : 'folder'} ${folder?.path ?? scratch} was not ` +
+            `trashed (${trashed?.status() ?? 'no answer'}): trash it by hand`,
+        );
     }
   }
 }

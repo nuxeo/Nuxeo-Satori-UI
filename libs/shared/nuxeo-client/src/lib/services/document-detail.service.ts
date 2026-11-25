@@ -1,7 +1,7 @@
 import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, forkJoin, of, map, catchError, throwError } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { EMPTY, Observable, forkJoin, of, map, catchError, throwError } from 'rxjs';
+import { expand, reduce, switchMap } from 'rxjs/operators';
 
 import { CURRENT_USERNAME } from '../current-user.token';
 import {
@@ -18,6 +18,17 @@ import { NuxeoApiBase } from './nuxeo-api-base';
 import { ALLOWED_TRANSITIONS_ENRICHER } from '../utils/allowed-transitions';
 import { normalizeDocumentAcls } from '../utils/ace-principal';
 import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-client-reason';
+
+/**
+ * A record's annotations on one file, of one origin, oldest first: `getAnnotationDocuments`'s
+ * query. Its parameters are the record, the file's xpath and the origin, in that order.
+ */
+export const ANNOTATION_DOCUMENTS_QUERY =
+  'SELECT * FROM Annotation WHERE ecm:ancestorId = ? AND annotation:xpath = ? AND externalEntity:origin = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 ORDER BY dc:created ASC, ecm:uuid ASC';
+/** A page of `getAnnotationDocuments`: Nuxeo's default largest page. */
+const ANNOTATION_PAGE_SIZE = 1000;
+/** How many pages it reads before it errors rather than answer part of a review. */
+const ANNOTATION_MAX_PAGES = 20;
 
 @Injectable({ providedIn: 'root' })
 export class DocumentDetailService {
@@ -895,14 +906,48 @@ export class DocumentDetailService {
   // ── Annotations ──
 
   /**
-   * A document's annotations on one of its files, named by the file's xpath: Nuxeo's `@annotation`
-   * adapter, which answers every one at once, unpaged, in no order it promises. An annotation is a
-   * comment that names the file it is on, so each one is in the document's comments too.
+   * A document's annotations on one of its files, of one origin, as documents, oldest first by
+   * `dc:created`, and every page of them. That is the time the repository stamped on each when it
+   * was written, which no field of `@annotation`'s body can set: an annotation's own `creationDate`
+   * is not that, since Nuxeo 2025 keeps one the request sends. Afterwards, whoever may write the
+   * annotation's document can change `dc:created`: a holder of `Write` on the record, whose
+   * permissions the annotations inherit, or of `Everything`. Asked of the
+   * repository, through `Repository.Query`, not of the search index, so that an annotation just
+   * written is in the answer: `search/lang/NXQL` reads the index, which lags. Each annotation is an
+   * `Annotation` document in the record's `Comments` folder. An answer that is not a list of
+   * documents errors with status 500.
    */
-  getAnnotations(uid: string, xpath: string): Observable<NuxeoAnnotationList> {
-    return this.http.get<NuxeoAnnotationList>(
-      this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@annotation`),
-      { params: new HttpParams().set('xpath', xpath) },
+  getAnnotationDocuments(uid: string, xpath: string, origin: string): Observable<NuxeoDocument[]> {
+    const page = (index: number): Observable<NuxeoDocumentList> =>
+      this.http
+        .post<NuxeoDocumentList>(
+          this.api.apiUrl('/nuxeo/api/v1/automation/Repository.Query'),
+          {
+            params: {
+              query: ANNOTATION_DOCUMENTS_QUERY,
+              queryParams: [uid, xpath, origin],
+              pageSize: ANNOTATION_PAGE_SIZE,
+              currentPageIndex: index,
+            },
+            context: {},
+          },
+          { headers: { properties: 'dublincore,comment,annotation,externalEntity' } },
+        )
+        .pipe(
+          switchMap((list) =>
+            Array.isArray(list?.entries)
+              ? of(list)
+              : throwError(() => ({ status: 500, message: 'not a list of documents' })),
+          ),
+        );
+    return page(0).pipe(
+      expand((list, index) => {
+        if (list.isNextPageAvailable !== true) return EMPTY;
+        if (index + 1 >= ANNOTATION_MAX_PAGES)
+          return throwError(() => ({ status: 500, message: 'too many annotations to read' }));
+        return page(index + 1);
+      }),
+      reduce((all: NuxeoDocument[], list) => [...all, ...list.entries], []),
     );
   }
 
@@ -941,7 +986,7 @@ export interface NuxeoCommentList {
 }
 
 /**
- * A comment on one of a document's files, as Nuxeo's `@annotation` adapter answers it. `origin`
+ * A comment on one of a document's files, as Nuxeo's `@annotation` adapter answers one created. `origin`
  * and `entity` are whoever wrote it's: what it is, and its own payload, as text. Anyone who may
  * write an annotation may write them, so a reader holds them to its own form before trusting them.
  */
@@ -953,10 +998,6 @@ export interface NuxeoAnnotation extends NuxeoComment {
   entity?: string | null;
   /** The signed-in user's permissions on the annotation itself. */
   permissions?: string[];
-}
-
-export interface NuxeoAnnotationList {
-  entries: NuxeoAnnotation[];
 }
 
 /** What `createAnnotation` writes: the file it is on, its text, and its writer's own payload. */

@@ -30,10 +30,12 @@ downloaded.
   `Picture`, for a look at the asset page in dev mode.
 - **The demo script,** as a steps file of the beta harness:
   [`scripts/beta-harness/steps/brand-assets-demo.mjs`](../../../scripts/beta-harness/steps/brand-assets-demo.mjs).
-- **Not installed anywhere yet.** The package is built and checked by the pipeline, and its asset
-  layout was seen on a live server in dev mode, on Pictures of the platform's own type (below, "What
-  was checked, and how"). The stand-in model, the product page, the queues and the demo script need
-  the package installed, which has not been done.
+- **On no shared server.** The package is built and checked by the pipeline. When its first
+  checks ran, no server had it, and its asset layout was seen in dev mode on Pictures of the
+  platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
+  on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
+  there; 0.1.1 is installed nowhere. The product page, the queues and the demo script have not run
+  on a shared server.
 
 ## What is in it
 
@@ -137,8 +139,8 @@ npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
   --model business-apps/packages/brand-assets-demo/content-model.json
 ```
 
-**`content-model.json` was not exported from a server with the package installed,** since none
-has it yet. Its stock types, facets and schemas, Picture's among them, are what Nuxeo 2025.10.18
+**`content-model.json` was not exported from a server with the package installed:** none had
+it when it was written. Its stock types, facets and schemas, Picture's among them, are what Nuxeo 2025.10.18
 answered, exported with `npm run app-package:model`; the kit's three types and its three record
 schemas were written from the XSDs in the same form, and `AcmeAsset`'s facets and schemas are
 Picture's with `acmeasset` added, as Nuxeo reports a type that extends another. Export it again,
@@ -298,8 +300,8 @@ NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-de
 
 `APP_URL` names the dev server if it is not on `http://localhost:4200`. The evidence goes to
 `~/Desktop/agentic-ui-evidence/beta/brand-assets-demo/`, outside the repository. **Not run end to
-end:** on the local server, without the package, it stops at its first precondition, with exit 2,
-as it should.
+end:** on the local server, before it had the package, it stopped at its first precondition, with
+exit 2, as it should. This README records no run since 0.1.0 was installed there.
 
 ### The review: phase 5's demo step 4
 
@@ -313,9 +315,9 @@ ends, whatever happened. The seeded records are not touched.
 3. a pin placed with the keyboard alone, and the pins reached with the arrow keys;
 4. the REST API's annotations, the same pins after a reload, and each pin on its point on a view
    of another size;
-5. a reader, offered no pin: the record's permissions answered in the browser without `Comment`
-   and `Write`, since the kit has no people. Hiding the control is not the control: Nuxeo 2025
-   accepts an annotation from anyone who may read the asset.
+5. a reader, offered no pin, and a holder of `Comment`, offered a pin and not Close round: the
+   record's permissions answered in the browser, since the kit has no people. Hiding the control is
+   not the control: Nuxeo 2025 accepts an annotation from anyone who may read the asset.
 
 **What it needs:** the dev server serving the kit's asset layout for the type it uses: `AcmeAsset`
 where the package is installed, else the platform's `Picture` (the README's two `config:dev`
@@ -330,14 +332,14 @@ NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-re
 
 **Run on the local Nuxeo 2025.10.18 (25 November 2026),** under the dev server, with the asset
 layout from `config:dev` and the stand-in model's `AcmeAsset` from the package's 0.1.0, which was
-already installed there: 25 of 25 checks passed, in a test workspace's folder, trashed at the end.
+already installed there: 30 of 30 checks passed, in a test workspace's folder, trashed at the end.
 
 ## What was checked, and how
 
 - **The package pipeline** builds it, with and without its content model, and refuses a copy whose
   asset layout puts a `date` widget on a text property, given the model.
 - **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in.
-- **On the local Nuxeo 2025.10.18, without the package:** the seed stops with exit 2 and writes
+- **On the local Nuxeo 2025.10.18, before it had the package:** the seed stops with exit 2 and writes
   nothing; `--preview` wrote the six pictures into the kit's workspace, twice, the second time
   updating and uploading nothing, and Nuxeo made each one's views. In headless Chromium, under the
   dev server with the preview's `config:dev` above, the asset page showed the warning banner on the
@@ -364,7 +366,10 @@ already installed there: 25 of 25 checks passed, in a test workspace's folder, t
   close, from anyone who may read the asset, whatever the page offers.
 - **The review moves or removes nothing, and reopens no round.** Each pin is also one of the
   asset's comments, which the Comments panel lists, and where Nuxeo lets a comment's author, or an
-  administrator, edit or delete it; that was not tried on a pin.
+  administrator, edit or delete it: editing its text there keeps it a pin, on its place and round.
+  Deleting a round's close renumbers the rounds after it.
+- **A pin does not say which file it was placed on:** replace the asset's picture, and every pin
+  shows on the new one.
 - **The banner's message names no date:** labels have no placeholders yet, so the rights card shows
   the day.
 - **The seed's and the demo's controls are not in CI:** the selftest needs Node alone and could be,

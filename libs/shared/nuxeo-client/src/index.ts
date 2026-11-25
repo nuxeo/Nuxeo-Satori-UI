@@ -232,7 +232,6 @@ export {
   type UserGroupSuggestion,
   type NuxeoAnnotation,
   type NuxeoAnnotationDraft,
-  type NuxeoAnnotationList,
   type NuxeoComment,
   type NuxeoCommentList,
 } from './lib/services/document-detail.service';

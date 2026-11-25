@@ -143,36 +143,53 @@ rounds. `{}` turns it on; it takes no option yet:
 - **Only on a picture.** The page draws the review in place of the picture's views (section 11),
   for a record with the `picture` schema and not the `video` one. On any other record the review is
   left out, and the console says so; given the content model, the pipeline refuses a review for a
-  type without the `picture` schema, or with the `video` one.
+  type without the `picture` schema, or with the `video` one. A facet given to one record at run
+  time can add the `picture` schema to a type the model has without it: the page then draws the
+  review, which the pipeline refused for the type.
 - **Pins.** A pin is placed by clicking the picture, or with "Add a pin" and its form's two fields,
   how far across and how far down in percent, which the keyboard alone fills; the pin being placed
-  shows on the picture as they change, and its note is required. Each pin is numbered in the order
-  the pins were placed, and listed beside the picture with its note, its author and its place.
-  Choosing one, on the picture or in the list, highlights it in both.
+  shows on the picture as they change, and its note is required. Both are offered only while a view
+  of the picture is shown. Each pin is numbered in the order the pins were written, and listed
+  beside the picture with its note, its author and its place. Choosing one, on the picture or in
+  the list, highlights it in both; choosing it again chooses none.
 - **Where a pin is** is written as fractions of the view's width and height, from its top left, so
   it stays on its point on a view of another size: Nuxeo makes each view at the picture's
-  proportions.
-- **Rounds.** A pin goes into the round open now, round 1 first. "Close round" closes it and opens
-  the next; the pins of a closed round stay on the picture and in the list, marked as past. A round
-  closes once: a second close of the same round, by two people at once, changes nothing.
-- **Stored as Nuxeo's own annotations,** through its `@annotation` REST adapter, with no schema and
-  no add-on: a pin is an annotation whose `entity` holds its round and place, and a round's close is
-  an annotation too, on the same record. Their file is `picture:views`, not `file:content`, where
-  the Annotations tab's viewer keeps its own. An annotation is a comment that names a file, so each
-  pin's note is also one of the record's comments, which the Comments panel lists, and where Nuxeo
-  lets its author, or an administrator, edit or delete it, as any comment; that was not tried on a
-  pin ([api-integrations.md](../api-integrations.md), section 39).
-- **What the page offers.** Add a pin to a holder of Nuxeo's `Comment` permission, or of `Write`,
-  on the record; Close round to a holder of `Write`. Nothing on a version, a record in the trash, or
-  a page drawn read-only, as the layout designer's preview is. A reader sees the pins and their
-  notes, and is offered neither.
+  proportions. A pin does not say which file it was placed on: replace the picture, and every pin
+  shows on the new one.
+- **In the order the repository wrote them.** The review reads its annotations oldest first by
+  `dc:created`, which the repository stamps when each is written. Not by an annotation's own
+  `creationDate`, which Nuxeo 2025 takes from the request when one is sent, so a writer could
+  backdate one. A holder of `Write` on the record, which its annotations inherit, can still change
+  `dc:created` afterwards, as they can change the record.
+- **Rounds.** A pin is in the round open when it was written, round 1 first, whatever its page had
+  seen: a pin written on a page that had not yet seen round 1 closed is round 2's. "Close round"
+  closes the round open then and opens the next; the pins of a closed round stay on the picture and
+  in the list, marked as past. Each close moves the rounds by one: a second close of a round
+  already closed, by two people at once, changes nothing, and a close deleted from the record's
+  comments renumbers the rounds after it, merging none. A review counts 999 rounds at most. After
+  each write the page reads the record's annotations again, so that what others wrote meanwhile
+  shows.
+- **Stored as Nuxeo's own annotations,** with no schema and no add-on: a pin is an annotation whose
+  `entity` holds its round and place, written through the `@annotation` REST adapter, and a
+  round's close is an annotation too, on the same record. Their file is `picture:views`, not
+  `file:content`, where the Annotations tab's viewer keeps its own. An annotation is a comment that
+  names a file, so each pin's note is also one of the record's comments, which the Comments panel
+  lists, and where Nuxeo lets its author, or an administrator, edit or delete it as any comment.
+  Editing its text there keeps its place and round ([api-integrations.md](../api-integrations.md),
+  section 39).
+- **What the page offers,** from the record's `permissions` enricher, which the document page
+  asks for: Add a pin to a holder of Nuxeo's `Comment` permission, or of `Write`, on the record;
+  Close round to a holder of `Write`, once the open round has a pin. Nothing on a version, a record
+  in the trash, a page drawn read-only, as the layout designer's preview is, or a record that came
+  without its permissions. A reader sees the pins and their notes, and is offered neither.
 - **Hiding a control is not the security control.** Nuxeo 2025's comment service accepts an
   annotation, a pin or a round's close, from anyone who may read the record, through the REST API,
-  whatever the page offers: `TreeCommentManager.checkCreateCommentPermissions` checks `Read`. A
-  review that only some readers may write needs the server to check more, which nothing here does.
-- **By keyboard,** the pins on the picture are one stop: the arrow keys, Home and End move among
-  them and choose the one reached. Each one's name says its number, its round, whether that round is
-  past, its place in percent and its note.
+  whatever the page offers: `TreeCommentManager.checkCreateCommentPermissions` checks `Read`. It
+  makes the signed-in user the author, whatever the request says. A review that only some readers
+  may write needs the server to check more, which nothing here does.
+- **By keyboard,** the pins on the picture are one stop, a toolbar: the arrow keys, Home and End
+  move among them and choose the one reached, which a hidden hint says. Each one's name says its
+  number, its round, whether that round is past, its place in percent and its note.
 
 ### Cards
 

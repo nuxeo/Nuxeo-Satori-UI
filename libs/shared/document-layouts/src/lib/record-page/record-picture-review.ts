@@ -13,6 +13,7 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
@@ -37,6 +38,8 @@ import {
   MAX_NOTE_LENGTH,
   REVIEW_ORIGIN,
   REVIEW_XPATH,
+  fromAnnotationDocument,
+  fromCreatedAnnotation,
   percent,
   pinPayload,
   readPictureReview,
@@ -44,6 +47,7 @@ import {
   roundClosedPayload,
   toFraction,
   type PictureReview,
+  type ReviewAnnotation,
   type ReviewPin,
   type ReviewRound,
 } from './picture-review';
@@ -56,7 +60,7 @@ type Loaded =
   | {
       readonly uid: string;
       readonly status: 'loaded';
-      readonly annotations: readonly NuxeoAnnotation[];
+      readonly annotations: readonly ReviewAnnotation[];
     };
 
 /** A round as the list shows it: its pins, and what its heading says. */
@@ -84,12 +88,14 @@ let nextId = 0;
  *   Comments panel beside the page lists its note. This component edits and deletes nothing.
  * - **A pin is placed** by clicking the picture, or with "Add a pin" and the form's two fields,
  *   across and down in percent, which a keyboard alone fills: the pin being placed shows on the
- *   picture as they change. The note is required.
+ *   picture as they change. The note is required. Both are offered only while a view is shown.
+ * - **After each write the record's annotations are read again,** quietly, so that a round someone
+ *   else closed meanwhile, and their pins, show; the answer to the write shows until then.
  * - **Rounds.** A pin goes into the round open now. Closing it opens the next; the pins of a
  *   closed round stay, marked as past, on the picture and in the list.
- * - **By keyboard,** the pins on the picture are one stop: the arrow keys move between them, in
- *   the order they were placed, and choose the one reached. Each one's name says its number, its
- *   round, its place and its note.
+ * - **By keyboard,** the pins on the picture are one stop, a toolbar: the arrow keys move between
+ *   them, in the order they were placed, and choose the one reached. Each one's name says its
+ *   number, its round, its place and its note. A chosen pin pressed again is no longer chosen.
  * - **What it offers is not a control** (`reviewOffers`): the server decides what it accepts, and
  *   Nuxeo 2025 accepts an annotation from anyone who may read the record.
  */
@@ -133,6 +139,12 @@ export class RecordPictureReviewComponent {
   /** The record whose review is read: its id, so that a record reloaded after an edit reads nothing again. */
   private readonly uid = computed(() => this.document().uid);
   private readonly reloads = new Subject<void>();
+  /** The quiet reads after a write: the latest one wins. */
+  private readonly refreshes = new Subject<string>();
+
+  private readonly views = viewChild(RecordPictureViewsComponent);
+  /** Whether a view of the picture is shown: what a pin is placed on. */
+  protected readonly pictureShown = computed(() => (this.views()?.imageUrl() ?? null) !== null);
   private readonly loaded = signal<Loaded | null>(null);
 
   /** What the signed-in user is offered, from the record's permissions: see `reviewOffers`. */
@@ -183,7 +195,8 @@ export class RecordPictureReviewComponent {
   protected readonly writeError = signal<string | null>(null);
 
   protected readonly placeable = computed(
-    () => this.draft() !== null && this.note().trim() !== '' && !this.saving(),
+    () =>
+      this.draft() !== null && this.note().trim() !== '' && !this.saving() && this.pictureShown(),
   );
 
   constructor() {
@@ -199,6 +212,22 @@ export class RecordPictureReviewComponent {
         takeUntilDestroyed(),
       )
       .subscribe((loaded) => this.loaded.set(loaded));
+    this.refreshes
+      .pipe(
+        switchMap((uid) =>
+          this.read(uid).pipe(
+            map((annotations) => ({ uid, annotations })),
+            // A quiet read that fails keeps what is shown: the write's answer is in it.
+            catchError(() => of(null)),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((read) => {
+        const state = this.loaded();
+        if (!read || this.uid() !== read.uid || state?.uid !== read.uid) return;
+        if (state.status === 'loaded') this.loaded.set({ ...state, annotations: read.annotations });
+      });
   }
 
   retry(): void {
@@ -235,8 +264,9 @@ export class RecordPictureReviewComponent {
       : '';
   }
 
+  /** Chooses a pin, or, pressed again, chooses none. */
   protected choose(pin: ReviewPin): void {
-    this.chosenId.set(pin.id);
+    this.chosenId.update((chosen) => (chosen === pin.id ? null : pin.id));
   }
 
   /** The arrow keys, Home and End move among the pins on the picture, choosing the one reached. */
@@ -264,7 +294,8 @@ export class RecordPictureReviewComponent {
    * pointer, as a script's or a key's, has no point: it starts one at the middle, as "Add a pin" does.
    */
   protected placeAt(event: MouseEvent): void {
-    if (!this.offers().pin || this.saving() || this.state().status !== 'loaded') return;
+    if (!this.offers().pin || !this.pictureShown() || this.saving()) return;
+    if (this.state().status !== 'loaded') return;
     const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
     if (event.detail === 0 || box.width <= 0 || box.height <= 0) {
       this.startPin();
@@ -285,13 +316,22 @@ export class RecordPictureReviewComponent {
     this.focus(`${this.id}-across`);
   }
 
-  /** The form's across or down field, in percent, moves the pin being placed. */
+  /**
+   * The form's across or down field, in percent, moves the pin being placed as it is typed in. A
+   * value it cannot read moves nothing, and one past an edge puts the pin on the edge.
+   */
   protected moveDraft(axis: 'x' | 'y', event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
+    const field = event.target as HTMLInputElement;
+    const value = Number(field.value);
     const draft = this.draft();
-    if (!draft || (event.target as HTMLInputElement).value.trim() === '' || !Number.isFinite(value))
-      return;
+    if (!draft || field.value.trim() === '' || !Number.isFinite(value)) return;
     this.draft.set({ ...draft, [axis]: toFraction(value / 100) });
+  }
+
+  /** Once the field is left, or its value committed, it says the place the pin will have. */
+  protected settleDraft(axis: 'x' | 'y', event: Event): void {
+    const draft = this.draft();
+    if (draft) (event.target as HTMLInputElement).value = String(percent(draft[axis]));
   }
 
   protected setNote(event: Event): void {
@@ -308,7 +348,7 @@ export class RecordPictureReviewComponent {
   protected placePin(): void {
     const draft = this.draft();
     const text = this.note().trim();
-    if (!draft || text === '' || this.saving()) return;
+    if (!draft || text === '' || this.saving() || !this.pictureShown()) return;
     const uid = this.uid();
     const round = this.round();
     this.write(
@@ -321,16 +361,17 @@ export class RecordPictureReviewComponent {
       uid,
       'pin',
       (created) => {
+        const pin = this.pins().find((each) => each.id === created.id);
+        // Saved, but not read back as a pin: said, and what was typed kept.
+        if (!pin) return false;
         this.draft.set(null);
         this.note.set('');
         this.chosenId.set(created.id);
-        const pin = this.pins().find((each) => each.id === created.id);
-        if (pin) {
-          this.announcer.announce(
-            this.translate.instant('document-layouts.review.placed', { number: pin.number }),
-          );
-        }
+        this.announcer.announce(
+          this.translate.instant('document-layouts.review.placed', { number: pin.number }),
+        );
         this.focus(`${this.id}-add`);
+        return true;
       },
     );
   }
@@ -349,6 +390,8 @@ export class RecordPictureReviewComponent {
       uid,
       'close',
       () => {
+        // A close that opened no round, as one past the last round a review counts: said.
+        if (this.round() <= round) return false;
         this.announcer.announce(
           this.translate.instant('document-layouts.review.closed', {
             round,
@@ -356,19 +399,22 @@ export class RecordPictureReviewComponent {
           }),
         );
         this.focus(`${this.id}-heading`);
+        return true;
       },
     );
   }
 
   /**
    * One write, its answer added to what the review was read from, so that the review shows it at
-   * once, read as any other annotation is. Dropped when the record changed while it was answered.
+   * once, read as any other annotation is, and then the record's annotations read again. Dropped
+   * when the record changed while it was answered. `done` says whether the answer did what it was
+   * for; when it did not, the failure is said.
    */
   private write(
     request: Observable<NuxeoAnnotation>,
     uid: string,
     what: 'pin' | 'close',
-    done: (created: NuxeoAnnotation) => void,
+    done: (created: NuxeoAnnotation) => boolean,
   ): void {
     this.saving.set(true);
     this.writeError.set(null);
@@ -377,14 +423,19 @@ export class RecordPictureReviewComponent {
         this.saving.set(false);
         const state = this.loaded();
         if (this.uid() !== uid || state?.uid !== uid || state.status !== 'loaded') return;
-        this.loaded.set({ ...state, annotations: [...state.annotations, created] });
-        done(created);
+        this.loaded.set({
+          ...state,
+          annotations: [...state.annotations, fromCreatedAnnotation(created)],
+        });
+        if (!done(created))
+          this.writeError.set(this.translate.instant(`document-layouts.review.error.${what}`));
+        this.refreshes.next(uid);
       },
       error: (failure: unknown) => {
         this.saving.set(false);
         if (this.uid() !== uid) return;
-        const status = failure instanceof HttpErrorResponse ? failure.status : 0;
-        const refused = status === 401 || status === 403;
+        // A 401 is a session that ended, not a refusal: it says the write failed.
+        const refused = failure instanceof HttpErrorResponse && failure.status === 403;
         this.writeError.set(
           this.translate.instant(
             `document-layouts.review.error.${what}${refused ? '-forbidden' : ''}`,
@@ -394,10 +445,16 @@ export class RecordPictureReviewComponent {
     });
   }
 
+  /** The record's review annotations, oldest first by the repository's own date, every page. */
+  private read(uid: string): Observable<ReviewAnnotation[]> {
+    return this.documents
+      .getAnnotationDocuments(uid, REVIEW_XPATH, REVIEW_ORIGIN)
+      .pipe(map((documents) => documents.map(fromAnnotationDocument)));
+  }
+
   private fetch(uid: string): Observable<Loaded> {
-    return this.documents.getAnnotations(uid, REVIEW_XPATH).pipe(
-      map((list): Loaded => {
-        const annotations = Array.isArray(list?.entries) ? list.entries : [];
+    return this.read(uid).pipe(
+      map((annotations): Loaded => {
         const { unreadable } = readPictureReview(annotations);
         if (unreadable > 0) {
           console.warn(
@@ -419,11 +476,18 @@ export class RecordPictureReviewComponent {
     this.draft.set(null);
     this.note.set('');
     this.writeError.set(null);
+    // Another record's write still answering is dropped when it answers: it holds nothing back.
+    this.saving.set(false);
   }
 
   private focus(elementId: string): void {
+    // By id, not by a selector built from one: an id holds a server's uuid, which no selector escapes.
     afterNextRender(
-      () => this.host.nativeElement.querySelector<HTMLElement>(`[id="${elementId}"]`)?.focus(),
+      () => {
+        const host = this.host.nativeElement;
+        const element = host.ownerDocument.getElementById(elementId);
+        if (element && host.contains(element)) element.focus();
+      },
       { injector: this.injector },
     );
   }

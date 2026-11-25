@@ -156,7 +156,9 @@ export function againstModel(
     });
   }
   // A review is drawn on a picture's views, which a record shows only with the `picture` schema
-  // and without the `video` one, whose player it keeps: as the record page decides it.
+  // and without the `video` one, whose player it keeps, as the record page decides it. The page
+  // decides for each record, whose run-time facets can add a schema the type's model lacks: this
+  // holds the type to it, as the type's records are without such a facet.
   if (isRecord(file['review'])) {
     const schemas = schemasOf(model, type);
     if (!schemas.has('picture'))

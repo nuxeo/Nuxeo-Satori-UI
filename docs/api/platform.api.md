@@ -3957,7 +3957,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-342 exported symbol(s).
+341 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4526,7 +4526,7 @@ class DocumentDetailService {
     createReply(uid: string, parentCommentId: string, text: string): Observable<NuxeoComment>;
     updateComment(uid: string, commentId: string, text: string): Observable<NuxeoComment>;
     deleteComment(uid: string, commentId: string): Observable<void>;
-    getAnnotations(uid: string, xpath: string): Observable<NuxeoAnnotationList>;
+    getAnnotationDocuments(uid: string, xpath: string, origin: string): Observable<NuxeoDocument[]>;
     createAnnotation(uid: string, annotation: NuxeoAnnotationDraft): Observable<NuxeoAnnotation>;
     static ɵfac: i0.ɵɵFactoryDeclaration<DocumentDetailService, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<any>;
@@ -4715,10 +4715,6 @@ interface NuxeoAnnotationDraft {
     text: string;
     origin?: string;
     entity?: string;
-    }
-}
-interface NuxeoAnnotationList {
-    entries: NuxeoAnnotation[];
     }
 }
 class NuxeoApiBase {

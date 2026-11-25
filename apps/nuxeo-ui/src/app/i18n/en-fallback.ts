@@ -271,6 +271,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-layouts.picture.label': 'Picture',
   'document-layouts.picture.loading': 'Loading the picture',
   'document-layouts.picture.views': 'Views of the picture',
+  'document-layouts.review.keys': 'Use the arrow keys to move between the pins.',
   'document-layouts.review.loading': 'Loading the review',
   'document-layouts.review.on-picture': 'Pins on the picture',
   // A pin's name on the picture, given through `instant()` rather than the pipe, so the rule above
