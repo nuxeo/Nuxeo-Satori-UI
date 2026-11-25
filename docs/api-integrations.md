@@ -2381,6 +2381,62 @@ answer of another shape is treated as a `500`.
 
 ---
 
+## 39. Record Page — a Picture's Review, Pins and Rounds, on Nuxeo's Annotations
+
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DocumentDetailService` (`getAnnotations`, `createAnnotation`), called by `RecordPictureReviewComponent`             |
+| **Read**        | `GET /nuxeo/api/v1/id/:uid/@annotation?xpath=picture:views`, once when the record is opened, and again on Retry      |
+| **Write**       | `POST /nuxeo/api/v1/id/:uid/@annotation`, once for each pin placed and each round closed                             |
+| **Server side** | Nuxeo's own comment service, `nuxeo-platform-comment` and its REST adapter: no schema, no add-on, nothing to install |
+| **Turned on**   | A record page's `review` (docs/business-apps/layout-v2.md, section 2, "Review"), on a record that shows its picture  |
+
+**Request payload:** the file it is on, the note, and the review's own payload, as text. The
+server makes the signed-in user the author.
+
+```json
+{
+  "entity-type": "annotation",
+  "parentId": "<uid>",
+  "xpath": "picture:views",
+  "text": "Logo sits too close to the collar seam",
+  "origin": "nuxeo-satori.review",
+  "entity": "{\"kind\":\"pin\",\"version\":1,\"round\":1,\"x\":0.3,\"y\":0.25}"
+}
+```
+
+A round's close is the same, with the `entity` `{"kind":"round-closed","version":1,"round":1}`
+and the text "Round 1 closed", in the closer's language.
+
+**Response (201 Created), and each entry of the list (200 OK, `{ "entries": [...] }`, unpaged):**
+the annotation, with `id`, `author`, `creationDate`, `xpath`, `origin` and `entity` as written,
+`entityId: null`, and the reader's `permissions` on it.
+
+**Behaviour verified on the local Nuxeo 2025.10.18, read only from its jars and written only on a
+test picture of our own (2026-11-25):**
+
+- `annotation:xpath` is a text Nuxeo stores and filters by, not a file it checks: `picture:views`
+  is accepted, and `?xpath=file:content`, where the Annotations tab's viewer (ARender, origin
+  `ARender`) keeps its annotations, does not return the review's. `entity` without `entityId` is
+  accepted, and returned as the same text.
+- An `Annotation` extends `Comment`, so `@comment` and the comments panel's
+  `SELECT * FROM Comment WHERE ecm:ancestorId = …` list each pin and close, with its note as its
+  text. Nuxeo 2025 stores them under the record, in its `Comments` folder, so trashing the record
+  trashes them with it.
+- **Who may write one:** `TreeCommentManager.checkCreateCommentPermissions` asks the record for
+  `Read`, and nothing more, for a comment and an annotation alike (bytecode of
+  `nuxeo-platform-comment-2025.10.18.jar`). Nuxeo defines a `Comment` permission, which neither
+  `Read` nor `ReadWrite` includes, and does not check it there. Editing or deleting one is for its
+  author, or a holder of `Everything`. So the page's offers (Add a pin to `Comment` or `Write`,
+  Close round to `Write`) are not a control: a reader may still post either through the REST API.
+- `getAnnotations` lists in no order the server promises: the review sorts by `creationDate`.
+
+**Errors:** a failed read shows the error state beside the picture, with Retry for a server
+error; a refused write (`401`, `403`) says the user may not, and any other failure says the pin or
+the close could not be saved, keeping what was typed.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

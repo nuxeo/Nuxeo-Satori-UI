@@ -1168,12 +1168,45 @@ describe('entryOf', () => {
     // A banner is an entry of its own, at the file's top level only.
     ['banners[1].visibleWhen.parameters[0]', 'banners[1]'],
     ['banners[0].tone', 'banners[0]'],
+    // So is the review, and anything inside it.
+    ['review', 'review'],
+    ['review.rounds', 'review'],
   ])('%s is about %s', (path, entry) => {
     expect(entryOf(path)).toBe(entry);
   });
 
-  it.each(['', 'columns', '$schema'])('"%s" is about the file as a whole', (path) => {
+  it.each(['', 'columns', '$schema', 'reviewer'])('"%s" is about the file as a whole', (path) => {
     expect(entryOf(path)).toBeNull();
+  });
+});
+
+describe('the review, as the app reads it', () => {
+  const page = (extra: Record<string, unknown>) => ({
+    version: 2,
+    ...extra,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('is on for a file with a review, beside cards or tabs, and off for one without', () => {
+    expect(read(page({ review: {} })).review).toBe(true);
+    const tabbed = { version: 2, review: {}, tabs: [{ id: 't', cards: [page({}).cards[0]] }] };
+    expect(read(tabbed).review).toBe(true);
+    expect(read(page({})).review).toBe(false);
+  });
+
+  it('leaves out a review with an option this build does not have, and says so', () => {
+    const file = read(page({ review: { mentions: true } }));
+    expect(file.review).toBe(false);
+    expect(file.cards.map((card) => card.id)).toEqual(['c']);
+    expect(file.problems).toEqual([
+      'review.mentions: "mentions" is not a key version 2 has; review left out',
+    ]);
+  });
+
+  it('refuses the file for a review that is not an object, as for a banner', () => {
+    expect(readRecordLayout(page({ review: true }), { rules: known })).toEqual({
+      invalid: 'review: review is an object: {} turns it on',
+    });
   });
 });
 

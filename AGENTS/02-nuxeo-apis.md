@@ -105,6 +105,20 @@ works on any boundary. `TaskService.getUserTasks` relies on both to return the n
 | ---------------------- | ------ | ------------------------------ |
 | Get document audit log | GET    | `/nuxeo/api/v1/id/:uid/@audit` |
 
+### Comments and annotations
+
+| Operation                        | Method | Endpoint                                         |
+| -------------------------------- | ------ | ------------------------------------------------ |
+| List a document's comments       | GET    | `/nuxeo/api/v1/id/:uid/@comment`                 |
+| Add a comment                    | POST   | `/nuxeo/api/v1/id/:uid/@comment`                 |
+| List the annotations on one file | GET    | `/nuxeo/api/v1/id/:uid/@annotation?xpath=:xpath` |
+| Add an annotation                | POST   | `/nuxeo/api/v1/id/:uid/@annotation`              |
+
+An annotation is a comment that names one of the document's files by `xpath`, with its writer's
+own `origin` and `entity` as text, so `@comment` lists annotations too. On Nuxeo 2025 either is
+accepted from anyone who may **read** the document: the `Comment` permission exists, and is not
+checked (docs/api-integrations.md, section 39).
+
 ---
 
 ## Automation Operations

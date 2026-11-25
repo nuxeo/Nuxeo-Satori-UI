@@ -1,0 +1,272 @@
+:host {
+  display: block;
+}
+
+/* The picture, and the pins listed beside it; one under the other on a narrow screen. */
+.record-review {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .record-review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Over the picture's own box, which the views component's stage is: a pin at 40% lies at 40%. */
+.record-review__overlay {
+  position: absolute;
+  inset: 0;
+}
+
+/* Under the pins: a click between them reaches it, and starts a pin where it lands. */
+.record-review__surface {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: crosshair;
+}
+
+.record-review__marks {
+  position: absolute;
+  inset: 0;
+  /* The group covers the picture only to hold its pins: clicks between them reach the surface. */
+  pointer-events: none;
+}
+
+/* A pin is centred on its point. Its ring of surface colour keeps it apart from any picture. */
+.record-review__pin {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 2px solid var(--mat-sys-surface);
+  border-radius: 14px;
+  transform: translate(-50%, -50%);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: var(--mat-sys-level2);
+
+  /* `:focus` on its own, not in a list with `:focus-visible`: AGENTS/08-bug-patterns.md, 17. */
+  &:focus {
+    outline: 3px solid var(--mat-sys-on-surface);
+    outline-offset: 2px;
+  }
+
+  &:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* A past round's pin: said by its outline and its fill, and in its name, not by colour alone. */
+.record-review__pin--past {
+  border-style: dashed;
+  border-color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+}
+
+/* The chosen pin: larger, above the others, with a ring. */
+.record-review__pin--chosen {
+  z-index: 1;
+  transform: translate(-50%, -50%) scale(1.25);
+  box-shadow:
+    0 0 0 3px var(--mat-sys-tertiary),
+    var(--mat-sys-level3);
+}
+
+/* The pin being placed. Decorative: the form's fields say where it is. */
+.record-review__pin--draft {
+  z-index: 2;
+  border-style: dashed;
+  border-color: var(--mat-sys-on-tertiary-container);
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+  pointer-events: none;
+}
+
+.record-review__panel {
+  min-width: 0;
+}
+
+/* Scoped under the panel, as the record page's card headings are: the theme's
+   `html[data-app-theme] .mat-typography h3` outranks a single class, and drew these as display
+   titles. Their whole `font` is set again, so that nothing of the display style is left. */
+.record-review__panel .record-review__heading,
+.record-review__panel .record-review__round-heading,
+.record-review__panel .record-review__form-heading {
+  margin: 0 0 8px;
+  font: var(--mat-sys-title-medium);
+  font-weight: 600;
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+
+  /* Focused from script only, after a round is closed. */
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+.record-review__panel .record-review__round-heading,
+.record-review__panel .record-review__form-heading {
+  margin-top: 16px;
+  font: var(--mat-sys-title-small);
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.record-review__status,
+.record-review__read-only,
+.record-review__hint,
+.record-review__closed-by,
+.record-review__none {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-review__actions,
+.record-review__form-actions,
+.record-review__where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.record-review__where mat-form-field {
+  flex: 1 1 8rem;
+}
+
+.record-review__note {
+  display: block;
+  margin-top: 8px;
+}
+
+.record-review__error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--mat-sys-error);
+
+  &:empty {
+    margin: 0;
+  }
+}
+
+.record-review__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each pin in the list: its number as on the picture, its note, and who placed it where. */
+.record-review__entry {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--mat-sys-on-surface);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
+
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+
+  &:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--mat-sys-primary);
+    background: var(--mat-sys-secondary-container);
+    color: var(--mat-sys-on-secondary-container);
+  }
+}
+
+.record-review__number {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.record-review__entry--past .record-review__number {
+  border: 2px dashed var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+}
+
+.record-review__entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.record-review__entry-note {
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.record-review__entry-meta {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.record-review__entry[aria-pressed='true'] .record-review__entry-meta {
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.record-review__past {
+  margin-inline-end: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.record-review__loading {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}

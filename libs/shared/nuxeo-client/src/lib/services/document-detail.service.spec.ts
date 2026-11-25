@@ -401,6 +401,60 @@ describe('DocumentDetailService permissions', () => {
 
     await expect(blob$).resolves.toBeInstanceOf(Blob);
   });
+
+  it('getAnnotations asks @annotation for the one file its xpath names', async () => {
+    const list$ = firstValueFrom(service.getAnnotations('doc-uid', 'picture:views'));
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/nuxeo/api/v1/id/doc-uid/@annotation' &&
+        r.params.get('xpath') === 'picture:views' &&
+        r.params.keys().length === 1,
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush({ 'entity-type': 'annotations', entries: [] });
+
+    await expect(list$).resolves.toEqual({ 'entity-type': 'annotations', entries: [] });
+  });
+
+  it('createAnnotation posts the file, the text and the payload, and no author', async () => {
+    const created$ = firstValueFrom(
+      service.createAnnotation('doc-uid', {
+        xpath: 'picture:views',
+        text: 'The logo is too close to the hem',
+        origin: 'nuxeo-satori.review',
+        entity: '{"kind":"pin"}',
+      }),
+    );
+
+    const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-uid/@annotation');
+    expect(req.request.method).toBe('POST');
+    // The server makes the user signed in the author: the body names none.
+    expect(req.request.body).toEqual({
+      'entity-type': 'annotation',
+      parentId: 'doc-uid',
+      xpath: 'picture:views',
+      text: 'The logo is too close to the hem',
+      origin: 'nuxeo-satori.review',
+      entity: '{"kind":"pin"}',
+    });
+    req.flush({ id: 'a1' });
+
+    await expect(created$).resolves.toEqual({ id: 'a1' });
+  });
+
+  it('createAnnotation sends no origin or entity it was not given', () => {
+    service.createAnnotation('doc-uid', { xpath: 'file:content', text: 'Note' }).subscribe();
+
+    const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-uid/@annotation');
+    expect(Object.keys(req.request.body as object).sort()).toEqual([
+      'entity-type',
+      'parentId',
+      'text',
+      'xpath',
+    ]);
+    req.flush({ id: 'a2' });
+  });
 });
 
 function docWithLocalAce(aceId: string, username: string) {

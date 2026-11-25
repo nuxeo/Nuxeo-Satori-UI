@@ -271,6 +271,14 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-layouts.picture.label': 'Picture',
   'document-layouts.picture.loading': 'Loading the picture',
   'document-layouts.picture.views': 'Views of the picture',
+  'document-layouts.review.loading': 'Loading the review',
+  'document-layouts.review.on-picture': 'Pins on the picture',
+  // A pin's name on the picture, given through `instant()` rather than the pipe, so the rule above
+  // does not find it in a template; it is a control's whole name all the same.
+  'document-layouts.review.pin-name':
+    'Pin {{number}}, round {{round}}, {{across}}% across, {{down}}% down: {{note}}',
+  'document-layouts.review.pin-name-past':
+    'Pin {{number}}, past round {{round}}, {{across}}% across, {{down}}% down: {{note}}',
   'document-layouts.sections': 'Property sections',
   'document-layouts.timeline.loading': 'Loading the history',
   'kd.content-lake-upload.loading': 'Loading',

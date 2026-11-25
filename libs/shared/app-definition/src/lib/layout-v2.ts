@@ -53,7 +53,7 @@ export interface ValidationOptions {
   readonly type?: string;
 }
 
-const FILE_KEYS = ['$schema', 'version', 'columns', 'banners', 'cards', 'tabs'];
+const FILE_KEYS = ['$schema', 'version', 'columns', 'banners', 'review', 'cards', 'tabs'];
 const BANNER_KEYS = ['id', 'label', 'labelKey', 'tone', 'visibleWhen'];
 /** A banner's tones, in layout version 2's words for them: a status badge's, less two. */
 export const BANNER_TONES = ['info', 'warning', 'negative'] as const;
@@ -64,6 +64,8 @@ const CARD_KEYS = ['id', 'label', 'labelKey', 'span', 'visibleWhen', ...CARD_CON
 const RELATED_KEYS = ['pageProvider', 'parameters', 'columns', 'sort', 'pageSize', 'rowActions'];
 const TIMELINE_KEYS = ['events', 'filter', 'pageSize'];
 const COMMENTS_KEYS = ['pageSize'];
+/** A review takes no options yet: `"review": {}` turns it on (layout-v2.md, section 2). */
+const REVIEW_KEYS: readonly string[] = [];
 const EXTERNAL_KEYS = ['connector', 'fields'];
 const EXTERNAL_FIELD_KEYS = ['name', 'label', 'labelKey', 'widget', 'parameters', 'visibleWhen'];
 
@@ -84,6 +86,7 @@ const ADDRESS =
 export const LAYOUT_V2_KEYS = {
   file: FILE_KEYS,
   banner: BANNER_KEYS,
+  review: REVIEW_KEYS,
   tab: TAB_KEYS,
   card: CARD_KEYS,
   field: FIELD_KEYS,
@@ -219,6 +222,10 @@ function layout(
     if (!view) c.add('banners', 'structure', 'banners belong in view mode only');
     else banners(c, file['banners']);
   }
+  if ('review' in file) {
+    if (!view) c.add('review', 'structure', 'a review belongs in view mode only');
+    else review(c, file['review']);
+  }
   const hasCards = 'cards' in file;
   const hasTabs = 'tabs' in file;
   if (hasCards === hasTabs) c.add('', 'structure', 'a file has "cards" or "tabs", one of the two');
@@ -267,6 +274,19 @@ function banners(c: Checker, list: unknown): void {
       c.add(join(path, 'tone'), 'structure', `tone is one of ${BANNER_TONES.join(', ')}`);
     if ('visibleWhen' in item) c.rule(item['visibleWhen'], join(path, 'visibleWhen'));
   });
+}
+
+/**
+ * The record page's review: pins on the picture, in rounds (layout-v2.md, section 2). It names no
+ * property, so the file alone cannot say whether the type has a picture: the content model can
+ * (`layout-model.ts`), and the record page, which leaves the review out of a record with none.
+ */
+function review(c: Checker, item: unknown): void {
+  if (!isRecord(item)) {
+    c.add('review', 'structure', 'review is an object: {} turns it on');
+    return;
+  }
+  c.unknownKeys(item, REVIEW_KEYS, 'review');
 }
 
 /** A card's related records: a list of records from a page provider (layout-v2.md, section 7). */

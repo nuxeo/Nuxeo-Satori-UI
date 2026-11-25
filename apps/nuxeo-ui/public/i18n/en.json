@@ -1543,6 +1543,41 @@
     "related": {
       "empty": "No records"
     },
+    "review": {
+      "across": "Across (%)",
+      "add-pin": "Add a pin",
+      "cancel": "Cancel",
+      "close-round": "Close round {{round}}",
+      "closed": "Round {{round}} closed. Round {{next}} is open.",
+      "closed-by": "Closed by {{user}}, {{when}}",
+      "down": "Down (%)",
+      "error": {
+        "close": "The round could not be closed",
+        "close-forbidden": "You may not close this round",
+        "pin": "The pin could not be placed",
+        "pin-forbidden": "You may not add a pin to this picture"
+      },
+      "failed": "The review could not be loaded",
+      "heading": "Review",
+      "hint": "Click the picture where the pin goes, or set how far across and down it is.",
+      "loading": "Loading the review",
+      "new-pin": "New pin in round {{round}}",
+      "no-pins": "No pins in this round yet",
+      "note": "Note",
+      "on-picture": "Pins on the picture",
+      "past": "Past",
+      "pin-name": "Pin {{number}}, round {{round}}, {{across}}% across, {{down}}% down: {{note}}",
+      "pin-name-past": "Pin {{number}}, past round {{round}}, {{across}}% across, {{down}}% down: {{note}}",
+      "pin-number": "Pin {{number}}:",
+      "place": "Place pin",
+      "placed": "Pin {{number}} placed",
+      "position": "{{across}}% across, {{down}}% down",
+      "read-only": "You can see the pins, but not add one.",
+      "round-closed-text": "Round {{round}} closed",
+      "round-heading-open": "Round {{round}}, open",
+      "round-heading-past": "Round {{round}}, past",
+      "round-open": "Round {{round}} is open"
+    },
     "sections": "Property sections",
     "timeline": {
       "all": "All events",

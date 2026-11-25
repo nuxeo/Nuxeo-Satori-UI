@@ -891,6 +891,35 @@ export class DocumentDetailService {
   deleteComment(uid: string, commentId: string): Observable<void> {
     return this.http.delete<void>(this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@comment/${commentId}`));
   }
+
+  // ── Annotations ──
+
+  /**
+   * A document's annotations on one of its files, named by the file's xpath: Nuxeo's `@annotation`
+   * adapter, which answers every one at once, unpaged, in no order it promises. An annotation is a
+   * comment that names the file it is on, so each one is in the document's comments too.
+   */
+  getAnnotations(uid: string, xpath: string): Observable<NuxeoAnnotationList> {
+    return this.http.get<NuxeoAnnotationList>(
+      this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@annotation`),
+      { params: new HttpParams().set('xpath', xpath) },
+    );
+  }
+
+  /**
+   * An annotation on one of a document's files. Nuxeo makes the user signed in its author, and
+   * stores `origin` and `entity` as the writer's own text, which it does not read.
+   */
+  createAnnotation(uid: string, annotation: NuxeoAnnotationDraft): Observable<NuxeoAnnotation> {
+    return this.http.post<NuxeoAnnotation>(this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@annotation`), {
+      'entity-type': 'annotation',
+      parentId: uid,
+      xpath: annotation.xpath,
+      text: annotation.text,
+      ...(annotation.origin === undefined ? {} : { origin: annotation.origin }),
+      ...(annotation.entity === undefined ? {} : { entity: annotation.entity }),
+    });
+  }
 }
 
 export interface NuxeoComment {
@@ -909,6 +938,33 @@ export interface NuxeoCommentList {
   currentPageSize: number;
   currentPageIndex: number;
   numberOfPages: number;
+}
+
+/**
+ * A comment on one of a document's files, as Nuxeo's `@annotation` adapter answers it. `origin`
+ * and `entity` are whoever wrote it's: what it is, and its own payload, as text. Anyone who may
+ * write an annotation may write them, so a reader holds them to its own form before trusting them.
+ */
+export interface NuxeoAnnotation extends NuxeoComment {
+  /** The file it is on, such as `file:content`. */
+  xpath: string;
+  entityId?: string | null;
+  origin?: string | null;
+  entity?: string | null;
+  /** The signed-in user's permissions on the annotation itself. */
+  permissions?: string[];
+}
+
+export interface NuxeoAnnotationList {
+  entries: NuxeoAnnotation[];
+}
+
+/** What `createAnnotation` writes: the file it is on, its text, and its writer's own payload. */
+export interface NuxeoAnnotationDraft {
+  xpath: string;
+  text: string;
+  origin?: string;
+  entity?: string;
 }
 
 export interface UserGroupSuggestion {

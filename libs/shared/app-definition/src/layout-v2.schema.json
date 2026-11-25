@@ -27,6 +27,10 @@
       },
       "description": "View mode only. Shown above the cards, each while its rule passes."
     },
+    "review": {
+      "$ref": "#/$defs/review",
+      "description": "View mode only. A picture's record page shows its picture as a review: pins on the view shown, each with a note, in rounds."
+    },
     "cards": {
       "type": "array",
       "items": {
@@ -62,6 +66,12 @@
     "xpath": {
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$"
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "description": "No options yet: {} turns the review on. Drawn only for a record with the picture schema and not the video one; the content model, when given, holds the type to that."
     },
     "banner": {
       "type": "object",

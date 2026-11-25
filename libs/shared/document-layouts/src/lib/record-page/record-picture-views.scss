@@ -19,6 +19,12 @@
   overflow: hidden;
 }
 
+/* Shrinks to the picture, so that an overlay laid over it at inset 0 covers the picture exactly. */
+.record-picture__stage {
+  position: relative;
+  max-width: 100%;
+}
+
 .record-picture__image {
   display: block;
   max-width: 100%;

@@ -65,6 +65,12 @@ removePermissionById(uid: string, aceId: string, acl = 'local'): Observable<Nuxe
 blockPermissionInheritance(uid: string): Observable<NuxeoDocument>
 unblockPermissionInheritance(uid: string): Observable<NuxeoDocument>
 sendNotificationEmailForPermission(uid: string, aceId: string): Observable<NuxeoDocument>
+getAnnotations(uid: string, xpath: string): Observable<NuxeoAnnotationList>
+  // GET @annotation?xpath=…: every annotation on that file of the record, unpaged, in no order promised
+createAnnotation(uid: string, { xpath, text, origin?, entity? }): Observable<NuxeoAnnotation>
+  // POST @annotation; the server makes the signed-in user the author. `origin` and `entity` are the
+  // writer's own text, which anyone who may read the record may write: hold them to a form on read.
+  // The record page's review stores its pins and rounds this way (docs/api-integrations.md, section 39)
 ```
 
 ---

@@ -69,6 +69,7 @@ record page is today's document page.
 | `version` | Required: `2`                                                                                  |
 | `columns` | How many columns the cards fill, 1 to 3. Default 1. `view` mode only                           |
 | `banners` | Messages above the cards, each shown while its rule passes (below). `view` mode only           |
+| `review`  | A picture's review: pins on the picture, in rounds (below). `view` mode only                   |
 | `cards`   | The cards, in order                                                                            |
 | `tabs`    | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
 | `$schema` | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
@@ -124,6 +125,54 @@ picture whose rights are ending. It shows above the cards, or above the tabs, wh
   pass together: a date that has passed is not within the next 30 days.
 - **A banner is not a security control,** any more than a hidden field is. Refusing a download
   whose rights have ended is the server's to do.
+
+### Review
+
+A record page that shows a picture can show it as a creative review: a reviewer places a pin at a
+point of the picture and writes a note, the pins are listed beside it, and the review goes in
+rounds. `{}` turns it on; it takes no option yet:
+
+```json
+{
+  "version": 2,
+  "review": {},
+  "cards": [{ "id": "asset", "labelKey": "acme.asset.card", "fields": ["dc:title"] }]
+}
+```
+
+- **Only on a picture.** The page draws the review in place of the picture's views (section 11),
+  for a record with the `picture` schema and not the `video` one. On any other record the review is
+  left out, and the console says so; given the content model, the pipeline refuses a review for a
+  type without the `picture` schema, or with the `video` one.
+- **Pins.** A pin is placed by clicking the picture, or with "Add a pin" and its form's two fields,
+  how far across and how far down in percent, which the keyboard alone fills; the pin being placed
+  shows on the picture as they change, and its note is required. Each pin is numbered in the order
+  the pins were placed, and listed beside the picture with its note, its author and its place.
+  Choosing one, on the picture or in the list, highlights it in both.
+- **Where a pin is** is written as fractions of the view's width and height, from its top left, so
+  it stays on its point on a view of another size: Nuxeo makes each view at the picture's
+  proportions.
+- **Rounds.** A pin goes into the round open now, round 1 first. "Close round" closes it and opens
+  the next; the pins of a closed round stay on the picture and in the list, marked as past. A round
+  closes once: a second close of the same round, by two people at once, changes nothing.
+- **Stored as Nuxeo's own annotations,** through its `@annotation` REST adapter, with no schema and
+  no add-on: a pin is an annotation whose `entity` holds its round and place, and a round's close is
+  an annotation too, on the same record. Their file is `picture:views`, not `file:content`, where
+  the Annotations tab's viewer keeps its own. An annotation is a comment that names a file, so each
+  pin's note is also one of the record's comments, which the Comments panel lists, and where Nuxeo
+  lets its author, or an administrator, edit or delete it, as any comment; that was not tried on a
+  pin ([api-integrations.md](../api-integrations.md), section 39).
+- **What the page offers.** Add a pin to a holder of Nuxeo's `Comment` permission, or of `Write`,
+  on the record; Close round to a holder of `Write`. Nothing on a version, a record in the trash, or
+  a page drawn read-only, as the layout designer's preview is. A reader sees the pins and their
+  notes, and is offered neither.
+- **Hiding a control is not the security control.** Nuxeo 2025's comment service accepts an
+  annotation, a pin or a round's close, from anyone who may read the record, through the REST API,
+  whatever the page offers: `TreeCommentManager.checkCreateCommentPermissions` checks `Read`. A
+  review that only some readers may write needs the server to check more, which nothing here does.
+- **By keyboard,** the pins on the picture are one stop: the arrow keys, Home and End move among
+  them and choose the one reached. Each one's name says its number, its round, whether that round is
+  past, its place in percent and its note.
 
 ### Cards
 
@@ -472,7 +521,8 @@ package contributes, by a key the open record holds, such as a claim's number
   and so does one about a timeline or comments. In a card from another system, a finding about one
   field leaves out that field, and one about the card's own keys leaves out the card.
 - **A finding about a banner,** such as a rule this build does not register, leaves out that
-  banner.
+  banner, and **one about the review,** such as an option this build does not have, leaves out the
+  review: the picture shows its views alone.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -490,8 +540,9 @@ What counts as structural:
 - a banner with no `label` or `labelKey`, or a `tone` other than its three;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `banners`, `related`, `timeline`, `comments` or `external`
-  outside it;
+- form-only keys in `view` mode, or `banners`, `review`, `related`, `timeline`, `comments` or
+  `external` outside it;
+- a `review` that is not an object;
 - a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
 - a `var:` property, which only a task form has
@@ -797,7 +848,9 @@ becomes. In version 2's terms:
 - **A Picture's record page shows its picture first.** A record with the `picture` schema, a
   Picture or any record a facet gives it, has its record page though it holds a file, and the page
   shows its picture views above the cards, under the banners, as Nuxeo lists them in
-  `picture:views`. That is `RecordPictureViewsComponent`, in the same library:
+  `picture:views`, or, when the file has a `review` (section 2), the same views as a review, with
+  its pins and rounds beside them (`RecordPictureReviewComponent`). That is
+  `RecordPictureViewsComponent`, in the same library:
   - one view shows large: `Medium` first, else `Small`, `FullHD` or `OriginalJpeg`, else the first,
     so that a view sized for a screen loads first where the record has one. A button for each view shows its name and size,
     and shows that view instead; the caption names the view shown, its size and its format;

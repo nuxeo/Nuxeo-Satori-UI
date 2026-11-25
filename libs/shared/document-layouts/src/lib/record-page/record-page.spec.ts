@@ -247,6 +247,8 @@ describe('RecordPageComponent', () => {
     createComment: ReturnType<typeof vi.fn>;
     /** A Picture's views, which a page with the picture's preview fetches. */
     fetchBlobByXpath: ReturnType<typeof vi.fn>;
+    /** A picture's review: its annotations on the views. */
+    getAnnotations: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -257,6 +259,7 @@ describe('RecordPageComponent', () => {
       getAllComments: vi.fn(() => new Subject()),
       createComment: vi.fn(),
       fetchBlobByXpath: vi.fn(() => new Subject()),
+      getAnnotations: vi.fn(() => of({ entries: [] })),
     };
     rules = { memberServices: false, canSeeService: true };
     principal = (kind, id) =>
@@ -1610,6 +1613,40 @@ describe('RecordPageComponent', () => {
       );
       expect(preview?.nextElementSibling?.classList.contains('record-page__grid')).toBe(true);
       expect(documents.fetchBlobByXpath).toHaveBeenCalledWith('m1', 'picture:views/0/content');
+      expect(preview?.querySelector('lib-record-picture-review')).toBeNull();
+      expect(documents.getAnnotations).not.toHaveBeenCalled();
+    });
+
+    it('draws the picture as a review when the layout has one, its offers held back on a read-only page', async () => {
+      fixture.destroy();
+      const views = [{ title: 'Medium', width: 10, height: 10, content: { digest: 'd' } }];
+      // As the layout service resolves a file with a review for a record that shows its picture.
+      const reviewed = { ...layoutOf(RIGHTS), preview: 'picture' as const, review: true };
+      const draw = async (readOnly: boolean): Promise<HTMLElement> => {
+        fixture = TestBed.createComponent(RecordPageComponent);
+        fixture.componentRef.setInput('document', {
+          ...member({ 'picture:views': views }),
+          contextParameters: { permissions: ['Read', 'Write'] },
+        });
+        fixture.componentRef.setInput('layout', reviewed);
+        fixture.componentRef.setInput('readOnly', readOnly);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        return fixture.nativeElement as HTMLElement;
+      };
+      const root = await draw(false);
+      const preview = root.querySelector('[data-preview="picture"]');
+      expect(
+        preview?.querySelector('lib-record-picture-review lib-record-picture-views'),
+      ).not.toBeNull();
+      expect(documents.getAnnotations).toHaveBeenCalledWith('m1', 'picture:views');
+      expect(preview?.querySelector('.record-review__add')).not.toBeNull();
+      fixture.destroy();
+
+      const readOnly = await draw(true);
+      expect(readOnly.querySelector('lib-record-picture-review')).not.toBeNull();
+      expect(readOnly.querySelector('.record-review__add')).toBeNull();
     });
   });
 });
