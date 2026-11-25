@@ -13985,7 +13985,8 @@ function reEscapeForGuardrail(value) {
  * 4. **No private key in it,** by content (a PEM private key, a JWK's private `d` in JSON or in a
  *    script, an unarmoured PKCS#8 or SEC1 key) or by name (`.pem`, `.key`, `.p8`, `.p12`, `.pfx`,
  *    `.jwk`). The spike's keys are made in memory for each run.
- * 5. **It imports nothing but its own files, Node's built-ins and Vitest,** in every file type,
+ * 5. **It imports nothing but its own files, Node's built-ins, Vitest and Playwright,** the last
+ *    for the optional browser check only, in every file type,
  *    because the module-boundary rule does not read the spike's `.mjs` sources.
  *
  * The directory missing fails too, rather than passing on nothing: delete this check with the
@@ -14002,7 +14003,7 @@ const PLUGIN_SPIKE_NAMERS = new Set([
   'scripts/beta-harness/module-boundaries.mjs',
 ]);
 const PLUGIN_SPIKE_TARGETS = new Set(['test', 'lint', 'typecheck']);
-const PLUGIN_SPIKE_BARE_IMPORTS = new Set(['vitest', 'vitest/config']);
+const PLUGIN_SPIKE_BARE_IMPORTS = new Set(['vitest', 'vitest/config', 'playwright']);
 const BINARY_FILE =
   /\.(png|jpe?g|gif|webp|ico|svgz|woff2?|ttf|otf|eot|zip|jar|gz|tgz|pdf|mp4|webm)$/i;
 const PRIVATE_KEY_FILE = /\.(pem|key|p8|p12|pfx|jwk)$/i;
@@ -14194,7 +14195,7 @@ function checkPluginSpikeIsolated() {
     }
   }
 
-  // 5. It imports nothing but its own files, Node's built-ins and Vitest.
+  // 5. It imports nothing but its own files, Node's built-ins, Vitest and Playwright.
   for (const file of spikeFiles) {
     if (isLink(file) || !/\.(m?[jt]s|c[jt]s|js)$/.test(file)) continue;
     const source = read(file);
@@ -14212,7 +14213,7 @@ function checkPluginSpikeIsolated() {
       }
       fail(
         `${file} imports ${JSON.stringify(specifier)}. The spike may import only its own files, ` +
-          "Node's built-ins and Vitest, so that nothing of the workspace is pulled into it.",
+          "Node's built-ins, Vitest and Playwright, so that nothing of the workspace is pulled into it.",
       );
     }
   }

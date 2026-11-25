@@ -87,7 +87,7 @@ describe('the demo server', () => {
     expect(response.headers.get('content-security-policy')).not.toMatch(/allow-same-origin/);
   });
 
-  it('serves nothing outside its route table', async () => {
+  it('answers 404 for files outside its route table', async () => {
     for (const path of [
       '/package.json',
       '/dev/serve.mjs',

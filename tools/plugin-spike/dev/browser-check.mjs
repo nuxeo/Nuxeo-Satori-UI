@@ -22,7 +22,8 @@ const LOAD_BEARING = ['session-storage', 'host-client', 'in-flight-authorization
 /** @type {any} */
 let playwright;
 try {
-  playwright = createRequire(join(process.cwd(), 'package.json'))('playwright');
+  const require = createRequire(join(process.cwd(), 'package.json'));
+  playwright = require('playwright');
 } catch {
   process.stderr.write(
     'browser-check: Playwright is not installed here. Install it with --no-save, as the e2e ' +

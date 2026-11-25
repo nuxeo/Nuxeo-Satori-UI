@@ -9,7 +9,8 @@ element can and cannot reach. **The report is
 **It ships nothing.** No app imports it, no library exports it and nothing builds it. Two checks
 fail if that changes: `checkPluginSpikeIsolated` in `scripts/review-guardrails.mjs`, and the
 `type:spike` probes in `scripts/beta-harness/module-boundaries.mjs`. Its project has no `build`
-target on purpose, and it imports nothing but its own files, Node's built-ins and Vitest.
+target on purpose, and it imports nothing but its own files, Node's built-ins, Vitest, and
+Playwright in the optional browser check.
 
 **No key here is trusted anywhere.** The tests and the demo server generate their keys in memory
 when they start, and none is ever written to disk. `checkPluginSpikeIsolated` fails on key

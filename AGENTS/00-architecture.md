@@ -66,7 +66,7 @@ engine: the development server's addresses, and the app registry's on a server.
   with a probe, refuses to pass unless the real project carries exactly that tag, and fails on any
   target Nx resolves for it beyond tests, lint and the type check. The rule does not read `.mjs`,
   so `checkPluginSpikeIsolated` fails on any other reference to or link into the directory, and on
-  an import from it of anything but its own files, Node's built-ins and Vitest
+  an import from it of anything but its own files, Node's built-ins, Vitest and Playwright
   ([the spike's report](../docs/business-apps/spikes/plugins-decision-5.md)).
 
 ---

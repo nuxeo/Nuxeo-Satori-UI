@@ -341,8 +341,8 @@ Angular ships a major release about every six months; this branch is on 22.2.3.
   outside the spike but Markdown and its three guards names it or links into it; no asset
   directory in `angular.json`, a `project.json`, a Storybook `main` file or a Vite config holds it;
   its project is tagged `type:spike` alone and declares no target but `test`, `lint` and
-  `typecheck`; no private key is in it; and it imports nothing but its own files, Node's built-ins
-  and Vitest. The last covers its `.mjs` sources, which the module-boundary rule does not read. It
+  `typecheck`; no private key is in it; and it imports nothing but its own files, Node's built-ins,
+  Vitest and, in the optional browser check, Playwright. The last covers its `.mjs` sources, which the module-boundary rule does not read. It
   fails too when the spike is gone. Its selftest has 21 negative controls and 2 positive ones; with
   each half broken in turn, that half's controls went red.
 - **`npm run beta:module-boundaries`** holds 14 forbidden imports and 7 allowed ones, 8 of the
