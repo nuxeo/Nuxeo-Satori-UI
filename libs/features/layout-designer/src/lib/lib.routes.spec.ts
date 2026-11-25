@@ -3,16 +3,23 @@ import { fullAdministratorGuard } from '@nuxeo/satori-platform/nuxeo-client';
 import { of } from 'rxjs';
 
 import { LayoutDesignerPageComponent } from './layout-designer-page/layout-designer-page';
+import { QueueDesignerPageComponent } from './queue-designer-page/queue-designer-page';
 import { layoutDesignerRoutes, leaveLayoutDesigner } from './lib.routes';
 
 describe('layoutDesignerRoutes', () => {
   // By identity, not by count: a guard swapped for any other function would pass a length check,
   // and on an administrators-only page that is the regression this exists to catch.
-  it('opens the designer for administrators alone, and asks before it is left', () => {
+  it('opens its layout files and its queues for administrators alone, and asks before either is left', () => {
     expect(layoutDesignerRoutes).toEqual([
       {
         path: '',
         component: LayoutDesignerPageComponent,
+        canActivate: [fullAdministratorGuard],
+        canDeactivate: [leaveLayoutDesigner],
+      },
+      {
+        path: 'queues',
+        component: QueueDesignerPageComponent,
         canActivate: [fullAdministratorGuard],
         canDeactivate: [leaveLayoutDesigner],
       },

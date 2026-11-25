@@ -48,17 +48,18 @@ experience exists, so
 
 ## 2. Feature Modules
 
-| Route                               | Module                                | Main component                 |
-| ----------------------------------- | ------------------------------------- | ------------------------------ |
-| `/#/browse`                         | `@agentic-ui/feature-browse`          | `BrowseComponent`              |
-| `/#/search`                         | `@agentic-ui/feature-search`          | `SearchComponent`              |
-| `/#/doc/:uid`                       | `@agentic-ui/feature-document-detail` | `DocumentDetailComponent`      |
-| `/#/collections`                    | `@agentic-ui/feature-collections`     | `CollectionDetailComponent`    |
-| `/#/tasks`                          | `@agentic-ui/feature-tasks`           | `TasksPageComponent`           |
-| `/#/administration`                 | `@agentic-ui/feature-administration`  | `AdministrationShellComponent` |
-| `/#/administration/layout-designer` | `@agentic-ui/feature-layout-designer` | `LayoutDesignerPageComponent`  |
-| `/#/documents`                      | `@agentic-ui/feature-assets`          | `AssetSearchResultsComponent`  |
-| `/#/trash`                          | `@agentic-ui/feature-trash`           | `TrashComponent`               |
+| Route                                      | Module                                | Main component                 |
+| ------------------------------------------ | ------------------------------------- | ------------------------------ |
+| `/#/browse`                                | `@agentic-ui/feature-browse`          | `BrowseComponent`              |
+| `/#/search`                                | `@agentic-ui/feature-search`          | `SearchComponent`              |
+| `/#/doc/:uid`                              | `@agentic-ui/feature-document-detail` | `DocumentDetailComponent`      |
+| `/#/collections`                           | `@agentic-ui/feature-collections`     | `CollectionDetailComponent`    |
+| `/#/tasks`                                 | `@agentic-ui/feature-tasks`           | `TasksPageComponent`           |
+| `/#/administration`                        | `@agentic-ui/feature-administration`  | `AdministrationShellComponent` |
+| `/#/administration/layout-designer`        | `@agentic-ui/feature-layout-designer` | `LayoutDesignerPageComponent`  |
+| `/#/administration/layout-designer/queues` | `@agentic-ui/feature-layout-designer` | `QueueDesignerPageComponent`   |
+| `/#/documents`                             | `@agentic-ui/feature-assets`          | `AssetSearchResultsComponent`  |
+| `/#/trash`                                 | `@agentic-ui/feature-trash`           | `TrashComponent`               |
 
 ---
 

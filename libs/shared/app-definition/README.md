@@ -312,9 +312,9 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   and its comments. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
 - **The content model in the migration server.** The pipeline holds a package to a model when given
-  one, and the layout designer, `libs/features/layout-designer`, holds the `view` file it edits to
-  the server's; the migration server is still to call `readContentModel` and `validateLayoutV2` with
-  it.
+  one, and the layout designer, `libs/features/layout-designer`, holds the `view`, `edit` and
+  `create` files it edits to the server's; the migration server is still to call `readContentModel`
+  and `validateLayoutV2` with it.
 - **Rules where there is no one record.** A queue's `visibleWhen`, and a bulk action's, may name a
   rule that reads a record (app-definition-v2.md, section 13). The menu and the home refuse a
   `{ "field" }` value in a rule, and still pass a rule that reads a record.

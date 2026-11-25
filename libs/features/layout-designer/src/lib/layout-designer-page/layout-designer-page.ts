@@ -16,6 +16,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   propertiesOf,
@@ -23,7 +24,13 @@ import {
   validateLayoutV2,
   type Finding,
 } from '@agentic-ui/shared/app-definition';
-import { RecordPageComponent, type RecordLayoutPreview } from '@agentic-ui/shared/document-layouts';
+import {
+  DocumentLayoutFormComponent,
+  RecordPageComponent,
+  type FormLayoutPreview,
+  type LayoutSource,
+  type RecordLayoutPreview,
+} from '@agentic-ui/shared/document-layouts';
 import {
   NxsBannerComponent,
   NxsConfirmDialogComponent,
@@ -35,20 +42,34 @@ import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { type Observable, combineLatest, map, of, switchMap } from 'rxjs';
 
 import { downloadJson } from '../download';
-import { LayoutDesignerService, type Reading, type RecordChoice } from '../layout-designer.service';
+import {
+  DESIGNED_MODES,
+  LayoutDesignerService,
+  type DesignedMode,
+  type Reading,
+  type RecordChoice,
+} from '../layout-designer.service';
 import {
   addProperty,
   cardsOf,
   insertField,
+  layoutFileName,
   layoutFileText,
   moveField,
+  newLayoutFile,
   removeField,
+  requiredChoice,
+  ruleFromText,
+  ruleText,
   setCardText,
+  setFieldRule,
   type CardPlace,
   type CardText,
   type DesignerCard,
   type DesignerField,
+  type FieldRuleKey,
   type LayoutJson,
+  type RequiredChoice,
 } from '../layout-edits';
 
 /** A field the designer has taken out of the file, kept to be shown again. */
@@ -74,20 +95,62 @@ export interface HiddenField {
  */
 export type SaveState = 'nothing' | 'checking' | 'refused' | 'saveable';
 
-/** The name a package gives a record page's file, under `layouts/<Type>/`. */
-export const LAYOUT_FILE_NAME = 'view.layout.json';
+/** A file the designer may open: a type's record page, edit form or create form. */
+export interface LayoutChoice {
+  readonly type: string;
+  readonly mode: DesignedMode;
+  /** Whether the server serves it. One it does not is opened as a new file. */
+  readonly served: boolean;
+  /** `<Type>/<mode>`, as the picker names it. */
+  readonly key: string;
+}
+
+/** The choices for one type, as the picker groups them. */
+export interface LayoutChoiceGroup {
+  readonly type: string;
+  readonly choices: readonly LayoutChoice[];
+}
+
+/** The preview of a record page: the record page engine's, for a record. */
+export interface RecordPreviewShown {
+  readonly record: NuxeoDocument;
+  readonly preview: RecordLayoutPreview;
+}
 
 /**
- * The layout designer: an administrator opens a record page's layout file, version 2, as the
- * server serves it, changes it, and sees the record page it draws for a real record of the type
- * (docs/business-apps/development-plan.md, phase 6). The edits are reordering and hiding fields,
- * adding a property of the type, and a card's id, heading text and heading key.
+ * The preview of a form: the form engine's, for the record an edit is for, or for a new record in
+ * that record's folder.
+ */
+export interface FormPreviewShown {
+  readonly mode: 'edit' | 'create';
+  readonly record: NuxeoDocument;
+  /** The folder a create form's record would be made in: the chosen record's. */
+  readonly parentPath: string | null;
+  readonly preview: FormLayoutPreview;
+}
+
+/** The folder a record is in, from its path; `null` for a record with none. */
+export function parentPathOf(path: string): string | null {
+  const at = path.lastIndexOf('/');
+  return at > 0 ? path.slice(0, at) : at === 0 ? '/' : null;
+}
+
+const isForm = (mode: DesignedMode): mode is 'edit' | 'create' => mode !== 'view';
+
+/**
+ * The layout designer: an administrator opens a type's layout file, version 2, as the server
+ * serves it, or a new one, changes it, and sees what it draws for a real record of the type
+ * (docs/business-apps/development-plan.md, phase 6). The files are a record page, `view`, and the
+ * edit and create forms, `edit` and `create`. The edits are reordering and hiding fields, adding a
+ * property of the type, a card's id, heading text and heading key, and a field's rules: when it
+ * shows, and in a form when it is required or read-only.
  *
- * - **The preview** is the record page engine's own: the file is read, held to the record's type
- *   and drawn by `lib-record-page`, as the View tab draws a served file, but read-only.
- * - **Every change is validated** by the app definition's validator, held to the server's content
- *   model when it can be read, and its findings are listed. A file with any finding cannot be
- *   saved.
+ * - **The preview** is the engine's own: the file is read, held to the record's type and drawn by
+ *   `lib-record-page` as the View tab draws a served file, or by `lib-document-layout-form` as the
+ *   Edit and Create forms draw one. Both are read-only, and the form offers no Save: nothing is sent.
+ * - **Every change is validated** by the app definition's validator, in the file's mode, held to
+ *   the server's content model when it can be read, and its findings are listed. A file with any
+ *   finding cannot be saved.
  * - **Saving** is a download of the file, as a package holds it. Nothing is written to the server,
  *   and publishing is not built: the app registry has no write API.
  *
@@ -98,6 +161,7 @@ export const LAYOUT_FILE_NAME = 'view.layout.json';
   selector: 'lib-layout-designer-page',
   standalone: true,
   imports: [
+    DocumentLayoutFormComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
@@ -105,6 +169,7 @@ export const LAYOUT_FILE_NAME = 'view.layout.json';
     NxsIconComponent,
     NxsSpinnerComponent,
     RecordPageComponent,
+    RouterLink,
     TranslatePipe,
   ],
   templateUrl: './layout-designer-page.html',
@@ -125,30 +190,73 @@ export class LayoutDesignerPageComponent {
   /** What a file may name, read once: the rules and row actions register before a page shows. */
   private readonly registries = this.service.registries();
 
-  protected readonly fileName = LAYOUT_FILE_NAME;
-
-  readonly types = toSignal(this.service.types(), { initialValue: { state: 'reading' } });
+  readonly files = toSignal(this.service.files(), { initialValue: { state: 'reading' } });
   readonly model = toSignal(this.service.model(), { initialValue: { state: 'reading' } });
 
-  /** The type whose record page is open. */
-  readonly type = signal<string | null>(null);
+  /**
+   * What may be opened: for each type the server serves a file of, its record page, edit form and
+   * create form, served or not, in the order `layouts.json` first names the type.
+   */
+  readonly choices = computed<readonly LayoutChoiceGroup[]>(() => {
+    const files = this.files();
+    if (files.state !== 'read') return [];
+    const served = new Set(files.value.map((file) => `${file.type}/${file.mode}`));
+    return [...new Set(files.value.map((file) => file.type))].map((type) => ({
+      type,
+      choices: DESIGNED_MODES.map((mode) => ({
+        type,
+        mode,
+        served: served.has(`${type}/${mode}`),
+        key: `${type}/${mode}`,
+      })),
+    }));
+  });
 
-  /** The type chosen in the picker, which its button opens: the open one until another is chosen. */
-  readonly typeChosen = linkedSignal<string>(() => this.type() ?? '');
+  /**
+   * The file open, or being opened. Set again to the same file, it is read again: so that a file
+   * that could not be read can be opened anew.
+   */
+  readonly current = signal<LayoutChoice | null>(null, { equal: () => false });
 
-  readonly source = toSignal(
-    toObservable(this.type).pipe(
-      switchMap((type) => (type ? this.service.source(type) : of(null))),
+  /** The file chosen in the picker, which its button opens: the open one until another is chosen. */
+  readonly fileChosen = linkedSignal<string>(() => this.current()?.key ?? '');
+
+  /**
+   * The file open, as the server serves it now, or a new one for a file it does not serve, with
+   * the choice it is for: the type and mode below are the file's, so that a file is never checked
+   * or drawn in the mode of the next one while that one is read.
+   */
+  private readonly opening = toSignal(
+    toObservable(this.current).pipe(
+      switchMap((choice) => {
+        if (!choice) return of(null);
+        const read: Observable<Reading<LayoutSource>> = choice.served
+          ? this.service.source(choice.type, choice.mode)
+          : of({ state: 'read', value: { url: '', content: newLayoutFile() } });
+        return read.pipe(map((source) => ({ choice, source })));
+      }),
     ),
     { initialValue: null },
   );
 
-  readonly typeList = computed<readonly string[]>(() => {
-    const types = this.types();
-    return types.state === 'read' ? types.value : [];
-  });
+  readonly source = computed<Reading<LayoutSource> | null>(() => this.opening()?.source ?? null);
 
-  /** Why the type's file could not be opened: it could not be read, or what came is no file. */
+  /** The type whose file is open. */
+  readonly type = computed(() => this.opening()?.choice.type ?? null);
+
+  /** The mode of the file open: a record page until one is opened. */
+  readonly mode = computed<DesignedMode>(() => this.opening()?.choice.mode ?? 'view');
+
+  /** Whether the file open is a form's, edit or create. */
+  readonly isForm = computed(() => isForm(this.mode()));
+
+  /** Whether the file open is a new one, which the server does not serve. */
+  readonly isNew = computed(() => this.opening()?.choice.served === false);
+
+  /** The file's name, as a package holds it under `layouts/<Type>/`. */
+  readonly fileName = computed(() => layoutFileName(this.mode()));
+
+  /** Why the file could not be opened: it could not be read, or what came is no file. */
   readonly sourceProblem = computed<string | null>(() => {
     const source = this.source();
     if (source?.state === 'failed') return source.problem;
@@ -161,7 +269,7 @@ export class LayoutDesignerPageComponent {
     return source?.state === 'read' && source.value.content ? source.value.content : null;
   });
 
-  /** The file as it is now, with every change made to it. Opened anew with each type. */
+  /** The file as it is now, with every change made to it. Opened anew with each file. */
   readonly file = linkedSignal<LayoutJson | null>(() => this.opened());
 
   /** The fields taken out of the file, to show again. None once another file is opened. */
@@ -176,7 +284,10 @@ export class LayoutDesignerPageComponent {
     return file !== null && opened !== null && layoutFileText(file) !== layoutFileText(opened);
   });
 
-  /** Whether leaving the file would lose something: a change to it, or a field to show again. */
+  /**
+   * Whether leaving the file would lose something: a change to it, or a field to show again. A new
+   * file left as it was opened loses nothing: it is opened the same again.
+   */
   readonly unsaved = computed(() => this.changed() || this.hidden().length > 0);
 
   readonly cards = computed<readonly DesignerCard[]>(() => cardsOf(this.file()));
@@ -211,28 +322,58 @@ export class LayoutDesignerPageComponent {
     return record?.state === 'read' ? record.value : null;
   });
 
-  /** The record page the file draws for the record, redrawn on every change. */
+  /** What the file draws for the record, redrawn on every change: a record page, or a form. */
   readonly preview = toSignal(
-    combineLatest([toObservable(this.file), toObservable(this.recordDocument)]).pipe(
-      switchMap(([file, record]) =>
-        file && record
-          ? this.service
+    combineLatest([
+      toObservable(this.file),
+      toObservable(this.recordDocument),
+      toObservable(this.mode),
+    ]).pipe(
+      switchMap(
+        ([file, record, mode]): Observable<RecordPreviewShown | FormPreviewShown | null> => {
+          if (!file || !record) return of(null);
+          if (!isForm(mode)) {
+            return this.service
               .preview(file, record)
-              .pipe(map((preview): PreviewShown => ({ record, preview })))
-          : of(null),
+              .pipe(map((preview): RecordPreviewShown => ({ record, preview })));
+          }
+          return this.service.previewForm(file, mode, record.type, record).pipe(
+            map((preview): FormPreviewShown => ({
+              mode,
+              record,
+              parentPath: parentPathOf(record.path),
+              preview,
+            })),
+          );
+        },
       ),
     ),
     { initialValue: null },
   );
 
-  /** Every finding of the validator, held to the content model once it is read. */
+  /** The record page the preview draws, when the file is one. */
+  readonly recordPreview = computed<RecordPreviewShown | null>(() => {
+    const shown = this.preview();
+    return shown && !('mode' in shown) ? shown : null;
+  });
+
+  /** The form the preview draws, when the file is one. */
+  readonly formPreview = computed<FormPreviewShown | null>(() => {
+    const shown = this.preview();
+    return shown && 'mode' in shown ? shown : null;
+  });
+
+  /** What the engine leaves out of the file, and why, in the words the console would have. */
+  readonly previewNotes = computed<readonly string[]>(() => this.preview()?.preview.notes ?? []);
+
+  /** Every finding of the validator, in the file's mode, held to the content model once it is read. */
   readonly findings = computed<readonly Finding[]>(() => {
     const file = this.file();
     const type = this.type();
     if (!file || !type) return [];
     const model = this.model();
     return validateLayoutV2(file, {
-      mode: 'view',
+      mode: this.mode(),
       registries: this.registries,
       type,
       model: model.state === 'read' ? model.value : undefined,
@@ -259,14 +400,26 @@ export class LayoutDesignerPageComponent {
     computation: () => ({}),
   });
 
-  /** Opens the type's file, once the person agrees to lose the changes to the one open, if any. */
-  open(type: string): void {
-    if (type === '' || type === this.type()) return;
+  /** The words the picker and the headings use for a mode: "record page", "edit form". */
+  modeName(mode: DesignedMode): string {
+    return this.translate.instant(`layout-designer.mode.${mode}`);
+  }
+
+  /**
+   * Opens the file `key` names, `<Type>/<mode>`, once the person agrees to lose the changes to the
+   * one open, if any.
+   */
+  open(key: string): void {
+    const choice = this.choices()
+      .flatMap((group) => group.choices)
+      .find((each) => each.key === key);
+    // The file open is not opened again, but one that could not be read is read again.
+    if (!choice || (choice.key === this.current()?.key && this.sourceProblem() === null)) return;
     this.discard()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((agreed) => {
-        if (agreed) this.type.set(type);
-        else this.typeChosen.set(this.type() ?? '');
+        if (agreed) this.current.set(choice);
+        else this.fileChosen.set(this.current()?.key ?? '');
       });
   }
 
@@ -284,11 +437,14 @@ export class LayoutDesignerPageComponent {
   }
 
   private discard(): Observable<boolean> {
-    const type = this.type();
-    if (!this.unsaved() || !type) return of(true);
+    const current = this.current();
+    if (!this.unsaved() || !current) return of(true);
     const data: NxsConfirmDialogData = {
       title: this.translate.instant('layout-designer.discard-title'),
-      message: this.translate.instant('layout-designer.discard-message', { type }),
+      message: this.translate.instant('layout-designer.discard-message', {
+        type: current.type,
+        mode: this.modeName(current.mode),
+      }),
       confirmLabel: this.translate.instant('layout-designer.discard'),
     };
     return this.dialog
@@ -350,6 +506,50 @@ export class LayoutDesignerPageComponent {
     this.edit((file) => setCardText(file, card.place, key, value));
   }
 
+  /** What the field's `required` is, as the designer offers it. */
+  requiredOf(field: DesignerField): RequiredChoice {
+    return requiredChoice(field.rules.required);
+  }
+
+  /**
+   * Makes the field not required, always required, or required while a rule passes. A rule chosen
+   * for a field with none is written empty, which the validator refuses until the rule is written.
+   */
+  setRequired(card: DesignerCard, field: DesignerField, choice: string): void {
+    const current = field.rules.required;
+    let value: unknown;
+    if (choice === 'always') value = true;
+    else if (choice === 'rule') value = requiredChoice(current) === 'rule' ? current : '';
+    else value = undefined;
+    this.edit((file) => setFieldRule(file, card.place, field.index, 'required', value));
+  }
+
+  /** The field's rule for `key`, as it is edited: an ID as it is, a rule as JSON. */
+  ruleOf(field: DesignerField, key: FieldRuleKey): string {
+    return ruleText(field.rules[key]);
+  }
+
+  /**
+   * Sets the field's rule for `key` from the text written: none takes the key out, but for
+   * `required`, whose rule stays to be written while "a rule" is chosen. Whatever is written goes
+   * into the file, and the validator says whether it is a rule.
+   */
+  setRule(card: DesignerCard, field: DesignerField, key: FieldRuleKey, text: string): void {
+    const rule = ruleFromText(text);
+    const value = key === 'required' && rule === undefined ? '' : rule;
+    this.edit((file) => setFieldRule(file, card.place, field.index, key, value));
+  }
+
+  /** How many of the field's rules the file sets, for its summary. */
+  rulesSet(field: DesignerField): number {
+    const keys: readonly FieldRuleKey[] =
+      this.isForm() && field.kind === 'property'
+        ? ['required', 'readOnlyWhen', 'visibleWhen']
+        : ['visibleWhen'];
+    return keys.filter((key) => field.rules[key] !== undefined && field.rules[key] !== false)
+      .length;
+  }
+
   /** The properties a card may add: the type's, less those the card shows already. */
   addable(card: DesignerCard): readonly string[] {
     const shown = new Set(
@@ -393,7 +593,7 @@ export class LayoutDesignerPageComponent {
   download(): void {
     const file = this.file();
     if (!file || this.saveState() !== 'saveable') return;
-    downloadJson(LAYOUT_FILE_NAME, layoutFileText(file), this.document);
+    downloadJson(this.fileName(), layoutFileText(file), this.document);
   }
 
   /** The file as the download writes it, for the page to show. */
@@ -410,7 +610,9 @@ export class LayoutDesignerPageComponent {
   /** What a field or a picker holds, from its change event. */
   protected valueOf(event: Event): string {
     const target = event.target;
-    return target instanceof HTMLInputElement || target instanceof HTMLSelectElement
+    return target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement
       ? target.value
       : '';
   }
@@ -451,10 +653,4 @@ export class LayoutDesignerPageComponent {
       { injector: this.injector },
     );
   }
-}
-
-/** The preview, with the record it was drawn for. */
-export interface PreviewShown {
-  readonly record: NuxeoDocument;
-  readonly preview: RecordLayoutPreview;
 }
