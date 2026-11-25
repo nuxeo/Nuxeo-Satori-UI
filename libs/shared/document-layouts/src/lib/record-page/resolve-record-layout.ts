@@ -1,3 +1,5 @@
+import { CHECKLIST_SUBFIELDS } from '@agentic-ui/shared/app-definition';
+
 import type {
   DocumentSchemaRef,
   DocumentTypeDefinition,
@@ -9,6 +11,7 @@ import {
   propertiesReadBy,
   type RecordBannerEntry,
   type RecordCardEntry,
+  type RecordChecklistEntry,
   type RecordComputedField,
   type RecordFieldEntry,
   type RecordLayoutFile,
@@ -72,9 +75,37 @@ export interface SkippedRecordField {
   readonly type?: string;
 }
 
+function cardsOf(file: RecordLayoutFile): readonly RecordCardEntry[] {
+  return file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
+}
+
 function fieldsOf(file: RecordLayoutFile): readonly RecordFieldEntry[] {
-  const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
-  return cards.flatMap((card) => card.fields);
+  return cardsOf(file).flatMap((card) => card.fields);
+}
+
+/**
+ * Why a checklist's property cannot hold its items' state, as the console says it, or `null` when
+ * it can: a list of complex values whose subfields, where the schema lists them, are
+ * `CHECKLIST_SUBFIELDS`, each of its type. With no subfields read, as for a table, it is taken as
+ * written, and an entry's missing subfield reads as not done.
+ */
+function checklistShapeProblem(
+  checklist: RecordChecklistEntry,
+  definition: LayoutFieldType,
+): string | null {
+  const type = widgetPropertyType(definition);
+  if (type !== 'complex[]')
+    return `a checklist reads a list of complex values, and ${checklist.field} is a ${type} property`;
+  const subfields = definition.fields ?? {};
+  if (Object.keys(subfields).length === 0) return null;
+  for (const [name, wanted] of Object.entries(CHECKLIST_SUBFIELDS)) {
+    const sub = own(subfields, name);
+    if (!sub) return `${checklist.field} has no subfield "${name}", which a checklist reads`;
+    const read = widgetPropertyType(sub);
+    if (read !== wanted)
+      return `"${name}" of ${checklist.field} is a ${read} value, and a checklist reads it as a ${wanted}`;
+  }
+  return null;
 }
 
 /** Every property `schemas` define, by `<prefix>:<name>`. */
@@ -106,6 +137,7 @@ export function recordFacetSchemasToRead(
     if (field.kind === 'property') read.add(field.xpath);
     else propertiesReadBy(field.computed, read);
   }
+  for (const card of cardsOf(file)) if (card.checklist) read.add(card.checklist.field);
   const named = new Set([...read].map(prefixOfXpath));
   return documentSchemas.filter((schema) => !own.has(schema.name) && named.has(schema.prefix));
 }
@@ -202,19 +234,37 @@ export function resolveRecordLayout(
     return [{ ...entry, definition }];
   };
 
+  /**
+   * Whether a checklist's card stays: its property is on the type, and can hold the items' state.
+   * One that is not is left out whole, as a field is, since no item could be read as done.
+   */
+  const checklistKept = (card: RecordCardEntry, checklist: RecordChecklistEntry): boolean => {
+    const definition = properties.get(checklist.field);
+    if (!definition) {
+      skipped.push({ place: card.place, xpath: checklist.field, reason: 'not-on-type' });
+      return false;
+    }
+    const problem = checklistShapeProblem(checklist, definition);
+    if (problem) notes.push(`${card.place} left out: ${problem}`);
+    return problem === null;
+  };
+
   // Mapped before they are filtered, so a field in a card that is itself left out is still reported.
   const cards = (list: readonly RecordCardEntry[]): ResolvedRecordCard[] =>
     list
+      .filter((card) => card.checklist === null || checklistKept(card, card.checklist))
       .map((card) => ({ ...card, fields: card.fields.flatMap(field) }))
       // A card of related records has no fields of its own: its columns are its rows' properties,
       // held to the rows' types when they are drawn. Nor has a timeline or comments, nor a card
-      // from another system, whose fields are that system's, not the record's.
+      // from another system, whose fields are that system's, not the record's, nor a checklist,
+      // whose property was held to the type above.
       .filter(
         (card) =>
           card.related !== null ||
           card.timeline !== null ||
           card.comments !== null ||
           card.external !== null ||
+          card.checklist !== null ||
           card.fields.length > 0,
       );
 

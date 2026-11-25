@@ -1,11 +1,11 @@
 # Payers Claims (demo)
 
 The Payers kit, version 1 ([development plan](../../../docs/business-apps/development-plan.md),
-phase 1), with phase 2's claims review workflow, and the package pipeline's demo app definition
-([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)). All its data is
-fictional. Phase 0's demo runs on it, phase 1's demo script runs on it (below), phase 2's first
-three demo steps are written for it, and the pipeline's controls (`scripts/app-package.selftest.mjs`)
-break copies of it.
+phase 1), with phase 2's claims review workflow and appeals, and the package pipeline's demo app
+definition ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)). All its data
+is fictional. Phase 0's demo runs on it, phase 1's demo script runs on it (below), phase 2's first
+three demo steps and its sixth are written for it, and the pipeline's controls
+(`scripts/app-package.selftest.mjs`) break copies of it.
 
 ## The short version
 
@@ -28,6 +28,13 @@ break copies of it.
   goes to a supervisor. Phase 2's first three demo steps are written for it, in
   [`scripts/beta-harness/steps/payers-claims-workflow.mjs`](../../../scripts/beta-harness/steps/payers-claims-workflow.mjs)
   ([below](#the-claims-review-workflow)). **Not run on a server yet:** the kit is not installed.
+- **The appeals,** version 0.4.1's: an appeal is a Case of the category `appeal`, opened against a
+  denied claim, which it links to. Its record page adds a checklist, layout version 2's
+  `checklist` card, whose items the Case layout lists and whose state, done or not with who and
+  when, the case's `case:checklist` holds, and its timeline. The seed writes two appeals, one under
+  way and one decided. Phase 2's demo step 6 is written for them, in
+  [`scripts/beta-harness/steps/payers-appeals.mjs`](../../../scripts/beta-harness/steps/payers-appeals.mjs)
+  ([below](#the-appeals)). **Not run on a server yet** either.
 - **What a production install shows:** the record pages and the model, to everyone, and the home,
   the menu, the queues and the labels from the app registry, after sign-in, to the three demo
   groups `app.json` names. The development server serves the same files through
@@ -41,7 +48,7 @@ break copies of it.
 | `bundle/agentic-ui-config/app.json`                            | The app: its name, version, platform range and groups                                      |
 | `bundle/agentic-ui-config/layouts/Member/view.layout.json`     | The Member record page: section 9's                                                        |
 | `bundle/agentic-ui-config/layouts/Claim/view.layout.json`      | The Claim record page                                                                      |
-| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page                                                                       |
+| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page, with an appeal's checklist and every case's timeline                 |
 | `bundle/agentic-ui-config/layouts/Provider/view.layout.json`   | The Provider record page, with the claims it billed                                        |
 | `bundle/agentic-ui-config/layouts/Member/metadata.layout.json` | Version 1: the Properties panel beside the Member page, without the social security number |
 | `bundle/agentic-ui-config/queues/unassigned-claims.json`       | Adjusters: claims no one holds yet, with a Status facet                                    |
@@ -64,6 +71,7 @@ break copies of it.
 | `workflow/platform-check.mjs`, `PlatformCheck.java`            | The route model held to the local Nuxeo's own classes, with no deploy                      |
 | `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`     | The seed script, its fictional records and people, and its controls. Not packaged          |
 | `demo/lifecycle.mjs`                                           | The claim lifecycle, read from the stand-in model, for the seed and its controls           |
+| `demo/appeals.mjs`                                             | The Case page's checklist, read from its layout, and the seeded appeals held to it         |
 | `package/package.xml`                                          | The Marketplace package: name, version, and what it depends on                             |
 | `build.mjs`                                                    | Version 1's builder: the generator's, byte for byte                                        |
 | `content-model.json`                                           | The stand-in model as the server answers it, for `--model`                                 |
@@ -81,7 +89,12 @@ break copies of it.
   a person. Those break something too: claims change lifecycle, and a claim created before 0.4.0
   is in the default lifecycle's `project` state, which the new lifecycle keeps only as a way into
   it, so until the seed moves it on it has none of a claim's transitions. Below 1.0.0 a breaking
-  change raises the minor.
+  change raises the minor. **0.4.1** is a patch raise: the pipeline counts 9 changes since 0.4.0,
+  seven labels added and the Case layout changed, which need a patch, and leaves `case.xsd` to a
+  person. Its change adds a property, `case:checklist`, and removes none, so nothing that read a
+  case before reads it differently, and a patch is enough. One thing does break, which the rule
+  cannot see: a platform built before the checklist card refuses the new Case page ("Not done
+  yet", below).
 
 ## The stand-in model
 
@@ -93,7 +106,7 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
 | ------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Member`            | `member`                              | `number`, `firstName`, `lastName`, `birthDate`, `address` (`street`, `city`, `zip`, `country`), `phone`, `email`, `plan`, `status`, `ssn`                   |
 | `Claim`             | `claim`                               | `number`, `member`, `provider`, `serviceDate`, `serviceStart`, `serviceEnd`, `received`, `billedAmount`, `allowedAmount`, `status`, `adjuster`, `diagnosis` |
-| `Case`              | `case`                                | `number`, `member`, `claim`, `category`, `state`, `received`, `due`, `assignee`, `summary`                                                                  |
+| `Case`              | `case`                                | `number`, `member`, `claim`, `category`, `state`, `received`, `due`, `assignee`, `summary`, and since 0.4.1 `checklist`                                     |
 | `Provider`          | `provider`                            | `number`, `npi`, `specialty`, `network`, `phone`, `address`. Its name is its `dc:title`                                                                     |
 | `ClaimDocument`     | `claimdoc`, on a File                 | `claim`, the claim's number, and `category`                                                                                                                 |
 | `PayersClaimSearch` | `payers_claim_search` (`claimsearch`) | The claim queues' search document, never saved: `claim_status_agg` and `claim_adjuster_agg`, the facets a queue sends back. Hidden                          |
@@ -103,6 +116,12 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
   is what the page providers are given.
 - **Statuses are properties,** as section 9 shows them: `member:status`, `claim:status`,
   `case:state`. Each schema lists its values.
+- **An appeal's checklist is a property,** since 0.4.1: `case:checklist`, a list of complex
+  values, `item`, `done`, `doneBy` and `doneOn`, the four subfields layout version 2's checklist
+  card reads (layout-v2.md, section 7). One entry per item done or under way; what an appeal
+  requires is the Case layout's to say. A grievance's is empty. Who and when are what the entry
+  holds: nothing on the server stamps them, so the seed writes them, as anyone changing an item
+  through the REST API sends them.
 - **A claim's lifecycle is its status,** since 0.4.0: `payersClaim`, whose states are
   `claim:status`'s values. A claim starts `submitted`; `review` puts it in review; `pend` and
   `resume` hold it and bring it back; `approve` and `deny` decide it, from review or held; `pay`
@@ -265,7 +284,7 @@ the builder after changing the source.
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
 ```
 
-It writes `dist/payers-claims-demo-0.4.0.zip`.
+It writes `dist/payers-claims-demo-0.4.1.zip`.
 
 After changing the route model's source, write its zip again first, and commit it:
 
@@ -275,8 +294,8 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
-`dist/payers-claims-demo-0.4.0.changes.md`. Run on 24 November 2026 against the staging branch's
-0.3.0: 29 changes, which need a minor version, and 0.4.0 raises the minor.
+`dist/payers-claims-demo-0.4.1.changes.md`. Run on 25 November 2026 against the staging branch's
+0.4.0: 9 changes, which need a patch version, and 0.4.1 raises the patch.
 
 ```bash
 mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
@@ -289,7 +308,11 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 Held to its content model ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md),
 section 4): `content-model.json` is the stand-in model as a local Nuxeo with this package installed
 answers it. It was exported with `npm run app-package:model` and cut down to the kit's five types,
-their facets and their schemas. Export it again when the stand-in model changes.
+their facets and their schemas. Export it again when the stand-in model changes. **Since 0.4.1,
+one property of it is written by hand:** `case:checklist`, in the shape the server answers a list
+of complex values with, its four subfields each with its type's constraint, as `relatedtext` and the
+contracts kit's boolean are answered. No server has 0.4.1 to export it from; export it again once
+one does. Run on 25 November 2026, the four layouts are held to it with no finding.
 
 ```bash
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 \
@@ -403,6 +426,46 @@ transition but `submit`; the seed follows it, and the claim's way on to its stat
 claim's state is its status. Nothing needs deleting first: 0.4.0 removes no type, schema or page
 provider.
 
+### Over version 0.4.0: version 0.4.1, with the appeals
+
+**Not run yet.** The same as over 0.3.0, above, with this version's zip; over 0.3.0, install 0.4.1
+directly, and check both lists below. With `nuxeo-agentic-ui` already installed, from the
+repository's root:
+
+**1. Build it.**
+
+```bash
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
+```
+
+**2. Into the container, with the one-off script** that removes the package installed and installs
+this one when the container next starts, then removes itself:
+
+```bash
+docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.4.1.zip nuxeo:/tmp/
+```
+
+```bash
+printf '%s\n' '#!/bin/bash' '{ nuxeoctl mp-remove payers-claims-demo --accept=true && nuxeoctl mp-install /tmp/payers-claims-demo-0.4.1.zip --accept=true; } > /var/log/nuxeo/payers-kit-install.log 2>&1 || echo "payers kit: install failed, see /var/log/nuxeo/payers-kit-install.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-install.sh && chmod 755 /tmp/zz-payers-kit-install.sh
+```
+
+```bash
+docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
+```
+
+**3. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
+
+- the install log lists 0.4.0 removed and 0.4.1 installed, and the server log's
+  `Component Loading Status` has nothing pending or missing, as above;
+- the case schema has the checklist: `GET /nuxeo/api/v1/config/schemas/case` lists `checklist`,
+  with `item`, `done`, `doneBy` and `doneOn`;
+- `/nuxeo/agentic-ui-config/layouts/Case/view.layout.json` holds the `checklist` and `history`
+  cards.
+
+**4. Seed it again** (below). It writes the appeals' checklists, the second appeal and its denied
+claim, and empties every other case's checklist. Nothing needs deleting first: 0.4.1 removes no
+type, schema, property or page provider.
+
 ### Removing it
 
 **First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it
@@ -448,8 +511,11 @@ export PAYERS_DEMO_PASSWORD=<a password for the demo users>
 node business-apps/packages/payers-claims-demo/demo/seed.mjs
 ```
 
-- **What it writes:** four members, three providers, eight claims, three cases and four claim
-  documents, under `/default-domain/workspaces/payers-demo`.
+- **What it writes:** four members, three providers, nine claims, four cases and four claim
+  documents, under `/default-domain/workspaces/payers-demo`. Two of the cases are appeals, each
+  against a denied claim and with its checklist: CASE-2041, under way, two of five items done, and
+  CASE-2043, decided, every item done, against CLAIM-000145, which 0.4.1 adds. Morgan Chen holds
+  that claim, so none of what phase 1's demo counts as Dana Lee or as member services changes.
 - **And the people:** six fictional users, in the three groups the kit's rules name.
 
   | User           | Groups                                   | Works                                     |
@@ -457,7 +523,7 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   | `dana.lee`     | `claims-adjusters`                       | Most of the claims                        |
   | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | One pended claim                          |
   | `riley.brooks` | `member-services`                        | Two cases                                 |
-  | `sam.patel`    | `member-services`                        | The appeal                                |
+  | `sam.patel`    | `member-services`                        | The two appeals, and the appeals demo     |
   | `alex.rivera`  | `claims-adjusters`                       | The workflow demo's claims, as adjuster   |
   | `jordan.kim`   | `claims-supervisors`                     | The workflow demo's claims, as supervisor |
 
@@ -466,6 +532,13 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   the Member edit form, which would list the social security number. The seed checks both as each
   user, wherever the permission comes from. The last two hold none of the seeded claims, so what
   the workflow demo does never changes the figures phase 1's demo counts.
+
+- **The appeals are held to the Case page first.** Before it asks the server anything, the seed
+  holds `data.mjs`'s cases to the Case layout's checklist card (`demo/appeals.mjs`): an appeal
+  against a claim that is not denied, an entry for an item the card does not list or listed twice,
+  a done item that does not say both who and when, someone not of the demo's people or a day that
+  does not exist, or a checklist on a grievance, stops the run with exit 1, naming it. An entry
+  not done may still say who and when, as CASE-2041's medical records do: the page shows neither.
 
 - **Each claim's lifecycle is its status.** After it writes a claim, the seed follows the fewest
   transitions of the claim lifecycle from the state the claim is in to its status
@@ -481,7 +554,8 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   its marker (a user's `company`, a group's `description`), is found before anything is written,
   and stops the run with exit 2.
 - **It checks what it wrote:** last, it signs in as each user, and checks their groups and what
-  they may change, once, and reads each claim back, in the state its status names. Then it runs
+  they may change, once, reads each claim back, in the state its status names, and each case,
+  holding the checklist it was given, entry for entry. Then it runs
   the seven page providers and compares what they return with
   what it seeded, each queue's aggregates included, asking `payers_my_claims` for each adjuster's
   claims as that adjuster. A queue may hold claims the seed did not write: the seed checks its
@@ -491,11 +565,11 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   `PAYERS_DEMO_PASSWORD` have no default, and `NUXEO_USER` must be an administrator: only one may
   create users and groups. `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a
   precondition is not met: no credentials, no demo password, no server, credentials refused or not
-  an administrator's, the package not installed or older than 0.4.0, no
+  an administrator's, the package not installed or older than 0.4.1, no
   `/default-domain/workspaces`, or a user or a group of the demo's names that the seed did not
   create.
 
-It prints a member's and a provider's record page, on the app at `APP_URL`
+It prints a member's and a provider's record page, and each appeal's, on the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).
 
 ### Seeing it under `nx serve`
@@ -637,6 +711,53 @@ than 0.4.0; the claims folder is missing or the adjuster may not add to it; the 
 other task forms, labels or Claim page; or an earlier run's claims could not be put away: their
 workflows cancelled, and they trashed. **Not run yet.**
 
+### The appeals
+
+Phase 2's demo step 6, "Open an appeal case with its checklist and timeline", as a steps file of
+the beta harness,
+[`scripts/beta-harness/steps/payers-appeals.mjs`](../../../scripts/beta-harness/steps/payers-appeals.mjs).
+It is built on decision 2's recommendation, as the workflow is, and decision 3 stays open: the
+checklist ticks nothing, and the appeals have no operation buttons
+([decisions.md](../../../docs/business-apps/decisions.md)).
+
+- **An appeal is a Case,** of the category `appeal`, not a type of its own: the model's Case already
+  holds a claim, a member, a state and an assignee, and the Member page's cases card lists appeals
+  and grievances together. It is opened against a denied claim, and its `case:claim` links to it,
+  shown on the Case page as a `document-link`: the claim's title, a link that opens it.
+- **The Case page's two new cards** (`layouts/Case/view.layout.json`): `checklist`, shown while
+  `case:category` is `appeal` (`app.rules.fieldIn`), lists five items, from "Appeal letter
+  received" to "Decision letter sent"; `history` is the case's timeline, its default kinds of
+  event, ten at a time. Both are configuration: the items and their words are the layout's and the
+  labels', and what is done, by whom and when is the case's `case:checklist`.
+
+The demo, run as the appeals' specialist, `sam.patel`, who reads and changes nothing:
+
+1. the appeal under way, CASE-2041: the file's five items, in its order, which is not the order
+   the seed writes them in, and in its words; the two done each with who and the day; the three not
+   done with neither, though the medical records' entry still names who asked for them and when,
+   and two have no entry at all; "2 of 5 done"; and its claim's link, which opens CLAIM-000144,
+   denied;
+2. its timeline: the server's audit of the case, of the card's kinds, newest first, entry for
+   entry; and, when the case's audit holds an event of another kind, none of those drawn. A seeded
+   case's may hold none, and the run then says so in a note;
+3. the decided appeal, CASE-2043: the same items in the same order, every one done, by the people
+   and on the days the seed wrote;
+4. a grievance, CASE-2042: no checklist, by the card's rule, and its timeline still drawn;
+5. the Case layout the dev server serves is the kit's file, and the bundle holds no code.
+
+```bash
+NUXEO_USER=sam.patel NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-appeals
+```
+
+**What it needs:** the package 0.4.1 installed and seeded, the dev server serving the kit's files
+(above), and Playwright. Exit 2 means a precondition is not met, and says which: the run's user is
+not `sam.patel`, in `member-services` and neither claims group; `data.mjs` disagrees with the Case
+page's checklist; the package is older than 0.4.1; a case is missing or does not hold the checklist
+the seed wrote; an appeal's claim is not denied on the server; or the dev server serves another
+Case page or other labels. **Not run yet:** the kit 0.4.1 is installed nowhere. What was run, on
+25 November 2026, is the record page engine's tests, which draw the checklist from a layout and a
+record, and the seed's controls against their stand-in server, which write and check both appeals.
+
 ## What a server shows, and what the dev server does
 
 The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses, to everyone:
@@ -694,9 +815,24 @@ included, is shown no app. The demo itself still runs on a development server, a
   themselves (`morgan.chen` is in both groups). Making the workflow the only way would take the
   lifecycle permission from the groups and have the chains follow it as the system; it is for the
   security review phase 2 needs. Hiding a button is not a control.
-- **Not run by the demo:** a supervisor sending a determination back, and demo step 6, the appeal
-  case with its checklist and timeline, which this model does not give: an appeal is a case, not a
-  claim, and the timeline and comments are already the record pages'.
+- **Not run by the demo:** a supervisor sending a determination back.
+- **The appeals have not run on a server:** the kit 0.4.1 is not installed, so demo step 6's
+  steps file has not run, and no server has answered `case:checklist` as `content-model.json`
+  writes it by hand (above).
+- **No one ticks a checklist item in the app.** The card is read-only, and decision 3 builds no
+  operation buttons. A case's checklist changes through the REST API, as the seed writes it; the
+  kit lays out no Edit form for a Case, and no demo group may change one. Who and when are what the
+  writer sends, not stamped: nothing on the server writes `doneBy` and `doneOn` from the change. A
+  chain that did would be server code in the kit, as `PayersClaim.KeepStatus` is.
+- **An appeal is not a workflow yet.** Nothing moves `case:state` with the checklist: an appeal
+  whose items are all done is not decided by that, and one decided with items not done is shown as
+  it is. The prototype's appeal review workflow is not built.
+- **No appeals queue.** An appeal is opened from its member's cases card, or by its address; the
+  prototype's appeals queue and its deadlines are not built.
+- **A platform built before the checklist card refuses the Case page,** and shows the document
+  page, since `checklist` is a card's content it does not know, a structural error to it. The
+  platform's version is still 0.2.0, as it was before the card, so the kit's range, `>=0.2.0`,
+  does not say so.
 - **The platform check is not in CI:** `workflow/platform-check.mjs` needs Docker, the local
   container and Java 21. The route model's own controls are (above).
 - **Phase 1's demo can be pointed at the workflow's adjuster,** `alex.rivera`, who is an adjuster

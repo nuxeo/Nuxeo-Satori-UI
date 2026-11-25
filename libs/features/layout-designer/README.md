@@ -54,8 +54,8 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
      string again once it holds none. A required rule chosen and not yet written is written empty, and
      refused until it is.
 
-   A card of related records, a timeline or comments is listed with its heading, and its contents are
-   edited in the file. Every key the designer does not edit is kept as it was written, a key version 2
+   A card of related records, a timeline, comments, another system's fields or a checklist is listed
+   with its heading, and its contents are edited in the file. Every key the designer does not edit is kept as it was written, a key version 2
    does not have included.
 
 3. **Previews it** against a record of the type: the last 20 changed, live ones, read with

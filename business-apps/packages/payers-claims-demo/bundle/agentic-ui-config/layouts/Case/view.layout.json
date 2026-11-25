@@ -58,6 +58,29 @@
       "labelKey": "payers.case.summary",
       "span": 2,
       "fields": [{ "field": "case:summary", "widget": "long-text" }]
+    },
+    {
+      "id": "checklist",
+      "labelKey": "payers.appeal.checklist",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "case:category" }, "appeal"]
+      },
+      "checklist": {
+        "field": "case:checklist",
+        "items": [
+          { "id": "appealLetter", "labelKey": "payers.appeal.appealLetter" },
+          { "id": "reviewerAssigned", "labelKey": "payers.appeal.reviewerAssigned" },
+          { "id": "medicalRecords", "labelKey": "payers.appeal.medicalRecords" },
+          { "id": "providerStatement", "labelKey": "payers.appeal.providerStatement" },
+          { "id": "decisionLetter", "labelKey": "payers.appeal.decisionLetter" }
+        ]
+      }
+    },
+    {
+      "id": "history",
+      "labelKey": "payers.case.history",
+      "timeline": { "pageSize": 10 }
     }
   ]
 }

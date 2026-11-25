@@ -132,6 +132,8 @@ describe('the JSON Schema, held to the registries and the validator', () => {
       ['comments', LAYOUT_V2_KEYS.comments],
       ['external', LAYOUT_V2_KEYS.external],
       ['externalField', LAYOUT_V2_KEYS.externalField],
+      ['checklist', LAYOUT_V2_KEYS.checklist],
+      ['checklistItem', LAYOUT_V2_KEYS.checklistItem],
       ['check', LAYOUT_V2_KEYS.check],
     ] as const) {
       expect(Object.keys(defs[part].properties).sort()).toEqual([...keys].sort());
