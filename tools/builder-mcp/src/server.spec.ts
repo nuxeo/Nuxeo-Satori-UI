@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createServer } from './server.ts';
 import { connect } from './testing/client.ts';
 import { RECORDED_ORIGIN, RecordedReads } from './testing/recordings.ts';
+import type { WriteRequest } from './package-writes.ts';
 import type { PackageRequest } from './validate-package.ts';
 
 describe('createServer', () => {
@@ -118,6 +119,113 @@ describe('createServer', () => {
         directory: 'business-apps/packages/payers-claims-demo',
       });
       expect(answer).toMatchObject({ isError: true, text: 'No dev server is configured.' });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('passes each write tool its package and changes as one write request', async () => {
+    const seen: WriteRequest[] = [];
+    const client = await connect(
+      createServer({
+        nuxeo: { problem: 'not needed' },
+        write: async (request) => {
+          seen.push(request);
+          throw new Error('stopped here');
+        },
+      }),
+    );
+    try {
+      const pkg = 'business-apps/packages/x';
+      const answers = [
+        await client.call('write_package_file', {
+          package: pkg,
+          path: 'bundle/agentic-ui-config/home.json',
+          content: '{}',
+        }),
+        await client.call('apply_generator', {
+          package: pkg,
+          generator: 'app-queue',
+          options: { id: 'open', pageProvider: 'x_open', pageSize: 20 },
+        }),
+        await client.call('apply_package_changes', {
+          package: pkg,
+          changes: [
+            { kind: 'write', path: 'bundle/agentic-ui-config/home.json', content: '{}' },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        }),
+      ];
+      for (const answer of answers)
+        expect(answer).toMatchObject({ isError: true, text: 'stopped here' });
+      expect(seen).toEqual([
+        {
+          package: pkg,
+          changes: [{ kind: 'write', path: 'bundle/agentic-ui-config/home.json', content: '{}' }],
+        },
+        {
+          package: pkg,
+          changes: [
+            {
+              kind: 'generator',
+              generator: 'app-queue',
+              options: { id: 'open', pageProvider: 'x_open', pageSize: 20 },
+            },
+          ],
+        },
+        {
+          package: pkg,
+          changes: [
+            { kind: 'write', path: 'bundle/agentic-ui-config/home.json', content: '{}' },
+            { kind: 'generator', generator: 'app-registry' },
+          ],
+        },
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('refuses a generator that is not an app generator before running anything', async () => {
+    const client = await connect(
+      createServer({
+        nuxeo: { problem: 'not needed' },
+        write: async () => {
+          throw new Error('the write ran');
+        },
+      }),
+    );
+    try {
+      for (const generator of ['config-package', 'extension-library', 'satori-component']) {
+        const answer = await client.call('apply_generator', {
+          package: 'business-apps/packages/x',
+          generator,
+        });
+        expect(answer.isError, generator).toBe(true);
+        expect(answer.text, generator).toContain('Invalid arguments for tool apply_generator');
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('refuses every write when the package roots it was given are wrong', async () => {
+    const client = await connect(
+      createServer({
+        nuxeo: { problem: 'not needed' },
+        packageRoots: { problem: 'BUILDER_PACKAGE_ROOTS: x is not a folder' },
+      }),
+    );
+    try {
+      const answer = await client.call('write_package_file', {
+        package: 'business-apps/packages/payers-claims-demo',
+        path: 'bundle/agentic-ui-config/home.json',
+        content: '{}',
+      });
+      expect(answer).toMatchObject({
+        isError: true,
+        text: 'BUILDER_PACKAGE_ROOTS: x is not a folder',
+      });
     } finally {
       await client.close();
     }
