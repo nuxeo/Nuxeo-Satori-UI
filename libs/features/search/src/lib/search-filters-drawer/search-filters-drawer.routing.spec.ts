@@ -82,7 +82,8 @@ describe('Search drawer route and session integration', () => {
       .overrideComponent(SearchComponent, {
         set: {
           imports: [],
-          template: '<button type="button" (click)="resetSearch()">Reset</button>',
+          template:
+            '<button type="button" [disabled]="!canReset()" (click)="resetSearch()">Reset</button>',
         },
       })
       .compileComponents();
@@ -93,6 +94,46 @@ describe('Search drawer route and session integration', () => {
     drawer.detectChanges();
     await drawer.whenStable();
   });
+
+  it.each([false, true])(
+    'enables Reset for customer-only filters after removing packaged filter: %s',
+    async (removePackaged) => {
+      const filters = removePackaged ? 'noFolder,customerFilter' : 'customerFilter';
+      const page = await harness.navigateByUrl(
+        `/search?quickFilters=${filters}&page=3&pageSize=25&sortBy=dc:title&sortOrder=asc`,
+        SearchComponent,
+      );
+      await drawer.whenStable();
+      if (removePackaged) {
+        page.toggleQuickFilter('noFolder');
+        await drawer.whenStable();
+      }
+      harness.detectChanges();
+
+      expect(session.request().quickFilters).toBe('customerFilter');
+      expect(page.hasFilters()).toBe(false);
+      expect(page.selectedQuickFilters().size).toBe(0);
+      const resetButton = harness.routeNativeElement?.querySelector<HTMLButtonElement>('button');
+      expect(resetButton).not.toBeNull();
+      expect(resetButton?.disabled).toBe(false);
+      resetButton?.click();
+      await drawer.whenStable();
+      harness.detectChanges();
+
+      const query = router.parseUrl(router.url).queryParams;
+      expect(query['quickFilters']).toBeUndefined();
+      expect(query['page']).toBeUndefined();
+      expect(query['pageSize']).toBe('25');
+      expect(query['sortBy']).toBe('dc:title');
+      expect(query['sortOrder']).toBe('asc');
+      expect(session.request().quickFilters).toBeUndefined();
+      expect(resetButton?.disabled).toBe(true);
+      page.goToPage(1);
+      await drawer.whenStable();
+      expect(router.parseUrl(router.url).queryParams['quickFilters']).toBeUndefined();
+      expect(session.request().quickFilters).toBeUndefined();
+    },
+  );
 
   it.each([false, true])(
     'preserves customer URL filters when changing Files from %s',

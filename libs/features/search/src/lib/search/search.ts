@@ -450,7 +450,12 @@ export class SearchComponent {
   /** Whether the filters differ from the open saved search's: Save is offered only then. */
   readonly savedSearchDirty = this.session.dirty;
   readonly hasFilters = this.session.hasFilters;
-  readonly canReset = computed(() => this.hasFilters() || this.selectedQuickFilters().size > 0);
+  readonly canReset = computed(
+    () =>
+      this.hasFilters() ||
+      this.selectedQuickFilters().size > 0 ||
+      !!this.session.request().quickFilters?.trim(),
+  );
 
   /** Which error state `error` shows: the status of the search request that failed. */
   readonly errorStatus = computed<NxsErrorStatus>(() => nxsErrorStatus(this.resultsState().error));

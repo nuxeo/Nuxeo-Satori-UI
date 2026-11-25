@@ -139,6 +139,8 @@ Customer extension checks also cover preserving unknown URL quick filters when c
 filters or Files scope and navigating between Queue items. The inline workspace resolves the
 registered search-filter replacement through the shared extension outlet, with the packaged drawer
 as its fallback.
+Reset remains enabled when only customer URL filters are active, including after the last packaged
+filter is removed; actual button checks confirm it clears those filters through subsequent paging.
 
 ### Follow-up Copilot review — 25 November 2026
 
