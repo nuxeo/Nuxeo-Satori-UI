@@ -74,10 +74,8 @@ check.
 
 **Today's growth is warm-up.** Browsed to page 200 once, by a probe against the same stand-in rather
 than by this check, which reads the heap after pages 1 and 50 only: the heap grew 2.6 MB over the
-first 25 pages, then
-about 5 kB a page, 13.2 MB at page 1, 16.1 MB at page 50 and 16.8 MB at page 200. A page of 50
-results is about 300 kB of JSON, 6 kB a record with every schema, which the browser holds in far
-less once parsed.
+first 25 pages, then about 5 kB a page, 13.2 MB at page 1, 16.1 MB at page 50 and 16.8 MB at page 200. A page of 50 results is about 300 kB of JSON, 6 kB a record with every schema, which the
+browser holds in far less once parsed.
 
 ## How it is measured
 
@@ -210,30 +208,36 @@ enabled.
 ## Measured on 25 November 2026
 
 On an Apple Silicon Mac, Chromium 153 headless, the network above, no CPU slowdown, the build of
-staging merged into this page's branch (commit `f0a618af6`, no changes on top). Each line's limit is
-the budget's, above:
+the branch that added the search index's window (commit `44bc47790`, no changes on top). Each
+line's limit is the budget's, above:
 
-| Measure                              | Measured |
-| ------------------------------------ | -------- |
-| First contentful paint               | 1320 ms  |
-| First page of results                | 1736 ms  |
-| Requests to open the library         | 14       |
-| A page, median                       | 288 ms   |
-| A page, 95th percentile              | 299 ms   |
-| Requests per page                    | 1        |
-| A facet, slowest                     | 299 ms   |
-| Requests per facet                   | 1        |
-| The asset page's first view, slowest | 578 ms   |
-| Requests to open the asset page      | 20       |
-| Heap after 50 pages                  | 16.1 MB  |
-| Heap growth over 50 pages            | 2.9 MB   |
+| Measure                                   | Measured |
+| ----------------------------------------- | -------- |
+| First contentful paint                    | 1308 ms  |
+| First page of results                     | 1724 ms  |
+| Requests to open the library              | 14       |
+| A page, median                            | 294 ms   |
+| A page, 95th percentile                   | 297 ms   |
+| Requests per page                         | 1        |
+| A facet, slowest                          | 299 ms   |
+| Requests per facet                        | 1        |
+| The asset page's first view, slowest      | 578 ms   |
+| Requests to open the asset page           | 20       |
+| Heap after 50 pages                       | 16.3 MB  |
+| Heap growth over 50 pages                 | 3.0 MB   |
+| Requests past the window                  | 0        |
+| Controls past the window, enabled         | 0        |
+| Pages 2 to 200 misstating the total       | 0 of 199 |
+| The window's last page without its notice | 0        |
 
 The slowest first view is the first open, which also loads the asset page's code; the four after
-it took 295 to 313 ms.
+it took 299 to 311 ms. On page 200 the pager read "9951–10000 of 100000", its next button disabled,
+and above the rows: "Only the first 10,000 of these 100,000 records can be paged through. Choose
+filters, or search, to narrow the list and find the others."
 
-Once more with a fourfold CPU slowdown (`--cpu 4`): 1528 ms to first paint, 1966 ms to the first
-page, 307 ms a page at the median, 657 ms to the slowest first view, and 2.9 MB of heap growth:
-within budget too, on every line.
+Once more with a fourfold CPU slowdown (`--cpu 4`), on the build before the window (`f0a618af6`):
+1528 ms to first paint, 1966 ms to the first page, 307 ms a page at the median, 657 ms to the
+slowest first view, and 2.9 MB of heap growth: within budget too, on every line. Not run again.
 
 The controls, the same day, against the build before staging was merged in, whose own run was
 within 6 ms of the one above on every time and equal on every count: each control was over on

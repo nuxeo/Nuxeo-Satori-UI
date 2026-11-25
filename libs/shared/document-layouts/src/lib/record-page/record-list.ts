@@ -451,7 +451,8 @@ export class RecordListComponent {
   protected readonly windowNotice = computed<string | null>(() => {
     this.translations();
     const known = this.window();
-    // A reach is set only where the count is above the window, so above the reach too.
+    // A reach is always below the total: some results are out of the pages' reach. At a count
+    // within the window it is known on its last served page only, so the notice shows there.
     if (known === null || known.reach === null || known.total === null) return null;
     if (this.state().status === 'failed') return null;
     return this.translate.instant(

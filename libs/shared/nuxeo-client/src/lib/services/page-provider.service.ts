@@ -112,7 +112,8 @@ export interface ResultWindow {
   /**
    * How many results the pages can reach at the page size given: the whole pages that end within
    * the search index's window, or, at a count within it, the end of the last page the server
-   * serves. Always fewer than `total`; `null` where no window cuts the results short.
+   * serves, which only that page's answer says. Always fewer than `total`; `null` where this page
+   * does not show the window cutting the results short.
    */
   readonly reach: number | null;
 }
@@ -139,8 +140,11 @@ export interface ResultWindow {
  * looks the same and pages on to the end. But at a page size that does not divide the window, the
  * index also refuses a last page that would cross it: measured over 9,886 results at 910 a page,
  * page 9, results 8,191 to 9,100, had no next page, and page 10 was HTTP 500. So where the server
- * says there is no next page although its count says there are more, which the repository never
- * does, the page read is the last it serves, and the reach ends with it.
+ * says there is no next page although its count says there are more, the page read is taken for
+ * the last it serves, and the reach ends with it, the notice saying so on that page. The
+ * repository was not seen to answer so (`nxql_search` and `@children` were measured; a provider of
+ * its with a positive `maxResults` and a whole count was not): were one to, its own flag would
+ * already stop the pager there, and the notice would be the only difference.
  */
 export function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow {
   const counts = [page.totalSize, page.resultsCount].filter(

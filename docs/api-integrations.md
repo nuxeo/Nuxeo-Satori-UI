@@ -2089,8 +2089,9 @@ is false whenever the count and a page do not fit in the window; `numberOfPages`
 **Neither scroll nor `search_after` is offered through REST.** The page provider endpoint reads
 `pageSize`, `currentPageIndex`, `offset`, `maxResults`, `sortBy`, `sortOrder`, `queryParams`,
 `quickFilters` and `highlight` (`QueryExecutor`, as `PageProviderService` lists them); `scrollId`,
-`scroll` and `searchAfter`, sent, changed nothing: page 0 answered as without them. Of the 324 Automation operations the server lists, the only scroll is
-`NuxeoDrive.ScrollDescendants`, Drive's, over a folder's descendants with no aggregates;
+`scroll` and `searchAfter`, sent, changed nothing: page 0 answered as without them. Of the 324
+Automation operations the server lists, the only scroll is `NuxeoDrive.ScrollDescendants`, Drive's,
+over a folder's descendants with no aggregates;
 `Repository.PageProvider` lists a page index and an offset as its parameters, as REST takes them
 (read from the list, not run). The Bulk Action Framework reads a whole query on the server, its
 command `SCROLLING_RUNNING` first (section 34), which is what a queue runs over every result with;
@@ -2100,12 +2101,14 @@ it was not run past 10,000 here, since that would write.
 `resultsCountLimit` can only be a window, since only the index counts past its own limit, so
 `RecordListComponent` offers no next page past the last whole page within it, whatever the server
 says, and refuses one asked for. Below a count within the limit, a server that says there is no
-next page although its count says there are more is at the window too, which the repository never
-does. The list shows the server's whole count, and above the rows "Only the first 10,000 of these
-13,592 records can be paged through", telling the reader to choose filters or search. A `-2` with a
-limit shows "of more than" that limit, and pages on, as the repository does. A queue's count, and
-the command a bulk action over every result sends, are still the whole query's; that the framework
-then processes past 10,000 is expected from how it reads the query, not measured here.
+next page although its count says there are more is taken to be at the window too, and the notice
+shows on that page; the repository was not seen to answer so, though one of its providers with a
+positive `maxResults` and a whole count was not measured. The list shows the server's whole count,
+and above the rows "Only the first 10,000 of these 13,592 records can be paged through", telling
+the reader to choose filters or search. A `-2` with a limit shows "of more than" that limit, and
+pages on, as the repository does. A queue's count, and the command a bulk action over every result
+sends, are still the whole query's; that the framework then processes past 10,000 is expected from
+how it reads the query, not measured here.
 
 **Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), at
 `/queues/<id>`, through `RecordListComponent`
