@@ -54,6 +54,7 @@ import {
   checkQueueNarrows,
   codeInPackage,
   daysSince,
+  deferred,
   differsFromFile,
   fieldsOf,
   listsOf,
@@ -68,6 +69,7 @@ import {
   sameJson,
   sessionBase,
   switchBrowserTo,
+  unheldFileErrors,
   unread,
   whoIs,
   withoutSchema,
@@ -259,27 +261,39 @@ export default async function run(page, h) {
   // What the dev server serves must be the participant's own files: they are what the rest of the
   // run asserts the pages were drawn from.
   const { config } = pkg;
+  // A package with no queue fails B4; one with several needs the facilitator to say which.
   const queue = screens ? participantQueue(config) : null;
   h.requirePrecondition(
-    "the package's queue for test B is known",
-    !screens || !queue.problem,
+    "the package's queue for test B is known, when it has more than one",
+    !screens || queue.id !== undefined || queue.none,
     queue?.problem,
   );
   const layouts = ['Member', ...(screens ? ['Claim', 'Case'] : [])];
-  const served = [
+  const needed = [
     'labels/en.json',
     ...layouts.map((type) => `layouts/${type}/view.layout.json`),
+    ...(screens ? ['navigation.json', ...(queue.id ? [`queues/${queue.id}.json`] : [])] : []),
+  ];
+  // A file the target needs and the package lacks is the participant's to write: it fails the
+  // items it serves, below, and is named here. What the package holds must be what is served.
+  const lacking = needed.filter((path) => !existsSync(join(config, path)));
+  h.check(
+    `the package holds every file its target's pages need${screens ? ', a queue among them' : ''}`,
+    lacking.length === 0 && (!screens || queue.id !== undefined),
+    `missing: ${[...lacking, ...(screens && !queue.id ? ['queues/<a queue>.json'] : [])].join(', ')}`,
+  );
+  const served = [
+    ...needed.filter((path) => !lacking.includes(path)),
     ...(existsSync(join(config, 'layouts', 'Member', 'metadata.layout.json'))
       ? ['layouts/Member/metadata.layout.json']
       : []),
-    ...(screens ? ['navigation.json', `queues/${queue.id}.json`] : []),
   ];
   const differing = await notServedFromPackage(page, h.baseUrl, REPO, config, served);
   h.requirePrecondition(
-    "the dev server serves the participant's labels, layouts" + (screens ? ', menu and queue' : ''),
+    "the dev server serves the participant's own files, as the package holds them",
     differing.length === 0,
-    `not the package's: ${differing.join(', ')}. Run config:dev on the package's files, then ` +
-      'restart the dev server if it started before the folder existed',
+    `not the package's: ${differing.join(', ')}. Run config:dev on the package's files, from ` +
+      "the participant's checkout, whose dev server APP_URL names",
   );
   const labels = readJson(join(config, 'labels', 'en.json'))?.labels ?? {};
   const layout = (type) => readJson(join(config, 'layouts', type, 'view.layout.json'));
@@ -298,7 +312,7 @@ export default async function run(page, h) {
   );
   const name = `${MEMBER.firstName} ${MEMBER.lastName}`;
   h.check(
-    `A2. a field shows the member's full name: ${name}`,
+    `A2. a field shows the member's name: ${name}`,
     fieldsOf(memberPage).some((field) => field.value === name),
     JSON.stringify(fieldsOf(memberPage).map((field) => [field.key, field.value])),
   );
@@ -366,22 +380,36 @@ export default async function run(page, h) {
   );
   await h.screenshot('member-as-adjuster');
 
+  // The panel is drawn once it shows any of the member's own values: which ones is the
+  // participant's metadata layout's to say, or the schema's when they wrote none.
+  const own = [
+    MEMBER.number,
+    MEMBER.firstName,
+    MEMBER.lastName,
+    MEMBER.phone,
+    MEMBER.email,
+    MEMBER.plan,
+  ];
   await page
     .waitForFunction(
-      (number) =>
-        (document.querySelector('nxs-properties-panel')?.textContent ?? '').includes(number),
-      MEMBER.number,
+      (values) => {
+        const text = document.querySelector('nxs-properties-panel')?.textContent ?? '';
+        return values.some((value) => text.includes(value));
+      },
+      own,
       { timeout: 30_000 },
     )
-    .catch(() => undefined);
+    .catch(deferred);
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(deferred);
   const panel = (await page.locator('nxs-properties-panel').textContent().catch(unread)) ?? '';
   const screen = (await page.evaluate(() => document.body.innerText).catch(unread)) ?? '';
+  const panelDrawn = own.some((value) => panel.includes(value));
   h.check(
     "A9, first half. the Properties panel is drawn, and the SSN is nowhere on the adjuster's Member page",
-    panel.includes(MEMBER.number) && screen !== '' && !screen.includes(MEMBER.ssn),
-    panel.includes(MEMBER.number)
+    panelDrawn && screen !== '' && !screen.includes(MEMBER.ssn),
+    panelDrawn
       ? 'the SSN is on the screen'
-      : 'the Properties panel was not drawn',
+      : "the Properties panel shows none of the member's values",
   );
 
   if (screens) {
@@ -537,28 +565,47 @@ export default async function run(page, h) {
     await h.screenshot('grievance');
 
     // ── 4. The claims queue ───────────────────────────────────────────────────────────────────
-    await h.step(`4. The claims queue, ${queue.id}, narrowed on the server: item B4`);
-    const queueFile = readJson(join(config, 'queues', `${queue.id}.json`));
-    await h.goTo('/#/home');
-    const menu = (await readAppMenu(page)) ?? [];
-    const entries = readJson(join(config, 'navigation.json'))?.entries ?? [];
-    h.check(
-      `B4. the menu has the package's entry for the queue ${queue.id}`,
-      entries.some((entry) => entry.queue === queue.id && menu.includes(`appMenu.${entry.id}`)),
-      `drawn ${JSON.stringify(menu)}`,
-    );
-    await checkQueueNarrows(page, h, { id: queue.id, queue: queueFile, labels });
-    const rows =
-      (await page
-        .evaluate(() =>
-          [...document.querySelectorAll('.queue-page tbody tr')].map((row) => row.innerText ?? ''),
-        )
-        .catch(unread)) ?? [];
-    h.check(
-      'B4. the queue lists claims: each row shows a claim number',
-      rows.length > 0 && rows.every((row) => /CLAIM-\d+/.test(row)),
-      JSON.stringify(rows),
-    );
+    await h.step(`4. The claims queue, ${queue.id ?? '(none)'}, narrowed on the server: item B4`);
+    h.check('B4. the package has a queue', queue.id !== undefined, queue.problem ?? '');
+    if (queue.id !== undefined) {
+      const queueFile = readJson(join(config, 'queues', `${queue.id}.json`));
+      await h.goTo('/#/home');
+      const menu = (await readAppMenu(page)) ?? [];
+      const entries = readJson(join(config, 'navigation.json'))?.entries ?? [];
+      h.check(
+        `B4. the menu has the package's entry for the queue ${queue.id}`,
+        entries.some((entry) => entry.queue === queue.id && menu.includes(`appMenu.${entry.id}`)),
+        `drawn ${JSON.stringify(menu)}`,
+      );
+      const buckets = await checkQueueNarrows(page, h, {
+        id: queue.id,
+        queue: queueFile,
+        labels,
+        item: 'B4',
+      });
+      // A Status facet: its buckets are the claims' statuses, which the seed's claims hold.
+      const statuses = new Set(CLAIMS.map((claim) => claim.status));
+      h.check(
+        `B4. the facet is by status: each of its buckets is a claim status, ${[...statuses].join(', ')}`,
+        buckets !== null &&
+          Object.keys(buckets).length > 0 &&
+          Object.keys(buckets).every((key) => statuses.has(key)),
+        JSON.stringify(buckets),
+      );
+      const rows =
+        (await page
+          .evaluate(() =>
+            [...document.querySelectorAll('.queue-page tbody tr')].map(
+              (row) => row.innerText ?? '',
+            ),
+          )
+          .catch(unread)) ?? [];
+      h.check(
+        'B4. the queue lists claims: each row shows a claim number',
+        rows.length > 0 && rows.every((row) => /CLAIM-\d+/.test(row)),
+        JSON.stringify(rows),
+      );
+    }
     await h.screenshot('claims-queue-narrowed');
   }
 
@@ -608,7 +655,10 @@ export default async function run(page, h) {
 
   // ── Health ─────────────────────────────────────────────────────────────────────────────────
   await h.step('Health');
-  h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
+  h.expectNoConsoleErrors('no unexpected browser console errors', [
+    ...ENVIRONMENTAL_ERRORS,
+    ...unheldFileErrors(config),
+  ]);
   h.note(
     "the pipeline is not run here: the protocol runs it as a command, with the server's model, " +
       'item A11',

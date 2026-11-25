@@ -16,8 +16,12 @@
  * - A copy of the reference's layout found under another `$schema`, and one changed field not.
  * - The page held to its file: the file's cards in order with their headings pass, and a card with
  *   a rule left out; a card missing, another's, out of order, headed otherwise or with no text in
- *   the labels, each named.
- * - The queue: none, two with none named and one named that is not there refused; one passed.
+ *   the labels, a file of tabs and no file at all, each named.
+ * - The 404s left to the registry: a home, a menu and actions the package does not hold, and the
+ *   queues of a menu that is not its own; not one it holds, its own menu's queues, the labels, a
+ *   layout, or another status.
+ * - The queue: none the package's failure; two with none named and one named that is not there
+ *   refused; one passed.
  *
  * Exit 0 when every control holds, 1 otherwise. Everything it writes is in a temporary directory,
  * removed at the end: nothing tracked is touched.
@@ -35,6 +39,7 @@ import {
   participantQueue,
   sameJson,
   sessionBase,
+  unheldFileErrors,
   withoutSchema,
 } from './participant.mjs';
 
@@ -257,15 +262,62 @@ try {
       differsFromFile(drawn(['member', null], ['claims', 'Claims']), file, {}) ?? '',
     ),
   );
+  check(
+    'a file of tabs is named, not half judged',
+    /in tabs/.test(differsFromFile(drawn(), { tabs: [{ id: 't', cards: [] }] }, texts) ?? ''),
+  );
+  check(
+    'no layout file at all is named',
+    /no such layout file/.test(differsFromFile(drawn(), null, texts) ?? ''),
+  );
+
+  console.log('\nThe files the package does not hold, and the app asks for');
+  const config = ok.config;
+  // Judged as the runner's `expectNoConsoleErrors` judges an ignore list: a string is contained, a
+  // pattern is matched.
+  const ignored = (text) =>
+    unheldFileErrors(config).some((each) =>
+      typeof each === 'string' ? text.includes(each) : each.test(text),
+    );
+  check(
+    "a home, a menu and actions the package does not hold: their 404 is the registry's to answer",
+    ['home.json', 'navigation.json', 'actions.json'].every((file) =>
+      ignored(`HTTP 404 /agentic-ui-config/${file}`),
+    ),
+  );
+  check(
+    "with no menu of its own, the registry's menu's queues: their 404 is the registry's too",
+    ignored('HTTP 404 /agentic-ui-config/queues/unassigned-claims.json'),
+  );
+  check(
+    'the labels, a layout and any other answer than 404 stay judged',
+    !ignored('HTTP 404 /agentic-ui-config/labels/en.json') &&
+      !ignored('HTTP 404 /agentic-ui-config/layouts/Member/view.layout.json') &&
+      !ignored('HTTP 500 /agentic-ui-config/home.json') &&
+      !ignored('HTTP 404 /nuxeo/api/v1/search/pp/member_claims/execute'),
+  );
+  write(join(config, 'navigation.json'));
+  check(
+    'a menu the package holds: its 404, and those of the queues it names, stay judged',
+    !ignored('HTTP 404 /agentic-ui-config/navigation.json') &&
+      !ignored('HTTP 404 /agentic-ui-config/queues/unassigned-claims.json'),
+    JSON.stringify(unheldFileErrors(config).map(String)),
+  );
 
   console.log('\nThe queue');
-  const config = ok.config;
   const queueOf = (value) => withEnv({ ACCEPTANCE_QUEUE: value }, () => participantQueue(config));
-  check('none, refused', typeof queueOf(undefined).problem === 'string');
+  check(
+    "none: the package's failure, not a precondition",
+    queueOf(undefined).none === true && queueOf(undefined).id === undefined,
+    JSON.stringify(queueOf(undefined)),
+  );
   write(join(config, 'queues', 'mine.json'));
   check('one, passed', queueOf(undefined).id === 'mine', JSON.stringify(queueOf(undefined)));
   write(join(config, 'queues', 'all.json'));
-  check('two with none named, refused', typeof queueOf(undefined).problem === 'string');
+  check(
+    'two with none named, refused, as a precondition',
+    typeof queueOf(undefined).problem === 'string' && queueOf(undefined).none === undefined,
+  );
   check('one named, passed', queueOf('all').id === 'all');
   check('one named that is not there, refused', typeof queueOf('other').problem === 'string');
 } finally {

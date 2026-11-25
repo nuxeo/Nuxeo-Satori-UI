@@ -153,37 +153,77 @@ answer becomes an item for the docs or the tools, as the tutorial's feedback sec
 
 ### Before every session: the control run
 
-A participant's failure must never be the server's. On the prepared server, the day before and
-again on the morning of each session day, the facilitator runs:
+A participant's failure must never be the server's. The day before, and again on the morning of each
+session day, the facilitator runs two things from **their own checkout**, never the participant's,
+against **their own dev server**, on port 4301, beside the participant's on 4300 (the two checkouts
+are [section 2](#2-preparing-a-server-for-tests-a-b-and-d)'s):
 
-1. **The reference kit's own demo steps file,** which must pass: `payers-claims-demo` for tests A
-   and B, `brand-assets-demo` for test D (each kit's README, "Running the demo"). For test C, the
-   tutorial's step 1 commands, which must find no `WorkOrder`.
-2. **The acceptance steps file against a copy of the reference kit's app definition**, which must
-   fail exactly one check, "the participant's layouts are their own", and pass every other. It is the
-   steps file seen failing on purpose, on the one thing a copy must fail, and seen passing on
-   everything a correct package must pass. Its screenshots are the pictures the participant is given.
+1. **The reference kit's own demo steps files,** which must pass: `payers-claims-demo` for tests A and
+   B, and `payers-appeals` for test B, which opens the Case page; `brand-assets-demo` for test D (each
+   kit's README, "Running the demo"), with the kit's files served by its README's `config:dev`
+   command, "Seeing it under `nx serve`", and `APP_URL=http://localhost:4301`. For test C, the
+   tutorial's step 1 commands, which must find no `WorkOrder`. The Payers demo has not run whole in its current form (its README, "Changed since
+   that run"): a failure there is investigated before anything else.
+2. **The acceptance steps file against a copy of the reference kit's app definition,** serving only
+   the files the target needs, and each queue its menu names, as a participant's package would: no
+   home, so that a package with none is seen to pass. It must fail exactly one check, "the
+   participant's layouts are their own", and pass every other: the steps file seen failing on
+   purpose on the one thing a copy must fail, and passing on everything a correct package must pass.
+   Its screenshots are the pictures the participant is given.
 
-```bash
-mkdir -p business-apps/packages/acceptance-control/bundle
-cp -R business-apps/packages/payers-claims-demo/bundle/agentic-ui-config business-apps/packages/acceptance-control/bundle/
-```
-
-Serve the copy's files with `config:dev`, as the kit's README serves the kit's but from
-`business-apps/packages/acceptance-control`, then run the test's steps file on it with
-`ACCEPTANCE_PACKAGE=business-apps/packages/acceptance-control`, `ACCEPTANCE_BASE=HEAD` and, for test
-B, `ACCEPTANCE_QUEUE=my-claims`; for test D, copy `brand-assets-demo`'s instead and give
-`ACCEPTANCE_QUEUE=library`. Then remove the copy, serve the platform's defaults again, and check
-that the checkout is clean:
+The facilitator's dev server, started once, after `config:dev` has made its folder:
 
 ```bash
-rm -r business-apps/packages/acceptance-control
 npm run config:dev
-git status --short
 ```
 
-If either run does something else, do not start the session: fix the server, or the steps file, and
-say so in the log.
+```bash
+NUXEO_PROXY_TARGET=http://127.0.0.1:18080 npx ng serve nuxeo-ui --configuration=development,remote --port 4301
+```
+
+**Tests A and B,** the copy, and what a package for them serves, then each scope:
+
+```bash
+mkdir -p business-apps/packages/acceptance-control/bundle && cp -R business-apps/packages/payers-claims-demo/bundle/agentic-ui-config business-apps/packages/acceptance-control/bundle/
+```
+
+```bash
+C=business-apps/packages/acceptance-control/bundle/agentic-ui-config && npm run config:dev -- --layout Member/view=$C/layouts/Member/view.layout.json --layout Member/metadata=$C/layouts/Member/metadata.layout.json --layout Claim/view=$C/layouts/Claim/view.layout.json --layout Case/view=$C/layouts/Case/view.layout.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/unassigned-claims.json --queue $C/queues/my-claims.json --queue $C/queues/pending-determination.json
+```
+
+```bash
+ACCEPTANCE_SCOPE=member ACCEPTANCE_PACKAGE=business-apps/packages/acceptance-control ACCEPTANCE_BASE=HEAD APP_URL=http://localhost:4301 NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- acceptance-payers
+```
+
+```bash
+ACCEPTANCE_SCOPE=screens ACCEPTANCE_QUEUE=my-claims ACCEPTANCE_PACKAGE=business-apps/packages/acceptance-control ACCEPTANCE_BASE=HEAD APP_URL=http://localhost:4301 NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- acceptance-payers
+```
+
+**Test D,** the same with the brand assets kit's files:
+
+```bash
+mkdir -p business-apps/packages/acceptance-control/bundle && cp -R business-apps/packages/brand-assets-demo/bundle/agentic-ui-config business-apps/packages/acceptance-control/bundle/
+```
+
+```bash
+C=business-apps/packages/acceptance-control/bundle/agentic-ui-config && npm run config:dev -- --layout AcmeAsset/view=$C/layouts/AcmeAsset/view.layout.json --layout AcmeProduct/view=$C/layouts/AcmeProduct/view.layout.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/library.json --queue $C/queues/products.json
+```
+
+```bash
+ACCEPTANCE_QUEUE=library ACCEPTANCE_PACKAGE=business-apps/packages/acceptance-control ACCEPTANCE_BASE=HEAD APP_URL=http://localhost:4301 NUXEO_USER=Administrator NUXEO_PASS="$DEMO_SERVER_ADMIN_PASSWORD" npm run beta:evidence -- acceptance-brand-assets
+```
+
+Then remove the copy, serve the platform's defaults again, and check that the checkout is clean:
+
+```bash
+rm -r business-apps/packages/acceptance-control && npm run config:dev && git status --short
+```
+
+If a run does anything else, do not start the session: fix the server, or the steps file, and say
+so in the log. Exit 2, on the control or later, names what it refused: the environment, or what
+the facilitator must name, such as the package, the session's commit, or the queue when the
+package has several. A file the target needs and the package lacks, a queue without a facet, or a
+facet that cannot narrow, is the participant's, and fails its item with exit 1.
 
 ### Recording
 
@@ -215,8 +255,8 @@ the person's name in their own notes, never in this folder or the repository.
 - a password, a token, the Connect registration or anything else secret: the demo passwords, the
   administrator's, `SATORI_GH_READONLY_TOKEN`, `NUXEO_CLID`. Export them before the session, never
   type them where a recording or the log sees them, and read the transcript for them before keeping it;
-- anything on screen but the app, the terminal and the docs: record one window, never the whole
-  desktop, so that no message, notification or other document is kept;
+- anything on screen but the app, the terminal and the docs: record those windows, each by itself,
+  never the whole desktop, so that no message, notification or other document is kept;
 - a recording of a person's voice or face, unless they have agreed to it in writing, beforehand.
   Notes are enough;
 - data from any server but the test one, whose data is fictional. Never run these tests against a
@@ -324,11 +364,30 @@ seed from the same commit as the steps files will run from:
   [brand assets README](../../business-apps/packages/brand-assets-demo/README.md), "Installing it on
   a local Nuxeo" and "Seeding it", the seed again on each session day.
 
-### The dev server the participant works with
+### Two checkouts, two dev servers
 
-Run once by the facilitator, so that the folder `config:dev` writes exists before the dev server
-starts; the participant runs `config:dev` again with their own files. Against the demo server, the
-harness's remote proxy, on port 4300:
+The dev server serves the `apps/nuxeo-ui/public/agentic-ui-config/` of the checkout it was started
+from ([`dev-config.mjs`](../../scripts/dev-config.mjs)), so the facilitator and the participant each
+have their own, on one machine, both proxying the test server:
+
+| Checkout                                 | Who                                     | Dev server | Holds                                                                 |
+| ---------------------------------------- | --------------------------------------- | ---------- | --------------------------------------------------------------------- |
+| `satori-acceptance`, above               | The facilitator: candidate and controls | Port 4301  | The reference kits, always                                            |
+| `satori-participant`, at the same commit | The participant, and the final checks   | Port 4300  | The reference kit removed during the session, put back for the checks |
+
+The participant's, before the clock starts, by the facilitator:
+
+```bash
+git clone https://github.com/nuxeo/Nuxeo-Satori-UI.git satori-participant && cd satori-participant
+```
+
+```bash
+git checkout --detach <the session's commit> && npm ci && mkdir -p tmp
+```
+
+```bash
+npm install --no-save @playwright/test @axe-core/playwright && npx playwright install chromium
+```
 
 ```bash
 npm run config:dev
@@ -338,25 +397,70 @@ npm run config:dev
 NUXEO_PROXY_TARGET=http://127.0.0.1:18080 npx ng serve nuxeo-ui --configuration=development,remote --port 4300
 ```
 
-Against the local server, `npx nx serve nuxeo-ui`, on 4200. `APP_URL` and the Builder MCP server's
-`DEV_SERVER_URL` name the port; its `NUXEO_URL` names the server, `http://127.0.0.1:18080` or
-`http://localhost:8080`.
+`config:dev` runs once before the dev server starts, so that its folder exists: a dev server started
+without it serves nothing under it until it is restarted. `tmp/` is where the model is exported:
+git ignores it, and the write tools read a model only from inside the checkout. Then the reference
+kit goes, as [section 1](#keeping-the-reference-out-of-reach) says, and `git status --short` lists
+its removal alone.
 
-### The participant's checkout and credentials
+**On a local Docker Nuxeo** instead, drop the remote proxy: `npx nx serve nuxeo-ui --port 4300`,
+whose proxy is `http://localhost:8080`, and read `http://localhost:8080` wherever this page says
+`http://127.0.0.1:18080`, and the server's own administrator wherever it says `Administrator` and
+`$DEMO_SERVER_ADMIN_PASSWORD`.
 
-The same clone, or one of their own at the same commit with `npm ci` run. Before the clock starts:
+### The participant's shell
 
-1. The reference kit removed, as [above](#keeping-the-reference-out-of-reach), and the control run's
-   copy gone: `git status --short` lists the removal alone.
-2. In the participant's shell, exported by the facilitator: `NUXEO_USER` and `NUXEO_PASS`, an
-   administrator of the test server, for the Builder MCP server and the model's export (its page
-   provider list needs one); `PAYERS_DEMO_PASSWORD` for tests A and B, to sign in to the app as the
-   demo people; `SESSION`, the session's evidence folder; `PLATFORM`, as above.
-3. The Builder MCP server registered, if they will use the agent, as the skill's step 0 says, with
-   the test server's `NUXEO_URL` and the dev server's `DEV_SERVER_URL` in its `env`. Registering it
-   changes the person's own Claude configuration: they run the command themselves.
-4. The `pipeline` function defined, and `ACCEPTANCE_PACKAGE` and `MODEL` explained: the participant
-   chooses the package's name and exports the model.
+Exported by the facilitator in the participant's terminal, before the clock starts and before any
+recording, so that no value is typed where it is seen:
+
+```bash
+export NUXEO_URL=http://127.0.0.1:18080 NUXEO_USER=Administrator NUXEO_PASS="$DEMO_SERVER_ADMIN_PASSWORD"
+```
+
+```bash
+export SESSION=~/Desktop/agentic-ui-evidence/business-apps/acceptance/<test>-<YYYY-MM-DD>-<code> PLATFORM=$(node -p "require('./libs/platform/package.json').version") MODEL=tmp/content-model.json && mkdir -p "$SESSION"
+```
+
+- **`NUXEO_USER` and `NUXEO_PASS`** are the test server's administrator, for the model's export
+  and the Builder MCP server: its page provider list needs one. On a test server with fictional
+  data only, which the session's end removes or keeps for the next session.
+- **The app's passwords on paper,** handed over by the facilitator, never typed into the terminal:
+  the demo people's password, `PAYERS_DEMO_PASSWORD`, for tests A and B, signing in as `dana.lee` and
+  `riley.brooks`; the administrator's, for test D. The app's sign-in field masks them.
+- **The model,** exported by the participant, as the tutorial's step 1 does, from the test server:
+
+  ```bash
+  npm run app-package:model -- --server http://127.0.0.1:18080/nuxeo --out tmp/content-model.json
+  ```
+
+- **`ACCEPTANCE_PACKAGE`,** the package's folder, which the participant names when they make it,
+  such as `business-apps/packages/<their name>`, and the `pipeline` function of
+  [section 1](#measuring), defined in this shell.
+- **The Builder MCP server,** if they will use the agent. Registering it changes the person's own
+  Claude configuration, so they run the command themselves, from the checkout's root, in this shell.
+  The skill's command names `localhost:8080` and the default dev server; for this session, with the
+  test server and the participant's dev server:
+
+  ```bash
+  claude mcp add-json nuxeo-builder --scope local '{"type":"stdio","command":"node","args":["tools/builder-mcp/src/main.ts"],"env":{"NUXEO_URL":"http://127.0.0.1:18080","DEV_SERVER_URL":"http://localhost:4300","NUXEO_USER":"${NUXEO_USER}","NUXEO_PASS":"${NUXEO_PASS}"}}'
+  ```
+
+  The single quotes keep the password out of the configuration, as the skill says.
+
+### A two-day test's night
+
+Leave the demo server running between the two days, or stop it and start it again with its own
+project, never `up` (its README, "Stopping, starting, removing"):
+
+```bash
+docker compose -f business-apps/demo-server/compose.yml -p satori-demo-acceptance stop
+```
+
+```bash
+docker compose -f business-apps/demo-server/compose.yml -p satori-demo-acceptance start
+```
+
+The dev servers are started again the same way, and the control runs again on the second morning.
 
 ## 3. Test A: the Member page in a day (phase 1)
 
@@ -396,8 +500,8 @@ On the seeded member, John Smith:
 
 | Item | What the page shows                                                                                                                    |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| A1   | A record page for the member, in cards, each with a heading                                                                            |
-| A2   | The member's full name, from the first and last names                                                                                  |
+| A1   | A record page for the member, in cards on one page, not in tabs, each with a heading                                                   |
+| A2   | The member's name                                                                                                                      |
 | A3   | Their age, from the date of birth                                                                                                      |
 | A4   | Their address in one field: street, city, postcode and country                                                                         |
 | A5   | Their phone                                                                                                                            |
@@ -427,8 +531,9 @@ returns it to anyone who may read the member, and masking it is decision I.
 
    It ends with `checked, built and verified`, and exit 0.
 
-2. **A1 to A10, the steps file.** Put the reference kit back, for its seed data; serve the
-   participant's files, if they are not served already; then, against the demo server's dev server:
+2. **A1 to A10, the steps file,** in the participant's checkout, against their dev server, with
+   `PAYERS_DEMO_PASSWORD` exported there now. First the checkout as the participant left it, then the
+   reference kit back, for its seed data; their files stay served as they served them:
 
    ```bash
    git status --short > "$SESSION/checkout.txt" && git diff --stat <the session's commit> >> "$SESSION/checkout.txt"
@@ -442,8 +547,10 @@ returns it to anyone who may read the member, and masking it is decision I.
    ACCEPTANCE_SCOPE=member ACCEPTANCE_PACKAGE="$ACCEPTANCE_PACKAGE" ACCEPTANCE_BASE=<the session's commit> APP_URL=http://localhost:4300 NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- acceptance-payers
    ```
 
-   Exit 0, every check passed. Exit 1 lists the item each failed check names. Exit 2 is the
-   environment, not the participant: fix it and run again.
+   Exit 0, every check passed. Exit 1 lists the item each failed check names: a file the target
+   needs and the package lacks fails here too. Exit 2 names what it refused, the environment or a
+   name the facilitator must give: fix it and run again
+   ([section 1](#before-every-session-the-control-run)).
 
 3. **The time,** within 8 hours, and the help, as [section 1](#the-verdict) says.
 
@@ -476,13 +583,13 @@ prototype's Payers flow, and the records: member `MEMBER-100048`, claim `CLAIM-0
 
 Items A1 to A11, and:
 
-| Item | What the page shows                                                                                                                                                                                                                                                                                                                                        |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1   | The Claim page, in cards each with a heading: the claim's number; its member, as a link named for the member that opens them; the billed amount; the day it was received; the allowed amount; the status as a badge; a list of the claim's documents                                                                                                       |
-| B2   | The Case page, in cards each with a heading: the case's number, category, and state as a badge; its member and its claim, each as a link by its title; who it is assigned to; the days received and due; how many days it has been open; its summary; on an appeal, its checklist, each item done or not, and who did each one done and when; its timeline |
-| B3   | On a case that is not an appeal, no checklist, and still its timeline                                                                                                                                                                                                                                                                                      |
-| B4   | A queue of claims for adjusters, in the menu, with a Status facet that narrows it on the server                                                                                                                                                                                                                                                            |
-| B5   | The prospect's review, below, accepts it                                                                                                                                                                                                                                                                                                                   |
+| Item | What the page shows                                                                                                                                                                                                                                                                                                                                                     |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1   | The Claim page, in cards on one page, each with a heading: the claim's number; its member, as a link named for the member that opens them; the billed amount; the day it was received; the allowed amount; the status as a badge; a list of the claim's documents                                                                                                       |
+| B2   | The Case page, in cards on one page, each with a heading: the case's number, category, and state as a badge; its member and its claim, each as a link by its title; who it is assigned to; the days received and due; how many days it has been open; its summary; on an appeal, its checklist, each item done or not, and who did each one done and when; its timeline |
+| B3   | On a case that is not an appeal, no checklist, and still its timeline                                                                                                                                                                                                                                                                                                   |
+| B4   | A queue of claims for adjusters, in the menu, with a Status facet that narrows it on the server                                                                                                                                                                                                                                                                         |
+| B5   | The prospect's review, below, accepts it                                                                                                                                                                                                                                                                                                                                |
 
 **The plan's words name three screens; the queue is this protocol's.** Section 3 of the plan lists "my
 queues" in the Member page's navigation, and a queue with a facet is where the Payers kit's facet
@@ -564,7 +671,7 @@ lists as a need not yet met.
   administrator's `NUXEO_USER` and `NUXEO_PASS` exported:
 
   ```bash
-  npm run app-package:model -- --server http://localhost:8080/nuxeo --out tmp/content-model.json
+  mkdir -p tmp && npm run app-package:model -- --server http://localhost:8080/nuxeo --out tmp/content-model.json
   ```
 
   ```bash
@@ -673,12 +780,12 @@ the one whose rights have ended, and the product AO-3101.
 
 | Item | What the page shows                                                                                                                                                    |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1   | The asset page, in cards each with a heading, with the picture first, as one of its views, never its original file                                                     |
+| D1   | The asset page, in cards on one page, each with a heading, with the picture first, as one of its views, never its original file                                        |
 | D2   | A warning banner while the asset's rights end within 30 days, a negative one once they have ended, and none on cleared rights, each in words from the package's labels |
 | D3   | The asset's title, product, colourway, shot and credit                                                                                                                 |
 | D4   | Its rights: the end date, the channels as chips, the regions and the rights holder                                                                                     |
 | D5   | Its history, and the creative review on the picture                                                                                                                    |
-| D6   | The product page, in cards each with a heading: its style, season, colourways and channels as chips, and launch date                                                   |
+| D6   | The product page, in cards on one page, each with a heading: its style, season, colourways and channels as chips, and launch date                                      |
 | D7   | A list of the shots the product still misses                                                                                                                           |
 | D8   | A list of the product's assets                                                                                                                                         |
 | D9   | The asset library, in the menu, with a facet that narrows it on the server                                                                                             |
@@ -691,8 +798,13 @@ add-on's and the kit's rights policy, not the participant's package: they are no
 
 ### Pass and fail
 
-As test A, with the brand assets kit put back for its seed data, and its steps file, run as anyone
-who may read the kit's workspace, the administrator here:
+As test A, in the participant's checkout: the pipeline with the server's model; the checkout as
+they left it, into `checkout.txt`; then the brand assets kit put back for its seed data, and its
+steps file, run as anyone who may read the kit's workspace, the administrator here:
+
+```bash
+git status --short > "$SESSION/checkout.txt" && git diff --stat <the session's commit> >> "$SESSION/checkout.txt"
+```
 
 ```bash
 git checkout -- business-apps/packages/brand-assets-demo
@@ -737,21 +849,36 @@ share, judge a participant's package, never a kit's:
   does not list them for a server run, which has no participant's package to give them.
 
 **How they were checked, 25 November 2026:** `node --check` and the harness's assertion audit
-(`npm run beta:audit`) on all three, and the shared checks' offline controls, 34 of them:
+(`npm run beta:audit`) on all four files, and the shared checks' offline controls, 40 of them:
 
 ```bash
 node scripts/beta-harness/steps/acceptance/participant.selftest.mjs
 ```
 
-They hold, in a scratch git repository, the package found and the reference kit refused under three
-spellings, the checkout's changes outside the package found and those inside or ignored not, code
-found in a bundle, a copied layout found, the page held to its file, and the queue named. Two guards
-taken out on purpose, the reference kit's refusal and the checkout's filter, turned three and four
-controls red, and were put back byte for byte. The controls found one real defect before any
-server did: on a checkout whose path goes through a link, as a temporary folder's does on macOS, every
-file inside the package was counted as outside it. **Not checked:** any run against a server. The
-first control run ([section 1](#before-every-session-the-control-run)) is the steps files' first
-run, and its result goes in the results table.
+They hold, in a scratch git repository: the package found, and the reference kit refused under three
+spellings; the checkout's changes outside the package found, and those inside it or ignored not;
+code found in a bundle; a copied layout found; the page held to its file, a file of tabs and a
+missing file named; the 404s a package with no home or menu leaves to the registry, and no other;
+and the queue named, none being the package's failure. Three guards taken out on purpose, the
+reference kit's refusal, the checkout's filter and the registry's queues, turned three, four and
+one controls red, and were put back byte for byte. The controls found one real defect before any
+server did: on a checkout whose path goes through a link, as a temporary folder's does on macOS,
+every file inside the package was counted as outside it.
+
+**An independent review** dry-ran every preparation step on paper against the repository, and
+traced the control run's checks against the reference kits' files and seed data. What it found is
+fixed above: a package with no home or menu failing the console check on the dev server's 404s; a
+package's own gaps refused as the environment's, with exit 2, rather than failed on their item; one
+checkout and one dev server shared by the facilitator's control and the participant, which neither
+could use; control commands left to be written by hand; the Builder MCP server and the model's
+export pointed at the default server; a model exported into a `tmp/` a fresh clone does not have; a
+layout in tabs, which the checks could only half see; the Properties panel judged by one property
+a participant's panel may leave out; passwords to be typed where a recording sees them; and a menu
+and a Status facet the target names and nothing checked.
+
+**Not checked:** any run against a server. The first control run
+([section 1](#before-every-session-the-control-run)) is the steps files' first run, and its result
+goes in the results table.
 
 ## 8. Results
 

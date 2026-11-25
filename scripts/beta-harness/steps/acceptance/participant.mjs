@@ -36,6 +36,24 @@ export const ENVIRONMENTAL_ERRORS = [
   /\/@rendition\/thumbnail$/,
 ];
 
+/**
+ * The dev server's 404 for each file of an app's definition the app reads at start or on its home,
+ * and the package does not hold: the app asks the dev server first, and reads the registry's where
+ * it answers 404 (`app-registry.service.ts`). A package the target needs no home or menu from is
+ * right to hold none. With no menu of its own, the menu is the registry's, whose queues the app
+ * asks the dev server for first, at start, for their names (`business-apps.menu.ts`): those 404s
+ * are left to the registry too. A file the package does hold, a queue its own menu names, and
+ * every other address, stay judged.
+ */
+export function unheldFileErrors(config) {
+  const unheld = ['home.json', 'navigation.json', 'actions.json']
+    .filter((file) => !existsSync(join(config, file)))
+    .map((file) => `HTTP 404 /agentic-ui-config/${file}`);
+  return existsSync(join(config, 'navigation.json'))
+    ? unheld
+    : [...unheld, /^HTTP 404 \/agentic-ui-config\/queues\/[^/]+\.json$/];
+}
+
 /** A JSON value with its object keys sorted, so two parses compare as text. */
 export function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -301,14 +319,19 @@ export const alwaysShown = (layout) =>
  * What differs between the page drawn and the layout file it should be drawn from, or `null`: every
  * card that shows for everyone drawn; every card drawn one of the file's, in the file's order; and
  * each headed with its literal label or its key's text in the package's labels. A card with a rule
- * may be left out, since its rule decides.
+ * may be left out, since its rule decides. The target asks for the cards on one page: a file of
+ * `tabs` (layout-v2.md, section 2) draws each tab's cards only once the tab is opened, so it is named
+ * as a difference rather than half judged.
  */
 export function differsFromFile(record, layout, labels) {
   const wanted = headingsOf(layout, labels);
   const order = wanted.map((card) => card.id);
   const drawn = (record?.cards ?? []).map((card) => ({ id: card.id, heading: card.heading }));
   const problems = [];
-  if (wanted.length === 0) problems.push('the file has no card');
+  if (layout === null || layout === undefined) problems.push('the package has no such layout file');
+  else if (Array.isArray(layout.tabs))
+    problems.push('the file puts its cards in tabs: the target asks for them on one page');
+  else if (wanted.length === 0) problems.push('the file has no card');
   for (const id of alwaysShown(layout))
     if (!drawn.some((card) => card.id === id)) problems.push(`card ${id} is not drawn`);
   let last = -1;
@@ -342,17 +365,21 @@ export function headingsOf(layout, labels) {
  * A queue of the package, opened and narrowed by its first facet, each judged against the server's
  * own answers, which the page's requests receive: the rows drawn are as many as the server
  * returned, the facet's buckets are the server's aggregate, and choosing a bucket sends it to the
- * page provider, whose answer the queue then draws. Records its checks on `h`.
+ * page provider, whose answer the queue then draws. Records its checks on `h`, each named for the
+ * target's `item`. A queue with no facet, or whose facet cannot narrow it, is the package's, so it
+ * fails a check rather than the run's preconditions. Answers the facet's buckets, as the server
+ * counted them, or `null` when it stopped before reading them.
  */
-export async function checkQueueNarrows(page, h, { id, queue, labels }) {
+export async function checkQueueNarrows(page, h, { id, queue, labels, item }) {
   const pageProvider = queue?.pageProvider;
   const aggregate = queue?.facets?.[0]?.aggregate;
-  h.requirePrecondition(
-    `the queue ${id} names a page provider and has a facet`,
+  h.check(
+    `${item}. the queue ${id} names a page provider and has a facet`,
     typeof pageProvider === 'string' && typeof aggregate === 'string',
     `queues/${id}.json names ${JSON.stringify(pageProvider)} and its first facet ` +
       `${JSON.stringify(aggregate)}: the target asks for a facet`,
   );
+  if (typeof pageProvider !== 'string' || typeof aggregate !== 'string') return null;
   const executes = (response, chosen) => {
     const url = new URL(response.url());
     return (
@@ -382,14 +409,14 @@ export async function checkQueueNarrows(page, h, { id, queue, labels }) {
   const title = (await page.locator('.queue-page__title').textContent().catch(unread))?.trim();
   const wanted = queue.label ?? labels?.[queue.labelKey] ?? null;
   h.check(
-    `the queue opens at #/queues/${id}, under its name from the package: ${wanted}`,
+    `${item}. the queue opens at #/queues/${id}, under its name from the package: ${wanted}`,
     wanted !== null && title === wanted,
     `drawn ${JSON.stringify(title)}`,
   );
   const served = firstBody?.entries ?? null;
   const drawn = await rowCount();
   h.check(
-    "the queue draws the server's answer: as many rows as the page provider returned, at least one",
+    `${item}. the queue draws the server's answer: as many rows as the page provider returned, at least one`,
     Array.isArray(served) && served.length > 0 && drawn === served.length,
     `drawn ${drawn} rows, the server returned ${served?.length ?? 'nothing'}`,
   );
@@ -415,7 +442,7 @@ export async function checkQueueNarrows(page, h, { id, queue, labels }) {
   );
   const facet = await readFacet();
   h.check(
-    `the facet ${aggregate} shows the server's buckets, each with its count`,
+    `${item}. the facet ${aggregate} shows the server's buckets, each with its count`,
     Object.keys(fromServer).length > 0 && sameJson(facet, fromServer),
     `drawn ${JSON.stringify(facet)}, the server's ${JSON.stringify(fromServer)}`,
   );
@@ -423,12 +450,12 @@ export async function checkQueueNarrows(page, h, { id, queue, labels }) {
   const chosen = Object.keys(fromServer).find(
     (key) => fromServer[key] > 0 && typeof total === 'number' && fromServer[key] < total,
   );
-  h.requirePrecondition(
-    `the facet has a bucket that holds some of the queue's ${total} records and not all`,
+  h.check(
+    `${item}. the facet has a bucket that holds some of the queue's ${total} records and not all, so that it can narrow it`,
     chosen !== undefined,
-    `the buckets are ${JSON.stringify(fromServer)}: seed the server again, or choose a queue whose ` +
-      'records differ in the facet',
+    `the buckets are ${JSON.stringify(fromServer)}: a facet on a property every record shares cannot narrow the queue`,
   );
+  if (chosen === undefined) return fromServer;
   const narrowedAnswer = page
     .waitForResponse((response) => executes(response, chosen), { timeout: 15_000 })
     .catch(unread);
@@ -443,7 +470,7 @@ export async function checkQueueNarrows(page, h, { id, queue, labels }) {
   const narrowedBody = narrowed?.ok() ? await narrowed.json().catch(unread) : null;
   const narrowedTotal = narrowedBody?.resultsCount ?? narrowedBody?.totalSize ?? null;
   h.check(
-    `choosing "${chosen}" sends ${aggregate}=["${chosen}"] to the page provider, which counts ${fromServer[chosen]}`,
+    `${item}. choosing "${chosen}" sends ${aggregate}=["${chosen}"] to the page provider, which counts ${fromServer[chosen]}`,
     narrowedBody !== null && narrowedTotal === fromServer[chosen],
     `the server answered ${narrowed?.status() ?? 'nothing'}, counting ${narrowedTotal}`,
   );
@@ -457,10 +484,11 @@ export async function checkQueueNarrows(page, h, { id, queue, labels }) {
     .catch(deferred);
   const after = await rowCount();
   h.check(
-    `the queue narrows to the server's answer for "${chosen}": ${expected} rows, of ${narrowedTotal} records where there were ${total}`,
+    `${item}. the queue narrows to the server's answer for "${chosen}": ${expected} rows, of ${narrowedTotal} records where there were ${total}`,
     typeof expected === 'number' && after === expected && narrowedTotal < total,
     `drawn ${after} rows`,
   );
+  return fromServer;
 }
 
 /** The session `AuthService` keeps, which the app's interceptor reads: helpers.mjs's key. */
@@ -576,11 +604,11 @@ export function participantQueue(config) {
       ? { id: named }
       : { problem: `ACCEPTANCE_QUEUE is ${named}, and the package's queues are ${ids.join(', ')}` };
   if (ids.length === 1) return { id: ids[0] };
+  // No queue is the package's failure, which the target's item records; several, with none named,
+  // is the facilitator's to settle before the run.
+  if (ids.length === 0) return { none: true, problem: 'the package has no queue' };
   return {
-    problem:
-      ids.length === 0
-        ? 'the package has no queue: the target asks for one'
-        : `the package has ${ids.length} queues, ${ids.join(', ')}: export ACCEPTANCE_QUEUE as the one the target names`,
+    problem: `the package has ${ids.length} queues, ${ids.join(', ')}: export ACCEPTANCE_QUEUE as the one the target names`,
   };
 }
 

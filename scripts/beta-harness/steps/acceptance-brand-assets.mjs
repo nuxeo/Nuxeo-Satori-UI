@@ -57,12 +57,14 @@ import {
   notServedFromPackage,
   participantPackage,
   participantQueue,
+  readAppMenu,
   readJson,
   readRecordPage,
   recordSettled,
   repositoryQuery,
   sameJson,
   sessionBase,
+  unheldFileErrors,
   unread,
   withoutSchema,
 } from './acceptance/participant.mjs';
@@ -208,21 +210,40 @@ export default async function run(page, h) {
   );
 
   const { config } = pkg;
+  // A package with no queue fails D9; one with several needs the facilitator to say which.
   const queue = participantQueue(config);
-  h.requirePrecondition("the package's library queue is known", !queue.problem, queue.problem);
-  const served = [
+  h.requirePrecondition(
+    "the package's library queue is known, when it has more than one",
+    queue.id !== undefined || queue.none,
+    queue.problem,
+  );
+  const needed = [
     'labels/en.json',
     'navigation.json',
     'layouts/AcmeAsset/view.layout.json',
     'layouts/AcmeProduct/view.layout.json',
-    `queues/${queue.id}.json`,
+    ...(queue.id ? [`queues/${queue.id}.json`] : []),
   ];
-  const differing = await notServedFromPackage(page, h.baseUrl, REPO, config, served);
+  // A file the target needs and the package lacks is the participant's to write: it fails the
+  // items it serves, below, and is named here. What the package holds must be what is served.
+  const lacking = needed.filter((path) => !existsSync(join(config, path)));
+  h.check(
+    "the package holds every file its target's pages need, a queue among them",
+    lacking.length === 0 && queue.id !== undefined,
+    `missing: ${[...lacking, ...(queue.id ? [] : ['queues/<a queue>.json'])].join(', ')}`,
+  );
+  const differing = await notServedFromPackage(
+    page,
+    h.baseUrl,
+    REPO,
+    config,
+    needed.filter((path) => !lacking.includes(path)),
+  );
   h.requirePrecondition(
-    "the dev server serves the participant's labels, menu, asset and product layouts, and library",
+    "the dev server serves the participant's own files, as the package holds them",
     differing.length === 0,
-    `not the package's: ${differing.join(', ')}. Run config:dev on the package's files, then ` +
-      'restart the dev server if it started before the folder existed',
+    `not the package's: ${differing.join(', ')}. Run config:dev on the package's files, from ` +
+      "the participant's checkout, whose dev server APP_URL names",
   );
   const labels = readJson(join(config, 'labels', 'en.json'))?.labels ?? {};
   const layout = (type) => readJson(join(config, 'layouts', type, 'view.layout.json'));
@@ -410,21 +431,32 @@ export default async function run(page, h) {
   await h.screenshot('product');
 
   // ── 4. The library ─────────────────────────────────────────────────────────────────────────
-  await h.step(`4. The library, ${queue.id}, narrowed on the server: item D9`);
-  const queueFile = readJson(join(config, 'queues', `${queue.id}.json`));
-  await checkQueueNarrows(page, h, { id: queue.id, queue: queueFile, labels });
-  const libraryTitles = ASSETS.map((asset) => asset.title);
-  const rows =
-    (await page
-      .evaluate(() =>
-        [...document.querySelectorAll('.queue-page tbody tr')].map((row) => row.innerText ?? ''),
-      )
-      .catch(unread)) ?? [];
-  h.check(
-    'D9. the library lists assets: each row shows a seeded asset title',
-    rows.length > 0 && rows.every((row) => libraryTitles.some((title) => row.includes(title))),
-    JSON.stringify(rows),
-  );
+  await h.step(`4. The library, ${queue.id ?? '(none)'}, narrowed on the server: item D9`);
+  h.check('D9. the package has a queue', queue.id !== undefined, queue.problem ?? '');
+  if (queue.id !== undefined) {
+    const queueFile = readJson(join(config, 'queues', `${queue.id}.json`));
+    await h.goTo('/#/home');
+    const menu = (await readAppMenu(page)) ?? [];
+    const entries = readJson(join(config, 'navigation.json'))?.entries ?? [];
+    h.check(
+      `D9. the menu has the package's entry for the library ${queue.id}`,
+      entries.some((entry) => entry.queue === queue.id && menu.includes(`appMenu.${entry.id}`)),
+      `drawn ${JSON.stringify(menu)}`,
+    );
+    await checkQueueNarrows(page, h, { id: queue.id, queue: queueFile, labels, item: 'D9' });
+    const libraryTitles = ASSETS.map((asset) => asset.title);
+    const rows =
+      (await page
+        .evaluate(() =>
+          [...document.querySelectorAll('.queue-page tbody tr')].map((row) => row.innerText ?? ''),
+        )
+        .catch(unread)) ?? [];
+    h.check(
+      'D9. the library lists assets: each row shows a seeded asset title',
+      rows.length > 0 && rows.every((row) => libraryTitles.some((title) => row.includes(title))),
+      JSON.stringify(rows),
+    );
+  }
   await h.screenshot('library-narrowed');
 
   // ── 5. The package ─────────────────────────────────────────────────────────────────────────
@@ -453,7 +485,10 @@ export default async function run(page, h) {
 
   // ── Health ─────────────────────────────────────────────────────────────────────────────────
   await h.step('Health');
-  h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
+  h.expectNoConsoleErrors('no unexpected browser console errors', [
+    ...ENVIRONMENTAL_ERRORS,
+    ...unheldFileErrors(config),
+  ]);
   h.note(
     "the pipeline is not run here: the protocol runs it as a command, with the server's model",
   );
