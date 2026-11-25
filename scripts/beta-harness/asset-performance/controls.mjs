@@ -10,7 +10,10 @@
  * - `fetch-all`, every page of a query read before the app's own request: the library's requests;
  * - `twice`, every request sent twice: every request line;
  * - `hold-pages`, every page of results kept in the page: the heap's growth;
- * - `ballast`, 80 MB held from the start: the heap after 50 pages.
+ * - `ballast`, 80 MB held from the start: the heap after 50 pages;
+ * - `unwindowed`, the search index's window enforced but not stated in the answer: a page asked
+ *   for past it, the control left enabled at its edge, and the notice of it;
+ * - `capped-count`, the count held to the window: the totals shown, and the notice.
  *
  * Each runs `check.mjs --control <id> --runs 1` against the same build, after one production
  * build unless `--skip-build`, and writes its report under

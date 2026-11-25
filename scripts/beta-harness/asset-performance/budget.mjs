@@ -66,9 +66,38 @@ export const MEASURES = Object.freeze([
     label: 'JavaScript heap growth from page 1 to page 50, after garbage collection',
     unit: 'MB',
   },
+  // The search index's window, 10,000 results: what must be none, at the edge and over the run.
+  {
+    id: 'window.requestsPast',
+    label: "page provider requests for a page past the search index's window, over the run",
+    unit: 'requests',
+    none: true,
+  },
+  {
+    id: 'window.controlsPast',
+    label: "controls on the window's last page that page past it, enabled",
+    unit: 'controls',
+    none: true,
+  },
+  {
+    id: 'window.totalsMisstated',
+    label: "pages up to the window's edge whose pager did not show the server's whole count",
+    unit: 'pages',
+    none: true,
+  },
+  {
+    id: 'window.noticeMissing',
+    label: "the window's last page without the notice of how far the pages reach and of how many",
+    unit: 'notices',
+    none: true,
+  },
 ]);
 
-/** The budget file, read and checked: every measure has a positive limit, and nothing else does. */
+/**
+ * The budget file, read and checked: every measure has a limit, and nothing else does. A limit is
+ * positive, but for a measure marked `none`, a count of what must not happen at all, whose limit
+ * is 0.
+ */
 export function readBudget(path = BUDGET_FILE) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   const limits = raw?.limits;
@@ -79,9 +108,11 @@ export function readBudget(path = BUDGET_FILE) {
   for (const id of Object.keys(limits)) {
     if (!known.has(id)) throw new Error(`${path}: "${id}" is not a measure the check takes`);
   }
-  for (const { id } of MEASURES) {
+  for (const { id, none } of MEASURES) {
     const limit = limits[id];
-    if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
+    if (none) {
+      if (limit !== 0) throw new Error(`${path}: "${id}" must be none, a limit of 0`);
+    } else if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
       throw new Error(`${path}: "${id}" has no positive limit`);
     }
   }

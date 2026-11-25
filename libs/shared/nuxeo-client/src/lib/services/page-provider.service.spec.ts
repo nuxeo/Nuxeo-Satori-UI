@@ -6,7 +6,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { NUXEO_API_ORIGIN } from '../nuxeo-api.config';
 import type { NuxeoDocumentList } from '../models/document.model';
-import { PageProviderService } from './page-provider.service';
+import { PageProviderService, resultWindow } from './page-provider.service';
 
 const PAGE: NuxeoDocumentList = {
   entries: [],
@@ -177,5 +177,59 @@ describe('PageProviderService', () => {
       .expectOne((r) => execute(r.url))
       .flush('No such provider', { status: 404, statusText: 'Not Found' });
     await expect(page).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('resultWindow', () => {
+  /** A page's counts, as the local Nuxeo 2025.10.18 answered them (docs/api-integrations.md, section 33). */
+  const counted = (more: Partial<NuxeoDocumentList>): NuxeoDocumentList => ({ ...PAGE, ...more });
+
+  it('reaches the whole pages within the search index window, and keeps its exact total past it', () => {
+    // Every document, through the search service: 13,592 counted, a window of 10,000.
+    const page = counted({ totalSize: 13_592, resultsCount: 13_592, resultsCountLimit: 10_000 });
+    expect(resultWindow(page, 50)).toEqual({ total: 13_592, moreThan: null, reach: 10_000 });
+    // 30 a page: page 332 ends at 9,990, and 333 would end at 10,020, which the server refuses.
+    expect(resultWindow(page, 30)).toEqual({ total: 13_592, moreThan: null, reach: 9_990 });
+    expect(resultWindow(page, 1)).toEqual({ total: 13_592, moreThan: null, reach: 10_000 });
+  });
+
+  it("sets no reach while the query fits in the window, as the brand library's six assets do", () => {
+    const page = counted({ totalSize: 6, resultsCount: 6, resultsCountLimit: 10_000 });
+    expect(resultWindow(page, 50)).toEqual({ total: 6, moreThan: null, reach: null });
+    const full = counted({ totalSize: 10_000, resultsCount: 10_000, resultsCountLimit: 10_000 });
+    expect(resultWindow(full, 50).reach).toBeNull();
+  });
+
+  it('sets no reach for the repository, which reports no limit and pages past 10,000', () => {
+    // nxql_search over every document: 11,902 counted, resultsCountLimit 0, page 10,000 served.
+    const page = counted({ totalSize: 11_902, resultsCount: 11_902, resultsCountLimit: 0 });
+    expect(resultWindow(page, 1)).toEqual({ total: 11_902, moreThan: null, reach: null });
+    expect(resultWindow(counted({ totalSize: 20_000 }), 50).reach).toBeNull();
+  });
+
+  it('says "more than" the limit where the server stopped counting there, and reaches on', () => {
+    // A folder's children a page of one at a time: resultsCount -2, resultsCountLimit 1.
+    const page = counted({ totalSize: -2, resultsCount: -2, resultsCountLimit: 1 });
+    expect(resultWindow(page, 1)).toEqual({ total: null, moreThan: 1, reach: null });
+    const limited = counted({ totalSize: -2, resultsCount: -2, resultsCountLimit: 200 });
+    expect(resultWindow(limited, 50)).toEqual({ total: null, moreThan: 200, reach: null });
+  });
+
+  it('claims nothing where the server neither counted nor gave a limit it stopped at', () => {
+    expect(resultWindow(counted({ totalSize: -1, resultsCount: -1 }), 50)).toEqual({
+      total: null,
+      moreThan: null,
+      reach: null,
+    });
+    const uncounted = counted({ totalSize: -1, resultsCount: -1, resultsCountLimit: 10_000 });
+    expect(resultWindow(uncounted, 50).moreThan).toBeNull();
+  });
+
+  it('takes the larger of the two counts, and a page size that is not one as 1', () => {
+    const page = counted({ totalSize: 12_000, resultsCount: 13_000, resultsCountLimit: 10_000 });
+    expect(resultWindow(page, 50).total).toBe(13_000);
+    expect(resultWindow(page, 0).reach).toBe(10_000);
+    expect(resultWindow(page, Number.NaN).reach).toBe(10_000);
+    expect(resultWindow(counted({ totalSize: 50, resultsCountLimit: 2.5 }), 1).reach).toBeNull();
   });
 });

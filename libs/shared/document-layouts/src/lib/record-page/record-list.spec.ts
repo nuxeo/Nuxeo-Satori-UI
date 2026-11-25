@@ -405,6 +405,162 @@ describe('RecordListComponent', () => {
     expect(list().hasNextPage()).toBe(true);
   });
 
+  describe("the search index's window", () => {
+    /**
+     * As the search index answers past its window on Nuxeo 2025.10.18: the exact count, the
+     * window as `resultsCountLimit` (docs/api-integrations.md, section 33). `isNextPageAvailable`
+     * is true here even at the window's edge, where the server says false: the list must stop on
+     * its own reading of the window, not on the server's word.
+     */
+    const PAST: Partial<NuxeoDocumentList> = {
+      totalSize: 13_592,
+      resultsCount: 13_592,
+      resultsCountLimit: 10_000,
+      numberOfPages: 1_360,
+      isNextPageAvailable: true,
+    };
+    const notice = (root: HTMLElement): string =>
+      root
+        .querySelector('.record-list__window .nxs-banner__message')
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim() ?? '';
+
+    it('never asks for a page that ends past the window, whatever the server says of a next one', async () => {
+      await render();
+      await answer([claim(1)], PAST);
+      // Ten a page: page 999 holds results 9,991 to 10,000, the last the server serves.
+      list().pageChange.emit(999);
+      await settle();
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 999, pageSize: 10 }),
+      );
+      await answer([claim(9_991)], { ...PAST, currentPageIndex: 999 });
+      expect(list().hasNextPage()).toBe(false);
+      // Asked for anyway, by the pager or anything else: refused, not sent.
+      list().pageChange.emit(1_000);
+      list().pageChange.emit(1_359);
+      await settle();
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(list().pageIndex()).toBe(999);
+      // Back within it, as before.
+      list().pageChange.emit(998);
+      await settle();
+      expect(execute).toHaveBeenCalledTimes(3);
+    });
+
+    it('refuses a page past the window while the next page loads, from the window last read', async () => {
+      await render();
+      await answer([claim(1)], PAST);
+      list().pageChange.emit(1);
+      await settle();
+      expect(list().loading()).toBe(true);
+      list().pageChange.emit(5_000);
+      await settle();
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 1 }),
+      );
+    });
+
+    it("disables the pager's next on the last page within the window", async () => {
+      const root = await render();
+      list().pageChange.emit(999);
+      await settle();
+      await answer([claim(9_991)], { ...PAST, currentPageIndex: 999 });
+      const next = root.querySelector<HTMLButtonElement>('.nxs-pager__next');
+      expect(next).not.toBeNull();
+      expect(next?.disabled).toBe(true);
+      // One page before it, the next one is still within it.
+      list().pageChange.emit(998);
+      await settle();
+      await answer([claim(9_981)], { ...PAST, currentPageIndex: 998 });
+      expect(root.querySelector<HTMLButtonElement>('.nxs-pager__next')?.disabled).toBe(false);
+    });
+
+    it("shows the server's whole count, not the window, and says how far the pages reach", async () => {
+      const root = await render();
+      await answer([claim(1)], PAST);
+      expect(list().totalSize()).toBe(13_592);
+      expect(root.querySelector('.nxs-pager__range')?.textContent?.trim()).toBe('1–1 of 13592');
+      expect(notice(root)).toBe(
+        'Only the first 10,000 of these 13,592 records can be paged through. Search for the records you need to find the others.',
+      );
+      fixture.componentRef.setInput('filterable', true);
+      await settle();
+      expect(notice(root)).toBe(
+        'Only the first 10,000 of these 13,592 records can be paged through. Choose filters, or search, to narrow the list and find the others.',
+      );
+    });
+
+    it('says nothing of a window the query fits in, nor of a repository that pages past 10,000', async () => {
+      const root = await render();
+      await answer([claim(1)], { ...PAST, totalSize: 6, resultsCount: 6, numberOfPages: 1 });
+      expect(notice(root)).toBe('');
+      list().pageChange.emit(1);
+      await settle();
+      await answer([claim(11)], { ...PAST, resultsCountLimit: 0, currentPageIndex: 1 });
+      expect(notice(root)).toBe('');
+      expect(list().hasNextPage()).toBe(true);
+      list().pageChange.emit(1_100);
+      await settle();
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 1_100 }),
+      );
+    });
+
+    it('keeps its notice while the next page loads, and leaves it out over a failure', async () => {
+      const root = await render();
+      await answer([claim(1)], PAST);
+      list().pageChange.emit(1);
+      await settle();
+      expect(notice(root)).toContain('10,000 of these 13,592');
+      pages[pages.length - 1].error({ status: 500 });
+      await settle();
+      expect(notice(root)).toBe('');
+    });
+
+    it('says "of more than" the limit the server stopped counting at, and pages on past it', async () => {
+      const root = await render();
+      await answer([claim(1)], {
+        totalSize: -2,
+        resultsCount: -2,
+        resultsCountLimit: 200,
+        numberOfPages: 0,
+        isNextPageAvailable: true,
+      });
+      expect(list().totalSize()).toBe(-1);
+      expect(list().totalMoreThan()).toBe(200);
+      expect(root.querySelector('.nxs-pager__range')?.textContent?.trim()).toBe(
+        '1–1 of more than 200',
+      );
+      expect(notice(root)).toBe('');
+      list().pageChange.emit(30);
+      await settle();
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 30 }),
+      );
+    });
+
+    it('starts again without a window for other buckets, and reads theirs from their first page', async () => {
+      await render();
+      await answer([claim(1)], PAST);
+      fixture.componentRef.setInput('aggregates', { claim_status_agg: ['open'] });
+      await settle();
+      await answer([claim(2)], { ...PAST, totalSize: 40, resultsCount: 40, numberOfPages: 4 });
+      list().pageChange.emit(3);
+      await settle();
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 3 }),
+      );
+    });
+  });
+
   it("starts on the first page for another record, and never shows the last record's rows", async () => {
     await render(['m1']);
     await answer([claim(1)], { numberOfPages: 2, isNextPageAvailable: true });

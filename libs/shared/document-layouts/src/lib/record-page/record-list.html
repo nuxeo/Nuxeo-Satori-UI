@@ -1,3 +1,6 @@
+@if (windowNotice(); as notice) {
+  <nxs-banner class="record-list__window" tone="info" [message]="notice" />
+}
 <nxs-document-list
   class="record-list"
   [documents]="documents()"
@@ -10,6 +13,7 @@
   [pageIndex]="pageIndex()"
   [pageSize]="list().pageSize"
   [totalSize]="totalSize()"
+  [totalMoreThan]="totalMoreThan()"
   [hasNextPage]="hasNextPage()"
   [loading]="loading()"
   [error]="error()"

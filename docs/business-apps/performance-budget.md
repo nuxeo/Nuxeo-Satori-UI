@@ -17,7 +17,9 @@ in `budget.json` together, with its reasoning. The offline selftest fails when t
   synthetic assets and answers after a stated latency, over an emulated office network.
 - **What it measures:** the library's first paint and first page of results; paging through 50
   pages and narrowing by facets; the asset page's first picture view; the JavaScript heap after 50
-  pages; and the requests each of those makes.
+  pages; and the requests each of those makes. Then **the search index's window**: on to page 200,
+  the last whole page within OpenSearch's 10,000 results, which the stand-in enforces as Nuxeo
+  does, and what the library offers and says there.
 - **What it does not measure:** Nuxeo's and OpenSearch's own query time at 100,000 documents. The
   stand-in's latencies are stated assumptions, not measurements of a server. That needs a server
   holding the data ("What this does not measure", below).
@@ -52,9 +54,14 @@ what was asked for, checked on the page itself: the expected first row, or the p
 | `asset.requests`                 | 25      | The first open's 20 requests today ("Requests per action", below), with room for five.                                                                                                                                                                              |
 | `heap.after50PagesMB`            | 64 MB   | A ceiling for the whole application after 50 pages, its code and services included: four times today's. It catches a gross change only; the next line catches a leak.                                                                                               |
 | `heap.growthMB`                  | 6 MB    | Twice today's 2.9 MB, which is warm-up, not pages held (below). A page of results, kept, costs about 0.2 MB of heap: the `hold-pages` control, keeping all 50, grew 13.3 MB. Six catches a list that keeps fifteen pages or more.                                   |
+| `window.requestsPast`            | 0       | A page that ends past the search index's window is HTTP 500 from Nuxeo: the person sees the list fail. None is ever asked for, over the whole run.                                                                                                                  |
+| `window.controlsPast`            | 0       | On page 200, the window's last whole page, no control offers a page past it: the pager's next is disabled, whatever the server says of a next page.                                                                                                                 |
+| `window.totalsMisstated`         | 0       | Every pager from page 2 to page 200 names the server's whole count, 100,000, not the window's 10,000 nor a guess. The total is what the person reads to decide to narrow.                                                                                           |
+| `window.noticeMissing`           | 0       | On page 200 the list says, above its rows, how many results its pages reach and of how many, both numbers, and to narrow with the filters or a search. Without it, paging just stops.                                                                               |
 
 The two heap lines are read after garbage collection, through the DevTools protocol, once after
-page 1 and once after page 50.
+page 1 and once after page 50. The four `window.` lines count what must not happen at all, so
+their limit is 0; `budget.mjs` refuses any other limit for them, and 0 for any other line.
 
 **Today's growth is warm-up.** Browsed to page 200 once, by a probe against the same stand-in rather
 than by this check, whose 50 pages are fixed: the heap grew 2.6 MB over the first 25 pages, then
@@ -78,9 +85,14 @@ credentials: the stand-in answers `/me` as a reader of its own, `perf-reader`, a
 2. **Paging.** 49 clicks on the pager's next button, so 50 pages browsed, each timed from the click
    event to the page's first row being the asset the server's order puts there.
 3. **The heap,** after page 1 and after page 50.
-4. **Facets.** Rights "Ending" chosen, then Shot "Detail", then each cleared, each timed from the
+4. **The search index's window.** 150 more clicks on next, to page 200, results 9,951 to 10,000,
+   each page its expected first row, not timed. Every pager from page 2 on is read for its total.
+   On page 200: whether next is still enabled, which is then pressed, as a person would, and the
+   list's notice, with the numbers it names. Every page the stand-in refused for the window, over
+   the whole run, is counted from its log.
+5. **Facets.** Rights "Ending" chosen, then Shot "Detail", then each cleared, each timed from the
    click to the first row of the narrowed list.
-5. **The asset page.** The first five rows opened in turn, each timed from the click to its first
+6. **The asset page.** The first five rows opened in turn, each timed from the click to its first
    picture view loaded from its blob, then back to the library. Loaded, not painted: the image is
    complete and its size known; Chromium decodes it when it paints.
 
@@ -148,6 +160,12 @@ with none last; a bucket chosen sent as a parameter named after its aggregate; e
 counted with the other aggregates' choices and not its own; a terms aggregate's ten largest; and a
 chosen bucket that holds nothing listed at 0.
 
+And it keeps to **the search index's window** as the local Nuxeo 2025.10.18 did over OpenSearch's
+default `max_result_window` ([api-integrations.md, section 33](../api-integrations.md#33-queues--queuesidjson-and-the-queues-page-provider)):
+`resultsCountLimit` 10,000 and the exact count past it; no next page on the last whole page within
+it, page 200 at 50 a page; and HTTP 500, with Nuxeo's message, for a page that ends past it, even
+where the results run out first. The selftest holds it to the measured answers, page for page.
+
 The asset page's other reads are answered too: the record with its enrichers, its type and schemas
 from the kit's `content-model.json`, its picture views as PNGs drawn by the kit's `png.mjs` and
 padded to the size the record gives each view, its
@@ -157,22 +175,27 @@ large as Nuxeo's stock ones: 251, 58 and 37 entries.
 ## The negative controls
 
 A check is not evidence until it has been seen to fail. `npm run beta:asset-performance-controls`
-runs the check six more times, each with something made worse on purpose, and passes only when
+runs the check eight more times, each with something made worse on purpose, and passes only when
 each run failed on the lines it should, each of them measured. Between them they name every line
 of the budget, which the offline selftest holds them to:
 
-| Control      | What it makes worse                                                                                    | Must be over                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `slow`       | The stand-in's server five times slower; the network as it was                                         | `library.firstPageMs`, `paging.medianMs`, `paging.p95Ms`, `facets.maxMs`, `asset.firstViewMs`  |
-| `big-bundle` | The app's first script 1.5 MB heavier, in bytes that do not compress                                   | `library.firstContentfulPaintMs`, `library.firstPageMs`                                        |
-| `fetch-all`  | A script in the page reads every page of a query before the app's own request for it is sent           | `library.firstPageMs`, `library.openRequests`, `facets.requestsPerChoice`                      |
-| `twice`      | A script in the page sends every request to the server a second time, as one subscribed to twice would | `library.openRequests`, `paging.requestsPerPage`, `facets.requestsPerChoice`, `asset.requests` |
-| `hold-pages` | A script in the page keeps every page of results the app is sent                                       | `heap.growthMB`                                                                                |
-| `ballast`    | A script in the page holds 80 MB from its first moment                                                 | `heap.after50PagesMB`                                                                          |
+| Control        | What it makes worse                                                                                                                                                          | Must be over                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `slow`         | The stand-in's server five times slower; the network as it was                                                                                                               | `library.firstPageMs`, `paging.medianMs`, `paging.p95Ms`, `facets.maxMs`, `asset.firstViewMs`  |
+| `big-bundle`   | The app's first script 1.5 MB heavier, in bytes that do not compress                                                                                                         | `library.firstContentfulPaintMs`, `library.firstPageMs`                                        |
+| `fetch-all`    | A script in the page reads every page of a query before the app's own request for it is sent                                                                                 | `library.firstPageMs`, `library.openRequests`, `facets.requestsPerChoice`                      |
+| `twice`        | A script in the page sends every request to the server a second time, as one subscribed to twice would                                                                       | `library.openRequests`, `paging.requestsPerPage`, `facets.requestsPerChoice`, `asset.requests` |
+| `hold-pages`   | A script in the page keeps every page of results the app is sent                                                                                                             | `heap.growthMB`                                                                                |
+| `ballast`      | A script in the page holds 80 MB from its first moment                                                                                                                       | `heap.after50PagesMB`                                                                          |
+| `unwindowed`   | The stand-in refuses past the window as Nuxeo does, but says nothing of it, as this check's first stand-in did: no `resultsCountLimit`, and a next page while records remain | `window.requestsPast`, `window.controlsPast`, `window.noticeMissing`                           |
+| `capped-count` | The stand-in counts only to 10,000, as OpenSearch's own default `track_total_hits` would have the index count                                                                | `window.totalsMisstated`, `window.noticeMissing`                                               |
 
-The scripts run in the page, around the app's own requests, and `big-bundle` pads the script as the
-stand-in serves it, rather than as changes to the app: no control needs a build of its own, and the
-app's code is left as it is.
+The scripts run in the page, around the app's own requests; `big-bundle` pads the script as the
+stand-in serves it, and `slow`, `unwindowed` and `capped-count` change how the stand-in answers,
+rather than the app: no control needs a build of its own, and the app's code is left as it is.
+`unwindowed` is the boundary's negative control: an app that cannot read the window from the
+server's answer pages past it, and the check goes red on the page asked for and the control left
+enabled.
 
 ## Measured on 25 November 2026
 
@@ -239,8 +262,11 @@ layout and the picture view, but they are the first place to look if the request
   assumptions. The page provider's real time at 100,000, with its three aggregates, the document
   page's enrichers and the audit, need a server holding 100,000 assets, which this check exists to
   avoid writing.
-- **The search index's own limits.** OpenSearch refuses, by default, a page past its 10,000th
-  result (`max_result_window`). The stand-in pages to the end; the check browses the first 2,500.
+- **The cost of deep pages.** The window itself is enforced and checked, but the stand-in answers
+  page 200 as fast as page 1, and an index's `from` and `size` work grows with the offset. A server
+  holding 100,000 assets would show what page 200 costs.
+- **A window other than the default.** An administrator may raise `index.max_result_window`; the
+  app reads the window from each answer, but the check runs at 10,000 only.
 - **A server under load:** many people at once, its memory, its threads, its database.
 - **A real network:** one machine runs both ends. The round trip and the bandwidth are emulated;
   there is no TLS, HTTP/2, proxy or packet loss.

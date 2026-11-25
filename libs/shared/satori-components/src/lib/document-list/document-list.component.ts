@@ -187,6 +187,11 @@ export class NxsDocumentListComponent {
   readonly pageSize = input(50, { transform: numberAttribute });
   /** Every document across every page, or negative when the server did not count them. */
   readonly totalSize = input(-1, { transform: numberAttribute });
+  /**
+   * Where the server stopped counting, when it gave no total: the pager says "of more than N"
+   * (`NxsPagerComponent.totalMoreThan`). Negative, the default, for none.
+   */
+  readonly totalMoreThan = input(-1, { transform: numberAttribute });
   /** Whether the server has another page. */
   readonly hasNextPage = input(false, { transform: booleanAttribute });
   /** Shows the loader in place of the rows. */

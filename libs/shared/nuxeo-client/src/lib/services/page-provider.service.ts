@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 
 import type { NuxeoDocumentList } from '../models/document.model';
+import type { NuxeoPaginatedList } from '../models/paginated.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
 
 /** One key of a page provider's order: a property, `<prefix>:<name>`, and a direction. */
@@ -94,6 +95,62 @@ const RESERVED_PARAMETERS: ReadonlySet<string> = new Set([
 /** Whether a request may filter on the aggregate `name`: see {@link PageProviderRequest.aggregates}. */
 export function isAggregateParameter(name: string): boolean {
   return AGGREGATE.test(name) && !RESERVED_PARAMETERS.has(name);
+}
+
+/** Nuxeo's count for "more than the limit it counts to" (`UNKNOWN_SIZE_AFTER_QUERY`). */
+const COUNTED_PAST_LIMIT = -2;
+
+/** What one page of a list's results says about the whole of them, and how far they can be paged. */
+export interface ResultWindow {
+  /** How many results the query holds: the server's count, or `null` where it gave none. */
+  readonly total: number | null;
+  /**
+   * Where the server stopped counting, with no count: the query holds more than this many. `null`
+   * with a count, or without a limit.
+   */
+  readonly moreThan: number | null;
+  /**
+   * How many results the pages can reach at the page size given: the whole pages that end within
+   * the search index's window. `null` where no window cuts the results short.
+   */
+  readonly reach: number | null;
+}
+
+/**
+ * The window of one page of a list's results: its total, and how many of them can be paged to.
+ *
+ * Measured on Nuxeo 2025.10.18 (docs/api-integrations.md, section 33):
+ *
+ * - **A page provider the search index serves** reports OpenSearch's `max_result_window` as
+ *   `resultsCountLimit`, 10,000 by default, whatever the query holds, and counts exactly past it:
+ *   13,592 for every document. A page that ends past the window, `currentPageIndex` times
+ *   `pageSize` plus `pageSize` above 10,000, is answered HTTP 500 (`search_phase_execution_exception`),
+ *   even where the results run out before it. Its `isNextPageAvailable` is already false on the
+ *   last page whose next one would end past it.
+ * - **One that queries the repository** reports `0`, and pages on past 10,000; or the limit it
+ *   counts to, past which `resultsCount` is `-2` and paging goes on.
+ *
+ * So a count above the limit is a window: only the index counts past its own limit. A `-2` with a
+ * limit says that there are more than that many, and nothing of how far they can be paged. A page
+ * size that is not a whole number from 1 counts as 1.
+ */
+export function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow {
+  const counts = [page.totalSize, page.resultsCount].filter(
+    (count): count is number => typeof count === 'number' && Number.isFinite(count) && count >= 0,
+  );
+  const total = counts.length > 0 ? Math.max(...counts) : null;
+  const limit = page.resultsCountLimit;
+  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit <= 0) {
+    return { total, moreThan: null, reach: null };
+  }
+  if (total === null) {
+    const stopped =
+      page.resultsCount === COUNTED_PAST_LIMIT || page.totalSize === COUNTED_PAST_LIMIT;
+    return { total, moreThan: stopped ? limit : null, reach: null };
+  }
+  if (total <= limit) return { total, moreThan: null, reach: null };
+  const size = Number.isInteger(pageSize) && pageSize >= 1 ? pageSize : 1;
+  return { total, moreThan: null, reach: Math.floor(limit / size) * size };
 }
 
 /**

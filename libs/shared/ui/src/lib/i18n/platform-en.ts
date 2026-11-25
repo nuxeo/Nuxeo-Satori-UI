@@ -499,6 +499,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.pager.previous": "Previous page",
   "satori-components.pager.range": "{{ first }}–{{ last }}",
   "satori-components.pager.range-of": "{{ first }}–{{ last }} of {{ total }}",
+  "satori-components.pager.range-of-more": "{{ first }}–{{ last }} of more than {{ count }}",
   "satori-components.permission-dialogs.cancel": "Cancel",
   "satori-components.permission-dialogs.comment": "Notification email",
   "satori-components.permission-dialogs.comment-placeholder": "Hi! Could you comment on this document and...",
