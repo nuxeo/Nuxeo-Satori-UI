@@ -290,6 +290,16 @@ function brokenCases(root, layout, queue, add) {
         },
       ];
     });
+    const template = (text) => (file) => {
+      file.cards = [
+        {
+          id: 'added',
+          fields: [{ id: 'named', computed: { type: 'core.template', parameters: [text] } }],
+        },
+      ];
+    };
+    broken('a template longer than the record page draws', template('x'.repeat(1001)));
+    broken('a template of braces that close nothing', template('{'.repeat(1000)));
     broken('a rule nested deeper than the validator reads', (file) => {
       file.cards = [{ id: 'added', visibleWhen: nested(300), fields: ['dc:title'] }];
     });

@@ -38,6 +38,13 @@
         [message]="'layout-designer.layer.package-changed' | translate"
       />
     }
+    @if (state.live && !state.served) {
+      <nxs-banner
+        tone="error"
+        data-layer="not-served"
+        [message]="'layout-designer.layer.not-served' | translate"
+      />
+    }
 
     <div class="layer-panel__versions">
       <section class="layer-panel__version" data-version="package" aria-labelledby="layer-package">

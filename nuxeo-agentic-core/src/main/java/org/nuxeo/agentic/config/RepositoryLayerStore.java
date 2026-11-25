@@ -36,7 +36,8 @@ import org.nuxeo.runtime.transaction.TransactionHelper;
  * and grants none, so only administrators, whom Nuxeo lets past every ACL, and the system read it.
  * A reader cannot list, search or fetch a draft through the REST API. The ACL is checked each time
  * the layer is read or written, and set back, with a warning in the log, when anyone has changed
- * it, as by sharing the folder. The layer is read and written here with a privileged session,
+ * it, as by sharing the folder; an app's document given an ACL of its own, as by sharing it, has it
+ * taken away, so that the folder's block holds for it. The layer is read and written here with a privileged session,
  * after {@link LayerService} has checked that the person is an administrator.</li>
  * <li><b>Not a control against administrators:</b> an administrator may write the document through
  * the REST API as any other. Nuxeo's audit records such a change under their name, where this
@@ -119,8 +120,10 @@ final class RepositoryLayerStore implements LayerStore {
             if (!guarded(session)) {
                 return stamps;
             }
+            // The documents readAll reads, and no others, so that the two agree when nothing changed.
             for (DocumentModel document : session.getChildren(new PathRef(ROOT))) {
-                if (ConfigScope.APP_ID.matcher(document.getName()).matches()) {
+                if (ConfigScope.APP_ID.matcher(document.getName()).matches()
+                        && document.getPropertyValue(BLOB) instanceof Blob) {
                     stamps.put(document.getName(), document.getChangeToken());
                 }
             }
@@ -189,11 +192,37 @@ final class RepositoryLayerStore implements LayerStore {
         if (!session.exists(root)) {
             return false;
         }
+        boolean changed = false;
         if (!isBlocked(session.getACP(root))) {
             log.warn("Agentic UI deployment layer: the ACL of {} grants a permission, or no longer blocks those it "
                     + "inherits; it is set back to blocking every one, so that no reader reaches a draft.", ROOT);
             session.setACP(root, blocked(), true);
+            changed = true;
+        }
+        // A grant on an app's own document would let its readers past the folder's block.
+        for (DocumentModel document : session.getChildren(root)) {
+            if (!hasNoAclOfItsOwn(session.getACP(document.getRef()))) {
+                log.warn("Agentic UI deployment layer: {} has an ACL of its own; it is taken away, so that the "
+                        + "folder's block holds for it.", document.getName());
+                session.setACP(document.getRef(), new ACPImpl(), true);
+                changed = true;
+            }
+        }
+        if (changed) {
             session.save();
+        }
+        return true;
+    }
+
+    /** Whether an ACP has no entry but those it inherits. */
+    static boolean hasNoAclOfItsOwn(ACP acp) {
+        if (acp == null) {
+            return true;
+        }
+        for (ACL acl : acp.getACLs()) {
+            if (!ACL.INHERITED_ACL.equals(acl.getName()) && !acl.isEmpty()) {
+                return false;
+            }
         }
         return true;
     }
@@ -220,10 +249,14 @@ final class RepositoryLayerStore implements LayerStore {
         return local;
     }
 
-    /** Whether an entry is {@link ACE#BLOCK}'s: everything denied to everyone, by its fields. */
+    /**
+     * Whether an entry is {@link ACE#BLOCK}'s: everything denied to everyone, by its fields, and for
+     * all time, not from a date or until one.
+     */
     private static boolean isBlock(ACE ace) {
         return ace != null && SecurityConstants.EVERYONE.equals(ace.getUsername())
-                && SecurityConstants.EVERYTHING.equals(ace.getPermission()) && !ace.isGranted();
+                && SecurityConstants.EVERYTHING.equals(ace.getPermission()) && !ace.isGranted()
+                && ace.getBegin() == null && ace.getEnd() == null;
     }
 
     /** An ACP that blocks every inherited permission and grants none. */

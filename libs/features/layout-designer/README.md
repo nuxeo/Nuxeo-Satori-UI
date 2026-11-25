@@ -162,9 +162,9 @@ Below the Save section of either page, for the file open:
   differences: package to live, live (or package) to draft, and the newest of them to the file as
   edited here. Nothing in a version is drawn as markup.
 - **Save draft** sends the file as edited, once the page's own check finds nothing in it. **Submit
-  for approval** puts the draft up. **Approve and publish** makes it live. **Roll back** undoes the
-  last change to what is live: it makes what was live just before live again, or the package's
-  version when nothing was. **Put the package's version back** does that whatever is live.
+  for approval** puts the draft up. **Approve and publish** makes it live. **Roll back** takes the
+  live version out, and its question names what goes back: the version an approval replaced, or
+  the package's version. **Put the package's version back** does that whatever is live.
   **Discard draft** drops it. **Open the newest version here** loads the draft, or the live version,
   into the designer to edit.
 - **The buttons follow the server's answer** of what the person may do, and one that may do nothing
@@ -200,13 +200,15 @@ Below the Save section of either page, for the file open:
   the server log says so at startup. Approval checks the draft again against the model as it is
   then, and refuses a draft made on a live version that has since changed.
 - **Every publish keeps the previous version:** each approval or rollback is a new version; the last
-  50 of a file are kept, and the live one always. **A rollback undoes the last change to what is
-  live**, at once and by one administrator: it puts back the version live just before, or the
-  package's file, and nothing else; any older version goes live again only as a draft a second
-  administrator approves. Undoing at once is what an incident needs, and what it puts back was live
-  a moment before, approved. It checks the restored version against the model first; the package's
-  file needs no check. A rolled-back version keeps the makers and approver of the one it restores,
-  and names who put it back.
+  50 of a file are kept, and the live one always. **A rollback takes the live version out**, at
+  once and by one administrator: it puts back the version an approval replaced, or the package's
+  file, and nothing else. A rollback is never undone by another: after one, the next puts the
+  package's file back, and what a rollback took out goes live again only as a draft a second
+  administrator approves. So one administrator can withdraw a change in an incident, and cannot
+  bring back one another withdrew. It checks the restored version against the model first; the
+  package's file needs no check. A rolled-back version keeps the makers and approver of the one it
+  restores, and names who put it back. An older version is not rolled back to: bringing it back
+  means saving it again as a draft, and reading an older version's content is not built yet.
 - **Concurrent edits:** every change names the file's revision, and one made on a revision that is
   no longer the file's is refused, 409, with the file as it is now. Every change, to any app, is
   made one at a time: on a server by the service's lock, and across a cluster inside
@@ -223,7 +225,14 @@ Below the Save section of either page, for the file open:
   serves none of its live files the validator does not pass; but the trail in it can be rewritten,
   and an approval forged, by whoever does that.
 - **Limits:** a layer holds at most 500 files and 64 MiB, versions and trail included; a change
-  over either is refused, 413.
+  over either is refused, 413, but for a rollback or a discard, so that an incident can always be
+  undone. A file's trail keeps its last 1000 lines and counts those let go (`trailDropped`); the
+  server log keeps every one. A `core.template` text is at most 1000 characters, as the record
+  page draws it, and every check the validator makes reads the file in one pass, so a check takes
+  time in proportion to the file. A log line names only what the service names itself: an action,
+  app or path the request chose that is not one is written as a place-holder.
+- **When the live version is not served,** because the validator refuses it as the server is now,
+  the state says so (`served: false`), the panel warns, and the export says so too.
 - **A change** is a POST of `application/json` with the header `X-Agentic-Layer-Change`, which a
   page on another site cannot send without a CORS preflight, and the registry answers no preflight;
   at most 1 MiB and 64 KiB, nested at most 512 deep, with no repeated key. Every answer is
@@ -235,12 +244,16 @@ Below the Save section of either page, for the file open:
   navigation whose ACL blocks every permission and grants none, so only administrators, whom Nuxeo
   lets past every ACL, and the system read it. The ACL is checked each time the layer is read or
   written, and set back, with a warning in the log, when someone has changed it, as by sharing the
-  folder.
+  folder; an app's document given an ACL of its own, as by sharing it, has it taken away. A block
+  for a time only is no block.
 - **CORS:** the change header holds only while no CORS configuration of the server
   (`nuxeo.cors.urls`, or a `corsConfig` contribution) lets another origin send it to
   `/nuxeo/agentic-ui-apps/`.
 - **The registry's copy** of the live layer is read again after a change on the server, and at most
-  10 seconds late for a change made on another server of a cluster.
+  10 seconds late for a change made on another server of a cluster; when nothing changed, a read
+  costs each app's stamp alone. A read that changes something checks every live file again, on
+  the request that makes it, and other requests wait for it: tens of milliseconds a file. A file
+  the validator could not check at all is checked again at the next read.
 
 ### Upgrades
 
@@ -297,8 +310,8 @@ served again. The stored layer stays in `/agentic-ui-layers` until an administra
   `rich-text` widget draws a record's value, not the layout's, as HTML through the record page's
   sanitizer and its allow-list (`renderTrustedHtml`, `RICH_TEXT_HTML`), so a layer that gives a text
   property that widget changes how that property's values are drawn for everyone.
-- **The rollback history:** 50 versions a file; that a rollback puts back only the version live
-  just before, or the package's file; a version no longer valid.
+- **The rollback history:** 50 versions a file; that a rollback puts back only the version an
+  approval replaced, or the package's file, and is never undone; a version no longer valid.
 - **Drafts leaking to readers:** the registry's `live()`, the configuration servlet, the repository
   folder's ACL and its repair, and the REST API's reach into `/agentic-ui-layers`.
 - **The layer's precedence** against the package and the manifest; and that a layer may add a

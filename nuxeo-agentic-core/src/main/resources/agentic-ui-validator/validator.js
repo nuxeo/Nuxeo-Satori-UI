@@ -860,6 +860,7 @@ var agenticUiValidator = (function () {
     }
     var ICON = /^[a-z0-9_]{1,64}$/;
     var MAX_NESTING = 256;
+    var TEMPLATE_MAX_LENGTH = 1e3;
     function createChecker(registries, options) {
         if (options === void 0) { options = {}; }
         var task = options.task === true;
@@ -1052,8 +1053,12 @@ var agenticUiValidator = (function () {
                         add(path, "parameter", "".concat(owner, " takes a text with {<prefix>:<name>} placeholders"));
                         return;
                     }
+                    if (item.length > TEMPLATE_MAX_LENGTH) {
+                        add(path, "parameter", "".concat(owner, " takes a text of at most ").concat(TEMPLATE_MAX_LENGTH, " characters, not ").concat(item.length));
+                        return;
+                    }
                     try {
-                        for (var _j = __values(item.matchAll(/\{([^}]*)\}/g)), _k = _j.next(); !_k.done; _k = _j.next()) {
+                        for (var _j = __values(item.matchAll(/\{([^{}]*)\}/g)), _k = _j.next(); !_k.done; _k = _j.next()) {
                             var _l = __read(_k.value, 2), inner = _l[1];
                             if (!XPATH.test(inner))
                                 add(path, "parameter", "the placeholder {".concat(inner, "} is not a property, <prefix>:<name>"));

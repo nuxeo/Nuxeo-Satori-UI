@@ -327,31 +327,30 @@ class LayerServiceTest {
         assertEquals("ben", live.get("approvedBy").asText());
         assertEquals("ada", live.get("submittedBy").asText());
         assertEquals("ben", live.get("restoredBy").asText());
-        assertEquals(2, back.body().get("previous").asInt());
-
-        // One administrator puts back only what was live just before, or the package's file.
-        ObjectNode older = change("rollback", 7);
-        older.put("to", 1);
-        LayerService.Outcome refused = service.act(APP, CLAIM_VIEW, ADA, older);
+        // A rollback is not undone by another: what it took down, version 2, is not put back.
+        assertEquals(0, back.body().get("previous").asInt());
+        ObjectNode undo = change("rollback", 7);
+        undo.put("to", 2);
+        LayerService.Outcome refused = service.act(APP, CLAIM_VIEW, ADA, undo);
         assertEquals(409, refused.status());
         assertEquals("not-restorable", refused.body().get("error").asText());
+        ObjectNode older = change("rollback", 7);
+        older.put("to", 1);
+        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, older).status());
         ObjectNode unknown = change("rollback", 7);
         unknown.put("to", 99);
         assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, unknown).status());
 
-        ObjectNode toPackage = change("rollback", 7);
-        toPackage.put("to", 0);
-        LayerService.Outcome packaged = service.act(APP, CLAIM_VIEW, ADA, toPackage);
+        // Rolling back again puts the package's file back, and then there is nothing to roll back.
+        LayerService.Outcome packaged = service.act(APP, CLAIM_VIEW, ADA, change("rollback", 7));
         assertEquals(200, packaged.status());
         assertTrue(packaged.body().get("live").isNull());
         assertEquals(404, new AppRegistryEndpoint(snapshot, service.live())
                 .respond("/apps/payers-claims/" + CLAIM_VIEW, DANA, null).status());
-
-        // And undoes the rollback to the package: version 3, the first file, goes live again.
-        LayerService.Outcome undone = service.act(APP, CLAIM_VIEW, ADA, change("rollback", 8));
-        assertEquals(200, undone.status());
-        assertEquals(3, undone.body().get("live").get("from").asInt());
-        assertEquals(text(first), text(undone.body().get("live").get("content")));
+        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, change("rollback", 8)).status());
+        ObjectNode back3 = change("rollback", 8);
+        back3.put("to", 3);
+        assertEquals(409, service.act(APP, CLAIM_VIEW, ADA, back3).status());
     }
 
     @Test
@@ -393,21 +392,57 @@ class LayerServiceTest {
                 .add("zz:forged");
         store.stored.put(APP, new LayerStore.Stored(ConfigSnapshot.JSON.writeValueAsBytes(forged), "forged"));
 
-        LayerService.Live live = service(ON, store).live();
+        LayerService reading = service(ON, store);
+        LayerService.Live live = reading.live();
         assertEquals(java.util.Set.of(MY_CLAIMS), live.of(APP).keySet());
+        // Administrators are told the live version is not what readers get.
+        assertFalse(reading.state(APP, CLAIM_VIEW, ADA).body().get("served").asBoolean());
+        assertTrue(reading.state(APP, MY_CLAIMS, ADA).body().get("served").asBoolean());
+        JsonNode exported = reading.export(ADA).body().get("apps").get(0).get("files");
+        exported.forEach(file -> assertEquals(MY_CLAIMS.equals(file.get("path").asText()),
+                file.get("served").asBoolean(), file.get("path").asText()));
+    }
+
+    @Test
+    void theTrailKeepsItsLastLinesAndCountsThoseLetGo() throws Exception {
+        LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
+        ObjectNode layer = ConfigSnapshot.JSON.createObjectNode().put("format", LayerService.FORMAT).put("app", APP);
+        ObjectNode file = layer.putObject("files").putObject(CLAIM_VIEW).put("revision", 7).put("live", 0);
+        file.putArray("versions");
+        com.fasterxml.jackson.databind.node.ArrayNode trail = file.putArray("trail");
+        for (int index = 0; index < LayerService.MAX_TRAIL; index++) {
+            trail.addObject().put("at", "2026-11-25T21:00:00Z").put("by", "ada").put("action", "submit")
+                 .put("revision", index);
+        }
+        store.stored.put(APP, new LayerStore.Stored(ConfigSnapshot.JSON.writeValueAsBytes(layer), "s"));
+        LayerService service = service(ON, store);
+        assertEquals(200, service.act(APP, CLAIM_VIEW, ADA, save(7, claimViewWith("x"))).status());
+        JsonNode state = service.state(APP, CLAIM_VIEW, ADA).body();
+        assertEquals(LayerService.MAX_TRAIL, state.get("trail").size());
+        assertEquals(1, state.get("trailDropped").asInt());
+        assertEquals("save", state.get("trail").get(LayerService.MAX_TRAIL - 1).get("action").asText());
     }
 
     @Test
     void aReadOfTheLiveLayerMadeWhileAChangeIsWrittenIsNotKept() {
         LayerFixtures.MemoryStore store = new LayerFixtures.MemoryStore();
-        LayerService service = service(ON, store);
-        assertTrue(service.live().apps().isEmpty());
+        ConfigSnapshot snapshot = LayerFixtures.snapshot();
+        LayerFixtures.TestClock clock = new LayerFixtures.TestClock();
+        LayerService service = service(ON, store, () -> snapshot, clock);
+        LayerService elsewhere = service(ON, store, () -> snapshot, clock);
         assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("First")).status());
+        assertEquals(1, service.live().of(APP).get(CLAIM_VIEW).version());
 
+        // Another server's change, seen at the next read; that read is made while a change is
+        // written here, between the layer read and the copy built from it.
+        ObjectNode queue = kitFile(MY_CLAIMS);
+        queue.put("label", "Elsewhere");
+        assertEquals(200, elsewhere.act(APP, MY_CLAIMS, BEN, save(0, queue)).status());
+        clock.advance(LayerService.REFRESH_MILLIS);
         store.afterReadAll.set(() -> assertEquals(200, publish(service, CLAIM_VIEW, claimViewWith("Second")).status()));
         LayerService.Live during = service.live();
         assertEquals(1, during.of(APP).get(CLAIM_VIEW).version());
-        // Not kept: the next read sees the change at once, not ten seconds later.
+        // Not kept over what the change left: the next read sees it at once, not ten seconds later.
         assertEquals(2, service.live().of(APP).get(CLAIM_VIEW).version());
     }
 
@@ -415,9 +450,12 @@ class LayerServiceTest {
     void namesAreComparedWithoutTheirCaseForTheSecondPairOfEyes() {
         LayerService service = service(ON, new LayerFixtures.MemoryStore());
         AppRegistryEndpoint.Viewer shouting = new AppRegistryEndpoint.Viewer("ADA", java.util.Set.of(), true);
+        AppRegistryEndpoint.Viewer benShouting = new AppRegistryEndpoint.Viewer("BEN", java.util.Set.of(), true);
+        // Ada wrote it and Ben submitted it: each name, in capitals, is still theirs.
         assertEquals(200, service.act(APP, CLAIM_VIEW, ADA, save(0, claimViewWith("Mine"))).status());
-        assertEquals(200, service.act(APP, CLAIM_VIEW, ADA, change("submit", 1)).status());
+        assertEquals(200, service.act(APP, CLAIM_VIEW, BEN, change("submit", 1)).status());
         assertEquals(403, service.act(APP, CLAIM_VIEW, shouting, change("approve", 2)).status());
+        assertEquals(403, service.act(APP, CLAIM_VIEW, benShouting, change("approve", 2)).status());
     }
 
     @Test

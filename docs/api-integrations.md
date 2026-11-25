@@ -2524,9 +2524,11 @@ round.
 { "action": "save", "revision": 3, "content": { "version": 2, "cards": [] } }
 ```
 
-`action` is `save` (with `content`), `submit`, `approve`, `rollback` (by default the version live
-just before, the answer's `previous`; or with `to`, that version or `0` for the package's file) or
-`discard`, and `revision` is the file's, as last read. The answer is the file as it then is:
+`action` is `save` (with `content`), `submit`, `approve`, `rollback` (by default the answer's
+`previous`, the version the last approval replaced, or the package's file when it is `0`, as after
+a rollback; or with `to`, that version or `0` for the package's file) or `discard`, and `revision`
+is the file's, as last read. The answer is the file as it then is, `served` saying whether the
+registry serves its live version:
 
 ```json
 {
@@ -2541,6 +2543,8 @@ just before, the answer's `previous`; or with `to`, that version or `0` for the 
   "versions": [{ "version": 1, "kind": "approved", "replaced": 0, "approvedBy": "ben", "at": "…" }],
   "trail": [{ "at": "…", "by": "ben", "action": "approve", "revision": 4, "version": 1 }],
   "packageChanged": false,
+  "served": true,
+  "trailDropped": 0,
   "permissions": { "write": true, "approve": false, "approveRefused": "…", "selfApproval": false }
 }
 ```
@@ -2557,8 +2561,10 @@ just before, the answer's `previous`; or with `to`, that version or `0` for the 
   the package's file, 0 (`not-restorable`); 413 for a change over 1 MiB and 64 KiB, and for a layer
   over 500 files or 64 MiB; 415 for anything but `application/json`, and 403 without the header
   (`no-change-header`); 422 for a file the validator finds anything in (`invalid`, with `findings`,
-  the validator's). A change that fails on the server is 500 (`failed`): read the file again to see
-  whether it was written. Every refused change is a warning in the server log, with who asked.
+  the validator's). A change that fails on the server is 500: `failed`, read the file again to see
+  whether it was written; `unreadable` and `unwritable`, the stored layer could not be read or
+  written, and nothing is changed. Every refused change is a warning in the server log, with who
+  asked.
 - **Every answer is `Cache-Control: no-store`**, `nosniff`, with the configuration servlet's
   `Content-Security-Policy`.
 - **What is served to readers:** only the live version, by the app registry, to the app's groups

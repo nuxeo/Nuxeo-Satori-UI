@@ -74,6 +74,8 @@ export interface LayerState {
   readonly trail: readonly LayerTrailLine[];
   /** Whether the package's file has changed since the live version, or the draft, was made on it. */
   readonly packageChanged: boolean;
+  /** Whether the registry serves the live version: not when the validator refuses it as the server is now. */
+  readonly served: boolean;
   readonly permissions: LayerPermissions;
 }
 
@@ -173,6 +175,7 @@ export function readLayerState(raw: unknown): LayerState | null {
       return line ? [line] : [];
     }),
     packageChanged: raw['packageChanged'] === true,
+    served: raw['served'] === true,
     permissions: {
       write: permissions['write'] === true,
       approve: permissions['approve'] === true,

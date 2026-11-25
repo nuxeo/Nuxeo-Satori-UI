@@ -117,16 +117,12 @@ export class LayerPanelComponent {
   readonly canApprove = computed(() => !this.busy() && this.state()?.permissions.approve === true);
 
   /**
-   * A rollback undoes the last change to what is live: something live to take out, or a version
-   * the package's file was put back over.
+   * A rollback takes the live version out: it puts back the version live before it, or the
+   * package's file when that was a rollback's or there was none. A rollback is never undone.
    */
   readonly canRollBack = computed(() => {
     const state = this.state();
-    return (
-      !this.busy() &&
-      state?.permissions.write === true &&
-      (state.live !== null || state.previous > 0)
-    );
+    return !this.busy() && state?.permissions.write === true && state.live !== null;
   });
 
   /** The package's file may be put back while something overrides it. */
@@ -247,10 +243,17 @@ export class LayerPanelComponent {
   private confirm(
     action: 'approve' | 'rollback' | 'rollback-package' | 'discard',
   ): Observable<boolean> {
+    // What a rollback puts back, named: the version live before the live one, or the package's.
+    const previous = this.state()?.previous ?? 0;
+    const target =
+      previous > 0
+        ? this.translate.instant('layout-designer.layer.target-version', { version: previous })
+        : this.translate.instant('layout-designer.layer.target-package');
     const data: NxsConfirmDialogData = {
       title: this.translate.instant(`layout-designer.layer.confirm-${action}-title`),
       message: this.translate.instant(`layout-designer.layer.confirm-${action}-message`, {
         path: this.path() ?? '',
+        target,
       }),
       confirmLabel: this.translate.instant(`layout-designer.layer.${action}`),
     };

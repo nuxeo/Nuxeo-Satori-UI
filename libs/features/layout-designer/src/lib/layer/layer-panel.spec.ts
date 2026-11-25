@@ -41,6 +41,7 @@ function state(change: Partial<LayerState> = {}): LayerState {
     trail: [],
     previous: 0,
     packageChanged: false,
+    served: true,
     permissions: { write: true, approve: false, approveRefused: null, selfApproval: false },
     ...change,
   };
@@ -232,11 +233,17 @@ describe('LayerPanelComponent', () => {
     expect(sent).toEqual([['layouts/Claim/view.layout.json', { action: 'approve', revision: 3 }]]);
   });
 
-  it("offers a rollback while there is a change to undo: a live version, or one the package's file replaced", async () => {
+  it('offers a rollback while something is live, and names what it puts back', async () => {
     await show({ kind: 'state', state: state({ live: null, previous: 0 }) });
     expect(button('rollback').disabled).toBe(true);
-    await show({ kind: 'state', state: state({ live: null, previous: 2 }) });
-    expect(button('rollback').disabled).toBe(false);
+    await show({ kind: 'state', state: state({ previous: 2 }) });
+    button('rollback').click();
+    expect((asked[0] as { message: string }).message).toContain(
+      'to version 2, the one live before',
+    );
+    await show({ kind: 'state', state: state({ previous: 0 }) });
+    button('rollback').click();
+    expect((asked[1] as { message: string }).message).toContain("to the package's version");
     await show({
       kind: 'state',
       state: state({
@@ -244,6 +251,13 @@ describe('LayerPanelComponent', () => {
       }),
     });
     expect(root().querySelector('[data-version="live"]')?.textContent).toContain('put back by ada');
+  });
+
+  it('says when the live version is not what people get', async () => {
+    await show({ kind: 'state', state: state({ served: false }) });
+    expect(root().querySelector('[data-layer="not-served"]')).not.toBeNull();
+    await show({ kind: 'state', state: state() });
+    expect(root().querySelector('[data-layer="not-served"]')).toBeNull();
   });
 
   it("puts the package's version back, after asking, while something overrides it", async () => {

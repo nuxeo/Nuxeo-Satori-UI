@@ -130,6 +130,34 @@ describe('validateDeploymentFile', () => {
     ).toHaveProperty('refused');
   });
 
+  it('refuses a template longer than the record page draws, and reads one of many braces in one pass', () => {
+    const named = (text: string) => ({
+      version: 2,
+      cards: [
+        { id: 'a', fields: [{ id: 'n', computed: { type: 'core.template', parameters: [text] } }] },
+      ],
+    });
+    const path = 'layouts/Claim/view.layout.json';
+    const long = validateDeploymentFile({ path, content: named('x'.repeat(1001)), model });
+    expect('findings' in long && long.findings.map((finding) => finding.message)).toEqual([
+      'the computation "core.template" takes a text of at most 1000 characters, not 1001',
+    ]);
+    // A thousand braces that close nothing: read once each, not once from each of them.
+    const started = performance.now();
+    const braces = validateDeploymentFile({ path, content: named('{'.repeat(1000)), model });
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(braces).toEqual({ findings: [] });
+    expect(
+      validateDeploymentFile({ path, content: named('{dc:title} {x}'), model }),
+    ).toHaveProperty('findings', [
+      {
+        path: 'cards[0].fields[0].computed.parameters[0]',
+        kind: 'parameter',
+        message: 'the placeholder {x} is not a property, <prefix>:<name>',
+      },
+    ]);
+  });
+
   it('answers JSON text with JSON text, and refuses text that is not JSON', () => {
     expect(JSON.parse(validate('not json'))).toEqual({ refused: 'the request is not JSON' });
     expect(

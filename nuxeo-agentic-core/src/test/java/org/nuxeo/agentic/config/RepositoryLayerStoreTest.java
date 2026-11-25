@@ -288,6 +288,35 @@ class RepositoryLayerStoreTest {
     }
 
     @Test
+    void anAppsDocumentGivenAnAclOfItsOwnHasItTakenAway() {
+        RepositoryLayerStore store = store();
+        assertTrue(store.write("payers-claims", bytes("{}"), null));
+        Stored app = documents.get(RepositoryLayerStore.ROOT + "/payers-claims");
+        ACP shared = new org.nuxeo.ecm.core.api.security.impl.ACPImpl();
+        ACL local = new org.nuxeo.ecm.core.api.security.impl.ACLImpl(ACL.LOCAL_ACL);
+        local.add(new ACE("members", "Read", true));
+        shared.addACL(local);
+        app.acp = shared;
+        assertFalse(RepositoryLayerStore.hasNoAclOfItsOwn(shared));
+
+        store.readAll();
+
+        assertTrue(RepositoryLayerStore.hasNoAclOfItsOwn(app.acp));
+    }
+
+    @Test
+    void aBlockForATimeIsNoBlock() {
+        ACP acp = new org.nuxeo.ecm.core.api.security.impl.ACPImpl();
+        ACL local = new org.nuxeo.ecm.core.api.security.impl.ACLImpl(ACL.LOCAL_ACL);
+        java.util.Calendar end = java.util.Calendar.getInstance();
+        end.add(java.util.Calendar.DAY_OF_MONTH, 1);
+        local.add(ACE.builder("Everyone", "Everything").isGranted(false).end(end).build());
+        acp.addACL(local);
+        assertFalse(RepositoryLayerStore.isBlocked(acp));
+        assertTrue(RepositoryLayerStore.isBlocked(RepositoryLayerStore.blocked()));
+    }
+
+    @Test
     void theStampsAreTheDocumentsChangeTokens() {
         RepositoryLayerStore store = store();
         assertTrue(store.stamps().isEmpty());
