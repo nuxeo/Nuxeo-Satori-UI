@@ -8,6 +8,7 @@
  *   node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]
  *     [--allow-list <file>] [--registered <file>] [--platform <version>]
  *     [--model <file> | --model-server <address>] [--previous <package directory>]
+ *     [--previous-platform <repository>]
  *
  * First it removes the zip, checksum and changelog an earlier run left for the package's name and version, so
  * that a refused package leaves nothing installable behind; a package.xml that is a symbolic link is
@@ -36,11 +37,16 @@
  *      version, and a tag, when given, is
  *      `app-package/<name>/<version>` for this package; given the package as it was before,
  *      `--previous`, the version moved as far as what changed needs (the validator's `changes`,
- *      `libs/shared/app-definition/src/lib/changes.ts`), and the package's name did not change;
+ *      `libs/shared/app-definition/src/lib/changes.ts`), the package's name did not change, and
+ *      the upgrade keeps every customer configuration (`app-upgrade-check.mjs`): what a customer
+ *      may override or name is removed only with a migration note, and the version rises as far as
+ *      that needs; given the platform as it was, `--previous-platform`, nothing the package names
+ *      is gone from the platform without one;
  *   4. `build.mjs` writes the zip, refusing what the server would;
  *   5. `verify-package-zip.mjs` finds a well-formed Nuxeo Package;
  *   6. the zip's SHA-256 goes beside it, as `<zip>.sha256`, in the form `sha256sum -c` reads, and,
- *      given `--previous`, what changed since, as `<name>-<version>.changes.md`.
+ *      given `--previous`, what changed since, as `<name>-<version>.changes.md`, with the migration
+ *      notes that cover it.
  *
  * Node 24 and the system's `unzip`, which reads the zip back at step 5, run all of it: no install
  * and no credential, so that a package's checks need nothing a customer's repository does not have.
@@ -101,6 +107,7 @@ const TEMPLATE = join(
   'build.mjs__tmpl__',
 );
 const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs');
+const UPGRADE = join(REPO, 'scripts', 'app-upgrade-check.mjs');
 /** The platform's English catalogue, which a package's label keys may name besides its own. */
 const CATALOGUE = join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json');
 /** The file `app-model` writes beside `bundle/`: the package's stand-in model, described. */
@@ -108,7 +115,8 @@ const OWN_MODEL = 'content-model.json';
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
-  ' [--model <file> | --model-server <address>] [--previous <package directory>]';
+  ' [--model <file> | --model-server <address>] [--previous <package directory>]' +
+  ' [--previous-platform <repository>]';
 // `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default.
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 /** `build.mjs`'s rule for a package name or version: a single file name, nothing above it. */
@@ -145,6 +153,7 @@ const VALUED = [
   '--model',
   '--model-server',
   '--previous',
+  '--previous-platform',
 ];
 
 function parse(argv) {
@@ -166,6 +175,8 @@ function parse(argv) {
   }
   // One content model: a file, or the server's, not both.
   if (options.model !== undefined && options['model-server'] !== undefined) return null;
+  // The platform as it was is held to only with the package as it was.
+  if (options['previous-platform'] !== undefined && options.previous === undefined) return null;
   return paths.length === 1 ? { directory: paths[0], ...options } : null;
 }
 
@@ -221,6 +232,7 @@ function run({
   model,
   unread,
   previous,
+  'previous-platform': previousPlatform,
 }) {
   const near = relative(process.cwd(), resolve(directory));
   const shown = near === '' ? '.' : near.startsWith('..') ? resolve(directory) : near;
@@ -401,9 +413,23 @@ function run({
       for (const change of compared.changes) console.error(`  - ${change.level}: ${change.what}`);
       return refuse(3, compared.refused);
     }
-    changelog = compared.changelog;
     // The changelog's first sentence: how many changes, what they need, what was raised.
     process.stdout.write(`${compared.changelog.split('\n')[0]}\n`);
+    // The upgrade: what a customer's configuration made on the version before still finds.
+    const upgrade = upgradeSince(previous, directory, previousPlatform);
+    if (typeof upgrade === 'number') return upgrade;
+    if (upgrade.findings.length > 0) {
+      for (const finding of upgrade.findings)
+        console.error(`  - ${finding.side}, ${finding.item}: ${finding.what}`);
+      return refuse(
+        3,
+        `the upgrade from ${compared.previous} does not keep every customer configuration: ` +
+          `${upgrade.findings.length === 1 ? '1 finding' : `${upgrade.findings.length} findings`}, listed above ` +
+          '(package-pipeline.md, section 10).',
+      );
+    }
+    for (const line of upgrade.said) process.stdout.write(`note: ${line}\n`);
+    changelog = compared.changelog + upgradeNotes(upgrade.covered);
   }
 
   // 4. The zip, from version 1's builder, which checks the component XML the way the server does.
@@ -502,6 +528,59 @@ function sinceThePrevious(previous, directory, name) {
     process.stderr.write(compared.stderr ?? '');
     return 2;
   }
+}
+
+/**
+ * The upgrade check (`app-upgrade-check.mjs`) on the package against the one it was, and, given
+ * one, the platform against the one it was: its verdict for this package, as JSON, or the exit
+ * code when the comparison could not be made. Run as a command, as the validator is.
+ */
+function upgradeSince(previous, directory, previousPlatform) {
+  const checked = spawnSync(
+    process.execPath,
+    [
+      UPGRADE,
+      resolve(directory),
+      '--previous',
+      resolve(previous),
+      ...(previousPlatform === undefined ? [] : ['--previous-platform', resolve(previousPlatform)]),
+      '--json',
+    ],
+    { encoding: 'utf8', env: withoutCredentials(process.env), maxBuffer: OUTPUT_LIMIT },
+  );
+  if (checked.status !== 0 && checked.status !== 1) {
+    process.stderr.write(checked.stderr ?? '');
+    return 2;
+  }
+  try {
+    const [verdict] = JSON.parse(checked.stdout).packages;
+    if (verdict && Array.isArray(verdict.findings)) return verdict;
+  } catch {
+    // Said below.
+  }
+  process.stderr.write(checked.stdout ?? '');
+  process.stderr.write(checked.stderr ?? '');
+  return 2;
+}
+
+/**
+ * The migration notes that cover the upgrade, for the changelog: each once, with the items it
+ * covers, so that whoever installs the release reads what to change in their own configuration.
+ */
+function upgradeNotes(covered) {
+  const notes = new Map();
+  for (const { side, item, note } of covered) {
+    const key = JSON.stringify(note);
+    if (!notes.has(key)) notes.set(key, { note, items: [] });
+    notes.get(key).items.push(side === 'kit' ? item : `the platform's ${item}`);
+  }
+  if (notes.size === 0) return '';
+  const lines = ['', '## Upgrading', ''];
+  for (const { note, items } of notes.values())
+    lines.push(
+      `- ${items.map((item) => `\`${item}\``).join(', ')}, since ${note.version}: ${note.note}`,
+    );
+  return `${lines.join('\n')}\n`;
 }
 
 /**

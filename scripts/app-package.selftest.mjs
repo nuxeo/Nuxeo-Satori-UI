@@ -1065,6 +1065,21 @@ const removeQueue = (directory) => {
         content[list] = content[list].filter((item) => item.queue !== id);
       });
 };
+/**
+ * `removeQueue`, with the migration note the upgrade check asks for (package-pipeline.md, section
+ * 10): the queue and the menu entries that named it, at `version`.
+ */
+const removeQueueWithItsNote = (version) => (directory) => {
+  const id = basename(firstQueue(directory), '.json');
+  const entries = JSON.parse(readFileSync(join(directory, NAVIGATION), 'utf8'))
+    .entries.filter((entry) => entry.queue === id)
+    .map((entry) => `menu-entry ${entry.id}`);
+  removeQueue(directory);
+  writeFileSync(
+    join(directory, 'upgrade-notes.json'),
+    `${JSON.stringify({ version: 1, notes: [{ version, items: [`queue ${id}`, ...entries], note: `The queue ${id} is gone: name another.` }] }, null, 2)}\n`,
+  );
+};
 const changeLabelText = (directory) =>
   jsonEdit(directory, LABELS, (labels) => {
     const [key] = Object.keys(labels.labels);
@@ -1073,12 +1088,13 @@ const changeLabelText = (directory) =>
 
 /**
  * The previous package at `from`, changed by `before`, and this one at `to`, changed by `after`,
- * run with `--previous`. `refused`: exit 1 at step 3 for that reason, no zip and no changelog.
- * Otherwise built, with a changelog holding each of `changelog`.
+ * run with `--previous`, and `args`, made from the scratch directory, after it. `refused`: exit 1 at
+ * step 3 for that reason, no zip and no changelog. Otherwise built, with a changelog holding each
+ * of `changelog`.
  */
 function expectVersion(
   what,
-  { from, to, before = () => undefined, after = () => undefined },
+  { from, to, before = () => undefined, after = () => undefined, args = () => [] },
   expected,
 ) {
   if (expected.refused) negative++;
@@ -1102,7 +1118,7 @@ function expectVersion(
     // built one must replace it.
     mkdirSync(out, { recursive: true });
     writeFileSync(changes, 'an earlier run left this');
-    const { status, output } = run(directory, out, ['--previous', previous]);
+    const { status, output } = run(directory, out, ['--previous', previous, ...args(scratch)]);
     const problems = [];
     if (expected.refused) {
       if (status !== 1) problems.push(`exit ${status}, not 1`);
@@ -1315,12 +1331,14 @@ expectVersion(
   },
 );
 expectVersion(
-  'a breaking change below 1.0.0, raising the minor',
-  { from: VERSION, to: NEXT_MINOR, after: removeQueue },
+  'a breaking change below 1.0.0, raising the minor, with its migration note',
+  { from: VERSION, to: NEXT_MINOR, after: removeQueueWithItsNote(NEXT_MINOR) },
   {
     changelog: [
       '## Breaking',
       'is removed: a link to it, a menu entry or a home card naming it stops working.',
+      '## Upgrading',
+      `, since ${NEXT_MINOR}: The queue `,
     ],
   },
 );
@@ -1361,10 +1379,102 @@ expectVersion(
   { changelog: [`No change since ${VERSION}.`] },
 );
 expectVersion(
-  'a breaking change in a later prerelease of a major version',
-  { from: '1.0.0-rc.1', to: '1.0.0-rc.2', after: removeQueue },
+  'a breaking change in a later prerelease of a major version, with its migration note',
+  { from: '1.0.0-rc.1', to: '1.0.0-rc.2', after: removeQueueWithItsNote('1.0.0-rc.2') },
   { changelog: ['## Breaking', '1.0.0-rc.2 is a later prerelease of the same version.'] },
 );
+
+// The upgrade (package-pipeline.md, section 10): given the package as it was, step 3 also holds
+// it to what a customer's configuration made on that version still finds. A menu entry is a
+// change to the version rules, and a patch passes them; the upgrade check asks a note and a minor.
+const dropMineEntry = (directory) =>
+  jsonEdit(directory, NAVIGATION, (menu) => {
+    menu.entries = menu.entries.filter((entry) => entry.id !== 'mine');
+  });
+expectVersion(
+  'a menu entry removed at a patch version, which the version rules pass and the upgrade does not',
+  { from: VERSION, to: OTHER, after: dropMineEntry },
+  { refused: `the upgrade from ${VERSION} does not keep every customer configuration: 2 findings` },
+);
+expectVersion(
+  'a menu entry removed, with its migration note, at a minor version',
+  {
+    from: VERSION,
+    to: NEXT_MINOR,
+    after: (directory) => {
+      dropMineEntry(directory);
+      writeFileSync(
+        join(directory, 'upgrade-notes.json'),
+        `${JSON.stringify({ version: 1, notes: [{ version: NEXT_MINOR, item: 'menu-entry mine', note: 'The entry is gone from the menu: open the queue my-claims at its address.' }] })}\n`,
+      );
+    },
+  },
+  {
+    changelog: [
+      '## Upgrading',
+      `- \`menu-entry mine\`, since ${NEXT_MINOR}: The entry is gone from the menu: open the queue my-claims at its address.`,
+    ],
+  },
+);
+
+// The platform as it was, `--previous-platform`: a rule the package named as it was, which the
+// platform as it was registered and this repository's does not, is refused at step 3 with no
+// platform note. The package as it is no longer names it, so step 2 passes.
+const UPGRADE_PLATFORM = [
+  'docs/extension-reference.md',
+  'libs/shared/app-definition/src/lib',
+  'nuxeo-agentic-core/src/main/resources/OSGI-INF',
+  'nuxeo-agentic-core/src/main/java',
+  'apps/nuxeo-ui/src/app/business-apps.menu.ts',
+  'libs/platform/package.json',
+];
+expectVersion(
+  'a rule the package named, gone from the platform as it is, with no platform note',
+  {
+    from: VERSION,
+    to: OTHER,
+    before: (directory) =>
+      jsonEdit(directory, HOME, (home) =>
+        home.cards.push({
+          id: 'urgent',
+          queue: 'unassigned-claims',
+          visibleWhen: 'app.rules.isUrgent',
+        }),
+      ),
+    args: (scratch) => {
+      const platform = join(scratch, 'platform-before');
+      for (const path of UPGRADE_PLATFORM)
+        cpSync(join(REPO, path), join(platform, path), { recursive: true });
+      const registries = join(platform, 'libs/shared/app-definition/src/lib/registries.ts');
+      const text = readFileSync(registries, 'utf8');
+      const anchor = "    'app.rules.dateWithin',\n  ].map(";
+      if (!text.includes(anchor))
+        throw new Error("the control cannot add a rule to the platform's registries");
+      writeFileSync(
+        registries,
+        text.replace(anchor, "    'app.rules.dateWithin',\n    'app.rules.isUrgent',\n  ].map("),
+      );
+      return ['--previous-platform', platform];
+    },
+  },
+  {
+    refused:
+      'platform, id app.rules.isUrgent: The platform no longer has the ID app.rules.isUrgent',
+  },
+);
+
+// The platform as it was is held to only with the package as it was: alone, it is the command's usage.
+{
+  negative++;
+  const { scratch, directory, out } = packageWith();
+  try {
+    const { status } = run(directory, out, ['--previous-platform', REPO]);
+    if (status !== 2)
+      failures.push(`--previous-platform with no --previous exits ${status}, not 2`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 // The previous package is the operator's input: one that is not there stops the run, exit 2.
 {

@@ -112,6 +112,11 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   a `nuxeo-agentic-core` that run them. An older platform offers none; an older core serves the
   file whole and has no `AgenticUi.RunAction`, so a newer platform offers both and the server runs
   neither, answering 404, which the dialog says. The minor says the kit does something new.
+- **Migration notes:** `upgrade-notes.json`, outside the zip. The upgrade check refuses a removal
+  that a customer's configuration may rely on without one
+  ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 10), and found
+  0.4.0's: the approve action and its three labels. Its note says what a configuration made on
+  0.3.0 names instead, and the changelog carries it.
 
 ## The stand-in model
 

@@ -22,7 +22,8 @@ It is the check behind phase 0's demo step 1, which the package pipeline runs
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)): a layout naming a widget
 the platform does not have is refused, and the message names the file, the place and the widget.
 It needs Node 24 and nothing else: `src/bin.mjs` runs the library's TypeScript as it is, with no
-install and no transpiler.
+install and no transpiler, through `src/typescript-hook.mjs`, which the pipeline's upgrade check
+(`scripts/app-upgrade-check.mjs`) imports too, to read the version rules and the registries.
 
 - **Files it checks:**
   - **A directory:** every file of an app definition under it, each known by its place
