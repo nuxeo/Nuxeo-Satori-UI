@@ -9,7 +9,8 @@
  * - the REST calls those two pages make, under `/nuxeo/`, from `library.mjs`'s 100,000 synthetic
  *   assets: `/me`, the library's page provider with its aggregates, the asset's document, its
  *   type and schemas from the kit's `content-model.json`, its picture views, history and
- *   annotations.
+ *   annotations. A page of the provider that ends past the search index's window is answered
+ *   HTTP 500, as Nuxeo answers it, and marked `pastWindow` in the log.
  *
  * Nothing is written anywhere, and no Nuxeo is asked: this is the "without writing 100,000
  * documents to any Nuxeo" of the check. Each answer is sent the latency `LATENCY` gives its route,
@@ -30,7 +31,13 @@ import { performance } from 'node:perf_hooks';
 import { gzipSync } from 'node:zlib';
 
 import { crc32, picturePng } from '../../../business-apps/packages/brand-assets-demo/demo/png.mjs';
-import { AGGREGATES, PAGE_PROVIDER, createLibrary } from './library.mjs';
+import {
+  AGGREGATES,
+  PAGE_PROVIDER,
+  PAST_WINDOW_MESSAGE,
+  PastWindowError,
+  createLibrary,
+} from './library.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const KIT = join(ROOT, 'business-apps/packages/brand-assets-demo');
@@ -309,10 +316,13 @@ function vocabulary(name) {
  * is added here rather than by Chromium's emulation, whose latency is a least time to the response
  * headers: a server slower than it gets no round trip at all. `padMainBytes` adds that many bytes
  * that do not compress to the app's first script, for the control that stands for a heavier
- * first bundle; 0, the build as it is.
+ * first bundle; 0, the build as it is. `window`, `counted` and `windowShown` are the library's
+ * (`createLibrary`): the search index's window, enforced as the server enforces it, and for two
+ * controls a count held to a limit or a window left unsaid.
  *
  * @param {{ port?: number, host?: string, dist: string, size?: number, today?: Date,
- *   latencyScale?: number, rttMs?: number, padMainBytes?: number }} options
+ *   latencyScale?: number, rttMs?: number, padMainBytes?: number, window?: number,
+ *   counted?: number | null, windowShown?: boolean }} options
  * @returns {Promise<{ url: string, log: object[], library: ReturnType<typeof createLibrary>,
  *   inFlight: () => number, close: () => Promise<void> }>}
  */
@@ -325,11 +335,14 @@ export async function startStandIn({
   latencyScale = 1,
   rttMs = 0,
   padMainBytes = 0,
+  window,
+  counted,
+  windowShown,
 }) {
   if (!dist || !existsSync(join(dist, 'index.html'))) {
     throw new Error(`no production build at ${dist}: index.html is missing`);
   }
-  const library = createLibrary({ size, today });
+  const library = createLibrary({ size, today, window, counted, windowShown });
   const config = kitConfiguration();
   const model = contentModel();
   const picture = pictures();
@@ -416,6 +429,14 @@ export async function startStandIn({
         choices,
       });
     } catch (error) {
+      // Past the search index's window, Nuxeo answers 500 with OpenSearch's refusal; the log marks
+      // it, so the check counts every page asked for past the window.
+      if (error instanceof PastWindowError) {
+        return {
+          ...answer('pageProvider', 0, nuxeoError(500, PAST_WINDOW_MESSAGE), 500),
+          pastWindow: true,
+        };
+      }
       return answer('pageProvider', 0, nuxeoError(400, error.message), 400);
     }
     const { base, perEntry } = LATENCY.pageProvider;
@@ -709,6 +730,7 @@ export async function startStandIn({
       const body = method === 'POST' ? await bodyOf(request) : null;
       const reply = api(method, path, url.searchParams, body);
       record.kind = reply.kind;
+      if (reply.pastWindow) record.pastWindow = true;
       const payload = Buffer.isBuffer(reply.body)
         ? reply.body
         : Buffer.from(JSON.stringify(reply.body));

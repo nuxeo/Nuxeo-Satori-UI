@@ -14,6 +14,7 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { Router } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NxsBannerComponent,
   NxsDocumentListComponent,
   type NxsDocumentListColumn,
   type NxsDocumentListLink,
@@ -41,7 +42,9 @@ import {
   PageProviderService,
   type PageProviderResults,
   type PageProviderSort,
+  type ResultWindow,
   documentNavigationUrl,
+  resultWindow,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { catchError, forkJoin, map, merge, of, startWith, switchMap, tap } from 'rxjs';
 
@@ -167,11 +170,19 @@ const rowContext = (base: ExtensionRuleContext, row: NuxeoDocument): ExtensionRu
  * A row offers the row actions the file lists that are registered here, while their rules pass.
  * A queue also filters the list by the buckets chosen in its facets, and lets rows be selected.
  * The page provider returns only what the user may read: nothing here is a security control.
+ *
+ * **The search index's window.** A page provider the search index serves refuses a page that ends
+ * past its `max_result_window`, 10,000 results by default (`resultWindow`). The list never asks for
+ * one: past the last page within the window it offers no next page, whatever the server says of
+ * one, and refuses a page asked for beyond it (`onPage`, the only way to another page but the
+ * first, to which other results, another order and another page size return). It still shows the
+ * server's whole count, and says, above the rows, how many of them the pages reach and how to find
+ * the rest.
  */
 @Component({
   selector: 'lib-record-list',
   standalone: true,
-  imports: [NxsDocumentListComponent, TranslatePipe],
+  imports: [NxsBannerComponent, NxsDocumentListComponent, TranslatePipe],
   templateUrl: './record-list.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -200,6 +211,11 @@ export class RecordListComponent {
   readonly selectedIds = model<readonly string[]>([]);
   /** What an empty list says; the related-records card's text when `null`. */
   readonly emptyHeading = input<string | null>(null);
+  /**
+   * Whether filters beside the list narrow it, as a queue's facets do: what the list says of
+   * results past the search index's window then names them.
+   */
+  readonly filterable = input(false);
   /** Each page as the server returned it, with its aggregates: what a queue's facets show. */
   readonly loaded = output<PageProviderResults>();
 
@@ -230,10 +246,28 @@ export class RecordListComponent {
     equal: (a, b) => JSON.stringify(a) === JSON.stringify(b),
   });
 
-  /** Another list, or other buckets chosen, starts on the first page; the order chosen stays. */
+  /** Which results these are: another list, or other buckets chosen. Not the order. */
+  private readonly results = computed(() =>
+    // The page size too: a page index, and a window's reach, are counted in pages of it.
+    JSON.stringify([this.identity(), this.chosen(), this.list().pageSize]),
+  );
+
+  /**
+   * Another list, other buckets chosen, or another page size, starts on the first page; the order
+   * chosen stays.
+   */
   protected readonly pageIndex = linkedSignal({
-    source: computed(() => JSON.stringify([this.identity(), this.chosen()])),
+    source: this.results,
     computation: () => 0,
+  });
+
+  /**
+   * The window the last page read reported, kept while the next one loads, so that no page past
+   * it is asked for in between. Other results start with none: their first page is always within it.
+   */
+  private readonly window = linkedSignal<string, ResultWindow | null>({
+    source: this.results,
+    computation: () => null,
   });
 
   /** The order chosen from a header; `null`, the file's. */
@@ -297,7 +331,10 @@ export class RecordListComponent {
                   : {}),
               })
               .pipe(
-                tap((page) => this.loaded.emit(page)),
+                tap((page) => {
+                  this.window.set(resultWindow(page, request.pageSize));
+                  this.loaded.emit(page);
+                }),
                 switchMap((page) => this.withProperties(page)),
                 startWith(LOADING),
                 catchError((error: unknown) => {
@@ -380,25 +417,50 @@ export class RecordListComponent {
     return state.status === 'failed' ? state.error : null;
   });
 
-  /**
-   * How many records the list holds: the server's count, or `-1`, unknown, where it gave none, as
-   * Nuxeo's `-2` past `resultsCountLimit` is. Never an estimate: the list shows it, and tells
-   * assistive technology it is the number of rows.
-   */
-  protected readonly totalSize = computed(() => {
+  /** The window of the page on screen; `null` while none is. */
+  private readonly shownWindow = computed<ResultWindow | null>(() => {
     const state = this.state();
-    if (state.status !== 'loaded') return -1;
-    const counts = [state.page.totalSize, state.page.resultsCount].filter(
-      (count): count is number => typeof count === 'number' && count >= 0,
-    );
-    return counts.length > 0 ? Math.max(...counts) : -1;
+    return state.status === 'loaded' ? resultWindow(state.page, this.list().pageSize) : null;
   });
 
+  /**
+   * How many records the list holds: the server's whole count, also past the search index's
+   * window, or `-1`, unknown, where it gave none, as Nuxeo's `-2` past `resultsCountLimit` is.
+   * Never an estimate, nor the window: the list shows it, and tells assistive technology it is the
+   * number of rows.
+   */
+  protected readonly totalSize = computed(() => this.shownWindow()?.total ?? -1);
+
+  /** Where the server stopped counting, for "of more than N"; `-1` for none. */
+  protected readonly totalMoreThan = computed(() => this.shownWindow()?.moreThan ?? -1);
+
+  /** Another page, by the server's word, unless it would end past the window. */
   protected readonly hasNextPage = computed(() => {
     const state = this.state();
     if (state.status !== 'loaded') return false;
     const { page } = state;
-    return page.isNextPageAvailable ?? page.currentPageIndex + 1 < page.numberOfPages;
+    const more = page.isNextPageAvailable ?? page.currentPageIndex + 1 < page.numberOfPages;
+    return more && this.servable(this.pageIndex() + 1);
+  });
+
+  /**
+   * What the list says above its rows when the query holds more than its pages reach: how many
+   * they reach, of how many, and to narrow the list to find the others. Kept while the next page
+   * loads; not over a failure, which says what failed instead.
+   */
+  protected readonly windowNotice = computed<string | null>(() => {
+    this.translations();
+    const known = this.window();
+    // A reach is always below the total: some results are out of the pages' reach. At a count
+    // within the window it is known on its last served page only, so the notice shows there.
+    if (known === null || known.reach === null || known.total === null) return null;
+    if (this.state().status === 'failed') return null;
+    return this.translate.instant(
+      this.filterable()
+        ? 'document-layouts.list.past-window-filters'
+        : 'document-layouts.list.past-window',
+      { reach: this.format(known.reach), total: this.format(known.total) },
+    );
   });
 
   /**
@@ -472,8 +534,23 @@ export class RecordListComponent {
     this.pageIndex.set(0);
   }
 
+  /** A page past the window is refused, never asked for: the server would answer HTTP 500. */
   protected onPage(index: number): void {
+    if (!this.servable(index)) return;
     this.pageIndex.set(index);
+  }
+
+  /**
+   * Whether the server can serve the page `index`: a page from the first, which ends within the
+   * window the last page read reported, where one cuts the results short.
+   */
+  private servable(index: number): boolean {
+    if (!Number.isInteger(index) || index < 0) return false;
+    const reach = this.window()?.reach ?? null;
+    // As `resultWindow` counts a page size that is not a whole number from 1.
+    const { pageSize } = this.list();
+    const size = Number.isInteger(pageSize) && pageSize >= 1 ? pageSize : 1;
+    return reach === null || (index + 1) * size <= reach;
   }
 
   /**
@@ -642,6 +719,15 @@ export class RecordListComponent {
         properties: new Map(rows.map((row, index) => [row.uid, read[index]])),
       })),
     );
+  }
+
+  /** A count written for the person, in the language shown, as the queue writes its own. */
+  private format(value: number): string {
+    try {
+      return new Intl.NumberFormat(this.translate.getCurrentLang() || this.locale).format(value);
+    } catch {
+      return String(value);
+    }
   }
 
   /** Once per list: the cells are redrawn as labels arrive, and the console need not hear it twice. */

@@ -81,6 +81,7 @@
               [stateHeadingLevel]="readOnly() ? 4 : 2"
               [source]="'queues/' + shown.id + '.json'"
               [aggregates]="chosen()"
+              [filterable]="facets().length > 0"
               [selectable]="rowsSelectable()"
               [selectedIds]="selectedIds()"
               [emptyHeading]="'queues.empty' | translate"

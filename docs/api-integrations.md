@@ -2057,6 +2057,59 @@ and the console says why.
   `-`, which the rendering parameters use: it would change the request rather than filter it.
 - A page provider that queries the repository answers no aggregates, so its facets are not drawn.
 
+**The search index's window.** OpenSearch serves a query's results through `from` and `size` only
+up to its `index.max_result_window`, 10,000 by default, which every index of the local server
+leaves at its default. Measured on the local Nuxeo 2025.10.18 on 2026-11-25, as an administrator,
+with read-only `GET`s only: every document through the search service
+(`/search/lang/NXQL/execute?query=SELECT * FROM Document`, the `REST_API_SEARCH_ADAPTER` provider,
+which `nuxeo.search.pageproviders.override` gives the search service, as it does
+`default_search`), 13,592 results; the same with `dc:created` after a given second, 9,886;
+`acme_asset_library`, the brand kit's, 6; and `nxql_search`, which queries the repository, 11,902.
+The probe is a Node script that sends `GET`s with `pageSize` and `currentPageIndex` and prints the
+paging fields of each answer, the credentials from the environment.
+
+| What was asked                                                           | What the server answered                                                                                               |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Any page, search service                                                 | `resultsCount` the exact count, 13,592, past the window too; `resultsCountLimit` 10,000, also for 6 results            |
+| `pageSize=1`, `currentPageIndex` 9998, 9999                              | HTTP 200, one record each; `isNextPageAvailable` true on 9998, **false on 9999**                                       |
+| `pageSize=1`, `currentPageIndex` 10000, 10001, 13591                     | **HTTP 500**, `RuntimeServiceException … OpenSearchException … [search_phase_execution_exception] all shards failed`   |
+| `pageSize=50`, pages 198, 199, 200                                       | 198 has a next page; 199, results 9,951 to 10,000, has none; 200 is HTTP 500                                           |
+| `pageSize=30`, pages 332, 333                                            | 332, ending at 9,990, has no next page; 333, from 9,990 to 10,020, is HTTP 500: the results it could have are lost     |
+| 9,886 results, a count within the window, `pageSize=910`, pages 8, 9, 10 | 8 has a next page; 9, results 8,191 to 9,100, has none; 10 is HTTP 500: 786 results within the window are out of reach |
+| `offset=10000&pageSize=50`                                               | HTTP 500, as a page index there                                                                                        |
+| `acme_asset_library`, 6 results, `pageSize=1`, page 10000                | **HTTP 500**: the window is on where a page ends, not on the results; page 9999 is HTTP 200, empty                     |
+| `nxql_search`, the repository, `pageSize=1`, page 10000                  | HTTP 200, one record: `resultsCountLimit` 0, no window                                                                 |
+| A folder's `@children`, `pageSize=1`, page 2                             | HTTP 200; `resultsCount` -2, `resultsCountLimit` 1: the repository's count limit, not a window                         |
+
+So a page past the window is an error, not an empty page, and the server's `isNextPageAvailable`
+stops at the window's last whole page, also below a count within the window. `isLastPageAvailable`
+is false whenever the count and a page do not fit in the window; `numberOfPages` is not held to it,
+272 at 50 a page for 13,592.
+
+**Neither scroll nor `search_after` is offered through REST.** The page provider endpoint reads
+`pageSize`, `currentPageIndex`, `offset`, `maxResults`, `sortBy`, `sortOrder`, `queryParams`,
+`quickFilters` and `highlight` (`QueryExecutor`, as `PageProviderService` lists them); `scrollId`,
+`scroll` and `searchAfter`, sent, changed nothing: page 0 answered as without them. Of the 324
+Automation operations the server lists, the only scroll is `NuxeoDrive.ScrollDescendants`, Drive's,
+over a folder's descendants with no aggregates;
+`Repository.PageProvider` lists a page index and an offset as its parameters, as REST takes them
+(read from the list, not run). The Bulk Action Framework reads a whole query on the server, its
+command `SCROLLING_RUNNING` first (section 34), which is what a queue runs over every result with;
+it was not run past 10,000 here, since that would write.
+
+**What the app does with it** (`resultWindow`, in `page-provider.service.ts`): a count above
+`resultsCountLimit` can only be a window, since only the index counts past its own limit, so
+`RecordListComponent` offers no next page past the last whole page within it, whatever the server
+says, and refuses one asked for. Below a count within the limit, a server that says there is no
+next page although its count says there are more is taken to be at the window too, and the notice
+shows on that page; the repository was not seen to answer so, though one of its providers with a
+positive `maxResults` and a whole count was not measured. The list shows the server's whole count,
+and above the rows "Only the first 10,000 of these 13,592 records can be paged through", telling
+the reader to choose filters or search. A `-2` with a limit shows "of more than" that limit, and
+pages on, as the repository does. A queue's count, and the command a bulk action over every result
+sends, are still the whole query's; that the framework then processes past 10,000 is expected from
+how it reads the query, not measured here.
+
 **Used by:** `QueuePageComponent` (`libs/shared/queues/src/lib/queue-page/queue-page.ts`), at
 `/queues/<id>`, through `RecordListComponent`
 (`libs/shared/document-layouts/src/lib/record-page/record-list.ts`).

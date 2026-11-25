@@ -14,6 +14,13 @@
  *
  * - **Paging:** `pageSize` and `currentPageIndex`, `pageSize` held to the provider's
  *   `maxPageSize` of 100, with `resultsCount`, `numberOfPages` and `isNextPageAvailable`.
+ * - **The search index's window**, as Nuxeo 2025.10.18 answered it over OpenSearch's default
+ *   `max_result_window` of 10,000 (docs/api-integrations.md, section 33): `resultsCountLimit` is
+ *   the window whatever the query holds, and `resultsCount` the exact count, past it too. A page
+ *   that ends past the window, `currentPageIndex` times `pageSize` plus `pageSize` above it, is
+ *   refused ({@link PastWindowError}), even where the results run out before it. On the last page
+ *   whose next one would end past it, `isNextPageAvailable` is false, and `isLastPageAvailable`
+ *   only while the whole count and a page fit in it. `numberOfPages` is not held to it.
  * - **Order:** the provider's own, `dc:expired` ascending, records with no end last, as the search
  *   index puts a missing value; or `sortBy` and `sortOrder` on one of the asset's single values.
  * - **Facets:** the three aggregates, `acme_rights_agg` (`date_range`, Ended, Ending and Cleared),
@@ -23,8 +30,8 @@
  *   aggregates' choices and not its own, and a chosen bucket that holds nothing is listed in
  *   `extendedBuckets` at 0.
  *
- * What it does not: the search index's `max_result_window`, which by default refuses a page past
- * the 10,000th result, and any query time of the index's own. `stand-in.mjs` adds the latency.
+ * What it does not: any query time of the index's own, also the deeper pages' within the window.
+ * `stand-in.mjs` adds the latency.
  */
 
 /** How many assets the library holds unless told otherwise: phase 5's "100,000 synthetic assets". */
@@ -38,6 +45,27 @@ export const MAX_PAGE_SIZE = 100;
 
 /** The provider's `pageSize`, which `queues/library.json` also sets. */
 export const DEFAULT_PAGE_SIZE = 50;
+
+/**
+ * OpenSearch's default `index.max_result_window`, the index setting the local Nuxeo's indices
+ * leave at its default: the most results a page may end at.
+ */
+export const RESULT_WINDOW = 10_000;
+
+/**
+ * What Nuxeo 2025.10.18 answers, HTTP 500, to a page of a provider the search index serves that
+ * ends past the window: measured with `pageSize=1&currentPageIndex=10000`, and `50` and `200`.
+ */
+export const PAST_WINDOW_MESSAGE =
+  'org.nuxeo.runtime.RuntimeServiceException: org.opensearch.client.opensearch._types.OpenSearchException: Request failed: [search_phase_execution_exception] all shards failed';
+
+/** A page asked for that ends past the window: the server refuses it whole. */
+export class PastWindowError extends Error {
+  constructor(offset, pageSize, window) {
+    super(`a page from result ${offset} of ${pageSize} ends past the window of ${window}`);
+    this.name = 'PastWindowError';
+  }
+}
 
 /** A terms aggregate's `size` in the provider: how many of its largest buckets it returns. */
 const TERMS_SIZE = 10;
@@ -131,10 +159,28 @@ const dayString = (epochDay) => new Date(epochDay * DAY_MS).toISOString();
  * The library: its records' compact facts, kept as typed arrays so that 100,000 of them cost a few
  * megabytes, and the documents built from them only when a page asks.
  *
- * @param {{ size?: number, today?: Date }} [options] `today` decides the rights buckets; UTC.
+ * `window` is the search index's (`RESULT_WINDOW`). `counted` is how far the index counts: `null`,
+ * as Nuxeo has it count, for the exact count; a number, for an index left to count only that far,
+ * as OpenSearch's own default `track_total_hits` of 10,000 would, which then reports that many.
+ * `windowShown` is whether the answer says what the window is, as Nuxeo's does: `false` answers
+ * as a server that refuses past the window without saying where it is, `resultsCountLimit` -1 and
+ * a next page while there are records. Both are for the check's negative controls only.
+ *
+ * @param {{ size?: number, today?: Date, window?: number, counted?: number | null,
+ *   windowShown?: boolean }} [options] `today` decides the rights buckets; UTC.
  */
-export function createLibrary({ size = LIBRARY_SIZE, today = new Date() } = {}) {
+export function createLibrary({
+  size = LIBRARY_SIZE,
+  today = new Date(),
+  window = RESULT_WINDOW,
+  counted = null,
+  windowShown = true,
+} = {}) {
   if (!Number.isSafeInteger(size) || size < 1) throw new Error(`a library of ${size} assets`);
+  if (!Number.isSafeInteger(window) || window < 1) throw new Error(`a window of ${window}`);
+  if (counted !== null && (!Number.isSafeInteger(counted) || counted < 1)) {
+    throw new Error(`a count up to ${counted}`);
+  }
   const todayDay = Math.floor(today.getTime() / DAY_MS);
   const product = new Uint16Array(size);
   const colorway = new Uint8Array(size);
@@ -423,6 +469,8 @@ export function createLibrary({ size = LIBRARY_SIZE, today = new Date() } = {}) 
     const [direction = 'asc'] = sortOrder ? sortOrder.split(',') : [];
     if (!SORTABLE.has(field)) throw new Error(`the library does not sort by "${field}"`);
     if (direction !== 'asc' && direction !== 'desc') throw new Error(`no order "${direction}"`);
+    const skip = index * size_;
+    if (skip + size_ > window) throw new PastWindowError(skip, size_, window);
 
     const tests = chosenIn(choices);
     const counts = Object.fromEntries(Object.keys(AGGREGATES).map((id) => [id, new Map()]));
@@ -456,7 +504,6 @@ export function createLibrary({ size = LIBRARY_SIZE, today = new Date() } = {}) 
 
     const entries = [];
     const sorted = order(field, direction);
-    const skip = index * size_;
     let seen = 0;
     for (let at = 0; at < size && entries.length < size_; at++) {
       const n = sorted[at];
@@ -464,25 +511,29 @@ export function createLibrary({ size = LIBRARY_SIZE, today = new Date() } = {}) 
       if (seen++ < skip) continue;
       entries.push(document(n));
     }
-    const pages = Math.ceil(total / size_);
+    const reported = counted === null ? total : Math.min(total, counted);
+    const pages = Math.ceil(reported / size_);
+    const more = index + 1 < pages;
     return {
       'entity-type': 'documents',
       isPaginable: true,
-      resultsCount: total,
+      resultsCount: reported,
       pageSize: size_,
       maxPageSize: MAX_PAGE_SIZE,
-      resultsCountLimit: -1,
+      resultsCountLimit: windowShown ? window : -1,
       currentPageSize: entries.length,
       currentPageIndex: index,
       currentPageOffset: skip,
       numberOfPages: pages,
       isPreviousPageAvailable: index > 0,
-      isNextPageAvailable: index + 1 < pages,
-      isLastPageAvailable: index + 1 < pages,
+      // As the index's page provider has them: no next page that would end past the window, and
+      // a last page only while the whole count and a page fit in it.
+      isNextPageAvailable: windowShown ? more && skip + 2 * size_ <= window : more,
+      isLastPageAvailable: windowShown ? more && reported + size_ <= window : more,
       isSortable: true,
       hasError: false,
       errorMessage: null,
-      totalSize: total,
+      totalSize: reported,
       pageIndex: index,
       pageCount: pages,
       entries,
@@ -537,6 +588,7 @@ export function createLibrary({ size = LIBRARY_SIZE, today = new Date() } = {}) 
   return {
     size,
     today: dayString(todayDay),
+    window,
     execute,
     /** The asset with this id as the document page reads it, with its enrichers; `null` if none. */
     document(uid) {

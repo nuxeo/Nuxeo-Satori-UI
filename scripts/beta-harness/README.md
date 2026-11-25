@@ -313,13 +313,15 @@ pipeline cannot assume — a measurement run, a browser, or evidence that lives 
 [`docs/business-apps/performance-budget.md`](../../docs/business-apps/performance-budget.md), at
 100,000 synthetic assets, without a Nuxeo. `check.mjs` builds the app for production, serves it on
 port 4294 with `stand-in.mjs`, a stand-in for every REST call the two pages make, answering from
-`library.mjs`'s synthetic library after a stated latency, and measures them in Chromium. It needs
-Playwright (Prerequisites, above) and no credentials. Exit codes are the runner's: 0, 1, 2.
+`library.mjs`'s synthetic library after a stated latency, and measures them in Chromium. The
+stand-in keeps to OpenSearch's result window as Nuxeo does, refusing a page that ends past the
+10,000th result, and the check pages the library to that edge. It needs Playwright
+(Prerequisites, above) and no credentials. Exit codes are the runner's: 0, 1, 2.
 
 ```bash
 npm run beta:asset-performance                    # build, measure, judge against budget.json
 npm run beta:asset-performance -- --skip-build    # the build already in dist/nuxeo-ui
-npm run beta:asset-performance-controls           # six controls, each must fail its own lines
+npm run beta:asset-performance-controls           # eight controls, each must fail its own lines
 npm run beta:asset-performance-selftest           # offline, in CI: library, stand-in, budget
 ```
 

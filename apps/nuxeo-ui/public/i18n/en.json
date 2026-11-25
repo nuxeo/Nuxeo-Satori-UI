@@ -1545,6 +1545,10 @@
         "not-before": "{{label}} cannot be before {{bound}}."
       }
     },
+    "list": {
+      "past-window": "Only the first {{reach}} of these {{total}} records can be paged through. Search for the records you need to find the others.",
+      "past-window-filters": "Only the first {{reach}} of these {{total}} records can be paged through. Choose filters, or search, to narrow the list and find the others."
+    },
     "loading-form": "Loading the form",
     "no": "No",
     "picture": {
@@ -2562,7 +2566,8 @@
       "past-end": "No more items",
       "previous": "Previous page",
       "range": "{{ first }}–{{ last }}",
-      "range-of": "{{ first }}–{{ last }} of {{ total }}"
+      "range-of": "{{ first }}–{{ last }} of {{ total }}",
+      "range-of-more": "{{ first }}–{{ last }} of more than {{ count }}"
     },
     "permissions-panel": {
       "add": "Add",

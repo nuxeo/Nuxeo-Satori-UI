@@ -44,6 +44,7 @@ import {
   type BulkCommandStatus,
   type NuxeoDocument,
   type PageProviderResults,
+  resultWindow,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   Subject,
@@ -140,6 +141,11 @@ function warn(message: string): void {
  * - **Every result of the query** can be selected instead, for the queue's bulk actions that the
  *   platform maps to an action of the Bulk Action Framework. The page confirms, naming the number,
  *   runs the action on the server, follows it, and reads the list again (`runWholeQuery`).
+ * - **Past the search index's window**, 10,000 results by default, the list's pages stop, and it
+ *   says so and points to the facets (`RecordListComponent`). The count it names, and the command
+ *   an action over every result sends, still cover the whole query: the framework reads the query
+ *   on the server rather than page by page, which is not expected to meet the window, though it
+ *   was not run past 10,000 records here (docs/api-integrations.md, section 33).
  * - **The queue shows** while its rule holds for the person signed in, with their groups and no
  *   record. Hiding a queue is not a security control: the address still answers, and the page
  *   provider returns only what the person may read.
@@ -573,13 +579,16 @@ export class QueuePageComponent {
     });
   }
 
+  /**
+   * The count is the query's whole one, also past the search index's window, which the list's
+   * pages do not reach: a command over the whole query is the framework's, which reads the query
+   * on the server rather than page by page, so the page does not hold it to the window.
+   */
   protected onLoaded(results: PageProviderResults): void {
     this.aggregations.set(results.aggregations ?? null);
     this.rows.set(results.entries ?? []);
-    const counts = [results.totalSize, results.resultsCount].filter(
-      (count): count is number => typeof count === 'number' && count >= 0,
-    );
-    const total = counts.length > 0 ? Math.max(...counts) : -1;
+    // The page size bears on the reach only, which this does not read.
+    const total = resultWindow(results, 1).total ?? -1;
     // After a command, the first read may still come from an index that has not caught up.
     this.total.set(this.awaitingReindex ? -1 : total);
     if (total < 0 && this.queue()?.bulkActions.some((id) => wholeQueryBulkAction(id) !== null)) {

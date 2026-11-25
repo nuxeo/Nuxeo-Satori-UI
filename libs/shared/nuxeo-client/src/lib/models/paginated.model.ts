@@ -2,6 +2,13 @@ export interface NuxeoPaginatedList<T> {
   entries: T[];
   totalSize: number;
   resultsCount?: number;
+  /**
+   * A limit the server reports with its count, which means one thing or another by what serves the
+   * list. A page provider the search index serves reports the index's `max_result_window`, 10,000
+   * by default, and still counts past it; the repository reports `0` for none, or the limit it
+   * counts to, past which `resultsCount` is `-2`. `resultWindow` reads which.
+   */
+  resultsCountLimit?: number;
   currentPageSize: number;
   currentPageIndex: number;
   numberOfPages: number;
