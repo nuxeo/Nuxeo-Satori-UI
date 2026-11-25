@@ -23,7 +23,7 @@
     {
       "id": "payers.claim.requestRecords",
       "labelKey": "payers.action.requestRecords",
-      "icon": "outgoing_mail",
+      "icon": "health_record",
       "order": 20,
       "on": ["record", "row"],
       "visibleWhen": {

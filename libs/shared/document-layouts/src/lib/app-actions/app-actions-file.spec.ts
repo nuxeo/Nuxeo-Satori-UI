@@ -42,7 +42,7 @@ describe('readAppActions', () => {
     expect(requestRecords).toMatchObject({
       labelKey: 'payers.action.requestRecords',
       label: null,
-      icon: 'outgoing_mail',
+      icon: 'health_record',
       order: 20,
       placements: ['record', 'row'],
       enabledWhen: 'app.rules.canWrite',

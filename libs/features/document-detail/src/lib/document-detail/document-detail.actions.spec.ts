@@ -1976,7 +1976,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     it('runs its handler with the record, and the record is read again when the page says it changed', async () => {
       // As AppActionsService registers an app's actions.json at startup.
       TestBed.inject(ExtensionSlotRegistry).register(EXTENSION_SLOTS.toolbar, [
-        { id: REQUEST, label: 'Request medical records', icon: 'outgoing_mail' },
+        { id: REQUEST, label: 'Request medical records', icon: 'health_record' },
       ]);
       const run = vi.fn(() => TestBed.inject(DocumentChangesService).notify());
       TestBed.inject(ExtensionActionRegistry).registerPackaged({ [REQUEST]: { execute: run } });

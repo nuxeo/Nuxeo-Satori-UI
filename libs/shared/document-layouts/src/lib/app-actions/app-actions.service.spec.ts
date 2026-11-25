@@ -146,7 +146,7 @@ describe('AppActionsService', () => {
       id: REQUEST,
       label: REQUEST,
       labelKey: 'payers.action.requestRecords',
-      icon: 'outgoing_mail',
+      icon: 'health_record',
       order: 20,
       enabledRule: 'app.rules.canWrite',
     });

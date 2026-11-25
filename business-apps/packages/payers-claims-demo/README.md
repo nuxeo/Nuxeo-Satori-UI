@@ -4,7 +4,7 @@ The Payers kit, version 1 ([development plan](../../../docs/business-apps/develo
 phase 1), with phase 2's claims review workflow and appeals, and the package pipeline's demo app
 definition ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md)). All its data
 is fictional. Phase 0's demo runs on it, phase 1's demo script runs on it (below), phase 2's first
-three demo steps and its sixth are written for it, and the pipeline's controls
+four demo steps and its sixth are written for it, and the pipeline's controls
 (`scripts/app-package.selftest.mjs`) break copies of it.
 
 ## The short version
@@ -35,6 +35,14 @@ three demo steps and its sixth are written for it, and the pipeline's controls
   way and one decided. Phase 2's demo step 6 is written for them, in
   [`scripts/beta-harness/steps/payers-appeals.mjs`](../../../scripts/beta-harness/steps/payers-appeals.mjs)
   ([below](#the-appeals)). **Not run on a server yet** either.
+- **Two operation buttons,** version 0.5.0's: Request medical records, for adjusters on a claim in
+  review or held, with a small form, and Refer to special investigations, for supervisors. Each runs
+  a fictional chain the bundle contributes, which writes to the claim's history. The kit never
+  allows its own chains: the server's administrators do, with a deployment contribution
+  ([below](#the-operation-buttons)), and the demo server's allows the first and leaves the second
+  out on purpose. Phase 2's demo step 4 is written for them, in
+  [`scripts/beta-harness/steps/payers-operations.mjs`](../../../scripts/beta-harness/steps/payers-operations.mjs).
+  **Not run on a server yet.**
 - **What a production install shows:** the record pages and the model, to everyone, and the home,
   the menu, the queues and the labels from the app registry, after sign-in, to the three demo
   groups `app.json` names. The development server serves the same files through
@@ -56,12 +64,15 @@ three demo steps and its sixth are written for it, and the pipeline's controls
 | `bundle/agentic-ui-config/queues/pending-determination.json`   | Member services and supervisors: claims in review or pended                                |
 | `bundle/agentic-ui-config/home.json`                           | The home: KPI cards for adjusters and for member services                                  |
 | `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the three queues, and two platform pages                               |
-| `bundle/agentic-ui-config/actions.json`                        | A Mark as paid button for supervisors: a lifecycle transition                              |
+| `bundle/agentic-ui-config/actions.json`                        | Mark as paid, a lifecycle transition, and the two operation buttons                        |
 | `bundle/agentic-ui-config/tasks/*.layout.json`                 | The claims review workflow's two task forms, one per step with a task                      |
 | `bundle/agentic-ui-config/labels/en.json`                      | Its labels, in English: every key the files above name                                     |
 | `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts, and the app with its files                |
 | `bundle/OSGI-INF/payers-claims-demo-model.xml`                 | **The stand-in model:** document types, the claim lifecycle, page providers                |
 | `bundle/OSGI-INF/payers-claims-demo-workflow.xml`              | The claims review workflow: its route model, variables, chains, vocabulary and filter      |
+| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two operation buttons' chains, and REST bindings closing Nuxeo's endpoint to them      |
+| `deployment/payers-claims-demo-operations-config.xml`          | The demo server's allow-list, for `nxserver/config/`. Not packaged: the deployment's own   |
+| `deployment/build-allow-list.json`                             | The allow-list the pipeline builds the kit against, and CI with it. Not packaged           |
 | `bundle/data/PayersClaimReview.zip`                            | The route model, as the importer reads it: written from `workflow/PayersClaimReview/`      |
 | `bundle/data/vocabularies/PayersClaimDecision.csv`             | The decisions a determination picks from                                                   |
 | `bundle/schemas/*.xsd`                                         | **The stand-in model's** schemas, and the workflow's variables (`var_*`)                   |
@@ -77,8 +88,9 @@ three demo steps and its sixth are written for it, and the pipeline's controls
 | `content-model.json`                                           | The stand-in model as the server answers it, for `--model`                                 |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
-- **No operation button.** Decision 3 is open, so the pipeline refuses every operation, and the
-  workflow's steps are task actions and lifecycle transitions, not buttons that run a chain.
+- **Operation buttons on decision 3's recommendation,** which is open: a per-deployment allow-list
+  ([decisions.md](../../../docs/business-apps/decisions.md), notes). The workflow's steps are still
+  task actions and lifecycle transitions; the two buttons run chains of their own.
 - **One version in three places:** `package.xml`'s, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`, raised together. The pipeline's step 3 refuses any of them that
   differs, and, given the package as it was (`--previous`), a version that moved less than the
@@ -94,7 +106,12 @@ three demo steps and its sixth are written for it, and the pipeline's controls
   person. Its change adds a property, `case:checklist`, and removes none, so nothing that read a
   case before reads it differently, and a patch is enough. One thing does break, which the rule
   cannot see: a platform built before the checklist card refuses the new Case page ("Not done
-  yet", below).
+  yet", below). **0.5.0** is a minor raise, more than the patch the pipeline asks for: it counts 13
+  changes since 0.4.1, two actions and eight labels added and the my-claims queue changed, and
+  leaves the manifest and the new operations component to a person. The buttons need a platform and
+  a `nuxeo-agentic-core` that run them. An older platform offers none; an older core serves the
+  file whole and has no `AgenticUi.RunAction`, so a newer platform offers both and the server runs
+  neither, answering 404, which the dialog says. The minor says the kit does something new.
 
 ## The stand-in model
 
@@ -278,13 +295,67 @@ the builder after changing the source.
 - **Not yet:** an install. Whether the server imports the model, starts it and runs its chains is
   for the demo's steps file, once the kit is installed.
 
+## The operation buttons
+
+Phase 2's demo step 4, "Request medical records" runs a server chain
+([development plan](../../../docs/business-apps/development-plan.md), phase 2), built on decision
+3's recommendation, which is open: configuration binds a button to a chain, through a
+per-deployment allow-list ([decisions.md](../../../docs/business-apps/decisions.md), notes). How
+the platform serves, draws and runs them is
+[app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), section 5.
+
+| Button                          | Shows                                                    | Its form                     | Runs                           | On the demo server's allow-list |
+| ------------------------------- | -------------------------------------------------------- | ---------------------------- | ------------------------------ | ------------------------------- |
+| Request medical records         | To adjusters, on a claim in review or held; on My claims | Urgent, and a note, required | `Payers.RequestMedicalRecords` | Yes, for `claims-adjusters`     |
+| Refer to special investigations | To supervisors, on a claim                               | None                         | `Payers.ReferToInvestigations` | **No, on purpose**              |
+
+- **The chains are the kit's,** in `bundle/OSGI-INF/payers-claims-demo-operations.xml`, and
+  fictional: each writes the request, or the referral, to the claim's history with
+  `Audit.LogEvent`, and nothing leaves the server. Request medical records is given the claim's
+  provider, read from the stored claim, and what the form sends: whether it is urgent, and the
+  note, which its comment writes as text.
+- **The right to run them from a button is the deployment's,** never the kit's:
+  `deployment/payers-claims-demo-operations-config.xml` is the demo server's allow-list, which the
+  server's administrators put in `nxserver/config/`. It allows Request medical records for
+  `claims-adjusters` holding `Write` on the claim, with its three parameters and their types, and
+  leaves Refer to special investigations out, so that the demo shows the app registry leaving its
+  button out and `AgenticUi.RunAction` refusing it. The pipeline refuses a package that contributes
+  to the allow-list.
+- **Nuxeo's own Automation endpoint is closed to both chains,** by the kit: a REST binding each,
+  for administrators only, so that a person runs them through a button or not at all. Closing is
+  not widening, so the kit may do it; the allow-list is what it may not touch.
+- **`enabledWhen` is `app.rules.canWrite`:** a reader who may not change the claim sees the button
+  and cannot choose it. The server checks `Write` itself, whatever the button let through.
+
+### How it was verified, with no deploy
+
+- **Against the server's own classes:** `node workflow/platform-check.mjs` loads the operations
+  component's two chains with `OperationChainContribution` and its bindings with `RestBinding`, from
+  the local container's jars, read-only; checks each binding is a chain's, for administrators only;
+  and runs each chain's comment, a template, with the server's MVEL and the chain parameters
+  `AgenticUi.RunAction` gives, a note holding a template among them, which comes back as text. Run
+  on 25 November 2026: 107 checks passed, 12 of them these.
+- **In `nuxeo-agentic-core`'s tests:** `AllowListXmlTest` reads the demo deployment's contribution
+  with XMap, registers it, and serves the kit's own `actions.json` through the registry with it:
+  Request medical records served, with its three parameters' sources, Refer to special
+  investigations left out.
+- **The package pipeline**, below, and its selftest, which refuses a copy of the kit that
+  contributes to the allow-list, three ways.
+- **Not yet:** an install. Whether the server registers the allow-list, serves the file filtered and
+  runs the chain is for the steps file, once the kit and the contribution are installed.
+
 ## Building it
 
+Since 0.5.0 its buttons run two chains, and the pipeline holds a package to the allow-list of the
+deployment it is built for, refusing every operation without one: `deployment/build-allow-list.json`
+names both, and CI gives it the pipeline (`app-packages.yml`). It is a build input, in no package
+and on no server; the demo server's own allow-list is narrower ([below](#the-operation-buttons)).
+
 ```bash
-npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
-It writes `dist/payers-claims-demo-0.4.1.zip`.
+It writes `dist/payers-claims-demo-0.5.0.zip`.
 
 After changing the route model's source, write its zip again first, and commit it:
 
@@ -294,15 +365,15 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
-`dist/payers-claims-demo-0.4.1.changes.md`. Run on 25 November 2026 against the staging branch's
-0.4.0: 9 changes, which need a patch version, and 0.4.1 raises the patch.
+`dist/payers-claims-demo-0.5.0.changes.md`. Run on 25 November 2026 against the staging branch's
+0.4.1: 13 changes, which need a patch version, and 0.5.0 raises the minor.
 
 ```bash
 mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
 ```
 
 ```bash
-npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --previous /tmp/base/business-apps/packages/payers-claims-demo
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json --previous /tmp/base/business-apps/packages/payers-claims-demo
 ```
 
 Held to its content model ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md),
@@ -315,7 +386,7 @@ contracts kit's boolean are answered. No server has 0.4.1 to export it from; exp
 one does. Run on 25 November 2026, the four layouts are held to it with no finding.
 
 ```bash
-npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 \
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json \
   --model business-apps/packages/payers-claims-demo/content-model.json
 ```
 
@@ -386,7 +457,7 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs --
 ```
 
 ```bash
-npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
 **2. Into the container, with a one-off script** that removes the package installed, then installs
@@ -435,7 +506,7 @@ repository's root:
 **1. Build it.**
 
 ```bash
-npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
 **2. Into the container, with the one-off script** that removes the package installed and installs
@@ -465,6 +536,65 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
 **4. Seed it again** (below). It writes the appeals' checklists, the second appeal and its denied
 claim, and empties every other case's checklist. Nothing needs deleting first: 0.4.1 removes no
 type, schema, property or page provider.
+
+### Over version 0.4.1: version 0.5.0, with the operation buttons
+
+**Not run yet.** Written from the 0.3.0 install, which was. Three things go on the server: a
+`nuxeo-agentic-ui` with the allow-list and `AgenticUi.RunAction`, this branch's or later; the kit;
+and the deployment's allow-list, which is not in either package. From the repository's root:
+
+**1. Build both packages:** `nuxeo-agentic-ui` as in step 1 of the first install, above, then the
+kit.
+
+```bash
+npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
+```
+
+**2. The deployment's allow-list, into the server's configuration.** A file in `nxserver/config/`
+whose name ends in `-config.xml` is a contribution the server reads at start, as
+`nuxeo-agentic-connectors`' README installs its connector. It is the server's, not a package's: an
+upgrade of either package leaves it, and removing it takes every button's chain off the allow-list.
+
+```bash
+docker cp business-apps/packages/payers-claims-demo/deployment/payers-claims-demo-operations-config.xml nuxeo:/opt/nuxeo/server/nxserver/config/payers-claims-demo-operations-config.xml
+```
+
+**3. Both packages into the container, with the one-off script,** which removes the kit and installs
+both when the container next starts, then removes itself:
+
+```bash
+docker cp nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-2026.0.2-SNAPSHOT.zip nuxeo:/tmp/nuxeo-agentic-ui.zip
+```
+
+```bash
+docker cp business-apps/packages/payers-claims-demo/dist/payers-claims-demo-0.5.0.zip nuxeo:/tmp/
+```
+
+```bash
+printf '%s\n' '#!/bin/bash' '{ nuxeoctl mp-remove payers-claims-demo --accept=true && nuxeoctl mp-install /tmp/nuxeo-agentic-ui.zip /tmp/payers-claims-demo-0.5.0.zip --accept=true; } > /var/log/nuxeo/payers-kit-install.log 2>&1 || echo "payers kit: install failed, see /var/log/nuxeo/payers-kit-install.log"' 'rm -f "$0"' > /tmp/zz-payers-kit-install.sh && chmod 755 /tmp/zz-payers-kit-install.sh
+```
+
+```bash
+docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
+```
+
+**4. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
+
+- the install log lists the kit removed and both installed, and the server log's
+  `Component Loading Status` has nothing pending or missing;
+- the server log names the allow-list's entry, from the configuration:
+  `docker exec nuxeo grep -n "Agentic UI allow-list" /var/log/nuxeo/server.log` shows
+  `Payers.RequestMedicalRecords allowed by payers-claims-demo.deployment.operations`, and the
+  registry's leaving out the other:
+  `docker exec nuxeo grep -n "Agentic UI app registry" /var/log/nuxeo/server.log` names
+  `payers.claim.referToInvestigations`;
+- as an adjuster, `GET /nuxeo/agentic-ui-apps/apps/payers-claims/actions.json` holds
+  `payers.claim.requestRecords` and not `payers.claim.referToInvestigations`;
+- the rest is the steps file's, below: the button run, the chain's entry in the claim's history,
+  and each refusal, the REST binding's among them.
+
+With no contribution in `nxserver/config/`, the registry serves neither button, and the server log
+says so: an allow-list nobody installed allows nothing.
 
 ### Removing it
 
@@ -758,6 +888,41 @@ Case page or other labels. **Not run yet:** the kit 0.4.1 is installed nowhere. 
 25 November 2026, is the record page engine's tests, which draw the checklist from a layout and a
 record, and the seed's controls against their stand-in server, which write and check both appeals.
 
+### The operation buttons' demo
+
+Phase 2's demo step 4, as a steps file of the beta harness,
+[`scripts/beta-harness/steps/payers-operations.mjs`](../../../scripts/beta-harness/steps/payers-operations.mjs),
+run as an adjuster, `dana.lee`:
+
+1. a claim of theirs in review, CLAIM-000131, offers Request medical records on its toolbar, and not
+   Refer to special investigations;
+2. its dialog asks the kit's question, with the form's two fields; run with the note empty, the
+   form refuses it and nothing is sent;
+3. with a note and Urgent ticked, it runs, the person is told the records are requested, and the
+   claim's history holds the chain's "Medical records requested", urgently, with the note, and
+   `AgenticUi.RunAction`'s "App action run", which holds no value;
+4. a paid claim of theirs offers no button: its `visibleWhen` reads the record's state.
+
+Then, past the app, as a hand-crafted request would go, the negative checks: the registry serves
+the kit's `actions.json` without Refer to special investigations, and its diagnostics, which the
+adjuster may read, say why; `AgenticUi.RunAction` answers 404 for that action, 400 for a value the
+form does not send and for a note over the allow-list's 500 characters, and 403 to member
+services, `riley.brooks`, whom the allow-list's group leaves out; and Nuxeo's own Automation
+endpoint refuses the adjuster both chains, by the kit's REST bindings. None of the six writes to
+the claim's history.
+
+```bash
+NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-operations
+```
+
+**What it needs:** `nuxeo-agentic-ui` from this branch or later, the package 0.5.0 installed and
+seeded, the deployment's allow-list in `nxserver/config/` (above), `PAYERS_DEMO_PASSWORD` for
+member services, and Playwright. Under `nx serve`, the buttons come from the app registry alone,
+through the dev server's proxy, never from `config:dev`; the dev server serves the kit's labels,
+or none of them. Exit 2 means a precondition is not met, and says which. Each run leaves two
+entries in CLAIM-000131's history, the chain's marked with the run's id, which no other demo counts.
+**Not run yet:** the kit 0.5.0 is installed nowhere.
+
 ## What a server shows, and what the dev server does
 
 The configuration servlet in `nuxeo-agentic-core` answers a fixed set of addresses, to everyone:
@@ -769,16 +934,16 @@ built on the decision log's proposed answers to B and E, which are open
 ([decisions.md](../../../docs/business-apps/decisions.md)). So, installed on a server, with a
 `nuxeo-agentic-core` that has the registry:
 
-| Part                         | Served by the package on a server                  | Under `config:dev`                                      |
-| ---------------------------- | -------------------------------------------------- | ------------------------------------------------------- |
-| The model and page providers | Yes                                                | From the server                                         |
-| The five layouts             | Yes                                                | Yes                                                     |
-| `home.json`                  | From the registry, to the demo groups              | Yes, and it wins over the registry's                    |
-| `navigation.json`            | From the registry, to the demo groups              | Yes, and it wins over the registry's                    |
-| The three queues             | From the registry, to the demo groups              | Yes, and they win over the registry's                   |
-| `labels/en.json`             | From the registry, to the demo groups              | Yes, and it wins over the registry's                    |
-| `actions.json`               | From the registry; nothing in the app reads it yet | No, so the kit's button is left out of the queues' rows |
-| `app.json`                   | From the registry: it lists the app                | No                                                      |
+| Part                         | Served by the package on a server                                                   | Under `config:dev`                           |
+| ---------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------- |
+| The model and page providers | Yes                                                                                 | From the server                              |
+| The five layouts             | Yes                                                                                 | Yes                                          |
+| `home.json`                  | From the registry, to the demo groups                                               | Yes, and it wins over the registry's         |
+| `navigation.json`            | From the registry, to the demo groups                                               | Yes, and it wins over the registry's         |
+| The three queues             | From the registry, to the demo groups                                               | Yes, and they win over the registry's        |
+| `labels/en.json`             | From the registry, to the demo groups                                               | Yes, and it wins over the registry's         |
+| `actions.json`               | From the registry, with only what the server's allow-list lets run, read at startup | No: the app reads it from the registry alone |
+| `app.json`                   | From the registry: it lists the app                                                 | No                                           |
 
 **So a production install shows the record pages to everyone, and the home, the menu and the
 queues to the demo groups once they sign in.** A person in none of them, an administrator
@@ -796,12 +961,20 @@ included, is shown no app. The demo itself still runs on a development server, a
   neither id is on the panel. A reference to a record that no longer exists shows "Unavailable",
   and so does one the reader may not read, which was not seen: the checks ran as an administrator,
   who may read every record.
-- **The kit's button is not offered on a queue's rows,** nor in bulk: `actions.json` is carried
-  and not served, and the queue leaves out an action the app does not register, saying so in the
-  console. Since 0.4.0 it is Mark as paid, for supervisors, on an approved claim: the lifecycle's
-  `pay`, which no step of the workflow follows. Before, it was an approve button, which on a claim
-  whose review runs would have approved it outside the workflow, and left the workflow's next chain
-  to fail.
+- **Mark as paid is not offered from `actions.json`,** on a row or the record: the app runs an
+  operation button, and leaves a lifecycle button to the platform's own Change state, saying so in
+  the console. It is the lifecycle's `pay`, for supervisors on an approved claim, which no step of
+  the workflow follows. Before 0.4.0 it was an approve button, which on a claim whose review runs
+  would have approved it outside the workflow, and left the workflow's next chain to fail.
+- **The operation buttons have not run on a server:** the kit 0.5.0, the deployment's allow-list
+  and a `nuxeo-agentic-ui` that runs them are installed nowhere, so demo step 4's steps file has not
+  run. The chains are held to the server's own classes and MVEL, and the registry and the run to
+  `nuxeo-agentic-core`'s tests, with fakes of the session and of Automation. An administrator may
+  still run both chains through Nuxeo's own Automation endpoint, which the REST bindings allow them;
+  the demo does not.
+- **Refer to special investigations is a control, not a feature,** on the demo server: the demo's
+  allow-list leaves it out on purpose. A deployment that wants it adds an entry for
+  `Payers.ReferToInvestigations`, and supervisors are offered it.
 - **The platform's lifecycle buttons offer a claim's transitions while its review runs.** The
   record page lists the transitions the claim's state allows; one followed there, approve or deny
   in review, makes the workflow's own next transition fail when its step completes, and the

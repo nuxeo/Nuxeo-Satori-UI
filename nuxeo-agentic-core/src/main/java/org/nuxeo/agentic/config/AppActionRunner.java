@@ -53,8 +53,8 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
  *
  * Nothing here is the only control. Nuxeo's permissions gate every operation the chain runs, as
  * for any request of the reader's, and Nuxeo's own Automation endpoint still runs any operation a
- * reader may run, allow-listed or not, unless the deployment closes it with a REST binding (the
- * README of {@code nuxeo-agentic-core}).
+ * reader may run, allow-listed or not, unless the deployment closes it with a REST binding
+ * (docs/api-integrations.md, section 39).
  */
 final class AppActionRunner {
 
