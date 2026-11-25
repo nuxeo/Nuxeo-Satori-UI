@@ -33,6 +33,8 @@
     "beta:module-boundaries": "node scripts/beta-harness/module-boundaries.mjs",
     "release-candidate": "node scripts/release-candidate.mjs",
     "release-candidate:selftest": "node scripts/release-candidate.selftest.mjs",
+    "demo-server": "node scripts/demo-server.mjs",
+    "demo-server:selftest": "node scripts/demo-server.selftest.mjs",
     "app-definition:server-validator": "node libs/shared/app-definition/src/server-validator-bin.mjs",
     "app-definition:validate": "node libs/shared/app-definition/src/bin.mjs validate",
     "app-package": "node scripts/app-package.mjs",
