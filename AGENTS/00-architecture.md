@@ -86,7 +86,7 @@ libs/
     collections/                 ← /collections — collection management
     tasks/                       ← /tasks — workflow tasks
     administration/              ← /administration — admin console
-    layout-designer/             ← /administration/layout-designer — record page layouts, administrators only (business apps, phase 6)
+    layout-designer/             ← /administration/layout-designer — record page, form and queue files, administrators only (business apps, phase 6)
     assets/                      ← /documents — DAM asset search
     trash/                       ← /trash — trash management
   shared/
@@ -444,19 +444,20 @@ shipped in the package; customers use `extension-component`. By hand, the steps 
 
 All routes use `HashLocationStrategy` (`/#/path`). This ensures Nuxeo/Tomcat serves `index.html` for all deep links without 404s.
 
-| Path                                | Component                    | Auth                                 |
-| ----------------------------------- | ---------------------------- | ------------------------------------ |
-| `/#/login`                          | LoginPageComponent           | Public                               |
-| `/#/dashboard`                      | DashboardPageComponent       | Required                             |
-| `/#/browse`                         | BrowseComponent              | Required                             |
-| `/#/search`                         | SearchComponent              | Required                             |
-| `/#/doc/:uid`                       | DocumentDetailComponent      | Required                             |
-| `/#/documents`                      | AssetSearchResultsComponent  | Required                             |
-| `/#/tasks`                          | TasksPageComponent           | Required                             |
-| `/#/collections`                    | CollectionDetailComponent    | Required                             |
-| `/#/trash`                          | TrashComponent               | Required                             |
-| `/#/administration`                 | AdministrationShellComponent | Admin only                           |
-| `/#/administration/layout-designer` | LayoutDesignerPageComponent  | Administrators only, not power users |
+| Path                                       | Component                    | Auth                                 |
+| ------------------------------------------ | ---------------------------- | ------------------------------------ |
+| `/#/login`                                 | LoginPageComponent           | Public                               |
+| `/#/dashboard`                             | DashboardPageComponent       | Required                             |
+| `/#/browse`                                | BrowseComponent              | Required                             |
+| `/#/search`                                | SearchComponent              | Required                             |
+| `/#/doc/:uid`                              | DocumentDetailComponent      | Required                             |
+| `/#/documents`                             | AssetSearchResultsComponent  | Required                             |
+| `/#/tasks`                                 | TasksPageComponent           | Required                             |
+| `/#/collections`                           | CollectionDetailComponent    | Required                             |
+| `/#/trash`                                 | TrashComponent               | Required                             |
+| `/#/administration`                        | AdministrationShellComponent | Admin only                           |
+| `/#/administration/layout-designer`        | LayoutDesignerPageComponent  | Administrators only, not power users |
+| `/#/administration/layout-designer/queues` | QueueDesignerPageComponent   | Administrators only, not power users |
 
 ---
 
