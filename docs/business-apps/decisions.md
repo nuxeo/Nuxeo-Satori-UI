@@ -88,7 +88,7 @@ way.
   rights on assets are `nuxeo-agentic-assets`, a Maven module beside `nuxeo-agentic-core` with a
   Marketplace package of its own, which the brand assets kit depends on; nothing of it went into
   `nuxeo-agentic-core`. It enforces the rights half of the plan's rights and sharing add-on at the
-  platform's download permission. Share links, decision C, are not built. What changes if B goes
+  platform's download permission. Share links, decision C, came in its version 0.2.0 (C, below). What changes if B goes
   another way:
   - **One large add-on:** the module's bundle moves into that add-on's package as it is, and a kit's
     `package.xml` depends on that package in place of `nuxeo-agentic-assets`. The component names a
@@ -96,6 +96,25 @@ way.
   - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
     dropped from the kit, and every customer then gets the download permission, which refuses
     nothing until a policy is contributed.
+
+- **C, share links (25 November 2026).** Built against the recommendation, "Share links in phase
+  5, invited outside users in phase 8": links, and no outside user. `nuxeo-agentic-assets` 0.2.0
+  serves some of an asset's picture views, and its original where its rights allow, watermarked on
+  the server, to whoever holds a link's token, with no sign-in, at `/nuxeo/agentic-share/`, while
+  the link is neither revoked nor past its last day and the asset's rights allow each one; the
+  brand assets kit 0.2.1 turns the asset page's links on
+  ([the add-on's README](../../nuxeo-agentic-assets/README.md#share-links)). Nobody is invited,
+  given an account or signed in: Nuxeo's own access for an outside person, `Document.AddPermission`
+  with an email, signs a transient principal in for the whole API, and is left for phase 8. **Held
+  for its security review,** the plan's condition for phase 5, and installed nowhere. Decision F is
+  not touched: no sign-in changes. What changes if C goes another way:
+  - **No outside access in the Beta:** the kit drops `"shareLinks"` from its asset layout, a patch;
+    the add-on drops its share links component, operations, directories and servlet, a minor
+    version, and its rights stay as they are.
+  - **Invited outside users instead of links:** the same removal, and the portal signs them in
+    through Nuxeo's transient users or decision F's tokens; the watermark and the download log
+    could serve the portal's downloads.
+  - **Both in phase 5:** the links stay as they are, and invitations are built beside them.
 
 - **D, the connectors add-on's first slice (24 November 2026).** Built against the
   recommendation: inside Nuxeo, as an add-on of its own, not a separate service.

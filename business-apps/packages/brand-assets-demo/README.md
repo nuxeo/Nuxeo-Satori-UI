@@ -46,8 +46,9 @@ downloaded.
   checks ran, no server had it, and its asset layout was seen in dev mode on Pictures of the
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
-  there; 0.1.1, 0.2.0 and 0.2.1 are installed nowhere. The product page, the queues and the demo script have not run
-  on a shared server.
+  there. Read only, on 25 November 2026, that server's package list shows 0.2.0 started, with
+  `nuxeo-agentic-assets` 0.1.0, which has no share links; 0.1.1 and 0.2.1 are installed nowhere.
+  The product page, the queues and the demo script have not run on a shared server.
 
 ## What is in it
 
@@ -393,8 +394,10 @@ NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-ri
 `NUXEO_URL` names Nuxeo if it is not on `http://localhost:8080`: the REST API is called there,
 not through the dev server. **Not run:** nothing installs the add-on or the kit yet.
 
-The plan's demo step 3, a share link, is not this kit's yet: decision C is out of its scope.
-Step 4, the review, is the next section's.
+The plan's demo step 3, a share link, has no steps file yet: once the add-on 0.2.0 and this kit
+0.2.1 are installed, it is run by hand as the
+[add-on's README](../../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo) says,
+after the share links' security review. Step 4, the review, is the next section's.
 
 **What it needs:** the package installed and seeded today (above), the dev server serving the
 kit's files (above), Playwright (`scripts/beta-harness/README.md`, "Prerequisites"), and no asset,
@@ -467,7 +470,8 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Versions 0.1.1, 0.2.0 and 0.2.1 are not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
+- **Versions 0.1.1 and 0.2.1 are not installed anywhere,** and 0.1.0 and 0.2.0 only on a local
+  server, not a shared one:
   the review was seen with its layout from `config:dev`, and the product page, the queues, the full
   seed and the demo have not run on a shared server.
 - **A reference shows its stored value:** a shot's asset is its document id, until the
@@ -478,8 +482,8 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 - **No home and no video:** each is out of this version's scope. **Share links have not run on a
   server,** nor has their demo step, the plan's step 3, a steps file of its own: not written. A
   banner is not a control: refusing a download whose rights have ended is the server's, which
-  `nuxeo-agentic-assets` does at the platform's download endpoints, not installed yet, and waiting
-  for its security review.
+  `nuxeo-agentic-assets` does at the platform's download endpoints, on the local server only, at
+  0.1.0, and waiting for its security review.
 - **Regions are not weighed:** `acmeasset:regions` is free text, and no rule reads it.
 - **The review is not held to who may review on the server:** Nuxeo 2025 takes a pin, or a round's
   close, from anyone who may read the asset, whatever the page offers.
