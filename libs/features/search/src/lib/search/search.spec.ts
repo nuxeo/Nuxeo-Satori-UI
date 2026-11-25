@@ -566,6 +566,32 @@ describe('SearchComponent', () => {
       expect(component.selectingAll()).toBe(false);
     });
 
+    it('keeps page responses unchanged and starts each select-all with an empty accumulator', async () => {
+      await fixture.whenStable();
+      const firstPage = [resultItem({ id: 'first' })];
+      const lastPage = [resultItem({ id: 'last' })];
+      Object.freeze(firstPage);
+      Object.freeze(lastPage);
+      mockSearchService.search
+        .mockReturnValueOnce(of({ items: firstPage, aggregations: {}, hasNextPage: true }))
+        .mockReturnValueOnce(of({ items: lastPage, aggregations: {}, hasNextPage: false }));
+      component.selectAllResults();
+      expect(mockSelectionService.selectAll).toHaveBeenLastCalledWith(['first', 'last'], {
+        first: 'Test Doc',
+        last: 'Test Doc',
+      });
+      expect(firstPage.map((item) => item.id)).toEqual(['first']);
+      expect(lastPage.map((item) => item.id)).toEqual(['last']);
+      mockSearchService.search.mockReturnValueOnce(
+        of({ items: [resultItem({ id: 'next' })], aggregations: {}, hasNextPage: false }),
+      );
+      component.selectAllResults();
+      expect(mockSelectionService.selectAll).toHaveBeenLastCalledWith(['next'], {
+        next: 'Test Doc',
+      });
+      expect(mockSelectionService.selectAll).toHaveBeenCalledTimes(2);
+    });
+
     it('cancels pending selection when criteria change or selection is cleared', async () => {
       await fixture.whenStable();
       const pending = new Subject<SearchResponseLike>();
@@ -718,7 +744,8 @@ describe('SearchComponent', () => {
       },
       { item: resultItem({ type: 'Folder', path: undefined }), commands: ['/doc', 'doc1'] },
       { item: resultItem(), commands: ['/doc', 'doc1'] },
-    ])('opens the queue at the first result using $commands', ({ item, commands }) => {
+    ])('opens the queue at the first result using $commands', async ({ item, commands }) => {
+      await fixture.whenStable();
       vi.spyOn(component, 'results').mockReturnValue([item]);
       const navigate = vi.spyOn(component['router'], 'navigate');
       component.openQueue();
@@ -816,7 +843,17 @@ describe('SearchComponent', () => {
       expect(select?.value).toBe('My filters');
     });
 
-    it('opens queue mode while retaining the existing search query parameters', () => {
+    it('does not open a queue from stale results while a replacement search is loading', async () => {
+      await fixture.whenStable();
+      vi.spyOn(component, 'results').mockReturnValue([resultItem({ id: 'stale' })]);
+      vi.spyOn(component, 'busy').mockReturnValue(true);
+      const navigate = vi.spyOn(component['router'], 'navigate');
+      component.openQueue();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('opens queue mode while retaining the existing search query parameters', async () => {
+      await fixture.whenStable();
       const navigate = vi.spyOn(component['router'], 'navigate');
       component.openQueue();
       expect(navigate).toHaveBeenCalledWith(

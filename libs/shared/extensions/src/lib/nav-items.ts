@@ -219,6 +219,39 @@ export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
   },
 ];
 
+/** The optional search queue keeps its manifest ID without becoming a sidebar entry. */
+export const PACKAGED_SEARCH_QUEUE_ITEM: NavItemDescriptor = {
+  id: 'app.navbar.search',
+  labelKey: 'search.workspace.search',
+  label: 'Search',
+  path: '/search',
+  icon: 'search',
+  hasDrawer: true,
+};
+
+/** Resolves the queue's labels, route and visibility independently of the sidebar navigation. */
+export const APP_SEARCH_QUEUE_ITEM = new InjectionToken<Signal<NavItemDescriptor | null>>(
+  'APP_SEARCH_QUEUE_ITEM',
+  {
+    providedIn: 'root',
+    factory: () => {
+      const extensions = inject(AppExtensionsService);
+      const ruleContext = inject(ExtensionRuleContextService);
+      if (
+        !extensions.inventory()[EXTENSION_SLOTS.navbar]?.includes(PACKAGED_SEARCH_QUEUE_ITEM.id)
+      ) {
+        extensions.register(EXTENSION_SLOTS.navbar, [PACKAGED_SEARCH_QUEUE_ITEM]);
+      }
+      return computed(
+        () =>
+          extensions
+            .resolve<NavItemDescriptor>(EXTENSION_SLOTS.navbar, ruleContext.context())
+            .find((item) => item.id === PACKAGED_SEARCH_QUEUE_ITEM.id) ?? null,
+      );
+    },
+  },
+);
+
 /**
  * The navigation to render: packaged entries merged with the manifest's, with
  * overrides applied, rules evaluated and order honoured.
@@ -238,7 +271,9 @@ export const APP_NAV_ITEMS = new InjectionToken<Signal<readonly NavItemDescripto
       const ruleContext = inject(ExtensionRuleContextService);
       extensions.register(EXTENSION_SLOTS.navbar, PACKAGED_NAV_ITEMS);
       return computed(() =>
-        extensions.resolve<NavItemDescriptor>(EXTENSION_SLOTS.navbar, ruleContext.context()),
+        extensions
+          .resolve<NavItemDescriptor>(EXTENSION_SLOTS.navbar, ruleContext.context())
+          .filter((item) => item.id !== PACKAGED_SEARCH_QUEUE_ITEM.id),
       );
     },
   },

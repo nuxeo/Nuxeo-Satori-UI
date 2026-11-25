@@ -259,12 +259,16 @@ export class SearchSession {
   /** Saves the filters as a new saved search, and opens it. */
   saveAs(title: string): Observable<void> {
     const filters = this.filters();
+    const params = nxsSearchFiltersToSavedParams(filters);
+    const viewState: Record<string, string> = filters.filesOnly
+      ? { contentViewData: JSON.stringify({ nxsFilesOnly: true }) }
+      : {};
     return this.searchService
       .saveSavedSearch({
         title,
-        params: nxsSearchFiltersToSavedParams(filters),
+        params,
         pageProviderName: SEARCH_PAGE_PROVIDER,
-        ...(filters.filesOnly ? { contentViewData: JSON.stringify({ nxsFilesOnly: true }) } : {}),
+        ...viewState,
       })
       .pipe(
         map((saved) => {
@@ -275,6 +279,7 @@ export class SearchSession {
             typeof record['title'] === 'string' && record['title'] ? record['title'] : title,
           );
           this.savedFilters.set(id ? filters : null);
+          this.loadedParams = id ? { ...params, ...viewState } : {};
           this.shared.markSavedSearchDirty();
         }),
       );

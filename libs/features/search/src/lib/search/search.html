@@ -181,6 +181,7 @@
         [attr.aria-label]="'search.switch-to-queue-view' | translate"
         [matTooltip]="'search.switch-to-queue-view' | translate"
         (click)="openQueue()"
+        [disabled]="busy()"
       >
         <mat-icon svgIcon="bullet_list" />
       </button>

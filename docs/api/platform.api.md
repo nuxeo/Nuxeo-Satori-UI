@@ -3631,10 +3631,11 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo/satori-platform/extensions
 
-65 exported symbol(s).
+67 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
+const APP_SEARCH_QUEUE_ITEM: InjectionToken<Signal<NavItemDescriptor | null>>;
 class AppExtensionsService {
     readonly config: import("@angular/core").Signal<ExtensionConfig>;
     readonly missingLayers: import("@angular/core").Signal<readonly string[]>;
@@ -3894,6 +3895,7 @@ const PACKAGED_DOCUMENT_TABS: readonly ExtensionTabDescriptor[];
 const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescriptor[];
 const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[];
 const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[];
+const PACKAGED_SEARCH_QUEUE_ITEM: NavItemDescriptor;
 interface PartitionedExtensionRoutes {
     readonly accepted: readonly ExtensionRouteDescriptor[];
     readonly rejected: readonly RejectedExtensionRoute[];

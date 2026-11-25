@@ -83,6 +83,37 @@ expanded search header and dropdown presentation informed the implementation.
 
 ## Screenshots
 
+### Follow-up Copilot review — 25 November 2026
+
+Four additional findings are addressed:
+
+- The optional queue resolves `app.navbar.search` through the extension registry independently
+  of sidebar navigation. Customer labels, paths, visibility, registered descriptors, and rules
+  retain their existing semantics. The Search sidebar item remains absent.
+- A keyword typed after focusing the collapsed header survives clicking the field and entering
+  the Search route. Intentionally empty drafts are preserved too; Escape/reopen restores the
+  applied keyword when there is no draft.
+- Save As initializes cached parameters from the newly created search's own payload. Regression
+  tests reproduced the previous search's layout/column leak in both Files-scope directions before
+  the fix, and cover failed creation and a response without an ID.
+- Select all appends each page to an operation-local accumulator, avoiding repeated copies of
+  earlier pages. Tests confirm that source response arrays stay unchanged, later operations start
+  empty, and the existing cancellation/error behavior remains intact.
+
+These follow-up paths are covered by browser/component and service regression tests. The screenshots
+below document the live beta UI checks described in the preceding sections; they are not evidence
+of changing a customer's manifest or reproducing the saved-state leak against the live server.
+
+The live follow-up check confirmed that `NEV draft`, typed after keyboard focus on Dashboard,
+survived click activation and the Search navigation. An explicitly empty draft also survived;
+Escape followed by reopening restored the applied `NEV` query. Submitting NEV and opening/returning
+from the registered queue retained all 125 results. The check also exposed a loading-time race:
+Queue could act on stale results. Its control and handler now prevent activation while search is busy.
+The live recheck observed Queue disabled alongside the loading spinner, enabled after completion,
+and opening/returning with the same 125 NEV results.
+
+![Dashboard keyword draft preserved after click activation](copilot-dashboard-draft.jpg)
+
 ### Copilot regression verification — 25 November 2026
 
 The review found seven defects. The follow-up preserves saved-search presentation state across

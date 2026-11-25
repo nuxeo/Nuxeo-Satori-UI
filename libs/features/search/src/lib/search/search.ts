@@ -256,6 +256,7 @@ export class SearchComponent {
   });
 
   openQueue(): void {
+    if (this.busy()) return;
     const first = this.results()[0];
     let commands: string[] = [];
     if (first?.type === 'Collection') commands = ['/collections', first.id];
@@ -702,7 +703,11 @@ export class SearchComponent {
             ? this.searchService.search({ ...request, pageIndex: index + 1 })
             : EMPTY,
         ),
-        reduce((items, page) => [...items, ...page.items], [] as SearchResultItem[]),
+        reduce((items, page) => {
+          // The accumulator belongs to this operation; do not recopy earlier pages.
+          for (const item of page.items) items.push(item);
+          return items;
+        }, [] as SearchResultItem[]),
         takeUntil(merge(this.cancelSelection, this.selectionService.cleared$)),
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.selectingAll.set(false)),

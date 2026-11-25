@@ -151,6 +151,71 @@ describe('SearchSession', () => {
     );
   });
 
+  it.each([false, true])(
+    'keeps Save As presentation state separate from its source with Files initially %s',
+    async (filesOnly) => {
+      searchService.getSavedSearchById.mockReturnValueOnce(
+        of({
+          ...EMPTY_SAVED_PARAMS,
+          contentViewData: JSON.stringify({ layout: 'grid', columns: ['title', 'type'] }),
+        }),
+      );
+      await firstValueFrom(session.openSavedSearch('source', 'Source search'));
+      session.setFilters({ ...session.filters(), authors: ['alice'], filesOnly });
+      searchService.saveSavedSearch.mockReturnValueOnce(of({ id: 'copy', title: 'New search' }));
+      await firstValueFrom(session.saveAs('New search'));
+      expect(searchService.saveSavedSearch).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          title: 'New search',
+          params: expect.objectContaining({ dc_creator_agg: '["alice"]' }),
+          ...(filesOnly ? { contentViewData: JSON.stringify({ nxsFilesOnly: true }) } : {}),
+        }),
+      );
+      if (!filesOnly)
+        expect(searchService.saveSavedSearch.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'contentViewData',
+        );
+      session.setFilters({ ...session.filters(), filesOnly: !filesOnly });
+      await firstValueFrom(session.save());
+      expect(searchService.updateSavedSearch).toHaveBeenLastCalledWith(
+        'copy',
+        expect.objectContaining({
+          contentViewData: JSON.stringify({ nxsFilesOnly: !filesOnly }),
+        }),
+      );
+    },
+  );
+
+  it('preserves the source search cache when Save As fails', async () => {
+    const presentation = { layout: 'grid', columns: ['title', 'type'] };
+    searchService.getSavedSearchById.mockReturnValueOnce(
+      of({ ...EMPTY_SAVED_PARAMS, contentViewData: JSON.stringify(presentation) }),
+    );
+    await firstValueFrom(session.openSavedSearch('source', 'Source search'));
+    searchService.saveSavedSearch.mockReturnValueOnce(throwError(() => new Error('Save failed')));
+    await expect(firstValueFrom(session.saveAs('New search'))).rejects.toThrow('Save failed');
+    expect(session.savedSearchId()).toBe('source');
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).toHaveBeenLastCalledWith(
+      'source',
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ ...presentation, nxsFilesOnly: true }),
+      }),
+    );
+  });
+
+  it('does not update the source search when Save As returns no saved ID', async () => {
+    searchService.getSavedSearchById.mockReturnValueOnce(of({ ...EMPTY_SAVED_PARAMS }));
+    await firstValueFrom(session.openSavedSearch('source', 'Source search'));
+    searchService.saveSavedSearch.mockReturnValueOnce(of({}));
+    await firstValueFrom(session.saveAs('New search'));
+    expect(session.savedSearchId()).toBe('');
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).not.toHaveBeenCalled();
+  });
+
   it('tracks No Containers removal across page recreation and preserves a newly opened saved scope', async () => {
     const query = { quickFilters: 'noFolder', sortBy: null, sortOrder: null };
     session.setPageQuery(query);

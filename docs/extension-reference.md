@@ -682,8 +682,10 @@ Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.
 | `app.navbar.administration`     | Administration           | `/administration`      | 130   | `app.rules.hasAdministrationAccess`  | —                     |
 | `app.navbar.trash`              | Trash                    | `/trash`               | 140   | `core.not(app.rules.isExternalUser)` | —                     |
 
-The shell retains `app.navbar.search` as the descriptor for the optional search queue, independently
-of the packaged sidebar. Global search is opened from the header; it is not an additional sidebar entry.
+The optional search queue registers `app.navbar.search` in the navbar extension slot and resolves it
+independently through `APP_SEARCH_QUEUE_ITEM`. Manifest labels, paths, visibility and rules apply to
+the queue; a hidden or unresolved descriptor does not open a fallback drawer. `APP_NAV_ITEMS` excludes
+this stable ID from the rendered sidebar. Global search is opened from the header.
 
 A share recipient, a `transient/` user, gets Browse, Favorites, Collections and Trash hidden by
 default through `app.rules.isExternalUser`. This is presentation only: the server still refuses those

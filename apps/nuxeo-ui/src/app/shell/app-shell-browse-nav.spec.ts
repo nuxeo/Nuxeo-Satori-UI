@@ -3,7 +3,12 @@ import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { NavigationEnd, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
+import {
+  APP_SEARCH_QUEUE_ITEM,
+  PACKAGED_NAV_ITEMS,
+  PACKAGED_SEARCH_QUEUE_ITEM,
+  type NavItemDescriptor,
+} from '@nuxeo/satori-platform/extensions';
 import { of, Subject } from 'rxjs';
 
 import {
@@ -37,13 +42,16 @@ describe('AppShellComponent — the Browse nav entry', () => {
   } as AppNavItem;
 
   let navigated: string[];
+  const queueDescriptor = signal<NavItemDescriptor | null>(PACKAGED_SEARCH_QUEUE_ITEM);
 
   beforeEach(async () => {
+    queueDescriptor.set(PACKAGED_SEARCH_QUEUE_ITEM);
     await TestBed.configureTestingModule({
       imports: [AppShellComponent],
       providers: [...appConfig.providers, provideHttpClientTesting()],
     })
       .overrideProvider(AuthService, { useValue: authMock })
+      .overrideProvider(APP_SEARCH_QUEUE_ITEM, { useValue: queueDescriptor })
       .compileComponents();
 
     navigated = [];
@@ -81,6 +89,51 @@ describe('AppShellComponent — the Browse nav entry', () => {
     const shell = TestBed.createComponent(AppShellComponent).componentInstance;
     TestBed.inject(SearchAggregationService).drawerFilters.set({ ecm_fulltext: 'NEV' });
     shell.onGlobalSearchActivate();
+    expect(shell.globalSearchTerm()).toBe('NEV');
+  });
+
+  for (const draft of ['invoice draft', '']) {
+    it(`preserves the typed ${draft ? 'nonempty' : 'empty'} draft through click activation and navigation`, () => {
+      const router = TestBed.inject(Router);
+      const navigation = new Subject<NavigationEnd>();
+      spyOnProperty(router, 'events', 'get').and.returnValue(navigation);
+      spyOnProperty(router, 'url', 'get').and.returnValue('/dashboard');
+      TestBed.inject(SearchAggregationService).drawerFilters.set({ ecm_fulltext: 'NEV' });
+      const fixture = TestBed.createComponent(AppShellComponent);
+      fixture.detectChanges();
+      const input = fixture.nativeElement.querySelector(
+        '#global-header-search-input',
+      ) as HTMLInputElement;
+      input.focus();
+      input.value = draft;
+      input.dispatchEvent(new Event('input'));
+      input.click();
+      expect(navigated).toEqual(['/search']);
+      expect(fixture.componentInstance.globalSearchTerm()).toBe(draft);
+      navigation.next(new NavigationEnd(1, '/search', '/search'));
+      fixture.detectChanges();
+      expect(input.value).toBe(draft);
+      fixture.componentInstance.submitGlobalSearch();
+      expect(TestBed.inject(SearchAggregationService).keywordRequest()).toEqual({ term: draft });
+    });
+  }
+
+  it('discards a draft on Escape and restores applied keywords when reopened', () => {
+    const router = TestBed.inject(Router);
+    const navigation = new Subject<NavigationEnd>();
+    spyOnProperty(router, 'events', 'get').and.returnValue(navigation);
+    spyOnProperty(router, 'url', 'get').and.returnValue('/dashboard');
+    TestBed.inject(SearchAggregationService).drawerFilters.set({ ecm_fulltext: 'NEV' });
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const shell = fixture.componentInstance;
+    shell.onGlobalSearchInput('draft');
+    shell.onGlobalSearchActivate();
+    navigation.next(new NavigationEnd(1, '/search', '/search'));
+    shell.closeSearch();
+    navigation.next(new NavigationEnd(2, '/dashboard', '/dashboard'));
+    shell.onGlobalSearchActivate();
+    navigation.next(new NavigationEnd(3, '/search', '/search'));
     expect(shell.globalSearchTerm()).toBe('NEV');
   });
 
@@ -216,6 +269,51 @@ describe('AppShellComponent — the Browse nav entry', () => {
     expect(shell.drawerOpen()).toBeTrue();
     expect(shell.activeDrawerItem()?.path).toBe('/search');
     expect(shell.activeDrawerItem()?.id).toBe('app.navbar.search');
+  });
+
+  it('uses the independently resolved queue label and path, then closes it when hidden', () => {
+    spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue(
+      '/doc/test?searchQueue=true',
+    );
+    queueDescriptor.set({
+      ...PACKAGED_SEARCH_QUEUE_ITEM,
+      labelKey: undefined,
+      label: 'Review queue',
+      path: '/custom-search',
+    });
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const shell = fixture.componentInstance;
+    expect(shell.activeDrawerItem()).toEqual(
+      jasmine.objectContaining({
+        id: 'app.navbar.search',
+        label: 'Review queue',
+        path: '/custom-search',
+      }),
+    );
+    expect(shell.drawerOpen()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="menubar"]').textContent).not.toContain(
+      'Review queue',
+    );
+    queueDescriptor.set(null);
+    fixture.detectChanges();
+    expect(shell.drawerOpen()).toBeFalse();
+    expect(shell.activeDrawerItem()).toBeNull();
+  });
+
+  it('does not open a fallback queue when its descriptor is hidden or unresolved', () => {
+    spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue(
+      '/doc/test?searchQueue=true',
+    );
+    queueDescriptor.set(null);
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.drawerOpen()).toBeFalse();
+    expect(fixture.componentInstance.activeDrawerItem()).toBeNull();
+    queueDescriptor.set(PACKAGED_SEARCH_QUEUE_ITEM);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.drawerOpen()).toBeTrue();
+    expect(fixture.componentInstance.activeDrawerItem()?.id).toBe('app.navbar.search');
   });
 
   it('opens the configurable view separately from header search', () => {

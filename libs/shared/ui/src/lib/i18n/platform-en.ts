@@ -850,6 +850,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "search.workspace.people": "People",
   "search.workspace.properties": "Properties",
   "search.workspace.reset": "Reset",
+  "search.workspace.search": "Search",
   "search.workspace.search-in": "Search in",
   "settings.themes.name.dark": "Dark",
   "settings.themes.name.kawaii": "Kawaii",

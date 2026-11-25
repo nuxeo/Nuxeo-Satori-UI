@@ -48,16 +48,6 @@ export function toAppNavItem(descriptor: NavItemDescriptor): AppNavItem {
   };
 }
 
-// Search queue links remain available independently of the prototype sidebar.
-export const SEARCH_QUEUE_NAV_ITEM: AppNavItem = {
-  id: 'app.navbar.search',
-  labelKey: 'search.workspace.search',
-  label: 'Search',
-  path: '/search',
-  icon: 'search',
-  hasDrawer: true,
-};
-
 export const THEMES_SETTINGS_PATH = '/settings/themes';
 
 export const SETTINGS_DRAWER_ITEMS: DrawerLinkItem[] = [
