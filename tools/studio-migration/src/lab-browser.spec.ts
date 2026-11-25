@@ -143,6 +143,8 @@ interface Scripted {
   readonly headers?: Record<string, string>;
   readonly status?: number;
   readonly body?: unknown;
+  /** Its answer's body cannot be read, as after the page moved on. */
+  readonly bodyGone?: boolean;
 }
 
 /** What a fake browser saw: each request as it went out, and what each route did with it. */
@@ -160,7 +162,7 @@ interface Seen {
  */
 function fakeBrowser(
   script: readonly Scripted[],
-  page: { kind: string; fields: string[] },
+  page: { kind: string; fields: string[] } | 'unreadable',
 ): { browser: PwBrowser; seen: Seen } {
   const seen: Seen = { continued: [], aborted: [], fulfilled: [], initScripts: [] };
   const browser = {
@@ -184,6 +186,7 @@ function fakeBrowser(
               (listeners[event] ??= []).push(listener);
             },
             async evaluate() {
+              if (page === 'unreadable') throw new Error('Execution context was destroyed');
               return page;
             },
             screenshot: () => Promise.resolve(),
@@ -208,7 +211,10 @@ function fakeBrowser(
                     return (
                       given && {
                         status: () => given.status,
-                        body: async () => Buffer.from(given.text),
+                        body: async () => {
+                          if (step.bodyGone) throw new Error('Response body is unavailable\nmore');
+                          return Buffer.from(given.text);
+                        },
                       }
                     );
                   },
@@ -365,6 +371,45 @@ describe('lab mode: recording an app', () => {
     expect(JSON.stringify(recording)).not.toContain(
       Buffer.from('alice:not-a-real-password').toString('base64'),
     );
+  });
+
+  it('keeps a layout whose answer could not be read, and a page it could not read, as unreadable', async () => {
+    const web = fakeBrowser(
+      [
+        {
+          method: 'POST',
+          url: 'http://nuxeo.test:8080/nuxeo/api/v1/automation/login',
+          body: { username: 'alice' },
+        },
+        {
+          url: 'http://nuxeo.test:8080/nuxeo/ui/document/note/nuxeo-note-view-layout.html',
+          kind: 'xhr',
+          bodyGone: true,
+        },
+      ],
+      { kind: 'other', fields: [] },
+    );
+    const recording = await recordApp(web.browser, 'web-ui', TARGET, USER, DOCUMENT, OPTIONS);
+    expect(recording.unreadable).toEqual([
+      'its layout /nuxeo/ui/document/note/nuxeo-note-view-layout.html was loaded, and its answer could not be read: Response body is unavailable',
+    ]);
+    expect(recording.layouts).toEqual([expect.objectContaining({ status: 200, fields: [] })]);
+
+    const app = fakeBrowser(
+      [
+        {
+          url: 'http://app.test:4297/nuxeo/api/v1/me',
+          headers: { authorization: AUTHORIZATION },
+          body: { id: 'alice' },
+        },
+      ],
+      'unreadable',
+    );
+    const unread = await recordApp(app.browser, 'new-app', TARGET, USER, DOCUMENT, OPTIONS);
+    expect(unread.unreadable).toEqual([
+      'its page could not be read: Execution context was destroyed',
+    ]);
+    expect(unread.page).toBeUndefined();
   });
 
   it('puts a control into the new app alone: a property withheld from its answers, or fewer schemas asked', async () => {

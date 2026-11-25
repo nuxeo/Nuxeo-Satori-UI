@@ -97,6 +97,8 @@ export interface AppRecording {
   readonly identity: readonly string[];
   /** Said when the page did not stop sending within lab mode's wait. */
   readonly unsettled?: string;
+  /** What lab mode could not read of what the app showed: its page, or a layout it loaded. */
+  readonly unreadable?: readonly string[];
   /** The screenshot's file name, in `--out`. */
   readonly screenshot?: string;
 }
@@ -308,12 +310,19 @@ export function compareDocument(
         : 'No screenshot was taken'
     }; the values are not compared yet`,
   };
-  if (identity.length > 0) {
-    const reason = `Not compared, because not every request ran as the user: ${identity.join('; ')}`;
+  const unread = [
+    ...(web.unreadable ?? []).map((problem) => `Web UI: ${problem}`),
+    ...(app.unreadable ?? []).map((problem) => `the new app: ${problem}`),
+  ];
+  if (identity.length > 0 || unread.length > 0) {
+    const reason =
+      identity.length > 0
+        ? `Not compared, because not every request ran as the user: ${identity.join('; ')}`
+        : `Not compared, because lab mode could not read all each app showed: ${unread.join('; ')}`;
     return {
       document,
       listing,
-      identityFailed: true,
+      identityFailed: identity.length > 0,
       checks: [
         { ...seen, status: 'not run', reason },
         { number: 7, name: 'What the server is asked', status: 'not run', findings: [], reason },

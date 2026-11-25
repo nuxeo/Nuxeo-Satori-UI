@@ -895,10 +895,14 @@ npm run studio-migration -- lab <document>... --out <new-directory> --app http:/
   - **5 does not run in lab mode:** evaluating each condition in Web UI needs the package installed
     and test users in and out of each group, which lab mode never creates: it writes nothing. A
     package with no condition passes, as in `check`.
-- **Exit codes:** 0, no document differs and no check failed; 1, a difference or a failed check,
-  or something could not be read or written; 2, the command was wrong, or the environment is: the
-  credentials, Playwright, a server that does not answer as the user, or a document that could not
-  be compared as the user.
+- **Not compared is never a pass.** A document is not compared when Web UI never asked for it, or
+  when lab mode could not read a layout either app loaded, or the new app's page: held to less than
+  what each showed, the rule could pass where it should not. Its checks say why, and the run
+  exits 1.
+- **Exit codes:** 0, every document compared, none differs and no check failed; 1, a difference, a
+  failed check, a document not compared, or something could not be read or written; 2, the command
+  was wrong, or the environment is: the credentials, Playwright, a server that does not answer as
+  the user, or a document that could not be compared as the user.
 
 **Its controls**, `--control`, each put into the new app's side alone, in the browser, for the
 rule to report:
@@ -1198,31 +1202,36 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
-- **For lab mode, 46 guards**, broken one at a time by a script that runs its four specs and
+- **For lab mode, 50 guards**, broken one at a time by a script that runs its four specs and
   restores the file, each seen turning them red:
   - **The rule:** a field under a condition not held, and only what Web UI fetched; a property
     the new app does not fetch, or cannot show; the page's fields, a layout file it loaded, and
     the rows the page draws itself, each as what it can show; the schemas, every one and by name;
-    a new app that never asks, or is answered otherwise; Web UI never asking; identity; a read by
-    path; Web UI's conditions; the servlet's envelope; a Web UI layout that did not load.
+    a new app that never asks, or is answered otherwise; Web UI never asking; identity, and what
+    could not be read; a read by path; Web UI's conditions; the servlet's envelope; a Web UI
+    layout that did not load.
   - **The browser:** downloads through the API and through the servlets; only reads, and only the
     operations that only read, by `POST`; the header to the server's origin alone; controls on
     the new app alone; an unsigned request, an answer naming another, and none naming the user; a
-    refused request recorded.
+    refused request recorded; a layout, and a page, that could not be read, kept as such.
   - **The server's reads:** one origin, no redirect; a field, a widget's type and a type's
     schemas, a vocabulary, a page provider and a task's variable, each against the server's
     model; a model that cannot be read; the package byte for byte, and the conversion as JSON.
   - **The command:** the credentials, a new or empty `--out`, who the credentials are, exit 2 on
-    identity and 1 on a difference, the package installed and the conversion served, and check 3
-    failing.
+    identity and 1 on a difference or a document not compared, the package installed and the
+    conversion served, and check 3 failing.
 
-  Three rounds ran. The first, of 46, found three no test reached: a field on the new app's page
+  Four rounds ran. The first, of 46, found three no test reached: a field on the new app's page
   that no layout file lists, as its generated layout shows one; a layout Web UI was refused whose
   answer has a body; and the control kept to the new app, which a second test of the same thing
   hid, now gone. The script did not find a fourth, whose text formatting had changed. The second
   round found that one reached by no test either, the package served without its conversion. Each
-  now has its test, and the third round found none. A spec drives `recordApp` through a small
-  stand-in for Playwright, so the browser half is held too: what is refused, sent and recorded.
+  now has its test, and the third round found none. `pre-pr-review.mjs` then found two empty
+  `.catch()`es: a layout whose answer could not be read was dropped, which would have made what
+  Web UI shows look smaller, and so held less. Each is now kept as unreadable, which stops the
+  document's comparison and exits 1, and the fourth round, with their four guards, found none. A
+  spec drives `recordApp` through a small stand-in for Playwright, so the browser half is held too:
+  what is refused, sent and recorded.
 
 ## Not done yet
 

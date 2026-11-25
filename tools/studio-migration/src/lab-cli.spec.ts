@@ -82,6 +82,7 @@ const me: RecordedRequest = {
 function recorder(
   pages: Readonly<Record<string, 'document' | 'browse'>>,
   identity: readonly string[] = [],
+  unreadable?: readonly string[],
 ): LabDeps['record'] {
   return async (_browser, app, _target, _credentials, document, options) => {
     writeFileSync(join(options.screenshot.out, options.screenshot.file), 'png');
@@ -104,6 +105,7 @@ function recorder(
         ? { page: { kind: pages[document.uid] ?? 'document', fields: [] } }
         : {}),
       identity: app === 'new-app' ? identity : [],
+      ...(app === 'new-app' && unreadable ? { unreadable } : {}),
       screenshot: options.screenshot.file,
     };
     return recording;
@@ -237,7 +239,23 @@ describe('lab: the command', () => {
         deps({ record: recorder({}, ['its sign-in answered as Guest']) }),
       ),
     ).toBe(2);
-    expect(out.printed[0]).toContain('1 not compared, because not every request ran as alice');
+    expect(out.printed[0]).toContain('1 not compared, each saying why');
+    expect(out.printed[0]).toContain('because not every request ran as the user');
+  });
+
+  it('exits 1, never 0, when a document could not be compared because its page could not be read', async () => {
+    const out = io();
+    expect(
+      await lab(
+        [NOTE.uid, '--out', fresh()],
+        out,
+        deps({ record: recorder({}, [], ['its page could not be read: gone']) }),
+      ),
+    ).toBe(1);
+    expect(out.printed[0]).toContain(
+      'Lab verdict: 0 of 1 document with a difference under the request-log rule; 1 not compared, each saying why',
+    );
+    expect(out.printed[0]).toContain('the new app: its page could not be read: gone');
   });
 
   it('says, with a control, whether the rule reported it', async () => {

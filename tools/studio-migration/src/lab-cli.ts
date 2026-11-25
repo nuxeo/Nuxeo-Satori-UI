@@ -15,9 +15,10 @@
  * data, with what each app sent; and a screenshot of each app on each document. It writes nothing
  * to the server: every request either app sends goes through `lab-browser.ts`'s refusal first.
  *
- * Exit codes: 0, no difference; 1, a difference or a failed check, or something could not be read
- * or written; 2, the command was wrong, or the environment is: the credentials, Playwright, a
- * server that does not answer as the user.
+ * Exit codes: 0, every document compared and none differs; 1, a difference, a failed check, a
+ * document not compared, or something could not be read or written; 2, the command was wrong, or
+ * the environment is: the credentials, Playwright, a server that does not answer as the user, or a
+ * document whose requests did not all run as the user.
  */
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -269,14 +270,18 @@ export async function lab(
       { flag: 'wx' },
     );
     io.out(text);
-    io.out(`Written to ${directory}: lab.txt, lab.json and ${compared.length * 2} screenshots.\n`);
+    const shots = compared.flatMap((entry) => [entry.web.screenshot, entry.app.screenshot]);
+    io.out(
+      `Written to ${directory}: lab.txt, lab.json and ${shots.filter(Boolean).length} of ${shots.length} screenshots.\n`,
+    );
 
     if (compared.some((entry) => entry.comparison.identityFailed)) return 2;
     const failed = [
       ...compared.flatMap((entry) => entry.comparison.checks),
       ...(halves?.checks ?? []),
     ].some((check) => check.status === 'fail');
-    return failed ? 1 : 0;
+    // A document that could not be compared is never a pass: what it would have found is unknown.
+    return failed || compared.some((entry) => notCompared(entry.comparison)) ? 1 : 0;
   } catch (error) {
     if (
       error instanceof LabServerError ||
@@ -391,6 +396,11 @@ export async function serverHalves(
   ];
 }
 
+/** A document whose request logs could not be held to the rule: as another user, or unread. */
+function notCompared(comparison: DocumentComparison): boolean {
+  return comparison.checks.some((check) => check.number === 7 && check.status === 'not run');
+}
+
 function given(count: number): string {
   return count === 1 ? 'the document given' : `the ${count} documents given`;
 }
@@ -424,13 +434,11 @@ export function labText(run: {
   const differing = run.compared.filter((comparison) =>
     comparison.checks.some((check) => check.status === 'fail'),
   ).length;
-  const uncompared = run.compared.filter((comparison) => comparison.identityFailed).length;
+  const uncompared = run.compared.filter(notCompared).length;
   lines.push(
     '',
     `Lab verdict: ${differing} of ${run.compared.length} ${run.compared.length === 1 ? 'document' : 'documents'} with a difference under the request-log rule${
-      uncompared
-        ? `; ${uncompared} not compared, because not every request ran as ${run.username}`
-        : ''
+      uncompared ? `; ${uncompared} not compared, each saying why` : ''
     }`,
   );
   if (run.control)

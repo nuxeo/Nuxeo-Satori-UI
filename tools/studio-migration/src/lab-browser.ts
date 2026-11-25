@@ -170,7 +170,7 @@ export async function launchChromium(): Promise<PwBrowser | string> {
   try {
     return await chromium.launch({ headless: true });
   } catch (error) {
-    return `Chromium did not start: ${(error as Error).message.split('\n')[0]}. npx playwright install chromium`;
+    return `Chromium did not start: ${firstLine(error)}. npx playwright install chromium`;
   }
 }
 
@@ -304,7 +304,7 @@ export async function recordApp(
 
     const page = await context.newPage();
     const recorded: Promise<RecordedRequest | null>[] = [];
-    const layoutFiles: Promise<{ path: string; status: number; body: Buffer } | null>[] = [];
+    const layoutFiles: Promise<LayoutFile>[] = [];
     let inFlight = 0;
     let lastActivity = Date.now();
 
@@ -331,16 +331,32 @@ export async function recordApp(
         app === 'web-ui'
           ? webUiLayoutMode(document.type, at.pathname)
           : appLayoutMode(document.type, at.pathname);
+      // A layout whose answer cannot be read is kept, said to be unreadable: dropped, it would
+      // make what Web UI shows, or what the new app can show, look smaller than it is.
       if (layout !== null && !failed)
         layoutFiles.push(
-          request
-            .response()
-            .then(async (response) =>
-              response
-                ? { path: at.pathname, status: response.status(), body: await response.body() }
-                : null,
-            )
-            .catch(() => null),
+          (async (): Promise<LayoutFile> => {
+            let status = 0;
+            try {
+              const response = await request.response();
+              if (!response)
+                return {
+                  path: at.pathname,
+                  status,
+                  body: Buffer.alloc(0),
+                  unreadable: 'no answer',
+                };
+              status = response.status();
+              return { path: at.pathname, status, body: await response.body() };
+            } catch (error) {
+              return {
+                path: at.pathname,
+                status,
+                body: Buffer.alloc(0),
+                unreadable: firstLine(error),
+              };
+            }
+          })(),
         );
     };
     page.on('requestfinished', (request) => done(request, false));
@@ -369,8 +385,14 @@ export async function recordApp(
       if (refused.has(request)) return { ...base, status: 'refused', reason: refused.get(request) };
       if (failed)
         return { ...base, status: 'failed', reason: request.failure()?.errorText ?? 'no answer' };
-      const response = await request.response().catch(() => null);
-      if (!response) return { ...base, status: 'failed', reason: 'no answer' };
+      let response: PwResponse | null = null;
+      let why = 'no answer';
+      try {
+        response = await request.response();
+      } catch (error) {
+        why = firstLine(error);
+      }
+      if (!response) return { ...base, status: 'failed', reason: why };
       const status = response.status();
       const extra: {
         documentProperties?: readonly string[];
@@ -404,7 +426,7 @@ export async function recordApp(
     try {
       await page.goto(url, { waitUntil: 'load', timeout: settleMs });
     } catch (error) {
-      unsettled = `the page did not load within ${settleMs / 1000} s (${(error as Error).message.split('\n')[0]}); what it sent until then is recorded`;
+      unsettled = `the page did not load within ${settleMs / 1000} s (${firstLine(error)}); what it sent until then is recorded`;
     }
     const started = Date.now();
     while (unsettled === undefined) {
@@ -414,31 +436,39 @@ export async function recordApp(
         unsettled = `the page was still sending after ${settleMs / 1000} s; what it sent until then is recorded`;
     }
 
+    /** What lab mode could not read of what the app showed, which stops the comparison. */
+    const unreadable: string[] = [];
     let pageSeen: { kind: AppPage; fields: string[] } | undefined;
     if (app === 'new-app') {
-      pageSeen = await page
-        .evaluate<{ kind: AppPage; fields: string[] }>(
+      try {
+        pageSeen = await page.evaluate<{ kind: AppPage; fields: string[] }>(
           `({
             kind: document.querySelector('lib-document-detail') ? 'document' : document.querySelector('lib-browse') ? 'browse' : 'other',
             fields: [...document.querySelectorAll('[data-field]')].map((element) => element.getAttribute('data-field')).filter((field) => field && field.includes(':')),
           })`,
-        )
-        .catch(() => ({ kind: 'other' as const, fields: [] }));
+        );
+      } catch (error) {
+        unreadable.push(`its page could not be read: ${firstLine(error)}`);
+      }
     }
     let shot: string | undefined;
     try {
       await page.screenshot({ path: join(screenshot.out, screenshot.file) });
       shot = screenshot.file;
     } catch {
+      // Said in check 6, which names no screenshot when there is none.
       shot = undefined;
     }
 
     const requests = (await Promise.all(recorded)).filter(
       (request): request is RecordedRequest => request !== null,
     );
-    const files = (await Promise.all(layoutFiles)).filter(
-      (file): file is { path: string; status: number; body: Buffer } => file !== null,
-    );
+    const files = await Promise.all(layoutFiles);
+    for (const file of files)
+      if (file.unreadable !== undefined)
+        unreadable.push(
+          `its layout ${file.path} was loaded, and its answer could not be read: ${file.unreadable}`,
+        );
     return {
       app,
       url,
@@ -448,6 +478,7 @@ export async function recordApp(
       ...(pageSeen ? { page: pageSeen } : {}),
       identity: identityProblems(app, requests, credentials.username),
       ...(unsettled ? { unsettled } : {}),
+      ...(unreadable.length > 0 ? { unreadable } : {}),
       ...(shot ? { screenshot: shot } : {}),
     };
   } finally {
@@ -498,6 +529,18 @@ export function identityProblems(
       `nothing ${app === 'web-ui' ? 'Web UI' : 'the new app'} read said who its requests ran as: neither /me nor a sign-in was answered for ${username}`,
     );
   return [...new Set(problems)];
+}
+
+/** A layout file an app loaded, as lab mode read it, or why its answer could not be read. */
+interface LayoutFile {
+  readonly path: string;
+  readonly status: number;
+  readonly body: Buffer;
+  readonly unreadable?: string;
+}
+
+function firstLine(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).split('\n')[0];
 }
 
 async function jsonOf(response: PwResponse): Promise<unknown> {

@@ -418,6 +418,21 @@ describe('lab mode: the request-log rule', () => {
     expect(comparison.checks[1].reason).toContain('the new app: its sign-in answered as Anonymous');
   });
 
+  it('compares nothing when what either app showed could not be read, rather than holding less', () => {
+    for (const [web, app] of [
+      [
+        webUi({ unreadable: ['its layout /x was loaded, and its answer could not be read: gone'] }),
+        newApp(['member:email']),
+      ],
+      [webUi(), newApp(['member:email'], { unreadable: ['its page could not be read: gone'] })],
+    ] as const) {
+      const comparison = compareDocument(DOCUMENT, web, app);
+      expect(comparison.identityFailed).toBe(false);
+      expect(comparison.checks.map((check) => check.status)).toEqual(['not run', 'not run']);
+      expect(comparison.checks[1].reason).toContain('could not read all each app showed');
+    }
+  });
+
   it('compares nothing when Web UI never asked for the document', () => {
     const comparison = compareDocument(DOCUMENT, webUi({ requests: [] }), newApp([]));
     expect(comparison.identityFailed).toBe(false);
