@@ -60,9 +60,11 @@ waits for Claude seats approved under Hyland's AI use requirements (phase 3, "Ne
   is out, being the whole page.
 - **The agent is held to the same rules.** Before its first prompt, the participant tells it: "Do not
   read `business-apps/packages/<the reference kit>`, the steps files under
-  `scripts/beta-harness/steps/`, or git's history of either." The skill names the Payers kit as its
-  worked example, so for tests A and B the agent will look for it. The facilitator reads the
-  transcript afterwards for any read of the reference, by any tool.
+  `scripts/beta-harness/steps/`, git's history of either, or anything outside this checkout." The
+  last is the facilitator's own checkout beside it, which holds the reference kits throughout
+  ([section 2](#two-checkouts-two-dev-servers)). The skill names the Payers kit as its worked
+  example, so for tests A and B the agent will look for it. The facilitator reads the transcript
+  afterwards for any read of the reference, by any tool.
 
 **A read of the reference answer voids the test.** The result is then a copy, not a rebuild: the
 log says what was read, when, and whether by the person or the agent.
@@ -181,10 +183,15 @@ npm run config:dev
 NUXEO_PROXY_TARGET=http://127.0.0.1:18080 npx ng serve nuxeo-ui --configuration=development,remote --port 4301
 ```
 
-**Tests A and B,** the copy, and what a package for them serves, then each scope:
+**Tests A and B,** the copy, cut down to what a package for them holds, which is what it serves; then
+each scope:
 
 ```bash
 mkdir -p business-apps/packages/acceptance-control/bundle && cp -R business-apps/packages/payers-claims-demo/bundle/agentic-ui-config business-apps/packages/acceptance-control/bundle/
+```
+
+```bash
+rm -r business-apps/packages/acceptance-control/bundle/agentic-ui-config/{home.json,actions.json,tasks,layouts/Provider}
 ```
 
 ```bash
@@ -206,6 +213,10 @@ mkdir -p business-apps/packages/acceptance-control/bundle && cp -R business-apps
 ```
 
 ```bash
+rm -r business-apps/packages/acceptance-control/bundle/agentic-ui-config/layouts/AcmeShot
+```
+
+```bash
 C=business-apps/packages/acceptance-control/bundle/agentic-ui-config && npm run config:dev -- --layout AcmeAsset/view=$C/layouts/AcmeAsset/view.layout.json --layout AcmeProduct/view=$C/layouts/AcmeProduct/view.layout.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/library.json --queue $C/queues/products.json
 ```
 
@@ -213,7 +224,9 @@ C=business-apps/packages/acceptance-control/bundle/agentic-ui-config && npm run 
 ACCEPTANCE_QUEUE=library ACCEPTANCE_PACKAGE=business-apps/packages/acceptance-control ACCEPTANCE_BASE=HEAD APP_URL=http://localhost:4301 NUXEO_USER=Administrator NUXEO_PASS="$DEMO_SERVER_ADMIN_PASSWORD" npm run beta:evidence -- acceptance-brand-assets
 ```
 
-Then remove the copy, serve the platform's defaults again, and check that the checkout is clean:
+Then remove the copy, serve the platform's defaults again, check that the checkout is clean, and
+stop the facilitator's dev server: until it is stopped, it serves whatever `config:dev` last wrote
+in that checkout.
 
 ```bash
 rm -r business-apps/packages/acceptance-control && npm run config:dev && git status --short
@@ -302,7 +315,8 @@ The last line is the harness's own prerequisite ([beta harness README](../../scr
 ### The demo server, from a release candidate
 
 **Not run yet:** the demo server was built and checked offline, and has never been started against
-Docker (its README, "What was checked, and what was not"). The first session's preparation is its
+Docker (its README, "What was checked, and what was not"; the
+[administrator's guide](administrator-guide.md), section 7). The first session's preparation is its
 first run: do it at least a day before, and fall back to the local server below if it fails.
 
 It needs Docker and Compose v2, signed in to `docker-private.packages.nuxeo.com` with your own
@@ -345,8 +359,9 @@ NUXEO_URL=http://127.0.0.1:18080 NUXEO_USER=Administrator NUXEO_PASS="$DEMO_SERV
 
 ### Or a local Docker Nuxeo
 
-The local container `nuxeo`, on port 8080, with OpenSearch, as the kits' READMEs use it. Install and
-seed from the same commit as the steps files will run from:
+The local container `nuxeo`, on port 8080, with OpenSearch, as the kits' READMEs use it, in the
+order the [administrator's guide](administrator-guide.md), section 3, gives. Install and seed from
+the same commit as the steps files will run from:
 
 - **Tests A and B:** `nuxeo-agentic-ui`, then the Payers kit, 0.4.1 or later, whose seed refuses an
   older one: the [Payers README](../../business-apps/packages/payers-claims-demo/README.md),
@@ -410,11 +425,12 @@ whose proxy is `http://localhost:8080`, and read `http://localhost:8080` whereve
 
 ### The participant's shell
 
-Exported by the facilitator in the participant's terminal, before the clock starts and before any
-recording, so that no value is typed where it is seen:
+Set by the facilitator in the participant's terminal, before the clock starts and before any
+recording. The administrator's password is read without being shown, since a new terminal does not
+have the facilitator's `DEMO_SERVER_ADMIN_PASSWORD`:
 
 ```bash
-export NUXEO_URL=http://127.0.0.1:18080 NUXEO_USER=Administrator NUXEO_PASS="$DEMO_SERVER_ADMIN_PASSWORD"
+printf 'Test server administrator password: ' && read -rs NUXEO_PASS && echo && export NUXEO_PASS NUXEO_USER=Administrator NUXEO_URL=http://127.0.0.1:18080
 ```
 
 ```bash
@@ -531,9 +547,14 @@ returns it to anyone who may read the member, and masking it is decision I.
 
    It ends with `checked, built and verified`, and exit 0.
 
-2. **A1 to A10, the steps file,** in the participant's checkout, against their dev server, with
-   `PAYERS_DEMO_PASSWORD` exported there now. First the checkout as the participant left it, then the
-   reference kit back, for its seed data; their files stay served as they served them:
+2. **A1 to A10, the steps file,** in the participant's checkout, against their dev server. The demo
+   password is read there now, unseen, as the administrator's was; then the checkout as the
+   participant left it, into `checkout.txt`; then the reference kit back, for its seed data. Their
+   files stay served as they served them:
+
+   ```bash
+   printf 'Demo password: ' && read -rs PAYERS_DEMO_PASSWORD && echo && export PAYERS_DEMO_PASSWORD
+   ```
 
    ```bash
    git status --short > "$SESSION/checkout.txt" && git diff --stat <the session's commit> >> "$SESSION/checkout.txt"
@@ -800,7 +821,8 @@ add-on's and the kit's rights policy, not the participant's package: they are no
 
 As test A, in the participant's checkout: the pipeline with the server's model; the checkout as
 they left it, into `checkout.txt`; then the brand assets kit put back for its seed data, and its
-steps file, run as anyone who may read the kit's workspace, the administrator here:
+steps file, run as anyone who may read the kit's workspace: the administrator, whose `NUXEO_USER` and
+`NUXEO_PASS` the participant's shell already holds:
 
 ```bash
 git status --short > "$SESSION/checkout.txt" && git diff --stat <the session's commit> >> "$SESSION/checkout.txt"
@@ -811,7 +833,7 @@ git checkout -- business-apps/packages/brand-assets-demo
 ```
 
 ```bash
-ACCEPTANCE_PACKAGE="$ACCEPTANCE_PACKAGE" ACCEPTANCE_BASE=<the session's commit> APP_URL=http://localhost:4300 NUXEO_USER=Administrator NUXEO_PASS="$DEMO_SERVER_ADMIN_PASSWORD" npm run beta:evidence -- acceptance-brand-assets
+ACCEPTANCE_PACKAGE="$ACCEPTANCE_PACKAGE" ACCEPTANCE_BASE=<the session's commit> APP_URL=http://localhost:4300 npm run beta:evidence -- acceptance-brand-assets
 ```
 
 `ACCEPTANCE_QUEUE=<the library's id>` when the package has more than one queue. The time is within
@@ -874,7 +896,11 @@ could use; control commands left to be written by hand; the Builder MCP server a
 export pointed at the default server; a model exported into a `tmp/` a fresh clone does not have; a
 layout in tabs, which the checks could only half see; the Properties panel judged by one property
 a participant's panel may leave out; passwords to be typed where a recording sees them; and a menu
-and a Status facet the target names and nothing checked.
+and a Status facet the target names and nothing checked. Its second look, at the fixes, found the
+Payers control's copy still holding a home it did not serve, the panel counted as drawn on the
+member's name, which its title shows first, the administrator's password missing from a new
+terminal, and the facilitator's checkout one directory away from the participant's agent: each is
+fixed above.
 
 **Not checked:** any run against a server. The first control run
 ([section 1](#before-every-session-the-control-run)) is the steps files' first run, and its result

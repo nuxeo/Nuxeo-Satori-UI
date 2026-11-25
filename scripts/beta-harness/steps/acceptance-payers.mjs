@@ -381,15 +381,9 @@ export default async function run(page, h) {
   await h.screenshot('member-as-adjuster');
 
   // The panel is drawn once it shows any of the member's own values: which ones is the
-  // participant's metadata layout's to say, or the schema's when they wrote none.
-  const own = [
-    MEMBER.number,
-    MEMBER.firstName,
-    MEMBER.lastName,
-    MEMBER.phone,
-    MEMBER.email,
-    MEMBER.plan,
-  ];
+  // participant's metadata layout's to say, or the schema's when they wrote none. Not the names:
+  // the panel shows the document's title, the member's name, before its properties arrive.
+  const own = [MEMBER.number, MEMBER.phone, MEMBER.email, MEMBER.plan];
   await page
     .waitForFunction(
       (values) => {
