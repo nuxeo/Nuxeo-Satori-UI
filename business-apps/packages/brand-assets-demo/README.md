@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.2.0 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.2.1 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, not photographed or
@@ -25,6 +25,11 @@ downloaded.
   own: [`scripts/beta-harness/steps/brand-assets-review.mjs`](../../../scripts/beta-harness/steps/brand-assets-review.mjs).
 - **A product page:** a product's details, its shots, and the shots its shot list still misses,
   each a related list over a page provider.
+- **Share links on the asset page,** turned on by the layout file's `"shareLinks": {}`, with no
+  code: to a user the server lets manage them, the page lists the asset's links for people
+  outside, offers a new one for some of its views or its original, until a last day, and Revoke,
+  and shows what they served (below, "Share links"). The server, `nuxeo-agentic-assets` 0.2.0,
+  holds every rule of a link.
 - **Two queues, a menu and labels:** the asset library, with three facets from its page provider's
   aggregates (Rights, Shot and Product), and the products.
 - **A stand-in model,** until a brand team's own arrives: the types, schemas and page providers
@@ -41,30 +46,30 @@ downloaded.
   checks ran, no server had it, and its asset layout was seen in dev mode on Pictures of the
   platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
   on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
-  there; 0.1.1 and 0.2.0 are installed nowhere. The product page, the queues and the demo script have not run
+  there; 0.1.1, 0.2.0 and 0.2.1 are installed nowhere. The product page, the queues and the demo script have not run
   on a shared server.
 
 ## What is in it
 
-| File                                                            | What it is                                                                                         |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `bundle/agentic-ui-config/app.json`                             | The app: its name, version, platform range and groups                                              |
-| `bundle/agentic-ui-config/layouts/AcmeAsset/view.layout.json`   | The asset page: two rights banners, the picture as a review, the asset, its rights and its history |
-| `bundle/agentic-ui-config/layouts/AcmeProduct/view.layout.json` | The product page: the product, its missing shots and its shots                                     |
-| `bundle/agentic-ui-config/layouts/AcmeShot/view.layout.json`    | A shot of the shot list, which a missing shot's row opens                                          |
-| `bundle/agentic-ui-config/queues/library.json`                  | The asset library, the rights that end soonest first, with three facets                            |
-| `bundle/agentic-ui-config/queues/products.json`                 | The products, the next launch first                                                                |
-| `bundle/agentic-ui-config/navigation.json`                      | The menu: the two queues                                                                           |
-| `bundle/agentic-ui-config/labels/en.json`                       | Its labels, in English: every key the files above name, and its fields' labels                     |
-| `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the three layouts and the app                                       |
-| `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers                                 |
-| `bundle/OSGI-INF/brand-assets-demo-rights.xml`                  | The rights policy for `AcmeAsset`, which `nuxeo-agentic-assets` enforces                           |
-| `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                                   |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged                    |
-| `demo/seed.selftest.mjs`                                        | The seed's controls, against a stand-in for the REST API it calls. Not packaged                    |
-| `package/package.xml`                                           | The Marketplace package: name, version, and what it depends on                                     |
-| `build.mjs`                                                     | Version 1's builder: the generator's, byte for byte                                                |
-| `content-model.json`                                            | The model as a server with this package installed is to answer it, for `--model`                   |
+| File                                                            | What it is                                                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                             | The app: its name, version, platform range and groups                                                               |
+| `bundle/agentic-ui-config/layouts/AcmeAsset/view.layout.json`   | The asset page: two rights banners, the picture as a review, its share links, the asset, its rights and its history |
+| `bundle/agentic-ui-config/layouts/AcmeProduct/view.layout.json` | The product page: the product, its missing shots and its shots                                                      |
+| `bundle/agentic-ui-config/layouts/AcmeShot/view.layout.json`    | A shot of the shot list, which a missing shot's row opens                                                           |
+| `bundle/agentic-ui-config/queues/library.json`                  | The asset library, the rights that end soonest first, with three facets                                             |
+| `bundle/agentic-ui-config/queues/products.json`                 | The products, the next launch first                                                                                 |
+| `bundle/agentic-ui-config/navigation.json`                      | The menu: the two queues                                                                                            |
+| `bundle/agentic-ui-config/labels/en.json`                       | Its labels, in English: every key the files above name, and its fields' labels                                      |
+| `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the three layouts and the app                                                        |
+| `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers                                                  |
+| `bundle/OSGI-INF/brand-assets-demo-rights.xml`                  | The rights policy for `AcmeAsset`, which `nuxeo-agentic-assets` enforces                                            |
+| `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                                                    |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged                                     |
+| `demo/seed.selftest.mjs`                                        | The seed's controls, against a stand-in for the REST API it calls. Not packaged                                     |
+| `package/package.xml`                                           | The Marketplace package: name, version, and what it depends on                                                      |
+| `build.mjs`                                                     | Version 1's builder: the generator's, byte for byte                                                                 |
+| `content-model.json`                                            | The model as a server with this package installed is to answer it, for `--model`                                    |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No home.** The kit has no KPIs yet: the menu opens the two queues.
@@ -105,6 +110,34 @@ previews is refused; the others hold every channel and are served everything lis
 asked of the add-on's `assetRights` enricher after the 403. No view is hidden or disabled: each is
 asked for, and the server decides. The Annotations tab's viewer asks for the original, which the
 server refuses on assets 503 and 505.
+
+## Share links
+
+The asset layout's `"shareLinks": {}` turns on the asset page's share links (layout-v2.md,
+section 2, "Share links"). From 0.2.1 the package depends on `nuxeo-agentic-assets` 0.2.0, which
+holds every rule of a link ([its README](../../../nuxeo-agentic-assets/README.md)); the kit
+contributes nothing of its own to them.
+
+- **Who sees them:** the page asks the server for the asset's links, and draws nothing of them for
+  a user it refuses, with 403: one without the asset's `WriteSecurity`, Nuxeo's permission to
+  give anyone else access. Hiding the section is not the control: the server refuses the same
+  user's every call.
+- **A new link** lists the original or some of the asset's views, by their titles, and a last
+  day, in UTC, from today to 90 days on. The server refuses an item the asset's rights do not
+  allow now, and the page says which and why, in the rights' words. Its address is shown once,
+  with Copy: the server keeps only a hash of its token, so a lost address is revoked and made
+  again.
+- **What a link serves,** to anyone who opens it, without signing in: only the items it lists,
+  watermarked on the server, while it is neither revoked nor past its last day and while the
+  asset's rights allow each one, so an ended right ends the link too. On the seeded assets, a link
+  to asset 503's original or its print view is refused when it is made, since its channels hold
+  no Print, and every link to asset 505 is, since its rights have ended.
+- **Revoke** stops a link at once, after a confirmation. The page lists each link's state,
+  active, expired or revoked, who made it and when, and the downloads log: each item served, when,
+  through which link, and nothing about who opened it.
+
+**Nothing of it has run on a server:** the add-on 0.2.0 and this version are installed nowhere,
+and the page was tested against a stand-in for the server's answers.
 
 ## The stand-in model
 
@@ -172,7 +205,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.2.0.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.2.1.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -195,8 +228,9 @@ them first should check each step's outcome as step 3 says. The local Nuxeo is t
 (`package/package.xml`), and it serves the layouts. If it is not, install it first, as the
 [Payers kit's README](../payers-claims-demo/README.md#installing-it-on-a-local-nuxeo) says.
 
-**From 0.2.0 it also depends on `nuxeo-agentic-assets` 0.1.0,** the add-on that enforces its rights
-policy. Install the two in one restart, as the
+**From 0.2.0 it also depends on `nuxeo-agentic-assets`,** the add-on that enforces its rights
+policy, and from 0.2.1 on its version 0.2.0, which adds the share links. Install the two in one
+restart, as the
 [add-on's README](../../../nuxeo-agentic-assets/README.md#installing-it-on-a-local-nuxeo) says:
 build the add-on with `mvn -pl nuxeo-agentic-assets -am package`, copy both zips in, and name both
 in the one-off script's `nuxeoctl mp-install`, the add-on first. The steps below install the kit
@@ -214,11 +248,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.0.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -412,7 +446,11 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   asset layout puts a `date` widget on a text property, given the model. Version 0.2.0 was held to
   0.1.1 on the staging branch with `--previous`: its three changes, the rights component, the
   manifest and `package.xml`'s new dependency, are "to judge", which the pipeline sees as a patch,
-  and 0.2.0 raises the minor, as a package newly needing an add-on should.
+  and 0.2.0 raises the minor, as a package newly needing an add-on should. Version 0.2.1 was held
+  to 0.2.0 on the staging branch the same way: its two changes, the asset layout's share links and
+  `package.xml`'s dependency raised to `nuxeo-agentic-assets` 0.2.0, need a patch, and the upgrade
+  check, `npm run app-upgrade -- --since origin/staging/enterprise-grade-app`, keeps every
+  configuration.
 - **The rights policy,** `brand-assets-demo-rights.xml`, is read by `nuxeo-agentic-assets`'s own
   tests, through XMap as the runtime reads a contribution, and decides the demo's uses as this
   README's table says; giving `OriginalJpeg` another channel turns them red.
@@ -429,7 +467,7 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
 
 ## Not done yet
 
-- **Versions 0.1.1 and 0.2.0 are not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
+- **Versions 0.1.1, 0.2.0 and 0.2.1 are not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
   the review was seen with its layout from `config:dev`, and the product page, the queues, the full
   seed and the demo have not run on a shared server.
 - **A reference shows its stored value:** a shot's asset is its document id, until the
@@ -437,7 +475,8 @@ already installed there: 30 of 30 checks passed, in a test workspace's folder, t
   the product.
 - **The library is a list, not a grid of previews,** as the prototype draws it: a queue's cells are
   one line of text.
-- **No home, no video and no share links:** each is out of this version's scope. A
+- **No home and no video:** each is out of this version's scope. **Share links have not run on a
+  server,** nor has their demo step, the plan's step 3, a steps file of its own: not written. A
   banner is not a control: refusing a download whose rights have ended is the server's, which
   `nuxeo-agentic-assets` does at the platform's download endpoints, not installed yet, and waiting
   for its security review.

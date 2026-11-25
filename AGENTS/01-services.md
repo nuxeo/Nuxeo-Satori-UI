@@ -715,6 +715,28 @@ read(connector: string, uid: string): Observable<ConnectorAnswer>
 
 ---
 
+## ShareLinkService (`libs/shared/nuxeo-client/src/lib/services/share-link.service.ts`)
+
+An asset's share links, through `nuxeo-agentic-assets`' Automation operations
+(`docs/business-apps/layout-v2.md`, section 2, "Share links"; `docs/api-integrations.md`,
+section 40). Exported from `@nuxeo/satori-platform/nuxeo-client`; the record page's
+`lib-record-share-links` is its caller. It checks nothing the server decides.
+
+```typescript
+list(uid: string): Observable<ShareLink[]>
+  // POST /automation/ShareLink.List, { params: {}, input: 'doc:<uid>' }; 403 without WriteSecurity
+create(uid: string, items: readonly ShareLinkItem[], end: string): Observable<CreatedShareLink>
+  // ShareLink.Create, { params: { renditions: items, end } }: { kind: 'created', link, token, path }
+  // or { kind: 'refused', refused: [{ rendition, reason }] }; the token is shown once, never kept
+revoke(uid: string, link: string): Observable<ShareLink>
+downloads(uid: string): Observable<ShareLinkDownloads>
+  // { downloads: [{ time, link, rendition }], truncated }
+// every answer held to its shape: another one errors with status 500; a created link's path must be
+// on this server (shareLinkUrl gives null for any other origin)
+```
+
+---
+
 ## ArenderService (`arender.service.ts`)
 
 ```typescript

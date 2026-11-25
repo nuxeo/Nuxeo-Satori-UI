@@ -144,6 +144,10 @@ Automation operations use `POST /nuxeo/api/v1/automation/:operationId` with body
 | Bulk download           | `Blob.BulkDownload`                     | `uids`                                                                                                                          |
 | CSV export              | `Bulk.RunAction`                        | `action: "csvExport"`                                                                                                           |
 | Read a system of record | `Connector.Read`                        | `connector`; input the document. Ours (`nuxeo-agentic-connectors`), not installed by default                                    |
+| Create a share link     | `ShareLink.Create`                      | `renditions` (`original`, `view:<title>`), `end` (`YYYY-MM-DD`, UTC); input the asset. Ours (`nuxeo-agentic-assets` 0.2.0)      |
+| List an asset's links   | `ShareLink.List`                        | —; input the asset. `403` without `WriteSecurity` on it                                                                         |
+| Revoke a share link     | `ShareLink.Revoke`                      | `link` (its id, the token's SHA-256); input the asset                                                                           |
+| A links' downloads log  | `ShareLink.Downloads`                   | —; input the asset. Time, link and item of each download, 200 at most, no one's name or address                                 |
 
 ---
 

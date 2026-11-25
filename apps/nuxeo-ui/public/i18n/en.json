@@ -1596,6 +1596,78 @@
       }
     },
     "sections": "Property sections",
+    "share-links": {
+      "create": {
+        "button": "Create link",
+        "end": "Last day",
+        "end-hint": "In UTC: the link works until the end of this day, 90 days ahead at most.",
+        "heading": "New share link",
+        "items": "What the link shares, {{max}} at most",
+        "nothing": "This asset has nothing to share: no original file and no view with a name."
+      },
+      "created": {
+        "address": "Address",
+        "announce": "Link {{label}} created. Copy its address now: it is shown this once.",
+        "copied": "Address copied",
+        "copy": "Copy the address",
+        "copy-failed": "The address could not be copied: select it and copy it by hand",
+        "done": "Done",
+        "heading": "Link {{label}} created",
+        "once": "Copy the address now: it is shown this once. The server keeps no copy of it, so a lost link is revoked and made again."
+      },
+      "created-by": "Created by {{user}}, {{when}}",
+      "downloads": {
+        "failed": "The downloads could not be loaded",
+        "heading": "Downloads",
+        "item": "Item",
+        "link": "Link",
+        "loading": "Loading the downloads",
+        "none": "Nothing has been downloaded through the asset's links.",
+        "time": "Time",
+        "truncated": "The latest 200 downloads are shown."
+      },
+      "error": {
+        "address": "The link was created, but the server gave an address on another site, so it is not shown. Revoke it.",
+        "create-failed": "The link could not be created. Try again.",
+        "create-forbidden": "You may not create share links for this asset.",
+        "create-refused": "The server refused the link: check what it shares and its last day.",
+        "revoke-failed": "The link could not be revoked. Try again.",
+        "revoke-forbidden": "You may not revoke this asset's share links.",
+        "revoke-refused": "The server refused to revoke the link."
+      },
+      "failed": "The share links could not be loaded",
+      "heading": "Share links",
+      "link": "Link {{label}}",
+      "list": "The asset's share links",
+      "loading": "Loading the share links",
+      "none": "This asset has no share links yet.",
+      "note": "People outside open a link without signing in. The server serves only what a link lists, watermarked, until its last day and while the asset's rights allow it.",
+      "original": "Original file",
+      "refused": {
+        "channel-not-covered": "the asset's channels do not cover it",
+        "heading": "The server did not create the link. It refused:",
+        "no-such-rendition": "the asset does not have it",
+        "not-cleared": "the asset's rights do not list it",
+        "other": "refused by the server",
+        "policy-error": "the asset's rights could not be read",
+        "rights-ended": "the asset's rights have ended"
+      },
+      "revoke": {
+        "button": "Revoke",
+        "confirm": "Revoke",
+        "done": "Link {{label}} revoked",
+        "label": "Revoke link {{label}}",
+        "message": "Revoke link {{label}}? It stops working at once, and cannot be turned on again.",
+        "title": "Revoke share link"
+      },
+      "revoked-by": "Revoked by {{user}}, {{when}}",
+      "state": {
+        "active": "Active",
+        "expired": "Expired",
+        "revoked": "Revoked"
+      },
+      "until": "Until {{day}} (UTC)"
+    },
     "timeline": {
       "all": "All events",
       "empty": "Nothing recorded yet",
