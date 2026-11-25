@@ -21,6 +21,7 @@ import {
   CURRENT_USERNAME,
   CLIPBOARD_STORAGE_KEY,
   DirectoryService,
+  DocumentChangesService,
   DocumentDetailService,
   NuxeoApiBase,
   TagService,
@@ -41,6 +42,7 @@ import {
   ExtensionActionRegistry,
   ExtensionComponentRegistry,
   ExtensionRuleContextService,
+  ExtensionSlotRegistry,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
@@ -1965,6 +1967,36 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.tagCategory(0)).not.toBe(component.tagCategory(1));
       expect(component.tagCategory(0)).toBe(component.tagCategory(7));
+    });
+  });
+
+  describe("an app's operation button on the toolbar", () => {
+    const REQUEST = 'payers.claim.requestRecords';
+
+    it('runs its handler with the record, and the record is read again when the page says it changed', async () => {
+      // As AppActionsService registers an app's actions.json at startup.
+      TestBed.inject(ExtensionSlotRegistry).register(EXTENSION_SLOTS.toolbar, [
+        { id: REQUEST, label: 'Request medical records', icon: 'health_record' },
+      ]);
+      const run = vi.fn(() => TestBed.inject(DocumentChangesService).notify());
+      TestBed.inject(ExtensionActionRegistry).registerPackaged({ [REQUEST]: { execute: run } });
+      await build();
+      mockDetailService.getFullDocument.mockClear();
+
+      component.runToolbarAction(offered(REQUEST));
+
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({ document: expect.objectContaining({ uid: 'doc-1' }) }),
+      );
+      expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('reads nothing again for a change said once it has left the record', async () => {
+      await build();
+      fixture.destroy();
+      mockDetailService.getFullDocument.mockClear();
+      TestBed.inject(DocumentChangesService).notify();
+      expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
     });
   });
 });

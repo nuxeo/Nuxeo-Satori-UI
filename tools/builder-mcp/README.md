@@ -70,16 +70,19 @@ Some things about them are worth knowing before relying on them:
   `tasks/<workflow>.<step>.layout.json`, and `var:<name>` for each variable of the step and of
   its workflow.
 - **An operation the server has is not one a package may name.** That is the deployment
-  allow-list's to say (decision 3). `validate_package` refuses every operation unless it is given
-  one.
+  allow-list's to say (decision 3): on a server, the deployment's contribution to
+  `org.nuxeo.agentic.ui.operations`, which a package may never make. `validate_package` refuses
+  every operation unless it is given an allow-list, or the package names the one it is built
+  against, `deployment/build-allow-list.json`, as CI gives the pipeline.
 - **`validate_package` is the pipeline itself.** It runs `scripts/app-package.mjs` as a command,
   as `npm run app-package` and CI do. Given the folder alone it passes what the workflow passes,
-  `--platform` with `libs/platform`'s version, and answers `asCi: true`. An allow-list, a
-  registered file or another platform version are the deployment's, change what is checked, and
-  are listed under `departsFromCi`. It gives no content model, as CI gives none, and the pipeline
-  holds a package that ships a stand-in model to its own `content-model.json`, so a misspelt
-  property of a demo kit is refused here too. A package on a customer's model is held to no
-  model: run `npm run app-package` with `--model` or `--model-server` for that.
+  `--platform` with `libs/platform`'s version, and the package's build allow-list when it has one,
+  and answers `asCi: true`. Another allow-list, a registered file or another platform version are
+  the deployment's, change what is checked, and are listed under `departsFromCi`. It gives no
+  content model, as CI gives none, and the pipeline holds a package that ships a stand-in model to
+  its own `content-model.json`, so a misspelt property of a demo kit is refused here too. A package
+  on a customer's model is held to no model: run `npm run app-package` with `--model` or
+  `--model-server` for that.
 - **It reads inside the repository only.** The pipeline's messages can quote what it read, and
   they go to the agent, so:
   - the folder and the files must be in the repository, and the answer for a path outside is the

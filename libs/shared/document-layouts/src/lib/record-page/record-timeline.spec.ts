@@ -5,6 +5,7 @@ import {
   type AuditEntry,
   type AuditLogList,
   type AuditLogQuery,
+  DocumentChangesService,
   DocumentDetailService,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -439,6 +440,24 @@ describe('RecordTimelineComponent', () => {
         'Modified',
         'Created',
       ]);
+    });
+
+    it('is refreshed in place when the page says documents changed, as after an operation button', async () => {
+      getAuditLog.mockReturnValue(of(page([modified, created])));
+      const root = await render();
+      const calls = getAuditLog.mock.calls.length;
+      // The record is the same: an action that recorded a request changed nothing the revision reads.
+      getAuditLog.mockReturnValue(of(page([transition, modified, created])));
+      TestBed.inject(DocumentChangesService).notify();
+      fixture.detectChanges();
+      expect(getAuditLog.mock.calls.length).toBe(calls + 1);
+      expect(root.querySelector('nxs-spinner')).toBeNull();
+      // And once more after the audit's delay, which a notification from outside the page's own
+      // change detection leaves to be waited out.
+      await new Promise((resolve) => setTimeout(resolve, AUDIT_DELAY * 3));
+      await settle();
+      expect(getAuditLog.mock.calls.length).toBe(calls + 2);
+      expect(lines(root)).toHaveLength(3);
     });
 
     it('is refreshed for a lock, a check-in and the trash, and not for an equal copy', async () => {

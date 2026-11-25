@@ -127,23 +127,24 @@ section 39).
 
 Automation operations use `POST /nuxeo/api/v1/automation/:operationId` with body `{ params: {}, context: {}, input: "" }`.
 
-| Operation               | ID                                      | Key params                                                                                                                      |
-| ----------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Create collection       | `Collection.Create`                     | `name`, `description`                                                                                                           |
-| Add to collection       | `Collection.AddToCollection`            | `collection` (uid)                                                                                                              |
-| Publish document        | `Document.PublishToSection`             | `target` (section uid)                                                                                                          |
-| Lock document           | `Document.Lock`                         | —                                                                                                                               |
-| Unlock document         | `Document.Unlock`                       | —                                                                                                                               |
-| Follow a transition     | `Document.FollowLifecycleTransition`    | `value` (the transition's name, from the `allowedTransitions` enricher)                                                         |
-| Add permission          | `Document.AddPermission`                | `username`, `permission`, `notify`, `comment`, `begin`, `end`, `creator` (logged-in user — populates "Granted by")              |
-| Replace permission      | `Document.ReplacePermission`            | `id`, `username`, `permission`, `notify`, `comment`, `begin`, `end` — an unknown `id` is a 200 no-op; omitted dates are cleared |
-| Remove permission       | `Document.RemovePermission`             | `id` removes one ACE; `user` removes **every** ACE of that principal (an unknown `id` is a 200 no-op)                           |
-| Add permission (legacy) | `Document.AddACE`                       | `user`, `permission` — client may pass `notify`/`comment`/`begin`/`end` but Nuxeo ignores them; prefer `Document.AddPermission` |
-| Block inheritance       | `Document.BlockPermissionInheritance`   | —                                                                                                                               |
-| Unblock inheritance     | `Document.UnblockPermissionInheritance` | —                                                                                                                               |
-| Bulk download           | `Blob.BulkDownload`                     | `uids`                                                                                                                          |
-| CSV export              | `Bulk.RunAction`                        | `action: "csvExport"`                                                                                                           |
-| Read a system of record | `Connector.Read`                        | `connector`; input the document. Ours (`nuxeo-agentic-connectors`), not installed by default                                    |
+| Operation               | ID                                      | Key params                                                                                                                        |
+| ----------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Create collection       | `Collection.Create`                     | `name`, `description`                                                                                                             |
+| Add to collection       | `Collection.AddToCollection`            | `collection` (uid)                                                                                                                |
+| Publish document        | `Document.PublishToSection`             | `target` (section uid)                                                                                                            |
+| Lock document           | `Document.Lock`                         | —                                                                                                                                 |
+| Unlock document         | `Document.Unlock`                       | —                                                                                                                                 |
+| Follow a transition     | `Document.FollowLifecycleTransition`    | `value` (the transition's name, from the `allowedTransitions` enricher)                                                           |
+| Add permission          | `Document.AddPermission`                | `username`, `permission`, `notify`, `comment`, `begin`, `end`, `creator` (logged-in user — populates "Granted by")                |
+| Replace permission      | `Document.ReplacePermission`            | `id`, `username`, `permission`, `notify`, `comment`, `begin`, `end` — an unknown `id` is a 200 no-op; omitted dates are cleared   |
+| Remove permission       | `Document.RemovePermission`             | `id` removes one ACE; `user` removes **every** ACE of that principal (an unknown `id` is a 200 no-op)                             |
+| Add permission (legacy) | `Document.AddACE`                       | `user`, `permission` — client may pass `notify`/`comment`/`begin`/`end` but Nuxeo ignores them; prefer `Document.AddPermission`   |
+| Block inheritance       | `Document.BlockPermissionInheritance`   | —                                                                                                                                 |
+| Unblock inheritance     | `Document.UnblockPermissionInheritance` | —                                                                                                                                 |
+| Bulk download           | `Blob.BulkDownload`                     | `uids`                                                                                                                            |
+| CSV export              | `Bulk.RunAction`                        | `action: "csvExport"`                                                                                                             |
+| Read a system of record | `Connector.Read`                        | `connector`; input the document. Ours (`nuxeo-agentic-connectors`), not installed by default                                      |
+| Run an app's button     | `AgenticUi.RunAction`                   | `app`, `action`, `values` (JSON text); input the document. Ours (`nuxeo-agentic-core`); runs only what the deployment allow-lists |
 
 ---
 

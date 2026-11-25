@@ -287,8 +287,120 @@ public class PlatformCheck {
             schema(byNode.get("supervisorApproval"), "route_node").elementText("taskAssigneesExpr"), new HashMap<>())),
         "supervisorApproval's task goes to claims-supervisors");
 
+    operationButtons(bundle, context);
+
     System.out.println(failures == 0 ? "\nAll checks passed." : "\n" + failures + " check(s) failed.");
     System.exit(failures == 0 ? 0 : 1);
+  }
+
+  /**
+   * A comment's template, as the server's MVEL runs it, its surrounding white space left out: the
+   * XML's line breaks around a value are not what the check is about.
+   */
+  static String run(String expression, Map<String, Object> variables) {
+    return String.valueOf(org.mvel2.templates.TemplateRuntime.eval(expression.substring("expr:".length()), variables)).strip();
+  }
+
+  /** A descriptor's list, as an array or a list, whichever the server's version returns. */
+  static List<?> items(Object value) {
+    return value instanceof Object[] array ? Arrays.asList(array) : (List<?>) value;
+  }
+
+  /** {@code CurrentUser} in an Automation expression: what the chains' comments read of it. */
+  public static final class User {
+    private final String name;
+
+    User(String name) {
+      this.name = name;
+    }
+
+    public String getName() {
+      return name;
+    }
+  }
+
+  /**
+   * The operation buttons' component, payers-claims-demo-operations.xml: its two chains, loaded by the
+   * descriptor class their point declares, each beginning with its guard, and no REST binding, which
+   * AgenticUi.RunAction would apply to the button too; and each chain's comment, a template, run by the server's MVEL with chain
+   * parameters as AgenticUi.RunAction gives them. What it does not show: that the server runs the
+   * chains, which only an install does.
+   */
+  static void operationButtons(File bundle, Context context) throws Exception {
+    System.out.println("== The operation buttons' chains");
+    Class<?> chainType = Class.forName("org.nuxeo.ecm.automation.core.OperationChainContribution");
+    Class<?> bindingType = Class.forName("org.nuxeo.ecm.automation.server.RestBinding");
+    org.w3c.dom.Document xml = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        .parse(new File(bundle, "OSGI-INF/payers-claims-demo-operations.xml"));
+    org.w3c.dom.NodeList extensions = xml.getDocumentElement().getElementsByTagName("extension");
+    Map<String, Object> chains = new TreeMap<>();
+    Map<String, Object> bindings = new TreeMap<>();
+    for (int i = 0; i < extensions.getLength(); i++) {
+      org.w3c.dom.Element extension = (org.w3c.dom.Element) extensions.item(i);
+      String key = extension.getAttribute("target") + "#" + extension.getAttribute("point");
+      Class<?> type = switch (key) {
+        case "org.nuxeo.ecm.core.operation.OperationServiceComponent#chains" -> chainType;
+        default -> null;
+      };
+      check(type != null, "payers-claims-demo-operations.xml contributes to " + key);
+      if (type == null) continue;
+      XMap xmap = new XMap();
+      xmap.register(type);
+      for (Object o : xmap.loadAll(context, extension)) {
+        if (type == chainType) chains.put((String) type.getMethod("getId").invoke(o), o);
+        else bindings.put((String) bindingType.getField("name").get(o), o);
+      }
+    }
+    List<String> ids = List.of("Payers.ReferToInvestigations", "Payers.RequestMedicalRecords");
+    check(chains.keySet().equals(new TreeSet<>(ids)), "the two chains are contributed: " + chains.keySet());
+    check(bindings.isEmpty(), "no REST binding, which would keep the button from those it is for: " + bindings.keySet());
+    for (Map.Entry<String, Object> chain : chains.entrySet()) {
+      List<?> ops = items(chainType.getMethod("getOps").invoke(chain.getValue()));
+      Object first = ops.isEmpty() ? null : ops.get(0);
+      String guarded = null;
+      if (first != null && "AgenticUi.RequireRunAction".equals(first.getClass().getMethod("getId").invoke(first))) {
+        for (Object param : items(first.getClass().getMethod("getParams").invoke(first))) {
+          if ("operation".equals(param.getClass().getMethod("getName").invoke(param)))
+            guarded = (String) param.getClass().getMethod("getValue").invoke(param);
+        }
+      }
+      check(chain.getKey().equals(guarded == null ? null : guarded.strip()),
+          chain.getKey() + " begins with AgenticUi.RequireRunAction for itself, so only a button runs it: " + (guarded == null ? null : guarded.strip()));
+    }
+    Map<String, String> comments = new TreeMap<>();
+    for (Map.Entry<String, Object> chain : chains.entrySet()) {
+      for (Object op : items(chainType.getMethod("getOps").invoke(chain.getValue()))) {
+        Class<?> opType = op.getClass();
+        if (!"Audit.LogEvent".equals(opType.getMethod("getId").invoke(op))) continue;
+        for (Object param : items(opType.getMethod("getParams").invoke(op))) {
+          Class<?> paramType = param.getClass();
+          if ("comment".equals(paramType.getMethod("getName").invoke(param)))
+            comments.put(chain.getKey(), (String) paramType.getMethod("getValue").invoke(param));
+        }
+      }
+    }
+    check(comments.keySet().equals(new TreeSet<>(ids)), "each records itself with Audit.LogEvent: " + comments.keySet());
+    String request = comments.getOrDefault("Payers.RequestMedicalRecords", "");
+    check(request.startsWith("expr:"), "Request medical records' comment is an expression");
+    Map<String, Object> urgent = new HashMap<>();
+    urgent.put("CurrentUser", new User("dana.lee"));
+    urgent.put("ChainParameters", new HashMap<>(Map.of("provider", "p1", "urgent", true, "note", "Before Friday")));
+    Object said = run(request, urgent);
+    check("dana.lee asked the provider for the claim's medical records, urgently: Before Friday".equals(said),
+        "with urgent and a note: " + said);
+    Map<String, Object> plain = new HashMap<>();
+    plain.put("CurrentUser", new User("dana.lee"));
+    // A form's flag left unticked is not sent: the chain parameter is absent, not false.
+    plain.put("ChainParameters", new HashMap<>(Map.of("provider", "p1", "note", "x")));
+    said = run(request, plain);
+    check("dana.lee asked the provider for the claim's medical records: x".equals(said), "with no urgent: " + said);
+    // A value is data: an expression in it is written as it is, never run.
+    plain.put("ChainParameters", new HashMap<>(Map.of("note", "@{Session.removeDocument(null)}")));
+    said = run(request, plain);
+    check(String.valueOf(said).endsWith(": @{Session.removeDocument(null)}"), "a note holding a template is text: " + said);
+    String refer = comments.getOrDefault("Payers.ReferToInvestigations", "");
+    said = run(refer, plain);
+    check("dana.lee referred the claim to special investigations.".equals(said), "the referral: " + said);
   }
 
   /** NodeVariables, as the route node holds them: every variable of its schema, null when unset. */

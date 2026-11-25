@@ -36,8 +36,6 @@ public class AgenticUiAppsServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
 
-    private transient volatile AppRegistryEndpoint endpoint;
-
     @Override
     protected void service(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String method = request.getMethod();
@@ -88,19 +86,23 @@ public class AgenticUiAppsServlet extends HttpServlet {
                 nuxeo.isAdministrator());
     }
 
-    /** Rendered once per snapshot, so file bodies and ETags change only when the snapshot does. */
-    private AppRegistryEndpoint endpoint() {
+    /**
+     * Rendered once per snapshot and allow-list, so file bodies and ETags change only when one of
+     * them does. The one {@code AgenticUi.RunAction} reads too, so that it runs only what this
+     * serves.
+     */
+    private static AppRegistryEndpoint endpoint() {
         ConfigSnapshot snapshot = Framework.getService(AgenticUiConfigService.class).getSnapshot();
-        AppRegistryEndpoint current = endpoint;
-        if (current == null || current.snapshot() != snapshot) {
-            synchronized (this) {
-                current = endpoint;
-                if (current == null || current.snapshot() != snapshot) {
-                    current = new AppRegistryEndpoint(snapshot);
-                    endpoint = current;
-                }
-            }
-        }
-        return current;
+        return AppRegistryEndpoint.current(snapshot, allowList());
+    }
+
+    /**
+     * The allow-list in force, or none when its component is not there, or when the platform's own
+     * operations have been replaced on this server: an app's actions that run an operation are then
+     * left out, rather than served unchecked.
+     */
+    static AllowList allowList() {
+        OperationAllowListService service = Framework.getService(OperationAllowListService.class);
+        return service == null || !service.intact() ? AllowList.EMPTY : service.getAllowList();
     }
 }
