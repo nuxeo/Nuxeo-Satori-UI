@@ -380,7 +380,7 @@ class ShareLinkComponentTest {
         refused(Why.NOT_COVERED, withoutPolicy.page(created.token()));
 
         ShareLinkComponent noService = new ShareLinkComponent(clock, store, repository, () -> null, new Watermarker(),
-                new java.security.SecureRandom(), new Semaphore(2));
+                new java.security.SecureRandom(), new Semaphore(2), () -> java.util.Set.of(ShareFakes.SHARERS));
         refused(Why.NOT_COVERED, noService.serve(created.token(), "view:FullHD"));
 
         asset.properties.put("dc:expired", "not a date");
@@ -433,7 +433,7 @@ class ShareLinkComponentTest {
         // As a database whose collation ignores case would answer an id written in capitals.
         ShareLink loose = created.link();
         ShareLink upper = new ShareLink(loose.id().toUpperCase(), loose.repository(), loose.document(), loose.items(),
-                loose.lastDay(), loose.created(), loose.createdBy(), null, null);
+                loose.digests(), loose.lastDay(), loose.created(), loose.createdBy(), null, null);
         store.links.put(loose.id(), upper);
         refused(Why.UNKNOWN, links.serve(created.token(), "view:FullHD"));
     }
@@ -455,10 +455,10 @@ class ShareLinkComponentTest {
 
     @Test
     void aFileTheWatermarkCannotBeDrawnOnIsNotServed() {
-        Created created = make(asset, "2026-12-14", "view:FullHD", "view:Medium");
         asset.viewFile(3, ShareFakes.blob("GIF89a not really".getBytes(), "image/gif"));
         asset.viewFile(2, ShareFakes.blob(ShareFakes.picture(20, 20, Color.GREEN, "gif",
                 BufferedImage.TYPE_INT_RGB), "image/gif"));
+        Created created = make(asset, "2026-12-14", "view:FullHD", "view:Medium");
         refused(Why.NOT_AN_IMAGE, links.serve(created.token(), "view:FullHD"));
         refused(Why.NOT_AN_IMAGE, links.serve(created.token(), "view:Medium"));
         assertTrue(store.downloads.isEmpty());
@@ -479,6 +479,157 @@ class ShareLinkComponentTest {
         store.failLogging = true;
         refused(Why.ERROR, links.serve(created.token(), "view:FullHD"));
     }
+
+    // ----- Bound to the files, the sharers and one turn per link -----
+
+    /**
+     * A user who may write the asset renames its views, so that the title a link lists names the
+     * print view: the link was made for another file, and serves nothing for that item.
+     */
+    @Test
+    void aViewRenamedOrReplacedEndsTheLinkForIt() throws IOException {
+        Created created = make(asset, "2026-12-14", "view:Small", "view:Medium");
+        decode(served(links.serve(created.token(), "view:Small")).bytes());
+
+        asset.properties.put("picture:views/1/title", "Small-old");
+        asset.properties.put("picture:views/4/title", "Small");
+        refused(Why.CHANGED, links.serve(created.token(), "view:Small"));
+        // Put back, the same file is served again.
+        asset.properties.put("picture:views/1/title", "Small");
+        asset.properties.put("picture:views/4/title", "OriginalJpeg");
+        served(links.serve(created.token(), "view:Small"));
+
+        // The picture replaced: its views are other files.
+        asset.viewFile(2, ShareFakes.blob(ShareFakes.jpeg(180, 140, Color.BLACK), "image/jpeg"));
+        refused(Why.CHANGED, links.serve(created.token(), "view:Medium"));
+        // And the page no longer lists it.
+        assertEquals(List.of("view:Small"),
+                assertInstanceOf(Page.class, links.page(created.token())).items().stream().map(ShareItem::id).toList());
+    }
+
+    @Test
+    void theOriginalReplacedEndsTheLinkForIt() {
+        Created created = make(asset, "2026-12-14", "original");
+        asset.properties.put("file:content",
+                (java.io.Serializable) ShareFakes.blob(ShareFakes.jpeg(320, 240, Color.BLACK), "image/jpeg"));
+        refused(Why.CHANGED, links.serve(created.token(), "original"));
+    }
+
+    @Test
+    void aFileWithNoDigestIsNotShared() {
+        asset.viewFile(3, ShareFakes.undigested(ShareFakes.jpeg(190, 150, Color.RED), "image/jpeg"));
+        NotCreated none = assertInstanceOf(NotCreated.class,
+                links.create(owner, asset.model(), List.of("view:FullHD"), "2026-12-14"));
+        assertEquals(List.of(new Refusal("view:FullHD", "no-such-rendition")), none.refused());
+    }
+
+    /**
+     * WriteSecurity is everyone's on their own workspace, and on a copy of any asset they may read
+     * put there: making a link needs the sharing group too, or an administrator.
+     */
+    @Test
+    void onlyAnAdministratorOrAMemberOfASharingGroupMakesALink() {
+        CoreSession manager = ShareFakes.session("workspace.owner", true);
+        DocumentSecurityException e = assertThrows(DocumentSecurityException.class,
+                () -> links.create(manager, asset.model(), List.of("view:FullHD"), "2026-12-14"));
+        assertTrue(e.getMessage().contains(ShareLinkService.SHARING_GROUPS_PROPERTY), e.getMessage());
+        CoreSession otherGroup = ShareFakes.session("workspace.owner", true, false, List.of("members"));
+        assertThrows(DocumentSecurityException.class,
+                () -> links.create(otherGroup, asset.model(), List.of("view:FullHD"), "2026-12-14"));
+        assertTrue(store.links.isEmpty());
+
+        // The same user still lists, revokes and reads the downloads: stopping a link is not sharing.
+        Created created = make(asset, "2026-12-14", "view:FullHD");
+        assertEquals(1, links.list(manager, asset.model()).size());
+        links.downloads(manager, asset.model());
+        links.revoke(manager, asset.model(), created.link().id());
+        refused(Why.REVOKED, links.serve(created.token(), "view:FullHD"));
+
+        CoreSession administrator = ShareFakes.session("Administrator", true, true, List.of());
+        assertInstanceOf(Created.class,
+                links.create(administrator, asset.model(), List.of("view:FullHD"), "2026-12-14"));
+    }
+
+    @Test
+    void aCreatorNoLongerInASharingGroupEndsTheLink() {
+        Created created = make(asset, "2026-12-14", "view:FullHD");
+        repository.groups.get(OWNER).remove(ShareFakes.SHARERS);
+        refused(Why.CREATOR_MAY_NOT_SHARE, links.serve(created.token(), "view:FullHD"));
+        repository.administrators.add(OWNER);
+        served(links.serve(created.token(), "view:FullHD"));
+    }
+
+    @Test
+    void theSharingGroupsAreTheCommaSeparatedNamesOfTheProperty() {
+        assertEquals(java.util.Set.of(), ShareLinkComponent.groups(null));
+        assertEquals(java.util.Set.of(), ShareLinkComponent.groups(""));
+        assertEquals(java.util.Set.of(), ShareLinkComponent.groups(" , "));
+        assertEquals(java.util.Set.of("brand-sharers", "legal"), ShareLinkComponent.groups(" brand-sharers ,legal,"));
+    }
+
+    /** Every open link is listed however many newer closed ones there are, and counted towards the limit. */
+    @Test
+    void everyOpenLinkIsListedAndCountedHoweverOld() {
+        Created old = make(asset, "2026-12-14", "view:FullHD");
+        for (int i = 0; i < ShareLinkService.MAX_LISTED + 50; i++) {
+            clock.now = NOW.plusSeconds(i + 1);
+            Created newer = make(asset, "2026-12-14", "view:Medium");
+            links.revoke(owner, asset.model(), newer.link().id());
+        }
+        List<ShareLink> listed = links.list(owner, asset.model());
+        assertEquals(ShareLinkService.MAX_LISTED, listed.size());
+        assertTrue(listed.stream().anyMatch(link -> link.id().equals(old.link().id())), "the open link is listed");
+        // Newest first still.
+        assertEquals(old.link().id(), listed.get(listed.size() - 1).id());
+    }
+
+    /** One link's items are marked one at a time: a second request through it waits for nothing and is told to try again. */
+    @Test
+    void oneLinkMarksOneItemAtATimeAndLeavesTheOtherTurnToOthers() throws Exception {
+        java.util.concurrent.CountDownLatch inside = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        Watermarker slow = new Watermarker() {
+            @Override
+            public byte[] watermark(org.nuxeo.ecm.core.api.Blob blob, String text) throws WatermarkException {
+                if (text.contains(slowLabel)) {
+                    inside.countDown();
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                return super.watermark(blob, text);
+            }
+        };
+        Asset other = repository.add(new Asset("asset-b", Color.BLUE));
+        ShareLinkComponent shared = ShareFakes.component(clock, store, repository, TestRights.kit(clock),
+                new Semaphore(2), slow);
+        Created busy = assertInstanceOf(Created.class,
+                shared.create(owner, asset.model(), List.of("view:FullHD", "view:Medium"), "2026-12-14"));
+        Created calm = assertInstanceOf(Created.class,
+                shared.create(owner, other.model(), List.of("view:Small"), "2026-12-14"));
+        slowLabel = busy.link().label();
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.Future<Answer> first = pool.submit(() -> shared.serve(busy.token(), "view:FullHD"));
+            assertTrue(inside.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            long started = System.nanoTime();
+            assertInstanceOf(Busy.class, shared.serve(busy.token(), "view:Medium"));
+            assertTrue(System.nanoTime() - started < 1_000_000_000L, "told at once, not after a wait");
+            served(shared.serve(calm.token(), "view:Small"));
+            release.countDown();
+            served(first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        // Its turn given back, the link marks again.
+        served(shared.serve(busy.token(), "view:Medium"));
+    }
+
+    private volatile String slowLabel = "none";
 
     // ----- Managing a document's links -----
 

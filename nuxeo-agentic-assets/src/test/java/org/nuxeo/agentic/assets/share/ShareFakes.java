@@ -55,6 +55,9 @@ final class ShareFakes {
 
     static final String OWNER = "brand.manager";
 
+    /** The group the tests' server names in nuxeo.agentic.share.groups, which the owner is in. */
+    static final String SHARERS = "brand-sharers";
+
     private ShareFakes() {
     }
 
@@ -106,8 +109,24 @@ final class ShareFakes {
         return out.toByteArray();
     }
 
+    /** A file as Nuxeo stores one: with its bytes' MD5 as its digest. */
     static Blob blob(byte[] bytes, String mimeType) {
+        Blob blob = new ByteArrayBlob(bytes, mimeType);
+        blob.setDigest(md5(bytes));
+        return blob;
+    }
+
+    /** A file as one not stored yet: no digest. */
+    static Blob undigested(byte[] bytes, String mimeType) {
         return new ByteArrayBlob(bytes, mimeType);
+    }
+
+    static String md5(byte[] bytes) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("MD5").digest(bytes));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** An asset as the brand kit seeds one, cleared until 2027 on every channel, with its pictures. */
@@ -275,6 +294,12 @@ final class ShareFakes {
         /** Each user's documents they hold WriteSecurity on. */
         final Map<String, Set<String>> mayShare = new HashMap<>();
 
+        /** Each user's groups, as the user directory has them now. */
+        final Map<String, Set<String>> groups = new HashMap<>(Map.of(OWNER, new HashSet<>(Set.of(SHARERS))));
+
+        /** The administrators, as the user directory has them now. */
+        final Set<String> administrators = new HashSet<>();
+
         /** Every document id read, in order. */
         final List<String> read = new ArrayList<>();
 
@@ -295,17 +320,29 @@ final class ShareFakes {
         }
 
         @Override
-        public boolean hasPermission(String repository, String document, String username, String permission) {
-            return "WriteSecurity".equals(permission)
+        public boolean mayShare(String repository, String document, String username, String permission,
+                Set<String> sharingGroups) {
+            boolean sharer = administrators.contains(username)
+                    || groups.getOrDefault(username, Set.of()).stream().anyMatch(sharingGroups::contains);
+            return sharer && "WriteSecurity".equals(permission)
                     && mayShare.getOrDefault(username, Set.of()).contains(document);
         }
     }
 
-    /** A signed-in user's session: who they are, and whether they hold WriteSecurity on every document. */
+    /**
+     * A signed-in user's session: who they are, and whether they hold WriteSecurity on every document.
+     * The owner is in the sharing group; anyone else in none.
+     */
     static CoreSession session(String user, boolean mayManage) {
+        return session(user, mayManage, false, OWNER.equals(user) ? List.of(SHARERS) : List.of());
+    }
+
+    static CoreSession session(String user, boolean mayManage, boolean administrator, List<String> groups) {
         NuxeoPrincipal principal = (NuxeoPrincipal) Proxy.newProxyInstance(ShareFakes.class.getClassLoader(),
                 new Class<?>[] { NuxeoPrincipal.class, Principal.class }, (proxy, method, args) -> switch (method.getName()) {
                 case "getName" -> user;
+                case "isAdministrator" -> administrator;
+                case "getAllGroups" -> List.copyOf(groups);
                 case "toString" -> user;
                 case "hashCode" -> user.hashCode();
                 case "equals" -> proxy == args[0];
@@ -335,7 +372,13 @@ final class ShareFakes {
 
     static ShareLinkComponent component(MovingClock clock, Store store, Repository repository,
             AssetRightsService rights, Semaphore marking) {
-        return new ShareLinkComponent(clock, store, repository, () -> rights, new Watermarker(),
-                new java.security.SecureRandom(), marking);
+        return component(clock, store, repository, rights, marking, new Watermarker());
+    }
+
+    /** As the server with nuxeo.agentic.share.groups set to the sharing group. */
+    static ShareLinkComponent component(MovingClock clock, Store store, Repository repository,
+            AssetRightsService rights, Semaphore marking, Watermarker watermarker) {
+        return new ShareLinkComponent(clock, store, repository, () -> rights, watermarker,
+                new java.security.SecureRandom(), marking, () -> Set.of(SHARERS));
     }
 }

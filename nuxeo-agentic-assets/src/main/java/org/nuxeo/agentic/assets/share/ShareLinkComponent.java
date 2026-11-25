@@ -13,13 +13,19 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -35,6 +41,7 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
 import org.nuxeo.ecm.core.api.NuxeoException;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.model.DefaultComponent;
 
@@ -47,14 +54,16 @@ import org.nuxeo.runtime.model.DefaultComponent;
  * <li>the token has a token's form, and a link has its hash, compared in constant time;</li>
  * <li>the link is not revoked, and its last day, in UTC, has not passed;</li>
  * <li>the link lists the item;</li>
- * <li>its creator, as the user directory has them now, still holds {@value ShareLinkService#MANAGE_PERMISSION}
- * on the document;</li>
+ * <li>its creator, as the user directory has them now, with their groups, still holds
+ * {@value ShareLinkService#MANAGE_PERMISSION} on the document, and is still an administrator or a
+ * member of a group {@value ShareLinkService#SHARING_GROUPS_PROPERTY} names;</li>
  * <li>the document is there, live, and not in the trash;</li>
  * <li>a rights policy of {@code nuxeo-agentic-assets} covers its type, the asset's rights have not
  * ended, a preview's use included, and the policy allows the item's use as it allows a download:
  * so an ended right, a channel taken off the asset, or a policy that no longer lists the use ends
  * the link for that item;</li>
- * <li>the document has the item: its view of that title, or its original;</li>
+ * <li>the document has the item, and its file is the one the link was made for: its view of that
+ * title, or its original, with the digest the link recorded;</li>
  * <li>the item is a JPEG or a PNG the watermark can be drawn on, within its size: the bytes served
  * are always the marked ones, never the file;</li>
  * <li>the download is logged.</li>
@@ -95,15 +104,21 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
 
     private final Semaphore marking;
 
+    /** The links one of whose items is being marked now: one at a time per link. */
+    private final Set<String> markingLinks = ConcurrentHashMap.newKeySet();
+
+    private final Supplier<Set<String>> sharingGroups;
+
     public ShareLinkComponent() {
         this(Clock.systemUTC(), new DirectoryShareLinkStore(), new ShareRepository.Nuxeo(),
                 () -> Framework.getService(AssetRightsService.class), new Watermarker(), new SecureRandom(),
-                new Semaphore(MARKING_AT_ONCE));
+                new Semaphore(MARKING_AT_ONCE), () -> groups(Framework.getProperty(SHARING_GROUPS_PROPERTY, "")));
     }
 
-    /** For tests, which choose the time, the store, the repository and the rights. */
+    /** For tests, which choose the time, the store, the repository, the rights and the groups. */
     ShareLinkComponent(Clock clock, ShareLinkStore store, ShareRepository repository,
-            Supplier<AssetRightsService> rights, Watermarker watermarker, SecureRandom random, Semaphore marking) {
+            Supplier<AssetRightsService> rights, Watermarker watermarker, SecureRandom random, Semaphore marking,
+            Supplier<Set<String>> sharingGroups) {
         this.clock = clock;
         this.store = store;
         this.repository = repository;
@@ -111,6 +126,31 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         this.watermarker = watermarker;
         this.random = random;
         this.marking = marking;
+        this.sharingGroups = sharingGroups;
+    }
+
+    /** The groups a comma-separated property names, trimmed; none for an empty one. */
+    static Set<String> groups(String property) {
+        return property == null ? Set.of()
+                : Arrays.stream(property.split(","))
+                        .map(String::trim)
+                        .filter(group -> !group.isEmpty())
+                        .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Whether this user may give someone outside access: an administrator, or a member of one of
+     * {@code groups}. {@code false} for no user.
+     */
+    static boolean isSharer(NuxeoPrincipal principal, Set<String> groups) {
+        if (principal == null) {
+            return false;
+        }
+        if (principal.isAdministrator()) {
+            return true;
+        }
+        List<String> all = principal.getAllGroups();
+        return all != null && all.stream().anyMatch(groups::contains);
     }
 
     @Override
@@ -127,6 +167,10 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
     @Override
     public Creation create(CoreSession session, DocumentModel document, List<String> items, String lastDay) {
         requireManage(session, document);
+        if (!isSharer(session.getPrincipal(), sharingGroups.get())) {
+            throw new DocumentSecurityException("Share links: only an administrator or a member of a group "
+                    + SHARING_GROUPS_PROPERTY + " names makes them");
+        }
         if (document.isVersion() || document.isProxy()) {
             throw bad("a version or a proxy is not shared: share its live document");
         }
@@ -145,10 +189,11 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
             throw bad("a link's last day is from today, " + today + ", to " + MAX_DAYS + " days after it, in UTC");
         }
         Instant now = now();
-        long open = store.forDocument(document.getId(), MAX_LISTED)
-                         .stream()
-                         .filter(link -> link.state(now) == ShareLink.State.ACTIVE)
-                         .count();
+        List<ShareLink> kept = store.forDocument(document.getId(), MAX_KEPT);
+        if (kept.size() >= MAX_KEPT) {
+            throw bad("the document has " + MAX_KEPT + " links kept already");
+        }
+        long open = kept.stream().filter(link -> link.state(now) == ShareLink.State.ACTIVE).count();
         if (open >= MAX_OPEN_LINKS) {
             throw bad("the document has " + MAX_OPEN_LINKS + " open links already: revoke one first");
         }
@@ -156,10 +201,15 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         if (!refused.isEmpty()) {
             return new NotCreated(refused);
         }
+        // Each item is bound to the file it has now: its digest, which refusals() saw is there.
+        Map<String, String> digests = new LinkedHashMap<>();
+        for (ShareItem item : chosen) {
+            digests.put(item.id(), blobOf(document, policy, item).getDigest());
+        }
         String token = ShareToken.generate(random);
         String user = session.getPrincipal().getName();
         ShareLink link = new ShareLink(ShareToken.hash(token), document.getRepositoryName(), document.getId(),
-                chosen.stream().map(ShareItem::id).toList(), day, now, user, null, null);
+                chosen.stream().map(ShareItem::id).toList(), digests, day, now, user, null, null);
         store.create(link);
         log.info("Share links: {} made link {} to {} for {}, until {} (UTC)", user, link.label(), document.getId(),
                 link.items(), day);
@@ -185,7 +235,8 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
             Decision decision = AssetRights.decide(policy, facts, item.use(), today);
             if (!decision.allowed()) {
                 refused.add(new Refusal(item.id(), decision.reason().code()));
-            } else if (blobOf(document, policy, item) == null) {
+            } else if (!hasDigest(blobOf(document, policy, item))) {
+                // No file, or one Nuxeo did not store with a digest: nothing to bind the link to.
                 refused.add(new Refusal(item.id(), "no-such-rendition"));
             }
         }
@@ -195,7 +246,18 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
     @Override
     public List<ShareLink> list(CoreSession session, DocumentModel document) {
         requireManage(session, document);
-        return store.forDocument(document.getId(), MAX_LISTED);
+        Instant now = now();
+        List<ShareLink> kept = store.forDocument(document.getId(), MAX_KEPT);
+        // Every open link, however old, so that none is out of Revoke's reach; then the newest closed
+        // ones, up to MAX_LISTED in all.
+        List<ShareLink> listed = new ArrayList<>(
+                kept.stream().filter(link -> link.state(now) == ShareLink.State.ACTIVE).toList());
+        kept.stream()
+            .filter(link -> link.state(now) != ShareLink.State.ACTIVE)
+            .limit(Math.max(0, MAX_LISTED - listed.size()))
+            .forEach(listed::add);
+        listed.sort(Comparator.comparing(ShareLink::created).reversed());
+        return listed;
     }
 
     @Override
@@ -314,7 +376,8 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
             if (itemId != null && !link.items().contains(itemId)) {
                 return refused(Why.NOT_LISTED, label, itemId);
             }
-            if (!repository.hasPermission(link.repository(), link.document(), link.createdBy(), MANAGE_PERMISSION)) {
+            if (!repository.mayShare(link.repository(), link.document(), link.createdBy(), MANAGE_PERMISSION,
+                    sharingGroups.get())) {
                 return refused(Why.CREATOR_MAY_NOT_SHARE, label, itemId);
             }
             String linkLabel = label;
@@ -334,7 +397,10 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         if (!AssetRights.decide(policy, facts, item.use(), today()).allowed()) {
             return Why.RIGHTS_REFUSED;
         }
-        return blobOf(document, policy, item) == null ? Why.NO_SUCH_ITEM : null;
+        if (blobOf(document, policy, item, link.digests().get(item.id())) == null) {
+            return blobOf(document, policy, item) == null ? Why.NO_SUCH_ITEM : Why.CHANGED;
+        }
+        return null;
     }
 
     /** The document's own refusals, before any item: {@code null} when it may be shared at all. */
@@ -393,7 +459,21 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         if (why != null) {
             return refused(why, label, itemId);
         }
-        Blob blob = blobOf(document, policy, item);
+        Blob blob = blobOf(document, policy, item, link.digests().get(item.id()));
+        // One item per link at a time, so that one link cannot hold every turn.
+        if (!markingLinks.add(link.id())) {
+            log.warn("Share links: link {} asked for {} while one of its items was being marked; told to try again",
+                    label, itemId);
+            return new Busy();
+        }
+        try {
+            return mark(link, item, itemId, blob, now, label);
+        } finally {
+            markingLinks.remove(link.id());
+        }
+    }
+
+    private Answer mark(ShareLink link, ShareItem item, String itemId, Blob blob, Instant now, String label) {
         byte[] marked;
         try {
             if (!marking.tryAcquire(MARKING_WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
@@ -454,6 +534,41 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /**
+     * The item's file, only when it has {@code digest}: the policy's original, or the first view of
+     * the item's title with it. {@code null} otherwise, and for no digest.
+     */
+    static Blob blobOf(DocumentModel document, RightsPolicy policy, ShareItem item, String digest) {
+        if (digest == null || digest.isEmpty()) {
+            return null;
+        }
+        try {
+            if (item.isOriginal()) {
+                return document.getPropertyValue(policy.originalXpath()) instanceof Blob blob
+                        && digest.equals(blob.getDigest()) ? blob : null;
+            }
+            Serializable views = document.getPropertyValue("picture:views");
+            if (!(views instanceof List<?> list)) {
+                return null;
+            }
+            for (int index = 0; index < list.size(); index++) {
+                Serializable title = document.getPropertyValue("picture:views/" + index + "/title");
+                if (item.title().equals(title)
+                        && document.getPropertyValue("picture:views/" + index + "/content") instanceof Blob blob
+                        && digest.equals(blob.getDigest())) {
+                    return blob;
+                }
+            }
+            return null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static boolean hasDigest(Blob blob) {
+        return blob != null && blob.getDigest() != null && !blob.getDigest().isEmpty();
     }
 
     /** What the watermark says: the link's label and last day, so that a copy names the link it came from. */

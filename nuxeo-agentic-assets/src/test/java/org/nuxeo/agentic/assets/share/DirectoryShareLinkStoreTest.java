@@ -132,8 +132,8 @@ class DirectoryShareLinkStoreTest {
     private static final String TOKEN = ShareToken.generate(new SecureRandom());
 
     private static ShareLink link(String id, String document, Instant created) {
-        return new ShareLink(id, "default", document, List.of("view:FullHD", "original"), LocalDate.of(2026, 12, 14),
-                created, "brand.manager", null, null);
+        return new ShareLink(id, "default", document, List.of("view:FullHD", "original"),
+                Map.of("view:FullHD", "0f3e", "original", "9a1b"), LocalDate.of(2026, 12, 14), created, "brand.manager", null, null);
     }
 
     @Test
@@ -144,7 +144,9 @@ class DirectoryShareLinkStoreTest {
         directories.store.create(link);
 
         Map<String, Object> row = directories.entries.get(DirectoryShareLinkStore.LINKS).get(link.id());
-        assertEquals(Set.of("id", "repository", "document", "items", "lastDay", "created", "createdBy"), row.keySet());
+        assertEquals(Set.of("id", "repository", "document", "items", "digests", "lastDay", "created", "createdBy"),
+                row.keySet());
+        assertEquals("{\"view:FullHD\":\"0f3e\",\"original\":\"9a1b\"}", row.get("digests"));
         assertEquals(link.id(), row.get("id"));
         assertEquals("[\"view:FullHD\",\"original\"]", row.get("items"));
         assertEquals("2026-12-14", row.get("lastDay"));
@@ -192,6 +194,10 @@ class DirectoryShareLinkStoreTest {
     void anEntryThatDoesNotReadBackAsWrittenIsNotALink() {
         for (Map.Entry<String, Object> broken : List.<Map.Entry<String, Object>> of(Map.entry("items", "not json"), Map.entry("items", "[]"),
                 Map.entry("items", "[\"blob:file:content\"]"), Map.entry("items", "[1]"), Map.entry("items", "{}"),
+                Map.entry("digests", "not json"), Map.entry("digests", "{}"), Map.entry("digests", "[]"),
+                Map.entry("digests", "{\"view:FullHD\":\"0f3e\"}"),
+                Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"original\":\"\"}"),
+                Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"view:Medium\":\"9a1b\"}"),
                 Map.entry("lastDay", "14/12/2026"), Map.entry("created", "2026-11-24T12:00:00Z"),
                 Map.entry("createdBy", ""), Map.entry("revoked", "yesterday"), Map.<String, Object> entry("document", 7))) {
             Directories directories = new Directories();

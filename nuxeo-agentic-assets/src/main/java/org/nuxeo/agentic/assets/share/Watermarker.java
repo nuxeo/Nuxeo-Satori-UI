@@ -39,9 +39,11 @@ import org.nuxeo.ecm.core.api.Blob;
  * <p>Refused, never passed through unmarked:
  * <ul>
  * <li>a file that is not a JPEG or a PNG, as ImageIO reads it;</li>
- * <li>a file of more than {@value #MAX_BYTES} bytes, or a picture of more than
- * {@value #MAX_PIXELS} pixels, read from its header before its pixels are, so that a small file
- * claiming a huge picture is refused before it takes memory;</li>
+ * <li>a file of more than {@value #MAX_BYTES} bytes, a picture of more than {@value #MAX_PIXELS}
+ * pixels, or one whose decoded pixels and the marked copy would take more than
+ * {@value #MAX_DECODED_BYTES} bytes, as a picture of 16 bits a channel would: each read from its
+ * header before its pixels are, so that a small file claiming a huge picture is refused before it
+ * takes memory;</li>
  * <li>a file ImageIO cannot decode, such as a CMYK JPEG, or text it cannot draw.</li>
  * </ul>
  * The file is read into memory and decoded from there, so the picture is never written to a
@@ -52,8 +54,17 @@ public class Watermarker {
     /** 64 MiB. */
     public static final long MAX_BYTES = 64L * 1024 * 1024;
 
-    /** A 6000 by 4000 picture: about 170 MB while it is marked. */
+    /** A 6000 by 4000 picture. */
     public static final long MAX_PIXELS = 24_000_000L;
+
+    /**
+     * 200 MiB: the decoded picture and the marked copy, 4 bytes a pixel, together. A 6000 by 4000
+     * picture of 8 bits a channel, with or without alpha, takes 168 to 192 MB; of 16, 288 MB, refused.
+     */
+    public static final long MAX_DECODED_BYTES = 200L * 1024 * 1024;
+
+    /** The bytes a pixel takes decoded when its reader does not say: the most any format here takes. */
+    static final int UNKNOWN_BYTES_PER_PIXEL = 8;
 
     static final Set<String> FORMATS = Set.of("jpeg", "png");
 
@@ -109,6 +120,11 @@ public class Watermarker {
                 if (width <= 0 || height <= 0 || (long) width * height > MAX_PIXELS) {
                     throw refused(WatermarkException.Kind.TOO_LARGE, width + " by " + height + " pixels", null);
                 }
+                long decoded = (long) width * height * (bytesPerPixel(reader) + 4);
+                if (decoded > MAX_DECODED_BYTES) {
+                    throw refused(WatermarkException.Kind.TOO_LARGE,
+                            width + " by " + height + " pixels would take " + decoded + " bytes to mark", null);
+                }
                 BufferedImage marked = mark(reader.read(0), text);
                 return jpeg(marked);
             } finally {
@@ -117,6 +133,26 @@ public class Watermarker {
         } catch (IOException | RuntimeException e) {
             throw refused(WatermarkException.Kind.NOT_AN_IMAGE, "the picture could not be decoded or marked", e);
         }
+    }
+
+    /**
+     * What one pixel takes decoded, from the reader's own type for the picture, read from its header:
+     * its samples' bits, rounded up to bytes. {@link #UNKNOWN_BYTES_PER_PIXEL} when it does not say.
+     */
+    static int bytesPerPixel(ImageReader reader) throws IOException {
+        javax.imageio.ImageTypeSpecifier type = reader.getRawImageType(0);
+        if (type == null) {
+            Iterator<javax.imageio.ImageTypeSpecifier> types = reader.getImageTypes(0);
+            type = types != null && types.hasNext() ? types.next() : null;
+        }
+        if (type == null) {
+            return UNKNOWN_BYTES_PER_PIXEL;
+        }
+        int bits = 0;
+        for (int size : type.getSampleModel().getSampleSize()) {
+            bits += size;
+        }
+        return bits <= 0 ? UNKNOWN_BYTES_PER_PIXEL : (bits + 7) / 8;
     }
 
     /** At most {@link #MAX_BYTES}, whatever length the blob claims. */

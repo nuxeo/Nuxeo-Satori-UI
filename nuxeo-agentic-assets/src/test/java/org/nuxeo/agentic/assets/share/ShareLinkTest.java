@@ -16,7 +16,7 @@ class ShareLinkTest {
 
     private static ShareLink link(String lastDay, Instant revoked) {
         return new ShareLink("ab12cd34" + "0".repeat(56), "default", "asset-a", List.of("view:FullHD"),
-                LocalDate.parse(lastDay), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager", revoked,
+                java.util.Map.of("view:FullHD", "d1"), LocalDate.parse(lastDay), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager", revoked,
                 revoked == null ? null : "brand.manager");
     }
 

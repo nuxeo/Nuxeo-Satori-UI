@@ -25,7 +25,7 @@ class ShareEndpointTest {
     private static final String TOKEN = ShareToken.generate(new SecureRandom());
 
     private static final ShareLink LINK = new ShareLink(ShareToken.hash(TOKEN), "default", "asset-a",
-            List.of("view:FullHD"), LocalDate.of(2026, 12, 14), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager",
+            List.of("view:FullHD"), Map.of("view:FullHD", "d1"), LocalDate.of(2026, 12, 14), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager",
             null, null);
 
     /** A service that answers what the test sets, and records what it was asked. */

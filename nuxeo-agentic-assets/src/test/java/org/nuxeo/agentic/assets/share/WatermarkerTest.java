@@ -165,6 +165,32 @@ class WatermarkerTest {
                 () -> watermarker.watermark(ShareFakes.blob(overLimit, "image/png"), TEXT)).kind());
     }
 
+    /**
+     * Within the pixels, a picture of 16 bits a channel would take 288 MB to mark: refused from its
+     * header. Of 8, 192 MB: let through to be decoded.
+     */
+    @Test
+    void aPictureTooDeepToMarkInItsBudgetIsRefusedFromItsHeader() throws Exception {
+        byte[] deep = ShareFakes.png(1, 1, Color.RED);
+        claimSize(deep, 6000, 4000);
+        assertEquals(6, deep[25], "an RGBA picture");
+        deep[24] = 16;
+        fixHeaderChecksum(deep);
+        assertEquals(WatermarkException.Kind.TOO_LARGE, assertThrows(WatermarkException.class,
+                () -> watermarker.watermark(ShareFakes.blob(deep, "image/png"), TEXT)).kind());
+
+        byte[] shallow = ShareFakes.png(1, 1, Color.RED);
+        claimSize(shallow, 6000, 4000);
+        assertEquals(WatermarkException.Kind.NOT_AN_IMAGE, assertThrows(WatermarkException.class,
+                () -> watermarker.watermark(ShareFakes.blob(shallow, "image/png"), TEXT)).kind());
+    }
+
+    private static void fixHeaderChecksum(byte[] png) {
+        CRC32 crc = new CRC32();
+        crc.update(png, 12, 17);
+        ByteBuffer.wrap(png).putInt(29, (int) crc.getValue());
+    }
+
     @Test
     void aFileOfMoreThan64MebibytesIsRefusedWithoutReadingItAll() {
         long[] read = new long[1];

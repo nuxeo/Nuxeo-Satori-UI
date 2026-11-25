@@ -17,8 +17,10 @@ import org.nuxeo.ecm.core.api.DocumentModel;
  * <p>Two sides:
  * <ul>
  * <li><strong>Signed in,</strong> through the operations: a user who holds
- * {@value #MANAGE_PERMISSION} on a document makes, lists and revokes its links, and reads their
- * downloads. Each call checks that permission on the session it is given, the user's.</li>
+ * {@value #MANAGE_PERMISSION} on a document lists and revokes its links, and reads their downloads;
+ * to make one, they must also be an administrator or a member of a group the server's
+ * {@value #SHARING_GROUPS_PROPERTY} names. Each call checks on the session it is given, the
+ * user's.</li>
  * <li><strong>Not signed in,</strong> through the servlet at {@code /agentic-share/}: the token is
  * all a request carries, and all it can name is an item of its own link. The document is the
  * link's, read with a system session, so nothing in the request can name another one.</li>
@@ -34,6 +36,14 @@ public interface ShareLinkService {
      */
     String MANAGE_PERMISSION = "WriteSecurity";
 
+    /**
+     * The server's property, in {@code nuxeo.conf}, naming the groups whose members may make share
+     * links, comma-separated; administrators may too. Unset or empty, only administrators may.
+     * {@value #MANAGE_PERMISSION} alone is not enough: every user holds it on their own workspace, and
+     * on a copy of any asset they may read put there, whose rights fields they may then write.
+     */
+    String SHARING_GROUPS_PROPERTY = "nuxeo.agentic.share.groups";
+
     /** The most items one link lists. */
     int MAX_ITEMS = 10;
 
@@ -43,8 +53,14 @@ public interface ShareLinkService {
     /** The most links a document may have open at once. */
     int MAX_OPEN_LINKS = 100;
 
-    /** The most links {@link #list} answers. */
+    /**
+     * The most links {@link #list} answers: every open link, then the newest closed ones up to this
+     * many in all.
+     */
     int MAX_LISTED = 200;
+
+    /** The most links a document keeps, open or closed: past it, no new one is made. */
+    int MAX_KEPT = 1000;
 
     /** The most downloads {@link #downloads} answers. */
     int MAX_DOWNLOADS = 200;
@@ -148,6 +164,8 @@ public interface ShareLinkService {
         RIGHTS_REFUSED,
         /** The document has no such view, or no original. */
         NO_SUCH_ITEM,
+        /** The item's file is not the one the link was made for: its digest is another. */
+        CHANGED,
         /** The item is not a picture the watermark can be drawn on. */
         NOT_AN_IMAGE,
         /** The item is larger than the watermark draws on. */

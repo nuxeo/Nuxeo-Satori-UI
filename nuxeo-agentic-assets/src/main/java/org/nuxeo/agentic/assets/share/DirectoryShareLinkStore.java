@@ -64,6 +64,8 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
 
     static final String ITEMS = "items";
 
+    static final String DIGESTS = "digests";
+
     static final String LAST_DAY = "lastDay";
 
     static final String CREATED = "created";
@@ -122,6 +124,7 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
         entry.put(REPOSITORY, link.repository());
         entry.put(DOCUMENT, link.document());
         entry.put(ITEMS, items(link.items()));
+        entry.put(DIGESTS, digests(link.digests()));
         entry.put(LAST_DAY, link.lastDay().toString());
         entry.put(CREATED, INSTANT.format(link.created()));
         entry.put(CREATED_BY, link.createdBy());
@@ -203,8 +206,9 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
     static ShareLink link(DocumentModel entry) {
         String revoked = optional(entry, REVOKED);
         try {
+            List<String> items = items(text(entry, LINK_SCHEMA, ITEMS));
             return new ShareLink(text(entry, LINK_SCHEMA, ID), text(entry, LINK_SCHEMA, REPOSITORY),
-                    text(entry, LINK_SCHEMA, DOCUMENT), items(text(entry, LINK_SCHEMA, ITEMS)),
+                    text(entry, LINK_SCHEMA, DOCUMENT), items, digests(text(entry, LINK_SCHEMA, DIGESTS), items),
                     LocalDate.parse(text(entry, LINK_SCHEMA, LAST_DAY)), instant(text(entry, LINK_SCHEMA, CREATED)),
                     text(entry, LINK_SCHEMA, CREATED_BY), revoked == null ? null : instant(revoked),
                     optional(entry, REVOKED_BY));
@@ -234,6 +238,37 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
         ArrayNode array = JSON.createArrayNode();
         items.forEach(array::add);
         return array.toString();
+    }
+
+    static String digests(Map<String, String> digests) {
+        com.fasterxml.jackson.databind.node.ObjectNode object = JSON.createObjectNode();
+        digests.forEach(object::put);
+        return object.toString();
+    }
+
+    /**
+     * The digests as {@link #digests(Map)} writes them: one text for each of the link's items, and
+     * nothing else.
+     */
+    static Map<String, String> digests(String json, List<String> items) {
+        JsonNode object;
+        try {
+            object = JSON.readTree(json);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("a share link's digests are not JSON", e);
+        }
+        if (object == null || !object.isObject() || object.size() != items.size()) {
+            throw new IllegalStateException("a share link's digests are not one for each item");
+        }
+        Map<String, String> digests = new java.util.LinkedHashMap<>();
+        for (String item : items) {
+            JsonNode digest = object.get(item);
+            if (digest == null || !digest.isTextual() || digest.textValue().isEmpty()) {
+                throw new IllegalStateException("a share link's item has no digest");
+            }
+            digests.put(item, digest.textValue());
+        }
+        return digests;
     }
 
     /** The items as {@link #items(List)} writes them: a JSON array of items, each one {@link ShareItem} reads. */

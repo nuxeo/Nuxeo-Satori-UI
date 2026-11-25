@@ -28,7 +28,8 @@ class ShareLinkJsonTest {
     private static final String TOKEN = ShareToken.generate(new SecureRandom());
 
     private static final ShareLink LINK = new ShareLink(ShareToken.hash(TOKEN), "default", "asset-a",
-            List.of("view:FullHD", "original"), LocalDate.of(2026, 12, 14), NOW, "brand.manager", null, null);
+            List.of("view:FullHD", "original"), java.util.Map.of("view:FullHD", "d1", "original", "d2"),
+            LocalDate.of(2026, 12, 14), NOW, "brand.manager", null, null);
 
     private static Set<String> keys(JsonNode node) {
         return Set.copyOf(iterable(node.fieldNames()));

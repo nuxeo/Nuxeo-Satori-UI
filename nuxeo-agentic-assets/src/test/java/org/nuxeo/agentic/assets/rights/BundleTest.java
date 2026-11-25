@@ -184,7 +184,7 @@ class BundleTest {
             }
         }
         assertEquals(List.of("agenticShareLinks", "agenticShareDownloads"), names);
-        assertEquals(List.of("id", "repository", "document", "items", "lastDay", "created", "createdBy", "revoked",
+        assertEquals(List.of("id", "repository", "document", "items", "digests", "lastDay", "created", "createdBy", "revoked",
                 "revokedBy"), fields("schemas/agenticsharelink.xsd"));
         assertEquals(List.of("id", "time", "link", "document", "item"), fields("schemas/agenticsharedownload.xsd"));
     }

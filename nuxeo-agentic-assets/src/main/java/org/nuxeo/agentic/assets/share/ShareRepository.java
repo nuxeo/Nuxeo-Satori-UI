@@ -18,7 +18,7 @@ import org.nuxeo.runtime.api.Framework;
 /**
  * The repository, as a request through a share link reads it: one document, by the id its link
  * holds, with a system session, since the visitor is no one Nuxeo knows; and whether the link's
- * creator, with their groups, still holds a permission on it.
+ * creator, with their groups, may still share it.
  */
 public interface ShareRepository {
 
@@ -30,10 +30,12 @@ public interface ShareRepository {
 
     /**
      * Whether {@code username}, as the user directory has them now, with their groups, holds
-     * {@code permission} on the document. {@code false} for a user who is no longer there, and when
-     * it cannot be told.
+     * {@code permission} on the document and is an administrator or a member of one of
+     * {@code sharingGroups}. {@code false} for a user who is no longer there, and when it cannot be
+     * told.
      */
-    boolean hasPermission(String repository, String document, String username, String permission);
+    boolean mayShare(String repository, String document, String username, String permission,
+            java.util.Set<String> sharingGroups);
 
     /** The server's repository, through {@link CoreInstance#doPrivileged} and the {@link UserManager}. */
     final class Nuxeo implements ShareRepository {
@@ -49,11 +51,12 @@ public interface ShareRepository {
         }
 
         @Override
-        public boolean hasPermission(String repository, String document, String username, String permission) {
+        public boolean mayShare(String repository, String document, String username, String permission,
+                java.util.Set<String> sharingGroups) {
             try {
                 NuxeoPrincipal principal = Framework.doPrivileged(
                         () -> Framework.getService(UserManager.class).getPrincipal(username));
-                if (principal == null) {
+                if (!ShareLinkComponent.isSharer(principal, sharingGroups)) {
                     return false;
                 }
                 return CoreInstance.doPrivileged(repository,
