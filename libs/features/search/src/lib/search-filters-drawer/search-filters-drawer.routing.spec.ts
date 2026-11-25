@@ -20,6 +20,7 @@ import {
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
+  SearchAggregationService,
   SearchService,
   SelectionService,
   type SearchResponse,
@@ -91,6 +92,126 @@ describe('Search drawer route and session integration', () => {
     drawer = TestBed.createComponent(SearchFiltersDrawerComponent);
     drawer.detectChanges();
     await drawer.whenStable();
+  });
+
+  it.each([false, true])(
+    'preserves customer URL filters when changing Files from %s',
+    async (filesOnly) => {
+      const quickFilters = [
+        'customerFirst',
+        ...(filesOnly ? ['noFolder'] : []),
+        'onlyValidated',
+        'customerSecond',
+        'customerFirst',
+      ].join(',');
+      await harness.navigateByUrl(
+        `/search?quickFilters=${quickFilters}&page=3&pageSize=25&sortBy=dc:title&sortOrder=asc`,
+        SearchComponent,
+      );
+      await drawer.whenStable();
+
+      session.setFilters({ ...session.filters(), filesOnly: !filesOnly });
+      await drawer.whenStable();
+      const expectedFilters = filesOnly
+        ? 'onlyValidated,customerFirst,customerSecond'
+        : 'noFolder,onlyValidated,customerFirst,customerSecond';
+      const query = router.parseUrl(router.url).queryParams;
+      expect(query['quickFilters']).toBe(expectedFilters);
+      expect(query['page']).toBeUndefined();
+      expect(query['pageSize']).toBe('25');
+      expect(query['sortBy']).toBe('dc:title');
+      expect(query['sortOrder']).toBe('asc');
+      expect(searchService.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          quickFilters: expectedFilters,
+          pageIndex: 0,
+          pageSize: 25,
+          sortBy: 'dc:title',
+          sortOrder: 'asc',
+        }),
+      );
+    },
+  );
+
+  it('preserves customer URL filters when toggling a packaged quick filter', async () => {
+    const page = await harness.navigateByUrl(
+      '/search?quickFilters=customerFirst,onlyValidated,customerSecond&page=3&pageSize=25',
+      SearchComponent,
+    );
+    await drawer.whenStable();
+    page.toggleQuickFilter('mostRecent');
+    await drawer.whenStable();
+    const expectedFilters = 'mostRecent,onlyValidated,customerFirst,customerSecond';
+    expect(router.parseUrl(router.url).queryParams['quickFilters']).toBe(expectedFilters);
+    expect(searchService.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({ quickFilters: expectedFilters, pageIndex: 0, pageSize: 25 }),
+    );
+  });
+
+  it('does not restore customer filters removed by a later URL when Files changes', async () => {
+    await harness.navigateByUrl(
+      '/search?quickFilters=customerFilter,onlyValidated',
+      SearchComponent,
+    );
+    await drawer.whenStable();
+    await harness.navigateByUrl('/search?quickFilters=onlyValidated', SearchComponent);
+    await drawer.whenStable();
+
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await drawer.whenStable();
+    expect(router.parseUrl(router.url).queryParams['quickFilters']).toBe('noFolder,onlyValidated');
+    expect(searchService.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({ quickFilters: 'noFolder,onlyValidated' }),
+    );
+  });
+
+  it('preserves customer URL filters when clicking a queue item without another search', async () => {
+    await harness.navigateByUrl(
+      '/doc/first?searchQueue=true&quickFilters=customerFilter,noFolder&page=3&pageSize=25',
+      DocumentPage,
+    );
+    await drawer.whenStable();
+    const callsBeforeClick = searchService.search.mock.calls.length;
+    TestBed.inject(SearchAggregationService).items.set([
+      {
+        id: 'next',
+        title: 'Next document',
+        type: 'File',
+        modifiedDate: '',
+        lastContributor: '',
+        author: '',
+        authorKey: '',
+        collection: '',
+        collectionKey: '',
+        tags: [],
+        icon: 'page',
+      },
+    ]);
+    drawer.detectChanges();
+    const itemButton = drawer.nativeElement.querySelector('.queue-item') as HTMLButtonElement;
+    expect(itemButton).not.toBeNull();
+    itemButton.click();
+    await drawer.whenStable();
+
+    expect(router.url.split('?')[0]).toBe('/doc/next');
+    expect(router.parseUrl(router.url).queryParams['quickFilters']).toBe('customerFilter,noFolder');
+    expect(searchService.search).toHaveBeenCalledTimes(callsBeforeClick);
+  });
+
+  it('preserves customer URL filters when toggling a queue filter', async () => {
+    await harness.navigateByUrl(
+      '/doc/first?searchQueue=true&quickFilters=noFolder,customerFilter&page=3&pageSize=25',
+      DocumentPage,
+    );
+    await drawer.whenStable();
+    drawer.componentInstance.toggleQueueQuickFilter('noFolder');
+    await drawer.whenStable();
+
+    expect(router.url.split('?')[0]).toBe('/search');
+    expect(router.parseUrl(router.url).queryParams['quickFilters']).toBe('customerFilter');
+    expect(searchService.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({ quickFilters: 'customerFilter', pageIndex: 0, pageSize: 25 }),
+    );
   });
 
   it.each(['/doc/first', '/collections/first', '/browse/first'])(
@@ -223,8 +344,8 @@ describe('Search drawer route and session integration', () => {
     async ({ filesOnly, pageNumber }) => {
       session.setFilters({ ...session.filters(), fulltext: 'applied' });
       const quickFilters = filesOnly
-        ? 'noFolder,mostRecent,onlyValidated'
-        : 'mostRecent,onlyValidated';
+        ? 'noFolder,mostRecent,onlyValidated,customerFilter'
+        : 'mostRecent,onlyValidated,customerFilter';
       const page = await harness.navigateByUrl(
         `/search?quickFilters=${quickFilters}&page=${pageNumber}&pageSize=25&sortBy=dc:title&sortOrder=asc`,
         SearchComponent,

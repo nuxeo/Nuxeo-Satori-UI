@@ -91,6 +91,7 @@ import {
 } from '@nuxeo/satori-platform/components';
 
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
+import { quickFilterQuery } from '../search-session/quick-filter-query';
 import { SearchFiltersDrawerComponent } from '../search-filters-drawer/search-filters-drawer.component';
 import {
   SEARCH_PAGE_SIZE,
@@ -473,6 +474,7 @@ export class SearchComponent {
    */
   private applyPageQuery(params: { get(name: string): string | null }): void {
     const quickFilters = params.get('quickFilters') ?? '';
+    this.urlQuickFilters = quickFilters;
     this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
 
     const sortBy = params.get('sortBy');
@@ -586,6 +588,7 @@ export class SearchComponent {
   /** The page the URL asked for, as the last applied URL; the URL follows the pager through it. */
   private urlPageIndex = 0;
   private urlPageSize = SEARCH_PAGE_SIZE;
+  private urlQuickFilters = '';
   readonly selectedCount = computed(() => this.selectionService.selectedCount());
   readonly SORTABLE_COLUMNS = new Set(['name', 'modified', 'contributor', 'author', 'created']);
 
@@ -610,14 +613,10 @@ export class SearchComponent {
 
     this.selectedQuickFilters.set(next);
 
-    const orderedSelected = QUICK_FILTER_OPTIONS.map((filter) => filter.value).filter(
-      (filterValue) => next.has(filterValue),
-    );
-
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
-        quickFilters: orderedSelected.length > 0 ? orderedSelected.join(',') : null,
+        quickFilters: this.quickFiltersQueryParam(next),
         page: null,
       },
       queryParamsHandling: 'merge',
@@ -997,6 +996,15 @@ export class SearchComponent {
     );
   }
 
+  /** Changing packaged filters must retain customer filters carried by the current URL. */
+  private quickFiltersQueryParam(selected: ReadonlySet<string>): string | null {
+    return quickFilterQuery(
+      this.urlQuickFilters,
+      selected,
+      QUICK_FILTER_OPTIONS.map((option) => option.value),
+    );
+  }
+
   /** Save the filters as a new saved search, under a name the user gives. */
   onSaveAs(): void {
     this.withSavedSearchName({ heading: this.translate.instant('ui.saved-search') }, (name) =>
@@ -1122,10 +1130,7 @@ export class SearchComponent {
           if (filesOnly) selected.add('noFolder');
           else selected.delete('noFolder');
           this.selectedQuickFilters.set(selected);
-          scopeParams.quickFilters =
-            QUICK_FILTER_OPTIONS.map((option) => option.value)
-              .filter((value) => selected.has(value))
-              .join(',') || null;
+          scopeParams.quickFilters = this.quickFiltersQueryParam(selected);
         }
         void this.router.navigate([], {
           relativeTo: this.route,

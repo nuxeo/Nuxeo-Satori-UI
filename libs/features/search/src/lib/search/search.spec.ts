@@ -23,6 +23,7 @@ import { vi } from 'vitest';
 
 import { SearchComponent } from './search';
 import { SearchSession } from '../search-session/search-session';
+import { SearchFiltersDrawerComponent } from '../search-filters-drawer/search-filters-drawer.component';
 import {
   DocumentDetailService,
   DirectoryService,
@@ -67,6 +68,14 @@ class AcmeTagComponent {
   readonly label = input('');
   readonly color = input('');
 }
+
+/** An existing customer filter panel need not declare the new inline presentation input. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-search-filters',
+  template: '<p class="acme-search-filters">Customer search filters</p>',
+})
+class AcmeSearchFiltersComponent {}
 
 /** A card registered under the packaged card's ID, which shows what the page passed it. */
 @Component({
@@ -2035,6 +2044,64 @@ describe('SearchComponent', () => {
 
       if (!lastBlob) throw new Error('exportCsv created no Blob');
       expect(await lastBlob.text()).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
+    });
+  });
+
+  describe('registered search filters', () => {
+    async function renderFilters(
+      providers: (Provider | EnvironmentProviders)[] = [],
+    ): Promise<void> {
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    it.each(['eager', 'lazy'])(
+      'renders a %s customer filter replacement without an inline input',
+      async (kind) => {
+        await renderFilters([
+          provideSatoriExtensions({
+            components: { 'app.sidebar.searchFilters': SearchFiltersDrawerComponent },
+          }),
+          provideSatoriExtensions({
+            components: {
+              'app.sidebar.searchFilters':
+                kind === 'lazy'
+                  ? () => Promise.resolve(AcmeSearchFiltersComponent)
+                  : AcmeSearchFiltersComponent,
+            },
+          }),
+        ]);
+        const filters = fixture.nativeElement.querySelector(
+          '#search-advanced-filters',
+        ) as HTMLElement;
+        expect(filters.querySelectorAll('.acme-search-filters')).toHaveLength(1);
+        expect(filters.querySelector('lib-search-filters-drawer')).toBeNull();
+      },
+    );
+
+    it('passes inline presentation to the registered packaged filters', async () => {
+      await renderFilters([
+        provideSatoriExtensions({
+          components: { 'app.sidebar.searchFilters': SearchFiltersDrawerComponent },
+        }),
+      ]);
+      const filters = fixture.debugElement.queryAll(By.directive(SearchFiltersDrawerComponent));
+      expect(filters).toHaveLength(1);
+      expect(filters[0].componentInstance.inline()).toBe(true);
+    });
+
+    it('keeps the packaged inline filters when no filter component is registered', async () => {
+      await renderFilters();
+      const filters = fixture.debugElement.queryAll(By.directive(SearchFiltersDrawerComponent));
+      expect(filters).toHaveLength(1);
+      expect(filters[0].componentInstance.inline()).toBe(true);
     });
   });
 

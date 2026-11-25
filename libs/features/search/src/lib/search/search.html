@@ -41,7 +41,14 @@
         </button>
         <div id="search-advanced-filters">
           @if (advancedFiltersOpen()) {
-            <lib-search-filters-drawer [inline]="true" />
+            <lib-extension-outlet
+              #searchFiltersOutlet
+              componentId="app.sidebar.searchFilters"
+              [componentInputs]="{ inline: true }"
+            />
+            @if (searchFiltersOutlet.unresolved()) {
+              <lib-search-filters-drawer [inline]="true" />
+            }
           }
         </div>
       </div>

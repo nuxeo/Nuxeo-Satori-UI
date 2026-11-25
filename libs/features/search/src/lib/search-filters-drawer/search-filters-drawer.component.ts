@@ -37,6 +37,7 @@ import {
 import { SearchQueueComponent } from '../search-queue/search-queue.component';
 import { loadFacetLabels } from './facet-labels';
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
+import { quickFilterQuery } from '../search-session/quick-filter-query';
 import {
   SEARCH_PAGE_PROVIDER,
   SEARCH_PAGE_SIZE,
@@ -94,6 +95,7 @@ export class SearchFiltersDrawerComponent {
   readonly viewMode = signal<DrawerViewMode>('filter');
   readonly selectedDocumentId = signal('');
   readonly selectedQueueQuickFilters = signal<ReadonlySet<string>>(new Set());
+  private urlQuickFilters = '';
 
   readonly filters = this.session.filters;
   readonly savedSearchId = this.session.savedSearchId;
@@ -152,7 +154,8 @@ export class SearchFiltersDrawerComponent {
       });
 
     this.activatedRoute.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      this.selectedQueueQuickFilters.set(this.parseQuickFilters(params.get('quickFilters') ?? ''));
+      this.urlQuickFilters = params.get('quickFilters') ?? '';
+      this.selectedQueueQuickFilters.set(this.parseQuickFilters(this.urlQuickFilters));
       if (params.get('searchQueue') === 'true') this.viewMode.set('queue');
     });
     this.hydrateQueueQuery(this.router.url);
@@ -285,11 +288,11 @@ export class SearchFiltersDrawerComponent {
   }
 
   private toQuickFiltersQueryParam(): string | null {
-    const selected = this.selectedQueueQuickFilters();
-    const ordered = QUEUE_QUICK_FILTER_OPTIONS.map((option) => option.value).filter((value) =>
-      selected.has(value),
+    return quickFilterQuery(
+      this.urlQuickFilters,
+      this.selectedQueueQuickFilters(),
+      QUEUE_QUICK_FILTER_OPTIONS.map((option) => option.value),
     );
-    return ordered.length > 0 ? ordered.join(',') : null;
   }
 
   private parseQuickFilters(value: string): Set<string> {

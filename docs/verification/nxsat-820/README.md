@@ -135,6 +135,11 @@ session fetched the default query and page. Queue routes now hydrate the existin
 sort, page and page size without taking ownership of the Search page's URL. Regression checks
 cover direct entry, changed queue URLs and retaining the current request between queue documents.
 
+Customer extension checks also cover preserving unknown URL quick filters when changing packaged
+filters or Files scope and navigating between Queue items. The inline workspace resolves the
+registered search-filter replacement through the shared extension outlet, with the packaged drawer
+as its fallback.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:
