@@ -15,7 +15,7 @@ builds it. Two proposals define the files:
 - [app-definition-v2.md](../../../docs/business-apps/app-definition-v2.md), for the others.
 
 ```bash
-npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]
+npm run app-definition:validate -- <package or file>... [--mode view|metadata|edit|create] [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>] [--catalogue <file>]
 ```
 
 It is the check behind phase 0's demo step 1, which the package pipeline runs
@@ -34,8 +34,8 @@ install and no transpiler.
   - `demo/` and `assets/` are not checked;
   - version 1's `bootstrap.json`, `manifest.json` and `layouts.json` are left alone.
 - **With its package:** each file is checked with its package's `app.json`, `actions.json`,
-  `assets/` and `queues/`, whether or not they were named. One of them that cannot be read is
-  reported, and fails the run.
+  `assets/`, `queues/` and `labels/en.json`, whether or not they were named. One of them that
+  cannot be read is reported, and fails the run.
 - **What the deployment gives it:**
   - **`--allow-list`:** the operations the deployment the package is built for allows,
     `{ "operations": [...] }`. Without one, every operation is refused. This is the build's check:
@@ -58,6 +58,11 @@ install and no transpiler.
     column or an address part naming a subfield the property lacks are each found. A model it
     cannot read exits 2, with every problem. Version 1 layouts are not held to it, and the run says
     how many layouts were, or that none was.
+- **`--catalogue`:** the platform's English catalogue, such as `apps/nuxeo-ui/public/i18n/en.json`,
+  its nested keys joined with dots. Given it, every `labelKey` a package's file names must have a
+  text in the package's `labels/en.json` or in the catalogue, and one with neither is found, by its
+  key; one beside a literal `label`, which wins, is not looked up. Without it, keys are not checked,
+  since a key the platform gives a text would be refused. The package pipeline always gives it.
 - **`model <file>`:** reads a content model alone, as `--model` does: exit 0 when it can be read
   whole, 1 with every problem when it cannot. The export checks the file it writes with it.
 - **`changes <previous package> <package>`:** compares two versions of one configuration package,

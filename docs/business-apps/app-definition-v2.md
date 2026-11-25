@@ -176,7 +176,9 @@ demo/                                starter kits only; not checked
   record, so its parameters are literals. A page provider for one person's work names the person
   in its own query, on the server.
 - **`facets`** are filters from the page provider's aggregates, each named as the page provider
-  defines it on the server.
+  defines it on the server. When the package's own model defines the page provider, the pipeline
+  refuses a facet whose aggregate it does not define ([package-pipeline.md](package-pipeline.md),
+  section 2).
 - **`rowActions` and `bulkActions`** are the platform's registered actions
   ([extension-reference.md](../extension-reference.md), sections 10a and 5), or the package's own,
   from `actions.json`, that show on rows or in bulk.
@@ -368,7 +370,7 @@ provider, for the development server.
   of the `actions.json` the app registry serves (section 10), and its diagnostics say why. A file
   with nothing left out is served as the package wrote it. A lifecycle button is served as it is.
 - **The server runs it, through `AgenticUi.RunAction`,** an Automation operation of
-  `nuxeo-agentic-core` ([api-integrations.md](../api-integrations.md), section 39). The request
+  `nuxeo-agentic-core` ([api-integrations.md](../api-integrations.md), section 40). The request
   names the app, the action, the record and what was entered in the form, never the operation. The
   server checks the person's `Read` on the record, that an app of theirs serves the action, the
   allow-list again, its groups and its permission, then builds the parameters itself: literals from
@@ -542,6 +544,9 @@ variables, which the server describes in `taskInfo.schemas`, as Web UI's task la
   `layout.field.claim:memberId`, which this replaces in this language. Version 1's manifest
   `labels` replace a key in every language at once.
 - **A text** is not empty.
+- **Every key a package names has a text** in its `labels/en.json` or in the platform's English
+  catalogue: the pipeline refuses one with neither, by its key and its file
+  ([package-pipeline.md](package-pipeline.md), section 2).
 - **Looking a key up:** in the person's language, in the package first and then in the
   platform's catalogue. A customer's manifest `labels` still win over both.
 - **How the app reads them:** for the person's language, and for the fallback language through

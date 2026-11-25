@@ -59,6 +59,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
     signs and publishes an app definition package.
 11. [tutorial.md](tutorial.md): build a small app from an empty package in a day, by hand and with
     the agent, and the feedback its first run found.
+12. [studio-migration-guide.md](studio-migration-guide.md): for a customer, migrating their own
+    Studio package with one command, reading its report and filling in its decisions.
 
 ## Facts that hold
 

@@ -22,10 +22,19 @@ quoted is that run's, trimmed to the lines that matter, with npm's own `> agenti
 lines left out. Part 1 was then followed a second time from an empty package, by a script that ran
 each command as written, wrote each file from this page, and held each quoted output to what the
 command printed: every one matched, and the package it built is the reference answer's, byte for
-byte, but for its README. Three things were not run, and each place says so: registering the MCP
-server with Claude Code, installing the package on a server, and a person outside the team doing
-all of it. The times are estimates for a person new to the repository, not measurements: measuring
-them is the plan's acceptance test, still to run.
+byte, but for its README. Then the tools changed, after the run's feedback (the closing section):
+the pipeline now refuses a label key with no text and a facet its page provider cannot answer, and
+holds a package that ships a stand-in model to its own `content-model.json`. So steps 2 to 8 were
+followed again from an empty package the same day, by a script that ran each command and wrote
+each file and each label from this page. It took step 5's hand path: the step's refusal and its
+`app-model --aggregates` command it ran first, then put the package back as it was before them.
+Part 2's `validate_package` was asked again over stdio. The outputs those steps quote are that
+run's, and the package it built is the reference answer's again, byte for byte but for its README,
+with the same digest. Steps 1 and 9, and part 2's `preview_package`, whose outputs the change does
+not touch, were not run again. Three things were not run at all, and each place says so:
+registering the MCP server with Claude Code, installing the package on a server, and a person
+outside the team doing all of it. The times are estimates for a person new to the repository, not
+measurements: measuring them is the plan's acceptance test, still to run.
 
 ## What you build
 
@@ -85,6 +94,20 @@ The app is for two groups, `facilities-coordinators`, who sort the work, and
   ```bash
   export NUXEO_USER=<administrator> NUXEO_PASS=<password>
   ```
+
+  The local Docker Nuxeo also lets guests in: in step 9 the app opens as Anonymous until you sign
+  out and log in with this account.
+
+- **The platform version,** which the pipeline's `--platform` takes, and which every generator's
+  next step writes as `--platform <platform version>`: the `version` of
+  `libs/platform/package.json`, the platform's own package. Nothing else in the repository says it.
+
+  ```bash
+  node -p "require('./libs/platform/package.json').version"
+  ```
+
+  It answered `0.2.0`, which the commands below give, as CI and the MCP server's `validate_package`
+  do.
 
 - **Move the reference answer out of the way,** so that you build the package from nothing and
   can compare yours with it at the end. Git keeps the reference: step 8 compares yours with it,
@@ -202,8 +225,8 @@ npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/fa
 Each answers `Type: WorkOrder, unchanged` and its page provider's name. The model is in a
 component of its own, `bundle/OSGI-INF/facilities-demo-model.xml`, with the schemas in
 `bundle/schemas/`, and `content-model.json` beside `bundle/` describes it as a server would: give
-that file to the other generators and the pipeline until a server has the package. Read it as you
-read the server's:
+that file to the other generators until a server has the package. The pipeline uses it without
+being told, since the package ships a stand-in model (step 8). Read it as you read the server's:
 
 ```bash
 node -e "const m = require('./business-apps/packages/facilities-demo/content-model.json'); for (const s of m.schemas) console.log(s.name, s.prefix ?? '-', Object.keys(s.fields).join(', '))"
@@ -291,8 +314,9 @@ related list across both columns. `bundle/agentic-ui-config/layouts/Building/vie
 - **The related list** asks the page provider with the open record's id, `ecm:uuid`, for the `?`
   of `wo:building = ?`. A related list names a page provider, never a query: the server binds its
   parameters.
-- **The `labelKey`s** are looked up in the labels, step 7. Until then a card shows its id made
-  readable.
+- **Each `labelKey` needs a text,** in the package's `labels/en.json` or in the platform's English
+  catalogue, `apps/nuxeo-ui/public/i18n/en.json`. On a page, a card whose key has none shows its id
+  made readable, so the pipeline refuses the key.
 
 Check after every write, against the model:
 
@@ -301,14 +325,37 @@ npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0 -
 ```
 
 ```text
+business-apps/packages/facilities-demo/bundle/agentic-ui-config/layouts/Building/view.layout.json: cards[0].fields[1].labelKey: the label key "facilities.field.buildingName" has no text in labels/en.json, or in the platform's catalogue [unknown]
+business-apps/packages/facilities-demo/bundle/agentic-ui-config/layouts/Building/view.layout.json: cards[1].labelKey: the label key "facilities.card.building.contact" has no text in labels/en.json, or in the platform's catalogue [unknown]
+business-apps/packages/facilities-demo/bundle/agentic-ui-config/layouts/Building/view.layout.json: cards[2].labelKey: the label key "facilities.card.building.workOrders" has no text in labels/en.json, or in the platform's catalogue [unknown]
 1 layout was held to the content model in business-apps/packages/facilities-demo/content-model.json.
-3 files: 3 passed, 0 refused.
-facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 bb37d9b49cb9fc031cdd96d64d9c617f64283935e4f7061f63a27f727f34acf2
+3 files: 2 passed, 1 refused.
+business-apps/packages/facilities-demo: step 2 refused it: the app definition has findings, listed above.
 ```
 
-`--platform` is the platform version the package is built for: `libs/platform`'s,
-`node -p "require('./libs/platform/package.json').version"`, which answered `0.2.0`, as CI passes
-it.
+The generators gave a text to each key they wrote: `labels/en.json` has `facilities.app` and
+`facilities.card.building.building`. The three keys written by hand have none. Add these three
+entries to its `labels`, after those two; step 7 writes the final file:
+
+```json
+{
+  "facilities.field.buildingName": "Name",
+  "facilities.card.building.contact": "Contact",
+  "facilities.card.building.workOrders": "Work orders"
+}
+```
+
+The same command then passes:
+
+```text
+1 layout was held to the content model in business-apps/packages/facilities-demo/content-model.json.
+3 files: 3 passed, 0 refused.
+facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 a1dcf86f6e5f3061b3fa82d8e61e14721ce1e5aec543f486f1db3aa3fd1f0f0f
+```
+
+- **The digest is your files', byte for byte,** the labels file's spacing included, so until
+  step 7 yours may differ. From step 8 it is the reference answer's.
+- **`--platform 0.2.0`** is the platform version, from "Before you start".
 
 **The WorkOrder page,** the same way. The related list opens a work order, so it needs a page too:
 
@@ -423,6 +470,19 @@ work order is completed. `bundle/agentic-ui-config/layouts/WorkOrder/view.layout
 - **A banner or a hidden card is not a security control.** The server still returns every field to
   anyone who may read the record.
 
+Its five new keys need a text too. `app-layout` gave the card it wrote one, "Workorder", which
+step 7 renames. Add these to `labels/en.json`'s `labels`:
+
+```json
+{
+  "facilities.banner.overdue": "This work order is past its due date.",
+  "facilities.field.workOrderTitle": "Summary",
+  "facilities.card.workOrder.schedule": "Schedule",
+  "facilities.card.workOrder.resolution": "Resolution",
+  "facilities.card.workOrder.history": "History"
+}
+```
+
 ## Step 4. An edit form with a field rule
 
 The rule, in plain words: **a completed work order needs its completion date and its
@@ -516,15 +576,42 @@ Step 3's command now holds three layouts to the model:
 
 [app-definition-v2.md](app-definition-v2.md), section 4. A queue is a page provider's records,
 with columns, a sort and facets. **A facet is an aggregate of the page provider's results,** and
-only the search index answers aggregates: the page provider `app-model` wrote reads the repository
-and returns none. The pipeline does not read page providers, so a facet on it passes (tried: the
-same package with the generated page provider built), and the queue leaves the facet out, saying
-so only in the browser's console ([app-definition-v2.md](app-definition-v2.md), section 4).
+only the search index answers aggregates: the page provider step 2 wrote reads the repository and
+returns none. On a server, the queue would leave the facet out, saying so only in the browser's
+console ([app-definition-v2.md](app-definition-v2.md), section 4). So the pipeline refuses a facet
+on it. Tried, with the queue and its facets below written first, and the facets' keys given their
+texts:
 
-**So the queue's page provider is changed by hand,** into the kind the platform's `default_search`
-is, and the Payers kit's queues are: a `SearchServicePageProvider` with a search document whose
-fields hold the buckets a person chooses. Three edits to
-`bundle/OSGI-INF/facilities-demo-model.xml`, and a schema file.
+```text
+3 layouts were held to the content model in business-apps/packages/facilities-demo/content-model.json.
+6 files: 6 passed, 0 refused.
+business-apps/packages/facilities-demo/bundle/agentic-ui-config/queues/open-work-orders.json: facets[0].aggregate: the page provider "facilities_open_work_orders", defined in OSGI-INF/facilities-demo-model.xml, has no aggregate "wo_priority_agg": it reads the repository, which answers none. A facet or a figure needs a page provider of the search index that defines the aggregate, as app-model --aggregates writes one [unknown]
+business-apps/packages/facilities-demo/bundle/agentic-ui-config/queues/open-work-orders.json: facets[1].aggregate: the page provider "facilities_open_work_orders", defined in OSGI-INF/facilities-demo-model.xml, has no aggregate "wo_category_agg": it reads the repository, which answers none. A facet or a figure needs a page provider of the search index that defines the aggregate, as app-model --aggregates writes one [unknown]
+business-apps/packages/facilities-demo: step 2 refused it: a facet or a figure names an aggregate its page provider does not define, listed above.
+```
+
+**So the queue's page provider is made the kind the search index answers,** the kind the platform's
+`default_search` is, and the Payers kit's queues are: a `SearchServicePageProvider` with a search
+document whose fields hold the buckets a person chooses. `app-model` writes it, given the
+properties to group by, over the one step 2 wrote:
+
+```bash
+npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/facilities-demo --type=WorkOrder --pageProvider=facilities_open_work_orders --where="wo:status IN ('New', 'Assigned')" --sort=wo:due --aggregates=wo:priority,wo:category --force
+```
+
+```text
+  Type:           WorkOrder, unchanged
+  Page provider:  facilities_open_work_orders, of the search index, with the aggregates wo_priority_agg, wo_category_agg
+```
+
+**The reference answer has it written by hand,** from before `app-model` could, with comments
+that say what each part is for. The generator's has the same names, the aggregates
+`wo_priority_agg` and `wo_category_agg` included, and differs only in its comments, the
+parentheses around its condition and its search schema's namespace: with it, the queue, the home
+and step 8's checks pass alike, and step 8's comparison lists the model's XML and
+`workordersearch.xsd` as yours. To build the reference answer byte for byte, skip the command and
+make the hand edits below: three to `bundle/OSGI-INF/facilities-demo-model.xml`, and a schema
+file.
 
 The search document's schema, a new file, `bundle/schemas/workordersearch.xsd`. Each field is named
 exactly as its aggregate:
@@ -665,6 +752,16 @@ Add the facets, by the aggregates' ids, and the columns' widgets.
 }
 ```
 
+Each facet's `aggregate` is one of the page provider's `<aggregate id>`s, or the pipeline refuses
+it. Their keys need a text; `app-queue` gave the queue's own name one. Add to `labels`:
+
+```json
+{
+  "facilities.facet.priority": "Priority",
+  "facilities.facet.category": "Category"
+}
+```
+
 - **Nothing checks a queue's columns against the model yet** ([package-pipeline.md](package-pipeline.md),
   section 7): read them against step 2's model yourself.
 - **A header sorts on the server.** The search index maps `dc:title` as analysed text, which it
@@ -729,6 +826,19 @@ name:
 }
 ```
 
+A figure's `aggregate` is held to its page provider as a facet's is. Add the five keys' texts to
+`labels`:
+
+```json
+{
+  "facilities.home.title": "Facilities",
+  "facilities.home.open": "Open work orders, by priority",
+  "facilities.home.urgent": "Urgent work orders",
+  "facilities.home.byCategory": "Open work orders, by category",
+  "facilities.nav.home": "Home"
+}
+```
+
 Check it, with step 3's command. **This is the mistake everyone makes once,** and the pipeline
 catches it:
 
@@ -754,19 +864,20 @@ business-apps/packages/facilities-demo/bundle/OSGI-INF/facilities-demo-config.xm
 
 ## Step 7. Labels
 
-[app-definition-v2.md](app-definition-v2.md), section 7. The generators wrote a text for each key
-they named, and you named more by hand. **No check says a key has no text:** the pipeline passes,
-and the page shows the card's id made readable. List the keys the package names:
+[app-definition-v2.md](app-definition-v2.md), section 7. Every key has had a text since step 3, or
+the pipeline would have refused it: it looks each `labelKey` up in `labels/en.json`, then in the
+platform's English catalogue. What is left is the texts themselves. List the keys the package
+names:
 
 ```bash
 grep -rho '"labelKey": "[^"]*"' --include='*.json' --exclude-dir=labels business-apps/packages/facilities-demo/bundle/agentic-ui-config | sort -u
 ```
 
-It lists 19 keys, `facilities.app` to `facilities.queue.open-work-orders`. Give each a text, and
-rename what the generators guessed: `app-layout` named the WorkOrder card after its schema,
-"Workorder". A field with no key shows its property's name made readable, `wo:number` as
-"Number"; a `layout.field.<prefix>:<name>` key gives it another in this language.
-`bundle/agentic-ui-config/labels/en.json`:
+It lists 19 keys, `facilities.app` to `facilities.queue.open-work-orders`. Rename what the
+generators guessed: `app-layout` named the WorkOrder card after its schema, "Workorder". A field
+with no key shows its property's name made readable, `wo:number` as "Number"; a
+`layout.field.<prefix>:<name>` key gives it another in this language. The whole file, in the
+reference answer's order, `bundle/agentic-ui-config/labels/en.json`:
 
 ```json
 {
@@ -823,12 +934,15 @@ npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0
 ```
 
 ```text
+The content model is the package's own content-model.json, since the package ships a stand-in model and no --model was given.
+3 layouts were held to the content model in business-apps/packages/facilities-demo/content-model.json.
 8 files: 8 passed, 0 refused.
 facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 4afd415394480d1a3c1f2a95da3fb9d2e2c6e38d9e52596568788041b43fb61f
 ```
 
-The same zip, byte for byte: the model only adds checks. Your digest is the same as this one if
-your files are the reference answer's; compare them:
+The same zip, byte for byte. With no `--model`, the pipeline held the package to its own
+`content-model.json`, as CI and `validate_package` do, because the package ships a stand-in
+model. Your digest is the same as this one if your files are the reference answer's; compare them:
 
 ```bash
 git status --short business-apps/packages/facilities-demo
@@ -839,31 +953,29 @@ answer's README describes the kit, and yours is the generator's. Any other file 
 yours differs; `git diff` shows how.
 
 **A deliberate mistake.** Misspell a property, as anyone does: in the WorkOrder page, change
-`"wo:assignee"` in the schedule card to `"wo:asignee"`. Without the model, the pipeline builds it:
+`"wo:assignee"` in the schedule card to `"wo:asignee"`. Run the pipeline as CI runs it, the second
+command above, without `--model`. It is refused at step 2, the finding names the file, the place
+and the reason, and no zip is left in `dist/`:
 
 ```text
-8 files: 8 passed, 0 refused.
-facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 87f6e6629e93561d7ce1fdd4a03437d2e629b9cf0f573660844e4c5b577e88b7
-```
-
-With the model, it is refused at step 2, the finding names the file, the place and the reason, and
-no zip is left in `dist/`:
-
-```text
+The content model is the package's own content-model.json, since the package ships a stand-in model and no --model was given.
 business-apps/packages/facilities-demo/bundle/agentic-ui-config/layouts/WorkOrder/view.layout.json: cards[1].fields[0].field: "wo:asignee" is not a property of the type "WorkOrder" or of its facets [unknown]
 3 layouts were held to the content model in business-apps/packages/facilities-demo/content-model.json.
 8 files: 7 passed, 1 refused.
 business-apps/packages/facilities-demo: step 2 refused it: the app definition has findings, listed above.
 ```
 
-Put `"wo:assignee"` back, and the pipeline passes with the digest it had.
+With `--model`, the finding is the same. Put `"wo:assignee"` back, and the pipeline passes with the
+digest it had.
 
-- **Always give it the model.** CI passes none yet, and nor does the MCP server's
-  `validate_package`, so on a pull request the misspelt property above passes, and the field shows
-  nothing on the page ([package-pipeline.md](package-pipeline.md), section 7).
+- **On a customer's project, give it the server's model.** A package that ships no stand-in model
+  is held to no model unless it is given one, and CI and `validate_package` give none: there the
+  misspelt property passes, and the field shows nothing on the page. `--model` or `--model-server`
+  refuses it ([package-pipeline.md](package-pipeline.md), section 4).
 - **Never weaken a check to pass.** A refusal is fixed in the package.
-- **What it does not check yet:** that a page provider exists, and the properties of a queue's or a
-  related list's columns, a rule or a computation. Read those against the model yourself.
+- **What it does not check yet:** that a page provider exists, a facet on a page provider of the
+  server's, and the properties of a queue's or a related list's columns, a rule or a computation.
+  Read those against the model yourself.
 
 ## Step 9. Preview in dev mode
 
@@ -893,10 +1005,16 @@ server on the default 4200; any free port does.
 npx nx serve nuxeo-ui --port 4299
 ```
 
-It is up when it prints `Local: http://localhost:4299/`. Open `http://localhost:4299/#/home`. The
-local Docker Nuxeo lets guests in, so the app opens as Anonymous, "AN" at the bottom of the menu:
-open that, choose Sign Out, and log in with your account. Signed in as the administrator, on
-25 November 2026:
+It is up when it prints `Local: http://localhost:4299/`. Open `http://localhost:4299/#/home`, and
+**sign in before you look at anything:**
+
+1. The local Docker Nuxeo lets guests in, so the app opens signed in as Anonymous, and nothing on
+   the page says so but "AN" at the bottom of the menu. A guest sees what a guest may read, which
+   is not what your account sees.
+2. Open "AN" and choose Sign Out.
+3. Log in with your account, the one in `NUXEO_USER`.
+
+Signed in as the administrator, on 25 November 2026:
 
 | Where                         | What it showed                                                                                                                                                |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1001,16 +1119,16 @@ Start Claude Code in the repository, with the reference answer moved out of the 
 you start". The prompts are examples: say it your way, one step at a time, and read what the agent
 answers before the next.
 
-| You ask                                                                                                                                                                                                                                                                                            | The agent should                                                                                                                                                          |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Follow `.cursor/skills/app-builder/SKILL.md`. I want a small facilities work-order app, Facilities, package `facilities-demo`, app id `facilities`, for `facilities-coordinators` and `facilities-technicians`. Read the server first."                                                           | Say what is not built (publishing). Call `get_content_model` and `describe_document_type` for `WorkOrder`, find none, and stop: types are Studio's                        |
-| "It is a demo kit: write a stand-in model with `app-model`. A WorkOrder has a number, a building (the Building's id), a category, a priority, a status, an assignee, a due date, an estimate, a completion date and a resolution; a Building has a code, a campus, floors, a manager and a phone." | Run step 2's `app-package`, without `--type`, and `app-model` for the two types                                                                                           |
-| "Page providers: a building's work orders, latest due first, and the open ones, New or Assigned, soonest due first."                                                                                                                                                                               | Run step 2's two `app-model --pageProvider` commands                                                                                                                      |
-| "A Building page with its details, a contact card and a list of its work orders. A WorkOrder page with the priority and status as badges, a warning when an open one is overdue, the resolution once completed, and the history."                                                                  | Run `app-layout` twice, edit the two files as in step 3, and run the pipeline with `--model`                                                                              |
-| "In the Edit form, a completed work order needs its completion date and its resolution."                                                                                                                                                                                                           | Run `app-form`, then write `required` with `app.rules.fieldIn` on the two fields, as in step 4                                                                            |
-| "A queue of the open work orders I can filter by priority and by category."                                                                                                                                                                                                                        | Say that a facet needs an aggregate the search index answers, and that `app-model`'s page provider has none; make step 5's hand edits, run `app-queue` and add the facets |
-| "A home with the open work orders by priority for everyone, the urgent ones for technicians, a breakdown by category for coordinators, and a menu with the home and the queue. Then the labels."                                                                                                   | Write `home.json` and `navigation.json`, run `app-registry`, and write the labels, as in steps 6 and 7                                                                    |
-| "Check it with the model, and show it to me."                                                                                                                                                                                                                                                      | Run step 8's command with `--model`, then `validate_package` and `preview_package`, and say what the preview cannot show                                                  |
+| You ask                                                                                                                                                                                                                                                                                            | The agent should                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Follow `.cursor/skills/app-builder/SKILL.md`. I want a small facilities work-order app, Facilities, package `facilities-demo`, app id `facilities`, for `facilities-coordinators` and `facilities-technicians`. Read the server first."                                                           | Say what is not built (publishing). Call `get_content_model` and `describe_document_type` for `WorkOrder`, find none, and stop: types are Studio's                                                         |
+| "It is a demo kit: write a stand-in model with `app-model`. A WorkOrder has a number, a building (the Building's id), a category, a priority, a status, an assignee, a due date, an estimate, a completion date and a resolution; a Building has a code, a campus, floors, a manager and a phone." | Run step 2's `app-package`, without `--type`, and `app-model` for the two types                                                                                                                            |
+| "Page providers: a building's work orders, latest due first, and the open ones, New or Assigned, soonest due first."                                                                                                                                                                               | Run step 2's two `app-model --pageProvider` commands                                                                                                                                                       |
+| "A Building page with its details, a contact card and a list of its work orders. A WorkOrder page with the priority and status as badges, a warning when an open one is overdue, the resolution once completed, and the history."                                                                  | Run `app-layout` twice, edit the two files as in step 3, and run the pipeline with `--model`                                                                                                               |
+| "In the Edit form, a completed work order needs its completion date and its resolution."                                                                                                                                                                                                           | Run `app-form`, then write `required` with `app.rules.fieldIn` on the two fields, as in step 4                                                                                                             |
+| "A queue of the open work orders I can filter by priority and by category."                                                                                                                                                                                                                        | Say that a facet needs an aggregate the search index answers; write the page provider with `app-model --aggregates`, or by hand as step 5 does; run `app-queue`, add the facets and give their keys a text |
+| "A home with the open work orders by priority for everyone, the urgent ones for technicians, a breakdown by category for coordinators, and a menu with the home and the queue. Then the labels."                                                                                                   | Write `home.json` and `navigation.json`, run `app-registry`, and write the labels, as in steps 6 and 7                                                                                                     |
+| "Check it with the model, and show it to me."                                                                                                                                                                                                                                                      | Run step 8's command with `--model`, then `validate_package` and `preview_package`, and say what the preview cannot show                                                                                   |
 
 **What the MCP server answered,** for the reads:
 
@@ -1026,13 +1144,27 @@ answers before the next.
 
 **What `validate_package` answered** for `{ "directory": "business-apps/packages/facilities-demo" }`:
 `"passed": true`, `"asCi": true`, no finding, and the zip's digest, `4afd4153...fb61f`, step 8's. It
-runs the pipeline as CI does, **without the model**: ask the agent for step 8's command with
-`--model` as well. With the misspelt property of step 8 it answered `"passed": true` too.
+runs the pipeline as CI does, with no `--model`, so the pipeline held the package to its own
+`content-model.json`, the first line of its `stdout`. With the misspelt property of step 8 it
+answered `"passed": false`, `"refusedAt": { "step": 2 }`, and one finding:
+
+```json
+{
+  "file": "bundle/agentic-ui-config/layouts/WorkOrder/view.layout.json",
+  "place": "cards[1].fields[0].field",
+  "message": "\"wo:asignee\" is not a property of the type \"WorkOrder\" or of its facets",
+  "kind": "unknown"
+}
+```
+
+On a customer's package, which ships no stand-in model, it is held to no model: ask the agent for
+step 8's command with `--model` as well.
 
 **What `preview_package` answered,** with the dev server on 4299: `"served": true`, the seven files
 written to the dev folder, `app.json` under `notServed` ("The app registry serves it on a server,
 after sign-in"), `"devServer": { "answering": true, ... }`, and the pages to open, the home and
-the queue, as in step 9. It names the Edit form "the WorkOrder record page (edit)": it is the form.
+the queue, as in step 9; sign in first, as step 9 says. It names the Edit form "the WorkOrder
+record page (edit)": it is the form.
 
 **An agent asked for an unregistered id is refused.** The field rule was written on
 `wo:resolution` with `app.rules.fieldEquals`, which reads well and is not registered, as an agent
@@ -1058,26 +1190,36 @@ writes to a server without your go-ahead, and the skill tells it to say what is 
 # What the tutorial's run found
 
 The acceptance test's feedback: where a step was slower, or more confusing, than it should be. In
-the order the run met them; none was changed here, since the tutorial follows the tools as they
-are.
+the order the run met them. The run followed the tools as they were; items 1 to 5 and 9 were then
+addressed, each marked **since fixed**, and the steps above follow the tools as they are now.
 
 1. **The queue's facet is the slowest step, and the only one with no help.** A facet needs a page
    provider the search index answers, with aggregates and a search document; `app-model` writes only
    repository ones, so three hand edits to the model's XML and a schema file are needed. Nothing
    checks any of it: the pipeline does not read page providers, and a facet on a page provider with
    no aggregate passes and is left out in the browser, said only in the console. `app-model` could
-   write the indexed kind, with `--aggregate`.
+   write the indexed kind, with `--aggregate`. **Since fixed:** `app-model --aggregates` writes it
+   (step 5), and the pipeline refuses a facet, or a home's figure, whose page provider in the
+   package's own model does not define its aggregate.
 2. **CI and `validate_package` pass no content model, so a misspelt property passes both,** though
    the kit carries `content-model.json` beside it. Only the command with `--model` refuses it. The
-   pipeline could read a package's own `content-model.json` when it has one.
+   pipeline could read a package's own `content-model.json` when it has one. **Since fixed:** given
+   no model, the pipeline holds a package that ships a stand-in model to its own
+   `content-model.json`, so CI and `validate_package` refuse it (step 8). A package on a customer's
+   model is still held to none unless it is given one.
 3. **A demo kit's order is not the skill's first example.** `app-package --type` needs the model,
    and `app-model` needs the package, so a demo scaffolds without `--type`, then writes the model,
    then the record pages. The generator's own output says so; the skill's first example does not.
+   **Since fixed:** the skill's section 2 gives a demo kit's order.
 4. **Every generator says `--platform <platform version>`, and none says where it is:**
-   `libs/platform/package.json`, 0.2.0.
+   `libs/platform/package.json`, 0.2.0. **Since fixed, in the docs:** "Before you start",
+   [package-pipeline.md](package-pipeline.md), section 3, and the skill say where it is. The
+   generators' own words are unchanged.
 5. **No check says a label key has no text.** The pipeline passes, and the page shows an id made
    readable. The `grep` in step 7 lists the keys; the pipeline could. The generators also guess
-   texts from schema names, "Workorder".
+   texts from schema names, "Workorder". **Since fixed:** the pipeline refuses a key with a text in
+   neither the package's `labels/en.json` nor the platform's catalogue, by its key and its file
+   (step 3). The guessed texts remain.
 6. **Reading a type's fields by hand takes a `node -e` line.** The MCP server's
    `describe_document_type` reads only the server, not a stand-in model, so in a demo kit neither
    the person nor the agent has a reader for the model they are building on.
@@ -1087,7 +1229,8 @@ are.
    queue "Something went wrong", and the record pages cannot be opened at all, until a server has
    the package and records of its types. For a demo kit, the preview is half a preview.
 9. **The local Nuxeo opens the app as Anonymous.** A person must find Sign Out behind "AN" before
-   logging in; nothing on the page says the app is a guest's.
+   logging in; nothing on the page says the app is a guest's. **Since fixed, on this page:** "Before
+   you start" and step 9 say so before the page is opened. The app itself still does not.
 10. **`preview_package` still calls the Edit form "the WorkOrder record page (edit)",** as the
     contracts kit's feedback, item 7, found.
 11. **No folder offers the stand-in types, and nothing writes a seed.** A server with the package

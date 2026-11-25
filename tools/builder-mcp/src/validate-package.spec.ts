@@ -168,6 +168,72 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(check.zip).toBeNull();
     });
 
+    // The tutorial's deliberate mistake: a misspelt property. The kit ships a stand-in model and the
+    // content-model.json that describes it, so the pipeline holds it to that by default, as CI does.
+    it("refuses a misspelt property, held to the package's own content model as CI is", async () => {
+      const root = demoWith('misspelt', (copy) =>
+        edit(join(copy, LAYOUT), '"claim:number",', '"claim:numbr",'),
+      );
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.passed).toBe(false);
+      expect(check.asCi).toBe(true);
+      expect(check.refusedAt?.step).toBe(2);
+      expect(check.findings).toEqual([
+        {
+          file: 'bundle/agentic-ui-config/layouts/Claim/view.layout.json',
+          place: 'cards[0].fields[0]',
+          message: '"claim:numbr" is not a property of the type "Claim" or of its facets',
+          kind: 'unknown',
+        },
+      ]);
+      expect(check.stdout).toContain(
+        "The content model is the package's own content-model.json, since the package ships a stand-in model and no --model was given.",
+      );
+    });
+
+    it('names the file and the key of a label key with no text', async () => {
+      const root = demoWith('label', (copy) =>
+        edit(join(copy, LAYOUT), '"labelKey": "payers.card.claim"', '"labelKey": "payers.card.x"'),
+      );
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.passed).toBe(false);
+      expect(check.findings).toEqual([
+        {
+          file: 'bundle/agentic-ui-config/layouts/Claim/view.layout.json',
+          place: 'cards[0].labelKey',
+          message:
+            'the label key "payers.card.x" has no text in labels/en.json, or in the platform\'s catalogue',
+          kind: 'unknown',
+        },
+      ]);
+    });
+
+    it("names the queue and the facet whose aggregate the package's page provider lacks", async () => {
+      const root = demoWith('facet', (copy) =>
+        edit(
+          join(copy, 'bundle', 'agentic-ui-config', 'queues', 'unassigned-claims.json'),
+          '"aggregate": "claim_status_agg"',
+          '"aggregate": "claim_state_agg"',
+        ),
+      );
+      const check = await validatePackage({ directory: root }, SCRATCH);
+      expect(check.passed).toBe(false);
+      expect(check.refusedAt).toEqual({
+        step: 2,
+        reason:
+          'a facet or a figure names an aggregate its page provider does not define, listed above.',
+      });
+      expect(check.findings).toEqual([
+        {
+          file: 'bundle/agentic-ui-config/queues/unassigned-claims.json',
+          place: 'facets[0].aggregate',
+          message:
+            'the page provider "payers_unassigned_claims", defined in OSGI-INF/payers-claims-demo-model.xml, has no aggregate "claim_state_agg": it defines claim_status_agg',
+          kind: 'unknown',
+        },
+      ]);
+    });
+
     it('refuses a builder that is not the reviewed one, before running it', async () => {
       const root = demoWith('builder', (copy) =>
         writeFileSync(

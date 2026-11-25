@@ -26,7 +26,7 @@ its types, which no server has ([tutorial, step 10](../../../docs/business-apps/
 | `bundle/OSGI-INF/facilities-demo-config.xml`                  | The component: the three layouts, and the app with the four files the registry serves | The generators               |
 | `bundle/OSGI-INF/facilities-demo-model.xml`                   | **The stand-in model:** two types, a search document and two page providers           | `app-model`, then by hand    |
 | `bundle/schemas/*.xsd`                                        | **The stand-in model's** schemas: `workorder`, `building` and the queue's search one  | `app-model`, and one by hand |
-| `content-model.json`                                          | The stand-in model as a server would answer it, for `--model`                         | `app-model`                  |
+| `content-model.json`                                          | The stand-in model as a server would answer it, which the pipeline holds the kit to   | `app-model`                  |
 | `package/`, `bundle/META-INF/MANIFEST.MF`, `build.mjs`        | The Marketplace package, the manifest, and version 1's builder, byte for byte         | `app-package`, `app-model`   |
 
 - **The stand-in model** is two types with no file, so each opens as a record page: `Building`
@@ -34,10 +34,12 @@ its types, which no server has ([tutorial, step 10](../../../docs/business-apps/
   `category`, `priority`, `status`, `assignee`, `due`, `estimate`, `completed`, `resolution`). A
   work order's `wo:building` holds its building's id. The names are plain: on a server whose model
   already has a `Building` or a `WorkOrder`, the two would collide.
-- **The queue's page provider is the one hand-written part of the model.** `app-model` writes page
-  providers that read the repository, and a facet needs one that the search index answers, with
-  aggregates: `facilities_open_work_orders` is a `SearchServicePageProvider` with the search
-  document `WorkOrderSearch`, as the Payers kit's queues are.
+- **The queue's page provider is the one hand-written part of the model.** A facet needs a page
+  provider that the search index answers, with aggregates: `facilities_open_work_orders` is a
+  `SearchServicePageProvider` with the search document `WorkOrderSearch`, as the Payers kit's
+  queues are. `app-model` wrote only page providers that read the repository when the kit was
+  written; `--aggregates` now writes this kind, with the same names, and the kit keeps the one
+  written by hand, whose comments the tutorial explains.
 - **No `actions.json`, no seed and no bootstrap fragment.** The tutorial asks for no button;
   seeding is what an install still needs; a bootstrap fragment would rebrand everyone's app on a
   shared server.
@@ -49,4 +51,5 @@ npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0 -
 ```
 
 It writes `dist/facilities-demo-0.1.0.zip` and its checksum. Without `--model`, as CI runs it, the
-same zip is built: the model only adds checks.
+pipeline holds the kit to its own `content-model.json`, since the kit ships a stand-in model, and
+builds the same zip.

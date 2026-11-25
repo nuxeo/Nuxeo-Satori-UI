@@ -12,6 +12,9 @@
  *                                                             the decisions file, for people to fill in
  *   report    <package.zip> <conversion-directory> [--json] [--allow-list <file>]
  *                                                             the report, for the person who approves it
+ *   migrate   <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+ *                                                             all of them in order, for a customer's own
+ *                                                             package (migrate.ts)
  *
  * `--allow-list` names the deployment's operations, `{ "operations": [...] }` (decision 3): a button
  * becomes an action only when its operation is on it. `check` and `report` read the list the
@@ -22,17 +25,23 @@
  * decision of an earlier file, for the same build of the package, that still holds. `check` and
  * `report` read it from the conversion, and take it only for the package they are given.
  *
- * Exit codes: 0 done, and for `check`, no check failed; 1 a check failed, or something could not be
- * read or written, with the reason; 2 the command was wrong. `report` exits 0 once it has printed the
- * report, whatever the report says. Nothing in a package is ever run, and nothing is ever written
- * over: `convert` and `mutate` write only into a new or empty directory, and `decisions` only a
- * `decisions.json` the conversion does not hold yet.
+ * `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, as a
+ * person would by hand, keeping what each prints in a file of `--out`, and says what to do next
+ * (`migrate.ts`, and docs/business-apps/studio-migration-guide.md for the customer).
+ *
+ * Exit codes: 0 done, and for `check` and `migrate`, no check failed; 1 a check failed, or something
+ * could not be read or written, with the reason; 2 the command was wrong. `report` exits 0 once it
+ * has printed the report, whatever the report says. Nothing in a package is ever run, and nothing is
+ * ever written over: `convert` and `mutate` write only into a new or empty directory, `decisions`
+ * only a `decisions.json` the conversion does not hold yet, and `migrate` only into a new or empty
+ * `--out`.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { account, type Accounting } from './account';
 import { CatalogueError, loadCatalogue, type How } from './catalogue';
 import {
+  allowListOf,
   convert,
   ConversionError,
   labelsOf,
@@ -46,6 +55,7 @@ import {
 import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
 import { runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
+import { migrate } from './migrate';
 import {
   DECISION_MUTATIONS,
   MUTATIONS,
@@ -62,6 +72,11 @@ export interface CliIo {
   readonly out: (text: string) => void;
   readonly err: (text: string) => void;
   readonly readFile: (path: string) => Buffer;
+  /**
+   * Given the harness's result once `check` has printed it: how `migrate` reads, as data, the
+   * result its `check` step printed, and knows the harness ran. Nothing else sets it.
+   */
+  readonly checked?: (result: HarnessResult) => void;
 }
 
 const USAGE = `usage:
@@ -72,6 +87,7 @@ const USAGE = `usage:
   studio-migration mutate --list
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+  studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
 `;
 
 /** What a command expects: its positional arguments, the flags it takes, and those with a value. */
@@ -91,6 +107,7 @@ const COMMANDS: Readonly<
   mutate: { args: 3, flags: [], valued: ['--package'] },
   decisions: { args: 2, flags: [], valued: ['--from'] },
   report: { args: 2, flags: ['--json'], valued: ['--allow-list'] },
+  migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
 };
 
 export function main(argv: readonly string[], io: CliIo): number {
@@ -158,6 +175,7 @@ export function main(argv: readonly string[], io: CliIo): number {
         io.out(
           json ? `${JSON.stringify(result, null, 2)}\n` : harnessSummary(result, pkg, args[1]),
         );
+        io.checked?.(result);
         return result.checks.some((check) => check.status === 'fail') ? 1 : 0;
       }
       case 'mutate': {
@@ -208,7 +226,7 @@ export function main(argv: readonly string[], io: CliIo): number {
           );
         }
         const lines = [
-          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them with an owner or a decision to fill in`,
+          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them still without an owner or a decision`,
         ];
         if (from !== undefined) {
           lines.push(`  carried from ${from}: ${carried}`);
@@ -233,6 +251,25 @@ export function main(argv: readonly string[], io: CliIo): number {
         });
         io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
         return 0;
+      }
+      case 'migrate': {
+        const out = values.get('--out');
+        if (out === undefined) {
+          io.err(USAGE);
+          return 2;
+        }
+        const from = values.get('--from');
+        // Each step is this very function, so each prints what the command prints by hand.
+        return migrate(
+          {
+            package: args[0],
+            out,
+            ...(allowListFile !== undefined ? { allowList: allowListFile } : {}),
+            ...(from !== undefined ? { from } : {}),
+          },
+          io,
+          main,
+        );
       }
     }
   } catch (error) {
@@ -267,17 +304,7 @@ function readJson(io: CliIo, path: string): unknown {
 
 /** The deployment's allow-list, `{ "operations": [...] }`, as app-definition's command line reads it. */
 function readAllowList(io: CliIo, path: string | undefined): ReadonlySet<string> | undefined {
-  if (path === undefined) return undefined;
-  const parsed = readJson(io, path);
-  const operations =
-    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)['operations']
-      : undefined;
-  if (!Array.isArray(operations) || !operations.every((item) => typeof item === 'string'))
-    throw new ConversionError(
-      `${path}: an allow-list is { "operations": [ <operation id>, ... ] }`,
-    );
-  return new Set(operations as string[]);
+  return path === undefined ? undefined : allowListOf(readJson(io, path), path);
 }
 
 function readPackage(io: CliIo, path: string): StudioPackage {

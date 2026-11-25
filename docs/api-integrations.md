@@ -2270,7 +2270,7 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   (`AppActions` in `nuxeo-agentic-core`): an action whose operation the deployment's
   `org.nuxeo.agentic.ui.operations` contribution does not hold, or that gives it a parameter it
   does not allow, is left out, and a diagnostic, `action-refused`, says why. A file with nothing
-  left out is served as the package wrote it. Section 39 runs what it serves.
+  left out is served as the package wrote it. Section 40 runs what it serves.
 - **A 200, a 304 and a 404 are `Cache-Control: private, no-cache`** with
   `X-Content-Type-Options: nosniff`, so the browser revalidates and a shared cache keeps nothing; a
   200 and a 304 also carry an ETag, `Vary: Cookie, Authorization` and the configuration servlet's
@@ -2308,19 +2308,20 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ## 37. Layout Designer — Layout Files and Queues, the Content Model and Records to Preview With
 
-| Field           | Value                                                                                                                                                                                                                                 |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service**     | `LayoutDesignerService` (`libs/features/layout-designer/src/lib/layout-designer.service.ts`), with `DocumentLayoutService`, `ContentModelService`, `HomeService` and `QueueService`                                                   |
-| **HTTP Method** | `GET`, and a `POST` that reads for a card from another system (section 38): the designer writes nothing, and saves the file as a download                                                                                             |
-| **Endpoints**   | `<config>/layouts.json` and `<config>/layouts/<Type>/<mode>.layout.json` — the layout files served, and one of them, a record page (`view`), an edit form (`edit`) or a create form (`create`), each read anew, past the interceptors |
-|                 | `/nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas` — the content model the file is held to, read once per session                                                                                                   |
-|                 | `/nuxeo/api/v1/config/types/<Type>` — the type the preview resolves the file against, as the record page and the forms read it                                                                                                        |
-|                 | `/nuxeo/api/v1/config/schemas/<name>` — a schema the record's facets add that the file names, as the record page and the Edit form read it                                                                                            |
-|                 | `/nuxeo/api/v1/search/lang/NXQL/execute` — the records of the type to preview with                                                                                                                                                    |
-|                 | `/nuxeo/api/v1/id/<uid>` — the record the preview draws, read as the document page reads it (`getFullDocument`)                                                                                                                       |
-|                 | `<config>/navigation.json` and `<config>/queues/<id>.json`, or the app registry's — the queues the app's menu opens, and one of them, read as the menu and the queue page read them (`APP_DEFINITION_FILES`)                          |
-|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — a queue's records, read by the queue page the preview draws, as section 33's queue reads them                                                                                      |
-| **Auth**        | The person's own, through the interceptors, but for the configuration files, which the layout and development reads send with the session's cookies only                                                                              |
+| Field           | Value                                                                                                                                                                                                                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Service**     | `LayoutDesignerService` (`libs/features/layout-designer/src/lib/layout-designer.service.ts`), with `DocumentLayoutService`, `ContentModelService`, `HomeService` and `QueueService`                                                                                                                                                                          |
+| **HTTP Method** | `GET`, and a `POST` that reads for a card from another system (section 38): the designer writes nothing, and saves the file as a download                                                                                                                                                                                                                    |
+| **Endpoints**   | `<config>/layouts.json` and `<config>/layouts/<Type>/<mode>.layout.json` — the layout files served, and one of them, a record page (`view`), an edit form (`edit`) or a create form (`create`), each read anew, past the interceptors                                                                                                                        |
+|                 | `/nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas` — the content model the file is held to, read once per session                                                                                                                                                                                                                          |
+|                 | `/nuxeo/api/v1/config/types/<Type>` — the type the preview resolves the file against, as the record page and the forms read it                                                                                                                                                                                                                               |
+|                 | `/nuxeo/api/v1/config/schemas/<name>` — a schema the record's facets add that the file names, as the record page and the Edit form read it                                                                                                                                                                                                                   |
+|                 | `/nuxeo/api/v1/search/lang/NXQL/execute` — the records of the type to preview with                                                                                                                                                                                                                                                                           |
+|                 | `/nuxeo/api/v1/id/<uid>` — the record the preview draws, read as the document page reads it (`getFullDocument`)                                                                                                                                                                                                                                              |
+|                 | `<config>/navigation.json` and `<config>/queues/<id>.json`, or the app registry's — the queues the app's menu opens, and one of them, read as the menu and the queue page read them (`APP_DEFINITION_FILES`)                                                                                                                                                 |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — a queue's records, read by the queue page the preview draws, as section 33's queue reads them                                                                                                                                                                                                             |
+|                 | `/nuxeo/agentic-ui-apps/apps/<id>/actions.json` — the app open's own actions, from the app registry alone (section 36), authenticated, through the interceptors, and only when the app open has the file: the queue's validator is given them as the pipeline gives a package's. A 404, or no app open, is no actions; the development server is never asked |
+| **Auth**        | The person's own, through the interceptors, but for the configuration files, which the layout and development reads send with the session's cookies only                                                                                                                                                                                                     |
 
 **The records query:**
 
@@ -2398,7 +2399,84 @@ answer of another shape is treated as a `500`.
 
 ---
 
-## 39. Operation Buttons — an App's Action, through `AgenticUi.RunAction`
+## 39. Record Page — a Picture's Review, Pins and Rounds, on Nuxeo's Annotations
+
+| Field           | Value                                                                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `DocumentDetailService` (`getAnnotationDocuments`, `createAnnotation`), called by `RecordPictureReviewComponent`                               |
+| **Read**        | `POST /nuxeo/api/v1/automation/Repository.Query`, `ANNOTATION_DOCUMENTS_QUERY`, every page: when the record is opened, on Retry, after a write |
+| **Write**       | `POST /nuxeo/api/v1/id/:uid/@annotation`, once for each pin placed and each round closed                                                       |
+| **Server side** | Nuxeo's own comment service, `nuxeo-platform-comment` and its REST adapter: no schema, no add-on, nothing to install                           |
+| **Turned on**   | A record page's `review` (docs/business-apps/layout-v2.md, section 2, "Review"), on a record that shows its picture                            |
+
+**Request payload:** the file it is on, the note, and the review's own payload, as text. No
+author and no date: the server sets both.
+
+```json
+{
+  "entity-type": "annotation",
+  "parentId": "<uid>",
+  "xpath": "picture:views",
+  "text": "Logo sits too close to the collar seam",
+  "origin": "nuxeo-satori.review",
+  "entity": "{\"kind\":\"pin\",\"version\":1,\"round\":1,\"x\":0.3,\"y\":0.25}"
+}
+```
+
+A round's close is the same, with the `entity` `{"kind":"round-closed","version":1,"round":1}`
+and the text "Round 1 closed", in the closer's language.
+
+**Response (201 Created):** the annotation, with `id`, `author`, `creationDate`, `xpath`, `origin`
+and `entity` as written, `entityId: null`, and the reader's `permissions` on it.
+
+**The read** is NXQL asked of the repository through `Repository.Query`, not of the search index:
+`search/lang/NXQL` reads the index, which lags, and the read after a write would miss what it just
+wrote (seen live: the pin and the close written disappeared until a later read). The query:
+`SELECT * FROM Annotation WHERE ecm:ancestorId = ? AND annotation:xpath = ? AND externalEntity:origin = ? AND ecm:isTrashed = 0 AND ecm:isVersion = 0 AND ecm:isProxy = 0 ORDER BY dc:created ASC, ecm:uuid ASC`,
+with the record, `picture:views` and `nuxeo-satori.review` as its `queryParams`, the header
+`properties: dublincore,comment,annotation,externalEntity`, 1000 a page, and every page read; an
+answer that is not a list of documents, or more than 20 pages, is an error, not part of a review.
+Each document gives `comment:author`, `comment:text`, `annotation:xpath`, `externalEntity:origin`,
+`externalEntity:entity`, and `dc:created`, the order the review reads in.
+
+**Behaviour verified on the local Nuxeo 2025.10.18, read only from its jars and written only on
+test pictures of our own (2026-11-25):**
+
+- `annotation:xpath` is a text Nuxeo stores and filters by, not a file it checks: `picture:views`
+  is accepted, and `@annotation?xpath=file:content`, where the Annotations tab's viewer (ARender,
+  origin `ARender`) keeps its annotations, does not return the review's. `entity` without
+  `entityId` is accepted, and returned as the same text.
+- An `Annotation` extends `Comment`, so `@comment` and the comments panel's
+  `SELECT * FROM Comment WHERE ecm:ancestorId = …` list each pin and close, with its note as its
+  text. Nuxeo 2025 stores them under the record, in its `Comments` folder, so trashing the record
+  trashes them with it.
+- **Who wrote it, and when.** A POST that sends `"author": "someone-else"` and
+  `"creationDate": "2000-01-01T00:00:00.000Z"` is answered, and read back, with the signed-in user
+  as its author and **the year 2000 as its `creationDate`**: the server sets the author, and keeps
+  a creation date the request sends. Its document's `dc:created` is the time the repository wrote
+  it, whatever the request said. So the review orders by `dc:created`, through the read above, not
+  by `creationDate`. The annotation documents inherit the record's permissions: a holder of `Write`
+  on the record may change `dc:created` or `comment:author` afterwards, as they may change the
+  record.
+- **Editing a pin's note in the comments panel keeps it a pin.** A `PUT @comment/:id` with
+  `{ "entity-type": "comment", "text": … }`, as the panel sends, changed the text and kept
+  `origin`, `entity` and `xpath`.
+- **Who may write one:** `TreeCommentManager.checkCreateCommentPermissions` asks the record for
+  `Read`, and nothing more, for a comment and an annotation alike (bytecode of
+  `nuxeo-platform-comment-2025.10.18.jar`). Nuxeo defines a `Comment` permission, which neither
+  `Read` nor `ReadWrite` includes, and does not check it there. Editing or deleting one is for its
+  author, or a holder of `Everything`. So the page's offers (Add a pin to `Comment` or `Write`,
+  Close round to `Write`) are not a control: a reader may still post either through the REST API.
+
+**Errors:** a failed read shows the error state beside the picture, with Retry for a server
+error; a failed read after a write keeps what is shown. A refused write (`403`) says the user may
+not; any other failure, a `401` included, says the pin or the close could not be saved, keeping
+what was typed, and so does a pin saved that does not read back as one, or a close that opened no
+round.
+
+---
+
+## 40. Operation Buttons — an App's Action, through `AgenticUi.RunAction`
 
 | Field           | Value                                                                                                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

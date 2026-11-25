@@ -157,8 +157,11 @@ function expectRefused(
   }
 }
 
-/** Built, with exit 0, and a checksum file that holds for the zip beside it; saying `says`, when given. */
-function expectBuilt(what, change, args = [], says) {
+/**
+ * Built, with exit 0, and a checksum file that holds for the zip beside it; saying `says`, when
+ * given, and never saying `never`.
+ */
+function expectBuilt(what, change, args = [], says, never) {
   positive++;
   const { scratch, directory, out } = packageWith(change);
   try {
@@ -167,6 +170,7 @@ function expectBuilt(what, change, args = [], says) {
     const problems = [];
     if (status !== 0) problems.push(`exit ${status}, not 0`);
     if (says !== undefined && !output.includes(says)) problems.push(`no "${says}"`);
+    if (never !== undefined && output.includes(never)) problems.push(`"${never}" is in the output`);
     if (!existsSync(zip)) problems.push('no zip');
     else {
       const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
@@ -1288,6 +1292,84 @@ expectVersion(
   }
 }
 
+// A facet is one of its page provider's aggregates, and a home's figure may count one's buckets.
+// Only a page provider of the search index answers aggregates, and only those it defines: on any
+// other, the facet is left out and the figure reads "Unavailable", said only in the console. So a
+// page provider the package's own model defines is held to what its definition lists.
+const QUEUE = 'bundle/agentic-ui-config/queues/unassigned-claims.json';
+expectRefused(
+  'a facet naming an aggregate its page provider, in the package, does not define',
+  ({ edit }) => edit(QUEUE, '"aggregate": "claim_status_agg"', '"aggregate": "claim_adjuster_agg"'),
+  2,
+  'queues/unassigned-claims.json: facets[0].aggregate: the page provider "payers_unassigned_claims", defined in OSGI-INF/payers-claims-demo-model.xml, has no aggregate "claim_adjuster_agg": it defines claim_status_agg [unknown]',
+);
+expectRefused(
+  'a facet on a page provider of the package that reads the repository, which answers no aggregate',
+  ({ edit }) =>
+    edit(QUEUE, '"pageProvider": "payers_unassigned_claims"', '"pageProvider": "member_claims"'),
+  2,
+  'facets[0].aggregate: the page provider "member_claims", defined in OSGI-INF/payers-claims-demo-model.xml, has no aggregate "claim_status_agg": it reads the repository, which answers none',
+);
+expectRefused(
+  "a home's figure counting an aggregate its page provider does not define",
+  ({ edit }) =>
+    edit(
+      'bundle/agentic-ui-config/home.json',
+      '"kpi": { "pageProvider": "payers_unassigned_claims", "aggregate": "claim_status_agg" }',
+      '"kpi": { "pageProvider": "payers_unassigned_claims", "aggregate": "claim_adjuster_agg" }',
+    ),
+  2,
+  'kpi.aggregate: the page provider "payers_unassigned_claims", defined in OSGI-INF/payers-claims-demo-model.xml, has no aggregate "claim_adjuster_agg"',
+);
+// The controls on those: a page provider the package does not define is the server's, which this
+// stage cannot read, so its facets are not held to anything; nor is one whose only definition in
+// the package is disabled, which the server does not register.
+expectBuilt('a facet on a page provider whose definition the package disables', ({ edit }) => {
+  edit(
+    'bundle/OSGI-INF/payers-claims-demo-model.xml',
+    '<genericPageProvider name="payers_unassigned_claims"',
+    '<genericPageProvider name="payers_unassigned_claims" enabled="false"',
+  );
+  edit(QUEUE, '"aggregate": "claim_status_agg"', '"aggregate": "claim_adjuster_agg"');
+});
+expectBuilt(
+  "a facet on a page provider the package does not define, which is the server's",
+  ({ edit }) =>
+    edit(QUEUE, '"pageProvider": "payers_unassigned_claims"', '"pageProvider": "default_search"'),
+);
+
+// A label key is looked up in the package's labels, then in the platform's catalogue: one with a
+// text in neither shows a heading's id made readable, or nothing, so it is refused, by its key.
+expectRefused(
+  'a label key with a text in neither the package nor the platform',
+  ({ edit }) => edit(LAYOUT, '"labelKey": "payers.card.claim"', '"labelKey": "payers.card.claimz"'),
+  2,
+  `cards[0].labelKey: the label key "payers.card.claimz" has no text in labels/en.json, or in the platform's catalogue [unknown]`,
+);
+expectRefused(
+  'a label key whose text labels/en.json no longer has',
+  ({ edit }) =>
+    edit(
+      'bundle/agentic-ui-config/labels/en.json',
+      '"payers.card.claim": "Claim"',
+      '"payers.card.claimOld": "Claim"',
+    ),
+  2,
+  'layouts/Claim/view.layout.json: cards[0].labelKey: the label key "payers.card.claim" has no text',
+);
+expectBuilt("a label key the platform's catalogue gives a text, nested as it is", ({ edit }) =>
+  edit(LAYOUT, '"labelKey": "payers.card.claim"', '"labelKey": "home.title"'),
+);
+expectBuilt(
+  'a label key with no text beside a literal label, which wins and is shown',
+  ({ edit }) =>
+    edit(
+      LAYOUT,
+      '"labelKey": "payers.card.claim"',
+      '"label": "Claim", "labelKey": "payers.card.claimz"',
+    ),
+);
+
 // The content model, given as a file (package-pipeline.md, section 4). The demo's is beside it,
 // and these controls copy the package with it, so each is held to the model it carries.
 const MODEL = 'content-model.json';
@@ -1336,9 +1418,95 @@ expectRefused(
   withModel,
 );
 expectBuilt('the demo package, held to its content model', unchanged, withModel);
-// The control on the controls above: the same layout passes with no model, so it is the model that
-// refuses it, and the model stays opt in.
-expectBuilt('a widget that does not show its property, with no content model', BOOLEAN_RECEIVED);
+
+// With no --model, a package that ships a stand-in model is held to the content-model.json beside
+// it, which describes that model: so CI and validate_package, which pass none, refuse a misspelt
+// property too.
+/** What the pipeline says when it holds a package to its own model. */
+const OWN_MODEL_SAID =
+  "The content model is the package's own content-model.json, since the package ships a stand-in model and no --model was given.";
+expectRefused(
+  "a field whose property the type does not have, with no --model: the package's own model refuses it",
+  ({ edit }) => edit(LAYOUT, '"claim:number",', '"claim:numbr",'),
+  2,
+  'cards[0].fields[0]: "claim:numbr" is not a property of the type "Claim" or of its facets [unknown]',
+);
+expectRefused(
+  "a widget that does not show its property, with no --model: the package's own model refuses it",
+  BOOLEAN_RECEIVED,
+  2,
+  RECEIVED_REFUSED,
+);
+expectBuilt(
+  'the demo package, held to its own content model with no --model, as CI runs it',
+  unchanged,
+  [],
+  OWN_MODEL_SAID,
+);
+// The controls on the controls above: the same layout passes with no model at all, so it is the
+// model that refuses it. A package with no content-model.json is held to none; nor is one whose
+// content-model.json no stand-in model backs, which describes a server, perhaps changed since.
+expectBuilt(
+  'a widget that does not show its property, in a package with no content-model.json',
+  ({ directory, edit }) => {
+    BOOLEAN_RECEIVED({ edit });
+    rmSync(join(directory, MODEL));
+  },
+  [],
+  undefined,
+  OWN_MODEL_SAID,
+);
+expectBuilt(
+  'a widget that does not show its property, beside a content-model.json no stand-in model backs',
+  ({ edit }) => {
+    BOOLEAN_RECEIVED({ edit });
+    // No component registers a document type any more: the package ships no model of its own.
+    for (const component of ['payers-claims-demo-model.xml', 'payers-claims-demo-workflow.xml'])
+      edit(`bundle/OSGI-INF/${component}`, 'point="doctype"', 'point="doctypes"');
+  },
+  [],
+  undefined,
+  OWN_MODEL_SAID,
+);
+// A type the package only adds to, `append="true"`, is the server's: no stand-in model of its own.
+expectBuilt(
+  'a widget that does not show its property, beside a content-model.json, in a package that only appends to types',
+  ({ directory, edit }) => {
+    BOOLEAN_RECEIVED({ edit });
+    for (const component of ['payers-claims-demo-model.xml', 'payers-claims-demo-workflow.xml']) {
+      const file = join(directory, 'bundle', 'OSGI-INF', component);
+      writeFileSync(
+        file,
+        readFileSync(file, 'utf8').replaceAll('<doctype name=', '<doctype append="true" name='),
+      );
+    }
+  },
+  [],
+  undefined,
+  OWN_MODEL_SAID,
+);
+// Given another model, that one is used, and the package's own is not read: here its own is broken.
+expectBuilt(
+  "a --model given, which the package's own, broken, does not replace",
+  ({ directory, edit }) => {
+    writeFileSync(
+      join(dirname(directory), 'given-model.json'),
+      readFileSync(join(directory, MODEL)),
+    );
+    edit(MODEL, '"Claim": {', '"Claims": {');
+  },
+  (scratch) => ['--model', join(scratch, 'given-model.json')],
+  undefined,
+  OWN_MODEL_SAID,
+);
+// The package's own model that cannot be read is the package's defect, refused at step 2 with no
+// zip, not the command's, which a --model file that cannot be read is (exit 2, below).
+expectRefused(
+  "a package's own content-model.json that cannot be read",
+  ({ edit }) => edit(MODEL, '},\n  "facets": [', '},\n  "facet": ['),
+  2,
+  "the package's own content-model.json, which describes its stand-in model, cannot be read as a content model",
+);
 
 // A model the validator cannot read stops the run, as a wrong allow-list does: exit 2, neither
 // refused nor built on a model nobody saw.

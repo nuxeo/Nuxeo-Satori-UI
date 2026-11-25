@@ -160,6 +160,28 @@ describe('resolveRecordLayout', () => {
     expect(layout.columns).toBe(2);
     expect(layout.cards[0].span).toBe(2);
   });
+
+  it('keeps the review for a record that shows its picture, and leaves it out, saying so, for one that does not', () => {
+    const reviewed = file([{ id: 'a', fields: ['dc:title'] }], { review: {} });
+    const shown = resolveRecordLayout(MEMBER, reviewed, [], 'picture');
+    expect(shown.layout.review).toBe(true);
+    expect(shown.notes).toEqual([]);
+
+    const none = resolveRecordLayout(MEMBER, reviewed, [], null);
+    expect(none.layout.review).toBe(false);
+    expect(none.notes).toEqual([
+      'review: a review is drawn on a picture, and this record shows none; left out',
+    ]);
+
+    const without = resolveRecordLayout(
+      MEMBER,
+      file([{ id: 'a', fields: ['dc:title'] }]),
+      [],
+      'picture',
+    );
+    expect(without.layout.review).toBe(false);
+    expect(without.notes).toEqual([]);
+  });
 });
 
 describe("a table's columns", () => {
