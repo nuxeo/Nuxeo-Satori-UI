@@ -19,9 +19,14 @@
  * 2. **Paging:** 49 clicks on the pager's next, so 50 pages browsed, each timed from its click to
  *    the page's first row being the asset the stand-in's order puts there, with its requests;
  *    then the JavaScript heap, after garbage collection, against the heap after page 1.
- * 3. **Facets:** Rights "Ending" chosen, then a Shot, then each cleared, each timed from its click
+ * 3. **The search index's window:** on to page 200, the last that ends within OpenSearch's
+ *    default `max_result_window` of 10,000, which the stand-in enforces as Nuxeo does, each page
+ *    its expected first row and every pager's total held to the library's 100,000; then whether
+ *    a control there still pages past it, which is pressed if so, and whether the list says how
+ *    far its pages reach. Every page the stand-in refused for the window, over the run, counts.
+ * 4. **Facets:** Rights "Ending" chosen, then a Shot, then each cleared, each timed from its click
  *    to the first row the server's narrowed order gives.
- * 4. **The asset page:** five rows opened from the library, each timed from its click to the
+ * 5. **The asset page:** five rows opened from the library, each timed from its click to the
  *    asset's first picture view loaded from its blob, with its requests.
  *
  * Then it holds the measures to `budget.json` (`budget.mjs`) and writes a report under
@@ -46,6 +51,7 @@ import { parseArgs } from 'node:util';
 import { EVIDENCE_ROOT } from '../../collect-evidence/evidence-path.mjs';
 import { spawnToolSync } from '../package-command.mjs';
 import { judge, largest, median, percentile, readBudget } from './budget.mjs';
+import { RESULT_WINDOW } from './library.mjs';
 import { LATENCY, startStandIn } from './stand-in.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -106,6 +112,18 @@ export const CONTROLS = Object.freeze({
       'a script in the page that holds 80 MB from its first moment, as an app that loads a large structure and keeps it would',
     initScript: holdBallast,
     over: ['heap.after50PagesMB'],
+  },
+  unwindowed: {
+    describe:
+      "the stand-in refusing a page past the search index's window as the server does, but saying nothing of where it is, as the check's first stand-in did: no resultsCountLimit, and a next page while records remain",
+    standIn: { windowShown: false },
+    over: ['window.requestsPast', 'window.controlsPast', 'window.noticeMissing'],
+  },
+  'capped-count': {
+    describe:
+      "the stand-in counting only as far as the window, as OpenSearch's own default track_total_hits would have the index count, so the server reports 10,000 results of 100,000",
+    standIn: { counted: RESULT_WINDOW },
+    over: ['window.totalsMisstated', 'window.noticeMissing'],
   },
 });
 
@@ -263,7 +281,33 @@ function pageInstruments() {
       );
     },
   };
-  window.__perf = { click: null, met: null, tests };
+  /** What the library's pager and the list's notice of the window say, as numbers where they can. */
+  const read = {
+    /** The total the pager's range names, "1–50 of 100000"; `null` where it names none. */
+    pagerTotal: () => {
+      const range = document.querySelector('.queue-page .nxs-pager__range')?.textContent ?? '';
+      const total = /\bof\s+(\d[\d.,\s\u00a0\u202f]*)$/.exec(range.replace(/\s+/g, ' ').trim());
+      return total ? Number(total[1].replace(/\D/g, '')) : null;
+    },
+    /** The pager's next button, and the window's notice with the numbers it names. */
+    edge: () => {
+      const next = document.querySelector('.queue-page .nxs-pager__next');
+      const notice = document.querySelector(
+        '.queue-page .record-list__window .nxs-banner__message',
+      );
+      const text = notice ? notice.textContent.replace(/\s+/g, ' ').trim() : null;
+      return {
+        nextDrawn: next !== null,
+        nextEnabled: next !== null && !next.disabled,
+        range: document.querySelector('.queue-page .nxs-pager__range')?.textContent?.trim() ?? null,
+        notice: text,
+        noticeNumbers: (text?.match(/\d[\d.,\u00a0\u202f]*/g) ?? []).map((n) =>
+          Number(n.replace(/\D/g, '')),
+        ),
+      };
+    },
+  };
+  window.__perf = { click: null, met: null, tests, read };
   document.addEventListener('click', () => (window.__perf.click = performance.now()), true);
 }
 
@@ -520,6 +564,7 @@ async function main() {
       latencyScale: control?.latencyScale ?? 1,
       rttMs: NETWORKS[options.network].rttMs,
       padMainBytes: control?.padMainBytes ?? 0,
+      ...control?.standIn,
     });
   } catch (error) {
     exitWith(2, `the stand-in did not start: ${error.message}`);
@@ -557,6 +602,10 @@ async function main() {
     facets: [],
     opens: [],
     heap: null,
+    window: standIn.library.window,
+    /** The pages from 2 to the window's edge whose pager named another total than the library's. */
+    totals: { read: 0, misstated: [] },
+    edge: null,
   };
   let verdict = 'error';
   try {
@@ -576,6 +625,12 @@ async function main() {
     }
     const { page, cdp } = session;
     const next = page.locator('.queue-page .nxs-pager__next');
+    /** The pager's total on the page now drawn, held to the library's whole count. */
+    const readTotal = async (pageNumber) => {
+      const shown = await page.evaluate(() => window.__perf.read.pagerTotal());
+      report.totals.read += 1;
+      if (shown !== standIn.library.size) report.totals.misstated.push({ page: pageNumber, shown });
+    };
 
     // 2. Paging: 50 pages browsed.
     const heapAtFirst = await heapMB(cdp);
@@ -592,6 +647,7 @@ async function main() {
         { timeout, quietMs: 300 },
       );
       report.pages.push({ page: index + 1, ...action });
+      await readTotal(index + 1);
     }
     const heapAtLast = await heapMB(cdp);
     report.heap = { atPage1MB: heapAtFirst, atPage50MB: heapAtLast };
@@ -599,7 +655,35 @@ async function main() {
       `paging: ${report.pages.length} pages, median ${Math.round(median(report.pages.map((p) => p.ms)))} ms; heap ${heapAtFirst.toFixed(1)} MB at page 1, ${heapAtLast.toFixed(1)} MB at page 50`,
     );
 
-    // 3. Facets, from page 50: a choice starts the list again on its first page.
+    // 3. The search index's window: on from page 50 to its last page, 200 at 50 a page, records
+    // 9,951 to 10,000, each page its expected first row; then what the edge offers and says. A
+    // next page still offered there is pressed, as a person would, and the stand-in refuses it as
+    // the server does. Not timed: the stand-in's latency is the same deep in the window.
+    const lastWithin = Math.floor(standIn.library.window / pageSize) - 1;
+    for (let index = PAGES_BROWSED; index <= lastWithin; index++) {
+      const expected = standIn.library.at(index * pageSize);
+      await next.click({ timeout });
+      await metAt(page, 'rowsStartWith', { title: expected.title, rows: pageSize }, timeout);
+      await readTotal(index + 1);
+    }
+    await settle(standIn, problems, "the walk to the window's edge");
+    const atEdge = await page.evaluate(() => window.__perf.read.edge());
+    const noticeShown =
+      atEdge.notice !== null &&
+      atEdge.noticeNumbers.includes(standIn.library.window) &&
+      atEdge.noticeNumbers.includes(standIn.library.size);
+    report.edge = { page: lastWithin + 1, ...atEdge, noticeShown, pressedPast: false };
+    if (!atEdge.nextDrawn) problems.push("the window's edge: the pager is not drawn");
+    if (atEdge.nextEnabled) {
+      report.edge.pressedPast = true;
+      await next.click({ timeout });
+      await settle(standIn, problems, "next, pressed at the window's edge");
+    }
+    console.log(
+      `window: page ${lastWithin + 1} reached, "${atEdge.range}"; next ${atEdge.nextEnabled ? 'ENABLED' : 'disabled'}; notice ${noticeShown ? 'shown' : 'MISSING'}; ${report.totals.misstated.length} of ${report.totals.read} pages misstated the total`,
+    );
+
+    // 4. Facets, from the window's edge: a choice starts the list again on its first page.
     const bucket = (aggregate, key) =>
       page
         .locator(
@@ -649,7 +733,7 @@ async function main() {
       );
     }
 
-    // 4. The asset page, five rows opened from the library's first page.
+    // 5. The asset page, five rows opened from the library's first page.
     for (let row = 0; row < ASSETS_OPENED; row++) {
       const asset = standIn.library.at(row);
       const action = await timedAction(
@@ -694,6 +778,10 @@ async function main() {
       'asset.requests': largest(report.opens.map((a) => a.requests.charged)),
       'heap.after50PagesMB': report.heap.atPage50MB,
       'heap.growthMB': report.heap.atPage50MB - report.heap.atPage1MB,
+      'window.requestsPast': standIn.log.filter((record) => record.pastWindow).length,
+      'window.controlsPast': report.edge.nextEnabled ? 1 : 0,
+      'window.totalsMisstated': report.totals.misstated.length,
+      'window.noticeMissing': report.edge.noticeShown ? 0 : 1,
     };
     const judged = judge(measured, budget);
 
@@ -742,16 +830,19 @@ async function main() {
   }
 
   report.verdict = verdict;
-  report.requestLog = standIn.log.map(({ at, method, path, query, kind, status, bytes, ms }) => ({
-    at: Math.round(at),
-    method,
-    path,
-    query,
-    kind,
-    status,
-    bytes,
-    ms: Math.round(ms),
-  }));
+  report.requestLog = standIn.log.map(
+    ({ at, method, path, query, kind, status, bytes, ms, pastWindow }) => ({
+      at: Math.round(at),
+      method,
+      path,
+      query,
+      kind,
+      status,
+      bytes,
+      ms: Math.round(ms),
+      ...(pastWindow ? { pastWindow } : {}),
+    }),
+  );
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outDir = options.report
     ? resolve(options.report)
@@ -801,6 +892,13 @@ export function markdown(report) {
     for (const check of report.checks) {
       const detail = check.detail ? ` (${check.detail})` : '';
       lines.push(`- ${check.pass ? 'pass' : '**FAIL**'}: ${check.name}${detail}`);
+    }
+    if (report.edge) {
+      const { edge, totals } = report;
+      lines.push(
+        '',
+        `**The window's edge,** ${report.window.toLocaleString('en')} results: page ${edge.page}, its pager "${edge.range ?? 'not drawn'}", next ${edge.nextEnabled ? '**enabled**, and pressed' : 'disabled'}; notice ${edge.notice ? `"${edge.notice}"` : '**none**'}; totals misstated on ${totals.misstated.length} of ${totals.read} pages${totals.misstated[0] ? `, the first page ${totals.misstated[0].page} showing ${totals.misstated[0].shown}` : ''}.`,
+      );
     }
     const kinds = (requests) =>
       Object.entries(requests.byKind)

@@ -17,7 +17,9 @@ other view of the same pages.
   page, so a numbered pager cannot be built on it. Next follows `hasNextPage`, Previous follows the
   page index.
 - **A total only when there is one.** "of N" appears only for a real, non-negative `totalSize`.
-  A negative total, Nuxeo's "did not count", shows the range alone.
+  A negative total, Nuxeo's "did not count", shows the range alone. Where Nuxeo stopped counting
+  at a limit, its `-2` with `resultsCountLimit`, pass that limit as `totalMoreThan`: the range
+  then says "of more than N" while it is within N.
 - **Nothing for a single page.** On a first page with no next page it renders nothing.
 - **Past the end.** A next page that turns out to be empty says "No more items" and keeps Previous.
 
@@ -55,13 +57,20 @@ catalogue does not.
 
 The pager reads nothing. Pass it Nuxeo's own pagination facts for the page you fetched:
 `isNextPageAvailable` as `hasNextPage`, and the response's count as `totalSize` — negative when Nuxeo
-declined to count.
+declined to count. `resultWindow()` from `@nuxeo/satori-platform/nuxeo-client` reads a page provider's
+answer into its total, its "more than", and how far the search index lets it be paged: a page that
+ends past OpenSearch's `max_result_window`, 10,000 by default, is refused, so pass `hasNextPage` as
+false on the last page within it.
 
 ## Examples
 
 ### The last page of a counted list
 
 <Canvas of={PagerStories.LastPageOfACountedList} />
+
+### Counted to a limit
+
+<Canvas of={PagerStories.CountedToALimit} />
 
 ### Past the end
 

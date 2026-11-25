@@ -20,7 +20,8 @@ import { nxsVisibleText } from '../visible-text';
  * Next/previous rather than numbered, because Nuxeo knows a listing's total only when it fits on
  * one page: `@children` reports a negative count otherwise, and `isNextPageAvailable` is the only
  * reliable fact. So Next follows `hasNextPage`, Previous follows the page index, and "of N" shows
- * only when `totalSize` is a real, non-negative total.
+ * only when `totalSize` is a real, non-negative total; "of more than N" only when the host passes
+ * the limit the server stopped counting at, as `totalMoreThan`.
  *
  * It renders nothing while everything fits on one page — a first page with no next page.
  */
@@ -42,6 +43,12 @@ export class NxsPagerComponent {
   readonly itemCount = input(0, { transform: numberAttribute });
   /** Every item across every page; negative when the server did not count them. */
   readonly totalSize = input(-1, { transform: numberAttribute });
+  /**
+   * Where the server stopped counting, when it gave no total: there are more items than this.
+   * Shown as "of more than N" while the range on screen is within it, and not past it, where it
+   * says nothing more than the range does. Negative, the default, for none; `totalSize` wins.
+   */
+  readonly totalMoreThan = input(-1, { transform: numberAttribute });
   /** Whether the server has another page. */
   readonly hasNextPage = input(false, { transform: booleanAttribute });
   /** Disables both buttons while a page loads. */
@@ -63,6 +70,10 @@ export class NxsPagerComponent {
   protected readonly knownTotal = computed((): number | null => {
     const total = this.totalSize();
     return Number.isFinite(total) && total >= 0 ? total : null;
+  });
+  protected readonly moreThan = computed((): number | null => {
+    const limit = this.totalMoreThan();
+    return Number.isFinite(limit) && limit > 0 && this.last() <= limit ? limit : null;
   });
   protected readonly canPrevious = computed(() => !this.disabled() && this.pageIndex() > 0);
   protected readonly canNext = computed(() => !this.disabled() && this.hasNextPage());

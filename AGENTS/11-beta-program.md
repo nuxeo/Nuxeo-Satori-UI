@@ -275,6 +275,14 @@ Treat them as settled; if you contradict one, prove it first.
   otherwise — measured, `pageSize=39` over 39 children answered `39` while `pageSize=20` answered
   `-2`. **The total is known only when there is nothing to page**, which is why a numbered pager is
   impossible and `isNextPageAvailable` is the fact to build on.
+- **A page provider the search index serves is the other way round: an exact count, and a window
+  on paging.** That measurement above is of a folder's children, which the repository serves. Its
+  `resultsCountLimit` is OpenSearch's `max_result_window`, 10,000, whatever the query holds, and its
+  `resultsCount` is exact past it (13,592 for every document). A page that _ends_ past the window
+  is HTTP 500 (`search_phase_execution_exception`), not an empty page, also page 10,000 of a
+  six-record query, and `isNextPageAvailable` is false on the last whole page within it. Measured
+  on 2025.10.18 on 2026-11-25 with read-only `GET`s; the table is in `docs/api-integrations.md`
+  §33, and `resultWindow()` reads which of the two a page is.
 
 - **A Bulk Action Framework command over a page provider leaves out, silently, what the list
   applies.** `POST /api/v1/search/pp/<name>/bulk/<action>` builds the command from the provider's

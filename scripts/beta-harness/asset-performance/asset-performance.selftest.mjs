@@ -26,6 +26,9 @@ import {
   AGGREGATES,
   LIBRARY_SIZE,
   MAX_PAGE_SIZE,
+  PAST_WINDOW_MESSAGE,
+  PastWindowError,
+  RESULT_WINDOW,
   assetNumber,
   assetUid,
   createLibrary,
@@ -69,7 +72,9 @@ describe('the synthetic library', () => {
     );
     const ids = new Set([...first, ...second].map((entry) => entry.uid));
     assert.equal(ids.size, 100);
-    const last = library.execute({ pageIndex: 1_999 }).entries;
+    // The last page is past the window: read from a library whose window holds every asset.
+    const whole = createLibrary({ today: TODAY, window: LIBRARY_SIZE });
+    const last = whole.execute({ pageIndex: 1_999 }).entries;
     assert.equal(last.at(-1).properties['dc:expired'], null);
     assert.equal(library.at(0).uid, first[0].uid);
     assert.equal(library.at(50).uid, second[0].uid);
@@ -164,6 +169,89 @@ describe('the synthetic library', () => {
   });
 });
 
+/**
+ * The search index's window, held to what the local Nuxeo 2025.10.18 answered over OpenSearch's
+ * default of 10,000 (docs/api-integrations.md, section 33): every document through the search
+ * service, 13,592, and `acme_asset_library`'s 6 assets.
+ */
+describe("the synthetic library at the search index's window", () => {
+  const library = createLibrary({ today: TODAY });
+  const flags = (page) => ({
+    resultsCount: page.resultsCount,
+    resultsCountLimit: page.resultsCountLimit,
+    numberOfPages: page.numberOfPages,
+    isNextPageAvailable: page.isNextPageAvailable,
+    isLastPageAvailable: page.isLastPageAvailable,
+  });
+
+  it('is the server’s window, 10,000, and still counts every asset past it', () => {
+    assert.equal(RESULT_WINDOW, 10_000);
+    assert.equal(library.window, RESULT_WINDOW);
+    assert.deepEqual(flags(library.execute()), {
+      resultsCount: 100_000,
+      resultsCountLimit: 10_000,
+      numberOfPages: 2_000,
+      isNextPageAvailable: true,
+      isLastPageAvailable: false,
+    });
+  });
+
+  it('serves the last page that ends within it, with no next page, as the server did', () => {
+    // Measured: 50 a page, page 198 had a next page and 199 had none; 30 a page, 332 had none.
+    assert.equal(library.execute({ pageIndex: 198 }).isNextPageAvailable, true);
+    const edge = library.execute({ pageIndex: 199 });
+    assert.equal(edge.entries.length, 50);
+    assert.equal(edge.currentPageOffset, 9_950);
+    assert.equal(edge.isNextPageAvailable, false);
+    assert.equal(edge.numberOfPages, 2_000, 'numberOfPages is not held to the window');
+    assert.equal(library.execute({ pageSize: 30, pageIndex: 332 }).isNextPageAvailable, false);
+    assert.equal(library.execute({ pageSize: 1, pageIndex: 9_999 }).entries.length, 1);
+  });
+
+  it('refuses a page that ends past it, even one that starts within it', () => {
+    // Measured: 50 a page, page 200; 30 a page, page 333, from result 9,990; 1 a page, 10,000.
+    assert.throws(() => library.execute({ pageIndex: 200 }), PastWindowError);
+    assert.throws(() => library.execute({ pageSize: 30, pageIndex: 333 }), PastWindowError);
+    assert.throws(() => library.execute({ pageSize: 1, pageIndex: 10_000 }), PastWindowError);
+  });
+
+  it('refuses it however few the results, as the server refused page 10,000 of 6 assets', () => {
+    const six = createLibrary({ size: 6, today: TODAY });
+    assert.deepEqual(flags(six.execute({ pageSize: 1 })), {
+      resultsCount: 6,
+      resultsCountLimit: 10_000,
+      numberOfPages: 6,
+      isNextPageAvailable: true,
+      isLastPageAvailable: true,
+    });
+    assert.equal(six.execute({ pageSize: 1, pageIndex: 5 }).isNextPageAvailable, false);
+    assert.equal(six.execute({ pageSize: 1, pageIndex: 9_999 }).entries.length, 0);
+    assert.throws(() => six.execute({ pageSize: 1, pageIndex: 10_000 }), PastWindowError);
+  });
+
+  it('stops short of a count within it at a page size that does not divide it, as 9,886 at 910 a page did', () => {
+    // The library's pages are 100 at most, so 30: 9,995 assets, page 332 the last that ends within.
+    const within = createLibrary({ size: 9_995, today: TODAY });
+    const edge = within.execute({ pageSize: 30, pageIndex: 332 });
+    assert.equal(edge.resultsCount, 9_995);
+    assert.equal(edge.numberOfPages, 334);
+    assert.equal(edge.isNextPageAvailable, false);
+    assert.throws(() => within.execute({ pageSize: 30, pageIndex: 333 }), PastWindowError);
+  });
+
+  it('for its controls, counts only as far as told, or leaves the window unsaid and still enforces it', () => {
+    const capped = createLibrary({ today: TODAY, counted: RESULT_WINDOW });
+    assert.equal(capped.execute().resultsCount, 10_000);
+    assert.equal(capped.execute().totalSize, 10_000);
+    assert.equal(capped.execute({ pageIndex: 199 }).isNextPageAvailable, false);
+    const unsaid = createLibrary({ today: TODAY, windowShown: false });
+    const edge = unsaid.execute({ pageIndex: 199 });
+    assert.equal(edge.resultsCountLimit, -1);
+    assert.equal(edge.isNextPageAvailable, true);
+    assert.throws(() => unsaid.execute({ pageIndex: 200 }), PastWindowError);
+  });
+});
+
 /** The rights bucket an entry is in, from its rights end and the library's day. */
 function bucketOf(entry) {
   const end = entry.properties['dc:expired'];
@@ -245,6 +333,30 @@ describe('the stand-in', () => {
     assert.equal(body.resultsCount, standIn.library.count({ acme_rights_agg: ['Ending'] }));
     const refused = await timed(standIn, `${path}?acme_rights_agg=Ending`);
     assert.equal(refused.response.status, 400);
+  });
+
+  it("answers a page past the search index's window HTTP 500, as Nuxeo does, and logs it", async () => {
+    const path = '/nuxeo/api/v1/search/pp/acme_asset_library/execute';
+    const within = await timed(standIn, `${path}?pageSize=50&currentPageIndex=199`);
+    assert.equal(within.response.status, 200);
+    assert.equal(within.body.entries.length, 0, 'past the 1,000 records, within the window');
+    assert.equal(within.body.resultsCountLimit, 10_000);
+    const query = '?pageSize=50&currentPageIndex=200';
+    const past = await timed(standIn, `${path}${query}`);
+    assert.equal(past.response.status, 500);
+    assert.deepEqual(past.body, {
+      'entity-type': 'exception',
+      status: 500,
+      message: PAST_WINDOW_MESSAGE,
+    });
+    const record = standIn.log.findLast((each) => each.query === query);
+    assert.equal(record.kind, 'pageProvider');
+    assert.equal(record.pastWindow, true);
+    assert.equal(
+      standIn.log.filter((each) => each.pastWindow).length,
+      1,
+      'only the page past the window is marked',
+    );
   });
 
   it('serves the kit’s configuration as config:dev writes it', async () => {
@@ -380,8 +492,40 @@ describe('the stand-in', () => {
 describe('the budget', () => {
   const budget = readBudget();
 
-  it('has a positive limit for every measure the check takes, and none for any other', () => {
+  it('has a limit for every measure the check takes, positive or 0 for one that must be none, and none for any other', () => {
     assert.deepEqual(Object.keys(budget.limits).sort(), MEASURES.map((m) => m.id).sort());
+    for (const { id, none } of MEASURES) {
+      assert.ok(none ? budget.limits[id] === 0 : budget.limits[id] > 0, id);
+    }
+  });
+
+  it("holds the window's lines to none, and refuses a budget that allows one or gives 0 elsewhere", () => {
+    const window = MEASURES.filter((measure) => measure.none).map((measure) => measure.id);
+    assert.deepEqual(window, [
+      'window.requestsPast',
+      'window.controlsPast',
+      'window.totalsMisstated',
+      'window.noticeMissing',
+    ]);
+    const dir = mkdtempSync(join(tmpdir(), 'asset-performance-budget-'));
+    try {
+      const write = (limits) => {
+        const file = join(dir, 'budget.json');
+        writeFileSync(file, JSON.stringify({ limits: { ...budget.limits, ...limits } }));
+        return file;
+      };
+      assert.throws(() => readBudget(write({ 'window.requestsPast': 1 })), /must be none/);
+      assert.throws(() => readBudget(write({ 'paging.p95Ms': 0 })), /no positive limit/);
+      const measured = Object.fromEntries(MEASURES.map(({ id }) => [id, 0]));
+      measured['window.requestsPast'] = 1;
+      const failed = judge(measured, budget).lines.filter((line) => !line.pass);
+      assert.deepEqual(
+        failed.map((line) => line.id),
+        ['window.requestsPast'],
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('passes a run within every limit', () => {

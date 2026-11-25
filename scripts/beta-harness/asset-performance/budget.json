@@ -12,6 +12,10 @@
     "asset.firstViewMs": 1000,
     "asset.requests": 25,
     "heap.after50PagesMB": 64,
-    "heap.growthMB": 6
+    "heap.growthMB": 6,
+    "window.requestsPast": 0,
+    "window.controlsPast": 0,
+    "window.totalsMisstated": 0,
+    "window.noticeMissing": 0
   }
 }
