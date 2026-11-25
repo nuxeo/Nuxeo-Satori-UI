@@ -316,6 +316,37 @@ function expectGreen(label, guardrail, files) {
   });
 }
 
+/**
+ * Asserts a correct tree is green AND that the guardrail says nothing at all.
+ *
+ * `expectWarn` already records why green-and-silent and green-with-a-warning are different
+ * outcomes that an exit code cannot tell apart; this is the missing half of that pair. Without it
+ * every "it must NOT warn here" control was written with `expectGreen`, which checks only the exit
+ * code — and `warn()` does not change it. Review of the install-caveat work found exactly that:
+ * the control asserting a repository path gets no install caveat would have passed just as well
+ * with the caveat emitted for every path, which is the one distinction it existed to protect.
+ *
+ * Use it wherever the absence of a warning is the claim. Where a warning is expected, `expectWarn`
+ * names it; where some unrelated warning is legitimate, `expectGreen` still applies.
+ */
+function expectSilent(label, guardrail, files) {
+  if (!selected(guardrail)) return;
+  positive += 1;
+  withFixture(files, null, (runGuardrail) => {
+    const { code, out } = runGuardrail(guardrail);
+    if (code !== 0) {
+      failures.push(`${label}: ${guardrail} failed on a correct tree.\n    ${out.trim()}`);
+      return;
+    }
+    if (/Review guardrail warnings:/.test(out)) {
+      failures.push(
+        `${label}: ${guardrail} was green but warned, and this control asserts it says ` +
+          `nothing.\n    ${out.trim()}`,
+      );
+    }
+  });
+}
+
 const APP = {
   'apps/nuxeo-ui/public/i18n/en.json': EN_JSON,
   'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK,
@@ -12281,11 +12312,36 @@ const GOOD_ENTRY = "{ path: 'assets/satori-ui', languages: ['de', 'en', 'fr'] }"
 /** Quote a list of plain language codes into source literals. */
 const literals = (codes) => codes.map((code) => `'${code}'`);
 
-/** A vendor folder shipping exactly `de`, `en` and `fr`. */
+const VENDOR_PACKAGE_JSON = 'node_modules/@hylandsoftware/satori-ui/package.json';
+
+/** `package-lock.json` pinning the vendor package, which is what `npm ci` installs from. */
+const lockPinning = (version) =>
+  `${JSON.stringify(
+    {
+      name: 'agentic-ui',
+      lockfileVersion: 3,
+      packages: { 'node_modules/@hylandsoftware/satori-ui': { version } },
+    },
+    null,
+    2,
+  )}\n`;
+
+/** The vendor package's own manifest — the version actually unpacked into `node_modules`. */
+const vendorInstalled = (version) =>
+  `${JSON.stringify({ name: '@hylandsoftware/satori-ui', version }, null, 2)}\n`;
+
+/**
+ * A vendor folder shipping exactly `de`, `en` and `fr`, from a faithful install.
+ *
+ * The lockfile pin and the unpacked manifest agree, because the rule will not judge a directory
+ * listing against the loader until they do — see the stale-install controls below.
+ */
 const VENDOR_FILES = {
   [`${VENDOR_I18N}/de.json`]: '{}\n',
   [`${VENDOR_I18N}/en.json`]: '{}\n',
   [`${VENDOR_I18N}/fr.json`]: '{}\n',
+  'package-lock.json': lockPinning('1.0.0'),
+  [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
 };
 
 expectRed(
@@ -12310,6 +12366,264 @@ expectRed(
   },
   null,
   /`options` build copies a catalogue for fr[\s\S]*does not list it in `languages`/,
+);
+
+/* --- the stale install: the defect that failed `main` itself and blocked every push ---
+ *
+ * `node_modules` is not checked in, so the installed tree is an INPUT to the verdict above — and
+ * it was the one input this rule never validated. `@hylandsoftware/satori-ui` shipped bare-named
+ * catalogues beside the regional ones up to `1.0.0-alpha.201` and regional names only from
+ * `1.0.0`. With `1.0.0` locked and an alpha on disk, every bare name was "served" while a correct
+ * loader listed none of them, so the rule blamed the loader for a stale `npm install`.
+ *
+ * `.husky/pre-push` runs the guardrails, so that rejected every `git push` from every branch on a
+ * tree where nothing was wrong. And its remedy made it worse rather than better:
+ * `upstreamCatalogueFor` prefers a name in `languages` over an alias, so listing `de` makes the
+ * loader request `de.json`, which `1.0.0` does not ship — a 404 and a console error on every page
+ * load, with the `sat.*` keys gone. That is NXSAT-732, reintroduced by obeying this gate.
+ *
+ * The regex pins BOTH halves: the stale install is named, AND the message that would send the
+ * reader to edit `languages` is absent. A control asserting only the new text would have passed
+ * while the old advice was still printed beside it.
+ */
+expectRed(
+  'an installed version that is not the one the lockfile pins',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    // The list that is correct for the locked 1.0.0, and looks wrong against the alpha on disk.
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The same drift must not be excused by the loader happening to match what is on disk: the
+// listing is not evidence about this repository either way, so the rule cannot judge from it.
+expectRed(
+  'a stale install whose languages the loader does happen to match',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
+);
+
+// The false-positive half: a faithful install must be judged exactly as before. Without this,
+// "fail when the versions differ" would have been free to fail every correct tree too.
+falsePositiveControls += 1;
+expectSilent(
+  'an installed version that matches the lockfile pin',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+// A prerelease pin is not drift when it is what the lockfile asks for — the rule compares the two
+// versions, it does not prefer the higher or the stabler one.
+falsePositiveControls += 1;
+expectSilent(
+  'a prerelease installed because the lockfile pins it',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    'package-lock.json': lockPinning('1.0.0-alpha.171'),
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+);
+
+/* Review of the drift check found two path shapes that handed back the pre-fix behaviour, both
+ * because the package root did not name the package whose files were about to be read. Each is
+ * worse than a plain miss: the lookup reports "no entry", which only warns, so the rule goes on
+ * to judge the stale install and print the advice that reintroduces NXSAT-732. */
+
+// An asset input may be written `./node_modules/…`; a lockfile key never is.
+expectRed(
+  'a stale install reached through a ./-prefixed asset input',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: `./${VENDOR_I18N}`, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
+);
+
+// A parent segment resolves away when the directory is READ, so the catalogues are the vendor's
+// as usual, but a key assembled from the raw spelling keeps `apps/../` and matches nothing. This
+// slipped through the fix for the `./` case above, which is why the resolver no longer filters
+// segments by name but puts the path through the same `join`/`relative` pair that reads it.
+expectRed(
+  'a stale install reached through an asset input with a parent segment',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: `apps/../${VENDOR_I18N}`, output: 'assets/satori-ui/i18n' },
+    ]),
+    ...VENDOR_FILES,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0/,
+);
+
+// A nested install must be compared against its OWN lock entry, not its parent's. Resolving from
+// the first `node_modules` segment named the parent, whose version agreeing with the lockfile
+// says nothing about the nested package actually being read.
+expectRed(
+  'a stale nested install judged against its parent package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      {
+        glob: '**/*',
+        input: 'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n',
+        output: 'assets/satori-ui/i18n',
+      },
+    ]),
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/de.json': '{}\n',
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/fr.json': '{}\n',
+    // The parent is faithful; only the nested package is stale.
+    'node_modules/parent/package.json': `${JSON.stringify({ name: 'parent', version: '2.0.0' }, null, 2)}\n`,
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/package.json':
+      vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': `${JSON.stringify(
+      {
+        name: 'agentic-ui',
+        lockfileVersion: 3,
+        packages: {
+          'node_modules/parent': { version: '2.0.0' },
+          'node_modules/parent/node_modules/@hylandsoftware/satori-ui': { version: '1.0.0' },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+  null,
+  /^(?![\s\S]*does not list it in `languages`)[\s\S]*node_modules\/parent\/node_modules\/@hylandsoftware\/satori-ui is installed at 1\.0\.0-alpha\.171/,
+);
+
+// A missing catalogue directory is read as "a typo, or a vendor that dropped the folder" — and
+// that is only sound for a FAITHFUL install. A stale one can simply predate the directory, so the
+// verdict has to come after the drift check, not before it. Both of the old readings send the
+// reader to edit `angular.json` when the fix is `npm ci`.
+expectRed(
+  'a stale install missing a directory the locked version ships',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    // The package is installed, and stale, and has no `i18n` at all.
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /^(?![\s\S]*path is a typo)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The typo/dropped-folder verdict assumes the install is the locked one exactly as the language
+// comparison does, so where that cannot be confirmed it must say so here too. It warned on the
+// directory-PRESENT path and was silent on this one, which stated a guess as a finding.
+expectRed(
+  'a missing directory judged without confirming the installed version',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    // Installed, no `i18n`, and nothing to compare its version against.
+    [VENDOR_PACKAGE_JSON]: '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /could not be confirmed before calling its missing node_modules\/@hylandsoftware\/satori-ui\/i18n a typo or a dropped folder: node_modules\/@hylandsoftware\/satori-ui\/package\.json declares no version[\s\S]*is installed but has no/,
+);
+
+// The other half: with a faithful install a missing directory really is a typo or a dropped
+// folder, and must still say so. Deferring to the drift check must not swallow that verdict.
+expectRed(
+  'a faithful install missing the directory the asset rule names',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /is installed but has no node_modules\/@hylandsoftware\/satori-ui\/i18n[\s\S]*path is a typo/,
+);
+
+/* A path inside `node_modules` that names no ONE package — a bare scope directory — is read and
+ * judged like any other folder, but `installedPackageRootOf` returns null for it, so the drift
+ * check was skipped IN SILENCE. A genuinely stale install then produced an NXSAT-732 verdict the
+ * gate had never checked, which is the whole defect of this branch arriving by another door.
+ *
+ * The language verdict itself is kept — with this glob the build really does serve no `de-DE.json`
+ * at the asset root — so the control asserts the caveat ACCOMPANIES it rather than replacing it. */
+expectRed(
+  'a stale install judged through a path naming no one installed package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'node_modules/@hylandsoftware', output: 'assets/satori-ui/i18n' },
+    ]),
+    [`${VENDOR_I18N}/de-DE.json`]: '{}\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [LOADER_PATH]: loaderWith(literals(['de-DE'])),
+  },
+  null,
+  /judged from node_modules\/@hylandsoftware without confirming the install: that path is inside node_modules but does not name one installed package[\s\S]*lists de-DE in `languages`/,
+);
+
+// A repository path outside `node_modules` has no install to confirm, so it must NOT warn — the
+// distinction is the point, and warning on everything would make the caveat meaningless.
+falsePositiveControls += 1;
+expectSilent(
+  'a repository asset path is judged without an install caveat',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': upstreamAngularJson([
+      { glob: '**/*', input: 'apps/nuxeo-ui/upstream-i18n', output: 'assets/satori-ui/i18n' },
+    ]),
+    'apps/nuxeo-ui/upstream-i18n/de.json': '{}\n',
+    'apps/nuxeo-ui/upstream-i18n/en.json': '{}\n',
+    [LOADER_PATH]: loaderWith(literals(['de', 'en'])),
+  },
+);
+
+// And when the comparison cannot be made at all the rule still judges, but says that it did so
+// on trust. Staying silent here is how this blind spot survived in the first place.
+expectWarn(
+  'a lockfile with no entry for the vendor package',
+  'checkUpstreamCatalogueLanguages',
+  {
+    'angular.json': UPSTREAM_ANGULAR_JSON,
+    ...VENDOR_FILES,
+    'package-lock.json': `${JSON.stringify({ lockfileVersion: 3, packages: {} }, null, 2)}\n`,
+    [LOADER_PATH]: loaderWith(literals(['de', 'en', 'fr'])),
+  },
+  null,
+  /without confirming it is the locked version: package-lock\.json has no entry for node_modules\/@hylandsoftware\/satori-ui/,
 );
 
 // The pre-fix shape: a folder with no language list at all, which is what made every language
@@ -12726,6 +13040,255 @@ expectRed(
   },
   null,
   /preview\.ts asks Satori's translation loader for "en" \(`fallbackLang`\)[\s\S]*serves no en\.json/,
+);
+
+/* --- the same stale install, pointing the other way ---
+ *
+ * This rule fails a language the served folder does NOT ship, so an install that ships MORE
+ * catalogues than the locked version makes it green for a request that 404s on a faithful one.
+ * Lenience is the dangerous direction here: the control directly above is exactly the defect
+ * being hidden, and the only difference is an `en.json` left over from an older install.
+ *
+ * So the drift check belongs in both rules, and it has to be the whole verdict rather than a
+ * warning beside a green one — a gate that says "probably fine" about an input it could not read
+ * is the shape this repository has paid for three times.
+ */
+expectRed(
+  'a stale install whose extra catalogue hides a doomed Storybook request',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    // The leftover the alpha shipped, which 1.0.0 does not.
+    [`${SB_VENDOR}/en.json`]: '{}\n',
+    'package-lock.json': lockPinning('1.0.0'),
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /is installed at 1\.0\.0-alpha\.171, but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The nested-install shape at this second site, which is where review found it: resolving from
+// the first `node_modules` segment compared `node_modules/parent`, so a faithful parent vouched
+// for a stale nested Satori and the leftover `en.json` went on hiding the doomed request.
+expectRed(
+  'a stale nested Satori install vouched for by a faithful parent',
+  'checkStorybookSatoriCatalogues',
+  {
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/en-US.json': '{}\n',
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/fr-FR.json': '{}\n',
+    // The leftover an older install shipped, which 1.0.0 does not.
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n/en.json': '{}\n',
+    'node_modules/parent/package.json': `${JSON.stringify({ name: 'parent', version: '2.0.0' }, null, 2)}\n`,
+    'node_modules/parent/node_modules/@hylandsoftware/satori-ui/package.json':
+      vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': `${JSON.stringify(
+      {
+        name: 'agentic-ui',
+        lockfileVersion: 3,
+        packages: {
+          'node_modules/parent': { version: '2.0.0' },
+          'node_modules/parent/node_modules/@hylandsoftware/satori-ui': { version: '1.0.0' },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/parent/node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en'`),
+  },
+  null,
+  /node_modules\/parent\/node_modules\/@hylandsoftware\/satori-ui is installed at 1\.0\.0-alpha\.171/,
+);
+
+// The missing-mount verdict at this site has the same ordering problem: a stale install can be
+// missing a folder the locked version ships, which is neither a typo nor a dropped folder.
+expectRed(
+  'a stale install missing the Storybook mount the locked version ships',
+  'checkStorybookSatoriCatalogues',
+  {
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /^(?![\s\S]*path is a typo)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*Run `npm ci`/,
+);
+
+// The same announcement at this site: a missing mount called a typo on an install whose version
+// could not be confirmed is a guess, and must be labelled as one.
+expectRed(
+  'a missing Storybook mount judged without confirming the installed version',
+  'checkStorybookSatoriCatalogues',
+  {
+    [VENDOR_PACKAGE_JSON]: '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /could not be confirmed before calling the missing node_modules\/@hylandsoftware\/satori-ui\/i18n a typo or a dropped folder[\s\S]*which does not exist/,
+);
+
+// The same silent skip at this site: a mount naming no one installed package was judged with no
+// drift check and no caveat.
+expectRed(
+  'a stale Storybook mount naming no one installed package',
+  'checkStorybookSatoriCatalogues',
+  {
+    [`${SB_VENDOR}/en-US.json`]: '{}\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /judged from node_modules\/@hylandsoftware without confirming the install: that path is inside node_modules but does not name one installed package/,
+);
+
+/* The last verdict in this rule that had no drift check: an ANCESTOR mount (one above the
+ * catalogue path) whose directory is missing was skipped by `continue`, so when it was the only
+ * mount the rule said "Add a `staticDirs` entry" — diagnosing a stale install as configuration.
+ * Here `node_modules/@hylandsoftware` exists, so the mount resolves inside the dependency tree,
+ * but the stale `satori-ui` has no `i18n`. */
+expectRed(
+  'a stale ancestor mount reported as a staticDirs problem',
+  'checkStorybookSatoriCatalogues',
+  {
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    // `to` is an ancestor of i18n/@hylandsoftware/satori-ui, so the mount is not exact and the
+    // path it resolves to — <from>/satori-ui — is not there, while the package itself is.
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /^(?![\s\S]*Add a `staticDirs` entry)[\s\S]*is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*need not be a `staticDirs` problem/,
+);
+
+// The other half: with a faithful install an empty catalogue path really is a `staticDirs`
+// problem, and must still say so. Qualifying the verdict must not swallow it.
+expectRed(
+  'a faithful install serving nothing at the catalogue path',
+  'checkStorybookSatoriCatalogues',
+  {
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
+    'package-lock.json': lockPinning('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /serves nothing at i18n\/@hylandsoftware\/satori-ui[\s\S]*Add a `staticDirs` entry/,
+);
+
+/* The mixed case: one skipped ancestor mount inside a stale package AND one mount that does serve
+ * catalogues, so `servedFrom` is not empty and the "serves nothing" branch never runs. The drift
+ * was recorded and then dropped, leaving "use a language that folder ships — satori-ui 1.0.0 ships
+ * regional codes only" while the install is an alpha. The serving mount is a repository path on
+ * purpose: a vendor one would hit the per-mount drift check and never reach here. */
+expectRed(
+  'a mixed configuration whose recorded drift never reaches the language verdict',
+  'checkStorybookSatoriCatalogues',
+  {
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0-alpha.171'),
+    'package-lock.json': lockPinning('1.0.0'),
+    // A local override that really does serve catalogues, but not the language asked for.
+    'apps/nuxeo-ui/public/satori-i18n/fr-FR.json': '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }, { from: '../../../../apps/nuxeo-ui/public/satori-i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /is installed at 1\.0\.0-alpha\.171 but package-lock\.json pins 1\.0\.0[\s\S]*may be the install rather than the language asked for[\s\S]*serves no en-US\.json/,
+);
+
+// The two states that fix left behind. An ABSENT dependency: the mount resolves inside
+// node_modules, the package is not installed, another mount serves catalogues — so the language
+// verdict fires and used to name what `satori-ui 1.0.0` ships with nothing installed at all.
+expectRed(
+  'a mixed configuration whose absent dependency never reaches the language verdict',
+  'checkStorybookSatoriCatalogues',
+  {
+    'package-lock.json': lockPinning('1.0.0'),
+    // `@hylandsoftware` exists so the mount is inside node_modules, but satori-ui is not there.
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    'apps/nuxeo-ui/public/satori-i18n/fr-FR.json': '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }, { from: '../../../../apps/nuxeo-ui/public/satori-i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /node_modules\/@hylandsoftware\/satori-ui is not installed, and[\s\S]*may be the install rather than the language asked for[\s\S]*serves no en-US\.json/,
+);
+
+// And an UNVERIFIABLE one: installed, but its version cannot be compared to the lockfile, so the
+// advice naming what 1.0.0 ships is a guess and must say so.
+expectRed(
+  'a mixed configuration whose unverifiable dependency never reaches the language verdict',
+  'checkStorybookSatoriCatalogues',
+  {
+    'package-lock.json': lockPinning('1.0.0'),
+    [VENDOR_PACKAGE_JSON]: '{ "name": "@hylandsoftware/satori-ui" }\n',
+    'apps/nuxeo-ui/public/satori-i18n/fr-FR.json': '{}\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }, { from: '../../../../apps/nuxeo-ui/public/satori-i18n', to: 'i18n/@hylandsoftware/satori-ui' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /could not be checked against package-lock\.json \(node_modules\/@hylandsoftware\/satori-ui\/package\.json declares no version\)[\s\S]*may be the install rather than the language asked for/,
+);
+
+/* The regression this branch itself introduced and review caught: an absent dependency reached
+ * through an ancestor mount turned the "serves nothing" verdict into a WARNING, so the gate
+ * exited 0 on a tree `main` failed. The install changes the remedy, not the fact that the
+ * Storybook serves no catalogue at that path, so this fails — and stays failing. */
+expectRed(
+  'an absent dependency serving no catalogue at all still fails',
+  'checkStorybookSatoriCatalogues',
+  {
+    'package-lock.json': lockPinning('1.0.0'),
+    // The scope exists so the mount is inside node_modules; satori-ui itself is not.
+    'node_modules/@hylandsoftware/satori-icons/package.json':
+      '{ "name": "@hylandsoftware/satori-icons" }\n',
+    [`${SB}/.storybook/main.ts`]: sbMain(
+      `[{ from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n', to: 'i18n/@hylandsoftware' }]`,
+    ),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
+  null,
+  /node_modules\/@hylandsoftware\/satori-ui is not installed, and[\s\S]*serves nothing at i18n\/@hylandsoftware\/satori-ui[\s\S]*may be the install rather than the configuration/,
+);
+
+// And a faithful install is judged as before, so the drift check cannot fail every Storybook.
+falsePositiveControls += 1;
+expectSilent(
+  'a Storybook asking only for languages a faithfully installed folder ships',
+  'checkStorybookSatoriCatalogues',
+  {
+    ...SB_VENDOR_1_0_0,
+    'package-lock.json': lockPinning('1.0.0'),
+    [VENDOR_PACKAGE_JSON]: vendorInstalled('1.0.0'),
+    [`${SB}/.storybook/main.ts`]: sbMain(),
+    [`${SB}/.storybook/preview.ts`]: sbPreview(`'en-US'`),
+  },
 );
 
 // The active language is requested as well as the fallback, so fixing only one is still red.
