@@ -7,6 +7,8 @@ promotion after a person approves.
 Status: built on 22 November 2026, and not yet run in full. The checks run on every pull request;
 signing and publishing run only for a tag, and no tag has been pushed yet. Versions were added on
 23 November 2026 (section 8); signatures and promotion after approval are a proposal (section 9).
+The upgrade check, phase 10's offline half of "an upgrade that keeps every configuration", was
+added on 25 November 2026 (section 10); its server-side half is not built.
 
 ## The short version
 
@@ -22,6 +24,10 @@ signing and publishing run only for a tag, and no tag has been pushed yet. Versi
 - **Its version is held to what changed.** Given the package as it was, a version that did not move
   when the content changed is refused, and so is one that moved less than the changes need: a
   queue removed needs a major. Each build writes what changed beside the zip (section 8).
+- **An upgrade keeps every customer configuration.** Given the package as it was, and the platform
+  as it was, what a customer may override or name in the kit, and what the kit names of the
+  platform, is removed or renamed only with a migration note and the version that needs; what the
+  kit still names is never removed. Offline, with no server (section 10).
 
 ## 1. What an app definition package is
 
@@ -61,16 +67,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                            |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4); the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files |
-| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8)                                                                                           |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                             |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                       |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`                                                                                                                                           |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                     |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                   |
+| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                                                        |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4); the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files                             |
+| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8), and the upgrade keeps every customer configuration (section 10), the platform's side too given `--previous-platform` |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                         |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                   |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`, with the migration notes that cover the upgrade                                                                                                                      |
+| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                                                 |
+| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                               |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -125,7 +131,8 @@ It writes `dist/payers-claims-demo-0.4.0.zip` and its `.sha256` in the package. 
 elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
 `--platform` its platform version; the workflow passes the version of `libs/platform`. `--model`
 and `--model-server` give it the server's content model (section 4). `--previous` gives it the
-package as it was, to hold its version to (section 8).
+package as it was, to hold its version and its upgrade to (sections 8 and 10), and
+`--previous-platform` the platform as it was, to hold what the package names of it to (section 10).
 
 Its negative controls break a copy of the demo package in one way each, and every one must be
 refused at its own step, for its own reason, with no zip left:
@@ -133,6 +140,8 @@ refused at its own step, for its own reason, with no zip left:
 ```bash
 npm run app-package:selftest
 ```
+
+The upgrade check has controls of its own, `npm run app-upgrade:selftest` (section 10).
 
 ## 4. The content model
 
@@ -427,3 +436,192 @@ tag app-package/<name>/<version>
 4. Production's Marketplace target and credentials, which the `nos-publish` step takes as it takes
    preprod's (the name of its production environment is not checked here).
 5. The ruleset for `app-package/*` tags.
+
+## 10. The upgrade check
+
+Phase 10 of the [development plan](development-plan.md) asks for "an upgrade that keeps every
+app's configuration". This is its offline half, built on 25 November 2026: it runs in CI with no
+server, and nothing here installs anything on one.
+
+A customer's configuration is made on one version of a kit and of the platform. Their own package
+layers over the kit's: it `<require>`s the kit's component to come after it, replaces or disables a
+layout by its type and mode, overrides a menu entry or gives a label another text by its ID, and
+names the kit's queues, properties and page providers in files of its own. The version rules
+(section 8) say how far a version must move; they do not say whether such a configuration still
+finds what it names. The upgrade check compares the package as it was with the package as it is,
+and the platform as it was with the platform as it is, and refuses an upgrade that takes something
+such a configuration relies on away, unless a migration note says what to do instead.
+
+[`scripts/app-upgrade-check.mjs`](../../scripts/app-upgrade-check.mjs) is the check. The XML is
+read by `verify-package-zip.mjs`'s helpers, as the rest of the pipeline reads it, and nothing is read
+through a symbolic link.
+
+### What is refused
+
+**On the kit's side**, each item named as a note names it:
+
+| Item                                                                               | What a customer's configuration does with it                                                                                                        |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layout <Type>/<mode>`, `fragment <layer>/<name>`, `asset <name>`                  | Replaces or disables it by its key, in a component that comes after the kit's                                                                       |
+| `app <id>`, `address <address>`                                                    | "Switch app" lists it, and a link opens it                                                                                                          |
+| `component <name>`                                                                 | `<require>`s it to come after it. Nuxeo leaves a component whose requirement is missing unstarted, so it contributes nothing                        |
+| `schema <name>`, `property <prefix>:<name>`, `type <name>`, `page-provider <name>` | Names them in its own layouts, queues, rules and home: only the kit's own schemas' properties, not `dc:` or another platform schema's               |
+| `queue <id>`, `task-form <workflow>.<step>`, `home`, `menu`                        | Links to them, or names them in its own menu and home                                                                                               |
+| `menu-entry <id>`                                                                  | Overrides it in its manifest, as `appMenu.<id>`, the ID the `navbar` slot gives it ([extension-reference.md](../extension-reference.md), section 3) |
+| `labels <language>`, `label <language> <key>`                                      | Gives a key another text in its manifest's `labels`, or names it                                                                                    |
+| `action <id>`                                                                      | Names it in a queue or a record page, or overrides it                                                                                               |
+
+- **Removed or renamed, with no note:** refused. A rename is a removal and an addition; the finding
+  names what was added of the same kind, so that its note can say `renamedTo`. A menu removed takes
+  its entries with it, a labels file its keys and a schema its properties, and each is said once.
+- **A configuration layer whose precedence changes, with no note:** refused. Nuxeo registers a
+  component's contributions after those of every component it requires, and a later contribution
+  on the same key wins (`ContributionRegistry` in `nuxeo-agentic-core`), so three things move a
+  layer: `requires <component>`, the component's `<require>`s changed; `contributor <key>`, a
+  contribution moved to another of the kit's components; `disables <key>`, a contribution the kit
+  newly disables with `enabled="false"`.
+- **What disappears while the kit still names it:** refused, and no note mends it.
+  `label-key <key>`: a key gone from every labels file of the kit, and not one of the platform's
+  English texts, while a file of the kit still names it, so the page shows the key.
+  `property <prefix>:<name>`: a property gone from the kit's schema while a field, column, sort,
+  rule, computation or template of the kit still names it.
+- **A version that does not rise as far as these need.** Each finding is breaking, so it needs a
+  major, or a minor below 1.0.0, as section 8 reads a version, whatever the version rules made of
+  the file it is in. The version rules already rate a queue, a layout or a label key removed as
+  breaking. They rate a menu entry, a property, a page provider, a component or a contributor as
+  a change, or a change to judge, which a patch or a minor passes, and the upgrade check refuses
+  that: _the upgrade needs more of the version than it was given: the changes since 0.4.0 need a
+  minor version … and 0.4.1 raises the patch._
+
+**On the platform's side**, what a kit names of the platform, as it was or as it is, against what
+the platform registers at each of the two refs:
+
+| Item                                                       | Read, at each ref, from                                                                                                                                                                                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id <id>`                                                  | The `app.` and `nxs.` IDs `docs/extension-reference.md` documents, as its drift gate reads them, and the rules, computations, checks, row and bulk actions and pages of `registries.ts`, which the validator holds a kit to |
+| `widget <name>`                                            | `registries.ts`'s widgets                                                                                                                                                                                                   |
+| `component <name>`, `extension-point <component>/<point>`  | `nuxeo-agentic-core`'s `OSGI-INF` components                                                                                                                                                                                |
+| `descriptor <element>`, `descriptor <element>@<attribute>` | The descriptors those extension points take, by their `@XObject` and `@XNode` annotations                                                                                                                                   |
+| `menu-prefix <prefix>`                                     | `APP_MENU_ID_PREFIX`, the prefix of an app's menu entries in the `navbar` slot                                                                                                                                              |
+
+A kit names an ID or a widget in a value of its JSON files, a label's or a `labelKey`'s apart, and
+a component, an extension point and a descriptor's elements and attributes in its own components.
+
+- **Gone while the kit as it is still names it:** refused, and no note mends it: mend the kit. For
+  an ID or a widget, the pipeline's step 2 refuses it first, as unknown.
+- **Gone, and named only by the kit as it was:** a configuration made on that version breaks. It
+  needs a note in [`platform-upgrade-notes.json`](platform-upgrade-notes.json), and the platform's
+  version, `libs/platform/package.json`'s, raised by a major, a minor below 1.0.0, as
+  [extension-reference.md](../extension-reference.md), section 1, promises for an ID.
+- **A file the platform as it was says what it registers in, which the platform as it is has
+  not:** refused, rather than read as everything it listed being removed. If it moved, the check's
+  `PLATFORM_SOURCES` must follow it. One that the platform as it was had not is said, and what it
+  lists is not compared.
+
+`registries.ts` is imported at each ref, to read what it registers exactly: it is plain data, and
+the repository's own reviewed code at that commit, its library checked for links first.
+
+### Migration notes
+
+A kit's notes are its `upgrade-notes.json`, beside `package/`, outside the zip, so a note changes no
+version. The platform's are [`docs/business-apps/platform-upgrade-notes.json`](platform-upgrade-notes.json).
+
+```json
+{
+  "version": 1,
+  "notes": [
+    {
+      "version": "0.2.0",
+      "item": "address contracts",
+      "renamedTo": "address contract-desk",
+      "note": "The app opens at contract-desk, not contracts: ..."
+    }
+  ]
+}
+```
+
+- **`version`** is the version that first ships the change, a prerelease's included. A note covers
+  a finding when it names its item and its version is one the upgrade crosses: above the version
+  held to, and up to the version as it is. So a note written for an earlier removal of the same id
+  does not cover a later one. A kit's notes are read in the kit's versions, the platform's in the
+  platform's.
+- **`item`**, or **`items`** for one change that takes several, such as an action and its labels:
+  each as the finding names it, one of the kinds above.
+- **`renamedTo`**, with one `item`: what it is called now. One that the kit or the platform as it is
+  does not have is refused.
+- **`note`**: what a customer does. A pull request's changelog, and a tag's job summary, carry it
+  under "Upgrading" (step 6), so whoever installs the release reads it.
+- **A notes file that cannot be read whole is refused:** a key a note does not have, a version that
+  is not one, an unknown kind, a second note for the same item at the same version. A note in range
+  that covers nothing is said, not refused: an item removed and then put back between the two
+  versions leaves one.
+
+### Running it
+
+```bash
+npm run app-upgrade -- --since origin/staging/enterprise-grade-app
+npm run app-upgrade -- business-apps/packages/payers-claims-demo --since 76fd666a1
+```
+
+`--since <ref>` compares every kit under `business-apps/packages/`, or those named, and the
+platform, as the working tree has them, with what they were at the ref: `git archive` writes the
+ref's copies to a scratch folder, so `git` and `tar` are needed beside Node. A kit the ref did not
+have is new, held to nothing of its own; one the tree no longer has is said. `--previous <package>`
+compares one kit with an export of it, and `--previous-platform <folder>` the platform with one
+`--export <ref> <folder>` wrote. Exit 0 keeps every configuration, 1 does not, 2 is a command it
+could not run.
+
+**In the pipeline,** step 3 runs it given `--previous`, after the version rules, and refuses the
+package on any finding: _the upgrade from 0.4.0 does not keep every customer configuration: 2
+findings, listed above_. Given `--previous-platform` too, the platform's side. The workflow passes
+both, from the same commit it holds the version to (section 8, "In CI"): the kit as it was, and
+the platform `--export` writes at that commit. So a pull request that removes an ID a kit names
+fails here, and the workflow runs on a change to the platform's sources for that reason.
+
+**Its controls:** `npm run app-upgrade:selftest` holds 40 negative controls and 8 sound ones. Each
+negative one breaks the demo, or a copy of the platform's files, in one way, and must be refused
+for its own reason: thirteen kinds of item removed or renamed, the three layers, the two kinds of
+dangling name; a note out of range, a rename to nothing, a notes file that cannot be read whole, a
+version raised too little, another package's version; seven platform changes (a rule gone with no
+note, a rule the kit still names, the menu's prefix, a descriptor's attribute, the defaults
+component renamed, a source gone, a note with the platform's version not raised); and the
+command's own errors. The sound ones are kept: unchanged, a removal and a rename with their notes,
+a note that covers nothing, a platform removal with its note and its version, and the same
+platform twice. Four of them run `--since` and `--export` on a scratch git repository.
+`npm run app-package:selftest` holds step 3 to it: a menu entry removed at a patch is refused
+there, as is a rule the kit as it was named and the platform as it is does not register; with a
+note and a minor it is built, and the changelog carries the note. Each was seen failing: with the
+kit's findings, the notes' range, the platform's findings or the version requirement taken out of
+the check, and with step 3's call to it taken out of the pipeline, the controls that hold each go
+red.
+
+**Run on the four kits,** 25 November 2026: against the staging branch, every configuration is
+kept. Against each kit's version before, where it has one, it found two upgrades the version rules
+had passed. Payers 0.4.0, from 0.3.0, removed the action `payers.claim.approve` and its three
+labels, when approval moved into the claims review workflow; contracts 0.2.0, from 0.1.0, moved
+the app's address from `contracts` to `contract-desk`. Each kit now has the note that says what to
+change, and both are kept.
+
+### What it does not see, and what a server-side test would add
+
+- **Only what a kit names stands for what a customer names.** The platform's side weighs the IDs
+  the four kits name, as they were or as they are; a customer's own configuration may name any
+  documented ID, and an ID no kit names can be removed without a note. Holding every documented ID
+  to the same rule is a check on the platform's versions, not yet made.
+- **Not weighed:** what nothing outside the kit can address: a home card, a queue's columns and
+  facets, a card's or a field's id inside a layout, a label's text. Nor, yet, a kit's directories,
+  its operation chains, its lifecycle states and transitions, which a customer's rule may name, a
+  complex property's subfields, or a facet.
+- **A server-side upgrade test**, which is the later step, would install the kit's version before
+  and a customer's configuration package on a server, upgrade the kit and the platform package
+  with `nuxeoctl mp-install`, and check what only a server shows:
+  - that the customer's component still starts, with no pending component, and that the served
+    configuration, `bootstrap.json`, `manifest.json`, `layouts.json` and the app registry's
+    listing and files, is the customer's, with the same contributions replaced or removed and no
+    new error in the diagnostics;
+  - that records made on the version before still open: a type renamed leaves its documents
+    unreadable, a property removed leaves its data behind, and a lifecycle changed leaves a record
+    in a state the new one keeps only as a way in, as payers 0.4.0's claims are;
+  - that a route model replaced by its zip's digest, a vocabulary loaded from its CSV, and a page
+    provider behind a queue all answer as the new version expects;
+  - the Admin Center's install path, which no rehearsal here has covered.

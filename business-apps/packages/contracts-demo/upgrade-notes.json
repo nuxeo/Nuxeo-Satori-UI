@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "notes": [
+    {
+      "version": "0.2.0",
+      "item": "address contracts",
+      "renamedTo": "address contract-desk",
+      "note": "The app opens at contract-desk, not contracts: /contracts is the platform's component showcase, which an app may not take (app-definition-v2.md, section 3). A link or bookmark to the app's old address names contract-desk instead."
+    }
+  ]
+}
