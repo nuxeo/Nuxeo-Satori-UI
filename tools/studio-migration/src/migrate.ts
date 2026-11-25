@@ -16,7 +16,9 @@
  *    decided, and what it prints in `decisions.txt`.
  *
  * Each step is `main` itself, given those arguments, so each file holds what the command prints by
- * hand, byte for byte. `--allow-list` goes to `convert`, `check` and `report`, as by hand.
+ * hand, byte for byte. `--allow-list` goes to `convert`, `check` and `report`, as by hand. `<out>`
+ * is given in full, as `path.resolve` gives it, so that every path the run prints can be opened
+ * from any folder: `npm run` reads a relative one from the repository's root.
  *
  * **A run that carries decisions.** With `--from`, an earlier run (its `--out`), a conversion
  * directory or a `decisions.json`, the decisions step carries each decision that still holds
@@ -28,7 +30,8 @@
  *   nothing after it. A check that fails is not a refusal: the harness ran and found something,
  *   which the report shows, so the run carries on, and exits 1 at its end.
  * - **It never writes over anything.** Before it writes, `--out` must be new or an empty
- *   directory, and the files `--allow-list` and `--from` name must be readable. Each file it writes
+ *   directory, the package must be readable, the file `--allow-list` names must be an allow-list,
+ *   and the one `--from` names must be readable. Each file it writes
  *   is written only where none is (`wx`), `convert` writes only into a new directory, and
  *   `decisions` never over a `decisions.json`. An earlier run, its decisions among them, is read
  *   and never changed.
@@ -36,16 +39,18 @@
  *   replaced during the run cannot give two steps two packages.
  * - **It says which checks still need a server,** the migration lab server, with the Studio
  *   package installed and Web UI beside the new app, and why: the halves of checks 3, 5, 6 and 7
- *   that compare the new app with Web UI as it runs the package. It reads that from the `check`
+ *   that need what only that server holds, its model and Web UI as it runs the package. It reads
+ *   that from the `check`
  *   step's own result, through `CliIo.checked`, rather than from its text.
  *
  * Exit codes: 0 every step ran and no check failed; 1 a step refused, or a check failed; 2 the
  * command was wrong, which `main` decides.
  */
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { CliIo } from './cli';
-import { DECISIONS_FILE } from './decisions';
+import { allowListOf } from './convert';
+import { DECISIONS_FILE, unfilled } from './decisions';
 import type { CheckResult, HarnessResult } from './harness';
 
 /** A command of the tool, as `main` runs it: `migrate` is given `main` itself. */
@@ -114,7 +119,7 @@ const OTHER_GAPS: Readonly<Record<number, string>> = {
 };
 
 export function migrate(request: MigrateRequest, io: CliIo, run: Command): number {
-  const { out } = request;
+  const out = resolve(request.out);
   const conversion = join(out, CONVERSION_DIRECTORY);
 
   // Each file is read once, and every step is given those bytes: the package among them.
@@ -132,7 +137,8 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
     io.err(`migrate: ${problem}. Nothing was written.\n\nWhat to do: ${todo}\n`);
     return 1;
   };
-  if (out.trim() === '') return refused('--out names no directory', 'give --out a new directory.');
+  if (request.out.trim() === '')
+    return refused('--out names no directory', 'give --out a new directory.');
   if (existsSync(out)) {
     if (!statSync(out).isDirectory())
       return refused(`${out} is a file, not a directory`, 'give --out a new directory.');
@@ -142,13 +148,22 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
         `give --out a new directory, such as ${nextOut(out)}. To carry the decisions you made in ${out}, add --from ${shell(out)}.`,
       );
   }
+  try {
+    readFile(request.package);
+  } catch (error) {
+    return refused(
+      `the package ${request.package} cannot be read: ${(error as Error).message}`,
+      "check the path to your package. npm run reads a relative path from the repository's root.",
+    );
+  }
   if (request.allowList !== undefined) {
     try {
-      readFile(request.allowList);
+      // The shape `convert` holds it to, so that a wrong one stops the run before it writes.
+      allowListOf(JSON.parse(readFile(request.allowList).toString('utf8')), request.allowList);
     } catch (error) {
       return refused(
-        `the allow-list ${request.allowList} cannot be read: ${(error as Error).message}`,
-        'check the path given to --allow-list.',
+        `the allow-list ${request.allowList} is not one it can use: ${(error as Error).message}`,
+        'give --allow-list a file of the form { "operations": [ "Operation.Id", ... ] }, naming the operations your deployment allows.',
       );
     }
   }
@@ -179,7 +194,7 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
       name: 'conversion',
       title: 'The conversion',
       argv: ['convert', pkg, conversion, ...allow],
-      whenRefused: `where the reason is about the allow-list, give --allow-list a file of the form { "operations": [ "Operation.Id", ... ] }. Where it names a file, something in your package has a name that cannot be a file name on every system, a limit of this tool rather than a mistake of yours: send ${join(out, STEP_FILES.inventory)} and this message to your Nuxeo contact.`,
+      whenRefused: `where the reason names a file, something in your package has a name that cannot be a file name on every system: a limit of this tool, not a mistake of yours. Send this message and ${join(out, STEP_FILES.inventory)} to your Nuxeo contact.`,
     },
     {
       name: 'checks',
@@ -306,13 +321,19 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
   const todo: string[] = [];
   if (failed.length > 0)
     todo.push(
-      `${failed.length === 1 ? 'Check' : 'Checks'} ${failed.map((check) => `${check.number} (${check.name})`).join(', ')} failed: the conversion is not right as it stands. What ${failed.length === 1 ? 'it' : 'each'} found is in ${join(out, STEP_FILES.checks)}. A finding about your package's own content, such as a colour below WCAG 2.1 AA contrast, is changed in Studio: build the package again and migrate it into a new directory. Send any other to your Nuxeo contact, with ${out}.`,
+      `${failed.length === 1 ? 'Check' : 'Checks'} ${failed.map((check) => `${check.number} (${check.name})`).join(', ')} failed: the conversion is not right as it stands. What ${failed.length === 1 ? 'it' : 'each'} found is in ${join(out, STEP_FILES.checks)}. A finding about your package's own content, such as a colour below WCAG 2.1 AA contrast, is changed in Studio: build the package again and migrate it into a new directory, before you fill in the decisions, which are for one build of the package and start again with a new one. Send any other to your Nuxeo contact, with ${out}.`,
     );
   todo.push(
     `Read the report, ${join(out, STEP_FILES.report)}: what the package holds and what each part became, what the checks found, and every item that needs a decision.`,
-    `In ${decisions}, write for each reported item that has none yet who owns it, in "owner", and what they decided, in "decision". Change nothing else in it.`,
-    `To see your decisions counted, run again into a new directory, carrying them: ${again}`,
   );
+  const left = toFillIn(decisions);
+  if (left === 0)
+    todo.push('Every reported item has an owner and a decision: none is left to fill in.');
+  else
+    todo.push(
+      `In ${decisions}, write for each reported item still without them who owns it, in "owner", and what they decided, in "decision". Change nothing else in it.`,
+      `To see your decisions counted, run again into a new directory, carrying them: ${again}`,
+    );
   if (server.length > 0)
     todo.push(
       'The checks that need the lab server cannot be run from here: ask your Nuxeo contact about running them, and keep this run for them.',
@@ -323,6 +344,19 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
   lines.push('', 'What to do next:', ...todo.map((item, index) => `  ${index + 1}. ${item}`), '');
   io.out(lines.join('\n'));
   return failed.length > 0 ? 1 : 0;
+}
+
+/**
+ * How many entries of the `decisions.json` the run wrote still have no owner or nothing decided, or
+ * `null` when it cannot be read, for which the next steps say to fill it in, as for a first run.
+ */
+function toFillIn(path: string): number | null {
+  try {
+    const file = JSON.parse(readFileSync(path, 'utf8')) as { readonly decisions?: unknown };
+    return Array.isArray(file.decisions) ? unfilled(file.decisions) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Runs one step through `main`, given the files migrate read, and keeps what it printed. */

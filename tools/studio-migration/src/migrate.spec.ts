@@ -164,6 +164,12 @@ describe.each([
     expect(migrated.out).toMatch(
       /^Migrating acme\.zip into .*\n\n1\. The inventory: done.*\n2\. The conversion: done[^]*\n3\. The checks that need no server: done, and no check failed;.*\n4\. The report: done.*\n5\. The decisions to fill in: done[^]*\nVerdict: not ready\. What stands in the way:\n/,
     );
+    expect(migrated.out).toContain(
+      `\n  2. In ${join(conversion, 'decisions.json')}, write for each reported item still without them who owns it`,
+    );
+    expect(migrated.out).toContain(
+      `\n  3. To see your decisions counted, run again into a new directory, carrying them: npm run studio-migration -- migrate acme.zip --out ${out}-2${allow.length ? ' --allow-list allow.json' : ''} --from ${out}\n`,
+    );
     // Check 10 holds the actions to the allow-list convert was given, so it never runs in part.
     expect(migrated.out).not.toContain('- 10 Package');
     // The scaffold, written last, changes nothing the checks and the report print.
@@ -200,11 +206,31 @@ describe.each([
     expect(migrated.out).toMatch(
       /\n3\. The decisions, carried: done[^]*\n4\. The checks that need no server: done.*\n5\. The report: done/,
     );
-    // Counted by the checks and the report, which ran after them.
+    // Counted by the checks and the report, which ran after them, and nothing is left to do with them.
     expect(readFileSync(join(out, 'check.txt'), 'utf8')).not.toMatch(/reported items? ha/);
+    expect(migrated.out).toContain(
+      '\n  2. Every reported item has an owner and a decision: none is left to fill in.\n',
+    );
+    expect(migrated.out).not.toContain('To see your decisions counted');
     expect(readFileSync(join(out, 'report.txt'), 'utf8')).toMatch(
       /Decisions needed: (\d+) reported items, \1 of them decided/,
     );
+
+    // A decision whose owner is spaces alone is carried, and still left to fill in.
+    const spaced = fresh();
+    expect(run(['migrate', 'acme.zip', '--out', spaced], files).code).toBe(0);
+    const spacedFile = join(spaced, 'conversion', 'decisions.json');
+    fill(spacedFile);
+    const blanked = JSON.parse(readFileSync(spacedFile, 'utf8'));
+    blanked.decisions[0].owner = '   ';
+    writeFileSync(spacedFile, JSON.stringify(blanked));
+    const again = fresh();
+    const carried = run(['migrate', 'acme.zip', '--out', again, '--from', spaced], files);
+    expect(readFileSync(join(again, 'decisions.txt'), 'utf8')).toMatch(
+      /reported items, 1 of them still without an owner or a decision\n/,
+    );
+    expect(carried.out).toContain('To see your decisions counted');
+    expect(carried.out).not.toContain('none is left to fill in');
 
     // The decisions.json itself, or the conversion holding it, carry the same.
     for (const from of [decisions, join(earlier, 'conversion')]) {
@@ -279,7 +305,7 @@ describe('migrate, its negative controls', () => {
     expect(refused.err).toContain(
       `Written before it stopped: ${join(out, 'inventory.txt')}. migrate never writes over a run`,
     );
-    expect(refused.err).toContain('What to do: where the reason is about the allow-list');
+    expect(refused.err).toContain('What to do: where the reason names a file');
     expect(readdirSync(out)).toEqual(['inventory.txt']);
     // By hand, the conversion refuses it the same way.
     const byHandConversion = run(['convert', 'acme.zip', fresh()], { 'acme.zip': pkg });
@@ -355,13 +381,25 @@ describe('migrate, its negative controls', () => {
     expect(existsSync(join(out, 'report.txt'))).toBe(false);
   });
 
-  it('refuses, before writing anything, an allow-list or an earlier run it cannot read', () => {
-    for (const [extra, problem] of [
-      [['--allow-list', 'missing.json'], 'the allow-list missing.json cannot be read'],
-      [['--from', join(fresh(), 'nowhere')], 'holds no decisions.json migrate can read'],
+  it('refuses, before writing anything, a package, an allow-list or an earlier run it cannot use', () => {
+    const given = { ...files, 'bad.json': Buffer.from('["Claim.Approve"]') };
+    for (const [argv, problem] of [
+      [['missing.zip'], 'the package missing.zip cannot be read: ENOENT'],
+      [
+        ['acme.zip', '--allow-list', 'missing.json'],
+        'the allow-list missing.json is not one it can use: ENOENT',
+      ],
+      [
+        ['acme.zip', '--allow-list', 'bad.json'],
+        'the allow-list bad.json is not one it can use: bad.json: an allow-list is { "operations": [ <operation id>, ... ] }',
+      ],
+      [
+        ['acme.zip', '--from', join(fresh(), 'nowhere')],
+        'holds no decisions.json migrate can read',
+      ],
     ] as const) {
       const out = fresh();
-      const refused = run(['migrate', 'acme.zip', '--out', out, ...extra], files);
+      const refused = run(['migrate', argv[0], '--out', out, ...argv.slice(1)], given);
       expect(refused.code).toBe(1);
       expect(refused.out).toBe('');
       expect(refused.err).toContain(problem);
@@ -423,6 +461,20 @@ describe('migrate, its negative controls', () => {
     expect(stopped.err).toContain('Error: a defect');
     expect(stopped.err).toContain('This is a defect in this tool, not a mistake in your package');
     expect(existsSync(join(out, 'conversion', 'decisions.json'))).toBe(false);
+  });
+
+  it('gives the steps --out in full, and prints it so, however it was given', () => {
+    const out = fresh();
+    const given = relative(process.cwd(), out);
+    const migrated = run(['migrate', 'acme.zip', '--out', given], files);
+    expect(migrated.code).toBe(0);
+    expect(given).not.toBe(out);
+    expect(migrated.out).toContain(`Migrating acme.zip into ${out}\n`);
+    expect(readFileSync(join(out, 'conversion.txt'), 'utf8')).toMatch(
+      new RegExp(
+        `^Converted Acme-Claims 1\\.0\\.0 into ${join(out, 'conversion').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\n`,
+      ),
+    );
   });
 
   it('exits 2 without a package or --out, or with an option it does not take', () => {
@@ -490,7 +542,10 @@ describe('migrate, on what still needs a server', () => {
       io.checked?.({ checks, ready: false, blockers: ['check 3 failed'] });
       return 1;
     };
-    const { code, out } = migrateWith({ package: 'acme.zip', out: fresh() }, printing);
+    const { code, out } = migrateWith(
+      { package: onDisk(syntheticPackage()), out: fresh() },
+      printing,
+    );
     expect(code).toBe(1);
     expect(out).toContain('\n  - 3 Check 3: its server half');
     expect(out).toContain('\n  - 6 Check 6: its server half');

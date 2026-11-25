@@ -411,6 +411,22 @@ export function recordedAllowList(conversion: Pick<Conversion, 'report'>): Reado
   return new Set(conversion.report.allowList ?? []);
 }
 
+/**
+ * A deployment's allow-list, `{ "operations": [...] }`, as app-definition's command line reads it,
+ * from `parsed`, the JSON of the file `path` names.
+ */
+export function allowListOf(parsed: unknown, path: string): ReadonlySet<string> {
+  const operations =
+    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)['operations']
+      : undefined;
+  if (!Array.isArray(operations) || !operations.every((item) => typeof item === 'string'))
+    throw new ConversionError(
+      `${path}: an allow-list is { "operations": [ <operation id>, ... ] }`,
+    );
+  return new Set(operations as string[]);
+}
+
 /** Each language's translations as the conversion holds them, in its labels files. */
 export function labelsOf(
   conversion: Pick<Conversion, 'app'>,

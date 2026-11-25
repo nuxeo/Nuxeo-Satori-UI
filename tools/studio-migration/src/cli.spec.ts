@@ -347,7 +347,7 @@ describe('studio-migration decisions and report', () => {
     const written = run(['decisions', 'acme.zip', out], files);
     expect(written).toMatchObject({ code: 0, err: '' });
     expect(written.out).toBe(
-      `Wrote ${join(out, 'decisions.json')}: 14 reported items, 14 of them with an owner or a decision to fill in\n`,
+      `Wrote ${join(out, 'decisions.json')}: 14 reported items, 14 of them still without an owner or a decision\n`,
     );
     const file = JSON.parse(readFileSync(join(out, 'decisions.json'), 'utf8'));
     expect(file.decisions).toHaveLength(14);
@@ -381,7 +381,7 @@ describe('studio-migration decisions and report', () => {
     });
     expect(carried.code).toBe(0);
     expect(carried.out).toContain(
-      ': 14 reported items, 1 of them with an owner or a decision to fill in\n' +
+      ': 14 reported items, 1 of them still without an owner or a decision\n' +
         '  carried from old.json: 13\n  not carried, and still in old.json: 1\n',
     );
     expect(carried.out).toMatch(

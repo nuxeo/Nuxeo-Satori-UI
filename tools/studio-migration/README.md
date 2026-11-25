@@ -76,8 +76,9 @@ them through what it writes.
   | 4. The report                     | `report <package> <out>/conversion`    | `report.txt`                                 |
   | 5. The decisions to fill in       | `decisions <package> <out>/conversion` | `conversion/decisions.json`, `decisions.txt` |
 
-  `--allow-list` goes to `convert`, `check` and `report`. So each file is what the command prints
-  by hand, byte for byte, and the tests hold them to it.
+  `--allow-list` goes to `convert`, `check` and `report`, and `<out>` is given in full, so that
+  every path the run prints opens from any folder. So each file is what the command prints by
+  hand into the same paths, byte for byte, and the tests hold them to it.
 
 - **With `--from`,** an earlier run, a conversion directory or a `decisions.json`, the decisions
   step carries the decisions that still hold (`decisions --from`), and runs third, so that the
@@ -90,8 +91,9 @@ them through what it writes.
   the harness ran from `check`'s own result, which `main` hands it (`CliIo.checked`), not from what
   `check` prints or its exit code.
 - **It never writes over anything.** Before writing anything it refuses an `--out` that is a file
-  or holds anything, and an `--allow-list` or `--from` it cannot read. Each file it writes is
-  written only where none is (`wx`); `convert` and `decisions` keep their own refusals.
+  or holds anything, a package it cannot read, an `--allow-list` that is no allow-list, and a
+  `--from` it cannot read. Each file it writes is written only where none is (`wx`); `convert`
+  and `decisions` keep their own refusals.
 - **It only reads the package,** once: every step is given the same bytes.
 - **It says which checks still need the migration lab server,** and why: each of checks 3, 5, 6
   and 7 whose server half did not run, with what that half adds and what this run could not
@@ -1037,18 +1039,24 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **The module boundary has been seen refusing.** The tool is tagged `type:tool`, which may use
   shared code and the core, and nothing may depend on it. An import of a feature library, planted
   in the tool, failed lint.
-- **For the guided migration, 24 guards**, broken one at a time by a script that runs
-  `migrate.spec.ts` and restores the file, each seen turning it red:
-  - **Before anything is written:** an `--out` that holds files, is a file, or is empty; an
-    `--allow-list` and a `--from` that cannot be read.
-  - **The steps:** the package read once; a step that exits non-zero stopping the run, and a
-    failed check not; one that throws stopping it; each file written only where none is; the
-    allow-list given to `convert`, `check` and `report`; `--from` given to `decisions`, found in a
-    run and in a conversion, and its step run before the checks.
+- **For the guided migration, 28 guards**, broken one at a time by a script that runs its specs
+  and restores the file, each seen turning them red:
+  - **Before anything is written:** an `--out` that holds files, is a file, or is empty; a package,
+    an `--allow-list` and a `--from` that cannot be read, and an allow-list of the wrong shape.
+  - **The steps:** `--out` given in full; the package read once; a step that exits non-zero
+    stopping the run, and a failed check not; one that throws stopping it; each file written only
+    where none is; the allow-list given to `convert`, `check` and `report`; `--from` given to
+    `decisions`, found in a run and in a conversion, and its step run before the checks.
   - **What it says:** a run that wrote nothing saying so, and what a stopped run wrote read from
     the disk; a server half listed only when it did not run, and the other checks that did not run
-    whole; exit 1 on a failed check; the next free directory.
+    whole; nothing left to fill in said so, and a decision of spaces still to fill in; exit 1 on a
+    failed check; the next free directory.
   - **In `cli.ts`:** `check` handing its result to `migrate`.
+
+  The first round, of 24, found none no test reached. The second, after the review's fixes, found
+  one: a decision whose owner is spaces alone counted as filled in, which no test sent through
+  `decisions`. It now has its test. A guard of the first round whose text the fixes had changed was
+  skipped by the script without a word; it was run on its own, and turned the suite red.
 
   Each of the three controls the guide's reader meets was also run with `npm run studio-migration`
   on a package written to disk: an `addon` package and a file that is no zip, refused at the

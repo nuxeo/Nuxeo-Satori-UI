@@ -23,8 +23,10 @@ You need:
   you install on a server. It holds a `package.xml` that declares a `studio` package, an
   `install.xml`, a `studio-registries.json` and your project's bundle, a `.jar`. Give it to the
   tool exactly as Studio built it: do not unzip it and zip it again.
-- **A computer with Node.js 24 and git.** The repository names the Node.js version it is tested
-  with in its `.nvmrc` file. The commands in this guide are for a macOS or Linux terminal.
+- **A computer with Node.js 24.15 or a later 24 release, and git.** `node --version` says which
+  Node.js you have. The repository is tested with Node.js 24 (its `.nvmrc` file and the `engines`
+  of its `package.json`); with another version `npm ci` warns about it, and nothing else is
+  promised. The commands in this guide are for a macOS or Linux terminal.
 - **A copy of this repository, with its dependencies installed:**
 
   ```bash
@@ -36,8 +38,7 @@ You need:
 
   Some of the repository's dependencies are Hyland packages on GitHub Packages, and `npm ci`
   reads them with a read-only token in `SATORI_GH_READONLY_TOKEN`. Ask your Nuxeo contact for
-  one. Without it `npm ci` stops with an authentication error (401 or 403), and the tool cannot
-  run. Use `npm ci`, not `npm install`: `npm ci` installs exactly the versions the repository was
+  one. Without it `npm ci` stops with an authentication error, and the tool cannot run. Use `npm ci`, not `npm install`: `npm ci` installs exactly the versions the repository was
   tested with.
 
 - **Optionally, your deployment's allow-list.** If buttons of your Web UI run Automation
@@ -56,7 +57,7 @@ command writes, in a folder outside your copy of the repository, and never commi
 
 **What the tool does with your package.** It reads it, and only reads it: it never changes the
 file, and runs nothing in it. Scripts in your layouts stay text. It has no code that talks to a
-network, and writes only into the folder you give it.
+network, and writes what it finds only into the folder you give it.
 
 ## 2. The one command
 
@@ -79,7 +80,8 @@ npm run studio-migration -- migrate ~/studio/my-project-1.0.0.zip --out ~/studio
 - **`--from <earlier run>`** carries the decisions you made in an earlier run (section 6).
 
 `npm run` reads relative paths from the repository's folder, whichever folder you run it from. Give
-full paths, as above, if your package is elsewhere.
+full paths, as above, if your package is elsewhere. What the command prints names every file by its
+full path, so you can open it from any folder.
 
 It runs five steps, in order, and prints each as it ends:
 
@@ -98,8 +100,9 @@ It runs five steps, in order, and prints each as it ends:
 - `report.json`, every part of your package with what became of it, as data;
 - `decisions.json`, from step 5.
 
-Each file holds exactly what that step prints when it is run on its own. If you ever want to run
-a step by hand, the [tool's README](../../tools/studio-migration/README.md) lists the commands.
+Each file holds exactly what that step prints when it is run on its own, given the full path of
+`--out`. If you ever want to run a step by hand, the
+[tool's README](../../tools/studio-migration/README.md) lists the commands.
 
 At the end it prints the verdict, the checks that still need a server, and what to do next. On
 the made-up package the repository tests with, it ends like this (shortened):
@@ -108,7 +111,7 @@ the made-up package the repository tests with, it ends like this (shortened):
 3. The checks that need no server: done, and no check failed; in /home/me/studio/migration-1/check.txt
 4. The report: done, in /home/me/studio/migration-1/report.txt
 5. The decisions to fill in: done; what it printed is in /home/me/studio/migration-1/decisions.txt
-   Wrote /home/me/studio/migration-1/conversion/decisions.json: 15 reported items, 15 of them with an owner or a decision to fill in
+   Wrote /home/me/studio/migration-1/conversion/decisions.json: 15 reported items, 15 of them still without an owner or a decision
 
 Verdict: not ready. What stands in the way:
   - check 3 ran only in part
@@ -135,30 +138,40 @@ What to do next:
 
 ## 3. When it stops
 
-The command stops at the first step that refuses, says why and what to do, and runs nothing after
-it. What it wrote before then stays in `--out`.
+Before it writes anything, the command checks what you gave it. A message that starts with
+`migrate:` and says "Nothing was written" is one of these, and you can run again with the same
+`--out` once it is fixed:
 
-- **"migrate: … already holds files, perhaps an earlier run".** The `--out` folder is not new. The
-  command wrote nothing. Give a new folder; to keep the decisions of the earlier run, add
-  `--from <that folder>`.
+- **"… already holds files, perhaps an earlier run".** The `--out` folder is not new. Give a new
+  folder; to keep the decisions of the earlier run, add `--from <that folder>`.
+- **"the package … cannot be read".** The path to your package is wrong. Remember that `npm run`
+  reads a relative path from the repository's folder.
+- **"the allow-list … is not one it can use".** The file cannot be read, or is not of the form
+  `{ "operations": [ ... ] }`.
+- **"… holds no decisions.json migrate can read".** `--from` names no earlier run.
+
+Then the command stops at the first step that refuses, says why and what to do, and runs nothing
+after it. What it wrote before then stays in `--out`.
+
 - **"1. The inventory: refused".** The file is not a Studio package the tool can read: it is not a
   zip, or holds no `package.xml`, or its `package.xml` declares another kind of package, such as
   an `addon`. Check that you gave it the package Studio builds for your project, as it was built.
   Nothing was written, so you can use the same `--out` again.
 - **A later step refused.** The message gives the reason and says what to do. One that names a
   limit of the tool, such as a file name in your package it cannot write on every system, is not
-  a mistake of yours: send the message and the `--out` folder to your Nuxeo contact. As something
-  was written, run again with a new `--out`, or delete the old one first.
+  a mistake of yours: send the message, and the files it names, to your Nuxeo contact. As
+  something was written, run again with a new `--out`, or delete the old one first.
 - **A check failed.** This is not a refusal: the run carries on to the report and the decisions,
   and exits 1. A failed check means the conversion does not show something as Web UI does. What
   the check found is in `check.txt`, and in the report. Where it is about your package's own
   content, such as a theme colour below the contrast WCAG 2.1 AA asks for, change it in Studio,
-  build the package again, and migrate it into a new folder. Send any other failure to your Nuxeo
-  contact.
+  build the package again, and migrate it into a new folder. Do this before you fill in the
+  decisions: they are for one build of the package, and a new build starts them again (section 6).
+  Send any other failure to your Nuxeo contact.
 
 ## 4. Reading the report
 
-`report.txt` is in five parts.
+`report.txt` is in six parts.
 
 **The header** names the package, its version and the platform it is for; the Studio branch,
 commit and build time recorded in its bundle; the app it became; the version of the converter;
@@ -188,7 +201,8 @@ the way:
 | Line                                                     | What to do                                                                                                |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `check N failed`                                         | Read what it found: section 3, "A check failed"                                                           |
-| `check N ran only in part`, `check N did not run`        | Nothing, for now: section 7 says what each needs                                                          |
+| `check 10 ran only in part`                              | Only when `check` or `report` is run by hand without the run's `--allow-list`: give it the same one       |
+| `check N ran only in part`, `check N did not run`        | For any other check, nothing for now: section 7 says what each needs                                      |
 | `N constructs are pending a later phase`                 | Nothing, for now: a later version of the tool converts them                                               |
 | `N proposals wait for a person to accept or reject them` | Read them under "Proposals". Accepting or rejecting one is not built yet, so they stay in the way for now |
 | `N reported items have no owner`                         | Fill in `decisions.json`: section 5                                                                       |
@@ -201,6 +215,10 @@ it is reported, where it was written if it was, and its owner and decision, or "
 became.
 
 `inventory.txt` is a shorter view of what the package holds, and `check.txt` is the checks alone.
+The inventory has a "Decisions needed" list of its own, which is shorter than the report's: it
+names what the tool's catalogue does not know or cannot map, by kind, such as a theme's colours
+that set nothing. The report's list is every reported item, one by one, and is the one
+`decisions.json` follows.
 
 ## 5. Filling in the decisions
 
@@ -217,7 +235,8 @@ became.
 }
 ```
 
-For each entry, write:
+An entry also has a `property`, a `to` or a `rule` when the report gives its item one. For each
+entry, write:
 
 - **`owner`:** who decides it, a person or a team;
 - **`decision`:** what they decided, in their own words, such as "Keep the search in Web UI until
@@ -228,6 +247,10 @@ while the report still says the same about its item: if the next run gives the i
 reason, the decision is not taken, and the item is decided again. Do not add entries or keys, and
 keep the top of the file as it is: it names the build of the package the decisions are for.
 
+**Make your changes in Studio first.** Decisions are for one build of your package, and a new build
+starts them again (section 6). If you mean to fix something in Studio, such as a check that failed,
+build the package again and migrate it before you fill in the decisions.
+
 ## 6. Running it again
 
 The command never writes over a run, so a run that counts your decisions goes into a new folder.
@@ -237,7 +260,8 @@ The command never writes over a run, so a run that counts your decisions goes in
 npm run studio-migration -- migrate ~/studio/my-project-1.0.0.zip --out ~/studio/migration-2 --from ~/studio/migration-1
 ```
 
-A run that gets to its end prints this command for you, with the next free folder name.
+A run that gets to its end with decisions still to fill in prints this command for you, with the
+next free folder name.
 
 - **What is carried:** each decision of the earlier run that still holds. `decisions.txt` says
   how many were carried, and lists each one that was not, with why. The earlier run is only read:
@@ -271,18 +295,18 @@ npm run studio-migration -- report <your-package.zip> ~/studio/migration-1/conve
 The harness has ten checks. The command runs every check, or the half of a check, that needs only
 your package and its conversion:
 
-| #   | Check                    | Without a server                                                                                     | Its server half, on the migration lab server                                                                     |
-| --- | ------------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 1   | Nothing dropped          | Every part of the package is in the report once, counted two independent ways                        | None                                                                                                             |
-| 2   | Fields                   | Each layout shows the same fields, modes, required flags and widgets                                 | None                                                                                                             |
-| 3   | Model                    | Every field, type, vocabulary and page provider your package defines exists                          | Confirms those the platform defines, from the server's own definitions                                           |
-| 4   | Labels                   | Every translation survives, in every language                                                        | None                                                                                                             |
-| 5   | Conditions               | Each rule decides as the original condition, read from both apps' code                               | Evaluates each original condition in Web UI itself, for test users and documents                                 |
-| 6   | What people see          | Labels and the order of buttons, menu entries and tabs                                               | Opens the same documents in both apps as the same user, compares every value, and takes screenshots side by side |
-| 7   | What the server is asked | Each list and button asks for the same page provider, operation and parameters                       | Records the requests both apps really send, and compares them and their result counts                            |
-| 8   | Theme                    | Colours mapped, files kept byte for byte, text contrast checked against WCAG 2.1 AA                  | None                                                                                                             |
-| 9   | Plugins                  | Not run: it tests the plugins that replace custom elements, which a later version of the tool brings | -                                                                                                                |
-| 10  | Package                  | The new app's configuration passes the package pipeline's validator                                  | None                                                                                                             |
+| #   | Check                    | Without a server                                                                                                                   | Its server half, on the migration lab server                                                                     |
+| --- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 1   | Nothing dropped          | Every part of the package is in the report once, counted two independent ways                                                      | None                                                                                                             |
+| 2   | Fields                   | Each layout shows the same fields, modes, required flags and widgets                                                               | None                                                                                                             |
+| 3   | Model                    | Every field, type, vocabulary and page provider your package defines exists                                                        | Confirms those the platform defines, from the server's own definitions                                           |
+| 4   | Labels                   | Every translation survives, in every language                                                                                      | None                                                                                                             |
+| 5   | Conditions               | Each rule decides as the original condition, read from both apps' code                                                             | Evaluates each original condition in Web UI itself, for test users and documents                                 |
+| 6   | What people see          | Labels and the order of buttons, menu entries and tabs                                                                             | Opens the same documents in both apps as the same user, compares every value, and takes screenshots side by side |
+| 7   | What the server is asked | Each list and button asks for the same page provider, operation and parameters                                                     | Records the requests both apps really send, and compares them and their result counts                            |
+| 8   | Theme                    | Colours mapped, files kept byte for byte, text contrast checked against WCAG 2.1 AA                                                | None                                                                                                             |
+| 9   | Plugins                  | Not run: it tests the plugins that replace custom elements, which a later version of the tool brings                               | -                                                                                                                |
+| 10  | Package                  | The new app's configuration passes the package pipeline's validator. Run by hand without the run's `--allow-list`, it runs in part | None                                                                                                             |
 
 **The migration lab server** is a Nuxeo server with your Studio package installed, Web UI running,
 and the new app installed beside it on the same documents, with fictional test users and groups.
@@ -290,13 +314,35 @@ The server halves compare the new app with Web UI as it actually runs your packa
 package alone cannot show: a condition can depend on what the server returns, a value on how a
 widget formats it, a list on what search finds.
 
-Until those halves run, checks 3, 5, 6 and 7 stay `partial`, and the verdict stays "not ready",
-however complete your decisions are. The command lists each of them at the end of a run, with
-what it would add and what this run could not settle. **This tool does not run them yet: none of
+Until those halves run, each of checks 3, 5, 6 and 7 that has something to settle on the server
+stays `partial`, and the verdict stays "not ready", however complete your decisions are. Check 5,
+for example, has nothing to settle in a package with no conditions. The command lists each check
+still waiting at the end of a run, with what its server half would add and what this run could
+not settle. **This tool does not run them yet: none of
 it talks to a server, and the lab server is not built.** Keep your run, and ask your Nuxeo contact
 about having them run.
 
-## 8. Not done yet
+## 8. Words the output uses
+
+- **Construct:** one part of your package the tool counts and accounts for, such as a layout, a
+  field, a column, a button, a translation, a theme colour or a file.
+- **The harness:** the ten checks of section 7.
+- **Truth table:** for a condition, every combination of what it tests, such as each group a user
+  may be in and each type a document may have. A converted rule passes when it decides as the
+  original does on every row.
+- **The migration server, the migration lab server:** the same server, of section 7.
+- **Phases M1 to M4:** the stages of the migration work, in the
+  [migration document](studio-migration.md), section 10. M3 brings plugins for custom code; M4 is
+  this command and what comes after it.
+- **Layer 0, Layer 2:** levels of the new app's configuration: Layer 0 is what it reads as it
+  starts, such as your theme's colours; Layer 2 is plugins, code a person reviews.
+- **A reference in a note,** such as "(layout-v2.md, section 10)" or "(app-definition-v2.md,
+  section 6)": a section of the team's design documents, in this folder of the repository,
+  `docs/business-apps/`. `extension-reference.md` is in `docs/`. A bare "(section 3)" is a section
+  of the [migration document](studio-migration.md), and "(decision 3)" is in the
+  [decision log](decisions.md).
+
+## 9. Not done yet
 
 - **The server halves** of checks 3, 5, 6 and 7, and the lab server they run on.
 - **Accepting or rejecting a proposal.** A proposal waits, and stays in the way of readiness.

@@ -41,6 +41,7 @@ import { join } from 'node:path';
 import { account, type Accounting } from './account';
 import { CatalogueError, loadCatalogue, type How } from './catalogue';
 import {
+  allowListOf,
   convert,
   ConversionError,
   labelsOf,
@@ -225,7 +226,7 @@ export function main(argv: readonly string[], io: CliIo): number {
           );
         }
         const lines = [
-          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them with an owner or a decision to fill in`,
+          `Wrote ${path}: ${plural(file.decisions.length, 'reported item')}, ${blank} of them still without an owner or a decision`,
         ];
         if (from !== undefined) {
           lines.push(`  carried from ${from}: ${carried}`);
@@ -303,17 +304,7 @@ function readJson(io: CliIo, path: string): unknown {
 
 /** The deployment's allow-list, `{ "operations": [...] }`, as app-definition's command line reads it. */
 function readAllowList(io: CliIo, path: string | undefined): ReadonlySet<string> | undefined {
-  if (path === undefined) return undefined;
-  const parsed = readJson(io, path);
-  const operations =
-    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)['operations']
-      : undefined;
-  if (!Array.isArray(operations) || !operations.every((item) => typeof item === 'string'))
-    throw new ConversionError(
-      `${path}: an allow-list is { "operations": [ <operation id>, ... ] }`,
-    );
-  return new Set(operations as string[]);
+  return path === undefined ? undefined : allowListOf(readJson(io, path), path);
 }
 
 function readPackage(io: CliIo, path: string): StudioPackage {
