@@ -76,7 +76,10 @@ Some things about them are worth knowing before relying on them:
   as `npm run app-package` and CI do. Given the folder alone it passes what the workflow passes,
   `--platform` with `libs/platform`'s version, and answers `asCi: true`. An allow-list, a
   registered file or another platform version are the deployment's, change what is checked, and
-  are listed under `departsFromCi`.
+  are listed under `departsFromCi`. It gives no content model, as CI gives none, and the pipeline
+  holds a package that ships a stand-in model to its own `content-model.json`, so a misspelt
+  property of a demo kit is refused here too. A package on a customer's model is held to no
+  model: run `npm run app-package` with `--model` or `--model-server` for that.
 - **It reads inside the repository only.** The pipeline's messages can quote what it read, and
   they go to the agent, so:
   - the folder and the files must be in the repository, and the answer for a path outside is the

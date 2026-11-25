@@ -147,25 +147,27 @@ export function decisionsFor(
     : undefined;
   if (reading?.refused) throw new DecisionsError(reading.refused);
   let carried = 0;
-  let blank = 0;
   const decisions = reportedEntries(report).map((entry): OwnerDecision => {
     const before = reading?.taken.get(entry.id);
     if (before) carried++;
-    const decision: OwnerDecision = {
+    return {
       id: entry.id,
       ...pinnedOf(entry),
       owner: before?.owner ?? '',
       decision: before?.decision ?? '',
     };
-    if (!decision.owner.trim() || !decision.decision.trim()) blank++;
-    return decision;
   });
   return {
     file: { format: DECISIONS_FORMAT, package: { ...build }, decisions },
     carried,
     notCarried: reading?.findings ?? [],
-    blank,
+    blank: unfilled(decisions),
   };
+}
+
+/** How many of the decisions still have no owner, or nothing decided: spaces alone are none. */
+export function unfilled(decisions: readonly Pick<OwnerDecision, 'owner' | 'decision'>[]): number {
+  return decisions.filter((item) => !item.owner.trim() || !item.decision.trim()).length;
 }
 
 export class DecisionsError extends Error {

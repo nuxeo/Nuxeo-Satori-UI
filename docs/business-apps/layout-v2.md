@@ -234,8 +234,8 @@ A field has `field` or `computed`, never both. A computed field is never editabl
 
 A widget says how one value is shown, and in a form how it is entered. It declares the property
 types it accepts. A widget on a property of another type is refused wherever the content model is
-known: by the app when it loads the page, by the pipeline when it is given the model, and by the
-layout designer, which will not save the file. The migration server is to refuse it too (section 11).
+known: by the app when it loads the page, by the pipeline when it has a model (one it is given,
+or a stand-in package's own), and by the layout designer, which will not save the file. The migration server is to refuse it too (section 11).
 
 | Widget          | For                            | Parameters                                                               | In a form                        |
 | --------------- | ------------------------------ | ------------------------------------------------------------------------ | -------------------------------- |
@@ -1031,9 +1031,9 @@ becomes. In version 2's terms:
   widget that does not show its property's type, a table column naming a subfield its property
   lacks, and a checklist whose property the type lacks, is not a list of complex values, or lacks
   one of `item`, `done`, `doneBy` and `doneOn` or has it of another type. Each is `unknown` or
-  `parameter`, so loading stays tolerant. The pipeline holds a package
-  to a model when it is given one ([package-pipeline.md](package-pipeline.md), section 4), and the
-  layout designer holds the file it edits, a record page or an edit or create form, to the server's
+  `parameter`, so loading stays tolerant. The pipeline holds a package to a model when it is given
+  one, and a package that ships a stand-in model to its own `content-model.json`
+  ([package-pipeline.md](package-pipeline.md), section 4), and the layout designer holds the file it edits, a record page or an edit or create form, to the server's
   model when it can read it, and saves none with a finding
   ([its README](../../libs/features/layout-designer/README.md)); the migration server
   is still to call it. Its limits:

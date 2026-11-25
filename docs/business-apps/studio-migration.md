@@ -410,6 +410,22 @@ These sit inside the [development plan](development-plan.md):
 | M3    | Phase 6                 | The code track: custom elements to plugins, with check 9                                                                                                                           |
 | M4    | Phase 10                | Migration at scale: many packages in one run, a self-service upload that validates a package and returns its report, and a support playbook                                        |
 
+**Where M4 stands, 25 November 2026:**
+
+- **Built:** the first piece of the self-service migration, for a customer running it on their own
+  package: `migrate <package.zip> --out <new-directory>` runs the inventory, the conversion, the
+  checks that need no server, the report and the decisions scaffold, in that order, as the
+  commands run by hand, and writes what each prints into `--out`. It stops at the first step that
+  refuses and says what to do, never writes over an earlier run or its decisions, only reads the
+  package, and names the checks whose server half still needs the lab server, and why. With
+  `--from`, it carries an earlier run's decisions, before the checks, so that they count. A
+  [guide](studio-migration-guide.md) is written for the customer.
+- **Not yet:** the upload, which validates a package sent to a service and returns its report;
+  many packages in one run; the support playbook. A customer runs the command on a copy of this
+  repository, which needs `npm ci`, and with it a read token for the Hyland packages on GitHub
+  Packages.
+- **Not checked:** on a real package. It was run on the made-up packages only.
+
 **Where the report stands, 24 November 2026:**
 
 - **Built:** most of section 8's report, for step 5 of phase 4's demo. Every reported item takes
