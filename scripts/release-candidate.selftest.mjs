@@ -5,20 +5,26 @@
  *
  * The command runs on a set meant to pass, so every run of it is green, and a check only ever seen
  * green is an assertion. Each control here breaks one rule and must see it refused, for its own
- * reason; the sound set must pass. None builds the client or runs Maven: the command's own run on
- * staging does that, and its refusals at stages 5 and 6 are these same functions.
+ * reason; the sound set must pass. None builds the client or runs Maven. Stage 7's set checks and
+ * stage 6's bundle comparison are the functions broken here; stage 6's other refusals, a Maven run
+ * that fails, a module that built nothing, a zip with no `package.xml`, no package deploying the
+ * client, are only reached by the command's own run (package-pipeline.md, section 11, says which of
+ * those were seen failing).
  *
  * - **Nuxeo's rules.** The dependency and platform cases are what nuxeo-connect-client 1.8.3's own
  *   classes answered when run (`Version`, `PackageDependency`, `PlatformVersionRange`), so a port
  *   that drifts from Nuxeo fails here, not on a server.
  * - **The set.** A package named twice, a dependency the candidate does not hold, one held at a
  *   snapshot, an unstamped version, a conflict, and a target platform outside a dependency's.
+ * - **The bundle.** A deployed bundle the same as the one built, and one with a file missing, one
+ *   more, one of other bytes, or none at all.
  * - **The kits, from real zips.** Two kits built by the pipeline share nothing; the same two, one
  *   given the other's app id, share exactly that, and one given the other's document type share
  *   exactly that.
  * - **The command.** It refuses an output directory that exists, file or folder, and leaves it as it
- *   was; one under `business-apps/packages/`; a `--since` that is no commit; and a version it could
- *   not carry. Each exits 2 having written nothing.
+ *   was; one inside the repository, under `business-apps/packages/` or elsewhere; one whose folder
+ *   is not there, which it does not make; a `--since` that is no commit; and a version it could not
+ *   carry. Each exits 2 having written nothing.
  * - **The demo listing.** The repository's kit demos are listed, with the users, seeds and
  *   environment each needs; a steps file that names a kit and declares no `serverRun`, or declares
  *   it for another kit, or a seed the kit does not have, is a problem that stops the listing.
@@ -36,6 +42,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -44,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 
 import { demoSteps, readSource } from './release-candidate-demo.mjs';
 import {
+  bundleDifferences,
   compareNuxeoVersions,
   dependencyMatches,
   descriptorOf,
@@ -55,6 +63,7 @@ import {
   readKit,
   registrationsOf,
   setProblems,
+  uncommittedPaths,
 } from './release-candidate-set.mjs';
 import { componentXmlOf } from './verify-package-zip.mjs';
 
@@ -82,6 +91,8 @@ try {
   platformRules();
   registrations();
   theSet();
+  theBundle();
+  theUncommittedPaths();
   kitsFromZips();
   theCommand();
   await theDemoListing();
@@ -390,6 +401,91 @@ function theSet() {
   );
 }
 
+// ── The uncommitted paths the manifest lists, from a real git ─────────────────────────────────
+function theUncommittedPaths() {
+  const repository = join(scratch, 'status-repository');
+  mkdirSync(repository);
+  const inIt = (...args) =>
+    spawnSync(
+      'git',
+      ['-c', 'user.name=selftest', '-c', 'user.email=selftest@example.invalid', ...args],
+      {
+        cwd: repository,
+        encoding: 'utf8',
+      },
+    );
+  inIt('init', '-q');
+  writeFileSync(join(repository, 'alpha-file.txt'), 'a\n');
+  writeFileSync(join(repository, 'kept.txt'), 'k\n');
+  inIt('add', '.');
+  inIt('commit', '-q', '-m', 'first');
+  inIt('mv', 'alpha-file.txt', 'renamed-file.txt');
+  writeFileSync(join(repository, 'kept.txt'), 'changed\n');
+  writeFileSync(join(repository, 'new.txt'), 'n\n');
+  const status = inIt('status', '--porcelain=v1', '-z', '--untracked-files=all').stdout;
+  const paths = uncommittedPaths(status).sort();
+  check(
+    "a rename's two names, a change and a new file, each whole, as git status names them",
+    JSON.stringify(paths) ===
+      JSON.stringify([
+        'alpha-file.txt (its name before)',
+        'kept.txt',
+        'new.txt',
+        'renamed-file.txt',
+      ]),
+    JSON.stringify({ status, paths }),
+    false,
+  );
+}
+
+// ── The bundle the package deploys, against the one built ─────────────────────────────────────
+function theBundle() {
+  const tree = (label, files) => {
+    const root = join(scratch, 'bundles', label);
+    for (const [file, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), text);
+    }
+    return root;
+  };
+  const built = { 'index.html': '<html>', 'main.js': 'one', 'assets/logo.svg': '<svg/>' };
+  const builtRoot = tree('built', built);
+  const files = Object.keys(built).sort();
+  const same = bundleDifferences(tree('same', built), builtRoot, files);
+  check(
+    'a deployed bundle the same as the one built, file for file and byte for byte',
+    same === null,
+    same,
+    false,
+  );
+  const cases = [
+    [
+      'a file missing',
+      tree('missing', { 'index.html': '<html>', 'main.js': 'one' }),
+      /^1 file\(s\) missing \(assets\/logo\.svg\)$/,
+    ],
+    [
+      'a file it was not built with',
+      tree('extra', { ...built, 'stale.js': 'old' }),
+      /^1 file\(s\) it was not built with \(stale\.js\)$/,
+    ],
+    [
+      'a file of other bytes',
+      tree('other', { ...built, 'main.js': 'two' }),
+      /^1 file\(s\) with other bytes \(main\.js\)$/,
+    ],
+    ['no bundle deployed at all', join(scratch, 'bundles', 'none'), /^3 file\(s\) missing/],
+  ];
+  for (const [name, deployed, says] of cases) {
+    const said = bundleDifferences(deployed, builtRoot, files);
+    check(
+      `refused: a deployed bundle with ${name}`,
+      said !== null && says.test(said),
+      said ?? 'no difference',
+    );
+  }
+}
+
 // ── The kits, read from zips the pipeline built ───────────────────────────────────────────────
 /** A kit copied into the scratch folder without its build output, then changed by `change`. */
 function kitCopy(source, label, change) {
@@ -548,8 +644,44 @@ function theCommand() {
   const underPackages = command(['--out', asKit, '--since', 'HEAD']);
   check(
     'refused: an output under business-apps/packages/, exit 2, nothing made',
-    underPackages.status === 2 && /read as a kit/.test(underPackages.stderr) && !existsSync(asKit),
+    underPackages.status === 2 &&
+      /is inside the repository/.test(underPackages.stderr) &&
+      !existsSync(asKit),
     underPackages.stderr,
+  );
+  // Elsewhere in the repository, given relative to it, where the command runs.
+  const inRepository = join(REPO, `release-candidate-selftest-${process.pid}`);
+  const inside = command(['--out', basename(inRepository), '--since', 'HEAD']);
+  check(
+    'refused: an output elsewhere inside the repository, exit 2, nothing made',
+    inside.status === 2 &&
+      /is inside the repository/.test(inside.stderr) &&
+      !existsSync(inRepository),
+    inside.stderr,
+  );
+  const noParent = join(scratch, 'no-such-folder', 'candidate');
+  const orphan = command(['--out', noParent, '--since', 'HEAD']);
+  check(
+    'refused: an output whose folder is not there, exit 2, and the folder not made',
+    orphan.status === 2 && /is not a folder/.test(orphan.stderr) && !existsSync(dirname(noParent)),
+    orphan.stderr,
+  );
+  // A folder reached through a link, as macOS's /tmp is, is a folder: the run goes on to --since.
+  mkdirSync(join(scratch, 'real-folder'));
+  symlinkSync(join(scratch, 'real-folder'), join(scratch, 'linked-folder'));
+  const throughLink = command([
+    '--out',
+    join(scratch, 'linked-folder', 'candidate'),
+    '--since',
+    'refs/heads/no-such-branch-for-the-selftest',
+  ]);
+  check(
+    'an output in a folder reached through a link is taken, and nothing is made before --since is read',
+    throughLink.status === 2 &&
+      /is not a commit/.test(throughLink.stderr) &&
+      readdirSync(join(scratch, 'real-folder')).length === 0,
+    throughLink.stderr,
+    false,
   );
   const fresh = join(scratch, 'fresh');
   const noCommit = command([

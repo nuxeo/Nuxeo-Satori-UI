@@ -6,11 +6,12 @@
  *
  *   node scripts/release-candidate.mjs --out <new directory> --since <git ref> [--version <version>]
  *
- * In order, each stage stopping the run when it refuses:
+ * In order, each stage stopping the run when it refuses, the cheap ones first:
  *
- *   1. The command. `--out` names nothing yet, and is not under `business-apps/packages/`, where it
- *      would be read as a kit: a candidate never overwrites an earlier one. `--since`, the last
- *      release, is a commit. Maven and `unzip` are there.
+ *   1. The command. `--out` names nothing yet, in a folder that exists, outside the repository: a
+ *      candidate never overwrites an earlier one, and one inside the repository would be copied
+ *      into the next one's Maven tree, or read as a kit. `--since` is a commit. Node is the major
+ *      version `.nvmrc` pins, and Maven and `unzip` are there.
  *   2. Every kit under `business-apps/packages/`, through the pipeline (`app-package.mjs`, steps 1
  *      to 6), with the candidate's platform version, `libs/platform`'s, so a kit whose platform range
  *      leaves it out is refused at the pipeline's step 2; and held with `--previous` to the kit as it
@@ -18,34 +19,43 @@
  *      step 3. A kit `--since` does not have is new, and held to nothing.
  *   3. The kits as a set, read from the zips the pipeline wrote: no two contribute the same package
  *      name, app id, address, queue, action, component, document type, facet, schema, lifecycle,
- *      page provider, automation chain or operation, directory, workflow, layout, or the other
- *      names `release-candidate-set.mjs` lists. An extension point it does not know is listed as
- *      not compared, never passed in silence.
- *   4. The client app's production bundle, as the Maven module `apps/nuxeo-ui` and
+ *      page provider, automation chain or operation, directory, workflow, layout, rights policy, or
+ *      the other names `release-candidate-set.mjs` lists. An extension point it does not know is
+ *      listed as not compared, never passed in silence.
+ *   4. The beta harness's demo steps a server run would execute, with the users and seeds each needs,
+ *      listed without running any (`release-candidate-demo.mjs`).
+ *   5. The client app's production bundle, as the Maven module `apps/nuxeo-ui` and
  *      `build-marketplace.yml` build it, `nx build nuxeo-ui --configuration=production
- *      --base-href=/nuxeo/agentic-ui/`, with Node 24 and without Nx's cache.
- *   5. The server packages: `mvn package` at the root, tests included, every module but
- *      `apps/nuxeo-ui`, whose own build stage 4 is. It runs in a scratch copy of the working tree,
- *      every file git does not ignore, whose version is set to the candidate's as
+ *      --base-href=/nuxeo/agentic-ui/`, without Nx's cache.
+ *   6. The server packages: `mvn package` at the root, tests included, every module but
+ *      `apps/nuxeo-ui`, whose own build stage 5 is. It runs in a scratch copy of the working tree,
+ *      every file git does not ignore, whose Maven version is set to the candidate's as
  *      `build-marketplace.yml` sets it: `versions:set`, and `@VERSION@` in a package's
  *      `package.xml`. So the repository's poms are never edited. The `nuxeo-agentic-ui` package
- *      must carry the bundle stage 4 built, file for file and byte for byte: its assembly skips a
- *      missing bundle without a word.
- *   6. The packages as a set: each one's dependencies are in the candidate at a version Nuxeo counts
- *      as meeting them, no two conflict, and each one's target platform is one its dependencies
- *      install on (`release-candidate-set.mjs`, Nuxeo's rules, ported).
- *   7. The beta harness's demo steps a server run would execute, with the users and seeds each needs,
- *      listed without running any (`release-candidate-demo.mjs`).
+ *      must carry the bundle stage 5 built, file for file and byte for byte (`bundleDifferences`):
+ *      its assembly skips a missing bundle without a word.
+ *   7. The packages as a set (`release-candidate-set.mjs`): each one's dependencies are in the
+ *      candidate at a version Nuxeo counts as meeting them, by Nuxeo's rules, ported; no two
+ *      conflict; and each one's target platform lies within the target platform of each package it
+ *      depends on. That last rule is this candidate's, not Nuxeo's, which holds each package to the
+ *      running platform alone: a package that claims platforms its dependency does not install on
+ *      could not be installed on them.
  *   8. Written into `--out`: the artifacts, `manifest.json` with each one's version and SHA-256,
  *      `SHA256SUMS` in the form `sha256sum -c` reads, `RELEASE-NOTES.md` with what changed in each
  *      kit since `--since`, and `DEMO-STEPS.md`.
  *
- * The candidate's version is the root pom's without `-SNAPSHOT`, or `--version`. Nuxeo counts
+ * The candidate's version, `--version`, is the Maven modules' version and the `nuxeo-agentic-ui`
+ * package's, the root pom's without `-SNAPSHOT` when it is left out. A package that keeps its own
+ * version, as `nuxeo-agentic-assets` does in `assets.package.version`, keeps it. Nuxeo counts
  * neither a snapshot nor an `rc` classifier as meeting a dependency on the release
  * (`release-candidate-set.mjs`), so a candidate built at `2026.0.2-SNAPSHOT` or `2026.0.2-rc.1`
  * could not install a kit that depends on `nuxeo-agentic-ui:2026.0.2`: a release candidate carries
  * the version it would be released as. The working tree is built as it is, and the manifest names
  * the commit and every uncommitted path, so a candidate built from changes nobody committed says so.
+ *
+ * Its children get no token: the environment's GitHub Packages and Nuxeo credentials are taken out
+ * of what the pipeline, Nx, Maven's tests and git are started with. An interruption, Ctrl-C or a
+ * cancelled job, removes `--out` and the scratch folder as a refusal does.
  *
  * It runs unconditionally, as `app-package.mjs` does: a "was I started directly?" guard is how
  * another gate here once exited 0 having checked nothing. `release-candidate.selftest.mjs` runs it
@@ -55,7 +65,7 @@
  * without a shell.
  *
  * Exit codes: 0, a candidate written; 1, refused, with `--out` removed, since it was this run's;
- * 2, the command was wrong, and nothing was written.
+ * 2, the command was wrong, and nothing was written; 128 and the signal's number, interrupted.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -69,11 +79,13 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { constants, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -81,10 +93,12 @@ import { spawnToolSync } from './beta-harness/package-command.mjs';
 import { withoutCredentials } from './nuxeo-content-model.mjs';
 import { demoSteps, demoStepsMarkdown } from './release-candidate-demo.mjs';
 import {
+  bundleDifferences,
   descriptorOf,
   duplicatesAcross,
   readKit,
   setProblems,
+  uncommittedPaths,
   unpack,
 } from './release-candidate-set.mjs';
 import { withoutCommentsOrInstructions } from './verify-package-zip.mjs';
@@ -127,15 +141,46 @@ function parse(argv) {
   return options.out !== undefined && options.since !== undefined ? options : null;
 }
 
+/**
+ * The environment every child is started with: this one's, without a credential. The tokens are
+ * the ones app-packages.yml and this workflow check are absent; NUXEO_USER and NUXEO_PASS are
+ * `withoutCredentials`'. Nothing the candidate runs needs any of them, the install being done.
+ */
+const TOKENS = [
+  'NODE_AUTH_TOKEN',
+  'NPM_TOKEN',
+  'SATORI_GH_READONLY_TOKEN',
+  'NPM_PACKAGES_TOKEN',
+  'GITHUB_PACKAGES_TOKEN',
+  'GITHUB_TOKEN',
+  'GH_TOKEN',
+];
+function childEnv() {
+  const env = withoutCredentials(process.env);
+  for (const name of TOKENS) delete env[name];
+  return env;
+}
+
 /** A command's result, with its output as text. */
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
     cwd: REPO,
     encoding: 'utf8',
     maxBuffer: OUTPUT_LIMIT,
-    env: withoutCredentials(process.env),
+    env: childEnv(),
     ...options,
   });
+}
+
+/**
+ * Why a child that streamed its output stopped, for a refusal, or `null` when it exited 0. A child
+ * killed by a signal, as Ctrl-C kills the whole foreground group, is said so, not as `exit null`.
+ */
+function stopped(result) {
+  if (result.status === 0) return null;
+  if (result.signal) return `was interrupted (${result.signal})`;
+  if (result.error) return `could not be run: ${result.error.message}`;
+  return `exited ${result.status}`;
 }
 
 /** `git`'s answer, or `null` when it refused. */
@@ -185,9 +230,21 @@ if (lstatSync(out, { throwIfNoEntry: false })) {
   );
   process.exit(2);
 }
-if (out === PACKAGES || out.startsWith(PACKAGES + sep)) {
+// The folder it goes in must be there already, so that a run that writes nothing makes nothing.
+// Compared as the file system has it, so a link or another letter case does not get it inside.
+const parent = statSync(dirname(out), { throwIfNoEntry: false })?.isDirectory()
+  ? realpathSync.native(dirname(out))
+  : null;
+if (parent === null) {
+  console.error(`${dirname(options.out)}, where --out would go, is not a folder.\n${USAGE}`);
+  process.exit(2);
+}
+const repository = realpathSync.native(REPO);
+const placed = join(parent, basename(out));
+if (placed === repository || placed.startsWith(repository + sep)) {
   console.error(
-    `${options.out} is under business-apps/packages/, where every folder is read as a kit. Put the candidate elsewhere.\n${USAGE}`,
+    `${options.out} is inside the repository, where the next candidate would copy it into its ` +
+      `Maven tree, or, under business-apps/packages/, read it as a kit. Put the candidate outside it.\n${USAGE}`,
   );
   process.exit(2);
 }
@@ -201,15 +258,6 @@ const sinceCommit = git([
 if (!sinceCommit) {
   console.error(`--since ${options.since} is not a commit this clone has.\n${USAGE}`);
   process.exit(2);
-}
-for (const [tool, args, why] of [
-  ['unzip', ['-v'], 'the pipeline reads each zip back with it'],
-  ['mvn', ['-v'], 'the server packages are built with it'],
-]) {
-  if (run(tool, args).status !== 0) {
-    console.error(`${tool} is not on the PATH, and ${why}.`);
-    process.exit(2);
-  }
 }
 const rootPom = withoutCommentsOrInstructions(readFileSync(join(REPO, 'pom.xml'), 'utf8'));
 const pomVersion = /<version>\s*([^<\s]+)\s*<\/version>/.exec(
@@ -225,6 +273,23 @@ if (!version || !VERSION.test(version)) {
   );
   process.exit(2);
 }
+// The client is built with the Node that runs this, as Nx is started with it: the pinned one.
+const pinned = readFileSync(join(REPO, '.nvmrc'), 'utf8').trim().replace(/^v/, '').split('.')[0];
+if (process.versions.node.split('.')[0] !== pinned) {
+  console.error(
+    `This is Node ${process.versions.node}, and .nvmrc pins Node ${pinned}, which the client is built with. Run it with Node ${pinned}.`,
+  );
+  process.exit(2);
+}
+for (const [tool, args, why] of [
+  ['unzip', ['-v'], 'the pipeline reads each zip back with it'],
+  ['mvn', ['-v'], 'the server packages are built with it'],
+]) {
+  if (run(tool, args).status !== 0) {
+    console.error(`${tool} is not on the PATH, and ${why}.`);
+    process.exit(2);
+  }
+}
 const modules = [
   ...(/<modules>([\s\S]*?)<\/modules>/.exec(rootPom)?.[1] ?? '').matchAll(
     /<module>\s*([^<\s]+)\s*<\/module>/g,
@@ -232,13 +297,11 @@ const modules = [
 ].map(([, module]) => module);
 const platform = JSON.parse(readFileSync(join(REPO, 'libs', 'platform', 'package.json'), 'utf8'));
 const head = git(['rev-parse', 'HEAD'])?.trim() ?? null;
-const uncommitted = (git(['status', '--porcelain=v1', '-z', '--untracked-files=all']) ?? '')
-  .split('\0')
-  .filter(Boolean)
-  .map((line) => line.slice(3));
+const uncommitted = uncommittedPaths(
+  git(['status', '--porcelain=v1', '-z', '--untracked-files=all']) ?? '',
+);
 
 try {
-  mkdirSync(dirname(out), { recursive: true });
   mkdirSync(out);
 } catch (error) {
   console.error(`${options.out} could not be made (${error.code ?? error.message}).\n${USAGE}`);
@@ -246,9 +309,23 @@ try {
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'release-candidate-'));
+/** What this run made: `--out` until the candidate is whole, and the scratch folder always. */
+const removeWhatThisRunMade = (candidateToo) => {
+  if (candidateToo) rmSync(out, { recursive: true, force: true });
+  rmSync(scratch, { recursive: true, force: true });
+};
+// Ctrl-C reaches the child too, which then stops and is refused below; a signal between children,
+// or a cancelled job's SIGTERM, lands here once the running child has returned.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'])
+  process.once(signal, () => {
+    removeWhatThisRunMade(true);
+    console.error(`\nInterrupted (${signal}): ${options.out} and the scratch folder are removed.`);
+    process.exit(128 + constants.signals[signal]);
+  });
 let code = 0;
 try {
   await build();
+  removeWhatThisRunMade(false);
 } catch (error) {
   // A refusal says why; anything else is this script's own failure, and says where. Either way
   // what was written is no candidate, and the folder was this run's.
@@ -257,11 +334,9 @@ try {
       ? `\nThe release candidate is refused: ${error.message}`
       : `\nThe release candidate was not assembled: ${error.stack ?? error}`,
   );
-  rmSync(out, { recursive: true, force: true });
+  removeWhatThisRunMade(true);
   console.error(`${options.out} is removed: it was this run's, and holds no candidate.`);
   code = 1;
-} finally {
-  rmSync(scratch, { recursive: true, force: true });
 }
 process.exit(code);
 
@@ -278,10 +353,12 @@ async function build() {
 
   const kits = buildKits();
   checkKits(kits);
+  stage(4, 'The demo steps a server run would execute, listed, not run');
+  const demo = await listDemoSteps(kits);
   const bundle = buildClient();
   const server = buildServer(bundle);
 
-  stage(6, 'The packages as a set');
+  stage(7, 'The packages as a set');
   const packages = [
     ...server.packages.map((each) => ({ ...each.descriptor, artifact: each.path })),
     ...kits.map((kit) => ({ ...kit.read.descriptor, artifact: kit.path })),
@@ -294,14 +371,11 @@ async function build() {
     );
   if (problems.length > 0) {
     for (const problem of problems) console.error(`  - ${problem}`);
-    throw new Refused(`stage 6: ${problems.length} problem(s) between the packages, listed above.`);
+    throw new Refused(`stage 7: ${problems.length} problem(s) between the packages, listed above.`);
   }
   process.stdout.write(
-    'Every dependency is met in the candidate, none conflict, and every target platform is one its dependencies install on.\n',
+    "Every dependency is met in the candidate, none conflict, and every target platform is within its dependencies'.\n",
   );
-
-  stage(7, 'The demo steps a server run would execute, listed, not run');
-  const demo = await listDemoSteps(kits);
 
   stage(8, 'Written');
   write({ kits, bundle, server, demo });
@@ -330,10 +404,11 @@ function buildKits() {
     const result = spawnSync(process.execPath, args, {
       cwd: REPO,
       stdio: ['ignore', 'inherit', 'inherit'],
-      env: withoutCredentials(process.env),
+      env: childEnv(),
     });
+    if (result.signal) throw new Refused(`stage 2: the pipeline ${stopped(result)} on ${name}.`);
     if (result.status !== 0) {
-      refused.push(`${name} (exit ${result.status})`);
+      refused.push(`${name} (${stopped(result)})`);
       continue;
     }
     const descriptor = descriptorOf(
@@ -354,7 +429,7 @@ function buildKits() {
   }
   if (refused.length > 0)
     throw new Refused(`stage 2: the pipeline refused ${refused.join(', ')}, as above.`);
-  // A kit the last release had and this candidate has not: the release note says so.
+  // A kit `--since` had and this candidate has not: the release note says so.
   const listed = git(['ls-tree', '-d', '--name-only', sinceCommit, 'business-apps/packages/']);
   if (listed === null)
     throw new Refused(`stage 2: git could not list business-apps/packages/ at ${options.since}.`);
@@ -441,9 +516,9 @@ function checkKits(kits) {
   process.stdout.write(`No two of the ${kits.length} kits contribute the same name.\n`);
 }
 
-// ── 4. The client app's production bundle ─────────────────────────────────────────────────────
+// ── 5. The client app's production bundle ─────────────────────────────────────────────────────
 function buildClient() {
-  stage(4, "The client app's production bundle");
+  stage(5, "The client app's production bundle");
   // Where the Maven assembly of nuxeo-agentic-ui-package looks for it: `../dist/nuxeo-ui/browser`.
   const output = join(scratch, 'maven', 'dist', 'nuxeo-ui');
   const result = spawnToolSync(
@@ -456,16 +531,13 @@ function buildClient() {
       `--output-path=${output}`,
       '--skip-nx-cache',
     ],
-    { cwd: REPO, stdio: ['ignore', 'inherit', 'inherit'], env: withoutCredentials(process.env) },
+    { cwd: REPO, stdio: ['ignore', 'inherit', 'inherit'], env: childEnv() },
   );
-  if (result.status !== 0)
-    throw new Refused(
-      `stage 4: the production build exited ${result.status ?? result.error?.message}.`,
-    );
+  if (stopped(result)) throw new Refused(`stage 5: the production build ${stopped(result)}.`);
   const browser = join(output, 'browser');
   if (!existsSync(join(browser, 'index.html')))
     throw new Refused(
-      `stage 4: the production build wrote no ${fromRepo(join(browser, 'index.html'))}.`,
+      `stage 5: the production build wrote no ${fromRepo(join(browser, 'index.html'))}.`,
     );
   // What the package carries: the assembly leaves a developer's local configuration out.
   const files = filesUnder(browser).filter(
@@ -488,16 +560,16 @@ function buildClient() {
   return { browser, files, listing };
 }
 
-// ── 5. The server packages ────────────────────────────────────────────────────────────────────
+// ── 6. The server packages ────────────────────────────────────────────────────────────────────
 function buildServer(bundle) {
-  stage(5, `The server packages: mvn package at the root, at ${version}`);
+  stage(6, `The server packages: mvn package at the root, at ${version}`);
   // The whole working tree, every file git does not ignore, and so no `target/`, `dist/` or
   // `node_modules/`: a module's tests may read beyond it, as nuxeo-agentic-assets' read the brand
   // kit's policy, and a copy of the modules alone fails them.
   const root = join(scratch, 'maven');
   const listed = run('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
   if (listed.status !== 0)
-    throw new Refused(`stage 5: git ls-files failed: ${listed.stderr.trim()}`);
+    throw new Refused(`stage 6: git ls-files failed: ${listed.stderr.trim()}`);
   for (const file of new Set(listed.stdout.split('\0').filter(Boolean))) {
     const source = join(REPO, ...file.split('/'));
     const entry = lstatSync(source, { throwIfNoEntry: false });
@@ -510,17 +582,14 @@ function buildServer(bundle) {
   }
   for (const module of modules)
     if (!existsSync(join(root, module, 'pom.xml')))
-      throw new Refused(`stage 5: the root pom names the module ${module}, which has no pom.xml.`);
+      throw new Refused(`stage 6: the root pom names the module ${module}, which has no pom.xml.`);
   const maven = (args) => {
     const result = spawnSync('mvn', ['-B', '-nsu', '--no-transfer-progress', ...args], {
       cwd: root,
       stdio: ['ignore', 'inherit', 'inherit'],
-      env: withoutCredentials(process.env),
+      env: childEnv(),
     });
-    if (result.status !== 0)
-      throw new Refused(
-        `stage 5: mvn ${args[0]} exited ${result.status ?? result.error?.message}.`,
-      );
+    if (stopped(result)) throw new Refused(`stage 6: mvn ${args[0]} ${stopped(result)}.`);
   };
   maven(['versions:set', `-DnewVersion=${version}`, '-DgenerateBackupPoms=false']);
   // build-marketplace.yml stamps nuxeo-agentic-ui-package's package.xml with sed; its assembly takes
@@ -554,7 +623,7 @@ function buildServer(bundle) {
       : [];
     if (built.length === 0)
       throw new Refused(
-        `stage 5: ${module} built nothing with the candidate's version in target/.`,
+        `stage 6: ${module} built nothing with the candidate's version in target/.`,
       );
     for (const name of built.sort()) {
       cpSync(join(target, name), join(serverOut, name));
@@ -567,7 +636,7 @@ function buildServer(bundle) {
     const descriptorFile = join(unpacked, 'package.xml');
     if (!existsSync(descriptorFile))
       throw new Refused(
-        `stage 5: ${basename(artifact.file)} has no package.xml, so it is not a Nuxeo package.`,
+        `stage 6: ${basename(artifact.file)} has no package.xml, so it is not a Nuxeo package.`,
       );
     packages.push({
       module: artifact.module,
@@ -576,37 +645,31 @@ function buildServer(bundle) {
       unpacked,
     });
   }
-  // The package that deploys the client must deploy this bundle, and nothing else there.
+  // The package that deploys the client must deploy this bundle, and nothing else there. One
+  // whose assembly found no bundle deploys nothing there, and so none carries it.
   const carriers = packages.filter((each) => existsSync(join(each.unpacked, ...DEPLOYED_BUNDLE)));
   if (carriers.length === 0)
     throw new Refused(
-      `stage 5: no server package deploys the client into ${DEPLOYED_BUNDLE.join('/')}/.`,
+      `stage 6: no server package deploys the client into ${DEPLOYED_BUNDLE.join('/')}/, so the bundle stage 5 built ships in none.`,
     );
   for (const carrier of carriers) {
-    const deployed = join(carrier.unpacked, ...DEPLOYED_BUNDLE);
-    const shipped = filesUnder(deployed);
-    const missing = bundle.files.filter((file) => !shipped.includes(file));
-    const extra = shipped.filter((file) => !bundle.files.includes(file));
-    const differing = bundle.files.filter(
-      (file) =>
-        shipped.includes(file) &&
-        sha256(join(deployed, ...file.split('/'))) !==
-          sha256(join(bundle.browser, ...file.split('/'))),
+    const differences = bundleDifferences(
+      join(carrier.unpacked, ...DEPLOYED_BUNDLE),
+      bundle.browser,
+      bundle.files,
     );
-    if (missing.length + extra.length + differing.length > 0)
+    if (differences !== null)
       throw new Refused(
-        `stage 5: ${carrier.path} does not carry the bundle stage 4 built: ${missing.length} file(s) missing ` +
-          `(${missing.slice(0, 3).join(', ')}), ${extra.length} more (${extra.slice(0, 3).join(', ')}), ` +
-          `${differing.length} with other bytes (${differing.slice(0, 3).join(', ')}).`,
+        `stage 6: ${carrier.path} does not carry the bundle stage 5 built: ${differences}.`,
       );
     process.stdout.write(
-      `${carrier.descriptor.name} ${carrier.descriptor.version} (${carrier.path}) carries the bundle: ${shipped.length} files, byte for byte.\n`,
+      `${carrier.descriptor.name} ${carrier.descriptor.version} (${carrier.path}) carries the bundle: ${bundle.files.length} files, byte for byte.\n`,
     );
   }
   return { artifacts, packages };
 }
 
-// ── 7. The demo steps ─────────────────────────────────────────────────────────────────────────
+// ── 4. The demo steps ─────────────────────────────────────────────────────────────────────────
 async function listDemoSteps(kits) {
   const { problems, listing } = await demoSteps({
     repo: REPO,
@@ -620,7 +683,7 @@ async function listDemoSteps(kits) {
   if (problems.length > 0) {
     for (const problem of problems) console.error(`  - ${problem}`);
     throw new Refused(
-      `stage 7: ${problems.length} steps file(s) could not be listed, as above. A listing that left one out would make a kit's demo look shorter than it is.`,
+      `stage 4: ${problems.length} steps file(s) could not be listed, as above. A listing that left one out would make a kit's demo look shorter than it is.`,
     );
   }
   const markdown = demoStepsMarkdown(listing);
@@ -715,7 +778,7 @@ function releaseNotes({ kits, bundle, server }) {
     '',
     `Assembled offline from ${head?.slice(0, 12) ?? 'no commit'}` +
       `${uncommitted.length > 0 ? `, with ${uncommitted.length} uncommitted path(s) listed in manifest.json` : ''}, ` +
-      `and compared with ${options.since} (${sinceCommit.slice(0, 12)}), the last release. Not signed, ` +
+      `and compared with --since, ${options.since} (${sinceCommit.slice(0, 12)}). Not signed, ` +
       'not published, and installed on no server.',
     '',
     '## The platform',

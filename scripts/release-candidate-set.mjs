@@ -2,11 +2,18 @@
  * What a release candidate holds its set of packages to (`scripts/release-candidate.mjs`,
  * docs/business-apps/package-pipeline.md, section 11): that each package's dependencies are in the
  * candidate at a version Nuxeo counts as meeting them, that no two packages conflict, that each
- * package's target platform is one its dependencies install on, and that no two kits contribute
- * the same thing a server or the app registry keeps one of.
+ * package's target platform lies within those of the packages it depends on, that no two kits
+ * contribute the same thing a server or the app registry keeps one of, and that the package that
+ * deploys the client carries the bundle that was built.
  *
- * Pure functions over what was read from the built zips, so that `release-candidate.selftest.mjs`
- * can break each rule in a fixture without building anything. Node alone: no install.
+ * Functions over what was read from the built zips and folders, so that
+ * `release-candidate.selftest.mjs` can break each rule in a fixture without building anything.
+ * Node and `unzip` alone: no install.
+ *
+ * **One rule is this candidate's own.** Nuxeo holds each package's target platform to the platform
+ * it is installed on, and to nothing else. That a package's range lie within its dependencies' is
+ * what this adds: a package that claims a platform its dependency does not install on could not be
+ * installed there, whatever it claims. The ranges themselves are read as Nuxeo reads them.
  *
  * **Nuxeo's rules, not semver's.** A package's dependency, `name:min` or `name:min:max`, is met as
  * Nuxeo Connect meets it, and the functions below are ported from nuxeo-connect-client 1.8.3's
@@ -505,6 +512,61 @@ export function duplicatesAcross(kits) {
   return [...owners.values()]
     .filter((entry) => entry.kits.length > 1)
     .sort((a, b) => javaCompare(`${a.kind} ${a.key}`, `${b.kind} ${b.key}`));
+}
+
+/**
+ * Every path `git status --porcelain=v1 -z` names: `XY path`, and for a rename or a copy a second
+ * field, the path it came from, which is a path of its own, not one to cut three characters from.
+ */
+export function uncommittedPaths(status) {
+  const fields = status.split('\0');
+  const paths = [];
+  for (let index = 0; index < fields.length; index++) {
+    const field = fields[index];
+    if (field.length < 4) continue;
+    paths.push(field.slice(3));
+    if (/[RC]/.test(field.slice(0, 2)) && index + 1 < fields.length)
+      paths.push(`${fields[++index]} (its name before)`);
+  }
+  return paths;
+}
+
+/** Every file under `directory`, as paths relative to it with `/` between their parts, sorted. */
+export function filesUnder(directory, prefix = '') {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) =>
+      entry.isDirectory()
+        ? filesUnder(join(directory, entry.name), `${prefix}${entry.name}/`)
+        : [`${prefix}${entry.name}`],
+    )
+    .sort();
+}
+
+/**
+ * How the bundle a package deploys, the folder `deployed`, differs from the one that was built,
+ * `built`, whose files are `files`: a phrase naming the files missing, the files there besides and
+ * the files with other bytes, or `null` when the two are the same file for file and byte for byte.
+ * A folder that is not there deploys no file.
+ */
+export function bundleDifferences(deployed, built, files) {
+  const shipped = new Set(existsSync(deployed) ? filesUnder(deployed) : []);
+  const wanted = new Set(files);
+  const missing = files.filter((file) => !shipped.has(file));
+  const extra = [...shipped].filter((file) => !wanted.has(file));
+  const at = (root, file) => join(root, ...file.split('/'));
+  const differing = files.filter(
+    (file) =>
+      shipped.has(file) && !readFileSync(at(deployed, file)).equals(readFileSync(at(built, file))),
+  );
+  const some = (list) => `${list.slice(0, 3).join(', ')}${list.length > 3 ? ', and more' : ''}`;
+  const said = [
+    missing.length > 0 ? `${missing.length} file(s) missing (${some(missing)})` : null,
+    extra.length > 0 ? `${extra.length} file(s) it was not built with (${some(extra)})` : null,
+    differing.length > 0
+      ? `${differing.length} file(s) with other bytes (${some(differing)})`
+      : null,
+  ].filter(Boolean);
+  return said.length === 0 ? null : said.join('; ');
 }
 
 /** `spawnSync` truncates a child's output in silence past its limit, 1 MiB by default. */
