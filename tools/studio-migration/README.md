@@ -7,6 +7,15 @@ declarative track (M1, and M2's conditions, task forms, tabs and layout blocks) 
 definition the package pipeline's validator accepts, and runs the verification harness over the
 result. It prints the report a person approves, with every reported item's owner and decision.
 
+**A customer migrating their own package** runs one command, `migrate`, and follows
+[the guide](../../docs/business-apps/studio-migration-guide.md), which is written for them:
+
+```bash
+npm run studio-migration -- migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+```
+
+The commands it runs, one by one:
+
 ```bash
 npx tsx tools/studio-migration/src/cli.ts inventory <package.zip> [--json]
 npx tsx tools/studio-migration/src/cli.ts convert <package.zip> <new-directory> [--allow-list <file>]
@@ -15,7 +24,10 @@ npx tsx tools/studio-migration/src/cli.ts mutate <conversion-directory> <mutatio
 npx tsx tools/studio-migration/src/cli.ts mutate --list
 npx tsx tools/studio-migration/src/cli.ts decisions <package.zip> <conversion-directory> [--from <decisions.json>]
 npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
+npx tsx tools/studio-migration/src/cli.ts migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
 ```
+
+`npm run studio-migration -- <command> …` runs the same, from the repository's root.
 
 - `inventory` says what the package holds, what each part becomes and what someone has to decide.
 - `convert` writes the M1 conversion and its report.
@@ -24,6 +36,9 @@ npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-direc
 - `decisions` writes the conversion's `decisions.json`, for people to say who owns each reported
   item and what they decided. `--from` carries the decisions of an earlier file that still hold.
 - `report` prints the report of the migration document's section 8 (below, **The report**).
+- `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, in that
+  order, keeps what each prints in a file of `--out`, and says what to do next (below, **The
+  guided migration**).
 - `--allow-list` names the deployment's operations, `{ "operations": [...] }`, as the app
   definition's validator reads them (decision 3). A button becomes an action only when its
   operation is on it. `check` and `report` use the list the conversion was made with, unless they
@@ -33,13 +48,75 @@ npx tsx tools/studio-migration/src/cli.ts report <package.zip> <conversion-direc
 
 **Exit codes:**
 
-- **0:** done, and for `check`, no check failed. A check that ran only in part has not failed.
-  `report` exits 0 once it has printed the report, whatever the report says.
+- **0:** done, and for `check` and `migrate`, no check failed. A check that ran only in part has
+  not failed. `report` exits 0 once it has printed the report, whatever the report says.
 - **1:** a check failed, or something could not be read or written; the reason is printed.
 - **2:** the command was wrong.
 
-`convert` and `mutate` write only into a new or empty directory, and `decisions` only a
-`decisions.json` the conversion does not hold yet, so none of them writes over anything.
+`convert` and `mutate` write only into a new or empty directory, `decisions` only a
+`decisions.json` the conversion does not hold yet, and `migrate` only into a new or empty `--out`,
+so none of them writes over anything.
+
+## The guided migration
+
+`migrate <package.zip> --out <new-directory>` ([`src/migrate.ts`](src/migrate.ts)) is phase 10's
+first piece of self-service migration (migration M4, in the
+[migration document](../../docs/business-apps/studio-migration.md), section 10): a customer runs
+it on their own package, and [the guide](../../docs/business-apps/studio-migration-guide.md) walks
+them through what it writes.
+
+- **The steps are the commands.** Each is `main` itself, given the arguments a person would type,
+  and what it prints goes into a file of `--out`:
+
+  | Step                              | Command                                | In `--out`                                   |
+  | --------------------------------- | -------------------------------------- | -------------------------------------------- |
+  | 1. The inventory                  | `inventory <package>`                  | `inventory.txt`                              |
+  | 2. The conversion                 | `convert <package> <out>/conversion`   | `conversion/`, `conversion.txt`              |
+  | 3. The checks that need no server | `check <package> <out>/conversion`     | `check.txt`                                  |
+  | 4. The report                     | `report <package> <out>/conversion`    | `report.txt`                                 |
+  | 5. The decisions to fill in       | `decisions <package> <out>/conversion` | `conversion/decisions.json`, `decisions.txt` |
+
+  `--allow-list` goes to `convert`, `check` and `report`. So each file is what the command prints
+  by hand, byte for byte, and the tests hold them to it.
+
+- **With `--from`,** an earlier run, a conversion directory or a `decisions.json`, the decisions
+  step carries the decisions that still hold (`decisions --from`), and runs third, so that the
+  checks and the report count them: inventory, conversion, decisions, checks, report. A first run
+  keeps the decisions last: a scaffold of blank entries changes nothing the checks or the report
+  print.
+- **It stops at the first step that refuses,** says why and what to do in plain words, and runs
+  nothing after it. A check that fails is not a refusal: the harness ran and found something, which
+  the report shows, so the run carries on to the report and the decisions, and exits 1. It knows
+  the harness ran from `check`'s own result, which `main` hands it (`CliIo.checked`), not from what
+  `check` prints or its exit code.
+- **It never writes over anything.** Before writing anything it refuses an `--out` that is a file
+  or holds anything, and an `--allow-list` or `--from` it cannot read. Each file it writes is
+  written only where none is (`wx`); `convert` and `decisions` keep their own refusals.
+- **It only reads the package,** once: every step is given the same bytes.
+- **It says which checks still need the migration lab server,** and why: each of checks 3, 5, 6
+  and 7 whose server half did not run, with what that half adds and what this run could not
+  settle, and check 9, which waits for M3. Check 10 is never among them: `check` is given the
+  allow-list `convert` was, and without one the conversion makes no action.
+
+**On the made-up packages**, Acme-Claims with and without M2's corpus, every file `migrate` writes
+is byte-identical to the commands run by hand into the same paths:
+
+- in the tests, each package with and without the allow-list, and with `--from` an earlier run of
+  it whose decisions are filled in;
+- in a shell, each package with and without the allow-list, and each of those four again with
+  `--from`: the commands run by hand with `tsx`, against `npm run studio-migration -- migrate`,
+  compared with `diff -r`. The packages' bytes were the same after every run.
+
+**Negative controls**, each in [`src/migrate.spec.ts`](src/migrate.spec.ts):
+
+- **A package that is not a Studio package:** an `addon` package, a zip with no `package.xml`, and
+  a file that is no zip. The inventory refuses each, and nothing is written.
+- **A step that refuses:** a theme folder whose name cannot be a file name on every system, which
+  the conversion refuses, so the checks, the report and the decisions do not run; and `--from`
+  holding another build's decisions, which the decisions step refuses before the checks.
+- **A re-run that would overwrite:** `migrate` into the `--out` of an earlier run, its decisions
+  filled in, which refuses before writing anything and leaves the run byte for byte as it was;
+  and a file appearing where a step's output goes during the run, which is not written over.
 
 ## The phase 0 demo
 
@@ -960,9 +1037,31 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
 - **The module boundary has been seen refusing.** The tool is tagged `type:tool`, which may use
   shared code and the core, and nothing may depend on it. An import of a feature library, planted
   in the tool, failed lint.
+- **For the guided migration, 24 guards**, broken one at a time by a script that runs
+  `migrate.spec.ts` and restores the file, each seen turning it red:
+  - **Before anything is written:** an `--out` that holds files, is a file, or is empty; an
+    `--allow-list` and a `--from` that cannot be read.
+  - **The steps:** the package read once; a step that exits non-zero stopping the run, and a
+    failed check not; one that throws stopping it; each file written only where none is; the
+    allow-list given to `convert`, `check` and `report`; `--from` given to `decisions`, found in a
+    run and in a conversion, and its step run before the checks.
+  - **What it says:** a run that wrote nothing saying so, and what a stopped run wrote read from
+    the disk; a server half listed only when it did not run, and the other checks that did not run
+    whole; exit 1 on a failed check; the next free directory.
+  - **In `cli.ts`:** `check` handing its result to `migrate`.
+
+  Each of the three controls the guide's reader meets was also run with `npm run studio-migration`
+  on a package written to disk: an `addon` package and a file that is no zip, refused at the
+  inventory with nothing written; a theme folder the conversion refuses, stopping at step 2 with
+  only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
+  19 files unchanged.
 
 ## Not done yet
 
+- **The rest of migration M4:** the upload, which validates a package sent to a service and returns
+  its report; many packages in one run; the support playbook. `migrate` runs on a copy of this
+  repository, so a customer needs `npm ci`, and with it a read token for the Hyland packages on
+  GitHub Packages.
 - **The server halves of checks 3, 5, 6 and 7** need the migration lab server, with the Studio
   package installed and Web UI beside the new app (development plan, phase 4). Neither local server
   has it, and no code reads a server yet: those halves say they did not run.
