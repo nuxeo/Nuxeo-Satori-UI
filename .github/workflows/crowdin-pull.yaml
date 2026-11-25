@@ -130,14 +130,13 @@ jobs:
           #
           # See D8d and D8h in docs/i18n-localization-plan.md.
 
-          # Spanish ships from the approved export independently of the French corrections
-          # in the shared translation PR (NXSAT-754). Keep it in ongoing downloads.
-          # Arabic/Hebrew and Italian/Swedish are enabled by separate PRs; add them to this
-          # list when their catalogues, shipped declarations, defaults and date adapters land.
-          # Do not advertise a language ahead of its catalogue. A scheduled export is still
-          # reviewed and validated before merging; a successful download does not prove that
-          # every translation passes the application's placeholder and renderable-value checks.
-          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=es'
+          # Arabic and Hebrew were verified 100% approved after their four placeholder
+          # corrections on 24 November 2026. Keep both in ongoing downloads now that
+          # their catalogues ship (NXSAT-754). Italian, Swedish and Spanish also ship,
+          # preserving ongoing downloads for all nine non-English target languages.
+          # A new catalogue must land with SHIPPED_CATALOGUE_LANGUAGES, both Layer 0
+          # availableLanguages defaults, and DATE_FNS_LOCALES; registration alone is insufficient.
+          download_translations_args: '--language=fr --language=de --language=ja --language=nl --language=es --language=ar --language=he --language=it --language=sv'
 
           create_pull_request: true
           localization_branch_name: crowdin-translations-update

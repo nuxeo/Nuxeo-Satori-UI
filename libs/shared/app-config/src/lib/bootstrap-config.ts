@@ -267,10 +267,11 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   // locale here that has no catalogue would advertise a language the application cannot
   // render, which `checkAdvertisedLocalesShip` fails.
   //
-  // Spanish ships an approved application catalogue and date-adapter entry (NXSAT-754).
-  // Arabic/Hebrew and Italian/Swedish have separate enablement PRs. Their catalogues must
-  // land with their shipped-catalogue and date-adapter entries before advertising them.
-  // The active string language drives document and CDK direction through syncDocumentDirection.
+  // Arabic and Hebrew ship approved application catalogues and date-adapter entries
+  // (NXSAT-754). The active language drives both document and CDK direction through
+  // syncDocumentDirection, so these two languages now activate the existing RTL support.
+  // All ten target languages ship catalogues and date-adapter entries.
+  // Do not advertise a future locale ahead of its catalogue.
   //
   // Shipping a catalogue does NOT mean every key is translated: `setFallbackLang('en')` covers
   // gaps, and a Crowdin pull fills every unapproved string with its English source.
@@ -279,7 +280,7 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   //
   // Nothing renders this list yet: there is no language picker (NXSAT-294), and only the config
   // parser reads it. A deployment selects its language through `defaultLanguage`.
-  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'es'],
+  availableLanguages: ['en', 'fr', 'de', 'ja', 'nl', 'ar', 'he', 'it', 'sv', 'es'],
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},

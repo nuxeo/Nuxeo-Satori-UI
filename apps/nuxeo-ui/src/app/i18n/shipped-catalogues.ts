@@ -26,15 +26,26 @@
  *
  * None of them answers "will the text actually render in this language?", and substituting one
  * that nearly does is how a check ends up testing a proxy for the thing in its own name.
- * `REGISTERED_LOCALES` is the closest and still wrong: `ar`, `he`, `it` and `sv` are
- * registered ahead of their catalogues (`D8e-webui`), so it would admit four languages that
- * render English throughout.
+ * Registration remains a formatting capability, not proof that translated text exists. A future
+ * locale can be registered ahead of its catalogue (`D8e-webui`); only the declaration below
+ * establishes that this build can load its application strings.
  *
  * `en` is listed, unlike in `REGISTERED_LOCALES`: `en.json` really does ship, it is the fallback
  * language, and `EN_FALLBACK_TRANSLATIONS` is compiled in besides. A consumer may therefore treat
  * membership here as the whole answer rather than having to special-case English.
  */
-export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = ['de', 'en', 'es', 'fr', 'ja', 'nl'];
+export const SHIPPED_CATALOGUE_LANGUAGES: readonly string[] = [
+  'ar',
+  'de',
+  'en',
+  'es',
+  'fr',
+  'he',
+  'it',
+  'ja',
+  'nl',
+  'sv',
+];
 
 /**
  * Locales whose catalogue exists only while someone is auditing, and only on a dev server.

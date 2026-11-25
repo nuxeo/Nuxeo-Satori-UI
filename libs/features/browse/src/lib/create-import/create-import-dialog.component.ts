@@ -32,6 +32,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
@@ -66,7 +67,6 @@ import {
   isRepositoryRootPath,
   isRestrictedImportParentPath,
   resolveCreatableSubtypes,
-  resolveImportBlobDocType,
   titleFromFileName,
   type ImportFileEntry,
   NOTE_FORMAT_OPTIONS,
@@ -89,9 +89,7 @@ import {
 } from '@nuxeo/satori-platform/ui';
 import { utcMidnightOf } from '../calendar-day';
 import { type MainBlobContentModel, typeHoldsMainBlob } from './main-blob-type';
-
-/** No content model yet, or none the server would give: the stock type names decide alone. */
-const NO_CONTENT_MODEL: MainBlobContentModel = { doctypes: {}, facets: [] };
+import { NO_CONTENT_MODEL, importDocTypeFor } from './import-doc-type';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -314,6 +312,15 @@ export class CreateImportDialogComponent implements OnInit {
       this.loadFolderContext(path);
     });
 
+    // The properties step's Location can move its files to another folder. Once that folder's
+    // types are known, each file whose type it does not allow starts again as Add properties would
+    // start it there; a type it allows is kept. Nuxeo would create the old type regardless.
+    effect(() => {
+      const importTypes = this.importBlobTypeNames();
+      if (this.view() !== 'importProperties' || this.importTypesUnavailable()) return;
+      untracked(() => this.reresolveImportEntryTypes(importTypes));
+    });
+
     effect(() => {
       const v = this.view();
       if (v === 'success') {
@@ -428,20 +435,46 @@ export class CreateImportDialogComponent implements OnInit {
    * file — a Section, or one that takes only Workspace and Folder. Each file would otherwise start
    * as `File`, `resolveImportBlobDocType`'s fallback, which the folder does not allow. Nuxeo does
    * not refuse it either: measured on the local server, a `File` posted into a Section or into
-   * WorkspaceRoot is created. So `importTypesUnavailable` disables plain Create and Add properties.
-   * The properties step's own Create does not yet recheck its files' types against a location
-   * changed on that step.
+   * WorkspaceRoot is created. So `importTypesUnavailable` disables plain Create, Add properties,
+   * and the properties step's Create once its Location moves the files to such a folder.
    */
   readonly noImportBlobTypes = computed(() => this.importBlobTypeNames().length === 0);
 
   /**
-   * Plain Create and Add properties both wait while the staged files cannot be given a type the
-   * folder allows: its allowed types are loading (after a location change, the previous folder's
-   * are still held), the content model has not answered (`importTypesUnsettled`), or it allows
-   * none that keeps a main file (`noImportBlobTypes`).
+   * Plain Create, Add properties and the properties step's Create all wait while the staged files
+   * cannot be given a type the folder allows: its allowed types are loading (after a location
+   * change, the previous folder's are still held), the content model has not answered
+   * (`importTypesUnsettled`), or it allows none that keeps a main file (`noImportBlobTypes`).
    */
   readonly importTypesUnavailable = computed(
     () => this.loadingContext() || this.importTypesUnsettled() || this.noImportBlobTypes(),
+  );
+
+  /**
+   * A checked file on the properties step is of a type this folder does not allow. Each file's type
+   * was chosen for the folder the step opened on; when the step's Location moves them,
+   * `reresolveImportEntryTypes` starts each one the new folder does not allow again, once its types
+   * load. Until it has, Create waits, and `runImportWithProperties` refuses. The file on screen is
+   * judged on the type its form shows, which it saves on leaving.
+   */
+  readonly importEntryTypeDisallowed = computed(() => {
+    const importTypes = this.importBlobTypeNames();
+    const current = this.importFileIndex();
+    const shown = this.importDocType();
+    return this.importEntries().some(
+      (entry, index) =>
+        entry.checked &&
+        !importTypes.includes(index === current ? shown || entry.docType : entry.docType),
+    );
+  });
+
+  /**
+   * The properties step's Create waits as plain Create does — a restricted location, or no type
+   * yet that the folder allows — and while a checked file's type is not allowed here.
+   */
+  readonly importPropertiesTypesBlocked = computed(
+    () =>
+      this.importRestricted() || this.importTypesUnavailable() || this.importEntryTypeDisallowed(),
   );
 
   /**
@@ -1120,22 +1153,17 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   /**
-   * The type a staged file starts as, for plain Create and Add properties alike.
-   * `resolveImportBlobDocType` infers one of the stock types from the MIME type and falls back to
-   * `File`, which is right whenever this folder allows a stock type. Where it allows only a type
-   * that extends one — a folder that takes `RentalContract` and not `File` — that fallback names
-   * a type the folder does not allow, so the first allowed blob type is used instead. The caller
-   * never reaches here with no allowed type: `importTypesUnavailable` stops it first.
+   * Opens the properties step, each file starting as plain Create would start it
+   * (`importDocTypeFor`). A location typed and not yet committed is committed first, as plain
+   * Create does: the blur commits it only after a delay, so a quick click would otherwise start
+   * the files as types the previous folder allows. When that commit changes the folder, whose
+   * types have not been read yet, this stops; Add properties is offered again once they load.
    */
-  private importDocTypeFor(file: File, allowedTypes: readonly string[]): string {
-    const resolved = resolveImportBlobDocType(file, allowedTypes);
-    return allowedTypes.length === 0 || allowedTypes.includes(resolved)
-      ? resolved
-      : allowedTypes[0];
-  }
-
   startImportProperties(): void {
+    const folderBeforeCommit = this.parentPath();
+    this.commitLocationInput();
     if (this.importRestricted() || this.importTypesUnavailable()) return;
+    if (this.parentPath() !== folderBeforeCommit) return;
     const files = this.uploads.pending();
     if (files.length === 0) return;
 
@@ -1143,7 +1171,7 @@ export class CreateImportDialogComponent implements OnInit {
     const entries: StagedImportFile[] = files.map((file) => ({
       file,
       checked: true,
-      docType: this.importDocTypeFor(file, allowedTypes),
+      docType: importDocTypeFor(file, allowedTypes),
       visited: false,
       state: defaultImportPropertiesState(file),
     }));
@@ -1208,9 +1236,40 @@ export class CreateImportDialogComponent implements OnInit {
     this.loadImportEntryToForm(lastIndex);
   }
 
+  /**
+   * Starts each staged file whose type `importTypes`, this folder's, does not include again, as
+   * Add properties would start it here (`importDocTypeFor`). A type the folder allows is kept, the
+   * one the form shows included; a form showing no type is left for the user to choose.
+   */
+  private reresolveImportEntryTypes(importTypes: readonly string[]): void {
+    const entries = this.importEntries();
+    if (entries.some((entry) => !importTypes.includes(entry.docType))) {
+      this.importEntries.set(
+        entries.map((entry) =>
+          importTypes.includes(entry.docType)
+            ? entry
+            : { ...entry, docType: importDocTypeFor(entry.file, importTypes) },
+        ),
+      );
+    }
+    const shown = this.importDocType();
+    const current = this.importEntries()[this.importFileIndex()];
+    if (shown && !importTypes.includes(shown) && current) {
+      this.importDocType.set(importDocTypeFor(current.file, importTypes));
+    }
+  }
+
+  /**
+   * Creates the checked files with their properties. As plain Create does, it commits a location
+   * typed on this step and stops when that changes the folder, whose types have not been read
+   * yet; and it refuses while `importPropertiesTypesBlocked` holds, the button aside, so no file
+   * is created as a type the folder does not allow.
+   */
   runImportWithProperties(): void {
+    const folderBeforeCommit = this.parentPath();
     this.commitLocationInput();
-    if (this.importRestricted()) return;
+    if (this.importPropertiesTypesBlocked()) return;
+    if (this.parentPath() !== folderBeforeCommit) return;
     if (!this.canCreateImportWithProperties()) return;
 
     const path = this.parentPath();
@@ -1635,7 +1694,7 @@ export class CreateImportDialogComponent implements OnInit {
     const allowedTypes = this.importBlobTypeNames();
     const entries: ImportFileEntry[] = files.map((file) => ({
       file,
-      docType: this.importDocTypeFor(file, allowedTypes),
+      docType: importDocTypeFor(file, allowedTypes),
       properties: { 'dc:title': titleFromFileName(file.name) },
     }));
     this.busy.set(true);

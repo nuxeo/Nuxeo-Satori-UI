@@ -318,6 +318,7 @@ Name, Level A) on the navigation's user-profile control, which is in the shell a
 every surface. With the rail collapsed it shows only the avatar initials NXSAT-673 added on
 2026-10-26, and they were not a word of its accessible name. The fifteenth is a Health 404 on an
 optional configuration file the local server does not serve, which is an environment condition.
+The check's ignore list now names that file, for the 404 only.
 
 **Fixed the same day, and AA is still not met.** The shell now names the control with
 `aria-labelledby`: the initials, then the display name. `phase-6-a11y/2026-11-23T18-53-44`,
@@ -330,12 +331,14 @@ the text it paints on both rails, and fails on the old markup. The case it repla
 defect because it ignored `aria-hidden` text, which is hidden from a screen reader but not from
 sight.
 
-The rule only now counts because the engine changed. The capture's `--no-save` install pins no
+The rule only now counts because the engine changed. The capture's `--no-save` install pinned no
 version, and resolved axe-core 4.14.1; the 35/35 of 2026-10-22 ran on 4.13.0, which tags the
 rule `experimental` and so does not run it under the WCAG tags. A full capture with 4.13.0 on the
 same commit passes every axe check. The diagnosis and both control runs are in
-[the accessibility standard](../../docs/accessibility.md#the-2026-11-23-measurement). Record the
-axe-core version with any later verdict.
+[the accessibility standard](../../docs/accessibility.md#the-2026-11-23-measurement). The engine
+is now pinned to 4.14.1 (`scripts/beta-harness/axe-engine.mjs`): `phase-6-a11y` refuses any other
+with exit 2, each scan checks the engine axe reports, and every `beta:evidence` manifest records
+`axeCore` under `environment`. Quote it with any later verdict.
 
 The table below is the 2026-08-24 measurement: **AA met on the fifteen cases scanned**,
 `KNOWN_VIOLATIONS` **empty**, with one upstream exclusion (the last row). The captures of

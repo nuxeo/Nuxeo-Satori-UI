@@ -59,8 +59,9 @@ the capture does not reach.
 upstream navigation component's profile button, which takes its accessible name from a label
 that is hidden while the rail is collapsed. The initials arrived on 2026-10-26 (NXSAT-673). The
 35/35 capture of 2026-10-22 predates them, and it ran on an axe-core release that does not run
-this rule under the WCAG tags. The capture's install pins no version, and the newer release that
-it now resolves runs the rule.
+this rule under the WCAG tags. The capture's install pinned no version, and the newer release it
+resolved runs the rule. The capture is now pinned to that newer release, so the next verdict is
+measured the same way.
 
 What was true of the August capture: **WCAG 2.1 AA was met on the fifteen cases scanned.** Seven
 rule classes and 77 nodes fixed, and `KNOWN_VIOLATIONS` empty, so that verdict was unconditional

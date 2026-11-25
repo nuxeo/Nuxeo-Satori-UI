@@ -8,6 +8,10 @@ Re-measure before quoting anything here. The 16 September edition of this page c
 **23 of 23 green** while `guardrails` was failing, and put the catalogue at **1653** keys when it
 held 1968 — both figures had a command printed beside them and neither had been re-run.
 
+## Merge integration — 25 November 2026
+
+PR #696 is merged. This branch stacks Spanish on the reconciled Italian/Swedish PR #656 and preserves Arabic/Hebrew from merged PR #696. All ten target languages are enabled: English, French, German, Japanese, Dutch, Arabic, Hebrew, Italian, Swedish and Spanish. Keep merge ancestry when merging #656 so this stacked PR remains mergeable. Approved exported files remain unchanged; three newer English keys currently use normal fallback. All 39 deferred Crowdin corrections and the English-source audit are tracked in [NXSAT-861](https://hyland.atlassian.net/browse/NXSAT-861); they are not claimed fixed by language enablement. Older dated measurements below remain historical.
+
 ## Spanish enabled independently — 24 November 2026
 
 NXSAT-754 imports only the unchanged Spanish catalogue from Crowdin PR #401 at
@@ -24,6 +28,49 @@ Spanish integration. Arabic/Hebrew and Italian/Swedish remain in separate PRs #6
 retain all enabled language entries when reconciling the shared lists at merge time.
 
 This measured status supersedes the historical Spanish readiness claims below.
+
+
+## Arabic and Hebrew enabled — 24 November 2026
+
+NXSAT-754 imports the unchanged corrected approved Arabic and Hebrew exports from
+[diagnostic run 45248551082](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/runs/45248551082).
+Crowdin reports both languages 100% translated and approved; all four reported placeholder
+mismatches are corrected. Each exported catalogue has 2,771 keys. The current English source
+has one newer key, which uses the normal English fallback until the next approved export.
+
+This independent branch enables Arabic and Hebrew in the shipped-catalogue list, both Layer 0
+defaults, date adapter and ongoing Crowdin pulls. Existing document/CDK RTL support activates
+through real startup, including overlay direction. Date parsing covers Hebrew, bare Arabic and
+Arabic regional variants with different field order or separators. Shared Satori strings without
+an upstream catalogue retain English fallback. Italian/Swedish integration remains in PR #656.
+
+Spanish PR #401 was rechecked at commit 15795c5669393e14f4fd42a483b1680792f2b2a0. Its Spanish
+catalogue passes placeholder and renderable-value checks but lacks enablement. The shared French
+export contains 12 literal Unicode escapes and five parenthesized-plural findings (17 findings
+across 16 entries); fix those in Crowdin and re-export. Each of the five exported catalogues also
+lacks the one newer English key; that warns and uses English fallback rather than blocking.
+
+These measurements supersede the historical readiness claims in the older dated sections below.
+
+## Italian and Swedish enabled — 23 November 2026
+
+NXSAT-754 imports the unchanged approved Italian and Swedish catalogues from
+[diagnostic run 45185014031](https://github.com/nuxeo/Nuxeo-Satori-UI/actions/runs/45185014031).
+Both have all 2,771 current application keys and pass the catalogue checks. Both are enabled in
+the shipped-catalogue list, both Layer 0 defaults and the date adapter, and included in ongoing
+Crowdin pulls. Italian uses day-first dates; Swedish uses year-first dates. The published adapter
+also maps Italian Switzerland separately because its separators differ from bare Italian.
+
+The live Crowdin API reports Arabic, Hebrew, Italian and Swedish **100% translated and 100%
+approved**. Arabic still fails placeholder parity in one entry, Hebrew in three; correct them in
+Crowdin and re-export. Spanish remains in translation PR #401 and is not enabled by this change.
+The older dated sections below are historical; their claims that these four languages await
+translation are superseded by this measurement.
+
+Swedish shared Satori component strings still use English fallback where the installed upstream
+package has no Swedish catalogue. Enabling the application's Swedish catalogue does not claim
+that upstream component translations are complete.
+
 
 ## Languages — the set is Nuxeo Web UI's, 30 October 2026
 
@@ -1271,3 +1318,12 @@ fails any source that is not.
    next pull. And never change the meaning of an existing key — change the key, because
    `update_without_changes` will otherwise keep the old translation and it will be wrong in every
    locale.
+
+
+## NXSAT-754 review follow-up — 24 November 2026
+
+PR #696 fixes the exported legacy `dateMaskFor`/`DateMaskPipe` helper. It recognizes the approved Arabic day/month/year words and Hebrew field letters, then composes the date adapter’s field order and separators. Arabic regional library consumers receive a month/day/year hint; Hebrew library consumers receive dots instead of the catalogue’s incompatible slashes. Complete Arabic field names survive two-digit-year formats. Tests reject duplicate field words and arbitrary prose. Integration tests read the actual imported Arabic/Hebrew JSON and check that following each composed hint parses as 3 April 2026.
+
+The application’s newer `nxs-date-input` uses a separate `NxsDateMaskPipe`/`nxsDateMask` implementation. It returns an adapter-formatted numeric sample for unsupported word masks. This fix does not add Arabic-word hints to that input, and the exported-helper tests do not establish what that input displays.
+
+Copilot also found misleading Hebrew republish wording and Arabic/Hebrew instructions tied to a screen side. These are translation-owner corrections in Crowdin project 160, separate from the four interpolation placeholders already corrected. Do not resolve those review threads or claim the catalogue ready until the corrected wording is approved, downloaded and validated. Non-English exports have not been hand-edited.

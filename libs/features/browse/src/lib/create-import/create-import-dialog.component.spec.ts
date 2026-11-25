@@ -3027,7 +3027,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
  *
  * The real template, and mocks of its own for each test, so that no folder leaks into another.
  */
-describe('CreateImportDialogComponent plain Create in a folder that does not allow File', () => {
+describe('CreateImportDialogComponent Import tab in a folder that does not allow File', () => {
   const SECTION_PATH = '/default-domain/sections/press';
 
   let fixture: ComponentFixture<CreateImportDialogComponent>;
@@ -3290,6 +3290,231 @@ describe('CreateImportDialogComponent plain Create in a folder that does not all
     expect(footerCreate()?.disabled).toBe(true);
     component.runUpload();
     expect(importFilesWithProperties).not.toHaveBeenCalled();
+  });
+
+  describe('Add properties, and the properties step after its Location moves the files', () => {
+    const LEASES_PATH = '/default-domain/workspaces/leases';
+    const workspace = () => folderAllowing('Workspace', ['File', 'Picture', 'Folder']);
+    const leases = () => folderAllowing('Folder', ['RentalContract', 'Folder'], LEASES_PATH);
+    const section = () => folderAllowing('Section', ['Section'], SECTION_PATH);
+
+    const stepReason = (): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '.import-properties-form .import-no-file-types',
+      );
+    const stepTypes = (): string[] => component.importEntries().map((entry) => entry.docType);
+
+    /** Opens the properties step on `WS_PATH`, on its last file so Create is offered at once. */
+    async function openStep(
+      files: File[],
+      ...folders: Array<NuxeoDocument | Observable<NuxeoDocument>>
+    ): Promise<void> {
+      await openImportTab(files, ...folders);
+      component.startImportProperties();
+      fixture.detectChanges();
+      component.selectImportFile(files.length - 1);
+      fixture.detectChanges();
+    }
+
+    /** Types `path` into the Location field on screen, as a keystroke does, without committing it. */
+    function typeLocation(path: string): void {
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '.location-input',
+      );
+      if (!input) throw new Error('no Location field');
+      input.value = path;
+      input.dispatchEvent(new Event('input'));
+    }
+
+    /** The step's Location, typed and committed by Enter or blur. */
+    async function moveStepTo(path: string): Promise<void> {
+      component.locationInput = path;
+      component.commitLocationInput();
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+    }
+
+    it('keeps Create disabled, and says why, once the Location moves the files to a Section', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep([pdfFile(), jpegFile('scan.jpg')], workspace(), section());
+      expect(component.view()).toBe('importProperties');
+      expect(stepTypes()).toEqual(['File', 'Picture']);
+      expect(footerCreate()?.disabled).toBe(false);
+
+      await moveStepTo(SECTION_PATH);
+
+      expect(getFolderContext).toHaveBeenLastCalledWith(SECTION_PATH);
+      expect(component.noImportBlobTypes()).toBe(true);
+      expect(stepReason()?.textContent).toContain(
+        'this location allows no document type that holds a file',
+      );
+      expect(footerCreate()?.disabled).toBe(true);
+      // The method refuses too, not only the button.
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+    });
+
+    it('starts each file again as the File subtype a folder allows, once the Location moves it there', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep([pdfFile(), jpegFile('scan.jpg')], workspace(), leases());
+
+      await moveStepTo(LEASES_PATH);
+
+      expect(stepTypes()).toEqual(['RentalContract', 'RentalContract']);
+      expect(component.importDocType()).toBe('RentalContract');
+      expect(stepReason()).toBeNull();
+      expect(footerCreate()?.disabled).toBe(false);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).toHaveBeenCalledWith(
+        LEASES_PATH,
+        [
+          expect.objectContaining({ docType: 'RentalContract' }),
+          expect.objectContaining({ docType: 'RentalContract' }),
+        ],
+        expect.anything(),
+      );
+    });
+
+    it('keeps a type the new folder allows, and starts again only the files it does not', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep(
+        [pdfFile(), jpegFile('scan.jpg')],
+        folderAllowing('Workspace', ['File', 'Picture', 'RentalContract']),
+        folderAllowing('Folder', ['File', 'RentalContract'], LEASES_PATH),
+      );
+      // The user makes the lease a RentalContract, where it would otherwise start as File.
+      component.selectImportFile(0);
+      component.importDocType.set('RentalContract');
+      component.selectImportFile(1);
+      fixture.detectChanges();
+
+      await moveStepTo(LEASES_PATH);
+
+      // Picture is not allowed there, so the scan starts again as File; the lease keeps its type.
+      expect(stepTypes()).toEqual(['RentalContract', 'File']);
+      component.runImportWithProperties();
+      expect(sentTypes()).toEqual(['RentalContract', 'File']);
+    });
+
+    it("commits a Location typed on the step, and waits for its folder's types, before creating", async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      const folder = new Subject<NuxeoDocument>();
+      await openStep([pdfFile()], workspace(), folder.asObservable());
+
+      // Typed and not yet committed: the blur commits it only after a delay.
+      typeLocation(LEASES_PATH);
+      expect(component.parentPath()).toBe(WS_PATH);
+      component.runImportWithProperties();
+      expect(component.parentPath()).toBe(LEASES_PATH);
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      // While the folder's types load, the Workspace's are still held, and Create waits.
+      fixture.detectChanges();
+      await flushAsync();
+      expect(component.loadingContext()).toBe(true);
+      expect(footerCreate()?.disabled).toBe(true);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      folder.next(leases());
+      fixture.detectChanges();
+      expect(footerCreate()?.disabled).toBe(false);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).toHaveBeenLastCalledWith(
+        LEASES_PATH,
+        [expect.objectContaining({ docType: 'RentalContract' })],
+        expect.anything(),
+      );
+    });
+
+    it('waits for the content model before starting the files as a File subtype the new folder allows', async () => {
+      const answer = useUnansweredContentModel();
+      // The Workspace allows File, so the step opens without waiting for the content model.
+      await openStep([pdfFile()], folderAllowing('Workspace', ['File', 'Folder']), leases());
+      expect(component.view()).toBe('importProperties');
+
+      await moveStepTo(LEASES_PATH);
+      expect(component.importTypesUnsettled()).toBe(true);
+      expect(stepReason()).toBeNull();
+      expect(footerCreate()?.disabled).toBe(true);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      answer(CONTAINER_DOCTYPES);
+      fixture.detectChanges();
+      expect(stepTypes()).toEqual(['RentalContract']);
+      expect(footerCreate()?.disabled).toBe(false);
+      component.runImportWithProperties();
+      expect(sentTypes()).toEqual(['RentalContract']);
+    });
+
+    it('refuses a file whose type the folder does not allow, before it is started again', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openStep([pdfFile()], workspace());
+      // The folder's types change under the step, and change detection has not run since.
+      component.creatableTypes.set([{ type: 'RentalContract', label: 'RentalContract' }]);
+
+      expect(component.importEntryTypeDisallowed()).toBe(true);
+      component.runImportWithProperties();
+      expect(importFilesWithProperties).not.toHaveBeenCalled();
+
+      fixture.detectChanges();
+      expect(stepTypes()).toEqual(['RentalContract']);
+      component.runImportWithProperties();
+      expect(sentTypes()).toEqual(['RentalContract']);
+    });
+
+    it('keeps Create disabled, and says why, once the Location moves the files to a restricted one', async () => {
+      await openStep([pdfFile()], workspace());
+
+      await moveStepTo('/default-domain');
+
+      expect(component.importRestricted()).toBe(true);
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '.import-properties-form .import-location-restricted',
+        ),
+      ).not.toBeNull();
+      expect(footerCreate()?.disabled).toBe(true);
+    });
+
+    it('Add properties commits a typed Location first, and opens the step once its types load', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openImportTab([pdfFile()], workspace(), leases());
+
+      // Typed, and Add properties clicked before the blur's delayed commit.
+      typeLocation(LEASES_PATH);
+      expect(component.parentPath()).toBe(WS_PATH);
+      component.startImportProperties();
+      expect(component.parentPath()).toBe(LEASES_PATH);
+      expect(component.view()).toBe('main');
+
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+      component.startImportProperties();
+      expect(component.view()).toBe('importProperties');
+      expect(stepTypes()).toEqual(['RentalContract']);
+    });
+
+    it('Add properties does not open the step for a typed Location that is a Section', async () => {
+      useDoctypes(CONTAINER_DOCTYPES);
+      await openImportTab([pdfFile()], workspace(), section());
+
+      typeLocation(SECTION_PATH);
+      component.startImportProperties();
+      expect(component.parentPath()).toBe(SECTION_PATH);
+      expect(component.view()).toBe('main');
+
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+      expect(reason()).not.toBeNull();
+      expect(addProperties()?.disabled).toBe(true);
+      component.startImportProperties();
+      expect(component.view()).toBe('main');
+    });
   });
 });
 
