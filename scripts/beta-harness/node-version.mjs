@@ -74,6 +74,20 @@ function assess() {
 
   const pin = `Node ${pinned}.x (.nvmrc ${nvmrc ?? 'absent'}, engines ${engines ?? 'absent'})`;
 
+  // The frontend module's Maven build installs its own Node (the root pom's `node.version`). When its
+  // major is not the pinned one, `mvn package` from the root builds the client with a Node the
+  // toolchain refuses, whatever Node runs this gate. That pin sat at v20 unnoticed.
+  const maven = readMavenNode();
+  if (maven !== null && majorOf(maven) !== pinned) {
+    lines.push(
+      `node-version: FAIL — the root pom.xml's node.version is ${maven}, but the pinned major is ${pin}.`,
+      '',
+      `The frontend module's Maven build installs that Node. Set <node.version> to a v${pinned}.x release.`,
+      '',
+    );
+    return { ok: false, status: 'unsupported', running, pinned, engines, hazards, lines };
+  }
+
   if (runningMajor === pinned) {
     lines.push(`node-version: pass — Node ${running} matches the pinned ${pin}.`);
     return { ok: true, status: 'supported', running, pinned, engines, hazards, lines };
@@ -180,6 +194,16 @@ function readEngines() {
   try {
     const pkg = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8'));
     return pkg?.engines?.node ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The root pom.xml's `node.version`, or null when there is no pom or no such property. */
+function readMavenNode() {
+  try {
+    const pom = readFileSync(resolve(repoRoot, 'pom.xml'), 'utf8');
+    return pom.match(/<node\.version>\s*([^<\s]+)\s*<\/node\.version>/)?.[1] ?? null;
   } catch {
     return null;
   }
