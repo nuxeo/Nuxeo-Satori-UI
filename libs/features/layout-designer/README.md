@@ -152,7 +152,8 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
   the app's own actions, such as the Payers kit's `my-claims`, cannot be downloaded there, even
   unchanged, unless the administrator is in one of the app's groups on a server with the package.
 - **A queue whose rule is not for the administrator** previews as the queue page shows it to them:
-  "not shown". Every Payers queue is for `claims-adjusters`.
+  "not shown". Every Payers queue has one: `unassigned-claims` and `my-claims` are for
+  `claims-adjusters`, and `pending-determination` for `claims-supervisors` and `member-services`.
 - **Byte for byte.** The download is the same JSON as the file, not the same bytes: it is written two
   spaces deep, as `JSON.stringify` writes it, and a hand-written file formatted by Prettier keeps short
   objects on one line. Phase 6's round trip, the designer's output matching the hand-written JSON
