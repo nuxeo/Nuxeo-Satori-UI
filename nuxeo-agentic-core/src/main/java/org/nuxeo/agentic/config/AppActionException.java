@@ -14,6 +14,11 @@ public class AppActionException extends NuxeoException {
     private static final long serialVersionUID = 1L;
 
     public enum Kind {
+        /**
+         * {@code AgenticUi.RunAction} or {@code AgenticUi.RequireRunAction} is no longer this module's
+         * operation on the server: something replaced it, by its id or an alias. Nothing runs.
+         */
+        PLATFORM_REPLACED(503, "This server's operations for app buttons are not the platform's own"),
         /** The request names no record. */
         NO_RECORD(400, "An app's action runs on one record, and the request names none"),
         /**

@@ -17,6 +17,13 @@ public interface OperationAllowListService {
     AllowList getAllowList();
 
     /**
+     * Whether {@code AgenticUi.RunAction} and {@code AgenticUi.RequireRunAction} are still this
+     * module's operations. When either is not, a chain or an alias of its id having replaced it, the
+     * registry serves no button that runs an operation, and nothing runs.
+     */
+    boolean intact();
+
+    /**
      * Runs one action of an app, as {@code AgenticUi.RunAction} is asked to, and answers what it did.
      *
      * @param session the reader's session: every check, and the operation, run as them

@@ -110,8 +110,8 @@ class AllowListXmlTest {
         assertEquals(new RunnableAction.Field("claim:provider"), request.parameters().get("provider"));
         assertEquals(null, registry.action(ActionFixtures.APP, "payers.claim.referToInvestigations", adjuster));
 
-        // The kit contributes both chains, and closes Nuxeo's own endpoint to them for everyone but
-        // administrators; it contributes nothing to the allow-list.
+        // The kit contributes both chains, each guarded so that only a button runs it, no REST binding,
+        // which the run applies to the button too, and nothing to the allow-list.
         String operations = Files.readString(kit.resolve("OSGI-INF/payers-claims-demo-operations.xml"));
         for (String chain : List.of("Payers.RequestMedicalRecords", "Payers.ReferToInvestigations")) {
             assertTrue(operations.contains("<chain id=\"" + chain + "\">"), chain);
@@ -120,12 +120,10 @@ class AllowListXmlTest {
                     + Pattern.quote(RequireRunActionOperation.ID) + "\">\\s*<param type=\"string\" name=\"operation\">"
                     + Pattern.quote(chain) + "</param>", Pattern.DOTALL).matcher(operations).find(),
                     chain + " does not begin with " + RequireRunActionOperation.ID + " for itself");
-            assertTrue(Pattern.compile("<binding name=\"" + Pattern.quote(chain)
-                    + "\" chain=\"true\">\\s*<administrator>true</administrator>\\s*</binding>")
-                              .matcher(operations)
-                              .find(), chain + " is not closed on Nuxeo's own Automation endpoint");
         }
         assertFalse(operations.contains("org.nuxeo.agentic.ui.operations\" point"));
+        assertFalse(operations.contains("point=\"bindings\""),
+                "a REST binding kept to administrators would refuse the button to the adjusters it is for");
     }
 
     @Test

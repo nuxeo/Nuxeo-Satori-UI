@@ -8,6 +8,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.automation.AutomationService;
 import org.nuxeo.ecm.automation.OperationContext;
+import org.nuxeo.ecm.automation.OperationNotFoundException;
+import org.nuxeo.ecm.automation.server.AutomationServer;
+import org.nuxeo.ecm.automation.server.RestBinding;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.runtime.api.Framework;
@@ -22,8 +26,10 @@ import org.nuxeo.runtime.model.RuntimeContext;
  * <b>Only from the server's configuration directory.</b> A contribution is taken only from a file in
  * {@code nxserver/config/}, which the runtime deploys in its own context
  * ({@code OSGiRuntimeService.loadConfig}, Nuxeo 2025.10.18): one from a bundle, a package's among
- * them, is refused and logged, whatever it says. So a package installed on the server cannot widen
- * the allow-list, even one the package pipeline never checked; the pipeline refuses one that tries.
+ * them, is refused and logged, whatever it says. So a package's own components cannot widen the
+ * allow-list. A package can still write a file into {@code nxserver/config/} when it is installed,
+ * through its {@code install.xml} or a deployment fragment: the package pipeline refuses both, and
+ * one it did not build is checked by nothing but the administrators who install it.
  *
  * An entry is registered only once {@link AllowedOperation#of} accepts it. One that does not is
  * logged and left out, and takes an entry registered earlier with the same id out with it: a
@@ -135,8 +141,87 @@ public class OperationAllowListComponent extends DefaultComponent implements Ope
             String values) {
         AgenticUiConfigService config = Framework.getService(AgenticUiConfigService.class);
         AppRegistryEndpoint registry = AppRegistryEndpoint.current(config.getSnapshot(), allowList);
-        return new AppActionRunner(registry, this::getAllowList, OperationAllowListComponent::automation).run(session,
-                input, app, action, values);
+        return new AppActionRunner(registry, this::getAllowList, OperationAllowListComponent::automation, PLATFORM)
+                                                                                                         .run(session,
+                                                                                                                 input,
+                                                                                                                 app,
+                                                                                                                 action,
+                                                                                                                 values);
+    }
+
+    @Override
+    public boolean intact() {
+        return PLATFORM.intact();
+    }
+
+    /** The server's Automation, as {@link AppActionRunner} asks it. */
+    static final AppActionRunner.Platform PLATFORM = new AppActionRunner.Platform() {
+        @Override
+        public boolean intact() {
+            boolean intact = ours(Framework.getService(AutomationService.class));
+            if (!intact) {
+                log.error("Agentic UI: {} or {} is not nuxeo-agentic-core's operation on this server: a chain or an "
+                        + "alias of its id replaced it. No app button runs, and none that runs an operation is served.",
+                        RunAppActionOperation.ID, RequireRunActionOperation.ID);
+            }
+            return intact;
+        }
+
+        @Override
+        public boolean bindingAdmits(String operation, NuxeoPrincipal principal) {
+            AutomationServer server = Framework.getService(AutomationServer.class);
+            if (server == null) {
+                return true;
+            }
+            return admits(server.getOperationBinding(operation), principal)
+                    && admits(server.getChainBinding(operation), principal);
+        }
+    };
+
+    /**
+     * Whether the server's Automation still runs this module's two operations under their ids: a
+     * chain, a scripted operation or an alias registered later under either id replaces it.
+     */
+    static boolean ours(AutomationService automation) {
+        return automation != null && isOurs(automation, RunAppActionOperation.ID, RunAppActionOperation.class)
+                && isOurs(automation, RequireRunActionOperation.ID, RequireRunActionOperation.class);
+    }
+
+    private static boolean isOurs(AutomationService automation, String id, Class<?> type) {
+        try {
+            return automation.getOperation(id).getType() == type;
+        } catch (OperationNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether a REST binding lets {@code principal} run what it binds, as Nuxeo's Automation endpoint
+     * decides ({@code AutomationServerComponent.accept}, Nuxeo 2025.10.18): not when it is disabled,
+     * and, when it names administrators or groups, only for an administrator it allows or a member of
+     * one of the groups. Its {@code secure} flag, HTTPS only, is the request's, not checked here.
+     */
+    static boolean admits(RestBinding binding, NuxeoPrincipal principal) {
+        if (binding == null) {
+            return true;
+        }
+        if (binding.isDisabled) {
+            return false;
+        }
+        if (!binding.isAdministrator && !binding.hasGroups()) {
+            return true;
+        }
+        if (binding.isAdministrator && principal.isAdministrator()) {
+            return true;
+        }
+        if (binding.hasGroups()) {
+            for (String group : binding.groups) {
+                if (principal.isMemberOf(group)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

@@ -97,11 +97,12 @@ public class AgenticUiAppsServlet extends HttpServlet {
     }
 
     /**
-     * The allow-list in force, or none when its component is not there: an app's actions that run an
-     * operation are then left out, rather than served unchecked.
+     * The allow-list in force, or none when its component is not there, or when the platform's own
+     * operations have been replaced on this server: an app's actions that run an operation are then
+     * left out, rather than served unchecked.
      */
     static AllowList allowList() {
         OperationAllowListService service = Framework.getService(OperationAllowListService.class);
-        return service == null ? AllowList.EMPTY : service.getAllowList();
+        return service == null || !service.intact() ? AllowList.EMPTY : service.getAllowList();
     }
 }

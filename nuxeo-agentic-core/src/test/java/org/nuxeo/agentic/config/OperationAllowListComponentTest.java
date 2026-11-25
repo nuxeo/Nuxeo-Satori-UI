@@ -1,16 +1,22 @@
 package org.nuxeo.agentic.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.nuxeo.agentic.config.ActionFixtures.REQUEST_RECORDS;
 import static org.nuxeo.agentic.config.ActionFixtures.requestRecords;
 
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.nuxeo.ecm.automation.AutomationService;
+import org.nuxeo.ecm.automation.OperationNotFoundException;
+import org.nuxeo.ecm.automation.OperationType;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.ComponentName;
 import org.nuxeo.runtime.model.RuntimeContext;
@@ -137,5 +143,41 @@ class OperationAllowListComponentTest {
         assertEquals("ReadWrite", component.getAllowList().get(REQUEST_RECORDS).permission());
         component.unregister(second);
         assertNull(component.getAllowList().get(REQUEST_RECORDS));
+    }
+
+    /** An Automation whose registry holds {@code types}, each id under the class it runs. */
+    private static AutomationService automation(Map<String, Class<?>> types) {
+        ClassLoader loader = OperationAllowListComponentTest.class.getClassLoader();
+        return (AutomationService) Proxy.newProxyInstance(loader, new Class<?>[] { AutomationService.class },
+                (proxy, method, args) -> {
+                    if (!method.getName().equals("getOperation")) {
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                    Class<?> type = types.get((String) args[0]);
+                    if (type == null) {
+                        throw new OperationNotFoundException((String) args[0]);
+                    }
+                    return Proxy.newProxyInstance(loader, new Class<?>[] { OperationType.class },
+                            (operation, called, none) -> {
+                                if (!called.getName().equals("getType")) {
+                                    throw new UnsupportedOperationException(called.getName());
+                                }
+                                return type;
+                            });
+                });
+    }
+
+    @Test
+    void thePlatformIsIntactOnlyWhileBothItsOperationsAreItsOwn() {
+        assertTrue(OperationAllowListComponent.ours(automation(Map.of(RunAppActionOperation.ID,
+                RunAppActionOperation.class, RequireRunActionOperation.ID, RequireRunActionOperation.class))));
+        // A chain, a scripted operation or an alias registered later under either id runs another class.
+        assertFalse(OperationAllowListComponent.ours(automation(Map.of(RunAppActionOperation.ID, Object.class,
+                RequireRunActionOperation.ID, RequireRunActionOperation.class))));
+        assertFalse(OperationAllowListComponent.ours(automation(Map.of(RunAppActionOperation.ID,
+                RunAppActionOperation.class, RequireRunActionOperation.ID, Object.class))));
+        assertFalse(OperationAllowListComponent.ours(automation(Map.of(RunAppActionOperation.ID,
+                RunAppActionOperation.class))));
+        assertFalse(OperationAllowListComponent.ours(null));
     }
 }

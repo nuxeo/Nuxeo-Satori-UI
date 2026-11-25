@@ -241,6 +241,19 @@ describe('AppActionsService', () => {
     });
   });
 
+  it.each([502, 503, 504])(
+    'takes a gateway’s HTTP %s as no answer, since the server may still be running it',
+    async (status) => {
+      choose(REQUEST, adjuster(claim('inReview')));
+      const { outcome } = await run({ note: 'x' }, claim('inReview'));
+      http.expectOne(RUN_URL).flush('', { status, statusText: 'Gateway' });
+      expect(await outcome).toEqual({
+        kind: 'unknown',
+        message: 'document-layouts.action.may-have-run',
+      });
+    },
+  );
+
   it('says nothing, and reads nothing again, when the dialog is cancelled', () => {
     choose(REQUEST, adjuster(claim('inReview')));
     const changes = vi.spyOn(TestBed.inject(DocumentChangesService), 'notify');

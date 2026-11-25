@@ -45,6 +45,12 @@ const FAILURE_KEYS: Readonly<Record<number, string>> = {
   404: 'document-layouts.action.unknown',
 };
 
+/**
+ * A gateway's answers, which say nothing of whether the server ran it: it may still be running, so
+ * they are taken as no answer, and the action is not offered again.
+ */
+const UNANSWERED: ReadonlySet<number> = new Set([502, 503, 504]);
+
 function warn(message: string): void {
   console.warn(`[agentic-ui-actions] ${message}`);
 }
@@ -228,7 +234,7 @@ export class AppActionsService {
             catchError((error: unknown) => {
               const status = error instanceof HttpErrorResponse ? error.status : 0;
               // No answer, in time or at all: the server may have run it, so it is not offered again.
-              if (error instanceof TimeoutError || status === 0) {
+              if (error instanceof TimeoutError || status === 0 || UNANSWERED.has(status)) {
                 warn(`"${action.id}": no answer from ${APP_ACTION_RUN_OPERATION}; it may have run`);
                 return of({
                   kind: 'unknown',

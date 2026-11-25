@@ -29,9 +29,13 @@ public record AllowedOperation(String id, String permission, Set<String> groups,
      * are given: on the allow-list, any of them would allow everything. Never allowed.
      */
     static final Set<String> NEVER = Set.of("RunOperation", "Context.RunOperation", "RunOperationOnList",
-            "Context.RunOperationOnList", "RunDocumentOperation", "Context.RunDocumentOperation",
-            "RunOperationOnProvider", "Context.RunOperationOnProvider", "RunInputScript", "Context.RunInputScript",
-            "RunScript", "Context.RunScript", "Auth.LoginAs", "Auth.Logout");
+            "Context.RunOperationOnList", "RunOperationOnListInNewTx", "Context.RunOperationOnListInNewTx",
+            "RunDocumentOperation", "Context.RunDocumentOperation", "Context.RunDocumentOperationInNewTx",
+            "RunFileOperation", "Context.RunFileOperation", "RunOperationOnProvider",
+            "Context.RunOperationOnProvider", "RunInputScript", "Context.RunInputScript", "RunScript",
+            "Context.RunScript", "Context.RestoreDocumentInputFromScript", "Context.RestoreDocumentsInputFromScript",
+            "Context.RestoreBlobInputFromScript", "Context.RestoreBlobsInputFromScript", "Auth.LoginAs",
+            "Auth.Logout");
 
     /** A name a record's type, a state or an app may have: letters, digits, `.`, `_` and `-`. */
     static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");

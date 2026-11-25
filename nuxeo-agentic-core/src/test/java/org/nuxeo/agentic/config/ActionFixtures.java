@@ -125,6 +125,7 @@ final class ActionFixtures {
                 case "getName" -> name;
                 case "getAllGroups" -> List.of(groups);
                 case "isAdministrator" -> false;
+                case "isMemberOf" -> List.of(groups).contains(args[0]);
                 case "toString" -> name;
                 case "hashCode" -> System.identityHashCode(proxy);
                 case "equals" -> proxy == args[0];

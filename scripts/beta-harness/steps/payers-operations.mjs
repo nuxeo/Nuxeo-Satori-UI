@@ -17,10 +17,10 @@
  *   asked for Request medical records with a value its form does not send, 400, with a note longer
  *   than the allow-list's or with none, 400, by someone the allow-list's groups leave out, 403, and
  *   on a paid claim, a state the allow-list does not name, 403, whatever the button's rule;
- * - **Nuxeo's own Automation endpoint runs neither chain:** a direct call is refused by the kit's REST
- *   bindings, and one through the `RunOperation` dispatcher, which no binding on a chain stops, by
- *   each chain's first step, `AgenticUi.RequireRunAction`. None of the ten refused requests writes
- *   to the claim's history.
+ * - **Nuxeo's own Automation endpoint runs neither chain:** a direct call, and one through the
+ *   `RunOperation` dispatcher, which no REST binding on a chain would stop, are refused by each
+ *   chain's first step, `AgenticUi.RequireRunAction`. None of the ten refused requests writes to
+ *   the claim's history.
  *
  * Each run writes two entries to the history of one seeded claim, the chain's marked by the run's id, and
  * changes nothing else: phase 1's and the workflow demo's figures do not read the history.
@@ -46,8 +46,8 @@
  * them; and, in the browser, no button on a claim no longer in review.
  *
  * Not covered, and said in notes: a row action on a queue (the kit's my-claims queue offers it, and
- * the client's specs run it), an administrator calling the chain directly, and the chain's effect
- * outside the server, which is fictional.
+ * the client's specs run it), an administrator calling the chain directly, which the same first
+ * step refuses (AppActionRunnerTest), and the chain's effect outside the server, which is fictional.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -434,7 +434,7 @@ export default async function run(page, h) {
   const refusedStatus = (answer) => typeof answer.status === 'number' && answer.status >= 400;
   const direct = [await chainCall(REQUEST_CHAIN), await chainCall(REFER_CHAIN)];
   h.check(
-    "a direct call is refused, by the kit's REST bindings, to anyone but an administrator",
+    "a direct call is refused, by each chain's first step, AgenticUi.RequireRunAction",
     direct.every(refusedStatus),
     direct.map((answer) => answer.status).join(', '),
   );
@@ -471,8 +471,8 @@ export default async function run(page, h) {
       "client's specs run (app-actions.rows.spec.ts)",
   );
   h.note(
-    "not run: an administrator calling the chains through Nuxeo's own endpoint, which the REST " +
-      'bindings still allow',
+    "not run: an administrator calling the chains through Nuxeo's own endpoint, which each chain's " +
+      'first step refuses as it refuses an adjuster; the Java tests hold the guard to that',
   );
   h.note(
     `the run leaves its two history entries on ${seeded.number}, marked "${RUN}": the history is ` +

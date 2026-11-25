@@ -70,7 +70,7 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 | `bundle/OSGI-INF/payers-claims-demo-config.xml`                | The component that contributes the five layouts, and the app with its files                |
 | `bundle/OSGI-INF/payers-claims-demo-model.xml`                 | **The stand-in model:** document types, the claim lifecycle, page providers                |
 | `bundle/OSGI-INF/payers-claims-demo-workflow.xml`              | The claims review workflow: its route model, variables, chains, vocabulary and filter      |
-| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two buttons' chains, each guarded so that only a button runs it, and REST bindings     |
+| `bundle/OSGI-INF/payers-claims-demo-operations.xml`            | The two buttons' chains, each guarded so that only a button runs it                        |
 | `deployment/payers-claims-demo-operations-config.xml`          | The demo server's allow-list, for `nxserver/config/`. Not packaged: the deployment's own   |
 | `deployment/build-allow-list.json`                             | The allow-list the pipeline builds the kit against, and CI with it. Not packaged           |
 | `bundle/data/PayersClaimReview.zip`                            | The route model, as the importer reads it: written from `workflow/PayersClaimReview/`      |
@@ -327,21 +327,22 @@ the platform serves, draws and runs them is
 - **Nuxeo's own Automation endpoint runs neither chain,** for anyone: each begins with
   `AgenticUi.RequireRunAction`, naming itself, which lets it go on only while
   `AgenticUi.RunAction` runs it for a button, and refuses a direct call and one through a
-  dispatcher such as `RunOperation` alike. A REST binding each, for administrators only, closes the
-  direct call as well, before the chain starts; a binding alone would not stop `RunOperation`.
-  Closing is not widening, so the kit may do both; the allow-list is what it may not touch.
+  dispatcher such as `RunOperation` alike. The kit contributes no REST binding: one would not stop
+  the dispatcher, and `AgenticUi.RunAction` applies bindings too, so one kept to administrators
+  would refuse the button to the adjusters it is for. Closing is not widening, so the kit may guard
+  its chains; the allow-list is what it may not touch.
 - **`enabledWhen` is `app.rules.canWrite`:** a reader who may not change the claim sees the button
   and cannot choose it. The server checks `Write` itself, whatever the button let through.
 
 ### How it was verified, with no deploy
 
 - **Against the server's own classes:** `node workflow/platform-check.mjs` loads the operations
-  component's two chains with `OperationChainContribution` and its bindings with `RestBinding`, from
-  the local container's jars, read-only; checks each binding is a chain's, for administrators only,
-  and that each chain begins with `AgenticUi.RequireRunAction` for itself; and runs each chain's
-  comment, a template, with the server's MVEL and the chain parameters
-  `AgenticUi.RunAction` gives, a note holding a template among them, which comes back as text. Run
-  on 25 November 2026: 109 checks passed, 14 of them these.
+  component's two chains with `OperationChainContribution`, from the local container's jars,
+  read-only; checks that each begins with `AgenticUi.RequireRunAction` for itself, and that the
+  component has no REST binding; and runs each chain's comment, a template, with the server's MVEL
+  and the chain parameters `AgenticUi.RunAction` gives, a note holding a template among them,
+  which comes back as text. Run
+  on 25 November 2026: 106 checks passed, 11 of them these.
 - **In `nuxeo-agentic-core`'s tests:** `AllowListXmlTest` reads the demo deployment's contribution
   with XMap, registers it, and serves the kit's own `actions.json` through the registry with it:
   Request medical records served, with its three parameters' sources, Refer to special
@@ -916,8 +917,8 @@ adjuster may read, say why; `AgenticUi.RunAction` answers 404 for that action, 4
 form does not send, for a note over the allow-list's 500 characters and for none, 403 to member
 services, `riley.brooks`, whom the allow-list's group leaves out, and 403 for the paid claim, a
 state the allow-list does not name; and Nuxeo's own Automation endpoint runs the adjuster neither
-chain, directly, which the REST bindings refuse, nor through `RunOperation`, which each chain's
-`AgenticUi.RequireRunAction` refuses. None of the ten writes to the claim's history.
+chain, directly or through `RunOperation`: each chain's `AgenticUi.RequireRunAction` refuses
+both. None of the ten writes to the claim's history.
 
 ```bash
 NUXEO_USER=dana.lee NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-operations

@@ -70,7 +70,8 @@ class AllowedOperationTest {
     void refusesWhatRunsAnotherOperationAScriptOrAsAnotherUser() {
         for (String id : new String[] { "RunOperation", "Context.RunOperation", "RunDocumentOperation",
                 "Context.RunOperationOnList", "RunOperationOnProvider", "RunScript", "Context.RunInputScript",
-                "Auth.LoginAs" }) {
+                "Auth.LoginAs", "RunFileOperation", "Context.RunDocumentOperationInNewTx",
+                "Context.RestoreDocumentInputFromScript", "Context.RestoreBlobsInputFromScript" }) {
             AllowedOperationDescriptor d = requestRecords();
             d.id = id;
             assertTrue(refusal(d).contains("so it would allow everything"), id);

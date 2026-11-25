@@ -48,6 +48,15 @@
       <artifactId>nuxeo-automation-core</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!--
+      Nuxeo's REST bindings for an operation, which AgenticUi.RunAction applies too, so that a
+      button never runs an operation Nuxeo keeps to administrators or to some groups.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.automation</groupId>
+      <artifactId>nuxeo-automation-server</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>
       <artifactId>nuxeo-runtime</artifactId>

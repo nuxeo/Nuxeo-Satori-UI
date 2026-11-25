@@ -279,6 +279,65 @@ class AppActionRunnerTest {
         assertFalse(AppActionRunner.running(null));
     }
 
+    /** A platform whose answers the test sets. */
+    private static AppActionRunner.Platform platform(boolean intact, boolean admits) {
+        return new AppActionRunner.Platform() {
+            @Override
+            public boolean intact() {
+                return intact;
+            }
+
+            @Override
+            public boolean bindingAdmits(String operation, org.nuxeo.ecm.core.api.NuxeoPrincipal principal) {
+                return admits;
+            }
+        };
+    }
+
+    @Test
+    void nothingRunsWhenThePlatformsOwnOperationsAreReplaced() {
+        AppActionRunner replaced = new AppActionRunner(registry(ACTIONS, allowed), () -> allowed, automation,
+                platform(false, true));
+        assertEquals(Kind.PLATFORM_REPLACED, assertThrows(AppActionException.class,
+                () -> replaced.run(reader.session(), asRequested, APP, REQUEST, null)).getKind());
+        assertEquals(List.of(), automation.runs);
+        assertEquals(List.of(), reader.asked, "checked before anything is asked of the repository");
+    }
+
+    @Test
+    void aButtonNeverRunsWhatNuxeosRestBindingKeepsFromThePerson() {
+        AppActionRunner bound = new AppActionRunner(registry(ACTIONS, allowed), () -> allowed, automation,
+                platform(true, false));
+        assertEquals(Kind.NOT_ALLOWED, assertThrows(AppActionException.class,
+                () -> bound.run(reader.session(), asRequested, APP, REQUEST, null)).getKind());
+        assertEquals(List.of(), automation.runs);
+    }
+
+    @Test
+    void aRequiredTextOfWhiteSpaceIsEmpty() {
+        allowed = allowList(ActionFixtures.narrowed());
+        assertEquals(Kind.INVALID_VALUE, refusal(REQUEST, "{\"note\":\"   \\n\"}"));
+    }
+
+    @Test
+    void aRestBindingIsAppliedAsNuxeosEndpointAppliesIt() {
+        org.nuxeo.ecm.core.api.NuxeoPrincipal adjuster = principal("dana.lee", "claims-adjusters");
+        assertTrue(OperationAllowListComponent.admits(null, adjuster));
+        org.nuxeo.ecm.automation.server.RestBinding open = new org.nuxeo.ecm.automation.server.RestBinding();
+        assertTrue(OperationAllowListComponent.admits(open, adjuster));
+        org.nuxeo.ecm.automation.server.RestBinding off = new org.nuxeo.ecm.automation.server.RestBinding();
+        off.isDisabled = true;
+        assertFalse(OperationAllowListComponent.admits(off, adjuster));
+        org.nuxeo.ecm.automation.server.RestBinding admins = new org.nuxeo.ecm.automation.server.RestBinding();
+        admins.isAdministrator = true;
+        assertFalse(OperationAllowListComponent.admits(admins, adjuster));
+        org.nuxeo.ecm.automation.server.RestBinding groups = new org.nuxeo.ecm.automation.server.RestBinding();
+        groups.groups = new String[] { "claims-supervisors", "claims-adjusters" };
+        assertTrue(OperationAllowListComponent.admits(groups, adjuster));
+        groups.groups = new String[] { "claims-supervisors" };
+        assertFalse(OperationAllowListComponent.admits(groups, adjuster));
+    }
+
     @Test
     void theMarkIsClearedWhenTheOperationFails() {
         automation.failing = REQUEST_RECORDS;

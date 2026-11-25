@@ -2568,8 +2568,15 @@ words, and stays open.
   (`org.nuxeo.ecm.automation.server.AutomationServer`, point `bindings`) closes the direct call
   only: it is checked against the operation the request names, `RunOperation` there. What closes
   both is the chain's first step, `AgenticUi.RequireRunAction`, which refuses, `403`, every run but
-  `AgenticUi.RunAction`'s, for administrators too. The Payers kit's two chains begin with it, and
-  have REST bindings as well.
+  `AgenticUi.RunAction`'s, for administrators too. The Payers kit's two chains begin with it.
+- **REST bindings apply to buttons too:** `AgenticUi.RunAction` refuses, `403`, an operation whose
+  binding is disabled, or kept to administrators or to groups the person is not in, as Nuxeo's
+  endpoint does (`AutomationServerComponent.accept`); its `secure` flag is the request's, not
+  checked. So a chain meant for a button has no binding of its own.
+- **The platform's own operations, checked:** when `AgenticUi.RunAction` or
+  `AgenticUi.RequireRunAction` is no longer `nuxeo-agentic-core`'s class on the server, a chain or
+  an alias of its id having replaced it, the registry serves no button that runs an operation, the
+  run answers `503`, and the server log says so.
 - **The allow-list's own checks,** besides the permission: an entry may name the apps, the groups,
   and the records' types and states it is for (`403`), and each parameter's source and whether it
   is required (`400` for a required value left empty).

@@ -371,7 +371,10 @@ provider, for the development server.
   **A package never contributes it.** The server reads it only from its configuration directory, in
   whose context the runtime deploys that directory's files, and refuses, and logs, a contribution
   from a bundle; the pipeline refuses a package that contributes to it, the target written with
-  or without its `service:` type, too. So configuration cannot widen it. Never allowed, whoever contributes them:
+  or without its `service:` type, too, and one that could write into `nxserver/config/` when it
+  is installed: a deployment fragment, or an `install.xml` doing more than copy its bundle. So no
+  package the pipeline built can widen it. One it did not build is checked by nothing but the
+  administrators who install it. Never allowed, whoever contributes them:
   the platform's own `AgenticUi.` operations, and those that run another operation, a script or as
   another user, such as `RunOperation` or `Auth.LoginAs`, any of which would allow everything. An
   entry that fails a check is not registered, and takes an entry of its id that was before it out
@@ -409,7 +412,11 @@ provider, for the development server.
   `AgenticUi.RunAction` runs it, a mark the server sets for the run and nothing a request carries
   can set, and refuses everyone else, administrators included. The Payers kit's two chains do. An
   operation allow-listed as itself has no first step, and stays reachable through Nuxeo's endpoint,
-  so chains are what the allow-list should name.
+  so chains are what the allow-list should name. **And a button never runs what Nuxeo's endpoint
+  keeps from the person:** `AgenticUi.RunAction` applies the operation's REST binding, disabled,
+  for administrators or for some groups, as that endpoint does; a chain meant for a button has no
+  binding. If either of the platform's two operations is replaced on the server, by a chain or an
+  alias of its id, the registry serves no button that runs an operation, and nothing runs.
 
 The allow-list the pipeline reads, for the deployment a package is built for:
 

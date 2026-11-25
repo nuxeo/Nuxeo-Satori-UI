@@ -19,6 +19,7 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.PropertyException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,7 +61,9 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
  *
  * Nothing here is the only control. Nuxeo's permissions gate every operation the chain runs, as
  * for any request of the reader's, and Nuxeo's own Automation endpoint still runs any operation a
- * reader may run, allow-listed or not, unless the deployment closes it with a REST binding
+ * reader may run, allow-listed or not, directly or through a dispatcher such as {@code RunOperation},
+ * except a chain that begins with {@code AgenticUi.RequireRunAction}. And a REST binding that keeps an
+ * operation to administrators or to some groups on that endpoint keeps it so for a button too
  * (docs/api-integrations.md, section 40).
  */
 final class AppActionRunner {
@@ -92,6 +95,36 @@ final class AppActionRunner {
         return operation != null && operation.strip().equals(RUNNING.get());
     }
 
+    /** What the run asks of the server it runs on, besides the allow-list. */
+    interface Platform {
+
+        /**
+         * Whether {@code AgenticUi.RunAction} and {@code AgenticUi.RequireRunAction} are still this
+         * module's operations: a chain, or an alias, of either id would replace it.
+         */
+        boolean intact();
+
+        /**
+         * Whether Nuxeo's own REST binding for {@code operation}, when it has one, lets
+         * {@code principal} run it: a button never runs what Nuxeo's endpoint keeps to
+         * administrators or to some groups, or has disabled.
+         */
+        boolean bindingAdmits(String operation, NuxeoPrincipal principal);
+    }
+
+    /** A server that replaced nothing and binds nothing: for tests. */
+    static final Platform UNBOUND = new Platform() {
+        @Override
+        public boolean intact() {
+            return true;
+        }
+
+        @Override
+        public boolean bindingAdmits(String operation, NuxeoPrincipal principal) {
+            return true;
+        }
+    };
+
     /** Runs one Automation operation as the reader, on {@code input}, given {@code parameters} only. */
     @FunctionalInterface
     interface Automation {
@@ -117,16 +150,27 @@ final class AppActionRunner {
 
     private final Automation automation;
 
+    private final Platform platform;
+
     AppActionRunner(AppRegistryEndpoint registry, Supplier<AllowList> allowList, Automation automation) {
+        this(registry, allowList, automation, UNBOUND);
+    }
+
+    AppActionRunner(AppRegistryEndpoint registry, Supplier<AllowList> allowList, Automation automation,
+            Platform platform) {
         this.registry = registry;
         this.allowList = allowList;
         this.automation = automation;
+        this.platform = platform;
     }
 
     Result run(CoreSession session, DocumentModel input, String app, String id, String values) {
         AppRegistryEndpoint.Viewer viewer = AgenticUiAppsServlet.viewer(session.getPrincipal());
         if (viewer == null) {
             throw new DocumentSecurityException("Running an app's action needs a user");
+        }
+        if (!platform.intact()) {
+            throw new AppActionException(Kind.PLATFORM_REPLACED);
         }
         DocumentRef ref = input == null ? null : input.getRef();
         if (ref == null) {
@@ -152,6 +196,9 @@ final class AppActionRunner {
         }
         if (!allowed.groups().isEmpty() && allowed.groups().stream().noneMatch(viewer.groups()::contains)) {
             throw refused(Kind.NOT_IN_GROUP, viewer, app, id, action.operation());
+        }
+        if (!platform.bindingAdmits(action.operation(), session.getPrincipal())) {
+            throw refused(Kind.NOT_ALLOWED, viewer, app, id, action.operation() + ", by Nuxeo's REST binding for it");
         }
         if (!session.hasPermission(ref, allowed.permission())) {
             log.warn("Agentic UI action refused: {} ran {} of the app {} ({}) without the {} permission on {}",
@@ -188,6 +235,10 @@ final class AppActionRunner {
             } catch (IllegalArgumentException e) {
                 throw refused(Kind.INVALID_VALUE, viewer, app, id,
                         action.operation() + ", parameter " + name + " " + e.getMessage());
+            }
+            if (declared.required() && value instanceof String text && text.isBlank()) {
+                throw refused(Kind.INVALID_VALUE, viewer, app, id,
+                        action.operation() + ", parameter " + name + " is required and blank");
             }
             if (value != null) {
                 parameters.put(name, value);

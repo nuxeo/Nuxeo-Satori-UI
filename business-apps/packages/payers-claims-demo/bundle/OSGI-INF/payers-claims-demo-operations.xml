@@ -16,9 +16,9 @@
   runs any chain a user may run, allow-listed or not, directly or through a dispatcher such as
   RunOperation, which no REST binding on the chain stops. So each chain begins with
   AgenticUi.RequireRunAction, from nuxeo-agentic-core, which lets it go on only while
-  AgenticUi.RunAction runs it for a button, and refuses everyone else, administrators included. The
-  REST bindings below close the endpoint's direct call to both chains as well, for everyone but
-  administrators, before the chain starts.
+  AgenticUi.RunAction runs it for a button, and refuses everyone else, administrators included. No
+  REST binding is contributed for them: AgenticUi.RunAction applies an operation's REST binding to
+  the button too, so one kept to administrators would refuse the adjusters the button is for.
 
   Each chain's input is the claim, as AgenticUi.RunAction gives it: the record as the repository
   stores it. Its parameters are chain parameters, ChainParameters in an expression, and only those
@@ -56,15 +56,5 @@
         <param type="string" name="comment">expr:@{CurrentUser.name} referred the claim to special investigations.</param>
       </operation>
     </chain>
-  </extension>
-
-  <!-- Nuxeo's own Automation endpoint runs these chains for administrators only. -->
-  <extension target="org.nuxeo.ecm.automation.server.AutomationServer" point="bindings">
-    <binding name="Payers.RequestMedicalRecords" chain="true">
-      <administrator>true</administrator>
-    </binding>
-    <binding name="Payers.ReferToInvestigations" chain="true">
-      <administrator>true</administrator>
-    </binding>
   </extension>
 </component>

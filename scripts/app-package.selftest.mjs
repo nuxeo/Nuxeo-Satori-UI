@@ -906,7 +906,69 @@ expectRefused(
       '<chain id="AgenticUi.RequireRunAction"><operation id="Context.FetchDocument" /></chain>\n    <chain id="Payers.ReferToInvestigations">',
     ),
   2,
-  'contributes the chain AgenticUi.RequireRunAction, an id of the platform',
+  'names a chain or a scripted operation AgenticUi.RequireRunAction',
+);
+expectRefused(
+  "a package whose chain takes the guard's id as an alias, which replaces it as surely",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '<chain id="Payers.ReferToInvestigations">',
+      '<chain id="Payers.Noop"><aliases><alias> AgenticUi.RequireRunAction </alias></aliases><operation id="Context.FetchDocument" /></chain>\n    <chain id="Payers.ReferToInvestigations">',
+    ),
+  2,
+  'names a chain or a scripted operation AgenticUi.RequireRunAction',
+);
+expectRefused(
+  "a package whose scripted operation takes the run endpoint's id",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      '<extension target="org.nuxeo.automation.scripting.internals.AutomationScriptingComponent" point="operation">\n    <scriptedOperation id="AgenticUi.RunAction"><script>function run(input, params) { return input; }</script></scriptedOperation>\n  </extension>\n</component>',
+    ),
+  2,
+  'names a chain or a scripted operation AgenticUi.RunAction',
+);
+expectRefused(
+  "a package with a deployment fragment, which could write into the server's configuration",
+  ({ write }) =>
+    write(
+      'bundle/OSGI-INF/deployment-fragment.xml',
+      '<?xml version="1.0"?>\n<fragment version="1"><install><copy from="x" to="${nuxeo.config.dir}/y-config.xml" /></install></fragment>\n',
+    ),
+  5,
+  'bundle/OSGI-INF/deployment-fragment.xml is a deployment fragment',
+);
+expectRefused(
+  "an install.xml that also copies a file into the server's configuration",
+  ({ edit }) =>
+    edit(
+      'package/install.xml',
+      '</install>',
+      '  <copy file="${package.root}/install/bundles" todir="${env.config}" />\n</install>',
+    ),
+  5,
+  "package/install.xml does more than copy the bundle into the server's bundles: it has <copy>",
+);
+expectRefused(
+  "an install.xml with a second update, into the server's configuration",
+  ({ edit }) =>
+    edit(
+      'package/install.xml',
+      '</install>',
+      '  <update file="${package.root}/install/bundles" todir="${env.config}" />\n</install>',
+    ),
+  5,
+  'package/install.xml does more than copy the bundle',
+);
+// The verifier refuses this one before the configuration check would: a package's one update must
+// copy its bundle into ${env.bundles}.
+expectRefused(
+  "an install.xml whose one update copies the bundle into the server's configuration",
+  ({ edit }) => edit('package/install.xml', 'todir="${env.bundles}"', 'todir="${env.config}"'),
+  5,
+  'is not a well-formed Nuxeo Package',
 );
 
 // Versions (package-pipeline.md, section 8): given the package as it was, `--previous`, the

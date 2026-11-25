@@ -14,13 +14,16 @@
     The allow-list is the deployment's, not an app's: it is read only from a file the server's
     administrators put in nxserver/config/, which the runtime deploys in its own context. A
     contribution from a bundle, a package's among them, is refused, and the log says so; the
-    package pipeline refuses a package that contributes here too. With no contribution, nothing is
+    package pipeline refuses a package that contributes here too, or that could write into
+    nxserver/config/ when it is installed. With no contribution, nothing is
     allowed.
 
     Not a control over Nuxeo's own Automation endpoint, which still runs any operation a user may
     run, through /nuxeo/api/v1/automation/, directly or through a dispatcher such as RunOperation,
     whatever REST binding the operation has. A chain meant only for a button begins with
-    AgenticUi.RequireRunAction, which refuses every run but AgenticUi.RunAction's.
+    AgenticUi.RequireRunAction, which refuses every run but AgenticUi.RunAction's. AgenticUi.RunAction
+    applies an operation's REST binding too: what Nuxeo's endpoint keeps to administrators or to some
+    groups, or has disabled, a button runs for no one else.
   </documentation>
 
   <implementation class="org.nuxeo.agentic.config.OperationAllowListComponent" />

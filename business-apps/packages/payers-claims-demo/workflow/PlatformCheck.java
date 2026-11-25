@@ -320,14 +320,14 @@ public class PlatformCheck {
   }
 
   /**
-   * The operation buttons' component, payers-claims-demo-operations.xml: its two chains and the REST
-   * bindings that close Nuxeo's own Automation endpoint to them, each loaded by the descriptor class
-   * its point declares, and each chain's comment, a template, run by the server's MVEL with chain
+   * The operation buttons' component, payers-claims-demo-operations.xml: its two chains, loaded by the
+   * descriptor class their point declares, each beginning with its guard, and no REST binding, which
+   * AgenticUi.RunAction would apply to the button too; and each chain's comment, a template, run by the server's MVEL with chain
    * parameters as AgenticUi.RunAction gives them. What it does not show: that the server runs the
    * chains, which only an install does.
    */
   static void operationButtons(File bundle, Context context) throws Exception {
-    System.out.println("== The operation buttons' chains and REST bindings");
+    System.out.println("== The operation buttons' chains");
     Class<?> chainType = Class.forName("org.nuxeo.ecm.automation.core.OperationChainContribution");
     Class<?> bindingType = Class.forName("org.nuxeo.ecm.automation.server.RestBinding");
     org.w3c.dom.Document xml = DocumentBuilderFactory.newInstance().newDocumentBuilder()
@@ -340,7 +340,6 @@ public class PlatformCheck {
       String key = extension.getAttribute("target") + "#" + extension.getAttribute("point");
       Class<?> type = switch (key) {
         case "org.nuxeo.ecm.core.operation.OperationServiceComponent#chains" -> chainType;
-        case "org.nuxeo.ecm.automation.server.AutomationServer#bindings" -> bindingType;
         default -> null;
       };
       check(type != null, "payers-claims-demo-operations.xml contributes to " + key);
@@ -354,14 +353,7 @@ public class PlatformCheck {
     }
     List<String> ids = List.of("Payers.ReferToInvestigations", "Payers.RequestMedicalRecords");
     check(chains.keySet().equals(new TreeSet<>(ids)), "the two chains are contributed: " + chains.keySet());
-    check(bindings.keySet().equals(new TreeSet<>(ids)), "each has a REST binding: " + bindings.keySet());
-    for (Object binding : bindings.values()) {
-      String name = (String) bindingType.getField("name").get(binding);
-      check(bindingType.getField("chain").getBoolean(binding)
-          && bindingType.getField("isAdministrator").getBoolean(binding)
-          && !bindingType.getField("isDisabled").getBoolean(binding) && !(boolean) bindingType.getMethod("hasGroups").invoke(binding),
-          "Nuxeo's own Automation endpoint runs " + name + " for administrators only: binding id " + bindingType.getMethod("getId").invoke(binding));
-    }
+    check(bindings.isEmpty(), "no REST binding, which would keep the button from those it is for: " + bindings.keySet());
     for (Map.Entry<String, Object> chain : chains.entrySet()) {
       List<?> ops = items(chainType.getMethod("getOps").invoke(chain.getValue()));
       Object first = ops.isEmpty() ? null : ops.get(0);
@@ -373,7 +365,7 @@ public class PlatformCheck {
         }
       }
       check(chain.getKey().equals(guarded == null ? null : guarded.strip()),
-          chain.getKey() + " begins with AgenticUi.RequireRunAction for itself, so only a button runs it: " + guarded);
+          chain.getKey() + " begins with AgenticUi.RequireRunAction for itself, so only a button runs it: " + (guarded == null ? null : guarded.strip()));
     }
     Map<String, String> comments = new TreeMap<>();
     for (Map.Entry<String, Object> chain : chains.entrySet()) {

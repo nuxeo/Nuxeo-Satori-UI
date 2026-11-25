@@ -124,6 +124,9 @@ const MAX_APP_FILES = 256;
 /** The component that holds the server's allow-list of the operations an app's buttons may run. */
 const ALLOW_LIST_COMPONENT = 'org.nuxeo.agentic.ui.operations';
 
+/** The one command a configuration package's `install.xml` holds: the bundle, into the bundles. */
+const INSTALL_UPDATE = { file: '${package.root}/install/bundles', todir: '${env.bundles}' };
+
 const REGISTRY_FILES = [
   /^home\.json$/,
   /^navigation\.json$/,
@@ -423,6 +426,11 @@ function run({
     // A refused zip is not left where someone could install it.
     rmSync(zip, { force: true });
     return refuse(5, `${basename(zip)} is not a well-formed Nuxeo Package, and is removed.`);
+  }
+  const reach = configurationReach(directory);
+  if (reach) {
+    rmSync(zip, { force: true });
+    return refuse(5, `${reach} ${basename(zip)} is removed.`);
   }
 
   // 6. Its checksum, which the publishing job checks before it signs anything, and what changed.
@@ -854,6 +862,59 @@ function filesUnder(directory, prefix = '') {
 }
 
 /**
+ * Whether installing the package could write into the server's own configuration, `nxserver/config/`,
+ * where the allow-list of the operations an app's buttons may run is read from, and every other
+ * `-config.xml` the server deploys in its own context: a problem, or `null`. Two ways a package
+ * could, and both are refused, after the verifier has read the zip as well-formed:
+ *
+ * - **a deployment fragment,** `deployment-fragment.xml` anywhere in the bundle, which the server's
+ *   preprocessor runs before it starts, and which may copy files and append to templates;
+ * - **an `install.xml` that does more** than its one `<update>` of the bundle into `${env.bundles}`:
+ *   another command, such as `<copy>` or `<config>`, or another `<update>`, may write anywhere,
+ *   the configuration directory among them.
+ *
+ * So the allow-list cannot be widened by a package the pipeline built. One it did not build is not
+ * checked by anything but the server's administrators, who install it.
+ */
+function configurationReach(directory) {
+  const bundle = join(directory, 'bundle');
+  const fragment = existsSync(bundle)
+    ? filesUnder(bundle).find((path) => basename(path).toLowerCase() === 'deployment-fragment.xml')
+    : undefined;
+  if (fragment)
+    return (
+      `bundle/${fragment} is a deployment fragment, which the server runs before it starts and which ` +
+      "may write into its own configuration, nxserver/config/, where the allow-list of an app's " +
+      'buttons is read from. A configuration package has none.'
+    );
+  const installXml = join(directory, 'package', 'install.xml');
+  if (!existsSync(installXml)) return null;
+  const xml = withoutCommentsOrInstructions(
+    readFileSync(installXml, 'utf8').replace(/^\uFEFF/, ''),
+  );
+  const elements = [...xml.matchAll(/<([A-Za-z_][\w.:-]*)/g)].map(([, name]) => name);
+  const updates = [...xml.matchAll(new RegExp(`<update${TAG}`, 'g'))].map(([, tag]) =>
+    attributesOf(tag),
+  );
+  const others = elements.filter((name) => name !== 'install' && name !== 'update');
+  if (
+    others.length > 0 ||
+    updates.length !== 1 ||
+    updates[0].file !== INSTALL_UPDATE.file ||
+    updates[0].todir !== INSTALL_UPDATE.todir ||
+    Object.keys(updates[0]).length !== 2
+  )
+    return (
+      `package/install.xml does more than copy the bundle into the server's bundles` +
+      (others.length > 0 ? `: it has <${others[0]}>` : '') +
+      `. A configuration package's install.xml is <update file="${INSTALL_UPDATE.file}" ` +
+      `todir="${INSTALL_UPDATE.todir}" /> alone, so that installing it writes nothing into the ` +
+      "server's own configuration, nxserver/config/, where the allow-list of an app's buttons is read from."
+    );
+  return null;
+}
+
+/**
  * What is wrong with what the package contributes to the server's allow-list, or `null`: anything
  * at all. The allow-list is the deployment's, plan decision 3 on its recommendation: an app's
  * `actions.json` names an operation, and only a contribution the server's administrators install
@@ -879,15 +940,23 @@ function allowListContributions(directory) {
     const file = componentFileOf(resolve(join(directory, 'bundle')), component);
     if (typeof file !== 'string' || file === '') continue;
     const xml = componentXmlOf(readFileSync(file, 'utf8'));
-    for (const chain of xml.matchAll(new RegExp(`<chain${TAG}`, 'g'))) {
-      const { id } = attributesOf(chain[1]);
-      if (id?.trim().startsWith('AgenticUi.'))
-        return (
-          `${component} contributes the chain ${id.trim()}, an id of the platform's own operations: ` +
-          "a chain of that id would replace the operation that runs an app's buttons, or the guard " +
-          'their chains begin with. Name it after the package.'
-        );
-    }
+    // A chain's id and each of its aliases, and a scripted operation's, share one registry with the
+    // operations, in which a later name replaces an earlier one (`OperationRegistry`).
+    const names = [
+      ...[...xml.matchAll(new RegExp(`<(?:chain|scriptedOperation)${TAG}`, 'g'))].map(
+        ([, tag]) => attributesOf(tag).id ?? '',
+      ),
+      ...[...xml.matchAll(/<alias(?:\s[^>]*)?>([\s\S]*?)<\/alias\s*>/g)].map(([, alias]) =>
+        withoutCdata(alias),
+      ),
+    ].map((name) => name.trim());
+    const taken = names.find((name) => name.startsWith('AgenticUi.'));
+    if (taken)
+      return (
+        `${component} names a chain or a scripted operation ${taken}, an id of the platform's own ` +
+        "operations: under that name or alias it would replace the operation that runs an app's " +
+        'buttons, or the guard their chains begin with. Name it after the package.'
+      );
     for (const extension of xml.matchAll(new RegExp(`<extension${TAG}`, 'g'))) {
       const { target, point } = attributesOf(extension[1]);
       // As Nuxeo reads a component's name: a name with no type is a service's.
