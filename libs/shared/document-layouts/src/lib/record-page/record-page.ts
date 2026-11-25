@@ -74,6 +74,7 @@ import {
   propertiesReadBy,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
+import { RecordPictureReviewComponent } from './record-picture-review';
 import { RecordPictureViewsComponent } from './record-picture-views';
 import { TAG_STATUS } from './record-tags';
 import { RecordTimelineComponent } from './record-timeline';
@@ -220,9 +221,11 @@ function fieldShowing(
  * of a record in another system, read on the server through a connector (`lib-record-external`), or
  * a checklist: the items the file requires, each done or not by the record's own property, with who
  * and when (`record-checklist.ts`). Banners come first, then, for a Picture, its views
- * (`lib-record-picture-views`), then the cards.
+ * (`lib-record-picture-views`), or, when the file has a `review`, the views with their pins and
+ * rounds (`lib-record-picture-review`), then the cards.
  *
- * Its fields and checklists are read-only; the comments card is where a user writes, and the
+ * Its fields and checklists are read-only; the comments card and the review are where a user
+ * writes, and the
  * server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
  * anyone the server lets read it, so nothing here is a security control.
  */
@@ -238,6 +241,7 @@ function fieldShowing(
     NxsIconComponent,
     RecordExternalComponent,
     RecordListComponent,
+    RecordPictureReviewComponent,
     RecordPictureViewsComponent,
     RecordTimelineComponent,
     RouterLink,
@@ -255,7 +259,8 @@ export class RecordPageComponent {
   readonly layout = input.required<ResolvedRecordLayout>();
   /**
    * The page without the ways it offers to change a record: a comments card shows its thread
-   * without the comment box, Reply, Edit or Delete, and a related list offers no row action. What
+   * without the comment box, Reply, Edit or Delete, a review its pins without Add a pin or Close
+   * round, and a related list offers no row action. What
    * the layout designer previews with, so that drawing the page it is editing writes nothing. A
    * convenience, not a control: the server's permissions decide what anyone may change.
    */

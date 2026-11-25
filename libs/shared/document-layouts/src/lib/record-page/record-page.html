@@ -27,7 +27,16 @@
       data-preview="picture"
       [attr.aria-label]="'document-layouts.picture.label' | translate"
     >
-      <lib-record-picture-views [document]="document()" [stateHeadingLevel]="3" />
+      @if (layout().review) {
+        <!-- Pins on the picture, in rounds, beside it (layout-v2.md, section 2, "Review"). -->
+        <lib-record-picture-review
+          [document]="document()"
+          [readOnly]="readOnly()"
+          [stateHeadingLevel]="3"
+        />
+      } @else {
+        <lib-record-picture-views [document]="document()" [stateHeadingLevel]="3" />
+      }
     </section>
   }
   @if (page.tabs) {

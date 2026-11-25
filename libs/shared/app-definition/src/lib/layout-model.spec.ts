@@ -306,6 +306,38 @@ describe('validateLayoutV2, given the content model', () => {
     ]);
   });
 
+  it('holds a review to a type whose record page shows a picture: the picture schema, and no video one', () => {
+    const reading = readContentModel({
+      doctypes: {
+        Asset: { parent: 'Document', facets: ['Picture'], schemas: ['dublincore'] },
+        Clip: { parent: 'Document', facets: ['Picture', 'Video'], schemas: ['dublincore'] },
+        Member: { parent: 'Document', facets: [], schemas: ['dublincore'] },
+      },
+      facets: [
+        {
+          name: 'Picture',
+          schemas: [{ name: 'picture', '@prefix': 'picture', fields: { views: 'complex[]' } }],
+        },
+        {
+          name: 'Video',
+          schemas: [{ name: 'video', '@prefix': 'vid', fields: { duration: 'double' } }],
+        },
+      ],
+      schemas: [{ name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } }],
+    });
+    if (!reading.model) throw new Error(reading.problems.join('\n'));
+    const reviewed = { ...withFields('dc:title'), review: {} };
+    expect(messages(reviewed, { type: 'Asset', given: reading.model })).toEqual([]);
+    expect(messages(reviewed, { type: 'Member', given: reading.model })).toEqual([
+      'review: a review is drawn on a picture, and the type "Member" has no "picture" schema: its record page shows no picture [unknown]',
+    ]);
+    expect(messages(reviewed, { type: 'Clip', given: reading.model })).toEqual([
+      'review: a review is drawn on a picture, and the type "Clip" has the "video" schema: its record page keeps its player, not its picture [unknown]',
+    ]);
+    // Without a model nothing says what the type has: the record page leaves the review out.
+    expect(messages(reviewed, { type: 'Member', given: null })).toEqual([]);
+  });
+
   it('refuses a type the model does not have, and a model given without a type', () => {
     expect(messages(withFields('member:firstName'), { type: 'Claim' })).toEqual([
       ': the document type "Claim" is not in the content model [unknown]',

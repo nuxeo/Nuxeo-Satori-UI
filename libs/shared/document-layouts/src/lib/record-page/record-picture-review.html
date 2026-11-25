@@ -1,0 +1,254 @@
+@let current = state();
+@let may = offers();
+@let shownDraft = draft();
+<div class="record-review" [attr.data-round]="round()">
+  <lib-record-picture-views
+    class="record-review__picture"
+    [document]="document()"
+    [stateHeadingLevel]="stateHeadingLevel()"
+  >
+    <div libRecordPictureOverlay class="record-review__overlay">
+      @if (may.pin && current.status === 'loaded') {
+        <!--
+          The pointer's shortcut: a click on the picture starts a pin there. Out of the tab order
+          and hidden from assistive technology, because "Add a pin" and its form do the same for
+          everyone, the keyboard included, and a second control would only repeat it.
+        -->
+        <button
+          type="button"
+          class="record-review__surface"
+          tabindex="-1"
+          aria-hidden="true"
+          (click)="placeAt($event)"
+        ></button>
+      }
+      @if (pins().length > 0) {
+        <span class="cdk-visually-hidden" [id]="id + '-keys'">{{
+          'document-layouts.review.keys' | translate
+        }}</span>
+        <div
+          class="record-review__marks"
+          role="toolbar"
+          [attr.aria-label]="'document-layouts.review.on-picture' | translate"
+          [attr.aria-describedby]="id + '-keys'"
+        >
+          @for (pin of pins(); track pin.id) {
+            <button
+              type="button"
+              class="record-review__pin"
+              [id]="id + '-pin-' + pin.id"
+              [class.record-review__pin--past]="pin.round < round()"
+              [class.record-review__pin--chosen]="pin.id === chosen()?.id"
+              [style.left.%]="pin.x * 100"
+              [style.top.%]="pin.y * 100"
+              [attr.tabindex]="pin.id === reachable()?.id ? 0 : -1"
+              [attr.aria-pressed]="pin.id === chosen()?.id"
+              [attr.aria-label]="pinName(pin)"
+              [attr.data-pin]="pin.number"
+              [attr.data-round]="pin.round"
+              (click)="choose(pin)"
+              (keydown)="movePin($event, pin)"
+            >
+              {{ pin.number }}
+            </button>
+          }
+        </div>
+      }
+      @if (shownDraft) {
+        <span
+          class="record-review__pin record-review__pin--draft"
+          aria-hidden="true"
+          [style.left.%]="shownDraft.x * 100"
+          [style.top.%]="shownDraft.y * 100"
+          >+</span
+        >
+      }
+    </div>
+  </lib-record-picture-views>
+
+  <section class="record-review__panel" [attr.aria-labelledby]="id + '-heading'">
+    <h3 class="record-review__heading" tabindex="-1" [id]="id + '-heading'">
+      {{ 'document-layouts.review.heading' | translate }}
+    </h3>
+    @switch (current.status) {
+      @case ('failed') {
+        <nxs-error-state
+          [status]="current.error"
+          [heading]="'document-layouts.review.failed' | translate"
+          [headingLevel]="4"
+          [retryable]="current.error === 500"
+          (retry)="retry()"
+        />
+      }
+      @case ('loaded') {
+        <p class="record-review__status">
+          {{ 'document-layouts.review.round-open' | translate: { round: round() } }}
+        </p>
+        <div class="record-review__actions">
+          @if (may.pin && pictureShown() && !shownDraft) {
+            <button
+              mat-flat-button
+              type="button"
+              class="record-review__add"
+              [id]="id + '-add'"
+              (click)="startPin()"
+            >
+              {{ 'document-layouts.review.add-pin' | translate }}
+            </button>
+          }
+          @if (closable() && !shownDraft) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="record-review__close"
+              disabledInteractive
+              [disabled]="saving()"
+              (click)="closeRound()"
+            >
+              {{ 'document-layouts.review.close-round' | translate: { round: round() } }}
+            </button>
+          }
+        </div>
+        @if (!may.pin) {
+          <p class="record-review__read-only">
+            {{ 'document-layouts.review.read-only' | translate }}
+          </p>
+        }
+        @if (shownDraft) {
+          <!-- novalidate: the fields are held to the picture as they are typed in, not by the browser. -->
+          <form
+            novalidate
+            class="record-review__form"
+            [attr.aria-labelledby]="id + '-form-heading'"
+            (submit)="$event.preventDefault(); placePin()"
+            (keydown.escape)="cancelDraft()"
+          >
+            <h4 class="record-review__form-heading" [id]="id + '-form-heading'">
+              {{ 'document-layouts.review.new-pin' | translate: { round: round() } }}
+            </h4>
+            <p class="record-review__hint">{{ 'document-layouts.review.hint' | translate }}</p>
+            <div class="record-review__where">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>{{ 'document-layouts.review.across' | translate }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  [id]="id + '-across'"
+                  [value]="(shownDraft.x * 100).toFixed(0)"
+                  (input)="moveDraft('x', $event)"
+                  (change)="settleDraft('x', $event)"
+                />
+              </mat-form-field>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>{{ 'document-layouts.review.down' | translate }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  [id]="id + '-down'"
+                  [value]="(shownDraft.y * 100).toFixed(0)"
+                  (input)="moveDraft('y', $event)"
+                  (change)="settleDraft('y', $event)"
+                />
+              </mat-form-field>
+            </div>
+            <mat-form-field appearance="outline" class="record-review__note">
+              <mat-label>{{ 'document-layouts.review.note' | translate }}</mat-label>
+              <textarea
+                matInput
+                rows="3"
+                required
+                [id]="id + '-note'"
+                [attr.maxlength]="maxNote"
+                [value]="note()"
+                (input)="setNote($event)"
+              ></textarea>
+              <mat-hint align="end">{{ note().length }} / {{ maxNote }}</mat-hint>
+            </mat-form-field>
+            <div class="record-review__form-actions">
+              <button
+                mat-flat-button
+                type="submit"
+                class="record-review__place"
+                disabledInteractive
+                [disabled]="!placeable()"
+              >
+                {{ 'document-layouts.review.place' | translate }}
+              </button>
+              <button mat-button type="button" (click)="cancelDraft()">
+                {{ 'document-layouts.review.cancel' | translate }}
+              </button>
+            </div>
+          </form>
+        }
+        <!-- Always there, so that a failure written into it is announced. -->
+        <p class="record-review__error" role="status">{{ writeError() ?? '' }}</p>
+
+        @for (shown of rounds(); track shown.round.number) {
+          <div class="record-review__round" [attr.data-round]="shown.round.number">
+            <h4 class="record-review__round-heading">
+              {{
+                (shown.open
+                  ? 'document-layouts.review.round-heading-open'
+                  : 'document-layouts.review.round-heading-past'
+                ) | translate: { round: shown.round.number }
+              }}
+            </h4>
+            @if (!shown.open && shown.round.closedBy) {
+              <p class="record-review__closed-by">
+                {{
+                  'document-layouts.review.closed-by'
+                    | translate: { user: shown.round.closedBy, when: when(shown.round.closedAt) }
+                }}
+              </p>
+            }
+            @if (shown.pins.length === 0) {
+              <p class="record-review__none">{{ 'document-layouts.review.no-pins' | translate }}</p>
+            } @else {
+              <ol class="record-review__list">
+                @for (pin of shown.pins; track pin.id) {
+                  <li>
+                    <button
+                      type="button"
+                      class="record-review__entry"
+                      [class.record-review__entry--past]="!shown.open"
+                      [attr.aria-pressed]="pin.id === chosen()?.id"
+                      [attr.data-pin]="pin.number"
+                      (click)="choose(pin)"
+                    >
+                      <span class="record-review__number" aria-hidden="true">{{ pin.number }}</span>
+                      <span class="record-review__entry-body">
+                        <span class="cdk-visually-hidden">{{
+                          'document-layouts.review.pin-number' | translate: { number: pin.number }
+                        }}</span>
+                        <span class="record-review__entry-note">{{ pin.note }}</span>
+                        <span class="record-review__entry-meta">
+                          @if (!shown.open) {
+                            <span class="record-review__past">{{
+                              'document-layouts.review.past' | translate
+                            }}</span>
+                          }
+                          {{ pin.author }} · {{ position(pin) }}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ol>
+            }
+          </div>
+        }
+      }
+      @default {
+        <div class="record-review__loading">
+          <nxs-spinner diameter="32" [label]="'document-layouts.review.loading' | translate" />
+        </div>
+      }
+    }
+  </section>
+</div>

@@ -230,6 +230,8 @@ export { ContentLakeIngestService } from './lib/services/content-lake-ingest.ser
 export {
   DocumentDetailService,
   type UserGroupSuggestion,
+  type NuxeoAnnotation,
+  type NuxeoAnnotationDraft,
   type NuxeoComment,
   type NuxeoCommentList,
 } from './lib/services/document-detail.service';

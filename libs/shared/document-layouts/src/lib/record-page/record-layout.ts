@@ -220,6 +220,11 @@ export interface RecordLayoutFile {
   readonly columns: number;
   /** The banners above the cards, in order; empty when the file has none. */
   readonly banners: readonly RecordBannerEntry[];
+  /**
+   * Whether the page shows its picture as a review, pins and rounds (layout-v2.md, section 2):
+   * the file's `review`, unless a finding about it left it out. A record with no picture shows none.
+   */
+  readonly review: boolean;
   /** The tabs, or `null` when the file lists its cards directly. */
   readonly tabs: readonly RecordTabEntry[] | null;
   /** The cards of a file without tabs; empty when it has tabs. */
@@ -258,13 +263,15 @@ export function labelOf(
 }
 
 /**
- * The entry a finding is about: the banner, or the innermost tab, card, field, list column, row
- * action or field from another system its path passes through, as `banners[1]`,
- * `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or `cards[4].external.fields[0]`. A widget's own
- * lists — a table's `parameters.columns` — are not fields of the file, so a finding inside one
- * names the field whose widget it is. `null` for a finding about the file as a whole.
+ * The entry a finding is about: the review, the banner, or the innermost tab, card, field, list
+ * column, row action or field from another system its path passes through, as `review`,
+ * `banners[1]`, `tabs[0].cards[1].fields[2]`, `cards[3].related.columns[1]` or
+ * `cards[4].external.fields[0]`. A widget's own lists — a table's `parameters.columns` — are not
+ * fields of the file, so a finding inside one names the field whose widget it is. `null` for a
+ * finding about the file as a whole.
  */
 export function entryOf(path: string): string | null {
+  if (path === 'review' || path.startsWith('review.')) return 'review';
   let entry: string | null = null;
   for (const match of path.matchAll(
     /(?:^|\.)(banners|tabs|cards|fields|related\.columns|related\.rowActions|external\.fields)\[(\d+)\]/g,
@@ -788,9 +795,12 @@ export function readRecordLayout(
     },
   );
 
+  // A finding about the review, such as an option this build does not have, leaves it out alone.
+  const review = isRecord(content['review']) && !leftOut.has('review');
+
   const columns = typeof content['columns'] === 'number' ? content['columns'] : 1;
   if (!Array.isArray(content['tabs'])) {
-    return { columns, banners, tabs: null, cards: cards(content['cards'], ''), problems };
+    return { columns, banners, review, tabs: null, cards: cards(content['cards'], ''), problems };
   }
   const tabs = content['tabs'].flatMap((tab: unknown, index): RecordTabEntry[] => {
     const place = `tabs[${index}]`;
@@ -807,5 +817,5 @@ export function readRecordLayout(
       },
     ];
   });
-  return { columns, banners, tabs, cards: [], problems };
+  return { columns, banners, review, tabs, cards: [], problems };
 }
