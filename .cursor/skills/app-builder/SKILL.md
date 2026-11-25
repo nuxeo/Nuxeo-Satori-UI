@@ -97,7 +97,7 @@ are given, and the write tools write only what passes the pipeline.
 Each makes the change to a staging copy, runs the pipeline's steps 1 to 6 on it as CI does, and
 writes to the package only when there is no finding. Read the answer every time:
 
-- **`written: true`:** the package now holds `changes`, and passes as CI runs it.
+- **`written: true`:** the package now holds `changes`, and passes as CI runs it, on the files it holds here (CI checks only what is committed).
 - **`written: false`:** nothing was written. `validation.findings` and `validation.refusedAt` say
   why. Fix what they name and write again. An id the platform or the package does not register (a
   widget, a rule, an operation the allow-list does not name) is refused here, at write time: never
@@ -128,7 +128,7 @@ the package, so its order is:
    with `aggregates` for one whose queue has facets or whose home counts buckets;
 3. `app-layout` and `app-form`, each given the kit's own model,
    `"model": "business-apps/packages/<name>/content-model.json"`;
-4. `app-queue`, `app-action`, and the home and the menu by hand, then `app-registry`.
+4. `app-queue`, `app-action`, and the home and the menu with `write_package_file`, then `app-registry`, in one call.
 
 The pipeline refuses a package with no record page, so steps 1 to 3 go in one
 `apply_package_changes` call: alone, the first two would be refused, and nothing written. So does
@@ -161,7 +161,7 @@ a hand-written file the component must name, with the `app-registry` that names 
   "options": { "id": "acme-contracts.approve", "transition": "approve", "on": "record,row",
                "type": "Contract", "confirm": "Approve this contract?", "queue": "open-contracts" } }
 
-// apply_package_changes: the home written by hand, and the app-registry that names it
+// apply_package_changes: the home written with write_package_file, and the app-registry that names it
 { "package": "business-apps/packages/acme-contracts", "changes": [
     { "kind": "write", "path": "bundle/agentic-ui-config/home.json", "content": "{ ... }" },
     { "kind": "generator", "generator": "app-registry" } ] }
@@ -197,7 +197,7 @@ What each writes, and what it leaves to you:
   Attachments. The component contributes it, as it does the record page. A field rule in plain
   words is the next edit (below).
 - **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
-  against the model yet. Facets are the next edit, by hand: `"facets": [{ "aggregate": "<id>",
+  against the model yet. Facets are the next edit, with `write_package_file`: `"facets": [{ "aggregate": "<id>",
 "labelKey": "<key>" }]`, each an aggregate the page provider defines, which
   `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
   page provider in the package's own model does not define.
@@ -206,9 +206,9 @@ What each writes, and what it leaves to you:
   the platform's, and refused.
 - **`app-registry`:** the component's `<app>`, naming every file of the app definition the
   registry serves. `app-package` writes it, and `app-layout`, `app-form`, `app-queue` and
-  `app-action` keep it in step; run it after writing a file by hand, or for a package that has
+  `app-action` keep it in step; run it in the same call as writing such a file with `write_package_file`, or for a package that has
   none. It takes out a file the package no longer holds.
-- **`app-model`, for a demo kit only:** a stand-in type with its schema, `--properties` such as
+- **`app-model`, for a demo kit only:** the write tools refuse it on a package that does not ship its own `content-model.json` already, unless the same call makes the package. A stand-in type with its schema, `--properties` such as
   `number,status=Draft|Active,value:double,end:date`, and page providers over it, `--pageProvider`
   with `--where` and `--sort`, in a model component of its own that the manifest lists first. A
   page provider reads the repository, which answers no aggregate; `--aggregates=<prefix>:<name>,...`
@@ -242,7 +242,7 @@ Then edit what the generators wrote, with `write_package_file`, as the person as
 - **Sensitive fields.** Ask before showing an identifier such as a social security number. Hiding a
   field with a rule is a convenience, not a control: the server still returns it to anyone who may
   read the record.
-- **The menu and the home** (`navigation.json`, `home.json`) have no generator: write them by hand,
+- **The menu and the home** (`navigation.json`, `home.json`) have no generator: write them with `write_package_file`,
   from `app-definition-v2.md`, sections 9 and 10, in one `apply_package_changes` call with the
   `app-registry` that has the app name them. Written alone, a new one is refused.
 

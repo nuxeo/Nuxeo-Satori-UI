@@ -132,8 +132,9 @@ What each does:
 
 1. **It refuses, before anything runs, what it may not write:**
    - a package that is not one folder directly inside `business-apps/packages/`, or inside the
-     folders `BUILDER_PACKAGE_ROOTS` names instead; whose name is not in kebab case, as
-     `app-package` names one; that is a link, is reached through one below its root, or holds a
+     folders `BUILDER_PACKAGE_ROOTS` names instead; named with a `.` or `..` part, since the file
+     system follows a link before a `..` and the text does not; whose name is not in kebab case,
+     as `app-package` names one; that is a link, whose real path is not its root's, or that holds a
      symbolic or hard link anywhere. A package that does not exist, unless the first change is
      `app-package`;
    - a path that leaves the package: absolute, with a `..`, `.` or empty part, a backslash or a
@@ -147,14 +148,18 @@ What each does:
      `.gitignore`. Nothing writes `deployment/`, whose build allow-list is what CI gives the
      pipeline, so an agent could otherwise allow its own operations (decision 3); an asset; code,
      such as `demo/*.mjs`; or `dist/`;
-   - a path that differs from a file of the package only in case: where case is ignored it is
-     that file, under a name it was not given;
+   - a path one of whose folders, or itself, differs from one the package holds only in case:
+     where case is ignored it is that one, under a name it was not given;
    - a generator other than those seven; an option its schema does not have, or not of its type,
      its values or its pattern; `package`, `name` or `directory` among the options, which the
      package argument gives; and `modelServer`, since a generator given an address sends
-     `NUXEO_USER` and `NUXEO_PASS` there. A `model` is a JSON file of the package, or one inside
-     the repository or a package root, through no link and no hidden folder, as `validate_package`
-     reads an allow-list; that one is read by the tool, without following a link, and the
+     `NUXEO_USER` and `NUXEO_PASS` there. `app-model` runs only for a demo kit: a package the same
+     call makes, or one that ships its own `content-model.json` already, which only `app-model`
+     writes. On a customer's package it would add types and page providers that, installed,
+     replace the server's, and hold the package to a model the agent wrote. A `model` is a JSON
+     file of the package, or one inside the repository or a package root, through no link and no
+     hidden folder, as `validate_package` reads an allow-list; that one must be a file, not a FIFO
+     that would hold every write waiting, is read by the tool without following a link, and the
      generator is given the copy. A customer's model can be exported into the checkout's `tmp/`,
      which git ignores: `npm run app-package:model -- --server <address> --out tmp/content-model.json`.
 2. **It makes the changes to a staging copy:** the package's files, but for its `dist/`, in a
@@ -176,22 +181,28 @@ What each does:
    does not check a layout of version 1, which the pipeline alone would pass whatever it named.
 4. **It writes only with no finding and no refusing step.** Otherwise the answer says
    `written: false`, with the findings, the step that refused it and what would have changed, and
-   the package is byte for byte as it was. With none, the write takes the package's lock,
-   `dist/builder-mcp-write.lock`, a file made only when there is none, which a write by another
-   process, such as a second server on the same checkout, takes too; a lock its holder left
-   behind, no longer running, is taken over, and one a running process holds refuses the write.
-   Then the package is read again, and one that changed since the staging copy was taken, or
-   gained a link, or a name that differs from another only in case, is not written. Then each
-   file is written into a folder of the write's own in the package's `dist/`, which git and the
-   builder leave out, and renamed into its place, which replaces a file whole and keeps its mode,
-   once the folder it goes in is found to be where the package's real path says. A failure part
-   way puts back every file already moved and removes every folder made, so the package is as it
-   was. The lock, and `dist/` when the write made it, are removed afterwards.
+   the package is byte for byte as it was. With none, a new package's folder is made, only when
+   there is none, and the write takes the package's lock, `dist/builder-mcp-write.lock`, which a
+   write by another process, such as a second server on the same checkout, takes too. The lock is
+   made whole or not at all: the process's id is written to a file of its own, then linked to the
+   lock's name, which a link takes only when it is free. A lock a running process holds refuses
+   the write; one whose holder is gone is moved aside and taken over, unless what was moved is not
+   the lock judged stale, which is then put back. Then the package is read again, and one that
+   changed since the staging copy was taken, or gained a link, or a name that differs from another
+   only in case, is not written. Then each file is written into a folder of the write's own in the
+   package's `dist/`, which git and the builder leave out, and renamed into its place, which
+   replaces a file whole and keeps its mode, once the folder it goes in is found to be where the
+   package's real path says. A failure part way puts back every file already moved and removes
+   every folder made, a new package's own included, so the package is as it was. The lock, and
+   `dist/` when the write made it, are removed afterwards; one that cannot be is named in the
+   note, and the write stands.
 
 The answer holds `written`; `changes`, each file `created`, `updated` or `removed`; `validation`,
 the pipeline's answer, naming the package rather than its copy; `generatorOutput`, what each
 generator printed, such as what to run next; and a `note`. One write runs at a time in a server,
-and one commit at a time in a package.
+and one commit at a time in a package. "As CI does" is on the files the package holds here: a
+local file git ignores is checked here too, and CI, which checks out only what is committed, is
+the stricter.
 
 **What it never does:**
 
@@ -207,7 +218,8 @@ and one commit at a time in a package.
 **What it cannot stop:** a process that writes into the package at the same moment as a commit,
 outside the lock, such as an editor or the agent's own file tools. Each folder is checked just
 before its file is moved, not held, so such a process could still swap a folder for a link in
-between. The skill keeps the agent's writes to these tools.
+between; and three writes at once on one stale lock could each take it, in the moment between
+moving a live lock aside and putting it back. The skill keeps the agent's writes to these tools.
 
 **What it does not do yet:**
 
@@ -367,13 +379,16 @@ npx nx run @nuxeo-satori/builder-mcp:typecheck
   finding, an unregistered rule, a layout of version 1 with an unregistered widget, which the
   pipeline alone passes, and an operation off the build allow-list, each refused with the package
   unchanged; a move that fails part way, and one the file system refuses, each put back; a package
-  that changed or gained a link while it was checked; a lock held, and one left behind; a path
-  that differs only in case; a file's mode kept; generators run on the staging copy, a generator
-  writing outside the package, a `prettier.config.mjs` at the package's path that formatting must
-  not load, and a new package made in one call. The checks against a write with a finding, a path
-  that leaves the package, a link, a file of version 1, a package changed meanwhile, a move that
-  fails part way, the lock, case, a mode, an option's pattern and that configuration were each
-  removed or undone once, and their tests seen failing, before they were trusted.
+  that changed or gained a link while it was checked, and a new one made meanwhile; a lock held,
+  and one left behind; a path or a folder that differs only in case; a file's mode kept; a `..`
+  in the package path after a link; a FIFO as the model; `app-model` on a package with no
+  stand-in model; generators run on the staging copy, a generator writing outside the package, a
+  `prettier.config.mjs` at the package's path that formatting must not load, and a new package
+  made in one call. The checks against a write with a finding, a path that leaves the package, a
+  link, a file of version 1, a package changed meanwhile, a move that fails part way, the lock,
+  case, a mode, an option's pattern, that configuration, a `..` package path, a FIFO model and
+  `app-model` outside a demo kit were each removed or undone once, and their tests seen failing,
+  before they were trusted. The lock's two-process races are not reproduced by a test.
 - **`src/preview-package.spec.ts`** runs the real pipeline and a byte copy of
   `scripts/dev-config.mjs` in a scratch checkout of its own, so the tests never write this
   checkout's dev folder, against a stand-in dev server: the files served and not, a refused

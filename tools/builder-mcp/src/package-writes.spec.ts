@@ -220,7 +220,14 @@ describe('writePackage, refusing before anything runs', () => {
 
   it('refuses a package that is not one folder directly inside a package root', async () => {
     for (const pkg of [
-      join(packages, '..', 'outside'),
+      `${packages}/../outside`,
+      `${packages}/./refused-early`,
+      'business-apps/packages/../x',
+    ])
+      expect(await refusal({ package: pkg, changes: writing(LABELS) }), pkg).toContain(
+        'has a "." or ".." part',
+      );
+    for (const pkg of [
       join(root, 'bundle'),
       packages,
       join(REPO_ROOT, 'business-apps', 'packages', 'contracts-demo'),
@@ -284,6 +291,65 @@ describe('writePackage, refusing before anything runs', () => {
       'is not of the form app-queue takes there',
     );
   });
+
+  it('runs app-model only for a demo kit, one that ships its own stand-in model', async () => {
+    const run = (pkg: string) =>
+      refusal({
+        package: pkg,
+        changes: [
+          { kind: 'generator', generator: 'app-model', options: { type: 'Acme', properties: 'x' } },
+        ],
+      });
+    // A package on a server's model: no content-model.json of its own.
+    const customers = kit('contracts-demo', 'customer-model', (copy) =>
+      rmSync(join(copy, 'content-model.json')),
+    );
+    expect(await run(customers)).toContain('app-model is for a demo kit only');
+    // The control: a demo kit reaches the generator.
+    expect(await run(root)).toBe('a generator ran');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a model that is not a file, without waiting on it',
+    async () => {
+      const fifo = join(packages, 'waiting.json');
+      expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
+      try {
+        expect(
+          await refusal({
+            changes: [
+              {
+                kind: 'generator',
+                generator: 'app-layout',
+                options: { type: 'Contract', model: fifo },
+              },
+            ],
+          }),
+        ).toContain('is not a JSON file, or goes through a link');
+      } finally {
+        rmSync(fifo, { force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'reads nothing through a link before a ".." in the package path',
+    async () => {
+      const outside = mkdtempSync(join(scratch, 'outside-'));
+      mkdirSync(join(outside, 'sub'));
+      mkdirSync(join(outside, 'victim', 'bundle'), { recursive: true });
+      symlinkSync(join(outside, 'sub'), join(packages, 'through'));
+      try {
+        for (const pkg of [`${packages}/through/../victim`, `${packages}/through/../fresh`])
+          expect(await refusal({ package: pkg, changes: writing(LABELS) }), pkg).toContain(
+            'has a "." or ".." part',
+          );
+        expect(readdirSync(outside).sort()).toEqual(['sub', 'victim']);
+      } finally {
+        rmSync(join(packages, 'through'));
+      }
+    },
+  );
 
   it('refuses a model outside the repository and the package roots, or not JSON', async () => {
     writeFileSync(join(scratch, 'model.json'), '{}');
@@ -585,7 +651,11 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       const before = fingerprint(root);
       await expect(
         writeFile(root, VIEW.replace('/Contract/', '/contract/'), read(root, VIEW)),
-      ).rejects.toThrow(`differs only in case from ${VIEW}`);
+      ).rejects.toThrow(`differs only in case from ${CONFIG}/layouts/Contract,`);
+      // A folder in another case, though no file of that name is there yet.
+      await expect(
+        writeFile(root, `${CONFIG}/layouts/contract/edit.layout.json`, read(root, VIEW)),
+      ).rejects.toThrow(`differs only in case from ${CONFIG}/layouts/Contract,`);
       expect(fingerprint(root)).toEqual(before);
     });
 
@@ -936,6 +1006,30 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(result.written, JSON.stringify(result.validation?.stderr ?? result)).toBe(true);
       expect(read(pkg, `${CONFIG}/layouts/Contract/view.layout.json`)).toContain('"version": 2');
       expect(existsSync(join(pkg, 'content-model.json'))).toBe(false);
+    });
+
+    it('writes nothing to a new package another write made meanwhile', async () => {
+      const pkg = join(packages, 'acme-meanwhile');
+      const result = await writePackage(
+        {
+          package: pkg,
+          changes: [
+            {
+              kind: 'generator',
+              generator: 'app-package',
+              options: {
+                owner: 'acme',
+                type: 'Contract',
+                model: 'business-apps/packages/contracts-demo/content-model.json',
+              },
+            },
+          ],
+        },
+        { ...OPTIONS, beforeCommit: () => mkdirSync(pkg) },
+      );
+      expect(result.written).toBe(false);
+      expect(result.note).toContain('the package changed while the changes were being checked');
+      expect(readdirSync(pkg)).toEqual([]);
     });
 
     it('leaves no package folder behind when a new package is refused', async () => {

@@ -37,6 +37,7 @@ import {
   closeSync,
   constants,
   fstatSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -89,6 +90,8 @@ const FORMATTING = ['.prettierrc', '.editorconfig'] as const;
 /** `app-package`'s rule for a package's name, which is its folder's. */
 const PACKAGE_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const CONFIG = 'bundle/agentic-ui-config';
+/** A demo kit's description of its stand-in model, beside `bundle/`, which `app-model` writes. */
+const OWN_MODEL = 'content-model.json';
 
 export type Change =
   | { readonly kind: 'write'; readonly path: string; readonly content: string }
@@ -267,7 +270,11 @@ function fromRepository(path: string): string | null {
 
 /** The package folder a request names, or why it is not one the tools write. */
 function packageFolder(path: string, roots: readonly string[]): Target {
-  const absolute = inRepository(path);
+  // A `..` is refused rather than resolved: the file system follows a link before it, and the
+  // text does not, so `<root>/link/../x` names one folder to `relative` and another to `lstat`.
+  if (path.split(/[\\/]/).some((part) => part === '..' || part === '.'))
+    throw new Error(`package: ${path} has a "." or ".." part. Name the package folder itself.`);
+  const absolute = resolve(inRepository(path));
   const shownRoots = roots.map((root) => fromRepository(root) ?? root).join(', ');
   for (const root of roots.map((candidate) => resolve(candidate))) {
     const from = relative(root, absolute);
@@ -290,6 +297,11 @@ function packageFolder(path: string, roots: readonly string[]): Target {
       throw new Error(`package: ${path} is a link, which is not followed. A package is a folder.`);
     if (entry && !entry.isDirectory()) throw new Error(`package: ${path} is not a folder.`);
     if (entry) {
+      // Resolved, the folder is the root's own: nothing on the way to it is a link.
+      if (realpathSync(absolute) !== join(realpathSync(root), from))
+        throw new Error(
+          `package: ${path} is reached through a link, which is not followed. A package is a folder of its root.`,
+        );
       const link = linkInside(absolute);
       if (link)
         throw new Error(
@@ -321,6 +333,15 @@ type Files = ReadonlyMap<string, Buffer>;
  * folder is refused rather than read: the copy holds only what the package holds.
  */
 function readFiles(directory: string): Files {
+  // The folder itself, before and after: one swapped for a link meanwhile is not read as the
+  // package, since what was read could be quoted back.
+  const folder = () => {
+    const entry = lstatSync(directory);
+    if (entry.isSymbolicLink() || !entry.isDirectory())
+      throw new Error('the package folder is no longer a folder.');
+    return realpathSync(directory);
+  };
+  const real = folder();
   const files = new Map<string, Buffer>();
   let total = 0;
   const walk = (folder: string, prefix: string) => {
@@ -345,6 +366,7 @@ function readFiles(directory: string): Files {
     }
   };
   walk(directory, '');
+  if (folder() !== real) throw new Error('the package folder was moved while it was read.');
   return files;
 }
 
@@ -486,7 +508,13 @@ function modelFile(
   let data: Buffer;
   let descriptor: number | null = null;
   try {
-    descriptor = openSync(found, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    // A file, checked before it is opened: opening a FIFO waits for a writer, and would hold every
+    // write. Opened without waiting all the same, and without following a link.
+    if (!lstatSync(found).isFile()) throw new Error('not a file');
+    descriptor = openSync(
+      found,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+    );
     const entry = fstatSync(descriptor);
     if (!entry.isFile() || entry.nlink > 1 || entry.size > MAX_PACKAGE_BYTES)
       throw new Error('not one file');
@@ -569,6 +597,8 @@ export function writePackage(
   options: WriteOptions = {},
 ): Promise<WriteResult> {
   const run = writing.then(() => write(request, options));
+  // The caller gets this write's failure through `run`; the chain only waits for it to end, so the
+  // next write starts whether this one passed or failed. Nothing is lost here.
   writing = run.catch(() => undefined);
   return run;
 }
@@ -619,13 +649,17 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
     for (const [path, data] of before) writeInto(staging, path, data);
     // A file the package holds, named in another case: on a file system that ignores case it is
     // that file, and the write would land on it under a name it was not given.
+    const held = new Set<string>();
+    for (const name of before.keys()) for (const prefix of prefixesOf(name)) held.add(prefix);
     for (const [index, change] of request.changes.entries()) {
-      if (change.kind !== 'write' || before.has(change.path)) continue;
-      const held = sameButCase(change.path, before.keys());
-      if (held !== undefined)
-        throw new Error(
-          `changes[${index}].path: ${change.path} differs only in case from ${held}, which the package holds. Write ${held}. Nothing was written.`,
-        );
+      if (change.kind !== 'write') continue;
+      for (const prefix of prefixesOf(change.path)) {
+        const other = sameButCase(prefix, held);
+        if (other !== undefined)
+          throw new Error(
+            `changes[${index}].path: ${prefix} differs only in case from ${other}, which the package holds. Write it as ${other}. Nothing was written.`,
+          );
+      }
     }
 
     const said: string[] = [];
@@ -649,6 +683,18 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
         continue;
       }
       const generator = change.generator as AppGenerator;
+      // A stand-in model is a demo kit's only: one made in this call, or one that ships its own
+      // content-model.json already, which only app-model writes. A package on a customer's model
+      // gets no types, schemas or page providers of its own, which installed would replace the
+      // server's, and would then hold it to a model the agent wrote.
+      if (
+        generator === 'app-model' &&
+        target.exists &&
+        !lstatSync(join(staging, OWN_MODEL), { throwIfNoEntry: false })?.isFile()
+      )
+        throw new Error(
+          `changes[${index}].generator: app-model is for a demo kit only, and ${target.shown} ships no stand-in model (no ${OWN_MODEL}): its types are the server's, which a package does not write. Nothing was written.`,
+        );
       let given: Record<string, unknown>;
       try {
         given = generatorOptions(
@@ -709,19 +755,19 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
       const kind = fileKind(path);
       if (typeof kind !== 'string') throw new Error(`${kind.problem} Nothing was written.`);
     }
-    // Two names of one file where case is ignored, as the package's volume may ignore it though
-    // the staging copy's does not: what was validated as two files would be written as one.
-    const names = [...new Set([...before.keys(), ...after.keys()])];
-    for (const { path } of changes) {
-      const other = sameButCase(
-        path,
-        names.filter((name) => name !== path),
-      );
-      if (other !== undefined)
-        throw new Error(
-          `${path} and ${other} differ only in case, and are one file where case is ignored. Nothing was written.`,
-        );
-    }
+    // Two names of one file or folder where case is ignored, as the package's volume may ignore it
+    // though the staging copy's does not: what was validated as two would be written as one.
+    const names = new Set<string>();
+    for (const name of [...before.keys(), ...after.keys()])
+      for (const prefix of prefixesOf(name)) names.add(prefix);
+    for (const { path } of changes)
+      for (const prefix of prefixesOf(path)) {
+        const other = sameButCase(prefix, names);
+        if (other !== undefined)
+          throw new Error(
+            `${prefix} and ${other} differ only in case, and are one where case is ignored. Nothing was written.`,
+          );
+      }
     const versionOne = changes.filter(
       ({ path, change }) => change !== 'removed' && !isVersionTwo(after.get(path), path),
     );
@@ -755,33 +801,57 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
     } catch (error) {
       throw new Error(`${(error as Error).message} Nothing was written.`);
     }
+    const changedMeanwhile: WriteResult = {
+      package: target.shown,
+      written: false,
+      changes,
+      validation: check,
+      generatorOutput: said,
+      note:
+        'Not written: the package changed while the changes were being checked, so what passed' +
+        ' is not what would be written. Nothing was written; read it again and write again.',
+    };
+    if (again.exists !== target.exists) return changedMeanwhile;
+    // A new package's folder is made only when there is none, so a second write making the same
+    // package at once finds it there, and is refused.
+    let madePackage = false;
+    if (!target.exists) {
+      try {
+        mkdirSync(target.directory);
+        madePackage = true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') return changedMeanwhile;
+        throw error;
+      }
+    }
     // One commit to a package at a time, across processes too, such as two servers on one
     // checkout: the lock is taken before the package is read again, and held until every file is
     // in place, so that a second commit reads the first one's result, and refuses it as a change.
-    const lock = again.exists ? lockPackage(target) : null;
+    let lock: PackageLock;
+    try {
+      lock = lockPackage(target);
+    } catch (error) {
+      if (madePackage) removeIfEmpty(target.directory);
+      throw error;
+    }
+    const left: string[] = [];
+    let committed = false;
     try {
       let now: Files;
       try {
-        now = again.exists ? readFiles(target.directory) : new Map();
+        now = readFiles(target.directory);
       } catch (error) {
         throw new Error(
           `package: ${target.shown}: ${(error as Error).message} Nothing was written.`,
         );
       }
-      if (again.exists !== target.exists || !sameFiles(before, now))
-        return {
-          package: target.shown,
-          written: false,
-          changes,
-          validation: check,
-          generatorOutput: said,
-          note:
-            'Not written: the package changed while the changes were being checked, so what passed' +
-            ' is not what would be written. Nothing was written; read it again and write again.',
-        };
-      commit(target, changes, after, before, options.beforeMove, lock?.dist);
+      if (!sameFiles(before, now)) return changedMeanwhile;
+      left.push(...commit(target, changes, after, before, options.beforeMove, lock.dist));
+      committed = true;
     } finally {
-      lock?.release();
+      const unreleased = lock.release();
+      if (unreleased !== null) left.push(unreleased);
+      if (madePackage && !committed) removeIfEmpty(target.directory);
     }
     return {
       package: target.shown,
@@ -791,10 +861,26 @@ async function write(request: WriteRequest, options: WriteOptions): Promise<Writ
       generatorOutput: said,
       note:
         `Written: ${changes.length} ${changes.length === 1 ? 'file' : 'files'}, after the pipeline's` +
-        ' steps 1 to 6 passed on the package as it now is, as CI runs them. Nothing was published.',
+        " steps 1 to 6 passed on the package as it now is, as CI runs them on the package's files" +
+        " (CI's checkout holds only those committed). Nothing was published." +
+        (left.length > 0 ? ` Left behind, to remove by hand: ${left.join('; ')}.` : ''),
     };
   } finally {
-    rmSync(work, { recursive: true, force: true });
+    try {
+      rmSync(work, { recursive: true, force: true });
+    } catch {
+      // The write's own temporary folder, in the system's: what it holds was never the package's,
+      // and the answer, written or not, stands without it.
+    }
+  }
+}
+
+/** Removes a folder the write made, when nothing else is in it. */
+function removeIfEmpty(folder: string): void {
+  try {
+    rmdirSync(folder);
+  } catch {
+    // Not empty, or gone: either way nothing of the write's is left in it.
   }
 }
 
@@ -858,6 +944,12 @@ function withoutColour(text: string): string {
   return text.replace(/\u001b\[[0-9;]*m/g, '');
 }
 
+/** Each folder a path goes through, and the path: `a`, `a/b`, `a/b/c.json`. */
+function prefixesOf(path: string): string[] {
+  const parts = path.split('/');
+  return parts.map((_, index) => parts.slice(0, index + 1).join('/'));
+}
+
 /** The first of `names` that is `path` but for case, or `undefined`. */
 function sameButCase(path: string, names: Iterable<string>): string | undefined {
   const folded = path.toLowerCase();
@@ -870,13 +962,26 @@ function sameButCase(path: string, names: Iterable<string>): string | undefined 
 /** The lock's name, in the package's `dist/`. */
 const LOCK = 'builder-mcp-write.lock';
 
+interface PackageLock {
+  readonly dist: string;
+  /** Lets the lock go; what could not be removed, or `null`. Never throws. */
+  release(): string | null;
+}
+
 /**
- * The package's write lock, taken: a file made only if there is none, `wx`, holding this process's
- * id, in the package's `dist/`, which is made when there is none and removed with the lock. One a
- * process left that is no longer running is taken over; one a running process holds refuses this
- * write.
+ * The package's write lock, taken, in the package's `dist/`, which is made when there is none and
+ * removed with the lock:
+ *
+ * - **Made whole or not at all.** This process's id goes into a file of the write's own first,
+ *   which is then linked to the lock's name: a link is made only when the name is free, and the
+ *   lock it makes already holds the id, so no other process reads it empty.
+ * - **One a running process holds refuses this write.** One whose holder is no longer running is
+ *   moved aside under a name of this write's own, and taken over only when what was moved holds
+ *   the id that was judged: had another process taken it over in between, its lock is linked back
+ *   and this write refused. Three writes at once on one stale lock could still both pass, in the
+ *   moment between moving a live lock aside and linking it back.
  */
-function lockPackage(target: Target): { readonly dist: string; release(): void } {
+function lockPackage(target: Target): PackageLock {
   const dist = join(target.directory, 'dist');
   const entry = lstatSync(dist, { throwIfNoEntry: false });
   if (entry && (entry.isSymbolicLink() || !entry.isDirectory()))
@@ -885,42 +990,81 @@ function lockPackage(target: Target): { readonly dist: string; release(): void }
     );
   const made = entry === undefined;
   if (made) mkdirSync(dist);
-  const file = join(dist, LOCK);
-  const take = () => writeFileSync(file, `${process.pid}\n`, { flag: 'wx' });
+  const lock = join(dist, LOCK);
+  const own = (what: string) => join(dist, `${LOCK}.${what}-${randomBytes(6).toString('hex')}`);
+  const mine = own(String(process.pid));
+  const held = (holder: number | null) =>
+    new Error(
+      `another write to ${target.shown} is being committed, by process ${holder ?? 'unknown'}.` +
+        ` Nothing was written; write again once it is done. If no write is running, remove` +
+        ` ${target.shown}/dist/${LOCK}.`,
+    );
   const removeDist = () => {
-    if (!made) return;
-    try {
-      rmdirSync(dist);
-    } catch {
-      // Something else is in it now, and it stays.
-    }
+    if (made) removeIfEmpty(dist);
   };
   try {
+    writeFileSync(mine, `${process.pid}\n`, { flag: 'wx' });
     try {
-      take();
+      linkSync(mine, lock);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      const holder = Number(readFileSync(file, 'utf8').trim());
-      if (Number.isInteger(holder) && holder > 0 && running(holder))
-        throw new Error(
-          `another write to ${target.shown} is being committed, by process ${holder}. Nothing was written; write again once it is done.`,
-        );
-      // Left by a process that has stopped: taken over. Two taking it over at once cannot both
-      // make it.
-      rmSync(file, { force: true });
-      take();
+      const holder = pidIn(lock);
+      if (holder === null || running(holder)) throw held(holder);
+      const aside = own('stale');
+      try {
+        renameSync(lock, aside);
+      } catch {
+        // Moved by another write first: that one is taking it over.
+        throw held(null);
+      }
+      const moved = pidIn(aside);
+      if (moved !== holder) {
+        try {
+          linkSync(aside, lock);
+        } catch {
+          // Taken again already: the lock is that write's.
+        }
+        rmSync(aside, { force: true });
+        throw held(moved);
+      }
+      rmSync(aside, { force: true });
+      try {
+        linkSync(mine, lock);
+      } catch {
+        throw held(pidIn(lock));
+      }
     }
   } catch (error) {
+    rmSync(mine, { force: true });
     removeDist();
     throw error;
   }
+  // The lock has one name again: a second would read as a hard link to every check that walks the
+  // package.
+  rmSync(mine, { force: true });
   return {
     dist,
     release: () => {
-      rmSync(file, { force: true });
-      removeDist();
+      try {
+        if (pidIn(lock) === process.pid) rmSync(lock, { force: true });
+        removeDist();
+        return null;
+      } catch (error) {
+        return `${target.shown}/dist/${LOCK} (${(error as Error).message})`;
+      }
     },
   };
+}
+
+/** The process id a lock holds, or `null` when it holds none or cannot be read. */
+function pidIn(file: string): number | null {
+  try {
+    const pid = Number(readFileSync(file, 'utf8').trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    // Gone or unreadable: it names no holder.
+    return null;
+  }
 }
 
 function running(pid: number): boolean {
@@ -947,8 +1091,9 @@ interface Moved {
  * move fail, every file already moved is put back as it was, and every folder made is removed, so
  * that the package is left as it was. A process killed outright part way cannot do that.
  *
- * `dist` is the package's `dist/`, which the lock made or found; for a package that is new, it is
- * made here, and removed afterwards.
+ * `dist` is the package's `dist/`, where the lock is. The answer is what was left behind once the
+ * package holds the changes, such as a scratch folder that could not be removed; a failure part
+ * way throws.
  */
 function commit(
   target: Target,
@@ -956,21 +1101,18 @@ function commit(
   after: Files,
   before: Files,
   beforeMove: WriteOptions['beforeMove'],
-  dist: string | undefined,
-): void {
+  dist: string,
+): string[] {
   const made: string[] = [];
   const makeFolder = (folder: string) => {
     mkdirSync(folder);
     made.push(folder);
   };
-  const ownDist = dist === undefined ? join(target.directory, 'dist') : undefined;
   const moved: Moved[] = [];
   let scratch: string | null = null;
   let failure: unknown = null;
   try {
-    if (!target.exists) makeFolder(target.directory);
-    if (ownDist !== undefined) makeFolder(ownDist);
-    const into = mkdtempSync(join(dist ?? (ownDist as string), 'builder-mcp-commit-'));
+    const into = mkdtempSync(join(dist, 'builder-mcp-commit-'));
     scratch = into;
     const real = realpathSync(target.directory);
     const prepared = changes.map((change, index) => {
@@ -993,17 +1135,16 @@ function commit(
     failure = error;
   }
   const unrestored = failure === null || scratch === null ? [] : putBack(moved, before, scratch);
-  if (scratch !== null) rmSync(scratch, { recursive: true, force: true });
-  // The folders made, deepest first, when they are empty again: a new package's `dist/` once the
-  // scratch is gone, and on a failure every folder made, the package's own included.
-  for (const folder of made.reverse()) {
-    if (failure === null && folder !== ownDist) continue;
+  const left: string[] = [];
+  if (scratch !== null) {
     try {
-      rmdirSync(folder);
-    } catch {
-      // Not empty: something else is in it, and it stays.
+      rmSync(scratch, { recursive: true, force: true });
+    } catch (error) {
+      left.push(`${relative(target.directory, scratch)} (${(error as Error).message})`);
     }
   }
+  // On a failure, every folder the moves made, deepest first, when it is empty again.
+  if (failure !== null) for (const folder of made.reverse()) removeIfEmpty(folder);
   if (failure !== null)
     throw new Error(
       `Writing ${target.shown} failed part way (${(failure as Error).message}). ` +
@@ -1011,6 +1152,7 @@ function commit(
           ? 'Every file already written was put back, so the package is as it was.'
           : `These could not be put back, and must be restored by hand, from version control where the package is in it: ${unrestored.join(', ')}.`),
     );
+  return left;
 }
 
 /**
