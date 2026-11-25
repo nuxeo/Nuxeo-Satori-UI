@@ -141,6 +141,70 @@ describe('NxsSearchFiltersComponent', () => {
     expect(document.querySelector('.filter-panel')).toBeNull();
   });
 
+  it('shows counts for multiple filters and clears only the date through Any time', async () => {
+    host.layout.set('horizontal');
+    host.filters.set({
+      ...NXS_EMPTY_SEARCH_FILTERS,
+      modified: ['last24h', 'lastWeek'],
+      nature: ['contract'],
+      size: ['tiny'],
+      subjects: ['unknown-category'],
+    });
+    await render();
+    expect(menuTrigger('Properties').textContent).toContain('(2)');
+    expect(menuTrigger('Date').textContent).toContain('(2)');
+    expect(menuTrigger('Categories').textContent).toContain('unknown-category');
+    menuTrigger('Date').click();
+    await render();
+    [...panel().querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Any time')!
+      .click();
+    await render();
+    expect(host.filters().modified).toEqual([]);
+    expect(host.filters().nature).toEqual(['contract']);
+    expect(host.filters().size).toEqual(['tiny']);
+    expect(menuTrigger('Date').textContent).toContain('Any time');
+    expect(document.querySelector('.filter-panel')).toBeNull();
+  });
+
+  it('toggles a menu closed and loads collections only once across repeated openings', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('Collections').click();
+    await render();
+    expect(panel().textContent).toContain('Claims');
+    expect(getUserCollections).toHaveBeenCalledTimes(1);
+    menuTrigger('Collections').click();
+    await render();
+    expect(document.querySelector('.filter-panel')).toBeNull();
+    menuTrigger('Collections').click();
+    await render();
+    expect(getUserCollections).toHaveBeenCalledTimes(1);
+    panel().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await render();
+    expect(document.querySelector('.filter-panel')).not.toBeNull();
+  });
+
+  it('dismisses a panel without taking focus from a clicked external control', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').click();
+    await render();
+    const external = document.createElement('button');
+    external.textContent = 'External action';
+    document.body.append(external);
+    const focus = vi.spyOn(external, 'focus');
+    try {
+      external.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      external.click();
+      await render();
+      expect(document.querySelector('.filter-panel')).toBeNull();
+      expect(focus).toHaveBeenCalled();
+    } finally {
+      external.remove();
+    }
+  });
+
   it('restores the latest trigger after switching panels and closing with Escape', async () => {
     host.layout.set('horizontal');
     await render();

@@ -169,7 +169,7 @@ const mockSelectionService = {
 };
 
 const mockAiGatewayService = {
-  nlToNxqlSuggestions: vi.fn(() => of({ suggestions: [] })),
+  nlToNxqlSuggestions: vi.fn((): Observable<{ suggestions: string[] }> => of({ suggestions: [] })),
   nlToNxql: vi.fn(),
 };
 
@@ -483,6 +483,37 @@ describe('SearchComponent', () => {
   });
 
   describe('selection', () => {
+    it('selects only the displayed page, including AI results, without fetching more results', async () => {
+      await fixture.whenStable();
+      vi.spyOn(component, 'displayResults').mockReturnValue([
+        row({ id: 'page-a', name: 'Page A' }),
+        row({ id: 'page-b', name: 'Page B' }),
+      ]);
+      component.selectPage();
+      expect(mockSelectionService.selectAll).toHaveBeenLastCalledWith(['page-a', 'page-b'], {
+        'page-a': 'Page A',
+        'page-b': 'Page B',
+      });
+      const calls = mockSearchService.search.mock.calls.length;
+      component.aiSearchMode.set(true);
+      component.selectAllResults();
+      expect(mockSelectionService.selectAll).toHaveBeenCalledTimes(2);
+      expect(mockSearchService.search).toHaveBeenCalledTimes(calls);
+    });
+
+    it('does not start a second select-all request while the first is pending', async () => {
+      await fixture.whenStable();
+      const pending = new Subject<SearchResponseLike>();
+      mockSearchService.search.mockReturnValueOnce(pending);
+      component.selectAllResults();
+      const calls = mockSearchService.search.mock.calls.length;
+      component.selectAllResults();
+      expect(mockSearchService.search).toHaveBeenCalledTimes(calls);
+      pending.next({ items: [resultItem()], aggregations: {} });
+      pending.complete();
+      expect(component.selectingAll()).toBe(false);
+      expect(mockSelectionService.selectAll).toHaveBeenCalledTimes(1);
+    });
     it('selects every result page using the current criteria, only after all pages succeed', async () => {
       await fixture.whenStable();
       const session = TestBed.inject(SearchSession);
@@ -593,6 +624,93 @@ describe('SearchComponent', () => {
   });
 
   describe('separate search inputs', () => {
+    it('discards stale Ask suggestions and recovers when the suggestions request fails', async () => {
+      const pending = new Subject<{ suggestions: string[] }>();
+      mockAiGatewayService.nlToNxqlSuggestions.mockReturnValueOnce(pending);
+      component.onAiQueryInput('first query');
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      expect(mockAiGatewayService.nlToNxqlSuggestions).toHaveBeenCalledWith('first query');
+      component.onAiQueryInput('second query');
+      pending.next({ suggestions: ['stale result'] });
+      expect(component.aiSuggestions()).toEqual([]);
+      mockAiGatewayService.nlToNxqlSuggestions.mockReturnValueOnce(
+        of({ suggestions: ['current result'] }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      expect(component.aiSuggestions()).toEqual(['current result']);
+      mockAiGatewayService.nlToNxqlSuggestions.mockReturnValueOnce(
+        throwError(() => new Error('offline')),
+      );
+      component.onAiQueryInput('third query');
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      expect(component.aiSuggestions()).toEqual([]);
+      mockAiFeatureFlagService.aiEnabled.set(false);
+      component.onAiQueryInput('disabled query');
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      expect(mockAiGatewayService.nlToNxqlSuggestions).toHaveBeenCalledTimes(3);
+      mockAiFeatureFlagService.aiEnabled.set(true);
+    });
+    it.each([
+      {
+        item: resultItem({ type: 'Collection', id: 'collection-1' }),
+        commands: ['/collections', 'collection-1'],
+      },
+      {
+        item: resultItem({ type: 'Folder', path: '/default-domain/folder' }),
+        commands: ['/browse/default-domain/folder'],
+      },
+      { item: resultItem({ type: 'Folder', path: undefined }), commands: ['/doc', 'doc1'] },
+      { item: resultItem(), commands: ['/doc', 'doc1'] },
+    ])('opens the queue at the first result using $commands', ({ item, commands }) => {
+      vi.spyOn(component, 'results').mockReturnValue([item]);
+      const navigate = vi.spyOn(component['router'], 'navigate');
+      component.openQueue();
+      expect(navigate).toHaveBeenCalledWith(
+        commands,
+        expect.objectContaining({
+          queryParams: { searchQueue: 'true' },
+          queryParamsHandling: 'merge',
+        }),
+      );
+    });
+
+    it('reports saved-search listing and opening failures without clearing existing criteria', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: 'keep me' });
+      mockSearchService.getSavedSearches.mockReturnValueOnce(
+        throwError(() => new Error('offline')),
+      );
+      component.loadFilterSets();
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not open the saved search.',
+        expect.anything(),
+      );
+      const open = vi
+        .spyOn(session, 'openSavedSearch')
+        .mockReturnValueOnce(throwError(() => new Error('offline')));
+      component.selectFilterSet('unlisted');
+      expect(open).toHaveBeenCalledWith('unlisted', '');
+      expect(toast.error).toHaveBeenCalledTimes(2);
+      expect(session.filters().fulltext).toBe('keep me');
+    });
+
+    it('changes page size through the session and resets the current page', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setPageIndex(3);
+      component.changePageSize(25);
+      expect(session.pageSize()).toBe(25);
+      expect(session.pageIndex()).toBe(0);
+    });
+
+    it('highlights adjacent whole-title matches and leaves unmatched text intact', () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), fulltext: 'a' });
+      expect(component.highlightedTitle('Aa')).toEqual([
+        { text: 'A', matched: true },
+        { text: 'a', matched: true },
+      ]);
+      expect(component.highlightedTitle('other')).toEqual([{ text: 'other', matched: false }]);
+    });
     it('clears the saved filter set through its clear button and restores Default', async () => {
       TestBed.resetTestingModule();
       await configure({}, { rendered: true });

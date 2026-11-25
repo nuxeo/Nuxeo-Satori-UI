@@ -62,6 +62,11 @@ expanded search header and dropdown presentation informed the implementation.
 - Corrected the extension reference for the new sidebar and retained search queue descriptor.
 - Explicitly typed the expanded-filter signal so Windows and Linux builds emit the same API
   declaration; this resolves the remote snapshot mismatch without changing runtime behavior.
+- Added regressions for Files-only serialization, saved-search Default selection and errors,
+  queue routing, page/all selection, date clearing, outside-click focus and stale Ask suggestions.
+  The targeted search suite passes 142 tests, filters 27, filter models 34 and saved searches 14;
+  both projects' spec files also pass TypeScript checking. The PR records the refreshed SonarCloud
+  quality-gate verdict separately from the scan job, which can succeed when its gate fails.
 - Preserved main's external-recipient navigation rules, drawer behavior, saved-search clearing,
   and registered chip-set replacement in both filter layouts.
 - Fixed unstable chip inputs causing repeated change detection in a horizontal overlay.
