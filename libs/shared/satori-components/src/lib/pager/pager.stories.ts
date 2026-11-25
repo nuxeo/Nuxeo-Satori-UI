@@ -38,6 +38,11 @@ const meta: Meta<NxsPagerComponent> = {
       control: 'number',
       description: 'Every item across every page; negative when the server did not count them.',
     },
+    totalMoreThan: {
+      control: 'number',
+      description:
+        'Where the server stopped counting, when it gave no total: “of more than N” while the range is within it. Negative for none.',
+    },
     hasNextPage: { control: 'boolean', description: 'Whether the server has another page.' },
     disabled: { control: 'boolean', description: 'Disables both buttons while a page loads.' },
     label: {
@@ -66,6 +71,11 @@ export const UncountedFolder: Story = {
 /** The last page of a collection, which Nuxeo counts: "of N" appears and Next is disabled. */
 export const LastPageOfACountedList: Story = {
   args: { itemCount: 10, totalSize: 60, hasNextPage: false },
+};
+
+/** A list Nuxeo counted up to a limit and no further: "of more than N", within the limit. */
+export const CountedToALimit: Story = {
+  args: { totalMoreThan: 200 },
 };
 
 /** The server offered a next page that was empty: the range gives way to "No more items". */

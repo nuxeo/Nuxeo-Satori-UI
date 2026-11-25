@@ -133,6 +133,11 @@ export interface ResultWindow {
  * So a count above the limit is a window: only the index counts past its own limit. A `-2` with a
  * limit says that there are more than that many, and nothing of how far they can be paged. A page
  * size that is not a whole number from 1 counts as 1.
+ *
+ * A count within the limit sets no reach, since the repository's count limit looks the same and
+ * pages on: the pages end with the results. One sliver is left to the server: at a page size that
+ * does not divide the window, 30 of 10,000, a last page that would cross it (results 9,991 on) is
+ * refused too, and there the index's own `isNextPageAvailable`, already false, stops the pager.
  */
 export function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow {
   const counts = [page.totalSize, page.resultsCount].filter(
