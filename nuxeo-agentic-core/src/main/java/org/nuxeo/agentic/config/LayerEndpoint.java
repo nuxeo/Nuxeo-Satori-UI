@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonToken;
@@ -36,6 +39,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * any cache.
  */
 final class LayerEndpoint {
+
+    private static final Logger log = LogManager.getLogger(LayerEndpoint.class);
 
     static final String EXPORT_PATH = "/layer.json";
 
@@ -96,23 +101,32 @@ final class LayerEndpoint {
             return answer(service.act(app, file, viewer, null));
         }
         if (!isJson(contentType)) {
-            return answer(LayerService.error(415, "not-json", "A change is sent as application/json."));
+            return refused(viewer, app, file, LayerService.error(415, "not-json", "A change is sent as application/json."));
         }
         if (changeHeader == null || changeHeader.isBlank()) {
-            return answer(LayerService.error(403, "no-change-header",
+            return refused(viewer, app, file, LayerService.error(403, "no-change-header",
                     "A change carries the " + CHANGE_HEADER + " header, which a page on another site cannot send."));
         }
         if (body == null || body.length > MAX_BODY_BYTES) {
-            return answer(LayerService.error(413, "too-large",
+            return refused(viewer, app, file, LayerService.error(413, "too-large",
                     "A change is at most " + MAX_BODY_BYTES + " bytes."));
         }
         JsonNode request;
         try {
             request = parse(body);
         } catch (IOException e) {
-            return answer(LayerService.error(400, "bad-request", "The change is not JSON: " + firstLine(e)));
+            return refused(viewer, app, file,
+                    LayerService.error(400, "bad-request", "The change is not JSON: " + firstLine(e)));
         }
         return answer(service.act(app, file, viewer, request));
+    }
+
+    /** A change refused here, before the service is asked: said in the log, as the service says its own. */
+    private static AppRegistryEndpoint.Response refused(AppRegistryEndpoint.Viewer viewer, String app, String file,
+            LayerService.Outcome outcome) {
+        log.warn("Agentic UI deployment layer: {} refused a change of {}/{}: {} {}", viewer.name(), app, file,
+                outcome.status(), outcome.body().path("error").asText());
+        return answer(outcome);
     }
 
     /**

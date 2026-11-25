@@ -30,9 +30,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * back would find none; and the host's own functions, such as {@code load} and {@code exit}, are
  * taken away before the script runs ({@link #HOST_GLOBALS}). It is given JSON text and gives JSON
  * text back.</li>
- * <li><b>No time limit:</b> a file is at most 1 MiB, nested at most 512 deep, and the validator
- * reads it in one pass of each check, so a check is bounded by the file; checks are made one at a
- * time.</li>
+ * <li><b>No time limit:</b> a file written through the service is at most 1 MiB, nested at most 512
+ * deep, and the validator reads it in one pass of each check, so a check is bounded by the file;
+ * checks are made one at a time. A stored layer written around the service is checked when it is
+ * served, and a stack it exhausts, as any error, refuses the file.</li>
  * <li><b>The content model</b> is the server's own, read when a file is checked
  * ({@link ServerContentModel}), so a file is held to the types, schemas and facets the server has
  * now, as the designer holds it to what {@code /api/v1/config} answers.</li>

@@ -51,8 +51,8 @@ export interface LayerComparison {
  *   before; **Discard draft** drops it. Each asks the server, which checks the person, the file and
  *   the approval itself, and answers with the file as it is then, or why not.
  * - **The buttons follow the server's answer** of what this person may do, and a button that may do
- *   nothing is turned off, with the reason, not hidden. That is not the control: the server refuses
- *   whatever is sent.
+ *   nothing is turned off, not hidden, with the reason for Save draft and, in the server's words, for
+ *   Approve and publish. That is not the control: the server refuses whatever is sent.
  * - **Approve, roll back and discard ask first**: the first two change the app for everyone.
  * - **Nothing is drawn as markup:** every version is shown as its JSON text.
  */

@@ -684,6 +684,12 @@ the `<lib-document-layout>` and `<lib-document-layout-form>` components that use
 `readValidationFailure` — not the service — and no `@nuxeo/satori-platform` entry point
 re-exports the library.
 
+A record page (`view`), edit or create form of the app open's deployment layer, which the app
+registry serves after sign-in to the app's groups (`APP_DEFINITION_FILES`,
+`layouts/<Type>/<mode>.layout.json`), is read first and wins over the file `layouts.json` lists; a
+layer that has none costs no request, and one that cannot be read leaves the package's file, said in
+the console (`docs/business-apps/app-definition-v2.md`, section 10).
+
 | Member                                                                                                                                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `layoutFor(type: string, mode: LayoutMode, documentSchemas: readonly DocumentSchemaRef[] = []): Observable<ResolvedLayout \| null>`                                   | The contributed file for `type`/`mode` if `agentic-ui-config/layouts.json` lists one, else the layout generated from `GET /config/types/<type>` (`fetch-schema: fields`). `documentSchemas` is the `schemas` list of the document's own read: each schema in it the type lacks — one a dynamic facet added — and the layout could show is read from `GET /config/schemas/<name>` (`fetch-schema: fields`), and its section follows the type's own; a layout file may name its fields. The index and files are read without the interceptors, so with no `Authorization` header — though, being same-origin, with the browser's cookies; index, files, types and schemas are each read once per session, except that a failed type or schema read is retried. `null` when the type cannot be read; a schema that cannot be read is left out, and so is a section a layout file leaves with no field to show — as the generated layout leaves out a schema with no fields. Never errors; every fallback is logged under `[agentic-ui-layouts]`. |
@@ -711,6 +717,24 @@ read(connector: string, uid: string): Observable<ConnectorAnswer>
   // POST /automation/Connector.Read, { params: { connector }, input: 'doc:<uid>' }
   // { connector, status: 'found' | 'not-found' | 'no-key', fields: { <name>: text | number | boolean } }
   // an answer of another shape errors with status 500; the server's errors pass through
+```
+
+---
+
+## DeploymentLayerService (`libs/features/layout-designer/src/lib/layer/deployment-layer.service.ts`)
+
+The layout designer's reads and changes of the app open's deployment layer
+(`LayerEndpoint` in `nuxeo-agentic-core`; `docs/api-integrations.md`, section 40), for
+`LayerPanelComponent`. Internal to the designer. Administrators alone, on the server.
+
+```typescript
+state(path: string): Observable<LayerReading>
+  // GET /nuxeo/agentic-ui-apps/apps/<app open>/layer/<path>, through the interceptors
+  // 'reading' first, then { kind: 'state', state } or why there is none:
+  // 'unavailable' (no-app | off | forbidden), 'refused' (the server's reason), 'failed'
+act(path: string, change: LayerChange): Observable<LayerReading>
+  // POST of { action, revision, content?, to? }, application/json, X-Agentic-Layer-Change: 1
+  // answered with the file as it then is, or the refusal: findings for a 422, the file for a 409
 ```
 
 ---
