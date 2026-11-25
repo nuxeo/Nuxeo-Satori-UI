@@ -452,7 +452,7 @@ export class AppShellComponent implements OnDestroy {
       this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
       this.drawerOpen.set(false);
       this.activeDrawerItem.set(null);
-      void this.router.navigateByUrl('/search');
+      void this.router.navigateByUrl(this.searchWorkspaceUrl());
       return;
     }
 
@@ -592,8 +592,15 @@ export class AppShellComponent implements OnDestroy {
       this.searchReturnUrl = this.router.url;
       this.drawerOpen.set(false);
       this.activeDrawerItem.set(null);
-      void this.router.navigateByUrl('/search');
+      void this.router.navigateByUrl(this.searchWorkspaceUrl());
     }
+  }
+
+  private searchWorkspaceUrl(): string {
+    // Returning from the queue must carry the applied scope into the page's URL hydration.
+    return this.searchState.drawerFilters()['filesOnly'] === 'true'
+      ? '/search?quickFilters=noFolder'
+      : '/search';
   }
 
   submitGlobalSearch(): void {

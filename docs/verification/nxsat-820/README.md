@@ -104,6 +104,13 @@ The new queue and saved-state regressions failed before the fixes. The two focus
 unavailable during this additional pass; the screenshots below are from the earlier signed-in
 verification and are not evidence of fresh manual checks for these five cases.
 
+A subsequent routing review also covers choosing a Files-only saved search from a document
+queue. The drawer redirect carries the newly applied Files scope to Search while resetting the
+old page, sort and unrelated quick filters. Router integration tests exercise both saved-scope
+directions and clearing No Containers afterward, using the real Search page, drawer and session.
+Header activation, keyword submission and a customer navigation entry use the same scope-preserving
+destination behavior; browser component tests cover Files and Files-and-folders for each entry point.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:

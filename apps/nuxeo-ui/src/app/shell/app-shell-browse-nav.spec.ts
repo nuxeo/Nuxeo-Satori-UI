@@ -92,6 +92,43 @@ describe('AppShellComponent — the Browse nav entry', () => {
     expect(shell.globalSearchTerm()).toBe('NEV');
   });
 
+  for (const filesOnly of [true, false]) {
+    for (const entry of ['click', 'submit', 'navigation'] as const) {
+      it(`preserves the applied ${filesOnly ? 'Files' : 'Files and folders'} scope on ${entry} from the queue`, () => {
+        spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue(
+          '/doc/test?quickFilters=noFolder,onlyValidated&searchQueue=true&page=3&sortBy=dc:title',
+        );
+        const state = TestBed.inject(SearchAggregationService);
+        state.drawerFilters.set({
+          ecm_fulltext: 'applied',
+          ...(filesOnly ? { filesOnly: 'true' } : {}),
+        });
+        const fixture = TestBed.createComponent(AppShellComponent);
+        fixture.detectChanges();
+        const shell = fixture.componentInstance;
+        if (entry === 'click') {
+          const input = fixture.nativeElement.querySelector(
+            '#global-header-search-input',
+          ) as HTMLInputElement;
+          input.click();
+          expect(shell.globalSearchTerm()).toBe('applied');
+        } else if (entry === 'submit') {
+          shell.onGlobalSearchInput('new keyword');
+          shell.submitGlobalSearch();
+          expect(state.keywordRequest()).toEqual({ term: 'new keyword' });
+        } else {
+          shell.onNavClick(
+            { ...BROWSE, id: 'app.navbar.search', path: '/search' },
+            new MouseEvent('click'),
+          );
+        }
+        // Retain the scope, without importing stale queue, paging or sorting state.
+        expect(navigated).toEqual([filesOnly ? '/search?quickFilters=noFolder' : '/search']);
+        expect(shell.drawerOpen()).toBeFalse();
+      });
+    }
+  }
+
   it('returns focus from Close search to Keywords before the expanded actions disappear', () => {
     const router = TestBed.inject(Router);
     const navigation = new Subject<NavigationEnd>();

@@ -254,7 +254,11 @@ export class SearchFiltersDrawerComponent {
 
   /** A change made from another page shows its results on the search page. */
   private ensureSearchRoute(): void {
-    if (this.router.url.split('?')[0] !== '/search') void this.router.navigateByUrl('/search');
+    if (this.router.url.split('?')[0] !== '/search') {
+      // Carry the newly applied scope, not the old queue's quick filters, page or sort.
+      const url = this.filters().filesOnly ? '/search?quickFilters=noFolder' : '/search';
+      void this.router.navigateByUrl(url);
+    }
   }
 
   private toQuickFiltersQueryParam(): string | null {
