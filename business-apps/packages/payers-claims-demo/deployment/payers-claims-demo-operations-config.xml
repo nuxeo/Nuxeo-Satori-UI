@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+  The demo server's allow-list for the Payers kit: the deployment's contribution, which the kit's
+  README has the server's administrators put in nxserver/config/. Not in the kit's package, and
+  never in one: the package pipeline refuses a package that contributes to
+  org.nuxeo.agentic.ui.operations (plan decision 3, on its recommendation: a per-deployment
+  allow-list).
+
+  It allows one of the kit's two chains, Payers.RequestMedicalRecords, for claims adjusters who may
+  change the claim, with the three parameters the kit's button gives it. It leaves
+  Payers.ReferToInvestigations out on purpose: the kit's actions.json names it too, and the demo
+  shows the app registry leaving that button out, and AgenticUi.RunAction refusing it.
+
+  Fictional, like the kit.
+-->
+<component name="payers-claims-demo.deployment.operations" version="1.0">
+  <require>org.nuxeo.agentic.ui.operations</require>
+
+  <extension target="org.nuxeo.agentic.ui.operations" point="allowList">
+    <operation id="Payers.RequestMedicalRecords" permission="Write">
+      <group>claims-adjusters</group>
+      <!-- The claim's provider, a document id, read from the stored claim. -->
+      <param name="provider" type="string" maxLength="64" />
+      <param name="urgent" type="boolean" />
+      <param name="note" type="string" maxLength="500" />
+    </operation>
+  </extension>
+</component>

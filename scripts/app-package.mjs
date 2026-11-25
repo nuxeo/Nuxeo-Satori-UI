@@ -23,7 +23,9 @@
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
  *      contributed, since the server would never serve one that is not. The package contributes
  *      its app to the app registry once, from its `app.json`, naming every file of the app
- *      definition the registry serves and nothing else. A manifest that is not a file, and a
+ *      definition the registry serves and nothing else. No component contributes to the server's
+ *      allow-list of the operations an app's buttons may run, `org.nuxeo.agentic.ui.operations`,
+ *      which is the deployment's, never a package's. A manifest that is not a file, and a
  *      component path that leaves
  *      `bundle/` or names a folder or a hard link, are refused before they are read (a missing one
  *      is the builder's to refuse, at step 4);
@@ -108,6 +110,9 @@ const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  */
 /** More files than this, and the server refuses the app: `ContributionRegistry.MAX_APP_FILES`. */
 const MAX_APP_FILES = 256;
+
+/** The component that holds the server's allow-list of the operations an app's buttons may run. */
+const ALLOW_LIST_COMPONENT = 'org.nuxeo.agentic.ui.operations';
 
 const REGISTRY_FILES = [
   /^home\.json$/,
@@ -302,7 +307,10 @@ function run({
   process.stderr.write(validation.stderr ?? '');
   if (validation.status === 2) return 2;
   if (validation.status !== 0) return refuse(2, 'the app definition has findings, listed above.');
-  const contributed = layoutContributions(directory) ?? appContributions(directory, root);
+  const contributed =
+    layoutContributions(directory) ??
+    allowListContributions(directory) ??
+    appContributions(directory, root);
   if (contributed) return refuse(2, contributed);
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
@@ -638,6 +646,38 @@ function filesUnder(directory, prefix = '') {
       ? filesUnder(join(directory, entry.name), `${prefix}${entry.name}/`)
       : [`${prefix}${entry.name}`],
   );
+}
+
+/**
+ * What is wrong with what the package contributes to the server's allow-list, or `null`: anything
+ * at all. The allow-list is the deployment's, plan decision 3 on its recommendation: an app's
+ * `actions.json` names an operation, and only a contribution the server's administrators install
+ * allows it (nuxeo-agentic-core's README). A package that contributed to it would allow its own
+ * buttons, and configuration could then widen the allow-list. Any extension whose target is the
+ * component is refused, whatever its point, enabled or not: Nuxeo registers an extension by its
+ * target, and a disabled entry still removes the deployment's. Called after `layoutContributions`,
+ * which has refused any component path that leaves `bundle/`.
+ */
+function allowListContributions(directory) {
+  const manifest = join(directory, 'bundle', 'META-INF', 'MANIFEST.MF');
+  if (!existsSync(manifest)) return null;
+  const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
+  for (const component of componentPathsOf(text)) {
+    const file = componentFileOf(resolve(join(directory, 'bundle')), component);
+    if (typeof file !== 'string' || file === '') continue;
+    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    for (const extension of xml.matchAll(new RegExp(`<extension${TAG}`, 'g'))) {
+      const { target, point } = attributesOf(extension[1]);
+      if (target?.trim() === ALLOW_LIST_COMPONENT)
+        return (
+          `${component} contributes to ${ALLOW_LIST_COMPONENT}${point ? `'s "${point}" point` : ''}, the ` +
+          "server's allow-list of the operations an app's buttons may run. The allow-list is the " +
+          "deployment's, never a package's: name the operation in actions.json, and give the server's " +
+          'administrators the contribution that allows it, as the Payers kit\'s README does.'
+        );
+    }
+  }
+  return null;
 }
 
 /**

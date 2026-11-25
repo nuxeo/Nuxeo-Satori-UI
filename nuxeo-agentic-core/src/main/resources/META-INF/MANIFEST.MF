@@ -9,4 +9,6 @@ Nuxeo-Component: OSGI-INF/login-startup-page-agentic-contrib.xml,
  OSGI-INF/agentic-notification-doc-url-contrib.xml,
  OSGI-INF/agentic-ui-config-service.xml,
  OSGI-INF/agentic-ui-config-defaults-contrib.xml,
- OSGI-INF/agentic-allowed-transitions-enricher-contrib.xml
+ OSGI-INF/agentic-allowed-transitions-enricher-contrib.xml,
+ OSGI-INF/agentic-ui-operations-service.xml,
+ OSGI-INF/agentic-ui-operations-contrib.xml

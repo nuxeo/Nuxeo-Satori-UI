@@ -325,7 +325,112 @@ describe('actions.json', () => {
     expect(show(validateActions(sound, { operations }))).toEqual([]);
   });
 
+  const withForm = (keys: Record<string, unknown> = {}): Record<string, unknown> =>
+    request({
+      enabledWhen: 'app.rules.canWrite',
+      parameters: { provider: { field: 'claim:provider' }, note: { field: 'var:note' } },
+      form: [
+        {
+          field: 'var:note',
+          widget: 'long-text',
+          parameters: { rows: 3 },
+          required: true,
+          labelKey: 'payers.request.note',
+        },
+      ],
+      ...keys,
+    });
+
+  it('passes an operation with an enabled rule and a form whose fields its parameters send', () => {
+    expect(show(validateActions(actions(withForm()), { operations }))).toEqual([]);
+    // A field written as a name alone, as a task form may.
+    expect(
+      show(
+        validateActions(
+          actions(withForm({ form: ['var:note'], parameters: { note: { field: 'var:note' } } })),
+          { operations },
+        ),
+      ),
+    ).toEqual([]);
+  });
+
   const rows: readonly Row[] = [
+    {
+      what: 'an enabled rule nobody registered',
+      input: actions(withForm({ enabledWhen: 'acme.rules.unknown' })),
+      found: ['actions[0].enabledWhen: the rule "acme.rules.unknown" is not registered [unknown]'],
+    },
+    {
+      what: 'a form that is not a list of fields',
+      input: actions(withForm({ form: {} })),
+      found: [
+        'actions[0].form: a form is a list of the fields it asks for [structure]',
+        `actions[0].parameters.note.field: "var:note" is a field of the action's form, and its form has no such field [structure]`,
+      ],
+    },
+    {
+      what: "a form field that is the record's, not a value to enter",
+      input: actions(
+        withForm({ form: ['claim:number'], parameters: { provider: { field: 'claim:provider' } } }),
+      ),
+      found: [
+        `actions[0].form[0]: an action's form asks for values: each field is "var:<name>", a letter then letters, digits or "_" [structure]`,
+      ],
+    },
+    {
+      what: 'a form field no parameter sends',
+      input: actions(withForm({ parameters: { provider: { field: 'claim:provider' } } })),
+      found: [
+        'actions[0].form[0].field: no parameter sends "var:note": give one { "field": "var:note" } [structure]',
+      ],
+    },
+    {
+      what: 'a parameter sending a form field the form does not have',
+      input: actions(
+        withForm({
+          parameters: { note: { field: 'var:note' }, urgent: { field: 'var:urgent' } },
+        }),
+      ),
+      found: [
+        `actions[0].parameters.urgent.field: "var:urgent" is a field of the action's form, and its form has no such field [structure]`,
+      ],
+    },
+    {
+      what: 'a form field the form engine refuses',
+      input: actions(withForm({ form: [{ field: 'var:note', widget: 'signature' }] })),
+      found: ['actions[0].form[0].widget: the widget "signature" is not registered [unknown]'],
+    },
+    {
+      what: 'a form on a bulk action',
+      input: actions(
+        withForm({ on: ['row', 'bulk'], parameters: { note: 'fixed' }, form: ['var:note'] }),
+      ),
+      found: [
+        'actions[0].form: a bulk action runs on many records at once, so it has no form [structure]',
+        'actions[0].form[0].field: no parameter sends "var:note": give one { "field": "var:note" } [structure]',
+      ],
+    },
+    {
+      what: 'a form on a lifecycle button',
+      input: actions(approve({ form: ['var:note'] })),
+      found: [
+        'actions[0].form: a form gives values to an operation [structure]',
+        'actions[0].form[0].field: no parameter sends "var:note": give one { "field": "var:note" } [structure]',
+      ],
+    },
+    {
+      what: 'a parameter worked out by a computation, which the server does not run',
+      input: actions(
+        request({
+          parameters: {
+            reference: { computed: { type: 'core.template', parameters: ['{claim:number}'] } },
+          },
+        }),
+      ),
+      found: [
+        'actions[0].parameters.reference: a computation is worked out in the browser, which the server does not trust: a parameter is a literal, a field of the record or a field of the form [structure]',
+      ],
+    },
     {
       what: 'not an object',
       input: null,
@@ -786,6 +891,8 @@ describe('actions.json, further', () => {
       found: ['actions[0].visibleWhen: the rule "app.rules.nope" is not registered [unknown]'],
     },
     {
+      // Before the server built the parameters, a template here was refused for its var: alone;
+      // every computed parameter is refused now, the server running no computation.
       what: "a task's variable in a template parameter",
       input: {
         version: 2,
@@ -801,7 +908,7 @@ describe('actions.json, further', () => {
         ],
       },
       found: [
-        'actions[0].parameters.note.computed.parameters[0]: "var:" names a task variable, which only a task form has [structure]',
+        'actions[0].parameters.note: a computation is worked out in the browser, which the server does not trust: a parameter is a literal, a field of the record or a field of the form [structure]',
       ],
     },
   ];

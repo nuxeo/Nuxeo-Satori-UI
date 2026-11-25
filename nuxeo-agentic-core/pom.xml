@@ -12,7 +12,7 @@
 
   <artifactId>nuxeo-agentic-core</artifactId>
   <name>Nuxeo Agentic Core</name>
-  <description>OSGi bundle: startup page, auth config, notification URL codec, the configuration service that serves packaged UI configuration for Agentic UI, and the allowedTransitions document enricher</description>
+  <description>OSGi bundle: startup page, auth config, notification URL codec, the configuration service that serves packaged UI configuration for Agentic UI, the allowedTransitions document enricher, and the deployment's allow-list of the operations an app's buttons may run, with AgenticUi.RunAction, which runs them</description>
 
   <dependencies>
     <dependency>
@@ -37,6 +37,15 @@
     <dependency>
       <groupId>org.nuxeo.ecm.core</groupId>
       <artifactId>nuxeo-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <!--
+      AgenticUi.RunAction, the operation an app's buttons run through, and the AutomationService it
+      runs an allow-listed operation with.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.automation</groupId>
+      <artifactId>nuxeo-automation-core</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>

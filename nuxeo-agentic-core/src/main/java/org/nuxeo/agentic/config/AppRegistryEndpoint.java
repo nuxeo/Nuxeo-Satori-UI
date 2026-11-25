@@ -1,12 +1,16 @@
 package org.nuxeo.agentic.config;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -33,8 +37,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * body and ETag are fixed when this is built, as {@link ConfigEndpoint}'s are. Every answer this
  * gives, a 404 included, is {@code private}: a shared cache must not hand one person's list to
  * another. The servlet's own 401 is {@code no-store}, and its 405 carries no body.
+ *
+ * <b>An app's {@code actions.json}</b> is served with only the actions this server's allow-list lets
+ * run ({@link AppActions}), and what it leaves out is in the listing's diagnostics, as the app's.
+ * The actions it serves that run an operation are the only ones {@code AgenticUi.RunAction} runs
+ * ({@link #action}), each checked again when it does ({@link AppActionRunner}). So this is built
+ * for one snapshot and one allow-list, and {@link #current} builds another when either changes.
  */
 final class AppRegistryEndpoint {
+
+    private static final Logger log = LogManager.getLogger(AppRegistryEndpoint.class);
 
     static final String APPS_PATH = "/apps.json";
 
@@ -65,23 +77,92 @@ final class AppRegistryEndpoint {
 
     private final ConfigSnapshot snapshot;
 
+    private final AllowList allowList;
+
     /** Each app's files by path, {@code app.json} first, rendered once. */
     private final Map<String, Map<String, Resource>> files = new HashMap<>();
 
+    /** Each app's served actions that run an operation, by app, then by action id. */
+    private final Map<String, Map<String, RunnableAction>> runnable = new HashMap<>();
+
+    /** The snapshot's diagnostics, then what serving each app's {@code actions.json} left out. */
+    private final List<Diagnostic> diagnostics;
+
+    /** The last one {@link #current} built, which the servlet and the run share. */
+    private static volatile AppRegistryEndpoint current;
+
+    /** With no allow-list: every action that runs an operation is left out. */
     AppRegistryEndpoint(ConfigSnapshot snapshot) {
+        this(snapshot, AllowList.EMPTY);
+    }
+
+    AppRegistryEndpoint(ConfigSnapshot snapshot, AllowList allowList) {
         this.snapshot = snapshot;
+        this.allowList = allowList;
+        List<Diagnostic> all = new ArrayList<>(snapshot.diagnostics());
         for (ConfigSnapshot.App app : snapshot.apps()) {
             Map<String, Resource> byPath = new LinkedHashMap<>();
             byPath.put(APP_FILE, resource(app.appBytes()));
             for (ConfigSnapshot.AppFile file : app.files().values()) {
-                byPath.put(file.path(), resource(file.bytes()));
+                if (AppActions.FILE.equals(file.path())) {
+                    AppActions.Served served = AppActions.serve(app.id(), new Provenance(
+                            app.provenance().component(), app.provenance().bundle(), file.source()), file.bytes(),
+                            allowList);
+                    byPath.put(file.path(), resource(served.bytes()));
+                    runnable.put(app.id(), served.runnable());
+                    all.addAll(served.diagnostics());
+                } else {
+                    byPath.put(file.path(), resource(file.bytes()));
+                }
             }
             files.put(app.id(), byPath);
         }
+        this.diagnostics = List.copyOf(all);
+    }
+
+    /**
+     * The registry for this snapshot and allow-list: the one last built when neither has changed
+     * since, so that file bodies and ETags change only when one does; otherwise a new one, whose
+     * actions' diagnostics are logged once, as the snapshot's are when it is built.
+     */
+    static AppRegistryEndpoint current(ConfigSnapshot snapshot, AllowList allowList) {
+        AppRegistryEndpoint built = current;
+        if (built == null || built.snapshot != snapshot || built.allowList != allowList) {
+            synchronized (AppRegistryEndpoint.class) {
+                built = current;
+                if (built == null || built.snapshot != snapshot || built.allowList != allowList) {
+                    built = new AppRegistryEndpoint(snapshot, allowList);
+                    for (Diagnostic diagnostic : built.diagnostics.subList(snapshot.diagnostics().size(),
+                            built.diagnostics.size())) {
+                        log.warn("Agentic UI app registry: {}", diagnostic.message());
+                    }
+                    current = built;
+                }
+            }
+        }
+        return built;
     }
 
     ConfigSnapshot snapshot() {
         return snapshot;
+    }
+
+    AllowList allowList() {
+        return allowList;
+    }
+
+    /**
+     * An action of an app that runs an operation, as this registry serves it, or {@code null}: when
+     * there is no such app, the person may not see it, its {@code actions.json} does not serve the
+     * action, or the action runs no operation. Each is the same answer, as a 404 is for a file.
+     */
+    RunnableAction action(String app, String id, Viewer viewer) {
+        ConfigSnapshot.App found = app == null ? null : find(app);
+        if (found == null || !mayView(found, viewer)) {
+            return null;
+        }
+        Map<String, RunnableAction> actions = runnable.get(app);
+        return actions == null || id == null ? null : actions.get(id);
     }
 
     static boolean mayView(ConfigSnapshot.App app, Viewer viewer) {
@@ -152,7 +233,7 @@ final class AppRegistryEndpoint {
             files.get(app.id()).keySet().forEach(paths::add);
             entry.set("content", app.app());
         }
-        listing.set("diagnostics", diagnostics(snapshot.diagnostics(), inForce, viewer.administrator()));
+        listing.set("diagnostics", diagnostics(diagnostics, inForce, viewer.administrator()));
         return listing;
     }
 

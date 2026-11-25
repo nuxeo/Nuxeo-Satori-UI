@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.ui.operations" version="1.0">
+
+  <documentation>
+    The Automation operations and chains that a business app's buttons may run on this server: the
+    deployment's allow-list (plan decision 3, on its recommendation).
+
+    An app's actions.json names an operation for each button that runs one. The app registry, at
+    /nuxeo/agentic-ui-apps/, serves the file with only the actions whose operation is on this
+    allow-list, each with only the parameters it gives the operation, and says in its diagnostics
+    what it left out. The operation AgenticUi.RunAction runs such an action on one record, and
+    checks the allow-list again first, with the user's permission on the record.
+
+    The allow-list is the deployment's, not an app's: a file the server's administrators put in
+    nxserver/config/, for one. A configuration package built by the package pipeline is refused if
+    it contributes here. With no contribution, nothing is allowed.
+
+    Not the only control, and not a control over Nuxeo's own Automation endpoint, which still runs
+    any operation a user may run, through /nuxeo/api/v1/automation/. A deployment that wants an
+    allow-listed chain run only through a button closes that endpoint to it with a REST binding
+    (org.nuxeo.ecm.automation.server.AutomationServer, point bindings).
+  </documentation>
+
+  <implementation class="org.nuxeo.agentic.config.OperationAllowListComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.config.OperationAllowListService" />
+  </service>
+
+  <extension-point name="allowList">
+    <documentation>
+      One operation or chain per element, by its id.
+
+      <code>
+        <operation id="Payers.RequestMedicalRecords" permission="Write">
+          <group>claims-adjusters</group>
+          <param name="urgent" type="boolean" />
+          <param name="note" type="string" maxLength="500" />
+        </operation>
+      </code>
+
+      permission is the one the user needs on the record, besides Read: Write when left out. Each
+      group, when there is one, is a group the user must be in one of. Each param is a parameter an
+      app's action may give the operation: its name, and its type, string, boolean, long or double;
+      a string is at most maxLength characters, 1000 when left out, and at most 10000. An action
+      that gives a parameter not listed here is not served, and does not run. An entry that fails a
+      check is not registered, and the log says why. A later contribution with the same id replaces
+      it whole, and enabled="false" removes it.
+    </documentation>
+    <object class="org.nuxeo.agentic.config.AllowedOperationDescriptor" />
+  </extension-point>
+
+</component>

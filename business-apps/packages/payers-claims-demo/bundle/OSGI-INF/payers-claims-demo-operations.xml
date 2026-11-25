@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!--
+  The chains behind the kit's two operation buttons (bundle/agentic-ui-config/actions.json), for
+  business apps phase 2's demo step 4: "Request medical records" runs a server chain. Fictional,
+  like the rest of the kit: each writes the request to the claim's history, and nothing leaves the
+  server.
+
+  The kit contributes the chains, never the right to run them from a button. The allow-list of the
+  operations an app's buttons may run is the deployment's (org.nuxeo.agentic.ui.operations, in
+  nuxeo-agentic-core), and the package pipeline refuses a package that contributes to it. The kit's
+  README gives the demo server's administrators that contribution, which allows Request medical
+  records and leaves Refer to special investigations out on purpose, so that the demo shows the
+  registry and the endpoint refusing it.
+
+  What the kit does contribute narrows: Nuxeo's own Automation endpoint, /nuxeo/api/v1/automation/,
+  runs any chain a user may run, allow-listed or not, so a REST binding closes it to both chains for
+  everyone but administrators. A button runs a chain through AgenticUi.RunAction, which calls
+  Automation inside the server, where no REST binding applies.
+
+  Each chain's input is the claim, as AgenticUi.RunAction gives it: the record as the repository
+  stores it. Its parameters are chain parameters, ChainParameters in an expression, and only those
+  the deployment's allow-list gives the chain; each is data, never evaluated.
+-->
+<component name="nuxeo.config.payers-claims-demo.operations" version="1.0">
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="chains">
+    <!-- Request medical records from the claim's provider: in the demo, the request in the
+         claim's history, with whether it is urgent and the adjuster's note. -->
+    <chain id="Payers.RequestMedicalRecords">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Medical records requested</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{CurrentUser.name} asked the provider for the claim's medical records@{ChainParameters["urgent"] == true ? ", urgently" : ""}: @{ChainParameters["note"]}</param>
+      </operation>
+    </chain>
+
+    <!-- Refer the claim to special investigations: in the demo, the referral in its history. Not on
+         the demo server's allow-list, so no button runs it there. -->
+    <chain id="Payers.ReferToInvestigations">
+      <operation id="Context.FetchDocument" />
+      <operation id="Audit.LogEvent">
+        <param type="string" name="event">Referred to special investigations</param>
+        <param type="string" name="category">Claim review</param>
+        <param type="string" name="comment">expr:@{CurrentUser.name} referred the claim to special investigations.</param>
+      </operation>
+    </chain>
+  </extension>
+
+  <!-- Nuxeo's own Automation endpoint runs these chains for administrators only. -->
+  <extension target="org.nuxeo.ecm.automation.server.AutomationServer" point="bindings">
+    <binding name="Payers.RequestMedicalRecords" chain="true">
+      <administrator>true</administrator>
+    </binding>
+    <binding name="Payers.ReferToInvestigations" chain="true">
+      <administrator>true</administrator>
+    </binding>
+  </extension>
+</component>
