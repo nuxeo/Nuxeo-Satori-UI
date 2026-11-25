@@ -517,8 +517,8 @@ and the platform as it was with the platform as it is, and refuses an upgrade th
 such a configuration relies on away, unless a migration note says what to do instead.
 
 [`scripts/app-upgrade-check.mjs`](../../scripts/app-upgrade-check.mjs) is the check. The XML is
-read by `verify-package-zip.mjs`'s helpers, as the rest of the pipeline reads it, and nothing is read
-through a symbolic link.
+read by `verify-package-zip.mjs`'s helpers, as the rest of the pipeline reads it, and nothing is
+read through a symbolic link.
 
 ### What is refused
 
@@ -593,7 +593,8 @@ cannot load stops the run, exit 2.
 ### Migration notes
 
 A kit's notes are its `upgrade-notes.json`, beside `package/`, outside the zip, so a note changes no
-version. The platform's are [`docs/business-apps/platform-upgrade-notes.json`](platform-upgrade-notes.json).
+version. The platform's are
+[`docs/business-apps/platform-upgrade-notes.json`](platform-upgrade-notes.json).
 
 ```json
 {
@@ -635,9 +636,10 @@ npm run app-upgrade -- business-apps/packages/payers-claims-demo --since 76fd666
 
 `--since <ref>` compares every kit under `business-apps/packages/`, or those named, and the
 platform, as the working tree has them, with what they were at the ref: `git archive` writes the
-ref's copies to a scratch folder, so `git` and `tar` are needed beside Node. A kit the ref did not
-have is new, held to nothing of its own; one the tree no longer has is said, and with `--json` is
-listed as `gone`. A kit whose folder was renamed is held to the package of the same name at the
+ref's copies to a scratch folder, so `git` and `tar` are needed beside Node: tried on macOS, run
+by the workflow on Linux, and not tried on Windows. `--previous` needs neither. A kit the ref did
+not have is new, held to nothing of its own; one the tree no longer has is said, and with `--json`
+is listed as `gone`. A kit whose folder was renamed is held to the package of the same name at the
 ref, which `--place-at <ref> <package>` prints. `--previous <package>` compares one kit with an
 export of it, and `--previous-platform <folder>` the platform with one `--export <ref> <folder>`
 wrote. Exit 0 keeps every configuration, 1 does not, 2 is a command it could not run.
