@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 /**
  * The queue designer with the queue page itself, not a stand-in: the real `LayoutDesignerService`,
  * `QueueService` and `lib-queue-page`, the server answered by `HttpTestingController`. What it
@@ -6,7 +7,6 @@
  */
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { provideRouter } from '@angular/router';
@@ -24,6 +24,24 @@ import { NUXEO_API_ORIGIN, type NuxeoDocument } from '@nuxeo/satori-platform/nux
 import { providePackagedRowActions } from '@nuxeo/satori-platform/ui';
 
 import { QueueDesignerPageComponent } from './queue-designer-page';
+import { LayerPanelComponent } from '../layer/layer-panel';
+
+/**
+ * The deployment layer's panel, as the page hands it the file open: what it is given is what is
+ * checked here. The panel itself, and every request it makes, is held by `layer-panel.spec.ts`.
+ */
+@Component({
+  selector: 'lib-layer-panel',
+  standalone: true,
+  template: '<p class="stub-layer-panel">{{ path() }}</p>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class StubLayerPanelComponent {
+  readonly path = input<string | null>(null);
+  readonly file = input<unknown>(null);
+  readonly saveable = input(false);
+  readonly openVersion = output<unknown>();
+}
 
 const CONFIG = '/nuxeo/agentic-ui-config';
 const EXECUTE = '/nuxeo/api/v1/search/pp/contracts_up_for_renewal/execute';
@@ -88,6 +106,10 @@ describe('QueueDesignerPageComponent, with the queue page', () => {
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-24T12:00:00Z') },
       ],
+    });
+    TestBed.overrideComponent(QueueDesignerPageComponent, {
+      remove: { imports: [LayerPanelComponent] },
+      add: { imports: [StubLayerPanelComponent] },
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(QueueDesignerPageComponent);

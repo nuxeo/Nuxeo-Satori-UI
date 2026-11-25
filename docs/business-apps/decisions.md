@@ -112,6 +112,26 @@ way.
     the tenant and the listing filters by it too; the contribution and the client do not change.
   - **Parity decision P4,** one global configuration, still conflicts with E as recommended:
     the registry serves a configuration per app and group.
+- **B and E, the designer's deployment layer (25 November 2026).** Built against the
+  recommendations: an app's deployment layer, a customer's own versions of its layouts and queues
+  made in the designer and approved by a second administrator, is in `nuxeo-agentic-core`, beside
+  the registry it overlays, because the customer's overlay is the configuration and app registry's,
+  a foundation module, so a runtime essential (B); and the registry serves it after sign-in, to the
+  app's groups (E) ([app-definition-v2.md](app-definition-v2.md), section 10). It is behind a
+  switch, off by default (decision J), loads no code (decision 5), and cannot hold `actions.json`,
+  so decision 3 is not touched. What changes if either goes another way:
+  - **B, the registry in an add-on of its own or a separate service:** the layer's classes
+    (`LayerService`, `LayerEndpoint`, `LayerStore`, `RepositoryLayerStore`,
+    `NashornDeploymentValidator`, `ServerContentModel`) and its script `agentic-ui-validator/` move
+    with the registry. A separate service needs the server's content model and a repository of its
+    own to keep the layer in, and the validator then runs where Node does, as the same script.
+  - **B, one large add-on:** the classes move into it as they are.
+  - **E, app definitions served before sign-in, to everyone:** a live layer would be served by the
+    configuration servlet, to everyone, one per server rather than one per app, and the record
+    page would read it there. Drafts would still never be served, and the write addresses would
+    keep their authentication.
+  - **Parity decision P4,** one global configuration, still conflicts with E as recommended: the
+    layer is one per app.
 - **B, the assets module's server add-on (24 November 2026).** Built against the recommendation:
   rights on assets are `nuxeo-agentic-assets`, a Maven module beside `nuxeo-agentic-core` with a
   Marketplace package of its own, which the brand assets kit depends on; nothing of it went into

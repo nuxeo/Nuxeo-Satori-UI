@@ -42,7 +42,7 @@
             <id>npm build</id>
             <phase>compile</phase>
             <configuration>
-              <arguments>run build -- --project=nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/</arguments>
+              <arguments>run build -- nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/</arguments>
             </configuration>
             <goals><goal>npm</goal></goals>
           </execution>

@@ -89,6 +89,31 @@
       <scope>provided</scope>
     </dependency>
 
+    <!--
+      The deployment layer. Its validator is the app definition's own, run in the script engine
+      Nuxeo LTS 2025 ships in nxserver/lib, nashorn-core 15.7, as nuxeo-agentic-assets reads it there:
+      provided, and in the tests the same engine, so DeploymentValidatorParityTest runs the script
+      the server runs. TransactionHelper is nuxeo-runtime-jtajca's, and ClusterService, the lock
+      that holds one app's changes to one server at a time, nuxeo-runtime-cluster's; both are in
+      the server's nxserver/bundles.
+    -->
+    <dependency>
+      <groupId>org.openjdk.nashorn</groupId>
+      <artifactId>nashorn-core</artifactId>
+      <version>15.7</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-jtajca</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.nuxeo.runtime</groupId>
+      <artifactId>nuxeo-runtime-cluster</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
