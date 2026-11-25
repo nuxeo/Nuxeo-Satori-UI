@@ -76,7 +76,12 @@ describe('Search drawer route and session integration', () => {
     })
       // Keep the actual routed component's constructor/effects and URL subscriptions; its
       // result-card presentation is outside this routing regression.
-      .overrideComponent(SearchComponent, { set: { imports: [], template: '' } })
+      .overrideComponent(SearchComponent, {
+        set: {
+          imports: [],
+          template: '<button type="button" (click)="resetSearch()">Reset</button>',
+        },
+      })
       .compileComponents();
     router = TestBed.inject(Router);
     session = TestBed.inject(SearchSession);
@@ -85,6 +90,50 @@ describe('Search drawer route and session integration', () => {
     drawer.detectChanges();
     await drawer.whenStable();
   });
+
+  it.each([
+    { filesOnly: true, pageNumber: 1 },
+    { filesOnly: true, pageNumber: 3 },
+    { filesOnly: false, pageNumber: 1 },
+    { filesOnly: false, pageNumber: 3 },
+  ])(
+    'clears every quick filter on Reset with Files=$filesOnly from page $pageNumber',
+    async ({ filesOnly, pageNumber }) => {
+      session.setFilters({ ...session.filters(), fulltext: 'applied' });
+      const quickFilters = filesOnly
+        ? 'noFolder,mostRecent,onlyValidated'
+        : 'mostRecent,onlyValidated';
+      const page = await harness.navigateByUrl(
+        `/search?quickFilters=${quickFilters}&page=${pageNumber}&pageSize=25&sortBy=dc:title&sortOrder=asc`,
+        SearchComponent,
+      );
+      await drawer.whenStable();
+      expect(session.pageIndex()).toBe(pageNumber - 1);
+      const resetButton = harness.routeNativeElement?.querySelector<HTMLButtonElement>('button');
+      expect(resetButton).not.toBeNull();
+      resetButton?.click();
+      await drawer.whenStable();
+      harness.detectChanges();
+
+      const query = router.parseUrl(router.url).queryParams;
+      expect(query['quickFilters']).toBeUndefined();
+      expect(query['page']).toBeUndefined();
+      expect(query['pageSize']).toBe('25');
+      expect(query['sortBy']).toBe('dc:title');
+      expect(query['sortOrder']).toBe('asc');
+      expect(session.filters().fulltext).toBe('');
+      expect(session.filters().filesOnly).toBeFalsy();
+      expect(session.request().quickFilters).toBeUndefined();
+      expect(session.pageIndex()).toBe(0);
+      expect(session.dirty()).toBe(false);
+
+      page.goToPage(1);
+      await drawer.whenStable();
+      expect(router.parseUrl(router.url).queryParams['quickFilters']).toBeUndefined();
+      expect(session.request().quickFilters).toBeUndefined();
+      expect(session.pageIndex()).toBe(1);
+    },
+  );
 
   it.each([
     { previousFiles: true, savedFiles: false },

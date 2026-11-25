@@ -22,6 +22,7 @@ import { NxsPagerComponent } from './pager.component';
       [totalSize]="totalSize()"
       [hasNextPage]="hasNextPage()"
       [disabled]="disabled()"
+      [preserveFocus]="preserveFocus()"
       [label]="label()"
       [pageSizeOptions]="sizes()"
       [showEdges]="edges()"
@@ -37,6 +38,7 @@ class HostComponent {
   readonly totalSize = signal(-2);
   readonly hasNextPage = signal(true);
   readonly disabled = signal(false);
+  readonly preserveFocus = signal(false);
   readonly label = signal('');
   readonly asked: number[] = [];
   readonly sizes = signal<number[]>([]);
@@ -109,6 +111,36 @@ describe('NxsPagerComponent', () => {
   it('shows the range without a total when the server did not count', () => {
     expect(range()).toBe('1–50');
     expect(el().querySelector('nav')?.getAttribute('aria-label')).toBe('Pages');
+  });
+
+  it('optionally keeps disabled navigation buttons focusable without emitting page changes', async () => {
+    host.preserveFocus.set(true);
+    host.edges.set(true);
+    host.sizes.set([50]);
+    host.totalSize.set(121);
+    host.pageIndex.set(1);
+    host.disabled.set(true);
+    await render();
+    const buttons = el().querySelectorAll<HTMLButtonElement>('button');
+    expect(buttons).toHaveLength(4);
+    for (const button of buttons) {
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      button.click();
+    }
+    expect(host.asked).toEqual([]);
+
+    host.disabled.set(false);
+    host.pageIndex.set(0);
+    host.totalSize.set(50);
+    host.hasNextPage.set(false);
+    await render();
+    for (const button of buttons) {
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      button.click();
+    }
+    expect(host.asked).toEqual([]);
   });
 
   it('shows "of N" only for a real total', async () => {

@@ -120,6 +120,16 @@ Suggestion reset now cancels pending timers, requests and thumbnails immediately
 the typing debounce. Search captures its return destination from completed navigation state,
 including drawer/custom-navigation entries, with Dashboard retained for an initial deep link.
 
+Further Chrome checks wait two animation frames after loading and page-boundary changes. They
+reproduced focus loss on all four pager buttons; waiting only for Angular stability missed the
+native blur. Search retains loading focus and opts into focus-preserving disabled navigation
+buttons in the shared pager. Other consumers retain the existing default behavior.
+
+The accompanying Reset concern did not reproduce: actual Angular button clicks on pages one and
+three, with Files enabled and disabled, cleared all quick filters and kept them cleared through
+subsequent paging. Those four real-router regression controls are retained; Reset production code
+was not changed based on the unconfirmed claim.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:

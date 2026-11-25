@@ -2156,6 +2156,7 @@ class NxsPagerComponent {
     readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly preserveFocus: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly label: import("@angular/core").InputSignal<string>;
     readonly pageChange: import("@angular/core").OutputEmitterRef<number>;
     protected readonly visible: import("@angular/core").Signal<boolean>;
@@ -2206,6 +2207,11 @@ class NxsPagerComponent {
     };
     "disabled": {
     "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "preserveFocus": {
+    "alias": "preserveFocus";
     "required": false;
     "isSignal": true;
     };

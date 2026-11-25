@@ -56,6 +56,8 @@ export class NxsPagerComponent {
   readonly hasNextPage = input(false, { transform: booleanAttribute });
   /** Disables both buttons while a page loads. */
   readonly disabled = input(false, { transform: booleanAttribute });
+  /** Keeps disabled navigation buttons focusable; does not prevent the pager itself being hidden. */
+  readonly preserveFocus = input(false, { transform: booleanAttribute });
   /**
    * The navigation landmark's accessible name, already translated. Blank, or only whitespace or
    * zero-width characters, names it "Pages".

@@ -34,8 +34,9 @@
         mat-icon-button
         type="button"
         [disabled]="!canPrevious()"
+        [disabledInteractive]="preserveFocus()"
         [attr.aria-label]="'satori-components.pager.first' | translate"
-        (click)="pageChange.emit(0)"
+        (click)="canPrevious() && pageChange.emit(0)"
       >
         <span aria-hidden="true">«</span>
       </button>
@@ -45,6 +46,7 @@
       type="button"
       class="nxs-pager__previous"
       [disabled]="!canPrevious()"
+      [disabledInteractive]="preserveFocus()"
       [matTooltip]="previousLabel"
       [attr.aria-label]="previousLabel"
       (click)="previous()"
@@ -56,6 +58,7 @@
       type="button"
       class="nxs-pager__next"
       [disabled]="!canNext()"
+      [disabledInteractive]="preserveFocus()"
       [matTooltip]="nextLabel"
       [attr.aria-label]="nextLabel"
       (click)="next()"
@@ -67,8 +70,9 @@
         mat-icon-button
         type="button"
         [disabled]="disabled() || pageIndex() >= lastPage()"
+        [disabledInteractive]="preserveFocus()"
         [attr.aria-label]="'satori-components.pager.last' | translate"
-        (click)="pageChange.emit(lastPage())"
+        (click)="!disabled() && pageIndex() < lastPage() && pageChange.emit(lastPage())"
       >
         <span aria-hidden="true">»</span>
       </button>

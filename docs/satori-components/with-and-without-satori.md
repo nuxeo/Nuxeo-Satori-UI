@@ -423,6 +423,12 @@ The same field and calendar button in both, holding 31 December. A typed date is
 so existing consumers retain their previous controls. Search retains its 40-item default
 and additionally offers 25, 50 and 100 items per page.
 
+`preserveFocus` optionally keeps disabled navigation buttons focusable using Material's
+`disabledInteractive` behavior and `aria-disabled`; unavailable actions still emit nothing.
+Search enables it so reaching the first or last page preserves keyboard focus. It does not
+keep a hidden pager mounted or change the page-size select's disabled behavior. The default
+remains `false`, preserving native disabled buttons for existing consumers.
+
 | Field           | Value                            |
 | --------------- | -------------------------------- |
 | Component       | `NxsPagerComponent`              |
