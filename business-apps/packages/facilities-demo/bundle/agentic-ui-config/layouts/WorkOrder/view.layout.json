@@ -1,0 +1,85 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "overdue",
+      "tone": "warning",
+      "labelKey": "facilities.banner.overdue",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "wo:status" }, "New", "Assigned"]
+          },
+          { "type": "app.rules.datePassed", "parameters": [{ "field": "wo:due" }] }
+        ]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "workorder",
+      "labelKey": "facilities.card.workOrder.workorder",
+      "fields": [
+        "wo:number",
+        { "field": "dc:title", "labelKey": "facilities.field.workOrderTitle" },
+        {
+          "field": "wo:building",
+          "widget": "document-link",
+          "parameters": { "types": ["Building"] }
+        },
+        "wo:category",
+        {
+          "field": "wo:priority",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": { "Low": "neutral", "Normal": "info", "High": "warning", "Urgent": "negative" }
+          }
+        },
+        {
+          "field": "wo:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "New": "info",
+              "Assigned": "warning",
+              "Completed": "positive",
+              "Cancelled": "neutral"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "schedule",
+      "labelKey": "facilities.card.workOrder.schedule",
+      "fields": [
+        { "field": "wo:assignee", "widget": "user" },
+        { "field": "wo:due", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "wo:estimate", "widget": "currency", "parameters": { "currency": "USD" } }
+      ]
+    },
+    {
+      "id": "resolution",
+      "labelKey": "facilities.card.workOrder.resolution",
+      "span": 2,
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "wo:status" }, "Completed"]
+      },
+      "fields": [
+        { "field": "wo:completed", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "wo:resolution", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "history",
+      "labelKey": "facilities.card.workOrder.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

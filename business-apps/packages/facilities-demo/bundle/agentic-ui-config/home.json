@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/home.schema.json",
+  "version": 2,
+  "labelKey": "facilities.home.title",
+  "cards": [
+    {
+      "id": "open",
+      "labelKey": "facilities.home.open",
+      "kpi": { "pageProvider": "facilities_open_work_orders", "aggregate": "wo_priority_agg" },
+      "queue": "open-work-orders"
+    },
+    {
+      "id": "urgent",
+      "labelKey": "facilities.home.urgent",
+      "kpi": {
+        "pageProvider": "facilities_open_work_orders",
+        "aggregate": "wo_priority_agg",
+        "bucket": "Urgent"
+      },
+      "queue": "open-work-orders",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["facilities-technicians"] }
+    },
+    {
+      "id": "by-category",
+      "labelKey": "facilities.home.byCategory",
+      "kpi": { "pageProvider": "facilities_open_work_orders", "aggregate": "wo_category_agg" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["facilities-coordinators"] }
+    }
+  ]
+}

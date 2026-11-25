@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
+Bundle-Name: facilities-demo
+Bundle-SymbolicName: nuxeo.config.facilities-demo;singleton:=true
+Bundle-Version: 0.1.0
+Nuxeo-Component: OSGI-INF/facilities-demo-model.xml,OSGI-INF/facilities-demo-config.xml
