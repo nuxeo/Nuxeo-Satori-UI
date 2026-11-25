@@ -203,7 +203,11 @@ function run(args, cwd = REPO) {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
-  return { status: result.status, output: `${result.stdout}\n${result.stderr}` };
+  return {
+    status: result.status,
+    output: `${result.stdout}\n${result.stderr}`,
+    stdout: result.stdout,
+  };
 }
 
 /**
@@ -268,20 +272,21 @@ expectUpgrade(
     ],
   },
 );
+/** The menu without its entry `id`. */
+const dropEntry = (id) => (directory) =>
+  jsonEdit(
+    directory,
+    NAVIGATION,
+    (menu) => (menu.entries = menu.entries.filter((entry) => entry.id !== id)),
+  );
 expectUpgrade(
   'a menu entry removed at a patch version, which the version rules pass',
-  {
-    to: PATCH,
-    after: (directory) =>
-      jsonEdit(
-        directory,
-        NAVIGATION,
-        (menu) => (menu.entries = menu.entries.filter((entry) => entry.id !== 'search')),
-      ),
-  },
+  // `mine` opens the queue my-claims, which stays: the navbar slot registers it as appMenu.mine.
+  { to: PATCH, after: dropEntry('mine') },
   {
     refused: [
-      'kit, menu-entry search:',
+      'kit, menu-entry mine: The menu entry mine is removed',
+      'overrides appMenu.mine',
       `kit, version ${PATCH}: The upgrade needs more of the version than it was given`,
       `and ${PATCH} raises the patch`,
     ],
@@ -387,26 +392,77 @@ expectUpgrade(
   },
 );
 expectUpgrade(
-  'a page provider renamed',
+  'a page provider the kit no longer names, renamed',
   {
     to: MINOR,
-    after: (directory) => edit(directory, MODEL, 'name="member_claims"', 'name="member_claims_v2"'),
+    before: (directory) =>
+      edit(
+        directory,
+        MODEL,
+        '<coreQueryPageProvider name="member_claims">',
+        '<coreQueryPageProvider name="payers_legacy"><pattern>SELECT * FROM Claim</pattern></coreQueryPageProvider>\n    <coreQueryPageProvider name="member_claims">',
+      ),
+    after: (directory) =>
+      edit(
+        directory,
+        MODEL,
+        '<coreQueryPageProvider name="member_claims">',
+        '<coreQueryPageProvider name="payers_legacy_v2"><pattern>SELECT * FROM Claim</pattern></coreQueryPageProvider>\n    <coreQueryPageProvider name="member_claims">',
+      ),
   },
   {
     refused: [
-      'kit, page-provider member_claims: The page provider member_claims is gone',
-      'If it was renamed, it may be page-provider member_claims_v2.',
+      'kit, page-provider payers_legacy: The page provider payers_legacy is gone',
+      'If it was renamed, it may be page-provider payers_legacy_v2.',
     ],
   },
 );
 expectUpgrade(
-  'a document type renamed',
+  'a page provider gone while a queue still names it, which a note does not mend',
+  {
+    to: MINOR,
+    after: (directory) => {
+      edit(directory, MODEL, 'name="payers_pending_claims"', 'name="payers_pending_claims_v2"');
+      notes(directory, [
+        { version: MINOR, item: 'page-provider payers_pending_claims', note: 'Renamed.' },
+      ]);
+    },
+  },
+  {
+    refused: [
+      'kit, page-provider payers_pending_claims: The page provider payers_pending_claims is gone from the package',
+      `${ROOT}/queues/pending-determination.json`,
+      'a note does not mend it',
+    ],
+  },
+);
+expectUpgrade(
+  'a document type no layout is for, removed',
+  {
+    to: MINOR,
+    before: (directory) =>
+      edit(
+        directory,
+        MODEL,
+        '<doctype name="Provider"',
+        '<doctype name="LegacyThing" extends="Document" />\n    <doctype name="Provider"',
+      ),
+  },
+  { refused: ['kit, type LegacyThing: The document type LegacyThing is gone'] },
+);
+expectUpgrade(
+  'a document type renamed while the kit contributes a layout for it',
   {
     to: MINOR,
     after: (directory) =>
       edit(directory, MODEL, '<doctype name="Provider"', '<doctype name="HealthProvider"'),
   },
-  { refused: ['kit, type Provider: The document type Provider is gone'] },
+  {
+    refused: [
+      'kit, type Provider: The document type Provider is gone from the package',
+      'still contributes a layout for it',
+    ],
+  },
 );
 expectUpgrade(
   'a property removed from the schema, which nothing names any more',
@@ -489,6 +545,31 @@ expectUpgrade(
   },
 );
 expectUpgrade(
+  "a page provider moved to another of the kit's components",
+  {
+    to: MINOR,
+    after: (directory) => {
+      const model = join(directory, ...MODEL.split('/'));
+      const text = readFileSync(model, 'utf8');
+      const provider =
+        /<coreQueryPageProvider name="member_claims">[\s\S]*?<\/coreQueryPageProvider>/.exec(text);
+      if (!provider) throw new Error('the control cannot find member_claims in the model');
+      writeFileSync(model, text.replace(provider[0], ''));
+      edit(
+        directory,
+        CONFIG,
+        '</component>',
+        `  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">\n    ${provider[0]}\n  </extension>\n</component>`,
+      );
+    },
+  },
+  {
+    refused: [
+      'kit, contributor page-provider member_claims: The page provider member_claims was contributed by nuxeo.config.payers-claims-demo.model and is now by nuxeo.config.payers-claims-demo',
+    ],
+  },
+);
+expectUpgrade(
   'a contribution newly disabled',
   {
     to: MINOR,
@@ -566,6 +647,23 @@ expectUpgrade(
   { refused: ['kit, queue pending-determination:', 'Its migration note goes in'] },
 );
 expectUpgrade(
+  'a note at the version held to, which the upgrade from it does not cross',
+  {
+    to: MINOR,
+    after: (directory) => {
+      removeQueue(directory, 'pending-determination');
+      notes(directory, [
+        {
+          version: VERSION,
+          items: ['queue pending-determination', 'menu-entry pending'],
+          note: 'Written for an earlier removal.',
+        },
+      ]);
+    },
+  },
+  { refused: ['kit, queue pending-determination:', 'Its migration note goes in'] },
+);
+expectUpgrade(
   'a note that says it is renamed to what the package does not have',
   {
     to: MINOR,
@@ -614,6 +712,17 @@ expectUpgrade(
   },
 );
 expectUpgrade(
+  'a notes file that is a folder',
+  {
+    to: MINOR,
+    after: (directory) => {
+      rmSync(join(directory, NOTES), { force: true });
+      mkdirSync(join(directory, NOTES));
+    },
+  },
+  { refused: [`payers-claims-demo/${NOTES} is not a file.`] },
+);
+expectUpgrade(
   'a note in range, at a version that does not rise as far as the removal needs',
   {
     to: PATCH,
@@ -647,6 +756,39 @@ expectUpgrade(
 // --- The kit: kept -----------------------------------------------------------------------------------
 
 expectUpgrade('unchanged', {}, { kept: ['every configuration is kept.'] });
+expectUpgrade(
+  'a menu entry for a platform page removed, which the navbar slot never registered',
+  { to: PATCH, after: dropEntry('search') },
+  { kept: ['every configuration is kept.'], never: ['menu-entry search'] },
+);
+expectUpgrade(
+  "a label key the platform's catalogue has, dropped while a layout names it, with its note",
+  {
+    to: MINOR,
+    before: (directory) =>
+      jsonEdit(
+        directory,
+        LABELS,
+        (labels) => (labels.labels['action.bulk-actions-delete'] = 'Remove'),
+      ),
+    after: (directory) => {
+      jsonEdit(
+        directory,
+        `${ROOT}/layouts/Provider/view.layout.json`,
+        (layout) => (layout.cards[0].labelKey = 'action.bulk-actions-delete'),
+      );
+      notes(directory, [
+        {
+          version: MINOR,
+          item: 'label en action.bulk-actions-delete',
+          note: "The platform's text shows.",
+        },
+      ]);
+    },
+  },
+  // Not dangling: the platform's English text shows where the package's was.
+  { kept: ['kept by the note for label en action.bulk-actions-delete'], never: ['label-key'] },
+);
 expectUpgrade(
   'a queue removed, at a minor version, with its note',
   {
@@ -780,6 +922,45 @@ expectUpgrade(
   },
 );
 expectUpgrade(
+  "a rule gone with its note, and the platform's version as it was unreadable",
+  {
+    before: namesUrgent,
+    platform: {
+      before: (root) => {
+        registersUrgent(root);
+        jsonEdit(root, 'libs/platform/package.json', (manifest) => delete manifest.version);
+      },
+      after: (root) => {
+        write(root, PLATFORM_NOTES, {
+          version: 1,
+          notes: [
+            {
+              version: PLATFORM_MINOR,
+              item: 'id app.rules.isUrgent',
+              note: 'Use app.rules.fieldIn.',
+            },
+          ],
+        });
+        jsonEdit(
+          root,
+          'libs/platform/package.json',
+          (manifest) => (manifest.version = PLATFORM_MINOR),
+        );
+      },
+    },
+  },
+  { refused: ['cannot be read from libs/platform/package.json'] },
+);
+expectUpgrade(
+  "the file the menu's prefix is read from, gone",
+  { platform: { after: (root) => rmSync(join(root, ...MENU.split('/'))) } },
+  {
+    refused: [`platform, source ${MENU}: The platform as it is has no ${MENU}`],
+    // Said by the source's finding, not as the prefix removed.
+    never: ['platform, menu-prefix'],
+  },
+);
+expectUpgrade(
   'a rule gone with its note, and the platform version not raised',
   {
     before: namesUrgent,
@@ -850,6 +1031,41 @@ expectUpgrade(
     rmSync(scratch, { recursive: true, force: true });
   }
 }
+{
+  // The platform's notes, reached through a linked folder, are not read: the run stops, exit 2.
+  negative++;
+  const scratch = mkdtempSync(join(tmpdir(), 'app-upgrade-check-'));
+  try {
+    const root = platformWith(scratch, 'platform-now');
+    const elsewhere = join(scratch, 'elsewhere');
+    cpSync(join(root, 'docs', 'business-apps'), elsewhere, { recursive: true });
+    rmSync(join(root, 'docs', 'business-apps'), { recursive: true });
+    symlinkSync(elsewhere, join(root, 'docs', 'business-apps'));
+    const { status, output } = run([DEMO, '--previous', DEMO, '--root', root]);
+    if (
+      status !== 2 ||
+      !output.includes('is reached through a symbolic link, which is not followed')
+    )
+      failures.push(`platform notes through a link exit ${status}, not 2\n${output}`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+{
+  // A registries.ts as it was that Node cannot load stops the run, exit 2, not a stack trace.
+  negative++;
+  const scratch = mkdtempSync(join(tmpdir(), 'app-upgrade-check-'));
+  try {
+    const before = platformWith(scratch, 'platform-before', (root) =>
+      write(root, REGISTRIES, 'export const PACKAGED_REGISTRIES = {;\n'),
+    );
+    const { status, output } = run([DEMO, '--previous', DEMO, '--previous-platform', before]);
+    if (status !== 2 || !output.includes('cannot be loaded, so what it registers cannot be read'))
+      failures.push(`a registries.ts that cannot load exits ${status}, not 2\n${output}`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 for (const [args, why] of [
   [[], 'no mode'],
   [[DEMO, DEMO, '--previous', DEMO], 'two packages with --previous'],
@@ -857,6 +1073,7 @@ for (const [args, why] of [
   [[DEMO, '--since', ''], 'an empty --since'],
   [[DEMO, '--previous', DEMO, '--since', 'HEAD'], 'two modes'],
   [['--export', 'HEAD'], '--export with no directory'],
+  [['--place-at', 'HEAD'], '--place-at with no package'],
   [[DEMO, '--previous', join(REPO, 'not-there')], 'a --previous that is not there'],
 ]) {
   negative++;
@@ -918,18 +1135,70 @@ for (const [args, why] of [
         `--since HEAD with a queue removed in the tree: exit ${changed.status}, not 1\n${changed.output}`,
       );
 
+    // Back to the commit, for the controls below.
+    git('checkout', '--quiet', '--', '.');
+
+    // What --export writes is every source the check reads: held to the platform it wrote, the
+    // check says of no source that the platform as it was has none.
     positive++;
     const into = join(scratch, 'export');
     const exported = run(['--export', 'HEAD', into, '--root', repository], repository);
-    for (const path of [
-      'docs/extension-reference.md',
-      'libs/shared/app-definition/src/lib/registries.ts',
-      'libs/platform/package.json',
-    ])
-      if (exported.status !== 0 || !existsSync(join(into, ...path.split('/'))))
-        failures.push(
-          `--export HEAD did not write ${path}: exit ${exported.status}\n${exported.output}`,
-        );
+    const held = run(
+      [
+        join(repository, ...KIT.split('/')),
+        '--previous',
+        DEMO,
+        '--previous-platform',
+        into,
+        '--root',
+        repository,
+      ],
+      repository,
+    );
+    if (
+      exported.status !== 0 ||
+      held.status !== 0 ||
+      held.output.includes('the platform as it was has no')
+    )
+      failures.push(
+        `--export HEAD, held to: exit ${exported.status} and ${held.status}, not 0 and 0, or a source missing\n${exported.output}\n${held.output}`,
+      );
+
+    // A kit whose folder is renamed, under the same package name, is still held to what it was.
+    negative++;
+    const moved = join(repository, 'business-apps', 'packages', 'payers-claims');
+    renameSync(join(repository, ...KIT.split('/')), moved);
+    dropEntry('mine')(moved);
+    const renamed = run(['--since', 'HEAD', '--root', repository], repository);
+    if (
+      renamed.status !== 1 ||
+      !renamed.output.includes('kit, menu-entry mine:') ||
+      renamed.output.includes('and gone now')
+    )
+      failures.push(
+        `--since HEAD with the kit's folder renamed: exit ${renamed.status}, not 1, or said gone\n${renamed.output}`,
+      );
+    positive++;
+    const placed = run(['--place-at', 'HEAD', moved, '--root', repository], repository);
+    if (placed.status !== 0 || placed.output.trim() !== KIT)
+      failures.push(
+        `--place-at HEAD names ${JSON.stringify(placed.output.trim())}, not ${KIT}\n${placed.output}`,
+      );
+
+    // A kit gone from the tree is said, and in JSON too: the output stays one JSON document.
+    positive++;
+    rmSync(moved, { recursive: true, force: true });
+    const gone = run(['--since', 'HEAD', '--root', repository, '--json'], repository);
+    let reading = null;
+    try {
+      reading = JSON.parse(gone.stdout);
+    } catch {
+      // Said below.
+    }
+    if (gone.status !== 0 || reading?.gone?.length !== 1 || !reading.gone[0].includes(KIT))
+      failures.push(
+        `--since HEAD --json with the kit gone: exit ${gone.status}, or not one JSON document naming it\n${gone.output}`,
+      );
 
     negative++;
     const unknown = run(['--since', 'no-such-ref', '--root', repository], repository);

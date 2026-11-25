@@ -1238,13 +1238,13 @@ expectVersion(
 // The upgrade (package-pipeline.md, section 10): given the package as it was, step 3 also holds
 // it to what a customer's configuration made on that version still finds. A menu entry is a
 // change to the version rules, and a patch passes them; the upgrade check asks a note and a minor.
-const dropSearchEntry = (directory) =>
+const dropMineEntry = (directory) =>
   jsonEdit(directory, NAVIGATION, (menu) => {
-    menu.entries = menu.entries.filter((entry) => entry.id !== 'search');
+    menu.entries = menu.entries.filter((entry) => entry.id !== 'mine');
   });
 expectVersion(
   'a menu entry removed at a patch version, which the version rules pass and the upgrade does not',
-  { from: VERSION, to: OTHER, after: dropSearchEntry },
+  { from: VERSION, to: OTHER, after: dropMineEntry },
   { refused: `the upgrade from ${VERSION} does not keep every customer configuration: 2 findings` },
 );
 expectVersion(
@@ -1253,17 +1253,17 @@ expectVersion(
     from: VERSION,
     to: NEXT_MINOR,
     after: (directory) => {
-      dropSearchEntry(directory);
+      dropMineEntry(directory);
       writeFileSync(
         join(directory, 'upgrade-notes.json'),
-        `${JSON.stringify({ version: 1, notes: [{ version: NEXT_MINOR, item: 'menu-entry search', note: 'Search is in the platform menu.' }] })}\n`,
+        `${JSON.stringify({ version: 1, notes: [{ version: NEXT_MINOR, item: 'menu-entry mine', note: 'The entry is gone from the menu: open the queue my-claims at its address.' }] })}\n`,
       );
     },
   },
   {
     changelog: [
       '## Upgrading',
-      `- \`menu-entry search\`, since ${NEXT_MINOR}: Search is in the platform menu.`,
+      `- \`menu-entry mine\`, since ${NEXT_MINOR}: The entry is gone from the menu: open the queue my-claims at its address.`,
     ],
   },
 );

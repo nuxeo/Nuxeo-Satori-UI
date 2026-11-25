@@ -91,7 +91,8 @@ const USAGE =
   'usage: node scripts/app-upgrade-check.mjs [<package directory>...] --since <git ref> [--root <repository>] [--json]\n' +
   '       node scripts/app-upgrade-check.mjs <package directory> --previous <package directory>' +
   ' [--previous-platform <repository>] [--root <repository>] [--json]\n' +
-  '       node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]';
+  '       node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]\n' +
+  '       node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]';
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 const KITS = 'business-apps/packages';
 const NOTES = 'upgrade-notes.json';
@@ -112,15 +113,13 @@ const PLATFORM_SOURCES = {
   menu: 'apps/nuxeo-ui/src/app/business-apps.menu.ts',
   version: 'libs/platform/package.json',
 };
-/** What `--export` writes: the sources, with the library `registries.ts` may import from. */
-const EXPORTED = [
-  PLATFORM_SOURCES.reference,
-  'libs/shared/app-definition/src/lib',
-  PLATFORM_SOURCES.components,
-  PLATFORM_SOURCES.descriptors,
-  PLATFORM_SOURCES.menu,
-  PLATFORM_SOURCES.version,
-];
+/**
+ * What `--export` writes: every source, made from the list above so that the two cannot part, with
+ * the whole library `registries.ts` sits in, which it may import from.
+ */
+const EXPORTED = Object.values(PLATFORM_SOURCES).map((path) =>
+  path === PLATFORM_SOURCES.registries ? dirname(path) : path,
+);
 /** The platform's own texts, which a label key the package drops may still have. */
 const CATALOGUE = 'apps/nuxeo-ui/public/i18n/en.json';
 
@@ -181,9 +180,10 @@ function parse(argv) {
     // An empty value is refused, not taken as no option, as app-package.mjs refuses one.
     const given = (text) => text !== undefined && text !== '' && !text.startsWith('-');
     if (arg === '--json') options.json = true;
-    else if (arg === '--export') {
-      if (!given(value) || !given(argv[index + 2]) || options.export) return null;
-      options.export = { ref: value, directory: argv[index + 2] };
+    else if (arg === '--export' || arg === '--place-at') {
+      const key = arg.slice(2);
+      if (!given(value) || !given(argv[index + 2]) || options[key]) return null;
+      options[key] = { ref: value, path: argv[index + 2] };
       index += 2;
     } else if (['--since', '--previous', '--previous-platform', '--root'].includes(arg)) {
       const key = arg.slice(2);
@@ -193,11 +193,14 @@ function parse(argv) {
     } else if (arg.startsWith('-')) return null;
     else options.packages.push(arg);
   }
-  const modes = ['export', 'since', 'previous'].filter((mode) => options[mode] !== undefined);
+  const modes = ['export', 'place-at', 'since', 'previous'].filter(
+    (mode) => options[mode] !== undefined,
+  );
   if (modes.length !== 1) return null;
   if (options.previous !== undefined && options.packages.length !== 1) return null;
   if (options['previous-platform'] !== undefined && options.previous === undefined) return null;
-  if (options.export !== undefined && (options.packages.length > 0 || options.json)) return null;
+  for (const mode of ['export', 'place-at'])
+    if (options[mode] !== undefined && (options.packages.length > 0 || options.json)) return null;
   return options;
 }
 
@@ -206,7 +209,7 @@ async function main(options) {
   if (!isDirectory(root)) throw new Usage(`--root ${root} is not a folder.`);
   if (options.export !== undefined) {
     const commit = commitOf(root, options.export.ref);
-    const into = resolve(options.export.directory);
+    const into = resolve(options.export.path);
     mkdirSync(into, { recursive: true });
     const written = extract(root, commit, EXPORTED, into);
     console.log(
@@ -214,8 +217,19 @@ async function main(options) {
     );
     return 0;
   }
+  if (options['place-at'] !== undefined) {
+    // The workflow's question: where the package was at the ref, under the same name if it moved.
+    const commit = commitOf(root, options['place-at'].ref);
+    const place = placeAt(
+      root,
+      commit,
+      readKit(directoryOf(options['place-at'].path, 'the package')),
+    );
+    if (place !== null) console.log(place);
+    return 0;
+  }
   const current = await readPlatform(root);
-  const notes = readNotes(join(root, ...PLATFORM_NOTES.split('/')), PLATFORM_KINDS, PLATFORM_NOTES);
+  const notes = readNotes(root, PLATFORM_NOTES, PLATFORM_KINDS, PLATFORM_NOTES);
   if (options.previous !== undefined) {
     const previous =
       options['previous-platform'] === undefined
@@ -237,26 +251,26 @@ async function main(options) {
     extract(root, commit, EXPORTED, scratch);
     const previous = await readPlatform(scratch);
     const results = [];
+    const held = new Set();
     for (const directory of named) {
-      const place = relative(root, directory).split(sep).join('/');
-      if (place === '' || place.startsWith('..') || isAbsolute(place))
-        throw new Usage(
-          `${directory} is not inside ${root}, so it has no place at ${options.since}.`,
-        );
       const kit = readKit(directory);
-      const before = existsAt(root, commit, `${place}/package/package.xml`)
-        ? (extract(root, commit, [place], scratch), readKit(at(place)))
-        : null;
+      const place = placeAt(root, commit, kit);
+      if (place !== null) held.add(place);
+      const before =
+        place === null ? null : (extract(root, commit, [place], scratch), readKit(at(place)));
       results.push(check(before, kit, { previous, current, notes }));
     }
-    // A kit the ref had and the tree has not is gone, not upgraded: said, not refused.
-    if (options.packages.length === 0)
-      for (const place of kitPlacesAt(root, commit))
-        if (!named.some((directory) => relative(root, directory).split(sep).join('/') === place))
-          console.log(
-            `${place}: at ${options.since}, and gone now; a package that is gone is not upgraded.`,
-          );
-    return report(results, options.json);
+    // A kit the ref had and the tree has not, under any folder, is gone, not upgraded: said.
+    const gone =
+      options.packages.length === 0
+        ? kitPlacesAt(root, commit)
+            .filter((place) => !held.has(place))
+            .map(
+              (place) =>
+                `${place}: at ${options.since}, and gone now; a package that is gone is not upgraded.`,
+            )
+        : [];
+    return report(results, options.json, gone);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -283,7 +297,7 @@ function check(before, kit, platform) {
         'from one version to the next, and a new name is a new package, compared with nothing.',
     });
   else if (before !== null) {
-    const notes = readNotes(join(kit.directory, NOTES), KIT_KINDS, `${kit.shown}/${NOTES}`);
+    const notes = readNotes(kit.directory, NOTES, KIT_KINDS, `${kit.shown}/${NOTES}`);
     const ofKit = kitFindings(before, kit, platform.current);
     settle(ofKit, notes, before.version, kit.version, surfaceOf(kit), {
       side: 'kit',
@@ -321,6 +335,15 @@ function check(before, kit, platform) {
     );
     const breaking = ofPlatform.filter((finding) => finding.kind === 'removed');
     const [was, is] = [platform.previous.version, platform.current.version];
+    if (breaking.length > 0 && (was === null || is === null))
+      findings.push({
+        side: 'platform',
+        item: `version ${is ?? 'unknown'}`,
+        kind: 'version',
+        what:
+          `The platform takes away what ${kit.name} named, and its version as it ${was === null ? 'was' : 'is'} ` +
+          'cannot be read from libs/platform/package.json, so the version that needs cannot be held to.',
+      });
     if (breaking.length > 0 && was !== null && is !== null) {
       const judged = judgeVersion(
         was,
@@ -377,7 +400,7 @@ function settle(found, reading, from, to, surface, { side, file, findings, cover
         side,
         ...finding,
         what:
-          `${finding.what} Its migration note goes in ${file}: { "version": "${to ?? '<version>'}", ` +
+          `${finding.what} Its migration note goes in ${file}: { "version": "${to === null || to === from ? '<the version that ships it>' : to}", ` +
           `"item": "${finding.item}", "note": "<what a customer does>" }, with "renamedTo" for a rename.`,
       });
       continue;
@@ -459,12 +482,29 @@ function kitFindings(before, kit, platform) {
     });
   }
 
+  // A page provider the kit's queues and home read, and a document type its layouts are for.
+  for (const [item, files] of namedByTheKit(kit)) {
+    if (!was.has(item) || is.has(item)) continue;
+    dangling.add(item);
+    const [kind, id] = split(item);
+    found.push({
+      item,
+      kind: 'dangling',
+      what:
+        (kind === 'type'
+          ? `The document type ${id} is gone from the package, and ${list(files)} still contributes a layout for it.`
+          : `The page provider ${id} is gone from the package, and ${list(files)} still names it, so it shows no records.`) +
+        ' Put it back, or stop naming it: a note does not mend it.',
+    });
+  }
+
   // Removed or renamed: what the package had that a customer may override or name.
   const added = [...is.keys()].filter((item) => !was.has(item));
   for (const [item, { under }] of was) {
     if (is.has(item) || (under !== undefined && !is.has(under))) continue;
     const [kind, id] = split(item);
     if (kind === 'property' && dangling.has(id)) continue;
+    if (dangling.has(item)) continue;
     if (kind === 'label' && dangling.has(id.slice(id.indexOf(' ') + 1))) continue;
     const alike = added.filter((other) => split(other)[0] === kind);
     found.push({
@@ -728,7 +768,7 @@ function platformUses(kit, previous, withPrefix) {
         add(`id ${value}`, file);
     });
     // The app's menu entries are registered in the navbar slot under the platform's prefix.
-    if (withPrefix && place === 'navigation.json' && entryIds(content).length > 0)
+    if (withPrefix && place === 'navigation.json' && registeredEntryIds(content).length > 0)
       for (const item of previous.surface) if (item.startsWith('menu-prefix ')) add(item, file);
   }
   for (const component of kit.components) {
@@ -855,7 +895,14 @@ async function registriesAt(root) {
   const link = firstLink(library);
   if (link !== null)
     throw new Usage(`${relative(root, link)} is a symbolic link, which is not followed.`);
-  const module = await import(pathToFileURL(file).href);
+  let module;
+  try {
+    module = await import(pathToFileURL(file).href);
+  } catch (error) {
+    throw new Usage(
+      `${PLATFORM_SOURCES.registries} under ${root} cannot be loaded, so what it registers cannot be read: ${error.message}`,
+    );
+  }
   if (!isRecord(module.PACKAGED_REGISTRIES))
     throw new Usage(
       `${PLATFORM_SOURCES.registries} under ${root} exports no PACKAGED_REGISTRIES, so what it registers cannot be read.`,
@@ -1070,7 +1117,7 @@ function surfaceOf(kit) {
     else if (place === 'home.json') add('home', file);
     else if (place === 'navigation.json') {
       add('menu', file);
-      for (const id of entryIds(content)) add(`menu-entry ${id}`, file, 'menu');
+      for (const id of registeredEntryIds(content)) add(`menu-entry ${id}`, file, 'menu');
     } else if ((match = /^labels\/([^/]+)\.json$/.exec(place))) {
       add(`labels ${match[1]}`, file);
       for (const key of Object.keys(labelsIn(content)))
@@ -1089,10 +1136,19 @@ function surfaceOf(kit) {
   return items;
 }
 
-function entryIds(content) {
+/**
+ * The ids of the menu's entries that the `navbar` slot registers, as `appMenu.<id>`: those that
+ * open a queue or the home. One that opens a platform page is not added, since the platform's own
+ * entry is in the menu already (`appMenuItems` in apps/nuxeo-ui), so no manifest can override it.
+ */
+function registeredEntryIds(content) {
   const entries = isRecord(content) && Array.isArray(content['entries']) ? content['entries'] : [];
   return entries.flatMap((entry) =>
-    isRecord(entry) && typeof entry['id'] === 'string' ? [entry['id']] : [],
+    isRecord(entry) &&
+    typeof entry['id'] === 'string' &&
+    (typeof entry['queue'] === 'string' || entry['page'] === 'home')
+      ? [entry['id']]
+      : [],
   );
 }
 
@@ -1181,11 +1237,45 @@ function propertyReferences(kit, before) {
 /** Each contribution's key, with the component that contributes it. */
 function contributors(kit) {
   const by = new Map();
+  const add = (key, component) => {
+    if (!by.has(key)) by.set(key, component.name);
+  };
+  for (const component of kit.components) {
+    for (const contribution of component.contributions)
+      if (contribution.enabled) add(contribution.key, component);
+    // What the model contributes is layered the same way: a later schema, type or page provider of
+    // the same name wins, so one that moves can come before a customer's override of it.
+    for (const schema of component.schemas) add(`schema ${schema.name}`, component);
+    for (const type of component.doctypes) add(`type ${type}`, component);
+    for (const provider of component.pageProviders) add(`page-provider ${provider}`, component);
+  }
+  return by;
+}
+
+/**
+ * What the package as it is names of its own model, which must still be there: each page provider
+ * a queue or a home's figure reads, and the document type of each layout it contributes. Each with
+ * the files that name it.
+ */
+function namedByTheKit(kit) {
+  const named = new Map();
+  const add = (item, file) => {
+    if (!named.has(item)) named.set(item, new Set());
+    named.get(item).add(file);
+  };
+  for (const [place, content] of kit.files)
+    walk(content, undefined, (value, key) => {
+      if (key === 'pageProvider' && typeof value === 'string')
+        add(`page-provider ${value}`, `bundle/agentic-ui-config/${place}`);
+    });
   for (const component of kit.components)
     for (const contribution of component.contributions)
-      if (contribution.enabled && !by.has(contribution.key))
-        by.set(contribution.key, component.name);
-  return by;
+      if (contribution.enabled && contribution.element === 'layout')
+        add(
+          `type ${contribution.key.slice('layout '.length).split('/')[0]}`,
+          `bundle/${component.path}`,
+        );
+  return named;
 }
 
 function disabledKeys(kit) {
@@ -1198,6 +1288,9 @@ function disabledKeys(kit) {
 
 function describeKey(key) {
   const [kind, id] = split(key);
+  if (kind === 'schema') return `The schema ${id}`;
+  if (kind === 'type') return `The document type ${id}`;
+  if (kind === 'page-provider') return `The page provider ${id}`;
   if (kind === 'layout') {
     const [type, mode] = id.split('/');
     return `The ${mode} layout of ${type} records`;
@@ -1215,11 +1308,11 @@ function describeKey(key) {
  * an action and its labels; every item one of `kinds`. Absent, the file has no note. What cannot be
  * read is a problem, and refused: a file read in part could cover what it does not say.
  */
-function readNotes(file, kinds, shown) {
-  if (!existsSync(file)) return { notes: [], problems: [] };
-  if (lstatSync(file).isSymbolicLink())
-    throw new Usage(`${shown} is a symbolic link, which is not followed.`);
-  const content = json(readFileSync(file, 'utf8'));
+function readNotes(root, rel, kinds, shown) {
+  const entry = entryAt(root, rel);
+  if (entry === null) return { notes: [], problems: [] };
+  if (!entry.isFile()) return { notes: [], problems: [`${shown} is not a file.`] };
+  const content = json(readFileSync(join(root, ...rel.split('/')), 'utf8'));
   const problems = [];
   const refuse = (where, problem) => problems.push(`${shown}${where}: ${problem}`);
   if (!isRecord(content)) {
@@ -1306,12 +1399,15 @@ function readNotes(file, kinds, shown) {
 
 // --- Output -----------------------------------------------------------------------------------------
 
-function report(results, asJson) {
+function report(results, asJson, gone = []) {
   const refused = results.some((result) => result.findings.length > 0);
   if (asJson) {
-    process.stdout.write(`${JSON.stringify({ kept: !refused, packages: results }, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ kept: !refused, packages: results, gone }, null, 2)}\n`,
+    );
     return refused ? 1 : 0;
   }
+  for (const line of gone) console.log(line);
   for (const result of results) {
     const held =
       result.previous === null ? 'new, held to nothing of its own' : `held to ${result.previous}`;
@@ -1361,6 +1457,29 @@ function kitsUnder(root) {
     .sort()
     .map((name) => join(kits, name))
     .filter((directory) => isFile(join(directory, 'package', 'package.xml')));
+}
+
+/**
+ * Where `kit` was at a commit: its own place when the commit has a package there, and otherwise the
+ * place of the package of the same name, so that a kit whose folder was renamed is still held to
+ * what it was. `null` for a package the commit did not have.
+ */
+function placeAt(root, commit, kit) {
+  const place = relative(root, kit.directory).split(sep).join('/');
+  if (place === '' || place.startsWith('..') || isAbsolute(place))
+    throw new Usage(`${kit.directory} is not inside ${root}, so it has no place at a commit.`);
+  if (existsAt(root, commit, `${place}/package/package.xml`)) return place;
+  for (const other of kitPlacesAt(root, commit)) {
+    const shown = git(root, ['show', `${commit}:${other}/package/package.xml`]);
+    if (shown.status !== 0) continue;
+    const name = attribute(
+      withoutCdata(withoutCommentsOrInstructions(shown.stdout)),
+      'package',
+      'name',
+    );
+    if (name === kit.name) return other;
+  }
+  return null;
 }
 
 /** The places of the packages under `business-apps/packages/` at a commit. */
@@ -1414,19 +1533,28 @@ function extract(root, commit, paths, into) {
   return present;
 }
 
-/** A file's text at `rel` under `root`, `null` when there is none; through a link, it stops the run. */
-function textAt(root, rel) {
+/**
+ * What is at `rel` under `root`, `null` when nothing is; reached through a link, at any part of the
+ * path, it stops the run.
+ */
+function entryAt(root, rel) {
   let path = root;
+  let entry = null;
   for (const part of rel.split('/')) {
     path = join(path, part);
-    const entry = lstatSync(path, { throwIfNoEntry: false });
+    entry = lstatSync(path, { throwIfNoEntry: false });
     if (!entry) return null;
     if (entry.isSymbolicLink())
       throw new Usage(
         `${rel} under ${root} is reached through a symbolic link, which is not followed.`,
       );
   }
-  return lstatSync(path).isFile() ? readFileSync(path, 'utf8') : null;
+  return entry;
+}
+
+/** A file's text at `rel` under `root`, `null` when there is none (`entryAt`). */
+function textAt(root, rel) {
+  return entryAt(root, rel)?.isFile() ? readFileSync(join(root, ...rel.split('/')), 'utf8') : null;
 }
 
 /** Every file with `extension` under the folder `rel`, by path, with its text; `null` with no folder. */
