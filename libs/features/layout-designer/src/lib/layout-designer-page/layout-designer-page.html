@@ -400,6 +400,11 @@
                   {{ 'layout-designer.shows-external' | translate }}
                 </p>
               }
+              @case ('checklist') {
+                <p class="layout-designer__message">
+                  {{ 'layout-designer.shows-checklist' | translate }}
+                </p>
+              }
             }
           </section>
         }

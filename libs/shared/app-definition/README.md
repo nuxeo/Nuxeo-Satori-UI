@@ -132,7 +132,9 @@ install and no transpiler.
   whole, since a layout held to a model read in part would be refused for what was left out.
   `propertiesOf` gives a type's properties, its facets' included, by `<prefix>:<name>`.
 - **`layout-model.ts`** holds a layout to the model, when `validateLayoutV2` is given one and the
-  type: each finding is `unknown` or `parameter`, so the app's tolerant loading still applies. Not
+  type: each finding is `unknown` or `parameter`, so the app's tolerant loading still applies. A
+  checklist's property is held to it too: on the type, a list of complex values, with the four
+  subfields `CHECKLIST_SUBFIELDS` names, each of its type. Not
   held to it: a related list's columns, which are other records'; the properties a computation, a
   rule or a widget parameter names; a task form's fields; a vocabulary's `directory` against the
   property's own.
@@ -179,7 +181,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 127 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 145 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -285,6 +287,15 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - reading a `directoryResolver` that names no directory, or constraints that are not a list, as
       no binding;
     - putting an address part that is not a text into a message, which threw.
+  - **Checklists,** 18 more, run on 25 November 2026:
+    - a checklist allowed outside view mode, or not a card's content at all;
+    - an `ecm:` or `var:` property, or one not written `<prefix>:<name>`, accepted;
+    - an empty list of items, an item listed twice, an item with no words, any item id, and a
+      checklist that is not an object, accepted;
+    - the unknown keys of a checklist, or of an item, ignored;
+    - given the model: a property the type lacks, one that is not a list of complex values, a
+      subfield missing or of another type accepted; checklists not held to the model at all; and
+      `doneOn` read as a text.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;
@@ -303,8 +314,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
   completes it.
 - **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
-  which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its timeline
-  and its comments. The other
+  which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its
+  timeline, its comments, another system's fields and its checklists. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
 - **The content model in the migration server.** The pipeline holds a package to a model when given
   one, and the layout designer, `libs/features/layout-designer`, holds the `view`, `edit` and
