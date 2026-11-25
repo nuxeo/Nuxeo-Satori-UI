@@ -838,18 +838,21 @@ npm run studio-migration -- lab <document>... --out <new-directory> --app http:/
   holds, a page's result count, and who `/me` and Web UI's sign-in say the requests ran as. Of the
   pages: the document layouts Web UI loaded for the document's type, read by the inventory's own
   reader as a package's are; the layout files the new app loaded for it; and which page the new app
-  showed, with the `data-field` of each field on it. Never a credential, and never a value.
+  showed, with the `data-field` of each field on it. Never a credential, and never a property's
+  value.
 - **Read only.** A request either app sends is refused before it leaves the browser, and listed,
   unless it is a `GET`, `HEAD` or `OPTIONS`, or a `POST` of an operation that only reads: Web UI's
   sign-in (`login`), `Repository.Query`, `Repository.PageProvider`, `Directory.SuggestEntries`,
   `Audit.QueryWithPageProvider` and `NuxeoDrive.GetRoots`. Downloads (`@blob`, `@rendition`,
   `@preview`, `@convert`, `nxfile` and the like) are refused too: the server may write them to its
-  audit log. From Node it only reads, with `GET`s to the server's origin that follow no redirect.
+  audit log. From Node it only reads: `GET`s, each to the origin it is for, that follow no
+  redirect.
 - **As the same user.** Before anything opens, `/me` must answer as the user, judged by the Beta
   harness's identity guard (`judgeMe`). Web UI is sent the user's `Authorization` on every request
   to the server's origin, and nowhere else. The new app is given the session its sign-in writes,
-  as `h.login()` writes it, before its first script runs, and every request it sends to Nuxeo's
-  API must carry that header. Each `/me` either app reads, and Web UI's sign-in, must name the
+  as `h.login()` writes it, before its first script runs, and every request it sends to Nuxeo must
+  carry that header, but the configuration service's files, which it reads without the header by
+  design. Each `/me` either app reads, and Web UI's sign-in, must name the
   user; a document where one does not is not compared, and the run exits 2. Under automation, Web
   UI waits for an `automation-ready` event unless `window.automationReady` is set, so lab mode
   sets it.
@@ -1202,7 +1205,7 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
-- **For lab mode, 50 guards**, broken one at a time by a script that runs its four specs and
+- **For lab mode, 52 guards**, broken one at a time by a script that runs its four specs and
   restores the file, each seen turning them red:
   - **The rule:** a field under a condition not held, and only what Web UI fetched; a property
     the new app does not fetch, or cannot show; the page's fields, a layout file it loaded, and
@@ -1212,8 +1215,9 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
     layout that did not load.
   - **The browser:** downloads through the API and through the servlets; only reads, and only the
     operations that only read, by `POST`; the header to the server's origin alone; controls on
-    the new app alone; an unsigned request, an answer naming another, and none naming the user; a
-    refused request recorded; a layout, and a page, that could not be read, kept as such.
+    the new app alone; an unsigned request, to Nuxeo and not only its API, but for the
+    configuration service's files; an answer naming another, and none naming the user; a refused
+    request recorded; a layout, and a page, that could not be read, kept as such.
   - **The server's reads:** one origin, no redirect; a field, a widget's type and a type's
     schemas, a vocabulary, a page provider and a task's variable, each against the server's
     model; a model that cannot be read; the package byte for byte, and the conversion as JSON.
@@ -1229,7 +1233,10 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   now has its test, and the third round found none. `pre-pr-review.mjs` then found two empty
   `.catch()`es: a layout whose answer could not be read was dropped, which would have made what
   Web UI shows look smaller, and so held less. Each is now kept as unreadable, which stops the
-  document's comparison and exits 1, and the fourth round, with their four guards, found none. A
+  document's comparison and exits 1. Reading the code against the Beta harness then found the
+  identity check judging Nuxeo's API alone, where that harness judges every request to Nuxeo but
+  the configuration service's files; it now does too. The fourth round, with the six guards those
+  brought, found none. A
   spec drives `recordApp` through a small stand-in for Playwright, so the browser half is held too:
   what is refused, sent and recorded.
 

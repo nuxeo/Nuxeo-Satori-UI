@@ -9,8 +9,9 @@
  * - **As the same user.** Web UI is sent the user's `Authorization` on every request to the Nuxeo
  *   server's origin, and nowhere else. The new app is given the session its sign-in writes, as
  *   the Beta harness's `h.login()` gives it, before its first script runs, and every request it
- *   sends to Nuxeo's API must carry that header. Each `/me` either app reads, and Web UI's
- *   sign-in, must name the user (the Beta harness's identity guard, `judgeMe`).
+ *   sends to Nuxeo must carry that header, but the configuration service's files, which are read
+ *   without it by design. Each `/me` either app reads, and Web UI's sign-in, must name the user
+ *   (the Beta harness's identity guard, `judgeMe`).
  * - **Playwright is not a dependency** of this repository, as for the Beta harness: it is loaded
  *   when lab mode runs, and installed with `npm install --no-save @playwright/test`.
  *
@@ -487,8 +488,10 @@ export async function recordApp(
 }
 
 /**
- * What says a recording did not run as the user: a request to Nuxeo's API sent without the user's
+ * What says a recording did not run as the user: a request to Nuxeo sent without the user's
  * header, a `/me` or sign-in that names someone else or the guest, or no answer naming anyone.
+ * The configuration service's files, under `/nuxeo/agentic-ui-config/`, are read without the
+ * header by design, as the Beta harness's identity guard excuses them.
  */
 export function identityProblems(
   app: LabApp,
@@ -498,11 +501,14 @@ export function identityProblems(
   const problems: string[] = [];
   const unsigned = requests.filter(
     (request) =>
-      request.path.startsWith('/nuxeo/api/') && request.status !== 'refused' && !request.signed,
+      request.path.startsWith('/nuxeo/') &&
+      !request.path.startsWith('/nuxeo/agentic-ui-config/') &&
+      request.status !== 'refused' &&
+      !request.signed,
   );
   if (unsigned.length > 0)
     problems.push(
-      `${unsigned.length} ${unsigned.length === 1 ? 'request' : 'requests'} to Nuxeo's API went out without the user's credentials, such as ${unsigned[0].method} ${unsigned[0].path}`,
+      `${unsigned.length} ${unsigned.length === 1 ? 'request' : 'requests'} to Nuxeo went out without the user's credentials, such as ${unsigned[0].method} ${unsigned[0].path}`,
     );
   const answers = requests.filter((request) => request.answeredAs !== undefined);
   for (const request of answers) {

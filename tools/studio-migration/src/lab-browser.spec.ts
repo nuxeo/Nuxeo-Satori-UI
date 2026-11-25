@@ -92,6 +92,27 @@ describe('lab mode: who the requests ran as', () => {
     expect(identityProblems('new-app', [me('alice')], 'alice')).toEqual([]);
   });
 
+  it("judges every request to Nuxeo but the configuration service's files, which are read without the header", () => {
+    const unsigned = (path: string): RecordedRequest =>
+      me(null, { path, signed: false, answeredAs: undefined });
+    expect(
+      identityProblems(
+        'new-app',
+        [me('alice'), unsigned('/nuxeo/agentic-ui-config/layouts.json')],
+        'alice',
+      ),
+    ).toEqual([]);
+    expect(
+      identityProblems(
+        'new-app',
+        [me('alice'), unsigned('/nuxeo/agentic-ui-apps/apps.json')],
+        'alice',
+      ),
+    ).toEqual([
+      "1 request to Nuxeo went out without the user's credentials, such as GET /nuxeo/agentic-ui-apps/apps.json",
+    ]);
+  });
+
   it('refuses an unsigned request, the guest, another user, and a run where nothing named the user', () => {
     expect(
       identityProblems(
@@ -103,7 +124,7 @@ describe('lab mode: who the requests ran as', () => {
         'alice',
       ),
     ).toEqual([
-      "1 request to Nuxeo's API went out without the user's credentials, such as GET /nuxeo/api/v1/id/f00d",
+      "1 request to Nuxeo went out without the user's credentials, such as GET /nuxeo/api/v1/id/f00d",
     ]);
     expect(
       identityProblems('new-app', [me('Guest', { answeredAnonymous: true })], 'alice')[0],
@@ -366,7 +387,7 @@ describe('lab mode: recording an app', () => {
     ).toBe(true);
     expect(recording.page).toEqual({ kind: 'document', fields: ['dc:description'] });
     expect(recording.identity).toEqual([
-      "1 request to Nuxeo's API went out without the user's credentials, such as GET /nuxeo/api/v1/id/f00d/@audit",
+      "1 request to Nuxeo went out without the user's credentials, such as GET /nuxeo/api/v1/id/f00d/@audit",
     ]);
     expect(JSON.stringify(recording)).not.toContain(
       Buffer.from('alice:not-a-real-password').toString('base64'),
