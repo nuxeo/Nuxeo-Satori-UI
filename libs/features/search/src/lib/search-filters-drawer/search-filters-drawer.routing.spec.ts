@@ -11,7 +11,7 @@ import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, type Observable } from 'rxjs';
+import { of, Subject, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
@@ -38,6 +38,11 @@ describe('Search drawer route and session integration', () => {
   let drawer: ComponentFixture<SearchFiltersDrawerComponent>;
   let router: Router;
   let session: SearchSession;
+  const selectionService = {
+    selectedCount: () => 0,
+    cleared$: new Subject<void>(),
+    selectAll: vi.fn(),
+  };
   const searchService = {
     search: vi.fn((): Observable<SearchResponse> =>
       of({ items: [], aggregations: {}, totalSize: 0, hasNextPage: false }),
@@ -71,7 +76,7 @@ describe('Search drawer route and session integration', () => {
         },
         { provide: DocumentDetailService, useValue: { fetchThumbnail: () => of(null) } },
         { provide: MatDialog, useValue: { open: vi.fn() } },
-        { provide: SelectionService, useValue: { selectedCount: () => 0 } },
+        { provide: SelectionService, useValue: selectionService },
         { provide: AiGatewayService, useValue: {} },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: {} },
@@ -93,6 +98,66 @@ describe('Search drawer route and session integration', () => {
     drawer = TestBed.createComponent(SearchFiltersDrawerComponent);
     drawer.detectChanges();
     await drawer.whenStable();
+  });
+
+  it.each(['searchQueue=true', 'customerView=compact'])(
+    'keeps the request and pending Select all when only %s changes',
+    async (extraParam) => {
+      const url = '/search?quickFilters=onlyValidated&page=3&pageSize=25';
+      const page = await harness.navigateByUrl(url, SearchComponent);
+      await drawer.whenStable();
+      const request = session.request();
+      const pending = new Subject<SearchResponse>();
+      searchService.search.mockReturnValueOnce(pending);
+      page.selectAllResults();
+      const requestCount = searchService.search.mock.calls.length;
+      expect(page.selectingAll()).toBe(true);
+
+      await harness.navigateByUrl(`${url}&${extraParam}`, SearchComponent);
+      await drawer.whenStable();
+
+      expect(session.request()).toEqual(request);
+      expect.soft(searchService.search).toHaveBeenCalledTimes(requestCount);
+      expect.soft(page.selectingAll()).toBe(true);
+      pending.next({ items: [], aggregations: {}, totalSize: 0, hasNextPage: false });
+      pending.complete();
+      expect(selectionService.selectAll).toHaveBeenCalledWith([], {});
+      expect(page.selectingAll()).toBe(false);
+    },
+  );
+
+  it.each([
+    {
+      query: 'quickFilters=mostRecent&page=3&pageSize=25',
+      expected: { quickFilters: 'mostRecent', pageIndex: 2, pageSize: 25 },
+    },
+    {
+      query: 'quickFilters=onlyValidated&page=4&pageSize=25',
+      expected: { quickFilters: 'onlyValidated', pageIndex: 3, pageSize: 25 },
+    },
+    {
+      query: 'quickFilters=onlyValidated&pageSize=50',
+      expected: { quickFilters: 'onlyValidated', pageIndex: 0, pageSize: 50 },
+    },
+  ])('cancels pending Select all for a changed request: $query', async ({ query, expected }) => {
+    const page = await harness.navigateByUrl(
+      '/search?quickFilters=onlyValidated&page=3&pageSize=25',
+      SearchComponent,
+    );
+    await drawer.whenStable();
+    const pending = new Subject<SearchResponse>();
+    searchService.search.mockReturnValueOnce(pending);
+    page.selectAllResults();
+    expect(page.selectingAll()).toBe(true);
+
+    await harness.navigateByUrl(`/search?${query}`, SearchComponent);
+    await drawer.whenStable();
+
+    expect(session.request()).toEqual(expected);
+    expect(page.selectingAll()).toBe(false);
+    pending.next({ items: [], aggregations: {}, totalSize: 0, hasNextPage: false });
+    pending.complete();
+    expect(selectionService.selectAll).not.toHaveBeenCalled();
   });
 
   it.each([false, true])(

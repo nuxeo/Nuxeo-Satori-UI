@@ -159,6 +159,13 @@ drafts, then verify the disabled state remains focusable and cannot invoke Clear
 Search actions were checked for the same self-disabling pattern; existing Reset, pager and selection
 focus regressions remain in place.
 
+Search URL hydration now leaves an unchanged page size alone. Two real-router controls reproduced
+unrelated URL parameters rerunning the same page-three request and cancelling pending Select all;
+the equality guard prevents both. Separate controls retain cancellation for actual filter, page and
+page-size changes. Saved-search label handling was compared with main: criteria edits intentionally
+keep the saved identity and dirty state, while reset, failure, rename and Save As update the existing
+title binding. No speculative label behavior was introduced.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:

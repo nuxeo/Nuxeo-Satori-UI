@@ -518,7 +518,7 @@ export class SearchComponent {
     // The URL counts pages from one; the session from zero. No `page` means the first.
     const pageSize = Number(params.get('pageSize'));
     this.urlPageSize = [25, 40, 50, 100].includes(pageSize) ? pageSize : SEARCH_PAGE_SIZE;
-    this.session.setPageSize(this.urlPageSize);
+    if (this.session.pageSize() !== this.urlPageSize) this.session.setPageSize(this.urlPageSize);
     const page = Number.parseInt(params.get('page') ?? '', 10);
     this.urlPageIndex = Number.isFinite(page) && page > 1 ? page - 1 : 0;
     this.session.setPageIndex(this.urlPageIndex);
