@@ -8,11 +8,14 @@ import { firstValueFrom, lastValueFrom, toArray } from 'rxjs';
 import { DeploymentLayerService, LAYER_CHANGE_HEADER } from './deployment-layer.service';
 import { LAYER_FORMAT } from './layer-state';
 
-const APP = {
+const APP: RegistryApp = {
   id: 'payers-claims',
+  label: null,
+  labelKey: null,
   url: 'apps/payers-claims/',
   files: [],
-} as unknown as RegistryApp;
+  content: {},
+};
 const URL = '/nuxeo/agentic-ui-apps/apps/payers-claims/layer/layouts/Claim/view.layout.json';
 
 const STATE = {

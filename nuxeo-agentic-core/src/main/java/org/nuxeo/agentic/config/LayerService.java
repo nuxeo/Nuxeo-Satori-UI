@@ -57,9 +57,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <h2>Concurrent changes</h2>
  * Each file has a revision, which every change names and every change raises. A change naming
  * another is refused, 409, with the file as it is now, so that an administrator never writes over a
- * change they have not seen. Changes to one app are made one at a time on a server, and the
- * repository's change token makes two servers' changes to one app refuse each other; the change
- * that loses is applied again to the layer as the winner left it, and refused if its file moved.
+ * change they have not seen. Changes to one app are made one at a time: on a server by a lock of
+ * the service's, and across a cluster inside the cluster's lock for the app ({@link AppLock}). The
+ * repository's change token refuses a write made on a read another write has since replaced; the
+ * change is then applied again to the layer as that write left it, and refused if its file moved.
  *
  * <h2>Audit</h2>
  * Every change is a line in the file's trail, with who made it, when, and the version and content
@@ -235,7 +236,13 @@ final class LayerService {
         }
         ObjectNode body = NODES.objectNode().put("format", FORMAT);
         ArrayNode apps = body.putArray("apps");
-        Map<String, LayerStore.Stored> stored = store.readAll();
+        Map<String, LayerStore.Stored> stored;
+        try {
+            stored = store.readAll();
+        } catch (RuntimeException e) {
+            log.error("Agentic UI deployment layer: the layer could not be read", e);
+            return error(500, "unreadable", "The deployment layer cannot be read.");
+        }
         for (Map.Entry<String, LayerStore.Stored> entry : new TreeMap<>(stored).entrySet()) {
             ObjectNode layer = parse(entry.getKey(), entry.getValue());
             if (layer == null) {

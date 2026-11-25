@@ -119,12 +119,17 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
 
     /**
      * The cluster's lock for an app's changes, which runs the work at once on a server that is not
-     * in a cluster. Tried for 30 seconds, every 100 ms.
+     * in a cluster. Tried for 30 seconds, every 100 ms. A server without the cluster service, which
+     * Nuxeo LTS 2025 deploys in {@code nuxeo-runtime-cluster}, is a server of one.
      */
-    static final LayerService.AppLock CLUSTER_LOCK = (app, work) -> Framework.getService(ClusterService.class)
-                                                                              .runAtomically("agentic-ui-layer/" + app,
-                                                                                      Duration.ofSeconds(30),
-                                                                                      Duration.ofMillis(100), work);
+    static final LayerService.AppLock CLUSTER_LOCK = (app, work) -> {
+        ClusterService cluster = Framework.getService(ClusterService.class);
+        if (cluster == null) {
+            work.run();
+        } else {
+            cluster.runAtomically("agentic-ui-layer/" + app, Duration.ofSeconds(30), Duration.ofMillis(100), work);
+        }
+    };
 
     /**
      * Decide, once, whether the deployment layer is switched on, and build it when it is. As for the

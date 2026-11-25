@@ -125,7 +125,7 @@ describe('validateDeploymentFile', () => {
         path,
         content: file,
         model,
-        registered: { rules: [''] as unknown as string[] },
+        registered: { rules: [''] },
       }),
     ).toHaveProperty('refused');
   });
