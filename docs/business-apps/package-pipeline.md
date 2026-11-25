@@ -29,6 +29,10 @@ signing and publishing run only for a tag, and no tag has been pushed yet. Versi
 - **Its version is held to what changed.** Given the package as it was, a version that did not move
   when the content changed is refused, and so is one that moved less than the changes need: a
   queue removed needs a major. Each build writes what changed beside the zip (section 8).
+- **Every kit at once, as a release candidate.** One command builds the client, the server
+  packages and every kit, and refuses a set that does not hold together: a dependency Nuxeo would
+  not count as met, two kits contributing the same name, a kit whose version did not move since the
+  last release. It runs offline on every push to a staging branch (section 11).
 
 ## 1. What an app definition package is
 
@@ -490,3 +494,146 @@ tag app-package/<name>/<version>
 4. Production's Marketplace target and credentials, which the `nos-publish` step takes as it takes
    preprod's (the name of its production environment is not checked here).
 5. The ruleset for `app-package/*` tags.
+
+## 11. A release candidate across all kits
+
+Phase 10's first demo is a release-candidate tour across every kit
+([development plan](development-plan.md), phase 10). `scripts/release-candidate.mjs` assembles the
+candidate that tour would install, offline: no Nuxeo server, no credential, no signature, no tag and
+no publishing. Built on 25 November 2026; it has not run on GitHub yet, only on a laptop.
+
+```bash
+npm run release-candidate -- --out ../release-candidate-2026.0.2 --since origin/main
+```
+
+- **`--out`** is a directory that does not exist yet, and not one under `business-apps/packages/`,
+  where it would be read as a kit. A candidate never overwrites an earlier one: an existing path,
+  folder or file, stops the run with exit 2 and is left as it was. A refused run removes the
+  directory it made, so no half-built candidate looks like a whole one.
+- **`--since`** is the last release, any git ref: each kit is held to itself as that commit has it.
+  A kit the commit does not have is new, and held to nothing; one it has that the candidate does
+  not is listed as removed.
+- **`--version`** is the version of the server packages. Left out, it is the root pom's without
+  `-SNAPSHOT`: a release candidate carries the version it would be released as, because Nuxeo
+  counts neither `2026.0.2-SNAPSHOT` nor `2026.0.2-rc.1` as meeting a kit's dependency on
+  `nuxeo-agentic-ui:2026.0.2` (below).
+- It needs Node 24, Maven with a JDK, `unzip`, git and an installed workspace (`npm ci`). It takes
+  about four minutes on a laptop, most of them the client's production build. It has not been run on
+  Windows, where Maven is a `.cmd` that Node starts only through a shell.
+
+### What it builds and checks
+
+Each stage stops the run when it refuses, with exit 1.
+
+| Stage                    | What is built, and what is refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2. Every kit             | Each folder under `business-apps/packages/`, through this pipeline's steps 1 to 6, with the platform version of `libs/platform` and `--previous` the kit at `--since`. So a kit whose platform range leaves the candidate's platform out is refused at step 2, and one whose version did not move as far as its changes need at step 3                                                                                                                                                                                         |
+| 3. The kits as a set     | Read from the zips: no two kits contribute the same package name, app id, address (the id, for an app with none), queue, action, component, document type, facet, schema, lifecycle, a type's lifecycle, page provider, automation chain or scripted operation, directory, action filter, workflow, event listener, or layout of a type and mode. A server keeps one of each: the later replaces the earlier, or is refused. An extension point the check does not know is printed and written to the manifest as not compared |
+| 4. The client            | `nx build nuxeo-ui --configuration=production --base-href=/nuxeo/agentic-ui/`, as `build-marketplace.yml` builds it, without Nx's cache. The Maven module `apps/nuxeo-ui` runs the same build with its own Node 20, which Angular 22 refuses, so the candidate builds it with Node 24 instead                                                                                                                                                                                                                                  |
+| 5. The server packages   | `mvn package` at the root, every module but `apps/nuxeo-ui`, in a scratch copy: its version set with `versions:set` and `@VERSION@` stamped into `package.xml`, as `build-marketplace.yml` does. The `nuxeo-agentic-ui` package must carry stage 4's bundle file for file and byte for byte: its assembly leaves a missing bundle out without a word, and without the stamp its version is `@VERSION@`, which Nuxeo reads as 0.0.0. A plain `mvn package` at the root, as the repository stands, builds exactly that package   |
+| 6. The packages as a set | Every package's dependencies, server packages' and kits', are in the candidate at a version Nuxeo counts as meeting them; no two conflict (`<conflicts>`); and each package's target platform is within the target platform of each package it depends on                                                                                                                                                                                                                                                                      |
+| 7. The demo steps        | Listed, not run (below). A steps file that names a kit and declares no `serverRun`, declares it for another kit, or needs a seed the kit does not have is refused: the listing would make the kit's demo look shorter than it is                                                                                                                                                                                                                                                                                               |
+
+**Nuxeo's rules, not semver's.** A dependency `name:min` or `name:min:max` is met as Nuxeo Connect
+meets it: `release-candidate-set.mjs` ports nuxeo-connect-client 1.8.3's `Version`,
+`PackageDependency`, `PlatformVersion` and `PlatformVersionRange`, read from their bytecode, and the
+selftest holds it to 27 cases those classes answered when run. Three of them decide a candidate's
+version: a snapshot is below its release, so is a classifier starting `rc`, `alpha` or `beta`, and
+any other classifier, such as `build-marketplace.yml`'s `2026.0.2-PR-12-BUILD-3`, is above it.
+
+### What it writes
+
+| File               | What it is                                                                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manifest.json`    | Every artifact with its kind, name, version and SHA-256; the commit and every uncommitted path; `--since` and its commit; each kit's app, address, platform range, dependencies and the version it was held to; what was not compared; the demo steps |
+| `SHA256SUMS`       | Every file of the candidate, in the form `sha256sum -c SHA256SUMS` reads from `--out`                                                                                                                                                                 |
+| `RELEASE-NOTES.md` | The server packages, with their target platforms and dependencies, and each kit with what changed in it since `--since`: the pipeline's changelog, or new                                                                                             |
+| `DEMO-STEPS.md`    | The demo steps a server run would execute                                                                                                                                                                                                             |
+| `client/`          | The production bundle, as the package deploys it, and its files' digests                                                                                                                                                                              |
+| `server/`          | Each module's jar, at the candidate's version, and each Nuxeo package Maven built                                                                                                                                                                     |
+| `kits/`            | Each kit's zip, checksum and changelog, as the pipeline wrote them                                                                                                                                                                                    |
+
+The working tree is built as it is. A candidate built with changes nobody committed says so, in the
+run's first line, in the manifest and in the release note.
+
+### The demo steps, listed
+
+The demo steps are the beta harness's steps files that name a kit's folder. Each declares, beside
+the preconditions that hold the run to it, what a server run of it needs:
+
+```js
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: { users: [WORKFLOW_ADJUSTER], who: "the workflow's adjuster, not a supervisor" },
+  signsInAs: [WORKFLOW_SUPERVISOR],
+  needs: [
+    'the kit 0.4.0 or later installed',
+    'the dev server with `npm run config:dev` serving ...',
+  ],
+};
+```
+
+The people are the constants the preconditions check `NUXEO_USER` against, not copies of them. The
+rest is read from the source, so it cannot disagree with what the file does: the labels of its
+`h.step(...)` calls, in the order written, and the environment it and each seed read. The file is
+imported to read its declaration, as the runner imports it to read `skipHttpCredentials`, and its
+`run` is not called. Today that lists five files, three for the Payers kit and two for brand
+assets; the contracts and facilities kits have no steps file, and the listing says so.
+
+### In CI
+
+[`release-candidate.yml`](../../.github/workflows/release-candidate.yml) runs the controls on a
+pull request that touches the candidate or what it reads, and the whole candidate on every push to
+a `staging/**` branch, held to `origin/main`: only `main` is published, so it is the last release.
+No kit has reached `main` yet, so in CI each kit is new and the `--previous` check holds it to
+nothing; held to an earlier staging commit on a laptop, it held three kits to their versions before
+and wrote their changelogs.
+
+- **One secret, for the install only.** The client cannot be built without the `@hylandsoftware`
+  packages, so `npm ci` reads the read-only `SATORI_GH_READONLY_TOKEN` in its own step, as ci.yml's
+  jobs do. The candidate's step runs with no token, checks so, and starts the script with `node`.
+  No signing key, Marketplace credential or write permission is in the workflow.
+- **The record is uploaded, not the candidate.** The repository is public, so anyone signed in can
+  download a run's artifacts, and the bundle carries the `@hylandsoftware` packages: uploading it
+  would publish them. The run's artifact is the manifest, the checksums and the two notes, and
+  the job's summary shows the notes.
+
+### Its controls
+
+`npm run release-candidate:selftest` breaks each check once and must see each refused: the
+dependency and platform cases Nuxeo answered; a package named twice, a dependency the candidate does
+not hold, one held at a snapshot, an `rc` or out of its range, a version never stamped, a conflict,
+and a target platform wider than its dependency's, of another name, or none; a disabled or
+commented contribution, which registers nothing, and an unknown point, which is listed; two
+repository kits built by the pipeline and read from their zips, which share nothing, then one given
+the other's app id and one given the other's document type, which share exactly that; an output
+directory that exists, which is left as it was, one under `business-apps/packages/`, a `--since`
+that is no commit, `--out` given twice and a version a candidate cannot carry; and a steps file with
+no declaration, one for another kit, and one needing a seed its kit does not have. It builds no
+client and runs no Maven: the command's own run does that, through the same functions.
+
+Run whole on 25 November 2026, the command was green on staging, and refused each of these, every
+time with exit 1 and its directory removed: a third kit copied from contracts with its app id
+changed to `payers-claims`, refused at stage 3 for that id; the same copy given the document type
+`Claim`, refused at stage 3 for that type; a kit depending on `nuxeo-agentic-ui:2026.0.3`, refused
+at stage 6 with the candidate's 2026.0.2 named; and a second run into the first run's directory,
+refused with exit 2 and the directory's `SHA256SUMS` unchanged.
+
+### What a server-side release run would add
+
+This run proves the set holds together on paper. It does not install anything, so it cannot say:
+
+- that Nuxeo installs the candidate: `nuxeoctl mp-install` of `nuxeo-agentic-ui` and then every
+  kit, on a fresh server of each target platform, with the dependency resolution Nuxeo does itself
+  rather than this port of it;
+- that the server starts with them all: a component whose `<require>` names one nobody contributes,
+  or a contribution the server refuses at startup, shows only there;
+- that the app registry serves every kit's app to its groups, and the shell's "Switch app" lists
+  them;
+- that each kit's seed runs and each demo steps file passes, which needs the seeds' administrator
+  and the demo people's passwords: the listing above is what such a run would execute;
+- an upgrade from the last release's packages that keeps every app's configuration, which is phase
+  10's second demo;
+- that the candidate's signature and the Marketplace's own checks pass, which need the keys and
+  credentials section 9 proposes.

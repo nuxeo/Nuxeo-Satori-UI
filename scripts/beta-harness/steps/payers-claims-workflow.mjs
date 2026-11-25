@@ -56,7 +56,7 @@
  * transitions outside the workflow.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -67,6 +67,22 @@ const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { USERS, WORKFLOW_ADJUSTER, WORKFLOW_SUPERVISOR } = await import(
   join(KIT, 'demo', 'data.mjs')
 );
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. The people are
+ * the ones the preconditions below hold the run to.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: { users: [WORKFLOW_ADJUSTER], who: "the workflow's adjuster, not a supervisor" },
+  signsInAs: [WORKFLOW_SUPERVISOR],
+  needs: [
+    'the kit 0.4.0 or later installed',
+    "the dev server with `npm run config:dev` serving the kit's two task forms and its labels",
+  ],
+};
 
 /** The route model's name, and the two steps with a task, as the kit's files name them. */
 const MODEL = 'PayersClaimReview';

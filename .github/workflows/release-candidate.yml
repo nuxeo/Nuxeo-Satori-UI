@@ -1,0 +1,140 @@
+name: Release candidate
+
+# Phase 10's release candidate across all kits (docs/business-apps/package-pipeline.md, section 11),
+# assembled offline by scripts/release-candidate.mjs: no Nuxeo server, no signature, no tag and no
+# publishing.
+#
+# - `controls`, on a pull request that touches the candidate or what it reads, and on every push to
+#   a `staging/**` branch: release-candidate.selftest.mjs, which breaks each of its checks once and
+#   must see each refused. A check only ever seen green is an assertion.
+# - `candidate`, on a push to a `staging/**` branch only: the whole candidate. Every kit through
+#   the pipeline, held to `main`, the last release, since only `main` is published
+#   (build-marketplace.yml); the kits as a set; the client's production bundle; `mvn package` at the
+#   root; the packages as a set; the demo steps a server run would execute, listed and not run. Its
+#   release note and demo steps go into the job's summary, and its record, the manifest with every
+#   artifact's version and SHA-256, the checksums and the two notes, into the run's artifacts.
+#   **The packages and the bundle do not.** This repository is public, so anyone signed in to
+#   GitHub can download a run's artifacts, and the bundle carries the `@hylandsoftware` packages,
+#   which GitHub Packages serves only with a token: uploading it would publish them. So nothing
+#   installable leaves the runner, and nothing reaches a Marketplace.
+#
+# **One secret, and only for the install.** The client app cannot be built without the
+# `@hylandsoftware` packages, which GitHub Packages serves only with a token, so `npm ci` reads the
+# read-only SATORI_GH_READONLY_TOKEN, in its own step's environment, as every ci.yml job does. There
+# is no `registry-url:`, which would write a second `.npmrc` and export NODE_AUTH_TOKEN to every
+# later step; the repository's `.npmrc` names the variable instead. The candidate's own step runs
+# with no token in its environment and checks so, and starts the script with `node`, not `npm`,
+# which refuses to start without the variable `.npmrc` names. No signing key, Marketplace
+# credential or write permission is in this workflow.
+
+on:
+  push:
+    branches: ['staging/**']
+  pull_request:
+    paths:
+      - 'scripts/release-candidate.mjs'
+      - 'scripts/release-candidate-set.mjs'
+      - 'scripts/release-candidate-demo.mjs'
+      - 'scripts/release-candidate.selftest.mjs'
+      - 'scripts/app-package.mjs'
+      - 'scripts/verify-package-zip.mjs'
+      - 'scripts/beta-harness/steps/*.mjs'
+      - 'business-apps/packages/**'
+      - '.github/workflows/release-candidate.yml'
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  controls:
+    name: Release candidate controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The token is not kept in .git/config, where what this job runs could reach it.
+          persist-credentials: false
+
+      # No `registry-url:`: the repository's `.npmrc` maps the scope and names the token variable.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # Node, git and unzip, which the runner has, and acorn from the install, for the demo listing.
+      # The command's own refusals it runs need Maven on the PATH, which the runner has too.
+      - name: Controls for the release candidate
+        run: node scripts/release-candidate.selftest.mjs
+
+  candidate:
+    name: Assemble the release candidate
+    if: github.event_name == 'push'
+    needs: controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every branch, so that `main`, the last release, is there to hold each kit to.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      # Asserted rather than described, as app-packages.yml does.
+      - name: Check the candidate's step has no credential
+        run: |
+          set -euo pipefail
+          for var in NODE_AUTH_TOKEN NPM_TOKEN SATORI_GH_READONLY_TOKEN NPM_PACKAGES_TOKEN GITHUB_PACKAGES_TOKEN NUXEO_USER NUXEO_PASS; do
+            if [ -n "${!var:-}" ]; then
+              echo "::error::$var is set; the candidate is assembled with no credential in scope"; exit 1
+            fi
+          done
+          if git config --get-regexp '^http\..*\.extraheader$' >/dev/null; then
+            echo "::error::the checkout left a credential in .git/config"; exit 1
+          fi
+          echo "No token and no stored credential. Node $(node --version), $(mvn -v | head -n 1)."
+
+      - name: Assemble the release candidate, held to main
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/release-candidate"
+          node scripts/release-candidate.mjs --out "$out" --since origin/main
+          cat "$out/RELEASE-NOTES.md" "$out/DEMO-STEPS.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # The record only, as the header says: no zip, jar or bundle file.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-record
+          path: |
+            ${{ runner.temp }}/release-candidate/manifest.json
+            ${{ runner.temp }}/release-candidate/SHA256SUMS
+            ${{ runner.temp }}/release-candidate/RELEASE-NOTES.md
+            ${{ runner.temp }}/release-candidate/DEMO-STEPS.md
+          retention-days: 30
+          if-no-files-found: error

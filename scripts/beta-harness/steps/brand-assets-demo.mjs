@@ -48,7 +48,7 @@
  * upload, which the seed checks, not the demo.
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, extname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -59,6 +59,22 @@ const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { ASSETS, MARKER, PRODUCTS, SHOTS, WORKSPACE, shotName } = await import(
   join(KIT, 'demo', 'data.mjs')
 );
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. The kit has no
+ * demo people of its own, so no user is named: the seed creates none.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: { users: [], who: "anyone who may read the kit's workspace" },
+  signsInAs: [],
+  needs: [
+    'the kit installed, and seeded on the day of the demo, with no asset, shot or product the seed did not write',
+    "the dev server with `npm run config:dev` serving the kit's files",
+  ],
+};
 
 const ROOT = `/default-domain/workspaces/${WORKSPACE.name}`;
 /** The assets the demo opens: one whose rights end soon, one whose have ended, one cleared. */
