@@ -23,6 +23,7 @@ export interface AppModelSchema {
   where?: string;
   sort?: string;
   pageSize?: number;
+  aggregates?: string | string[];
   force?: boolean;
 }
 
@@ -128,6 +129,12 @@ const VALUE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
 const PAGE_PROVIDER = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/;
 /** The simple types a stand-in property may have, and a list of each but `boolean`. */
 const SIMPLE = ['string', 'long', 'double', 'boolean', 'date'];
+/** The property types a terms aggregate groups by value: not a date or a double, which range. */
+const BUCKETED = /^(?:string|long|integer|boolean)(?:\[\])?$/;
+/** An aggregate's id, which a facet sends back as a parameter's name. */
+const AGGREGATE = /^[A-Za-z][A-Za-z0-9_]{0,127}$/;
+/** The class the platform's `default_search` is replaced with: it reads the search index. */
+const SEARCH_PAGE_PROVIDER = 'org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider';
 
 interface Property {
   readonly name: string;
@@ -227,6 +234,35 @@ function schemaFile(
     `  xmlns:nxs="${namespace}">\n\n` +
     (listTypes.length > 0 ? `${listTypes.join('\n')}\n` : '') +
     elements.join('') +
+    '</xs:schema>\n'
+  );
+}
+
+/**
+ * The search document's schema: one list of texts per aggregate, named exactly as the aggregate is.
+ * A facet's chosen buckets come back as named parameters, each named after its aggregate, such as
+ * `wo_priority_agg=["Urgent"]`; the server writes each into the field of that name, and the
+ * aggregate reads its selection from it.
+ */
+function searchSchemaFile(
+  pkgName: string,
+  schema: string,
+  type: string,
+  fields: readonly string[],
+): string {
+  const namespace = `http://www.nuxeo.org/ecm/project/schemas/${pkgName}/${schema}`;
+  return (
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    `<!-- STAND-IN, written by the app-model generator: the search document of the ${type} type's\n` +
+    '     page providers of the search index. It is never saved. Each field holds the buckets a\n' +
+    "     person chose in a facet, and is named exactly as its aggregate is, in the page provider's\n" +
+    '     aggregates. -->\n' +
+    '<xs:schema\n' +
+    `  targetNamespace="${namespace}"\n` +
+    '  xmlns:xs="http://www.w3.org/2001/XMLSchema"\n' +
+    `  xmlns:nxs="${namespace}">\n\n` +
+    '  <xs:simpleType name="stringList">\n    <xs:list itemType="xs:string" />\n  </xs:simpleType>\n\n' +
+    fields.map((field) => `  <xs:element name="${field}" type="nxs:stringList" />\n`).join('') +
     '</xs:schema>\n'
   );
 }
@@ -331,6 +367,155 @@ function withComponent(manifest: string, file: string, component: string): strin
   return lines.join(eol);
 }
 
+/** A page provider of the search index over a type: its search document, and its aggregates. */
+interface Search {
+  /** `<Type>Search`, never saved, as `DefaultSearch` is `default_search`'s. */
+  readonly document: string;
+  /** Its schema, `<schema>_search`, with its prefix and its file. */
+  readonly schema: string;
+  readonly prefix: string;
+  readonly file: string;
+  /** Each aggregate's id, `<prefix>_<name>_agg`, and the property it groups by. */
+  readonly aggregates: readonly { readonly id: string; readonly property: string }[];
+}
+
+/**
+ * What a page provider of the search index over `type` needs: a search document, that document's
+ * schema, named after the type's own, and a terms aggregate for each property `--aggregates` names.
+ * The properties are the type's, from this run's `--properties` or from `content-model.json`, so
+ * an aggregate on a property the type does not have is refused here rather than answered empty.
+ */
+function searchOf(
+  tree: Tree,
+  options: {
+    readonly type: string;
+    readonly written?: {
+      readonly schema: string;
+      readonly prefix: string;
+      readonly properties: readonly Property[];
+    };
+    readonly aggregated: readonly string[];
+    readonly modelJson: string;
+  },
+): Search {
+  const { type, written, aggregated, modelJson } = options;
+  const fields = new Map<string, string>();
+  let own: { schema: string; prefix: string } | undefined;
+  if (written) {
+    own = { schema: written.schema, prefix: written.prefix };
+    for (const property of written.properties)
+      fields.set(
+        `${written.prefix}:${property.name}`,
+        `${property.type}${property.list ? '[]' : ''}`,
+      );
+  }
+  const text = tree.read(modelJson, 'utf-8');
+  const model = text === null ? undefined : parseJson(text, modelJson);
+  const doctypes = isRecord(model) && isRecord(model['doctypes']) ? model['doctypes'] : {};
+  const schemas = isRecord(model) && Array.isArray(model['schemas']) ? model['schemas'] : [];
+  const doctype = doctypes[type];
+  if (isRecord(doctype) && Array.isArray(doctype['schemas'])) {
+    for (const name of doctype['schemas']) {
+      const entry = schemas.find((each) => isRecord(each) && each['name'] === name);
+      if (typeof name !== 'string' || !isRecord(entry) || !isRecord(entry['fields'])) continue;
+      const declared = [entry['prefix'], entry['@prefix']].find(
+        (prefix): prefix is string => typeof prefix === 'string' && prefix !== '',
+      );
+      const prefix = declared ?? name;
+      for (const [field, kind] of Object.entries(entry['fields'])) {
+        const xpath = `${prefix}:${field}`;
+        if (!fields.has(xpath)) fields.set(xpath, typeof kind === 'string' ? kind : 'complex');
+      }
+      if (own === undefined && !NUXEO_SCHEMAS.includes(name)) own = { schema: name, prefix };
+    }
+  }
+  if (own === undefined) {
+    throw new Error(
+      `--aggregates name ${type}'s properties, and ${modelJson} does not describe ${type} with a schema of its own: write its --properties first.`,
+    );
+  }
+  const aggregates = aggregated.map((property) => {
+    const kind = fields.get(property);
+    if (kind === undefined) {
+      throw new Error(`--aggregates: "${property}" is not a property of ${type}.`);
+    }
+    if (!BUCKETED.test(kind)) {
+      throw new Error(
+        `--aggregates: "${property}" is a ${kind} property, and a terms aggregate groups by value: give a text, a whole number or a yes or no, or a list of one.`,
+      );
+    }
+    return { id: `${property.replace(':', '_')}_agg`, property };
+  });
+  // A facet's chosen buckets go back as a parameter named after the aggregate, which a "." or a
+  // "-" cannot be (app-definition-v2.md, section 4).
+  const badId = aggregates.find((aggregate) => !AGGREGATE.test(aggregate.id));
+  if (badId !== undefined) {
+    throw new Error(
+      `--aggregates: "${badId.property}" would make the aggregate "${badId.id}", which a facet cannot send back: an aggregate is a letter, then letters, digits and "_".`,
+    );
+  }
+  const search: Search = {
+    document: `${type}Search`,
+    schema: `${own.schema}_search`,
+    prefix: `${own.prefix}search`,
+    file: `${own.schema}search.xsd`,
+    aggregates,
+  };
+  if (!TYPE.test(search.document) || NUXEO_TYPES.has(search.document)) {
+    throw new Error(
+      `The search document of ${type} would be ${search.document}, which is not a type a stand-in may write: choose another --type.`,
+    );
+  }
+  if (!SCHEMA.test(search.schema) || !PREFIX.test(search.prefix)) {
+    throw new Error(
+      `The search document's schema would be ${search.schema}, written ${search.prefix}:, longer than a schema's name or prefix may be: give ${type} a shorter --schema and --prefix.`,
+    );
+  }
+  return search;
+}
+
+/**
+ * A page provider that reads the search index, as the platform's `default_search` is replaced
+ * with, so that it answers the aggregates a queue's facets and a home's figures name. Its
+ * condition is `app-model`'s other page providers' own.
+ */
+function searchPageProvider(
+  name: string,
+  type: string,
+  where: string | undefined,
+  sort: { readonly column: string; readonly ascending: boolean },
+  pageSize: number,
+  search: Search,
+): string {
+  return (
+    `<genericPageProvider name="${name}"\n    class="${SEARCH_PAGE_PROVIDER}">\n` +
+    `  <searchDocumentType>${search.document}</searchDocumentType>\n` +
+    '  <whereClause>\n' +
+    '    <fixedPart>\n' +
+    `      ecm:primaryType = '${type}'${where ? ` AND (${escapeXml(where)})` : ''}\n` +
+    '      AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0\n' +
+    '    </fixedPart>\n' +
+    '  </whereClause>\n' +
+    '  <aggregates>\n' +
+    search.aggregates
+      .map(
+        (aggregate) =>
+          `    <aggregate id="${aggregate.id}" type="terms" parameter="${aggregate.property}">\n` +
+          `      <field schema="${search.schema}" name="${aggregate.id}" />\n` +
+          '      <properties>\n' +
+          '        <property name="size">10</property>\n' +
+          '      </properties>\n' +
+          '    </aggregate>\n',
+      )
+      .join('') +
+    '  </aggregates>\n' +
+    `  <sort column="${sort.column}" ascending="${sort.ascending}" />\n` +
+    `  <pageSize>${pageSize}</pageSize>\n` +
+    '  <maxPageSize>100</maxPageSize>\n' +
+    '</genericPageProvider>'
+  );
+}
+
 /** The configuration component's `name`, which the model component's is made from. */
 function componentName(tree: Tree, pkg: AppPackage): string {
   const markup = markupOnly(tree.read(pkg.component, 'utf-8') ?? '');
@@ -384,6 +569,12 @@ const DUBLIN_CORE = {
  *   lists a write at once: `SELECT * FROM Document WHERE ecm:primaryType = '<Type>'`, `--where`'s
  *   condition, and no version, proxy or trashed record. A `?` in it is a parameter, bound as a
  *   quoted, escaped literal. A queue has no open record, so a queue's needs none.
+ * - **`--aggregates`**, with `--pageProvider`, writes it from the search index instead, as the
+ *   platform's `default_search` is, since only the index answers aggregates, which a queue's
+ *   facets and a home's figures name. Each property, `<prefix>:<name>`, one of the type's, gets a
+ *   terms aggregate, `<prefix>_<name>_agg`; the type gets a search document, `<Type>Search`, never
+ *   saved, whose schema holds each aggregate's chosen buckets in a field of the same name. The
+ *   index lags a write by about a second.
  * - **The model component** is the bundle's own, apart from the configuration one, so that it can
  *   be replaced whole; it is listed first in the manifest's `Nuxeo-Component`.
  * - **`content-model.json`**, beside `bundle/`, describes the type in the shape
@@ -464,6 +655,21 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   if (!(Number.isInteger(pageSize) && pageSize >= 1 && pageSize <= 100)) {
     throw new Error(`--pageSize ${pageSize} must be a whole number from 1 to 100.`);
   }
+  const aggregated = listOption(options.aggregates);
+  if (aggregated.length > 0 && pageProvider === undefined) {
+    throw new Error('--aggregates describe a page provider: give its --pageProvider too.');
+  }
+  if (aggregated.length > 0 && where?.includes('?')) {
+    throw new Error(
+      `--where "${options.where}" takes a parameter, and a page provider with --aggregates is a queue's, which has no record to fill it.`,
+    );
+  }
+  const badAggregate = aggregated.find((xpath) => !XPATH.test(xpath));
+  if (badAggregate !== undefined) {
+    throw new Error(`--aggregates: "${badAggregate}" must be a property, <prefix>:<name>.`);
+  }
+  const twice = aggregated.find((xpath, i) => aggregated.indexOf(xpath) !== i);
+  if (twice !== undefined) throw new Error(`--aggregates lists "${twice}" twice.`);
 
   const pkgName = pkg.component
     .slice(pkg.component.lastIndexOf('/') + 1)
@@ -472,9 +678,43 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   const manifestFile = `${pkg.root}/bundle/META-INF/MANIFEST.MF`;
   const schemaPath = `${pkg.root}/bundle/schemas/${schema}.xsd`;
   const modelName = `${componentName(tree, pkg)}.model`;
+  const modelJson = `${pkg.root}/content-model.json`;
+  const search =
+    aggregated.length > 0
+      ? searchOf(tree, {
+          type,
+          written: properties.length > 0 ? { schema, prefix, properties } : undefined,
+          aggregated,
+          modelJson,
+        })
+      : undefined;
   let xml = tree.read(modelFile, 'utf-8') ?? modelComponent(modelName);
   const markup = markupOnly(xml);
   const written: string[] = [];
+  // The search schema's file is the search document's alone: another schema read from it, such as
+  // a type's own schema that happens to be named so, would be written over.
+  // A file there already is written again only when it is this search schema's, as an earlier run
+  // registered it: one no entry reads, or one written by hand for something else, is left alone.
+  const schemaTags = search
+    ? [...markup.matchAll(/<schema(?=[ \t\r\n/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g)]
+    : [];
+  const readFrom = (tag: string) => attribute(tag, 'src') === `schemas/${search?.file}`;
+  const taken = schemaTags.some(
+    ([tag]) => readFrom(tag) && attribute(tag, 'name') !== search?.schema,
+  );
+  const ours = schemaTags.some(
+    ([tag]) => readFrom(tag) && attribute(tag, 'name') === search?.schema,
+  );
+  if (
+    search &&
+    (taken ||
+      schemaPath === `${pkg.root}/bundle/schemas/${search.file}` ||
+      (!ours && tree.exists(`${pkg.root}/bundle/schemas/${search.file}`)))
+  ) {
+    throw new Error(
+      `schemas/${search.file}, where the search document's schema ${search.schema} goes, is another schema's, or a file no entry of ${modelFile} registers as ${search.schema}: give the type another --schema, or register or remove the file.`,
+    );
+  }
 
   if (properties.length > 0) {
     const hasType = named(markup, 'doctype', type).length > 0;
@@ -552,16 +792,17 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       );
     }
     const parameters = where?.includes('?') ?? false;
-    const element =
-      `<coreQueryPageProvider name="${pageProvider}">\n` +
-      `  <pattern${parameters ? ' quoteParameters="true" escapeParameters="true"' : ''}>\n` +
-      `    SELECT * FROM Document WHERE ecm:primaryType = '${type}'${where ? ` AND (${escapeXml(where)})` : ''}\n` +
-      '    AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0\n' +
-      '  </pattern>\n' +
-      `  <sort column="${sort.column}" ascending="${sort.ascending}" />\n` +
-      `  <pageSize>${pageSize}</pageSize>\n` +
-      '  <maxPageSize>100</maxPageSize>\n' +
-      '</coreQueryPageProvider>';
+    const element = search
+      ? searchPageProvider(pageProvider, type, where, sort, pageSize, search)
+      : `<coreQueryPageProvider name="${pageProvider}">\n` +
+        `  <pattern${parameters ? ' quoteParameters="true" escapeParameters="true"' : ''}>\n` +
+        `    SELECT * FROM Document WHERE ecm:primaryType = '${type}'${where ? ` AND (${escapeXml(where)})` : ''}\n` +
+        '    AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0\n' +
+        '  </pattern>\n' +
+        `  <sort column="${sort.column}" ascending="${sort.ascending}" />\n` +
+        `  <pageSize>${pageSize}</pageSize>\n` +
+        '  <maxPageSize>100</maxPageSize>\n' +
+        '</coreQueryPageProvider>';
     if (existing.length > 0) {
       // Written again in its place: from its start tag to its end tag, its own line kept.
       const current = markupOnly(xml);
@@ -591,6 +832,54 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
       );
     }
   }
+  if (search) {
+    // The search document's schema holds a field for each aggregate of every page provider of the
+    // type's that reads the index, so the fields it had are kept.
+    const searchPath = `${pkg.root}/bundle/schemas/${search.file}`;
+    const had = [
+      ...(tree.read(searchPath, 'utf-8') ?? '').matchAll(/<xs:element name="([^"]+)"/g),
+    ].map(([, field]) => field);
+    const fields = [...new Set([...had, ...search.aggregates.map((aggregate) => aggregate.id)])];
+    tree.write(searchPath, searchSchemaFile(pkgName, search.schema, type, fields));
+    written.push(searchPath);
+    const registered = named(markupOnly(xml), 'schema', search.schema).filter(
+      ([tag]) => attribute(tag, 'src') !== undefined,
+    );
+    if (registered.length === 0) {
+      xml = addToExtension(
+        xml,
+        modelFile,
+        'org.nuxeo.ecm.core.schema.TypeService',
+        'schema',
+        `<schema name="${search.schema}" prefix="${search.prefix}" src="schemas/${search.file}" />`,
+      );
+    } else if (
+      registered.some(
+        ([tag]) =>
+          attribute(tag, 'src') !== `schemas/${search.file}` ||
+          attribute(tag, 'prefix') !== search.prefix,
+      )
+    ) {
+      throw new Error(
+        `${modelFile} registers the schema ${search.schema} otherwise than as ${search.prefix}, from schemas/${search.file}: change it there.`,
+      );
+    }
+    if (named(markupOnly(xml), 'doctype', search.document).length === 0) {
+      xml = addToExtension(
+        xml,
+        modelFile,
+        'org.nuxeo.ecm.core.schema.TypeService',
+        'doctype',
+        `<!-- The search document of ${type}'s page providers of the search index, as DefaultSearch\n` +
+          "     is default_search's. Never saved: it holds the buckets a queue's facets send back. No\n" +
+          '     folder lists it among its subtypes, and it is hidden from navigation. -->\n' +
+          `<doctype name="${search.document}" extends="Document">\n` +
+          '  <facet name="HiddenInNavigation" />\n' +
+          `  <schema name="${search.schema}" />\n` +
+          '</doctype>',
+      );
+    }
+  }
   tree.write(modelFile, xml);
   written.unshift(modelFile);
 
@@ -603,7 +892,6 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   }
 
   // The content model, in the shape the export writes, for the generators and the pipeline.
-  const modelJson = `${pkg.root}/content-model.json`;
   if (properties.length > 0) {
     const text = tree.read(modelJson, 'utf-8');
     const current =
@@ -655,8 +943,8 @@ Wrote the stand-in model, for a demo:
   ${written.join('\n  ')}
 
   Type:           ${properties.length > 0 ? `${type}, schema ${schema} (${prefix}:), ${properties.length} properties` : `${type}, unchanged`}
-  Page provider:  ${pageProvider ?? 'none'}
-
+  Page provider:  ${pageProvider === undefined ? 'none' : search ? `${pageProvider}, of the search index, with the aggregates ${search.aggregates.map((aggregate) => aggregate.id).join(', ')}` : pageProvider}
+${search ? `\nA queue on ${pageProvider} filters by these aggregates: give it "facets", each\n{ "aggregate": "<id>", "labelKey": "<key>" }, and each key a text in labels/en.json. A home's\nfigure may count one's buckets.\n` : ''}
 Lay the type out against the content model beside it:
 
   npx nx g ./tools/satori-generators:app-layout --package=${pkg.root} --type=${type} --model=${modelJson}

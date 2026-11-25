@@ -32,6 +32,8 @@ on:
       - 'business-apps/packages/**'
       - 'libs/shared/app-definition/src/**'
       - 'libs/platform/package.json'
+      # A label key's text may be the platform's: step 2 reads its English catalogue.
+      - 'apps/nuxeo-ui/public/i18n/en.json'
       - 'scripts/app-package.mjs'
       - 'scripts/app-package.selftest.mjs'
       - 'scripts/app-package-model.mjs'
@@ -44,7 +46,6 @@ on:
       - 'docs/business-apps/platform-upgrade-notes.json'
       - 'nuxeo-agentic-core/src/main/**'
       - 'apps/nuxeo-ui/src/app/business-apps.menu.ts'
-      - 'apps/nuxeo-ui/public/i18n/en.json'
       - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
       - '.github/workflows/app-packages.yml'
   push:
@@ -54,6 +55,8 @@ on:
       - 'business-apps/packages/**'
       - 'libs/shared/app-definition/src/**'
       - 'libs/platform/package.json'
+      # A label key's text may be the platform's: step 2 reads its English catalogue.
+      - 'apps/nuxeo-ui/public/i18n/en.json'
       - 'scripts/app-package.mjs'
       - 'scripts/app-package.selftest.mjs'
       - 'scripts/app-package-model.mjs'
@@ -66,7 +69,6 @@ on:
       - 'docs/business-apps/platform-upgrade-notes.json'
       - 'nuxeo-agentic-core/src/main/**'
       - 'apps/nuxeo-ui/src/app/business-apps.menu.ts'
-      - 'apps/nuxeo-ui/public/i18n/en.json'
       - 'tools/satori-generators/src/config-package/files/build.mjs__tmpl__'
       - '.github/workflows/app-packages.yml'
 

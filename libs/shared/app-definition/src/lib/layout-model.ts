@@ -9,6 +9,8 @@
  *   subfield's type, as a field's does. An address's `parts` name subfields of its property too.
  * - **A checklist's property** is on the type, a list of complex values, with the subfields
  *   {@link CHECKLIST_SUBFIELDS} names, each of its type.
+ * - **A review** is for a type with the `picture` schema and without the `video` one, the records
+ *   whose page shows a picture.
  *
  * Each finding is `unknown` or `parameter`, never `structure`, so that the app, loading a file
  * tolerantly, would leave out the field it is in and show the rest. It runs once the file's own
@@ -205,7 +207,34 @@ export function againstModel(
       if (isRecord(tab)) cards(tab['cards'], join(join('tabs', index), 'cards'));
     });
   }
+  // A review is drawn on a picture's views, which a record shows only with the `picture` schema
+  // and without the `video` one, whose player it keeps, as the record page decides it. The page
+  // decides for each record, whose run-time facets can add a schema the type's model lacks: this
+  // holds the type to it, as the type's records are without such a facet.
+  if (isRecord(file['review'])) {
+    const schemas = schemasOf(model, type);
+    if (!schemas.has('picture'))
+      add(
+        'review',
+        'unknown',
+        `a review is drawn on a picture, and the type "${type}" has no "picture" schema: its record page shows no picture`,
+      );
+    else if (schemas.has('video'))
+      add(
+        'review',
+        'unknown',
+        `a review is drawn on a picture, and the type "${type}" has the "video" schema: its record page keeps its player, not its picture`,
+      );
+  }
   return findings;
+}
+
+/** The schemas a document of `type` has: its own, and those of each facet it declares. */
+function schemasOf(model: ContentModel, type: string): ReadonlySet<string> {
+  const names = new Set(model.types.get(type)?.schemas ?? []);
+  for (const facet of model.types.get(type)?.facets ?? [])
+    for (const schema of model.facets.get(facet)?.schemas ?? []) names.add(schema);
+  return names;
 }
 
 /**
@@ -215,9 +244,7 @@ export function againstModel(
  */
 function whyMissing(model: ContentModel, type: string, xpath: string): string {
   const [prefix, name] = xpath.split(':');
-  const declared = new Set(model.types.get(type)?.schemas ?? []);
-  for (const facet of model.types.get(type)?.facets ?? [])
-    for (const schema of model.facets.get(facet)?.schemas ?? []) declared.add(schema);
+  const declared = schemasOf(model, type);
   const named = model.schemas.get(prefix);
   if (named && declared.has(prefix) && named.prefix !== prefix && named.properties.has(name))
     return `"${xpath}" is written "${named.prefix}:${name}": the schema "${prefix}" has the prefix "${named.prefix}"`;

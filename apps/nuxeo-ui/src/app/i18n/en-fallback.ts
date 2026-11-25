@@ -271,6 +271,15 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-layouts.picture.label': 'Picture',
   'document-layouts.picture.loading': 'Loading the picture',
   'document-layouts.picture.views': 'Views of the picture',
+  'document-layouts.review.keys': 'Use the arrow keys to move between the pins.',
+  'document-layouts.review.loading': 'Loading the review',
+  'document-layouts.review.on-picture': 'Pins on the picture',
+  // A pin's name on the picture, given through `instant()` rather than the pipe, so the rule above
+  // does not find it in a template; it is a control's whole name all the same.
+  'document-layouts.review.pin-name':
+    'Pin {{number}}, round {{round}}, {{across}}% across, {{down}}% down: {{note}}',
+  'document-layouts.review.pin-name-past':
+    'Pin {{number}}, past round {{round}}, {{across}}% across, {{down}}% down: {{note}}',
   'document-layouts.sections': 'Property sections',
   'document-layouts.timeline.loading': 'Loading the history',
   'kd.content-lake-upload.loading': 'Loading',
@@ -371,8 +380,16 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'layout-designer.move-up': 'Move {{field}} up',
   'layout-designer.nav': 'What to design',
   'layout-designer.queue.reading': 'Opening the queue',
+  'layout-designer.queue.hide-column': 'Hide the column {{field}}',
+  'layout-designer.queue.move-column-down': 'Move the column {{field}} down',
+  'layout-designer.queue.move-column-up': 'Move the column {{field}} up',
+  'layout-designer.queue.move-facet-down': 'Move the facet {{field}} down',
+  'layout-designer.queue.move-facet-up': 'Move the facet {{field}} up',
+  'layout-designer.queue.move-sort-down': 'Move the sort on {{field}} down',
+  'layout-designer.queue.move-sort-up': 'Move the sort on {{field}} up',
   'layout-designer.queue.remove-facet': 'Remove the facet {{field}}',
   'layout-designer.queue.remove-sort': 'Remove the sort on {{field}}',
+  'layout-designer.queue.show-column': 'Show the column {{field}} again',
   'layout-designer.record-reading': 'Reading the record',
   'layout-designer.records-reading': 'Reading the records to preview with',
   'layout-designer.rule-placeholder': 'app.rules.canWrite, or { "type": …, "parameters": […] }',

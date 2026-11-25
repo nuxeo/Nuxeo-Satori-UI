@@ -10,9 +10,12 @@
  *   node scripts/app-upgrade-check.mjs <package directory> --previous <package directory>
  *     [--previous-platform <repository>] [--root <repository>] [--json]
  *   node scripts/app-upgrade-check.mjs --export <git ref> <directory> [--root <repository>]
+ *   node scripts/app-upgrade-check.mjs --place-at <git ref> <package directory> [--root <repository>]
  *
  * `--since` compares each package, every one under `business-apps/packages/` when none is named,
- * and the platform, with what they were at a git ref: the working tree against the ref. `--previous`
+ * and the platform, with what they were at a git ref: the working tree against the ref, a package
+ * whose folder was renamed against the package of the same name, whose place `--place-at` prints
+ * for the workflow. `--previous`
  * compares one package with an export of it, as the pipeline's step 3 does (`app-package.mjs`),
  * and the platform with `--previous-platform`'s, when it is given. `--export` writes what this check
  * reads of the platform at a ref into a directory, for `--previous-platform`: the workflow's step.
@@ -24,14 +27,16 @@
  * - **A part of the kit a customer may override or name, removed or renamed with no migration
  *   note** in the kit's `upgrade-notes.json`: a layout, fragment or asset the component contributes;
  *   the app; a component, which a customer's `<require>`s; a schema, a property of one, a document
- *   type or a page provider; a queue, a task form, the home, the menu or one of its entries (which
- *   the `navbar` slot registers as `appMenu.<id>`); a labels language or one of its keys; an action;
- *   the app's address.
+ *   type or a page provider; a queue, a task form, the home, the menu or one of its entries that
+ *   open a queue or the home (which the `navbar` slot registers as `appMenu.<id>`); a labels
+ *   language or one of its keys; an action; the app's address.
  * - **A configuration layer whose precedence changes with no note:** a component whose `<require>`s
- *   change, a contribution that moves to another component, a contribution newly disabled. Nuxeo
- *   registers a component's contributions after those of what it requires, and a later
- *   contribution on the same key wins (`ContributionRegistry` in nuxeo-agentic-core).
- * - **A label key or a property that disappears while the kit still names it.** No note mends it.
+ *   change; a contribution, a schema, a document type or a page provider that moves to another of
+ *   the kit's components; a contribution newly disabled. Nuxeo registers a component's
+ *   contributions after those of what it requires, and a later contribution on the same key wins
+ *   (`ContributionRegistry` in nuxeo-agentic-core).
+ * - **A label key, a property or a page provider that disappears while the kit still names it, or a
+ *   document type while it contributes a layout for it.** No note mends it.
  * - **A version that does not rise as far as these need.** Each is breaking: a major, or a minor
  *   below 1.0.0, as the version rules read a version (package-pipeline.md, section 8), where those
  *   rules asked less, as they do for a menu entry, a property or a component.

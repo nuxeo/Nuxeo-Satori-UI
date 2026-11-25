@@ -19,8 +19,11 @@
  *      since no step before the builder reads it;
  *   2. `bundle/agentic-ui-config/` is an app definition: it has an `app.json`, and the validator of
  *      `libs/shared/app-definition` finds nothing in it, given the deployment's allow-list, what
- *      it registers and its platform version, and, when one is given, the server's content model.
- *      The layouts the component contributes are the files the validator read, in the modes it
+ *      it registers, its platform version, the platform's English catalogue, which with the
+ *      package's labels must give every label key a text, and a content model: the one given, or,
+ *      for a package that ships a stand-in model, its own `content-model.json`. A queue's facet and
+ *      a home's figure name an aggregate their page provider defines, when the package's own
+ *      model defines it. The layouts the component contributes are the files the validator read, in the modes it
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
  *      contributed, since the server would never serve one that is not. The package contributes
  *      its app to the app registry once, from its `app.json`, naming every file of the app
@@ -47,7 +50,10 @@
  * and no credential, so that a package's checks need nothing a customer's repository does not have.
  * The content model is the one input that may need a server, and it is opt in: `--model` names a
  * file `app-package-model.mjs` exported, and `--model-server` reads the model live, with
- * `NUXEO_USER` and `NUXEO_PASS` from the environment.
+ * `NUXEO_USER` and `NUXEO_PASS` from the environment. Given neither, a package that ships a
+ * stand-in model, a component of its own registering document types, is held to the
+ * `content-model.json` beside its `bundle/`, which `app-model` writes to describe it; a package on
+ * a server's model is held to none.
  * The XML is read by `verify-package-zip.mjs`'s own helpers, the builder's grammar ported, so that
  * the three cannot disagree about what a descriptor says.
  *
@@ -100,6 +106,10 @@ const TEMPLATE = join(
 );
 const VALIDATOR = join(REPO, 'libs', 'shared', 'app-definition', 'src', 'bin.mjs');
 const UPGRADE = join(REPO, 'scripts', 'app-upgrade-check.mjs');
+/** The platform's English catalogue, which a package's label keys may name besides its own. */
+const CATALOGUE = join(REPO, 'apps', 'nuxeo-ui', 'public', 'i18n', 'en.json');
+/** The file `app-model` writes beside `bundle/`: the package's stand-in model, described. */
+const OWN_MODEL = 'content-model.json';
 const USAGE =
   'usage: node scripts/app-package.mjs <package directory> [--out <directory>] [--tag <tag>]' +
   ' [--allow-list <file>] [--registered <file>] [--platform <version>]' +
@@ -299,11 +309,37 @@ function run({
   const appFile = join(root, 'app.json');
   if (!existsSync(appFile))
     return refuse(2, 'bundle/agentic-ui-config/ has no app.json, which an app definition needs.');
+  // With no model given, a package that ships a stand-in model is held to its own description of
+  // it, so that a property it does not have is refused in CI as well.
+  const own = model === undefined ? ownModel(directory) : null;
+  const heldTo = model ?? own;
+  if (own !== null) {
+    process.stdout.write(
+      `The content model is the package's own ${OWN_MODEL}, since the package ships a stand-in model and no --model was given.\n`,
+    );
+    // Read first, as the validator would: the package's own file that cannot be read is the
+    // package's defect, refused here, not a command given wrongly, which --model's would be.
+    const read = spawnSync(process.execPath, [VALIDATOR, 'model', own], {
+      encoding: 'utf8',
+      env: withoutCredentials(process.env),
+      maxBuffer: OUTPUT_LIMIT,
+    });
+    if (read.status !== 0) {
+      process.stderr.write(read.stdout ?? '');
+      process.stderr.write(read.stderr ?? '');
+      return refuse(
+        2,
+        `the package's own ${OWN_MODEL}, which describes its stand-in model, cannot be read as a content model, as above. Write it again with app-model, or mend it.`,
+      );
+    }
+  }
   const flags = [
     ...(allowList ? ['--allow-list', allowList] : []),
     ...(registered ? ['--registered', registered] : []),
     ...(platform ? ['--platform', platform] : []),
-    ...(model ? ['--model', model] : []),
+    ...(heldTo ? ['--model', heldTo] : []),
+    '--catalogue',
+    CATALOGUE,
   ];
   const validation = spawnSync(process.execPath, [VALIDATOR, 'validate', root, ...flags], {
     encoding: 'utf8',
@@ -314,6 +350,14 @@ function run({
   process.stderr.write(validation.stderr ?? '');
   if (validation.status === 2) return 2;
   if (validation.status !== 0) return refuse(2, 'the app definition has findings, listed above.');
+  const unanswered = unansweredAggregates(directory, root);
+  if (unanswered.length > 0) {
+    for (const finding of unanswered) process.stdout.write(`${finding}\n`);
+    return refuse(
+      2,
+      'a facet or a figure names an aggregate its page provider does not define, listed above.',
+    );
+  }
   const contributed = layoutContributions(directory) ?? appContributions(directory, root);
   if (contributed) return refuse(2, contributed);
 
@@ -663,14 +707,175 @@ function layoutContributions(directory) {
  * a misspelt point or another component's target, is registered by nothing.
  */
 function configurationExtensions(xml) {
+  return extensionsOf(xml, 'org.nuxeo.agentic.ui.config', 'configuration');
+}
+
+/** A component's extensions to `target`'s `point`, each as `[start, end]` in its markup. */
+function extensionsOf(xml, target, point) {
   return [
     ...xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g')),
   ].flatMap((extension) => {
-    const { target, point } = attributesOf(extension[1]);
-    return target === 'org.nuxeo.agentic.ui.config' && point === 'configuration'
+    const attributes = attributesOf(extension[1]);
+    return attributes.target === target && attributes.point === point
       ? [[extension.index, extension.index + extension[0].length]]
       : [];
   });
+}
+
+/**
+ * The components the manifest names that can be read inside the bundle, each with its markup as
+ * the builder reads it. One that cannot is passed over: `layoutContributions` refuses it, and the
+ * builder refuses one that is missing.
+ */
+function componentsOf(directory) {
+  const bundle = join(directory, 'bundle');
+  const manifest = join(bundle, 'META-INF', 'MANIFEST.MF');
+  if (!existsSync(manifest) || !lstatSync(manifest).isFile()) return [];
+  const components = [];
+  for (const component of componentPathsOf(readFileSync(manifest, 'utf8').replace(/^\uFEFF/, ''))) {
+    const file = componentFileOf(resolve(bundle), component);
+    if (typeof file !== 'string' || file === '') continue;
+    try {
+      components.push({ component, xml: componentXmlOf(readFileSync(file, 'utf8')) });
+    } catch {
+      // Unreadable: layoutContributions says so.
+    }
+  }
+  return components;
+}
+
+/**
+ * The package's own content model, when no other is given: `content-model.json` beside `bundle/`,
+ * as `app-model` writes it, when the package ships a stand-in model, a component that registers
+ * document types of its own. `null` otherwise: a package on a customer's model ships no types, and
+ * a file there with no stand-in behind it describes a server, which may have changed since. A
+ * `<doctype append="true">` adds to a type the server has, and is not one of the package's own.
+ */
+function ownModel(directory) {
+  const file = join(directory, OWN_MODEL);
+  if (!existsSync(file) || !lstatSync(file).isFile()) return null;
+  const standIn = componentsOf(directory).some(({ xml }) =>
+    extensionsOf(xml, 'org.nuxeo.ecm.core.schema.TypeService', 'doctype').some(([from, to]) =>
+      [...xml.slice(from, to).matchAll(new RegExp(`<doctype${TAG}`, 'g'))].some(
+        ([, attributes]) => attributesOf(attributes).append?.toLowerCase() !== 'true',
+      ),
+    ),
+  );
+  return standIn ? file : null;
+}
+
+/**
+ * The page providers the package's own components define, by name: the component, whether it reads
+ * the repository (`coreQueryPageProvider`) or is generic, such as the search index's, and the ids of
+ * the aggregates it defines. A disabled definition takes the page provider away, as the server
+ * does; of two definitions, the later the manifest loads is the one the server keeps.
+ */
+function pageProvidersOf(directory) {
+  const providers = new Map();
+  for (const { component, xml } of componentsOf(directory)) {
+    for (const [from, to] of extensionsOf(
+      xml,
+      'org.nuxeo.ecm.platform.query.api.PageProviderService',
+      'providers',
+    )) {
+      const extension = xml.slice(from, to);
+      for (const match of extension.matchAll(
+        new RegExp(`<(coreQueryPageProvider|genericPageProvider)${TAG}`, 'g'),
+      )) {
+        const [tag, element, inside] = match;
+        const { name, enabled } = attributesOf(inside);
+        if (!name) continue;
+        if (enabled !== undefined && enabled.toLowerCase() !== 'true') {
+          providers.delete(name);
+          continue;
+        }
+        const start = match.index + tag.length;
+        const end = inside.trimEnd().endsWith('/')
+          ? start
+          : extension.indexOf(`</${element}`, start);
+        const definition = extension.slice(start, end === -1 ? extension.length : end);
+        const aggregates = [...definition.matchAll(new RegExp(`<aggregate${TAG}`, 'g'))]
+          .map(([, attributes]) => attributesOf(attributes).id)
+          .filter((id) => id !== undefined && id !== '');
+        providers.set(name, {
+          component,
+          repository: element === 'coreQueryPageProvider',
+          aggregates: new Set(aggregates),
+        });
+      }
+    }
+  }
+  return providers;
+}
+
+/** A JSON file of the app definition, or `null` when it cannot be read: the validator says why. */
+function definitionFile(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));
+  } catch {
+    return null;
+  }
+}
+
+/** A JSON object: not a list, not `null`. A declaration, since the run starts above it. */
+function isObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Each aggregate a queue's facet or a home's figure names on a page provider of the package's own
+ * that does not define it, as a finding in the validator's form: the file, the place, why. Only the
+ * search index answers aggregates, and only those a page provider defines: a facet on any other is
+ * left out of the queue, and a figure reads "Unavailable", each said only in the browser's console.
+ * A page provider the package does not define is the server's, and is not checked here.
+ */
+function unansweredAggregates(directory, root) {
+  const providers = pageProvidersOf(directory);
+  if (providers.size === 0) return [];
+  const findings = [];
+  const check = (file, place, pageProvider, aggregate) => {
+    const provider = providers.get(pageProvider);
+    if (
+      provider === undefined ||
+      typeof aggregate !== 'string' ||
+      provider.aggregates.has(aggregate)
+    )
+      return;
+    const defined = [...provider.aggregates];
+    const why =
+      defined.length > 0
+        ? `it defines ${defined.join(', ')}`
+        : provider.repository
+          ? 'it reads the repository, which answers none. A facet or a figure needs a page provider of the search index that defines the aggregate, as app-model --aggregates writes one'
+          : 'it defines none';
+    findings.push(
+      `${join(root, file)}: ${place}: the page provider "${pageProvider}", defined in ${provider.component}, has no aggregate "${aggregate}": ${why} [unknown]`,
+    );
+  };
+  const queues = join(root, 'queues');
+  if (existsSync(queues) && lstatSync(queues).isDirectory())
+    for (const entry of readdirSync(queues, { withFileTypes: true })
+      .filter((each) => each.isFile() && each.name.endsWith('.json'))
+      .sort((a, b) => a.name.localeCompare(b.name))) {
+      const queue = definitionFile(join(queues, entry.name));
+      if (!isObject(queue) || !Array.isArray(queue.facets)) continue;
+      queue.facets.forEach((facet, index) =>
+        check(
+          join('queues', entry.name),
+          `facets[${index}].aggregate`,
+          queue.pageProvider,
+          isObject(facet) ? facet.aggregate : undefined,
+        ),
+      );
+    }
+  const home = definitionFile(join(root, 'home.json'));
+  if (isObject(home) && Array.isArray(home.cards))
+    home.cards.forEach((card, index) => {
+      const kpi = isObject(card) ? card.kpi : undefined;
+      if (isObject(kpi))
+        check('home.json', `cards[${index}].kpi.aggregate`, kpi.pageProvider, kpi.aggregate);
+    });
+  return findings;
 }
 
 /**

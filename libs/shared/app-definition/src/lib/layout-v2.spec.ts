@@ -4,6 +4,7 @@ import {
   loadable,
   publishable,
   validateLayoutV2,
+  validateTaskForm,
   type Finding,
   type LayoutMode,
 } from './layout-v2';
@@ -547,6 +548,44 @@ describe('banners', () => {
   it("name their rule as a card does, and an unregistered one is that banner's finding", () => {
     expect(messages(page({ ...ending, visibleWhen: 'acme.rules.licensed' }))).toEqual([
       'banners[0].visibleWhen: the rule "acme.rules.licensed" is not registered [unknown]',
+    ]);
+  });
+});
+
+describe('a review', () => {
+  const reviewed = (review: unknown) => ({
+    version: 2,
+    review,
+    cards: [{ id: 'c', fields: ['dc:title'] }],
+  });
+
+  it('is turned on by an empty object, beside cards or tabs', () => {
+    expect(messages(reviewed({}))).toEqual([]);
+    expect(
+      messages({ version: 2, review: {}, tabs: [{ id: 't', cards: [{ id: 'c', fields: [] }] }] }),
+    ).toEqual([]);
+  });
+
+  it('is refused outside view mode, and in a task form', () => {
+    for (const mode of ['metadata', 'edit', 'create'] as const) {
+      expect(messages(reviewed({}), mode)).toEqual([
+        'review: a review belongs in view mode only [structure]',
+      ]);
+    }
+    expect(validateTaskForm(reviewed({})).map((finding) => finding.message)).toEqual([
+      'a review belongs in view mode only',
+    ]);
+  });
+
+  it('is refused as anything but an object, and an option it does not have is unknown', () => {
+    for (const shape of [true, 'pins', [], null]) {
+      expect(messages(reviewed(shape))).toEqual([
+        'review: review is an object: {} turns it on [structure]',
+      ]);
+    }
+    // Unknown, not structure: the app, loading the file tolerantly, leaves the review out alone.
+    expect(messages(reviewed({ rounds: 3 }))).toEqual([
+      'review.rounds: "rounds" is not a key version 2 has [unknown]',
     ]);
   });
 });

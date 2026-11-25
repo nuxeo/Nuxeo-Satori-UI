@@ -208,6 +208,178 @@ describe('app-model generator', () => {
     expect(xml).toContain('<sort column="dc:title" ascending="true" />');
   });
 
+  describe('a page provider of the search index, with --aggregates', () => {
+    const SEARCH_XSD = `${ROOT}/bundle/schemas/contractsearch.xsd`;
+    const open = () =>
+      generate({
+        pageProvider: 'acme_open_contracts',
+        where: "contract:status IN ('Draft', 'Active')",
+        sort: 'contract:end',
+        aggregates: 'contract:status,contract:noticeDays',
+      });
+
+    it('reads the index, with a terms aggregate per property, each its search field', async () => {
+      await contract();
+      await open();
+      const xml = read(tree, MODEL);
+      expect(xml).toContain(
+        '    <genericPageProvider name="acme_open_contracts"\n' +
+          '        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">\n' +
+          '      <searchDocumentType>ContractSearch</searchDocumentType>\n' +
+          '      <whereClause>\n' +
+          '        <fixedPart>\n' +
+          "          ecm:primaryType = 'Contract' AND (contract:status IN ('Draft', 'Active'))\n" +
+          '          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0\n' +
+          '        </fixedPart>\n' +
+          '      </whereClause>\n' +
+          '      <aggregates>\n' +
+          '        <aggregate id="contract_status_agg" type="terms" parameter="contract:status">\n' +
+          '          <field schema="contract_search" name="contract_status_agg" />\n' +
+          '          <properties>\n' +
+          '            <property name="size">10</property>\n' +
+          '          </properties>\n' +
+          '        </aggregate>\n' +
+          '        <aggregate id="contract_noticeDays_agg" type="terms" parameter="contract:noticeDays">\n',
+      );
+      expect(xml).toContain(
+        '      </aggregates>\n' +
+          '      <sort column="contract:end" ascending="true" />\n' +
+          '      <pageSize>50</pageSize>\n' +
+          '      <maxPageSize>100</maxPageSize>\n' +
+          '    </genericPageProvider>',
+      );
+      expect(xml).not.toContain('<coreQueryPageProvider');
+      // Its search document: never saved, hidden, with a schema of its own registered once.
+      expect(xml).toContain(
+        '    <doctype name="ContractSearch" extends="Document">\n' +
+          '      <facet name="HiddenInNavigation" />\n' +
+          '      <schema name="contract_search" />\n' +
+          '    </doctype>',
+      );
+      expect(xml).toContain(
+        '<schema name="contract_search" prefix="contractsearch" src="schemas/contractsearch.xsd" />',
+      );
+      const xsd = read(tree, SEARCH_XSD);
+      expect(xsd).toContain('<xs:element name="contract_status_agg" type="nxs:stringList" />');
+      expect(xsd).toContain('<xs:element name="contract_noticeDays_agg" type="nxs:stringList" />');
+      // Not a record type: the content model the layouts are held to is unchanged.
+      expect(read(tree, `${ROOT}/content-model.json`)).not.toContain('ContractSearch');
+    });
+
+    it("keeps the search document's fields for another page provider, and writes it once", async () => {
+      await contract();
+      await open();
+      await generate({ pageProvider: 'acme_by_party', aggregates: 'dc:creator' });
+      const xml = read(tree, MODEL);
+      expect(xml.match(/<doctype name="ContractSearch"/g)).toHaveLength(1);
+      expect(xml.match(/<schema name="contract_search" prefix=/g)).toHaveLength(1);
+      expect(xml).toContain('<aggregate id="dc_creator_agg" type="terms" parameter="dc:creator">');
+      const xsd = read(tree, SEARCH_XSD);
+      for (const field of ['contract_status_agg', 'contract_noticeDays_agg', 'dc_creator_agg'])
+        expect(xsd).toContain(`<xs:element name="${field}" type="nxs:stringList" />`);
+    });
+
+    it('turns a page provider of the repository into one of the index with --force', async () => {
+      await contract();
+      await generate({ pageProvider: 'acme_open_contracts' });
+      await expect(open()).rejects.toThrow('has the page provider acme_open_contracts already');
+      expect(read(tree, MODEL)).toContain('<coreQueryPageProvider name="acme_open_contracts">');
+      await generate({
+        pageProvider: 'acme_open_contracts',
+        aggregates: 'contract:status',
+        force: true,
+      });
+      const xml = read(tree, MODEL);
+      expect(xml).not.toContain('<coreQueryPageProvider');
+      expect(xml.match(/<genericPageProvider /g)).toHaveLength(1);
+    });
+
+    it('writes the type and its page provider in one run', async () => {
+      await generate({
+        properties: 'number,status=Draft|Active',
+        pageProvider: 'acme_open_contracts',
+        aggregates: 'contract:status',
+      });
+      expect(read(tree, MODEL)).toContain('<aggregate id="contract_status_agg"');
+    });
+
+    const refused: [string, Partial<AppModelSchema>, string][] = [
+      [
+        'with no page provider',
+        { type: 'Other', properties: 'a', aggregates: 'other:a' },
+        'give its --pageProvider too',
+      ],
+      [
+        'with a parameter, which a queue cannot fill',
+        { pageProvider: 'p', where: 'contract:counterparty = ?', aggregates: 'contract:status' },
+        'has no record to fill it',
+      ],
+      [
+        'on a property the type does not have',
+        { pageProvider: 'p', aggregates: 'contract:owner' },
+        '"contract:owner" is not a property of Contract',
+      ],
+      [
+        'on a date, which ranges',
+        { pageProvider: 'p', aggregates: 'contract:end' },
+        '"contract:end" is a date property',
+      ],
+      ['on a double', { pageProvider: 'p', aggregates: 'contract:value' }, 'is a double property'],
+      [
+        'on something not a property',
+        { pageProvider: 'p', aggregates: 'status' },
+        '"status" must be a property',
+      ],
+      [
+        'whose id a facet could not send back',
+        { pageProvider: 'p', aggregates: 'common:icon-expanded' },
+        'would make the aggregate "common_icon-expanded_agg", which a facet cannot send back',
+      ],
+      [
+        'twice',
+        { pageProvider: 'p', aggregates: 'contract:status,contract:status' },
+        'lists "contract:status" twice',
+      ],
+    ];
+    for (const [what, options, message] of refused) {
+      it(`refuses an aggregate ${what}`, async () => {
+        await contract();
+        const before = read(tree, MODEL);
+        await expect(generate(options)).rejects.toThrow(message);
+        expect(read(tree, MODEL)).toBe(before);
+        expect(tree.exists(SEARCH_XSD)).toBe(false);
+      });
+    }
+
+    it("refuses a search schema whose file is another schema's", async () => {
+      await contract();
+      await generate({ type: 'ContractLog', properties: 'entry', schema: 'contractsearch' });
+      const before = read(tree, MODEL);
+      const xsd = read(tree, SEARCH_XSD);
+      await expect(open()).rejects.toThrow(
+        "schemas/contractsearch.xsd, where the search document's schema contract_search goes, is another schema's",
+      );
+      expect(read(tree, MODEL)).toBe(before);
+      expect(read(tree, SEARCH_XSD)).toBe(xsd);
+    });
+
+    it("leaves alone a file at the search schema's place that no entry registers", async () => {
+      await contract();
+      tree.write(SEARCH_XSD, '<!-- written by hand, for something else -->\n');
+      const before = read(tree, MODEL);
+      await expect(open()).rejects.toThrow('or a file no entry of');
+      expect(read(tree, MODEL)).toBe(before);
+      expect(read(tree, SEARCH_XSD)).toBe('<!-- written by hand, for something else -->\n');
+    });
+
+    it('refuses an aggregate on a type the content model does not describe', async () => {
+      await expect(generate({ pageProvider: 'p', aggregates: 'contract:status' })).rejects.toThrow(
+        'write its --properties first',
+      );
+      expect(tree.exists(MODEL)).toBe(false);
+    });
+  });
+
   describe('refuses, and writes nothing', () => {
     const refusals: [string, Partial<AppModelSchema>, string][] = [
       ['nothing to write', {}, 'Give the type its properties with --properties'],

@@ -70,6 +70,7 @@ record page is today's document page.
 | `version` | Required: `2`                                                                                  |
 | `columns` | How many columns the cards fill, 1 to 3. Default 1. `view` mode only                           |
 | `banners` | Messages above the cards, each shown while its rule passes (below). `view` mode only           |
+| `review`  | A picture's review: pins on the picture, in rounds (below). `view` mode only                   |
 | `cards`   | The cards, in order                                                                            |
 | `tabs`    | Or tabs, each holding cards: `{ "id", "label"?, "labelKey"?, "visibleWhen"?, "cards": [...] }` |
 | `$schema` | Optional: the address of a JSON Schema, for editors, as version 1's fragments write it         |
@@ -126,6 +127,71 @@ picture whose rights are ending. It shows above the cards, or above the tabs, wh
 - **A banner is not a security control,** any more than a hidden field is. Refusing a download
   whose rights have ended is the server's to do.
 
+### Review
+
+A record page that shows a picture can show it as a creative review: a reviewer places a pin at a
+point of the picture and writes a note, the pins are listed beside it, and the review goes in
+rounds. `{}` turns it on; it takes no option yet:
+
+```json
+{
+  "version": 2,
+  "review": {},
+  "cards": [{ "id": "asset", "labelKey": "acme.asset.card", "fields": ["dc:title"] }]
+}
+```
+
+- **Only on a picture.** The page draws the review in place of the picture's views (section 11),
+  for a record with the `picture` schema and not the `video` one. On any other record the review is
+  left out, and the console says so; given the content model, the pipeline refuses a review for a
+  type without the `picture` schema, or with the `video` one. A facet given to one record at run
+  time can add the `picture` schema to a type the model has without it: the page then draws the
+  review, which the pipeline refused for the type.
+- **Pins.** A pin is placed by clicking the picture, or with "Add a pin" and its form's two fields,
+  how far across and how far down in percent, which the keyboard alone fills; the pin being placed
+  shows on the picture as they change, and its note is required. Both are offered only while a view
+  of the picture is shown. Each pin is numbered in the order the pins were written, and listed
+  beside the picture with its note, its author and its place. Choosing one, on the picture or in
+  the list, highlights it in both; choosing it again chooses none.
+- **Where a pin is** is written as fractions of the view's width and height, from its top left, so
+  it stays on its point on a view of another size: Nuxeo makes each view at the picture's
+  proportions. A pin does not say which file it was placed on: replace the picture, and every pin
+  shows on the new one.
+- **In the order the repository wrote them.** The review reads its annotations oldest first by
+  `dc:created`, which the repository stamps when each is written. Not by an annotation's own
+  `creationDate`, which Nuxeo 2025 takes from the request when one is sent, so a writer could
+  backdate one. A holder of `Write` on the record, which its annotations inherit, can still change
+  `dc:created` afterwards, as they can change the record.
+- **Rounds.** A pin is in the round open when it was written, round 1 first, whatever its page had
+  seen: a pin written on a page that had not yet seen round 1 closed is round 2's. "Close round"
+  closes the round open then and opens the next; the pins of a closed round stay on the picture and
+  in the list, marked as past. Each close moves the rounds by one: a second close of a round
+  already closed, by two people at once, changes nothing, and a close deleted from the record's
+  comments renumbers the rounds after it, merging none. A review counts 999 rounds at most. After
+  each write the page reads the record's annotations again, so that what others wrote meanwhile
+  shows.
+- **Stored as Nuxeo's own annotations,** with no schema and no add-on: a pin is an annotation whose
+  `entity` holds its round and place, written through the `@annotation` REST adapter, and a
+  round's close is an annotation too, on the same record. Their file is `picture:views`, not
+  `file:content`, where the Annotations tab's viewer keeps its own. An annotation is a comment that
+  names a file, so each pin's note is also one of the record's comments, which the Comments panel
+  lists, and where Nuxeo lets its author, or an administrator, edit or delete it as any comment.
+  Editing its text there keeps its place and round ([api-integrations.md](../api-integrations.md),
+  section 39).
+- **What the page offers,** from the record's `permissions` enricher, which the document page
+  asks for: Add a pin to a holder of Nuxeo's `Comment` permission, or of `Write`, on the record;
+  Close round to a holder of `Write`, once the open round has a pin. Nothing on a version, a record
+  in the trash, a page drawn read-only, as the layout designer's preview is, or a record that came
+  without its permissions. A reader sees the pins and their notes, and is offered neither.
+- **Hiding a control is not the security control.** Nuxeo 2025's comment service accepts an
+  annotation, a pin or a round's close, from anyone who may read the record, through the REST API,
+  whatever the page offers: `TreeCommentManager.checkCreateCommentPermissions` checks `Read`. It
+  makes the signed-in user the author, whatever the request says. A review that only some readers
+  may write needs the server to check more, which nothing here does.
+- **By keyboard,** the pins on the picture are one stop, a toolbar: the arrow keys, Home and End
+  move among them and choose the one reached, which a hidden hint says. Each one's name says its
+  number, its round, whether that round is past, its place in percent and its note.
+
 ### Cards
 
 | Key                 | Meaning                                                                                                                                                                                                       |
@@ -168,8 +234,8 @@ A field has `field` or `computed`, never both. A computed field is never editabl
 
 A widget says how one value is shown, and in a form how it is entered. It declares the property
 types it accepts. A widget on a property of another type is refused wherever the content model is
-known: by the app when it loads the page, by the pipeline when it is given the model, and by the
-layout designer, which will not save the file. The migration server is to refuse it too (section 11).
+known: by the app when it loads the page, by the pipeline when it has a model (one it is given,
+or a stand-in package's own), and by the layout designer, which will not save the file. The migration server is to refuse it too (section 11).
 
 | Widget          | For                            | Parameters                                                               | In a form                        |
 | --------------- | ------------------------------ | ------------------------------------------------------------------------ | -------------------------------- |
@@ -523,7 +589,8 @@ each done or not, with who did it and when, in `view` mode:
   finding about one field leaves out that field, and one about the card's own keys leaves out the
   card.
 - **A finding about a banner,** such as a rule this build does not register, leaves out that
-  banner.
+  banner, and **one about the review,** such as an option this build does not have, leaves out the
+  review: the picture shows its views alone.
 - **Strict when built.** A package that reaches a server has already passed every check, so the
   app has little to refuse.
 - **Tolerant when loaded.** A file written for a later platform still shows everything this one
@@ -544,8 +611,9 @@ What counts as structural:
 - a banner with no `label` or `labelKey`, or a `tone` other than its three;
 - a field with both `field` and `computed`, or neither;
 - a computed field with no `id`;
-- form-only keys in `view` mode, or `banners`, `related`, `timeline`, `comments`, `external` or
-  `checklist` outside it;
+- form-only keys in `view` mode, or `banners`, `review`, `related`, `timeline`, `comments`,
+  `external` or `checklist` outside it;
+- a `review` that is not an object;
 - a timeline's `events` that is empty, or names an event other than by its ID;
 - a `span` over `columns`;
 - a `var:` property, which only a task form has
@@ -865,7 +933,9 @@ becomes. In version 2's terms:
 - **A Picture's record page shows its picture first.** A record with the `picture` schema, a
   Picture or any record a facet gives it, has its record page though it holds a file, and the page
   shows its picture views above the cards, under the banners, as Nuxeo lists them in
-  `picture:views`. That is `RecordPictureViewsComponent`, in the same library:
+  `picture:views`, or, when the file has a `review` (section 2), the same views as a review, with
+  its pins and rounds beside them (`RecordPictureReviewComponent`). That is
+  `RecordPictureViewsComponent`, in the same library:
   - one view shows large: `Medium` first, else `Small`, `FullHD` or `OriginalJpeg`, else the first,
     so that a view sized for a screen loads first where the record has one. A button for each view shows its name and size,
     and shows that view instead; the caption names the view shown, its size and its format;
@@ -961,9 +1031,9 @@ becomes. In version 2's terms:
   widget that does not show its property's type, a table column naming a subfield its property
   lacks, and a checklist whose property the type lacks, is not a list of complex values, or lacks
   one of `item`, `done`, `doneBy` and `doneOn` or has it of another type. Each is `unknown` or
-  `parameter`, so loading stays tolerant. The pipeline holds a package
-  to a model when it is given one ([package-pipeline.md](package-pipeline.md), section 4), and the
-  layout designer holds the file it edits, a record page or an edit or create form, to the server's
+  `parameter`, so loading stays tolerant. The pipeline holds a package to a model when it is given
+  one, and a package that ships a stand-in model to its own `content-model.json`
+  ([package-pipeline.md](package-pipeline.md), section 4), and the layout designer holds the file it edits, a record page or an edit or create form, to the server's
   model when it can read it, and saves none with a finding
   ([its README](../../libs/features/layout-designer/README.md)); the migration server
   is still to call it. Its limits:
