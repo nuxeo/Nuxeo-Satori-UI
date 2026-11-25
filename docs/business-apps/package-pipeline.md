@@ -735,8 +735,9 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
   an existing path, folder or file, stops the run with exit 2 and is left as it was. A refused or
   interrupted run removes the directory it made, so no half-built candidate looks like a whole one,
   and its scratch folder.
-- **`--since`** is the last release, any git ref: each kit is held to itself as that commit has it.
-  A kit the commit does not have is new, and held to nothing; one it has that the candidate does
+- **`--since`** is the last release, any git ref: each kit is held to the package of its name as
+  that commit has it, and to the platform there, as section 10's upgrade check reads them. A kit
+  the commit does not have is new, and held to nothing; one it has that the candidate does
   not is listed as removed. A kit is released by its tag `app-package/<name>/<version>` (section 5),
   and none has been pushed yet, so for now no ref is every kit's last release.
 - **`--version`** is the Maven modules' version and the `nuxeo-agentic-ui` package's. Left out, it
@@ -745,7 +746,8 @@ npm run release-candidate -- --out ../release-candidate-2026.0.2 --since <the la
   kit's dependency on `nuxeo-agentic-ui:2026.0.2` (below). A package that keeps a version of its
   own keeps it: `nuxeo-agentic-assets` is 0.1.0, its `assets.package.version`.
 - It needs the Node `.nvmrc` pins, 24, and refuses another, since the client is built with the Node
-  that runs it; Maven with a JDK, `unzip`, git, and an installed workspace (`npm ci`). It took about
+  that runs it; Maven with a JDK, `unzip`, git, `tar`, which the upgrade check's export uses, and an
+  installed workspace (`npm ci`). It took about
   thirty seconds on a laptop whose Angular build cache was warm; CI's first run will say how long it
   takes without one. It has not been run on Windows, where Maven is a `.cmd` that Node starts only
   through a shell.
