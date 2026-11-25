@@ -41,7 +41,9 @@ public class ShareLinkServlet extends HttpServlet {
             ShareEndpoint endpoint = new ShareEndpoint(service);
             answer = TransactionHelper.runInTransaction(() -> Framework.doPrivileged(
                     () -> endpoint.respond(request.getMethod(), request.getPathInfo(), request.getContextPath())));
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
+            // An Error too, such as running out of memory while decoding: nothing is served, and the
+            // visitor gets the one refusal, not the container's error page.
             log.error("Share links: a request could not be answered, so it is refused", e);
             answer = ShareEndpoint.notAvailable();
         }

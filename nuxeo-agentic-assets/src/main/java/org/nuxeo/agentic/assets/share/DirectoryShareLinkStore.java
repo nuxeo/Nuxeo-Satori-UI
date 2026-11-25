@@ -66,6 +66,8 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
 
     static final String DIGESTS = "digests";
 
+    static final String SHA256 = "sha256";
+
     static final String LAST_DAY = "lastDay";
 
     static final String CREATED = "created";
@@ -125,6 +127,7 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
         entry.put(DOCUMENT, link.document());
         entry.put(ITEMS, items(link.items()));
         entry.put(DIGESTS, digests(link.digests()));
+        entry.put(SHA256, digests(link.sha256()));
         entry.put(LAST_DAY, link.lastDay().toString());
         entry.put(CREATED, INSTANT.format(link.created()));
         entry.put(CREATED_BY, link.createdBy());
@@ -209,6 +212,7 @@ public class DirectoryShareLinkStore implements ShareLinkStore {
             List<String> items = items(text(entry, LINK_SCHEMA, ITEMS));
             return new ShareLink(text(entry, LINK_SCHEMA, ID), text(entry, LINK_SCHEMA, REPOSITORY),
                     text(entry, LINK_SCHEMA, DOCUMENT), items, digests(text(entry, LINK_SCHEMA, DIGESTS), items),
+                    digests(text(entry, LINK_SCHEMA, SHA256), items),
                     LocalDate.parse(text(entry, LINK_SCHEMA, LAST_DAY)), instant(text(entry, LINK_SCHEMA, CREATED)),
                     text(entry, LINK_SCHEMA, CREATED_BY), revoked == null ? null : instant(revoked),
                     optional(entry, REVOKED_BY));

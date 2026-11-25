@@ -25,7 +25,7 @@ class ShareEndpointTest {
     private static final String TOKEN = ShareToken.generate(new SecureRandom());
 
     private static final ShareLink LINK = new ShareLink(ShareToken.hash(TOKEN), "default", "asset-a",
-            List.of("view:FullHD"), Map.of("view:FullHD", "d1"), LocalDate.of(2026, 12, 14), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager",
+            List.of("view:FullHD"), Map.of("view:FullHD", "d1"), Map.of("view:FullHD", "s1"), LocalDate.of(2026, 12, 14), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager",
             null, null);
 
     /** A service that answers what the test sets, and records what it was asked. */
@@ -102,6 +102,7 @@ class ShareEndpointTest {
             Response response = endpoint.respond(method, "/" + TOKEN + "/view/FullHD", "/nuxeo");
             assertEquals(405, response.status(), method);
             assertEquals("GET", response.headers().get("Allow"));
+            assertEquals(ShareEndpoint.FILE_POLICY, response.headers().get("Content-Security-Policy"));
             common(response);
         }
         assertTrue(service.asked.isEmpty());
@@ -152,7 +153,7 @@ class ShareEndpointTest {
     @Test
     void anItemIsServedAsTheMarkedBytesUnderAFileNameOfSafeCharacters() {
         byte[] marked = { 1, 2, 3 };
-        service.answer = new ShareLinkService.Served(LINK, ShareItem.parse("view:Web \"view\"/2;x"), marked,
+        service.answer = new ShareLinkService.Served(LINK, ShareItem.parse("view:Web \"view\" 2;x"), marked,
                 "image/jpeg");
         Response response = get("/" + TOKEN + "/view/FullHD");
         assertEquals(200, response.status());
@@ -170,6 +171,7 @@ class ShareEndpointTest {
         Response response = get("/" + TOKEN + "/view/FullHD");
         assertEquals(503, response.status());
         assertEquals("10", response.headers().get("Retry-After"));
+        assertEquals(ShareEndpoint.FILE_POLICY, response.headers().get("Content-Security-Policy"));
         common(response);
     }
 

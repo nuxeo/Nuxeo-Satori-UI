@@ -97,6 +97,10 @@ class ShareLinkComponentTest {
         assertThrows(DocumentSecurityException.class, () -> links.list(reader, asset.model()));
         assertThrows(DocumentSecurityException.class, () -> links.downloads(reader, asset.model()));
         assertThrows(DocumentSecurityException.class, () -> links.revoke(reader, asset.model(), "0".repeat(64)));
+        // In the sharing group, but without WriteSecurity on this asset: still no link.
+        CoreSession sharer = ShareFakes.session("sharer", false, false, List.of(ShareFakes.SHARERS));
+        assertThrows(DocumentSecurityException.class,
+                () -> links.create(sharer, asset.model(), List.of("view:FullHD"), "2026-12-14"));
         assertTrue(store.links.isEmpty());
     }
 
@@ -433,7 +437,7 @@ class ShareLinkComponentTest {
         // As a database whose collation ignores case would answer an id written in capitals.
         ShareLink loose = created.link();
         ShareLink upper = new ShareLink(loose.id().toUpperCase(), loose.repository(), loose.document(), loose.items(),
-                loose.digests(), loose.lastDay(), loose.created(), loose.createdBy(), null, null);
+                loose.digests(), loose.sha256(), loose.lastDay(), loose.created(), loose.createdBy(), null, null);
         store.links.put(loose.id(), upper);
         refused(Why.UNKNOWN, links.serve(created.token(), "view:FullHD"));
     }
@@ -468,7 +472,7 @@ class ShareLinkComponentTest {
     void tooManyMarkedAtOnceIsTryAgainNotTheFile() {
         Created created = make(asset, "2026-12-14", "view:FullHD");
         ShareLinkComponent full = ShareFakes.component(clock, store, repository, TestRights.kit(clock),
-                new Semaphore(0));
+                new Semaphore(0)).waits(50, 50);
         assertInstanceOf(Busy.class, full.serve(created.token(), "view:FullHD"));
         assertTrue(store.downloads.isEmpty());
     }
@@ -583,53 +587,123 @@ class ShareLinkComponentTest {
         assertEquals(old.link().id(), listed.get(listed.size() - 1).id());
     }
 
-    /** One link's items are marked one at a time: a second request through it waits for nothing and is told to try again. */
-    @Test
-    void oneLinkMarksOneItemAtATimeAndLeavesTheOtherTurnToOthers() throws Exception {
-        java.util.concurrent.CountDownLatch inside = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
-        Watermarker slow = new Watermarker() {
-            @Override
-            public byte[] watermark(org.nuxeo.ecm.core.api.Blob blob, String text) throws WatermarkException {
-                if (text.contains(slowLabel)) {
-                    inside.countDown();
-                    try {
-                        release.await();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-                return super.watermark(blob, text);
-            }
-        };
-        Asset other = repository.add(new Asset("asset-b", Color.BLUE));
-        ShareLinkComponent shared = ShareFakes.component(clock, store, repository, TestRights.kit(clock),
-                new Semaphore(2), slow);
-        Created busy = assertInstanceOf(Created.class,
-                shared.create(owner, asset.model(), List.of("view:FullHD", "view:Medium"), "2026-12-14"));
-        Created calm = assertInstanceOf(Created.class,
-                shared.create(owner, other.model(), List.of("view:Small"), "2026-12-14"));
-        slowLabel = busy.link().label();
+    /** A watermarker that holds every marking of a picture carrying a given label until released. */
+    private static final class Holding extends Watermarker {
+        final java.util.concurrent.CountDownLatch inside = new java.util.concurrent.CountDownLatch(1);
 
-        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
-        try {
-            java.util.concurrent.Future<Answer> first = pool.submit(() -> shared.serve(busy.token(), "view:FullHD"));
-            assertTrue(inside.await(10, java.util.concurrent.TimeUnit.SECONDS));
-            long started = System.nanoTime();
-            assertInstanceOf(Busy.class, shared.serve(busy.token(), "view:Medium"));
-            assertTrue(System.nanoTime() - started < 1_000_000_000L, "told at once, not after a wait");
-            served(shared.serve(calm.token(), "view:Small"));
-            release.countDown();
-            served(first.get(10, java.util.concurrent.TimeUnit.SECONDS));
-        } finally {
-            release.countDown();
-            pool.shutdownNow();
+        final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+
+        final java.util.concurrent.atomic.AtomicInteger atOnce = new java.util.concurrent.atomic.AtomicInteger();
+
+        final java.util.concurrent.atomic.AtomicInteger most = new java.util.concurrent.atomic.AtomicInteger();
+
+        volatile String held = "none";
+
+        @Override
+        public byte[] watermark(byte[] file, String text, String shortText) throws WatermarkException {
+            if (!text.contains(held)) {
+                return super.watermark(file, text, shortText);
+            }
+            most.accumulateAndGet(atOnce.incrementAndGet(), Math::max);
+            try {
+                inside.countDown();
+                // Never forever: a test that breaks the turns fails here rather than hanging.
+                release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                return super.watermark(file, text, shortText);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            } finally {
+                atOnce.decrementAndGet();
+            }
         }
-        // Its turn given back, the link marks again.
-        served(shared.serve(busy.token(), "view:Medium"));
     }
 
-    private volatile String slowLabel = "none";
+    /**
+     * One link's items are marked one after the other: while one is, another through the same link
+     * waits its turn, and is told to try again only after the wait; another link marks meanwhile.
+     */
+    @Test
+    @org.junit.jupiter.api.Timeout(60)
+    void oneLinkMarksOneItemAtATimeAndLeavesTheOtherTurnToOthers() throws Exception {
+        Holding holding = new Holding();
+        Asset other = repository.add(new Asset("asset-b", Color.BLUE));
+        ShareLinkComponent shared = ShareFakes.component(clock, store, repository, TestRights.kit(clock),
+                new Semaphore(2), holding).waits(2000, 300);
+        Created busy = assertInstanceOf(Created.class,
+                shared.create(owner, asset.model(), List.of("view:FullHD", "view:Medium"), "2026-12-14"));
+        // Two links that share a turn wait for each other, one time in 64: the test takes one that does not.
+        Created calm;
+        do {
+            calm = assertInstanceOf(Created.class,
+                    shared.create(owner, other.model(), List.of("view:Small"), "2026-12-14"));
+        } while (Math.floorMod(busy.link().id().hashCode(), 64) == Math.floorMod(calm.link().id().hashCode(), 64));
+        holding.held = busy.link().label();
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<Answer> first = pool.submit(() -> shared.serve(busy.token(), "view:FullHD"));
+            assertTrue(holding.inside.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            // The same link's other item waits its turn, 300 ms here, and is told to try again.
+            long started = System.nanoTime();
+            assertInstanceOf(Busy.class, shared.serve(busy.token(), "view:Medium"));
+            assertTrue(System.nanoTime() - started >= 250_000_000L, "it waited for its turn");
+            // Another link marks meanwhile: the held one has one turn of the two, not both.
+            Created other2 = calm;
+            served(shared.serve(other2.token(), "view:Small"));
+
+            // Asked again while the first is still held, it is served once the first lets go.
+            java.util.concurrent.Future<Answer> second = pool.submit(() -> shared.serve(busy.token(), "view:Medium"));
+            Thread.sleep(100);
+            holding.release.countDown();
+            served(first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+            served(second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            holding.release.countDown();
+            pool.shutdownNow();
+        }
+        assertEquals(1, holding.most.get(), "one item of the link marked at a time");
+    }
+
+    /** As a store that gives two files the same digest would: the bytes read are not the link's. */
+    @Test
+    void bytesOtherThanTheLinksUnderTheSameDigestAreNotServed() {
+        Created created = make(asset, "2026-12-14", "view:FullHD");
+        org.nuxeo.ecm.core.api.Blob recorded = (org.nuxeo.ecm.core.api.Blob) asset.properties.get(
+                "picture:views/3/content");
+        org.nuxeo.ecm.core.api.Blob other = ShareFakes.undigested(ShareFakes.jpeg(190, 150, Color.BLACK), "image/jpeg");
+        other.setDigest(recorded.getDigest());
+        asset.viewFile(3, other);
+        refused(Why.CHANGED, links.serve(created.token(), "view:FullHD"));
+        assertTrue(store.downloads.isEmpty());
+    }
+
+    @Test
+    void aLinkRecordsTheSha256OfEachItemsBytes() throws IOException {
+        Created created = make(asset, "2026-12-14", "view:FullHD", "original");
+        org.nuxeo.ecm.core.api.Blob view = (org.nuxeo.ecm.core.api.Blob) asset.properties.get("picture:views/3/content");
+        org.nuxeo.ecm.core.api.Blob original = (org.nuxeo.ecm.core.api.Blob) asset.properties.get("file:content");
+        assertEquals(java.util.Map.of("view:FullHD", ShareLinkComponent.sha256(view.getByteArray()), "original",
+                ShareLinkComponent.sha256(original.getByteArray())), created.link().sha256());
+        assertEquals(java.util.Map.of("view:FullHD", view.getDigest(), "original", original.getDigest()),
+                created.link().digests());
+    }
+
+    /** The server's sharing groups are read at every request: a group taken off it ends its members' links. */
+    @Test
+    void aGroupTakenOffTheSharingGroupsEndsItsMembersLinks() {
+        java.util.concurrent.atomic.AtomicReference<java.util.Set<String>> groups = new java.util.concurrent.atomic.AtomicReference<>(
+                java.util.Set.of(ShareFakes.SHARERS));
+        ShareLinkComponent configured = new ShareLinkComponent(clock, store, repository, () -> TestRights.kit(clock),
+                new Watermarker(), new java.security.SecureRandom(), new Semaphore(2), groups::get);
+        Created created = assertInstanceOf(Created.class,
+                configured.create(owner, asset.model(), List.of("view:FullHD"), "2026-12-14"));
+        served(configured.serve(created.token(), "view:FullHD"));
+        groups.set(java.util.Set.of("legal"));
+        refused(Why.CREATOR_MAY_NOT_SHARE, configured.serve(created.token(), "view:FullHD"));
+        assertThrows(DocumentSecurityException.class,
+                () -> configured.create(owner, asset.model(), List.of("view:FullHD"), "2026-12-14"));
+    }
 
     // ----- Managing a document's links -----
 

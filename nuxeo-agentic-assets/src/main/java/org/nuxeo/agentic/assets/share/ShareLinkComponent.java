@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -64,8 +63,8 @@ import org.nuxeo.runtime.model.DefaultComponent;
  * the link for that item;</li>
  * <li>the document has the item, and its file is the one the link was made for: its view of that
  * title, or its original, with the digest the link recorded;</li>
- * <li>the item is a JPEG or a PNG the watermark can be drawn on, within its size: the bytes served
- * are always the marked ones, never the file;</li>
+ * <li>the bytes read for it have the SHA-256 the link recorded, and are a JPEG or a PNG the watermark
+ * can be drawn on, within its limits: the bytes served are always the marked ones, never the file;</li>
  * <li>the download is logged.</li>
  * </ol>
  * Nothing in a request names a document: the document is the link's, read with a system session.
@@ -86,6 +85,15 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
     /** How long a request waits for its turn to be marked before it is told to try again. */
     static final long MARKING_WAIT_MILLIS = 2000;
 
+    /**
+     * How long a request waits for its link's turn: a link's page asks for each of its pictures at
+     * once, and they are marked one after the other.
+     */
+    static final long LINK_WAIT_MILLIS = 10_000;
+
+    /** How many turns links share: a link always takes the same one, so it holds one at a time. */
+    static final int LINK_TURNS = 64;
+
     /** {@code yyyy-MM-dd}, and nothing else. */
     static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("uuuu-MM-dd")
                                                          .withResolverStyle(ResolverStyle.STRICT);
@@ -104,8 +112,15 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
 
     private final Semaphore marking;
 
-    /** The links one of whose items is being marked now: one at a time per link. */
-    private final Set<String> markingLinks = ConcurrentHashMap.newKeySet();
+    /**
+     * The links' turns: a link marks one item at a time, so that it never holds more than one of the
+     * {@link #MARKING_AT_ONCE}; two links may share a turn, and then wait for each other.
+     */
+    private final Semaphore[] linkTurns = new Semaphore[LINK_TURNS];
+
+    private volatile long markingWaitMillis = MARKING_WAIT_MILLIS;
+
+    private volatile long linkWaitMillis = LINK_WAIT_MILLIS;
 
     private final Supplier<Set<String>> sharingGroups;
 
@@ -127,6 +142,16 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         this.random = random;
         this.marking = marking;
         this.sharingGroups = sharingGroups;
+        for (int i = 0; i < LINK_TURNS; i++) {
+            linkTurns[i] = new Semaphore(1);
+        }
+    }
+
+    /** For tests, which do not wait seconds for a turn. */
+    ShareLinkComponent waits(long marking, long link) {
+        this.markingWaitMillis = marking;
+        this.linkWaitMillis = link;
+        return this;
     }
 
     /** The groups a comma-separated property names, trimmed; none for an empty one. */
@@ -201,15 +226,19 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         if (!refused.isEmpty()) {
             return new NotCreated(refused);
         }
-        // Each item is bound to the file it has now: its digest, which refusals() saw is there.
+        // Each item is bound to the file it has now: its digest, which refusals() saw is there, and
+        // the SHA-256 of its bytes.
         Map<String, String> digests = new LinkedHashMap<>();
+        Map<String, String> sha256 = new LinkedHashMap<>();
         for (ShareItem item : chosen) {
-            digests.put(item.id(), blobOf(document, policy, item).getDigest());
+            Blob blob = blobOf(document, policy, item);
+            digests.put(item.id(), blob.getDigest());
+            sha256.put(item.id(), sha256(blob));
         }
         String token = ShareToken.generate(random);
         String user = session.getPrincipal().getName();
         ShareLink link = new ShareLink(ShareToken.hash(token), document.getRepositoryName(), document.getId(),
-                chosen.stream().map(ShareItem::id).toList(), digests, day, now, user, null, null);
+                chosen.stream().map(ShareItem::id).toList(), digests, sha256, day, now, user, null, null);
         store.create(link);
         log.info("Share links: {} made link {} to {} for {}, until {} (UTC)", user, link.label(), document.getId(),
                 link.items(), day);
@@ -350,7 +379,11 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
         return open(token, item == null ? "" : item);
     }
 
-    /** The page when {@code itemId} is {@code null}; the item otherwise. Never throws. */
+    /**
+     * The page when {@code itemId} is {@code null}; the item otherwise. Never throws a
+     * {@code RuntimeException}: an {@code Error}, such as running out of memory, reaches the servlet,
+     * which answers it with the same refusal.
+     */
     private Answer open(String token, String itemId) {
         String label = "?";
         try {
@@ -460,23 +493,30 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
             return refused(why, label, itemId);
         }
         Blob blob = blobOf(document, policy, item, link.digests().get(item.id()));
-        // One item per link at a time, so that one link cannot hold every turn.
-        if (!markingLinks.add(link.id())) {
-            log.warn("Share links: link {} asked for {} while one of its items was being marked; told to try again",
-                    label, itemId);
+        // One item per link at a time, so that one link cannot hold every turn: its page's pictures
+        // wait for each other.
+        Semaphore turn = linkTurns[Math.floorMod(link.id().hashCode(), LINK_TURNS)];
+        try {
+            if (!turn.tryAcquire(linkWaitMillis, TimeUnit.MILLISECONDS)) {
+                log.warn("Share links: link {} asked for {} while its turn was taken; told to try again", label,
+                        itemId);
+                return new Busy();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return new Busy();
         }
         try {
             return mark(link, item, itemId, blob, now, label);
         } finally {
-            markingLinks.remove(link.id());
+            turn.release();
         }
     }
 
     private Answer mark(ShareLink link, ShareItem item, String itemId, Blob blob, Instant now, String label) {
         byte[] marked;
         try {
-            if (!marking.tryAcquire(MARKING_WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+            if (!marking.tryAcquire(markingWaitMillis, TimeUnit.MILLISECONDS)) {
                 log.warn("Share links: link {} asked for {} while {} items were being marked; told to try again", label,
                         itemId, MARKING_AT_ONCE);
                 return new Busy();
@@ -486,7 +526,12 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
             return new Busy();
         }
         try {
-            marked = watermarker.watermark(blob, watermarkText(link));
+            byte[] file = watermarker.read(blob);
+            // The bytes read are the ones the link was made for, whatever digest the store gives.
+            if (!sha256(file).equals(link.sha256().get(itemId))) {
+                return refused(Why.CHANGED, label, itemId);
+            }
+            marked = watermarker.watermark(file, watermarkText(link), link.label());
         } catch (WatermarkException e) {
             Why kind = e.kind() == WatermarkException.Kind.TOO_LARGE ? Why.TOO_LARGE : Why.NOT_AN_IMAGE;
             log.info("Share links: the {} of link {} is not marked ({}), so it is not served", itemId, label,
@@ -564,6 +609,29 @@ public class ShareLinkComponent extends DefaultComponent implements ShareLinkSer
             return null;
         } catch (RuntimeException e) {
             return null;
+        }
+    }
+
+    /** The SHA-256 of the blob's bytes, read as a stream, in lowercase hexadecimal. */
+    static String sha256(Blob blob) {
+        try (java.io.InputStream in = blob.getStream()) {
+            java.security.MessageDigest sha256 = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[64 * 1024];
+            for (int read; (read = in.read(buffer)) > 0;) {
+                sha256.update(buffer, 0, read);
+            }
+            return java.util.HexFormat.of().formatHex(sha256.digest());
+        } catch (java.io.IOException | java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("a file could not be read to bind a link to it", e);
+        }
+    }
+
+    static String sha256(byte[] bytes) {
+        try {
+            return java.util.HexFormat.of()
+                                      .formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 

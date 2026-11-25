@@ -16,7 +16,7 @@ class ShareLinkTest {
 
     private static ShareLink link(String lastDay, Instant revoked) {
         return new ShareLink("ab12cd34" + "0".repeat(56), "default", "asset-a", List.of("view:FullHD"),
-                java.util.Map.of("view:FullHD", "d1"), LocalDate.parse(lastDay), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager", revoked,
+                java.util.Map.of("view:FullHD", "d1"), java.util.Map.of("view:FullHD", "s1"), LocalDate.parse(lastDay), Instant.parse("2026-11-24T12:00:00Z"), "brand.manager", revoked,
                 revoked == null ? null : "brand.manager");
     }
 
@@ -49,7 +49,7 @@ class ShareLinkTest {
         assertEquals("FullHD", ShareItem.parse("view:FullHD").title());
         assertTrue(ShareItem.parse("original").isOriginal());
         for (String wrong : new String[] { null, "", "Original", "view:", "view: x", "view:x ", "view:a\nb",
-                "view:a\u200eb", "view:" + "x".repeat(65), "rendition:FullHD", "blob:file:content", "views:FullHD" }) {
+                "view:a\u200eb", "view:a/b", "view:a\\b", "view:" + "x".repeat(65), "rendition:FullHD", "blob:file:content", "views:FullHD" }) {
             assertThrows(IllegalArgumentException.class, () -> ShareItem.parse(wrong), String.valueOf(wrong));
         }
         ShareItem.parse("view:" + "x".repeat(64));

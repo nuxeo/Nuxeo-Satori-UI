@@ -185,6 +185,55 @@ class WatermarkerTest {
                 () -> watermarker.watermark(ShareFakes.blob(shallow, "image/png"), TEXT)).kind());
     }
 
+    /**
+     * A long thin picture within the pixels takes tiles by its diagonal squared: refused from its
+     * header by its side, or by the tiles it would take, not marked for hours.
+     */
+    @Test
+    void aLongThinPictureIsRefusedBeforeItIsMarked() throws Exception {
+        for (int[] size : new int[][] { { 24_000_000, 1 }, { 16_385, 1 }, { 1, 16_385 } }) {
+            byte[] thin = ShareFakes.png(1, 1, Color.RED);
+            claimSize(thin, size[0], size[1]);
+            long started = System.nanoTime();
+            assertEquals(WatermarkException.Kind.TOO_LARGE, assertThrows(WatermarkException.class,
+                    () -> watermarker.watermark(ShareFakes.blob(thin, "image/png"), TEXT)).kind(),
+                    () -> Arrays.toString(size));
+            assertTrue(System.nanoTime() - started < 1_000_000_000L, "refused at once");
+        }
+        // Within the side, still too many tiles for a picture one pixel high.
+        assertTrue(Watermarker.layout(16_384, 1, TEXT, "ab12cd34").tiles() > Watermarker.MAX_TILES);
+        byte[] strip = ShareFakes.png(1, 1, Color.RED);
+        claimSize(strip, 16_384, 1);
+        assertEquals(WatermarkException.Kind.TOO_LARGE, assertThrows(WatermarkException.class,
+                () -> watermarker.watermark(ShareFakes.blob(strip, "image/png"), TEXT)).kind());
+        // A picture of an ordinary shape takes few.
+        assertTrue(Watermarker.layout(6000, 4000, TEXT, "ab12cd34").tiles() < 200);
+        assertTrue(Watermarker.layout(1920, 1080, TEXT, "ab12cd34").tiles() < 200);
+    }
+
+    /** A picture too small for the whole text across it carries the link's label whole instead. */
+    @Test
+    void aSmallPictureCarriesTheLabelWhole() {
+        assertEquals(TEXT, Watermarker.layout(1920, 1080, TEXT, "ab12cd34").text());
+        assertEquals(TEXT, Watermarker.layout(400, 300, TEXT, "ab12cd34").text());
+        Watermarker.Layout thumbnail = Watermarker.layout(100, 67, TEXT, "ab12cd34");
+        assertEquals("ab12cd34", thumbnail.text());
+        // It fits along the diagonal, the font made smaller where it must be.
+        Watermarker.Layout tiny = Watermarker.layout(30, 20, TEXT, "ab12cd34");
+        assertEquals("ab12cd34", tiny.text());
+        assertTrue(tiny.size() < 12, () -> "size " + tiny.size());
+    }
+
+    /** What the budget counts: the decoded picture, the marked copy and the file twice. */
+    @Test
+    void theBudgetCountsThePixelsTheCopyAndTheFileTwice() {
+        assertEquals(6000L * 4000 * (3 + 4) + 2L * 1000, Watermarker.decodedBytes(6000, 4000, 3, 1000));
+        // A 6000 by 4000 JPEG of 8 bits a channel with a 20 MB file fits.
+        assertTrue(Watermarker.decodedBytes(6000, 4000, 3, 20_000_000) <= Watermarker.MAX_DECODED_BYTES);
+        // 8 bits with alpha and a 10 MB file, no longer.
+        assertTrue(Watermarker.decodedBytes(6000, 4000, 4, 10_000_000) > Watermarker.MAX_DECODED_BYTES);
+    }
+
     private static void fixHeaderChecksum(byte[] png) {
         CRC32 crc = new CRC32();
         crc.update(png, 12, 17);

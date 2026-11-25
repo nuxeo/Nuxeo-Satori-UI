@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!-- A share link, as the agenticShareLinks directory keeps it. No field holds the token: id is its
      SHA-256. Every value is text: instants in UTC to the millisecond, the last day as yyyy-MM-dd,
-     the items as a JSON array, and each item's file's digest as a JSON object. -->
+     the items as a JSON array, each item's file's digest, and its SHA-256, as JSON objects. -->
 <xs:schema targetNamespace="http://www.nuxeo.org/agentic/schemas/sharelink"
   xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
@@ -10,6 +10,7 @@
   <xs:element name="document" type="xs:string" />
   <xs:element name="items" type="xs:string" />
   <xs:element name="digests" type="xs:string" />
+  <xs:element name="sha256" type="xs:string" />
   <xs:element name="lastDay" type="xs:string" />
   <xs:element name="created" type="xs:string" />
   <xs:element name="createdBy" type="xs:string" />

@@ -76,6 +76,7 @@ public class ShareEndpoint {
             Map<String, String> headers = new LinkedHashMap<>(COMMON);
             headers.put("Allow", "GET");
             headers.put("Content-Type", "text/plain; charset=UTF-8");
+            headers.put("Content-Security-Policy", FILE_POLICY);
             return new Response(405, headers, new byte[0]);
         }
         if (service == null || pathInfo == null || !pathInfo.startsWith("/")) {
@@ -119,6 +120,7 @@ public class ShareEndpoint {
             Map<String, String> headers = new LinkedHashMap<>(COMMON);
             headers.put("Content-Type", "text/plain; charset=UTF-8");
             headers.put("Retry-After", "10");
+            headers.put("Content-Security-Policy", FILE_POLICY);
             return new Response(503, headers, "Busy: try again in a moment.\n".getBytes(StandardCharsets.UTF_8));
         }
         return notAvailable();

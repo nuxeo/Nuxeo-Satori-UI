@@ -133,7 +133,8 @@ class DirectoryShareLinkStoreTest {
 
     private static ShareLink link(String id, String document, Instant created) {
         return new ShareLink(id, "default", document, List.of("view:FullHD", "original"),
-                Map.of("view:FullHD", "0f3e", "original", "9a1b"), LocalDate.of(2026, 12, 14), created, "brand.manager", null, null);
+                Map.of("view:FullHD", "0f3e", "original", "9a1b"), Map.of("view:FullHD", "5e2c", "original", "77aa"),
+                LocalDate.of(2026, 12, 14), created, "brand.manager", null, null);
     }
 
     @Test
@@ -144,9 +145,14 @@ class DirectoryShareLinkStoreTest {
         directories.store.create(link);
 
         Map<String, Object> row = directories.entries.get(DirectoryShareLinkStore.LINKS).get(link.id());
-        assertEquals(Set.of("id", "repository", "document", "items", "digests", "lastDay", "created", "createdBy"),
+        assertEquals(Set.of("id", "repository", "document", "items", "digests", "sha256", "lastDay", "created",
+                "createdBy"),
                 row.keySet());
-        assertEquals("{\"view:FullHD\":\"0f3e\",\"original\":\"9a1b\"}", row.get("digests"));
+        // A JSON object, one digest for each item; read back as it was written, in whatever order.
+        assertEquals(Map.of("view:FullHD", "0f3e", "original", "9a1b"),
+                DirectoryShareLinkStore.digests((String) row.get("digests"), link.items()));
+        assertEquals(Map.of("view:FullHD", "5e2c", "original", "77aa"),
+                DirectoryShareLinkStore.digests((String) row.get("sha256"), link.items()));
         assertEquals(link.id(), row.get("id"));
         assertEquals("[\"view:FullHD\",\"original\"]", row.get("items"));
         assertEquals("2026-12-14", row.get("lastDay"));
@@ -198,6 +204,7 @@ class DirectoryShareLinkStoreTest {
                 Map.entry("digests", "{\"view:FullHD\":\"0f3e\"}"),
                 Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"original\":\"\"}"),
                 Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"view:Medium\":\"9a1b\"}"),
+                Map.entry("sha256", "{}"), Map.entry("sha256", "{\"view:FullHD\":\"5e2c\"}"),
                 Map.entry("lastDay", "14/12/2026"), Map.entry("created", "2026-11-24T12:00:00Z"),
                 Map.entry("createdBy", ""), Map.entry("revoked", "yesterday"), Map.<String, Object> entry("document", 7))) {
             Directories directories = new Directories();
@@ -208,6 +215,26 @@ class DirectoryShareLinkStoreTest {
             // Listed, it is left out rather than failing the list.
             assertTrue(directories.store.forDocument("asset-a", 10).isEmpty(), broken::toString);
         }
+    }
+
+    /** An entry that lists what no link may, with its digests to match, is not a link either. */
+    @Test
+    void anEntryListingWhatNoLinkMayIsNotALink() {
+        Directories directories = new Directories();
+        ShareLink link = link(ShareToken.hash(TOKEN), "asset-a", Instant.parse("2026-11-24T12:00:00Z"));
+        directories.store.create(link);
+        Map<String, Object> row = directories.entries.get(DirectoryShareLinkStore.LINKS).get(link.id());
+        for (String item : List.of("blob:file:content", "rendition:FullHD", "view:", "view:a/b")) {
+            row.put("items", "[\"" + item + "\"]");
+            row.put("digests", "{\"" + item + "\":\"0f3e\"}");
+            row.put("sha256", "{\"" + item + "\":\"5e2c\"}");
+            assertThrows(IllegalStateException.class, () -> directories.store.find(link.id()), item);
+        }
+        // The same entry with an item a link may list reads back.
+        row.put("items", "[\"view:FullHD\"]");
+        row.put("digests", "{\"view:FullHD\":\"0f3e\"}");
+        row.put("sha256", "{\"view:FullHD\":\"5e2c\"}");
+        assertEquals(List.of("view:FullHD"), directories.store.find(link.id()).orElseThrow().items());
     }
 
     @Test

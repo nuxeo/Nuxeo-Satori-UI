@@ -14,8 +14,9 @@ import org.nuxeo.agentic.assets.rights.Use;
  *
  * <p>Written {@code original} or {@code view:<title>}, as the operations take and answer them and
  * the download log records them. A title is the view's {@code picture:views/n/title} exactly, of 1
- * to {@value #MAX_TITLE} characters, with no control character and no space at either end; a view
- * with no title cannot be listed.
+ * to {@value #MAX_TITLE} characters, with no control character, no {@code /} or {@code \}, which an
+ * address cannot carry in a path segment, and no space at either end; a view with no title cannot be
+ * listed.
  *
  * @param id the item as written
  * @param use the use the rights policy decides it as
@@ -64,7 +65,9 @@ public record ShareItem(String id, Use use) {
         if (title == null || title.isEmpty() || title.length() > MAX_TITLE || !title.equals(title.strip())) {
             return false;
         }
-        return title.codePoints().noneMatch(c -> Character.isISOControl(c) || Character.getType(c) == Character.FORMAT);
+        return title.codePoints()
+                    .noneMatch(c -> Character.isISOControl(c) || Character.getType(c) == Character.FORMAT || c == '/'
+                            || c == '\\');
     }
 
     /** {@code value} for a log line or a message: at most 80 characters, control characters replaced. */

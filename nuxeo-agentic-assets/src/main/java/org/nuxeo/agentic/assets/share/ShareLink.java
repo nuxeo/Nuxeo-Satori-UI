@@ -23,6 +23,9 @@ import java.util.Objects;
  * @param digests each item's file's digest when the link was made: an item is served only while the
  *            document's file for it still has that digest, so a view renamed, a picture replaced or
  *            another file put in its place ends the link for it
+ * @param sha256 each item's file's SHA-256 when the link was made, of its bytes: checked against the
+ *            bytes read before they are marked, so that a file the store would give the same digest
+ *            to is not taken for the one the link was made for
  * @param lastDay the last day it opens, in UTC: it stops at the first instant of the next day
  * @param created when it was made
  * @param createdBy who made it: asked again, at each opening, whether they may still share the
@@ -31,8 +34,8 @@ import java.util.Objects;
  * @param revokedBy who revoked it, or {@code null}
  */
 public record ShareLink(String id, String repository, String document, List<String> items,
-        Map<String, String> digests, LocalDate lastDay, Instant created, String createdBy, Instant revoked,
-        String revokedBy) {
+        Map<String, String> digests, Map<String, String> sha256, LocalDate lastDay, Instant created,
+        String createdBy, Instant revoked, String revokedBy) {
 
     /** What a link is at a given instant. The wire names are the operations'. */
     public enum State {
@@ -55,6 +58,7 @@ public record ShareLink(String id, String repository, String document, List<Stri
         Objects.requireNonNull(document, "document");
         items = List.copyOf(items);
         digests = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(digests));
+        sha256 = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(sha256));
         Objects.requireNonNull(lastDay, "lastDay");
         Objects.requireNonNull(created, "created");
         Objects.requireNonNull(createdBy, "createdBy");
@@ -80,6 +84,6 @@ public record ShareLink(String id, String repository, String document, List<Stri
 
     /** The same link, revoked. */
     public ShareLink revokedAt(Instant at, String by) {
-        return new ShareLink(id, repository, document, items, digests, lastDay, created, createdBy, at, by);
+        return new ShareLink(id, repository, document, items, digests, sha256, lastDay, created, createdBy, at, by);
     }
 }
