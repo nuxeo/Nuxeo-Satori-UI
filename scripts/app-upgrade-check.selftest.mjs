@@ -1095,6 +1095,19 @@ for (const [args, why] of [
       recursive: true,
       filter: (path) => basename(path) !== 'dist',
     });
+    // A second kit, to move into the folder the first one leaves.
+    const OTHER_KIT = 'business-apps/packages/facilities-demo';
+    const otherVersion = attribute(
+      withoutCommentsOrInstructions(
+        readFileSync(join(REPO, ...OTHER_KIT.split('/'), 'package', 'package.xml'), 'utf8'),
+      ),
+      'package',
+      'version',
+    );
+    cpSync(join(REPO, ...OTHER_KIT.split('/')), join(repository, ...OTHER_KIT.split('/')), {
+      recursive: true,
+      filter: (path) => basename(path) !== 'dist',
+    });
     const git = (...args) => {
       const result = spawnSync('git', ['-C', repository, ...args], { encoding: 'utf8' });
       if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
@@ -1164,26 +1177,35 @@ for (const [args, why] of [
         `--export HEAD, held to: exit ${exported.status} and ${held.status}, not 0 and 0, or a source missing\n${exported.output}\n${held.output}`,
       );
 
-    // A kit whose folder is renamed, under the same package name, is still held to what it was.
+    // A kit whose folder is renamed, under the same package name, is still held to what it was,
+    // and another kit moved into the folder it left is held to its own, not to that one.
     negative++;
     const moved = join(repository, 'business-apps', 'packages', 'payers-claims');
     renameSync(join(repository, ...KIT.split('/')), moved);
     dropEntry('mine')(moved);
+    renameSync(join(repository, ...OTHER_KIT.split('/')), join(repository, ...KIT.split('/')));
     const renamed = run(['--since', 'HEAD', '--root', repository], repository);
     if (
       renamed.status !== 1 ||
       !renamed.output.includes('kit, menu-entry mine:') ||
+      !renamed.output.includes(`: facilities-demo ${otherVersion}, held to ${otherVersion}`) ||
+      renamed.output.includes('The package as it was is') ||
       renamed.output.includes('and gone now')
     )
       failures.push(
-        `--since HEAD with the kit's folder renamed: exit ${renamed.status}, not 1, or said gone\n${renamed.output}`,
+        `--since HEAD with the kits' folders moved: exit ${renamed.status}, not 1, or a kit held to another's folder, or said gone\n${renamed.output}`,
       );
     positive++;
-    const placed = run(['--place-at', 'HEAD', moved, '--root', repository], repository);
-    if (placed.status !== 0 || placed.output.trim() !== KIT)
-      failures.push(
-        `--place-at HEAD names ${JSON.stringify(placed.output.trim())}, not ${KIT}\n${placed.output}`,
-      );
+    for (const [directory, was] of [
+      [moved, KIT],
+      [join(repository, ...KIT.split('/')), OTHER_KIT],
+    ]) {
+      const placed = run(['--place-at', 'HEAD', directory, '--root', repository], repository);
+      if (placed.status !== 0 || placed.output.trim() !== was)
+        failures.push(
+          `--place-at HEAD names ${JSON.stringify(placed.output.trim())}, not ${was}\n${placed.output}`,
+        );
+    }
 
     // A kit gone from the tree is said, and in JSON too: the output stays one JSON document.
     positive++;

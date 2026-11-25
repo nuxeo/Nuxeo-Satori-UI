@@ -639,10 +639,12 @@ platform, as the working tree has them, with what they were at the ref: `git arc
 ref's copies to a scratch folder, so `git` and `tar` are needed beside Node: tried on macOS, run
 by the workflow on Linux, and not tried on Windows. `--previous` needs neither. A kit the ref did
 not have is new, held to nothing of its own; one the tree no longer has is said, and with `--json`
-is listed as `gone`. A kit whose folder was renamed is held to the package of the same name at the
-ref, which `--place-at <ref> <package>` prints. `--previous <package>` compares one kit with an
-export of it, and `--previous-platform <folder>` the platform with one `--export <ref> <folder>`
-wrote. Exit 0 keeps every configuration, 1 does not, 2 is a command it could not run.
+is listed as `gone`. A kit is held to the package of its name at the ref, wherever it was, so a
+kit whose folder was renamed is held to what it was, and a kit moved into a folder another left is
+not held to that one; `--place-at <ref> <package>` prints the place. `--previous <package>`
+compares one kit with an export of it, and `--previous-platform <folder>` the platform with one
+`--export <ref> <folder>` wrote. Exit 0 keeps every configuration, 1 does not, 2 is a command it
+could not run.
 
 **In the pipeline,** step 3 runs it given `--previous`, after the version rules, and refuses the
 package on any finding: _the upgrade from 0.4.0 does not keep every customer configuration: 2
@@ -668,9 +670,10 @@ the command's own errors, a link to the platform's notes and a `registries.ts` t
 among them. The sound ones are kept: unchanged; a menu entry for a platform page removed; a label
 key the platform's catalogue has, dropped with its note; a removal and a rename with their notes; a
 note that covers nothing; a platform removal with its note and its version; the same platform
-twice. Seven run on a scratch git repository: `--since` on a clean tree, a queue removed, the kit's
-folder renamed, the kit gone with `--json`, an unknown ref, `--place-at`, and `--export` held to
-by `--previous-platform` with no source missing. `npm run app-package:selftest` holds step 3 to
+twice. Seven run on a scratch git repository: `--since` on a clean tree, a queue removed, one kit's
+folder renamed and another kit moved into it, a kit gone with `--json`, an unknown ref,
+`--place-at`, and `--export` held to by `--previous-platform` with no source missing.
+`npm run app-package:selftest` holds step 3 to
 it: a menu entry removed at a patch is refused there, as is a rule the kit as it was named and the
 platform as it is does not register; with a note and a minor it is built, and the changelog
 carries the note. Each was seen failing: with the kit's findings, either bound of the notes'

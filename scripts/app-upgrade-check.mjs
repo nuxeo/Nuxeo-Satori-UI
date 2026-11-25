@@ -1465,26 +1465,26 @@ function kitsUnder(root) {
 }
 
 /**
- * Where `kit` was at a commit: its own place when the commit has a package there, and otherwise the
- * place of the package of the same name, so that a kit whose folder was renamed is still held to
- * what it was. `null` for a package the commit did not have.
+ * Where `kit` was at a commit: the place of the package of the same name, its own place first, so
+ * that a kit whose folder was renamed is still held to what it was, and a kit moved into a folder
+ * another package left is not held to that one. With none of its name, its own place when the
+ * commit has a package there, which the name check then refuses, as the pipeline refuses a package
+ * renamed; `null` for a package the commit did not have.
  */
 function placeAt(root, commit, kit) {
   const place = relative(root, kit.directory).split(sep).join('/');
   if (place === '' || place.startsWith('..') || isAbsolute(place))
     throw new Usage(`${kit.directory} is not inside ${root}, so it has no place at a commit.`);
-  if (existsAt(root, commit, `${place}/package/package.xml`)) return place;
-  for (const other of kitPlacesAt(root, commit)) {
-    const shown = git(root, ['show', `${commit}:${other}/package/package.xml`]);
-    if (shown.status !== 0) continue;
-    const name = attribute(
-      withoutCdata(withoutCommentsOrInstructions(shown.stdout)),
-      'package',
-      'name',
-    );
-    if (name === kit.name) return other;
-  }
-  return null;
+  const nameAt = (where) => {
+    const shown = git(root, ['show', `${commit}:${where}/package/package.xml`]);
+    if (shown.status !== 0) return null;
+    return attribute(withoutCdata(withoutCommentsOrInstructions(shown.stdout)), 'package', 'name');
+  };
+  const own = existsAt(root, commit, `${place}/package/package.xml`);
+  if (own && nameAt(place) === kit.name) return place;
+  for (const other of kitPlacesAt(root, commit))
+    if (other !== place && nameAt(other) === kit.name) return other;
+  return own ? place : null;
 }
 
 /** The places of the packages under `business-apps/packages/` at a commit. */
