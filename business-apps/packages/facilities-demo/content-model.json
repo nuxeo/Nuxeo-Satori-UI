@@ -1,0 +1,78 @@
+{
+  "doctypes": {
+    "WorkOrder": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "workorder"]
+    },
+    "Building": {
+      "parent": "Document",
+      "facets": [],
+      "schemas": ["common", "dublincore", "building"]
+    }
+  },
+  "facets": [],
+  "schemas": [
+    {
+      "name": "common",
+      "fields": {
+        "icon": "string",
+        "icon-expanded": "string"
+      }
+    },
+    {
+      "name": "dublincore",
+      "prefix": "dc",
+      "@prefix": "dc",
+      "fields": {
+        "contributors": "string[]",
+        "coverage": "string",
+        "created": "date",
+        "creator": "string",
+        "description": "string",
+        "expired": "date",
+        "format": "string",
+        "issued": "date",
+        "language": "string",
+        "lastContributor": "string",
+        "modified": "date",
+        "nature": "string",
+        "publisher": "string",
+        "rights": "string",
+        "source": "string",
+        "subjects": "string[]",
+        "title": "string",
+        "valid": "date"
+      }
+    },
+    {
+      "name": "workorder",
+      "prefix": "wo",
+      "@prefix": "wo",
+      "fields": {
+        "number": "string",
+        "building": "string",
+        "category": "string",
+        "priority": "string",
+        "status": "string",
+        "assignee": "string",
+        "due": "date",
+        "estimate": "double",
+        "completed": "date",
+        "resolution": "string"
+      }
+    },
+    {
+      "name": "building",
+      "prefix": "bldg",
+      "@prefix": "bldg",
+      "fields": {
+        "code": "string",
+        "campus": "string",
+        "floors": "long",
+        "manager": "string",
+        "phone": "string"
+      }
+    }
+  ]
+}

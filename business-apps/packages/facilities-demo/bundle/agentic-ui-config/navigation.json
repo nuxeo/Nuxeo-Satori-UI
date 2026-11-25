@@ -1,0 +1,8 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "home", "labelKey": "facilities.nav.home", "icon": "home", "page": "home" },
+    { "id": "open-work-orders", "icon": "inbox", "queue": "open-work-orders" }
+  ]
+}

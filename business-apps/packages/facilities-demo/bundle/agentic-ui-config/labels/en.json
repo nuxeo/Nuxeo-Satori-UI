@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/labels.schema.json",
+  "version": 2,
+  "labels": {
+    "facilities.app": "Facilities",
+    "facilities.home.title": "Facilities",
+    "facilities.home.open": "Open work orders, by priority",
+    "facilities.home.urgent": "Urgent work orders",
+    "facilities.home.byCategory": "Open work orders, by category",
+    "facilities.nav.home": "Home",
+    "facilities.queue.open-work-orders": "Open work orders",
+    "facilities.facet.priority": "Priority",
+    "facilities.facet.category": "Category",
+    "facilities.banner.overdue": "This work order is past its due date.",
+    "facilities.card.building.building": "Building",
+    "facilities.card.building.contact": "Contact",
+    "facilities.card.building.workOrders": "Work orders",
+    "facilities.card.workOrder.workorder": "Work order",
+    "facilities.card.workOrder.schedule": "Schedule",
+    "facilities.card.workOrder.resolution": "Resolution",
+    "facilities.card.workOrder.history": "History",
+    "facilities.field.buildingName": "Name",
+    "facilities.field.workOrderTitle": "Summary",
+    "layout.field.bldg:code": "Building code",
+    "layout.field.bldg:manager": "Facilities manager",
+    "layout.field.wo:number": "Work order",
+    "layout.field.wo:due": "Due",
+    "layout.field.wo:estimate": "Estimate",
+    "layout.field.wo:completed": "Completed on"
+  }
+}

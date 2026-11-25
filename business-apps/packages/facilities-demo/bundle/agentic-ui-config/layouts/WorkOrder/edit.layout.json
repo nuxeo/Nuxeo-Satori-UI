@@ -1,0 +1,48 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "workorder",
+      "labelKey": "facilities.card.workOrder.workorder",
+      "fields": [
+        {
+          "field": "dc:title",
+          "required": true
+        },
+        {
+          "field": "wo:number",
+          "required": true
+        },
+        {
+          "field": "wo:building",
+          "required": true
+        },
+        "wo:category",
+        "wo:priority",
+        {
+          "field": "wo:status",
+          "required": true
+        },
+        "wo:assignee",
+        "wo:due",
+        { "field": "wo:estimate", "widget": "currency", "parameters": { "currency": "USD" } },
+        {
+          "field": "wo:completed",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "wo:status" }, "Completed"]
+          }
+        },
+        {
+          "field": "wo:resolution",
+          "widget": "long-text",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "wo:status" }, "Completed"]
+          }
+        }
+      ]
+    }
+  ]
+}
