@@ -84,8 +84,20 @@ function packageWith(change = unchanged) {
   return { scratch, directory, out: join(scratch, 'out') };
 }
 
+/**
+ * The allow-list a package names beside its bundle, for the deployment it is built for: what CI
+ * gives the pipeline (`app-packages.yml`). The Payers kit's buttons run two chains.
+ */
+const BUILD_ALLOW_LIST = join('deployment', 'build-allow-list.json');
+
+/** As CI runs it: given the package's own build allow-list, unless the control gives another. */
 function run(directory, out, args = []) {
-  const result = spawnSync(process.execPath, [SCRIPT, directory, '--out', out, ...args], {
+  const allowList = join(directory, BUILD_ALLOW_LIST);
+  const withAllowList =
+    !args.includes('--allow-list') && existsSync(allowList)
+      ? [...args, '--allow-list', allowList]
+      : args;
+  const result = spawnSync(process.execPath, [SCRIPT, directory, '--out', out, ...withAllowList], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -820,10 +832,143 @@ expectBuilt(
       '"transition": "pay",',
       '"operation": "Payers.ApproveClaim",',
     );
-    // The deployment's, so beside the package rather than in it.
-    write('../allow-list.json', JSON.stringify({ operations: ['Payers.ApproveClaim'] }));
+    // The deployment's, so beside the package rather than in it, with the kit's own two chains.
+    const kit = JSON.parse(readFileSync(join(DEMO, BUILD_ALLOW_LIST), 'utf8')).operations;
+    write('../allow-list.json', JSON.stringify({ operations: [...kit, 'Payers.ApproveClaim'] }));
   },
   (scratch) => ['--allow-list', join(scratch, 'allow-list.json')],
+);
+
+// The operation buttons (plan decision 3, on its recommendation): the kit's run two chains, which
+// the deployment allows, and which a package may never allow itself.
+expectRefused(
+  "the kit's buttons, given an allow-list that holds none of their chains",
+  ({ write }) => write('../empty-allow-list.json', JSON.stringify({ operations: [] })),
+  2,
+  `the operation "Payers.RequestMedicalRecords" is not on this deployment's allow-list`,
+  (scratch) => ['--allow-list', join(scratch, 'empty-allow-list.json')],
+);
+const OPERATIONS = 'bundle/OSGI-INF/payers-claims-demo-operations.xml';
+const ALLOW_ITSELF =
+  '<extension target="org.nuxeo.agentic.ui.operations" point="allowList">\n' +
+  '    <operation id="Payers.ReferToInvestigations" />\n  </extension>\n</component>';
+expectRefused(
+  "a package that allows its own operations, contributing to the server's allow-list",
+  ({ edit }) => edit(OPERATIONS, '</component>', ALLOW_ITSELF),
+  2,
+  `contributes to org.nuxeo.agentic.ui.operations's "allowList" point, the server's allow-list`,
+);
+expectRefused(
+  "a package that removes an operation from the server's allow-list, with a disabled entry",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      ALLOW_ITSELF.replace(
+        '<operation id="Payers.ReferToInvestigations" />',
+        '<operation id="Payers.RequestMedicalRecords" enabled="false" />',
+      ),
+    ),
+  2,
+  'contributes to org.nuxeo.agentic.ui.operations',
+);
+expectRefused(
+  "a package that contributes to the server's allow-list from another of its components",
+  ({ edit }) =>
+    edit(
+      'bundle/OSGI-INF/payers-claims-demo-model.xml',
+      '</component>',
+      ALLOW_ITSELF.replace('point="allowList"', 'point="anything"'),
+    ),
+  2,
+  `OSGI-INF/payers-claims-demo-model.xml contributes to org.nuxeo.agentic.ui.operations's "anything" point`,
+);
+expectRefused(
+  "a package that names the allow-list's component as a service, which Nuxeo reads as the same",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      ALLOW_ITSELF.replace(
+        'target="org.nuxeo.agentic.ui.operations"',
+        'target=" service:org.nuxeo.agentic.ui.operations "',
+      ),
+    ),
+  2,
+  `contributes to org.nuxeo.agentic.ui.operations's "allowList" point`,
+);
+expectRefused(
+  "a package that replaces the guard a button's chain begins with, by a chain of its id",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '<chain id="Payers.ReferToInvestigations">',
+      '<chain id="AgenticUi.RequireRunAction"><operation id="Context.FetchDocument" /></chain>\n    <chain id="Payers.ReferToInvestigations">',
+    ),
+  2,
+  'names a chain or a scripted operation AgenticUi.RequireRunAction',
+);
+expectRefused(
+  "a package whose chain takes the guard's id as an alias, which replaces it as surely",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '<chain id="Payers.ReferToInvestigations">',
+      '<chain id="Payers.Noop"><aliases><alias> AgenticUi.RequireRunAction </alias></aliases><operation id="Context.FetchDocument" /></chain>\n    <chain id="Payers.ReferToInvestigations">',
+    ),
+  2,
+  'names a chain or a scripted operation AgenticUi.RequireRunAction',
+);
+expectRefused(
+  "a package whose scripted operation takes the run endpoint's id",
+  ({ edit }) =>
+    edit(
+      OPERATIONS,
+      '</component>',
+      '<extension target="org.nuxeo.automation.scripting.internals.AutomationScriptingComponent" point="operation">\n    <scriptedOperation id="AgenticUi.RunAction"><script>function run(input, params) { return input; }</script></scriptedOperation>\n  </extension>\n</component>',
+    ),
+  2,
+  'names a chain or a scripted operation AgenticUi.RunAction',
+);
+expectRefused(
+  "a package with a deployment fragment, which could write into the server's configuration",
+  ({ write }) =>
+    write(
+      'bundle/OSGI-INF/deployment-fragment.xml',
+      '<?xml version="1.0"?>\n<fragment version="1"><install><copy from="x" to="${nuxeo.config.dir}/y-config.xml" /></install></fragment>\n',
+    ),
+  5,
+  'bundle/OSGI-INF/deployment-fragment.xml is a deployment fragment',
+);
+expectRefused(
+  "an install.xml that also copies a file into the server's configuration",
+  ({ edit }) =>
+    edit(
+      'package/install.xml',
+      '</install>',
+      '  <copy file="${package.root}/install/bundles" todir="${env.config}" />\n</install>',
+    ),
+  5,
+  "package/install.xml does more than copy the bundle into the server's bundles: it has <copy>",
+);
+expectRefused(
+  "an install.xml with a second update, into the server's configuration",
+  ({ edit }) =>
+    edit(
+      'package/install.xml',
+      '</install>',
+      '  <update file="${package.root}/install/bundles" todir="${env.config}" />\n</install>',
+    ),
+  5,
+  'package/install.xml does more than copy the bundle',
+);
+// The verifier refuses this one before the configuration check would: a package's one update must
+// copy its bundle into ${env.bundles}.
+expectRefused(
+  "an install.xml whose one update copies the bundle into the server's configuration",
+  ({ edit }) => edit('package/install.xml', 'todir="${env.bundles}"', 'todir="${env.config}"'),
+  5,
+  'is not a well-formed Nuxeo Package',
 );
 
 // Versions (package-pipeline.md, section 8): given the package as it was, `--previous`, the
@@ -1739,8 +1884,22 @@ await (async () => {
         done({ status: code, output });
       });
     });
+  // With the package's build allow-list, as `run` gives it, so that only the model differs.
   const live = (directory, out, environment = env) =>
-    command([SCRIPT, directory, '--out', out, '--model-server', address], environment);
+    command(
+      [
+        SCRIPT,
+        directory,
+        '--out',
+        out,
+        '--model-server',
+        address,
+        ...(existsSync(join(directory, BUILD_ALLOW_LIST))
+          ? ['--allow-list', join(directory, BUILD_ALLOW_LIST)]
+          : []),
+      ],
+      environment,
+    );
   const bareEnv = () => withoutCredentials(process.env);
   const scratch = mkdtempSync(join(tmpdir(), 'app-package-live-'));
   try {

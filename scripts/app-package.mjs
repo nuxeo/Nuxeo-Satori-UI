@@ -27,7 +27,9 @@
  *      read them in: none inline, none from elsewhere; and every file under `layouts/` is
  *      contributed, since the server would never serve one that is not. The package contributes
  *      its app to the app registry once, from its `app.json`, naming every file of the app
- *      definition the registry serves and nothing else. A manifest that is not a file, and a
+ *      definition the registry serves and nothing else. No component contributes to the server's
+ *      allow-list of the operations an app's buttons may run, `org.nuxeo.agentic.ui.operations`,
+ *      which is the deployment's, never a package's. A manifest that is not a file, and a
  *      component path that leaves
  *      `bundle/` or names a folder or a hard link, are refused before they are read (a missing one
  *      is the builder's to refuse, at step 4);
@@ -126,6 +128,12 @@ const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  */
 /** More files than this, and the server refuses the app: `ContributionRegistry.MAX_APP_FILES`. */
 const MAX_APP_FILES = 256;
+
+/** The component that holds the server's allow-list of the operations an app's buttons may run. */
+const ALLOW_LIST_COMPONENT = 'org.nuxeo.agentic.ui.operations';
+
+/** The one command a configuration package's `install.xml` holds: the bundle, into the bundles. */
+const INSTALL_UPDATE = { file: '${package.root}/install/bundles', todir: '${env.bundles}' };
 
 const REGISTRY_FILES = [
   /^home\.json$/,
@@ -358,7 +366,10 @@ function run({
       'a facet or a figure names an aggregate its page provider does not define, listed above.',
     );
   }
-  const contributed = layoutContributions(directory) ?? appContributions(directory, root);
+  const contributed =
+    layoutContributions(directory) ??
+    allowListContributions(directory) ??
+    appContributions(directory, root);
   if (contributed) return refuse(2, contributed);
 
   // 3. One version, written in three places, `package.xml` read as the builder reads it.
@@ -441,6 +452,11 @@ function run({
     // A refused zip is not left where someone could install it.
     rmSync(zip, { force: true });
     return refuse(5, `${basename(zip)} is not a well-formed Nuxeo Package, and is removed.`);
+  }
+  const reach = configurationReach(directory);
+  if (reach) {
+    rmSync(zip, { force: true });
+    return refuse(5, `${reach} ${basename(zip)} is removed.`);
   }
 
   // 6. Its checksum, which the publishing job checks before it signs anything, and what changed.
@@ -922,6 +938,118 @@ function filesUnder(directory, prefix = '') {
       ? filesUnder(join(directory, entry.name), `${prefix}${entry.name}/`)
       : [`${prefix}${entry.name}`],
   );
+}
+
+/**
+ * Whether installing the package could write into the server's own configuration, `nxserver/config/`,
+ * where the allow-list of the operations an app's buttons may run is read from, and every other
+ * `-config.xml` the server deploys in its own context: a problem, or `null`. Two ways a package
+ * could, and both are refused, after the verifier has read the zip as well-formed:
+ *
+ * - **a deployment fragment,** `deployment-fragment.xml` anywhere in the bundle, which the server's
+ *   preprocessor runs before it starts, and which may copy files and append to templates;
+ * - **an `install.xml` that does more** than its one `<update>` of the bundle into `${env.bundles}`:
+ *   another command, such as `<copy>` or `<config>`, or another `<update>`, may write anywhere,
+ *   the configuration directory among them.
+ *
+ * So the allow-list cannot be widened by a package the pipeline built. One it did not build is not
+ * checked by anything but the server's administrators, who install it.
+ */
+function configurationReach(directory) {
+  const bundle = join(directory, 'bundle');
+  const fragment = existsSync(bundle)
+    ? filesUnder(bundle).find((path) => basename(path).toLowerCase() === 'deployment-fragment.xml')
+    : undefined;
+  if (fragment)
+    return (
+      `bundle/${fragment} is a deployment fragment, which the server runs before it starts and which ` +
+      "may write into its own configuration, nxserver/config/, where the allow-list of an app's " +
+      'buttons is read from. A configuration package has none.'
+    );
+  const installXml = join(directory, 'package', 'install.xml');
+  if (!existsSync(installXml)) return null;
+  const xml = withoutCommentsOrInstructions(
+    readFileSync(installXml, 'utf8').replace(/^\uFEFF/, ''),
+  );
+  const elements = [...xml.matchAll(/<([A-Za-z_][\w.:-]*)/g)].map(([, name]) => name);
+  const updates = [...xml.matchAll(new RegExp(`<update${TAG}`, 'g'))].map(([, tag]) =>
+    attributesOf(tag),
+  );
+  const others = elements.filter((name) => name !== 'install' && name !== 'update');
+  if (
+    others.length > 0 ||
+    updates.length !== 1 ||
+    updates[0].file !== INSTALL_UPDATE.file ||
+    updates[0].todir !== INSTALL_UPDATE.todir ||
+    Object.keys(updates[0]).length !== 2
+  )
+    return (
+      `package/install.xml does more than copy the bundle into the server's bundles` +
+      (others.length > 0 ? `: it has <${others[0]}>` : '') +
+      `. A configuration package's install.xml is <update file="${INSTALL_UPDATE.file}" ` +
+      `todir="${INSTALL_UPDATE.todir}" /> alone, so that installing it writes nothing into the ` +
+      "server's own configuration, nxserver/config/, where the allow-list of an app's buttons is read from."
+    );
+  return null;
+}
+
+/**
+ * What is wrong with what the package contributes to the server's allow-list, or `null`: anything
+ * at all. The allow-list is the deployment's, plan decision 3 on its recommendation: an app's
+ * `actions.json` names an operation, and only a contribution the server's administrators install
+ * allows it (nuxeo-agentic-core's README). A package that contributed to it would allow its own
+ * buttons, and configuration could then widen the allow-list. Any extension whose target is the
+ * component is refused, whatever its point, enabled or not: Nuxeo registers an extension by its
+ * target, and a disabled entry still removes the deployment's. The target is compared as Nuxeo
+ * reads a component's name: `service:org.nuxeo.agentic.ui.operations` is the same component, since a
+ * name with no type is a service's (`ComponentName`). The server refuses such a contribution too,
+ * from anywhere but its configuration directory (`OperationAllowListComponent`).
+ *
+ * Nor may a package contribute a chain whose id is the platform's, `AgenticUi.` and a name: a chain
+ * and an operation share one registry, and a chain with the id of `AgenticUi.RunAction` or
+ * `AgenticUi.RequireRunAction` would replace the endpoint, or the guard a button's chain begins
+ * with. Called after `layoutContributions`, which has refused any component path that leaves
+ * `bundle/`.
+ */
+function allowListContributions(directory) {
+  const manifest = join(directory, 'bundle', 'META-INF', 'MANIFEST.MF');
+  if (!existsSync(manifest)) return null;
+  const text = readFileSync(manifest, 'utf8').replace(/^\uFEFF/, '');
+  for (const component of componentPathsOf(text)) {
+    const file = componentFileOf(resolve(join(directory, 'bundle')), component);
+    if (typeof file !== 'string' || file === '') continue;
+    const xml = componentXmlOf(readFileSync(file, 'utf8'));
+    // A chain's id and each of its aliases, and a scripted operation's, share one registry with the
+    // operations, in which a later name replaces an earlier one (`OperationRegistry`).
+    const names = [
+      ...[...xml.matchAll(new RegExp(`<(?:chain|scriptedOperation)${TAG}`, 'g'))].map(
+        ([, tag]) => attributesOf(tag).id ?? '',
+      ),
+      ...[...xml.matchAll(/<alias(?:\s[^>]*)?>([\s\S]*?)<\/alias\s*>/g)].map(([, alias]) =>
+        withoutCdata(alias),
+      ),
+    ].map((name) => name.trim());
+    const taken = names.find((name) => name.startsWith('AgenticUi.'));
+    if (taken)
+      return (
+        `${component} names a chain or a scripted operation ${taken}, an id of the platform's own ` +
+        "operations: under that name or alias it would replace the operation that runs an app's " +
+        'buttons, or the guard their chains begin with. Name it after the package.'
+      );
+    for (const extension of xml.matchAll(new RegExp(`<extension${TAG}`, 'g'))) {
+      const { target, point } = attributesOf(extension[1]);
+      // As Nuxeo reads a component's name: a name with no type is a service's.
+      const name = target?.trim().replace(/^service:/, '');
+      if (name === ALLOW_LIST_COMPONENT)
+        return (
+          `${component} contributes to ${ALLOW_LIST_COMPONENT}${point ? `'s "${point}" point` : ''}, the ` +
+          "server's allow-list of the operations an app's buttons may run. The allow-list is the " +
+          "deployment's, never a package's: name the operation in actions.json, and give the server's " +
+          "administrators the contribution that allows it, as the Payers kit's README does."
+        );
+    }
+  }
+  return null;
 }
 
 /**

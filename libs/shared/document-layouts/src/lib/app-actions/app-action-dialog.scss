@@ -1,0 +1,10 @@
+.lib-app-action {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-inline-size: min(480px, 80vw);
+}
+
+.lib-app-action__question {
+  margin: 0;
+}

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.ui.operations.contrib">
+
+  <documentation>
+    AgenticUi.RunAction: runs one action of a business app's actions.json on the input record, as
+    the app registry serves it, after checking the allow-list again and the user's permission on
+    the record. Its parameters are the app's id, the action's id, and what the user entered in the
+    action's form; never the operation.
+
+    AgenticUi.RequireRunAction: the first step of a chain meant for an app's button. It lets the
+    chain go on only while AgenticUi.RunAction runs it, as the operation it names, and refuses every
+    other way of running it, Nuxeo's own Automation endpoint and its dispatchers among them.
+  </documentation>
+
+  <require>org.nuxeo.agentic.ui.operations</require>
+  <require>org.nuxeo.agentic.ui.config</require>
+
+  <extension target="org.nuxeo.ecm.core.operation.OperationServiceComponent" point="operations">
+    <operation class="org.nuxeo.agentic.config.RunAppActionOperation" />
+    <operation class="org.nuxeo.agentic.config.RequireRunActionOperation" />
+  </extension>
+
+</component>

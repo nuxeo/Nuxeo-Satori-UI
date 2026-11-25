@@ -20,7 +20,8 @@ the Payers Claims app, checked as a whole.
 Status: proposal, 22 November 2026; the menu and the home added on 23 November 2026, in phase 1;
 the app registry, which serves an app's files on a server after sign-in, on 24 November 2026
 (section 10). The app draws the home (section 10), the queues (section 4), the menu (section 9),
-the labels (section 7) and the task forms (section 6). Nothing in the app reads `actions.json` or
+the labels (section 7) and the task forms (section 6); since 25 November 2026, the operation
+buttons of `actions.json` (section 5), on decision 3's recommendation. Nothing in the app reads
 module settings yet.
 
 ## The short version
@@ -31,7 +32,8 @@ module settings yet.
   no expression language (decision 4).
 - **A queue** is a page provider with columns, facets, sorts and actions.
 - **An action** is a lifecycle button, or a button that runs an operation. The operation must be
-  on the deployment's allow-list (decision 3, still open).
+  on the deployment's allow-list, which the server holds (decision 3, still open, built on its
+  recommendation).
 - **A task form** is a layout file for one workflow step. Its `var:` fields are the step's
   variables.
 - **Labels** are per language. **Module settings** are per module.
@@ -230,8 +232,10 @@ provider, for the development server.
 - **Selecting rows** offers the queue's bulk actions in the app's selection bar: those that the
   `bulk-actions` slot resolves and that have a handler on the page, as row actions are offered.
   Choosing a bucket clears the selection. Rows cannot be selected when no bulk action is offered.
-- **An action of the package's own**, from `actions.json`, is one the app does not register yet, so
-  it is left out of the rows and the selection bar. Phase 2 runs them.
+- **An action of the package's own**, from `actions.json`, is offered on the rows when it runs an
+  operation on `row` and the app registry serves it: the app registers it at startup (section 5).
+  Its lifecycle buttons, and its bulk actions, are left out of the rows and the selection bar, and
+  the console says why.
 - **The rule** is the rule registry's, evaluated with the person, their groups and no record. The
   page is hidden while it does not pass, and asks the page provider for nothing. A rule this build
   does not register, one nested deeper than the registry answers, or a finding in it, hides the
@@ -286,11 +290,24 @@ provider, for the development server.
     {
       "id": "payers.claim.requestRecords",
       "labelKey": "payers.action.requestRecords",
-      "icon": "outgoing_mail",
+      "icon": "health_record",
       "on": ["record", "row"],
       "visibleWhen": { "type": "app.rules.inState", "parameters": ["pending"] },
+      "enabledWhen": "app.rules.canWrite",
       "operation": "Payers.RequestMedicalRecords",
-      "parameters": { "provider": { "field": "claim:provider" }, "urgent": false },
+      "parameters": {
+        "provider": { "field": "claim:provider" },
+        "note": { "field": "var:note" },
+        "urgent": false
+      },
+      "form": [
+        {
+          "field": "var:note",
+          "label": "Note to the provider",
+          "widget": "long-text",
+          "required": true
+        }
+      ],
       "success": { "labelKey": "payers.action.requestRecords.sent" },
       "refresh": true
     },
@@ -309,32 +326,127 @@ provider, for the development server.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                 | Required, and the package's own. A manifest cannot rebind an action registered in code ([extension-reference.md](../extension-reference.md), section 1): neither an id starting `app.` or `core.`, which is the platform's, nor one a customer registers in Layer 2 code, in any slot, which the deployment lists for the pipeline |
 | `label`, `labelKey`  | The button's text. One of them is required                                                                                                                                                                                                                                                                                         |
-| `icon`               | A Material Symbols name, such as `check`                                                                                                                                                                                                                                                                                           |
+| `icon`               | An icon of the platform's icon set, such as `check`                                                                                                                                                                                                                                                                                |
 | `order`              | A whole number. Lower comes first                                                                                                                                                                                                                                                                                                  |
 | `on`                 | Where it shows: `record`, the record page's toolbar; `row`, a queue's row menu; `bulk`, a queue's selection. `["record"]` when left out                                                                                                                                                                                            |
-| `visibleWhen`        | A rule                                                                                                                                                                                                                                                                                                                             |
+| `visibleWhen`        | A rule: the button shows while it passes                                                                                                                                                                                                                                                                                           |
+| `enabledWhen`        | A rule: the button shows, and cannot be chosen, while it does not pass. Both rules are checked again before the action runs                                                                                                                                                                                                        |
 | `transition`         | A lifecycle transition. The button shows only when the record's lifecycle allows it, as phase 2's allowed-transitions enricher says                                                                                                                                                                                                |
 | `operation`          | An Automation operation or chain, on the deployment's allow-list                                                                                                                                                                                                                                                                   |
-| `parameters`         | The operation's parameters: each name to a value                                                                                                                                                                                                                                                                                   |
+| `parameters`         | The operation's parameters: each name to a literal, a field of the record, `{ "field": "<prefix>:<name>" }`, or a field of the action's form, `{ "field": "var:<name>" }`. Not a computation                                                                                                                                       |
+| `form`               | The fields the person fills in before it runs, each `var:<name>`, written as a task form's fields are (section 6): widgets, rules and checks                                                                                                                                                                                       |
 | `confirm`, `success` | `{ "label" }` or `{ "labelKey" }`: a question before it runs, and a message after                                                                                                                                                                                                                                                  |
-| `refresh`            | Whether the record or the queue reloads afterwards. True when left out                                                                                                                                                                                                                                                             |
+| `refresh`            | Whether the record and the lists are read again afterwards. True when left out                                                                                                                                                                                                                                                     |
 
-- **One of `transition` and `operation`.** Parameters belong to an operation only.
-- **The allow-list.** Decision 3 makes it per deployment, and phase 2's security review signs it
-  off. Until then the validator takes it as a file of operation ids, shown below. With none it
-  refuses every operation: a package cannot reach a server operation nobody allowed.
-- **A bulk action's parameters are literals.** It runs on many records at once, so no one record's
-  field can give it a value.
-- **The server decides.** Nuxeo's permissions and the lifecycle still gate every operation and
-  every transition. Hiding a button is not a security control.
+- **One of `transition` and `operation`.** Parameters and a form belong to an operation only.
+- **The allow-list is the deployment's** (plan decision 3, built on its recommendation, which is
+  still open: [decisions.md](decisions.md), notes). It is a contribution to
+  `org.nuxeo.agentic.ui.operations`'s `allowList` point that the server's administrators install,
+  a file in `nxserver/config/`, naming each operation or chain a button may run, the permission
+  the person needs on the record, `Write` by default, and each parameter an app may give it, with
+  its type, where its value may come from, and whether it is required. It may narrow each further:
+  the apps whose buttons may run it, the groups the person must be in one of, and the types and the
+  lifecycle states of the records it runs on. The server checks every one of them itself, whatever
+  the button's own rules said:
 
-The allow-list the validator reads for now:
+  ```xml
+  <extension target="org.nuxeo.agentic.ui.operations" point="allowList">
+    <operation id="Payers.RequestMedicalRecords" permission="Write">
+      <app>payers-claims</app>
+      <group>claims-adjusters</group>
+      <type>Claim</type>
+      <state>inReview</state>
+      <param name="provider" type="string" maxLength="64" source="field:claim:provider" />
+      <param name="note" type="string" maxLength="500" source="input" required="true" />
+      <param name="urgent" type="boolean" source="input" />
+    </operation>
+  </extension>
+  ```
+
+  A type is `string`, `boolean`, `long` or `double`; a string is at most `maxLength`
+  characters, 1000 by default, and holds no control character but a tab or a line break. A source
+  is `input`, the action's form, `literal`, the app's file, or `field:` and a property of the
+  record as stored; any of them when left out.
+
+  **A package never contributes it.** The server reads it only from its configuration directory, in
+  whose context the runtime deploys that directory's files, and refuses, and logs, a contribution
+  from a bundle; the pipeline refuses a package that contributes to it, the target written with
+  or without its `service:` type, too, and one that could write into `nxserver/config/` when it
+  is installed: a deployment fragment, or an `install.xml` doing more than copy its bundle. So no
+  package the pipeline built can widen it. One it did not build is checked by nothing but the
+  administrators who install it. Never allowed, whoever contributes them:
+  the platform's own `AgenticUi.` operations, and those that run another operation, a script or as
+  another user, such as `RunOperation` or `Auth.LoginAs`, any of which would allow everything. An
+  entry that fails a check is not registered, and takes an entry of its id that was before it out
+  with it, so that a narrowing with a typo does not leave the wider one in force.
+
+- **The pipeline holds a package to an allow-list too,** that of the deployment it is built for, as
+  a file of operation ids, shown below: a package naming an operation it does not hold is refused,
+  and with none every operation is. That is the build's check; the server's contribution is the
+  control.
+- **The registry serves only what the server's allow-list lets run.** An action whose operation is
+  not on it, that gives a parameter it does not allow, or a literal of another type, is left out
+  of the `actions.json` the app registry serves (section 10), and its diagnostics say why. A file
+  with nothing left out is served as the package wrote it. A lifecycle button is served as it is.
+- **The server runs it, through `AgenticUi.RunAction`,** an Automation operation of
+  `nuxeo-agentic-core` ([api-integrations.md](../api-integrations.md), section 40). The request
+  names the app, the action, the record and what was entered in the form, never the operation. The
+  server checks the person's `Read` on the record, that an app of theirs serves the action, the
+  allow-list again, its app, its groups and its permission, the record's type and state, then builds
+  the parameters itself: literals from the file, fields from the record as the repository stores
+  it, and the form's values, each from where and of the type the allow-list says, a required one
+  never empty nor white space alone. Anything else the request holds is refused, or never read. It
+  runs the operation as the person, in an Automation context of its own, then writes "App action
+  run" to the record's history.
+- **A computation is refused as a parameter:** it is worked out in the browser, and the server,
+  which builds the parameters, does not run one.
+- **A bulk action's parameters are literals,** and it has no form: it runs on many records at once,
+  so no one record's field can give it a value. The app does not run bulk actions from this file
+  yet.
+- **The server decides.** Nuxeo's permissions and the lifecycle gate every operation and every
+  transition, and the allow-list every button. Hiding or disabling a button is not a security
+  control, and the allow-list is not one over Nuxeo's own Automation endpoint, which still runs any
+  operation a person may run, directly or through a dispatcher such as `RunOperation`, past any
+  REST binding the chain has. **A chain meant to run only through a button begins with
+  `AgenticUi.RequireRunAction`,** naming itself: the step lets the chain go on only while
+  `AgenticUi.RunAction` runs it, a mark the server sets for the run and nothing a request carries
+  can set, and refuses everyone else, administrators included. The Payers kit's two chains do. An
+  operation allow-listed as itself has no first step, and stays reachable through Nuxeo's endpoint,
+  so chains are what the allow-list should name. **And a button never runs what Nuxeo's endpoint
+  keeps from the person:** `AgenticUi.RunAction` applies the operation's REST binding, disabled,
+  for administrators or for some groups, as that endpoint does; a chain meant for a button has no
+  binding. If either of the platform's two operations is replaced on the server, by a chain or an
+  alias of its id, the registry serves no button that runs an operation, and nothing runs.
+
+The allow-list the pipeline reads, for the deployment a package is built for:
 
 ```json allow-list.json
 {
   "operations": ["Payers.RequestMedicalRecords", "Payers.AssignToCurrentUser"]
 }
 ```
+
+### Where the app reads it, and what it draws
+
+- **From the app registry alone,** for the app open, once at startup, since the toolbar and the
+  row menus are drawn from registries read then. The development server never serves
+  `actions.json`: a file it served would be one the server's allow-list had not filtered. With no
+  app open, before sign-in or on a server with no registry, no button is offered.
+- **An action on `record`** is a button on the document page's toolbar, and one on `row` an entry of
+  every list's row menu where the list names it: a queue's `rowActions`, or a related list's. Its
+  `visibleWhen` decides where it shows, and its `enabledWhen` whether it can be chosen.
+- **Chosen,** its rules are checked again with the record it was chosen on, then a dialog asks its
+  question, its `confirm` or the platform's naming the record, with its form drawn by the version 2
+  form engine as a task form is. Run, the form's own checks must pass; the record is read again
+  from the server, and both rules are checked a third time, on what it is now; only then is the
+  server asked. Its `success` message, or the platform's, says it ran. A refusal or a failure is
+  said in the dialog, which stays open with what was entered.
+- **Afterwards,** unless `refresh` is false, every list reads its page again, the record page's
+  timeline its history, and the document page the record.
+- **What is left out,** and the console says why: an action with a finding or a rule this build
+  cannot answer, as for a queue (section 12); a lifecycle button, which the platform's own Change
+  state offers; an action on `bulk` alone; and, when it is chosen, one whose form has a field the
+  form engine cannot draw as one value, such as an address, which would run without it.
 
 ## 6. Task forms
 
@@ -797,8 +909,9 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 
 - **Decisions B and E** are open. The app registry is built against their proposed answers, and
   [decisions.md](decisions.md)'s notes say what changes if either is taken another way.
-- **Decision 3 and the security review of operation buttons**, in phase 2: the allow-list's home,
-  format and owner. The file above is the validator's input until then.
+- **Decision 3 and the security review of operation buttons**, in phase 2. The allow-list is built
+  on the decision's recommendation, per deployment, on the server (section 5); the decision, and
+  the review that signs it off, are open.
 - **Addresses by host name**, for tenants (decision G). `address` is a path only.
 - **In task forms:** rules for one button only, and starting a workflow from a record with its
   start form.
@@ -807,9 +920,10 @@ When the app loads a file, what a finding does depends on its kind and on the fi
 - **Layouts per app.** The registry serves an app's other files; its layouts are still the
   configuration servlet's, one per type and mode for the whole server, to everyone. Two apps with
   a layout for the same type and mode replace each other's.
-- **Actions and module settings in the app.** The registry serves `actions.json`, and nothing in
-  the app reads it yet (phase 2). It does not serve `modules/<module>.json`: no domain module
-  exists yet.
+- **Actions and module settings in the app.** The app runs an operation button on one record, on
+  the toolbar or a row; not a lifecycle button from `actions.json`, which the platform's own Change
+  state offers, nor a bulk action. The registry does not serve `modules/<module>.json`: no domain
+  module exists yet.
 - **An app's branding and address.** The shell does not yet apply `branding` from the app open's
   `app.json`, nor open it at its `address`.
 - **The platform range in the shell.** The shell holds each listed `app.json` to the validator

@@ -19,6 +19,61 @@
       "transition": "pay",
       "confirm": { "labelKey": "payers.action.pay.confirm" },
       "success": { "labelKey": "payers.action.pay.done" }
+    },
+    {
+      "id": "payers.claim.requestRecords",
+      "labelKey": "payers.action.requestRecords",
+      "icon": "health_record",
+      "order": 20,
+      "on": ["record", "row"],
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.isType", "parameters": ["Claim"] },
+          { "type": "app.rules.inState", "parameters": ["inReview", "pended"] },
+          { "type": "app.rules.inGroup", "parameters": ["claims-adjusters"] }
+        ]
+      },
+      "enabledWhen": "app.rules.canWrite",
+      "operation": "Payers.RequestMedicalRecords",
+      "parameters": {
+        "provider": { "field": "claim:provider" },
+        "urgent": { "field": "var:urgent" },
+        "note": { "field": "var:note" }
+      },
+      "form": [
+        {
+          "field": "var:urgent",
+          "labelKey": "payers.action.requestRecords.urgent",
+          "widget": "boolean"
+        },
+        {
+          "field": "var:note",
+          "labelKey": "payers.action.requestRecords.note",
+          "widget": "long-text",
+          "parameters": { "rows": 3 },
+          "required": true
+        }
+      ],
+      "confirm": { "labelKey": "payers.action.requestRecords.confirm" },
+      "success": { "labelKey": "payers.action.requestRecords.sent" }
+    },
+    {
+      "id": "payers.claim.referToInvestigations",
+      "labelKey": "payers.action.refer",
+      "icon": "policy",
+      "order": 30,
+      "on": ["record"],
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          { "type": "app.rules.isType", "parameters": ["Claim"] },
+          { "type": "app.rules.inGroup", "parameters": ["claims-supervisors"] }
+        ]
+      },
+      "operation": "Payers.ReferToInvestigations",
+      "confirm": { "labelKey": "payers.action.refer.confirm" },
+      "success": { "labelKey": "payers.action.refer.done" }
     }
   ]
 }

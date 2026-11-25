@@ -6,11 +6,13 @@
  * the pipeline's own, steps 1 to 6 of docs/business-apps/package-pipeline.md.
  *
  * - **As CI runs it, unless told otherwise.** Given the folder alone, it passes what the workflow
- *   passes: `--out` and `--platform`, the version of `libs/platform`. An allow-list, a registered
- *   file or another platform version are the deployment's to give, and change what is checked, so
- *   the answer lists each one it was given under `departsFromCi`, and `asCi` is then false. It
- *   gives no content model, as CI gives none: the pipeline holds a package that ships a stand-in
- *   model to its own `content-model.json`, and a package on a server's model to none.
+ *   passes: `--out` and `--platform`, the version of `libs/platform`, and the allow-list the package
+ *   names beside its bundle, `deployment/build-allow-list.json`, when it has one. Another
+ *   allow-list, a registered file or another platform version are the deployment's to give, and
+ *   change what is checked, so the answer lists each one it was given under `departsFromCi`, and
+ *   `asCi` is then false. It gives no content model, as CI gives none: the pipeline holds a package
+ *   that ships a stand-in model to its own `content-model.json`, and a package on a server's model
+ *   to none.
  * - **Inside the repository only** (`within`): no link followed, in the path or anywhere in the
  *   package, no hidden folder or file, and the allow-list and the registered file are JSON files.
  *   The pipeline's messages can quote what it read, and they go to the agent.
@@ -46,6 +48,8 @@ import { fileURLToPath } from 'node:url';
 export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 export const PIPELINE = join(REPO_ROOT, 'scripts', 'app-package.mjs');
 export const RUN_TIMEOUT_MS = 180_000;
+/** Where a package names the allow-list it is built against, which CI gives the pipeline. */
+export const BUILD_ALLOW_LIST = ['deployment', 'build-allow-list.json'] as const;
 const OUTPUT_LIMIT = 16 * 1024 * 1024;
 /** What the pipeline's processes may see of the environment: where programs and temporary files are. */
 const PASSED_ENVIRONMENT = [
@@ -217,7 +221,15 @@ export async function validatePackage(
       throw new Error(`${what}: ${path} is not a JSON file.`);
     return found;
   };
-  const allowList = file(request.allowList, 'allowList');
+  // As CI gives it (`app-packages.yml`): the build allow-list a package names beside its bundle,
+  // `deployment/build-allow-list.json`, unless the request gives another. Inside the package, which
+  // holds no link (above).
+  const builds = join(directory, ...BUILD_ALLOW_LIST);
+  const asBuilt =
+    request.allowList === undefined && lstatSync(builds, { throwIfNoEntry: false })?.isFile()
+      ? builds
+      : undefined;
+  const allowList = file(request.allowList, 'allowList') ?? asBuilt;
   const registered = file(request.registered, 'registered');
   // An empty version would reach the pipeline as no version, and its range would go unchecked.
   if (
@@ -227,7 +239,7 @@ export async function validatePackage(
     throw new Error(`platform: "${request.platform}" is not a version, such as 1.0.0.`);
   const platform = request.platform ?? platformVersion();
   const departsFromCi = [
-    ...(allowList ? ['allowList'] : []),
+    ...(allowList && !asBuilt ? ['allowList'] : []),
     ...(registered ? ['registered'] : []),
     ...(request.platform !== undefined && request.platform !== platformVersion()
       ? ['platform']
@@ -255,7 +267,7 @@ export async function validatePackage(
       options.timeoutMs ?? RUN_TIMEOUT_MS,
       pipelineEnvironment(process.env, temporary),
     );
-    return interpret(directory, run, platform, departsFromCi);
+    return interpret(directory, run, platform, departsFromCi, asBuilt !== undefined);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -376,6 +388,7 @@ function interpret(
   run: Run,
   platform: string,
   departsFromCi: readonly string[],
+  asBuilt = false,
 ): PackageCheck {
   const stdout = lines(run.stdout);
   const stderr = lines(run.stderr);
@@ -414,7 +427,11 @@ function interpret(
     zip,
     command:
       `node scripts/app-package.mjs <package> --out <temporary> --platform ${platform}` +
-      (departsFromCi.includes('allowList') ? ' --allow-list <file>' : '') +
+      (departsFromCi.includes('allowList')
+        ? ' --allow-list <file>'
+        : asBuilt
+          ? ' --allow-list <package>/deployment/build-allow-list.json'
+          : '') +
       (departsFromCi.includes('registered') ? ' --registered <file>' : ''),
     stdout,
     stderr: run.failure ? [...stderr, run.failure] : stderr,

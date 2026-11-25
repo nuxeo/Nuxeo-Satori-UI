@@ -33,6 +33,7 @@ const JARS = [
   'nxserver/bundles/nuxeo-core-el-*.jar',
   'nxserver/bundles/nuxeo-core-[0-9]*.jar',
   'nxserver/bundles/nuxeo-automation-core-*.jar',
+  'nxserver/bundles/nuxeo-automation-server-*.jar',
   'nxserver/bundles/nuxeo-routing-api-*.jar',
   'nxserver/bundles/nuxeo-routing-core-*.jar',
   'nxserver/bundles/nuxeo-platform-actions-core-*.jar',

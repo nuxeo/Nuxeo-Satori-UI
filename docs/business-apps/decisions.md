@@ -64,6 +64,34 @@ way.
   seed's second appeal, a minor version below 1.0.0, since a property and labels are removed.
   Decision 3 stays open: the checklist is read-only, and ticks no item through a button or a chain.
 
+- **3, operation buttons (25 November 2026).** Built against the recommendation, "Yes, through a
+  per-deployment allow-list (parity decision 3)": configuration may bind a button to an Automation
+  chain or operation, and only one the server's own allow-list holds
+  ([app-definition-v2.md](app-definition-v2.md), section 5). The allow-list is a contribution to
+  `org.nuxeo.agentic.ui.operations` in `nuxeo-agentic-core`, on B's recommendation that the runtime
+  essentials live there, which the server's administrators install in `nxserver/config/`, never a
+  package: the server reads it from nowhere else, and the pipeline refuses a package that
+  contributes to it. It names each chain, the permission, and the apps, groups, record types and
+  states that run it, and each parameter an app may give it, with its type and its source. The app
+  registry serves an app's `actions.json` with only what it allows, and `AgenticUi.RunAction`
+  checks it again, with the person's permissions, before it runs a chain as them; the request never
+  names the chain. A chain meant only for buttons begins with `AgenticUi.RequireRunAction`, which
+  refuses any other run, Nuxeo's own Automation endpoint and `RunOperation` among them. The
+  Payers kit's "Request medical records" runs on it, phase 2's demo step 4, from a steps file not
+  run yet. The security review of operation buttons, which phase 2's "Done when" asks for, is not
+  done. What changes if 3 goes another way:
+  - **No: configuration binds no chain.** The kit's two operation buttons and its operations
+    component go, a minor version below 1.0.0; `actions.json` keeps lifecycle buttons only, and the
+    validator refuses `operation`. The allow-list, the run endpoint and the client's buttons can be
+    removed with them, or left, unused, since nothing reaches them without a contribution.
+  - **Yes, with an allow-list per app or per tenant:** the contribution gains an `app` (or a tenant)
+    attribute, and the registry and the run match it as well as the operation. The client does not
+    change.
+  - **Yes, through Nuxeo's own Automation endpoint, gated by REST bindings alone:** the client posts
+    to the chain itself, and the registry stops filtering; the person's permissions and the
+    bindings are then the only control, and a binding cannot check parameters.
+  - **P3, the parity plan's decision,** is followed as it stands: a per-deployment allow-list.
+
 - **B and E, the app registry's first version (24 November 2026).** Built against the
   recommendations: `nuxeo-agentic-core` carries the registry, as a runtime essential (B), and it
   serves app definitions after sign-in, to the groups each app's `app.json` names (E). Tenants are
