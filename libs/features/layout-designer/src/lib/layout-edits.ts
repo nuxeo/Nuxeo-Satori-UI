@@ -10,6 +10,12 @@
 
 export type LayoutJson = Record<string, unknown>;
 
+/**
+ * A field's keys that hold a rule, as layout-v2.md, sections 2 and 5, writes them: `visibleWhen`
+ * in every mode; `required`, which may also be `true`, and `readOnlyWhen` in the forms only.
+ */
+export type FieldRuleKey = 'required' | 'readOnlyWhen' | 'visibleWhen';
+
 /** Where a card is: `cards[<card>]`, or `tabs[<tab>].cards[<card>]`. */
 export interface CardPlace {
   readonly tab: number | null;
@@ -27,6 +33,22 @@ export interface DesignerField {
   /** The property, a computed field's id, or `null` for an entry that names neither. */
   readonly name: string | null;
   readonly widget: string | null;
+  /** The field's rules as written, by key; `undefined` for a key it does not have. */
+  readonly rules: Readonly<Record<FieldRuleKey, unknown>>;
+}
+
+const NO_RULES: Readonly<Record<FieldRuleKey, unknown>> = {
+  required: undefined,
+  readOnlyWhen: undefined,
+  visibleWhen: undefined,
+};
+
+function rulesOf(entry: LayoutJson): Readonly<Record<FieldRuleKey, unknown>> {
+  return {
+    required: entry['required'],
+    readOnlyWhen: entry['readOnlyWhen'],
+    visibleWhen: entry['visibleWhen'],
+  };
 }
 
 /** A card as the designer lists it. */
@@ -53,12 +75,18 @@ const isObject = (value: unknown): value is LayoutJson =>
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-function fieldOf(entry: unknown, index: number): DesignerField {
-  if (typeof entry === 'string') return { index, kind: 'property', name: entry, widget: null };
+/**
+ * What one entry of a card's `fields`, or of a queue's `columns`, is: the two are written the same
+ * way (layout-v2.md, sections 2 and 7).
+ */
+export function fieldOf(entry: unknown, index: number): DesignerField {
+  if (typeof entry === 'string') {
+    return { index, kind: 'property', name: entry, widget: null, rules: NO_RULES };
+  }
   if (isObject(entry)) {
     const widget = typeof entry['widget'] === 'string' ? entry['widget'] : null;
     if (typeof entry['field'] === 'string') {
-      return { index, kind: 'property', name: entry['field'], widget };
+      return { index, kind: 'property', name: entry['field'], widget, rules: rulesOf(entry) };
     }
     if ('computed' in entry) {
       return {
@@ -66,10 +94,11 @@ function fieldOf(entry: unknown, index: number): DesignerField {
         kind: 'computed',
         name: typeof entry['id'] === 'string' ? entry['id'] : null,
         widget,
+        rules: rulesOf(entry),
       };
     }
   }
-  return { index, kind: 'other', name: null, widget: null };
+  return { index, kind: 'other', name: null, widget: null, rules: NO_RULES };
 }
 
 function shows(card: LayoutJson): DesignerCard['shows'] {
@@ -207,6 +236,83 @@ export function setCardText(
     if (key !== 'id' && value === '') delete card[key];
     else card[key] = value;
   });
+}
+
+/**
+ * The file with the card's field at `index` given `value` for `key`, or without `key` when `value`
+ * is `undefined`. A field written `"<prefix>:<name>"` is written as an object to hold a rule, and
+ * written back as the string once it holds nothing but its `field` again, as the kits write one.
+ * An entry that is neither is left as it is.
+ */
+export function setFieldRule(
+  file: LayoutJson,
+  place: CardPlace,
+  index: number,
+  key: FieldRuleKey,
+  value: unknown,
+): LayoutJson {
+  return withCard(file, place, (card) => {
+    const fields = card['fields'];
+    if (!Array.isArray(fields) || index < 0 || index >= fields.length) return;
+    const entry: unknown = fields[index];
+    if (typeof entry === 'string') {
+      if (value !== undefined) fields[index] = { field: entry, [key]: structuredClone(value) };
+      return;
+    }
+    if (!isObject(entry)) return;
+    if (value === undefined) delete entry[key];
+    else entry[key] = structuredClone(value);
+    const keys = Object.keys(entry);
+    if (keys.length === 1 && keys[0] === 'field' && typeof entry['field'] === 'string') {
+      fields[index] = entry['field'];
+    }
+  });
+}
+
+/** What the designer offers for `required`: not required, always, or while a rule passes. */
+export type RequiredChoice = 'no' | 'always' | 'rule';
+
+/** The choice a field's `required` is: `true` is always, a rule is a rule, and nothing or `false` is no. */
+export function requiredChoice(value: unknown): RequiredChoice {
+  if (value === undefined || value === false) return 'no';
+  return value === true ? 'always' : 'rule';
+}
+
+/**
+ * A rule as the designer shows it to be edited: a rule's ID as it is, any other rule as JSON, two
+ * spaces deep, and none as nothing.
+ */
+export function ruleText(value: unknown): string {
+  if (value === undefined) return '';
+  return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+}
+
+/**
+ * A rule as the person wrote it: nothing is no rule, `undefined`; JSON is what it says; anything
+ * else is a rule's ID, as written. A text that was meant as JSON and is not becomes an ID the rule
+ * registry does not have, so the validator refuses it rather than the designer guessing.
+ */
+export function ruleFromText(text: string): unknown {
+  const trimmed = text.trim();
+  if (trimmed === '') return undefined;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * A new layout file, for a type and a mode the server serves none for: one card, with no field,
+ * to add the type's properties to.
+ */
+export function newLayoutFile(): LayoutJson {
+  return { version: 2, cards: [{ id: 'main', fields: [] }] };
+}
+
+/** The name a package gives a type's file for a mode, under `layouts/<Type>/`. */
+export function layoutFileName(mode: string): string {
+  return `${mode}.layout.json`;
 }
 
 /** The file as a download or a package holds it: JSON, two spaces deep, and a last newline. */
