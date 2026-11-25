@@ -23,8 +23,9 @@ in `budget.json` together, with its reasoning. The offline selftest fails when t
 - **What it does not measure:** Nuxeo's and OpenSearch's own query time at 100,000 documents. The
   stand-in's latencies are stated assumptions, not measurements of a server. That needs a server
   holding the data ("What this does not measure", below).
-- **Where it stands, on 25 November 2026:** within budget on every line. Its six negative controls,
-  between them breaking every line of the budget on purpose, each fail it on the lines they should.
+- **Where it stands, on 25 November 2026:** within budget on every line, the window's four
+  included. Its eight negative controls, between them breaking every line of the budget on
+  purpose, each fail it on the lines they should.
 
 ```bash
 npm run beta:asset-performance                  # build, measure, judge: exit 0, 1 or 2
@@ -239,21 +240,26 @@ Once more with a fourfold CPU slowdown (`--cpu 4`), on the build before the wind
 1528 ms to first paint, 1966 ms to the first page, 307 ms a page at the median, 657 ms to the
 slowest first view, and 2.9 MB of heap growth: within budget too, on every line. Not run again.
 
-The controls, the same day, against the build before staging was merged in, whose own run was
-within 6 ms of the one above on every time and equal on every count: each control was over on
-every line it names, and failed the run:
+The eight controls, the same day, against that same build (`--skip-build`), while other work
+loaded the machine, so their times are if anything high: each control was over on every line it
+names, and failed the run.
 
-| Control      | Over budget on                                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `slow`       | first page 2851 ms; a page 1165 ms median, 1166 ms at the 95th; facets 1168 ms; first view 1147 ms                  |
-| `big-bundle` | first paint 2480 ms; first page 2888 ms                                                                             |
-| `fetch-all`  | first page 66,863 ms; 1014 requests to open the library; facets 3507 ms and 41 requests                             |
-| `twice`      | 28 requests to open the library; a page 560 ms median and 2 requests; 2 requests a facet; 40 to open the asset page |
-| `hold-pages` | heap growth 13.3 MB                                                                                                 |
-| `ballast`    | heap after 50 pages 92.4 MB                                                                                         |
+| Control        | Over budget on                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `slow`         | first page 2891 ms; a page 1171 ms median, 1179 ms at the 95th; facets 1168 ms; first view 1164 ms                    |
+| `big-bundle`   | first paint 2488 ms; first page 2900 ms                                                                               |
+| `fetch-all`    | first page 15,159 ms; 1014 requests to open the library; facets 3568 ms and 41 requests; 900 requests past the window |
+| `twice`        | 28 requests to open the library; a page 554 ms median and 2 requests; 2 requests a facet; 40 to open the asset page   |
+| `hold-pages`   | heap growth 13.4 MB                                                                                                   |
+| `ballast`      | heap after 50 pages 92.6 MB                                                                                           |
+| `unwindowed`   | 1 request past the window, the next pressed on page 200 and refused; next enabled there; no notice                    |
+| `capped-count` | the total misstated on all 199 pages, "of 10000"; no notice                                                           |
 
 Each was within budget on the lines it does not touch, but for the slower pages `twice`'s extra
-requests cost and the slower facets of `fetch-all`.
+requests cost, the slower facets of `fetch-all`, and `fetch-all`'s requests past the window: it
+reads every page of the library, and 900 of its 1,000 are now refused, as Nuxeo refuses them. That
+is also why its first page took 15 seconds rather than the 67 it took before the stand-in kept the
+window: the refused pages are answered at once.
 
 ### Requests per action
 
