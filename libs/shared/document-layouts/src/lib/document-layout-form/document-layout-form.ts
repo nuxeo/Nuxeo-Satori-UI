@@ -155,8 +155,15 @@ export class DocumentLayoutFormComponent {
   readonly type = input<string | null>(null);
   /** The folder a new document is created in. */
   readonly parentPath = input<string | null>(null);
-  /** While saving: the form is read-only. */
+  /** While saving, or in the layout designer's preview: every input is read-only. */
   readonly disabled = input(false);
+  /**
+   * A version 2 form resolved elsewhere, drawn in place of the type's served one: the layout
+   * designer's preview of a file it edits (`DocumentLayoutService.previewFormLayout`). With one,
+   * the served file is not read, and neither a contributed form nor a `documentEdit` or
+   * `documentCreate` entry takes its place. It saves nothing: the host owns Save, as for any form.
+   */
+  readonly preview = input<ResolvedFormLayout | null>(null);
   /** The level of the section headings, one below the dialog or page title. */
   readonly headingLevel = input<NxsHeadingLevel>(3);
 
@@ -192,7 +199,8 @@ export class DocumentLayoutFormComponent {
     const mode = this.mode();
     const type = this.formType();
     // A task form has no slot of its own: the task panel's component is replaced whole instead.
-    if (!type || mode === 'task') return null;
+    // A preview draws the file it is given, never what would replace it.
+    if (!type || mode === 'task' || this.preview() !== null) return null;
     const document = mode === 'edit' ? this.document() : documentToCreate(type, this.parentPath());
     return layoutSlotEntry(this.extensions, this.components, mode, {
       ...this.ruleContext.context(),
@@ -233,7 +241,7 @@ export class DocumentLayoutFormComponent {
   private readonly target = computed<FormTarget | null>(
     () => {
       const type = this.formType();
-      if (!type || this.usesEntry()) return null;
+      if (!type || this.usesEntry() || this.preview() !== null) return null;
       const mode = this.mode();
       const document = this.document();
       const schemas =
@@ -277,8 +285,13 @@ export class DocumentLayoutFormComponent {
     { initialValue: null },
   );
 
-  /** `undefined` while resolving; `null` when the type could not be read. */
+  /**
+   * `undefined` while resolving; `null` when the type could not be read. A preview's, as it is
+   * given.
+   */
   private readonly layout = computed<ResolvedLayout | ResolvedFormLayout | null | undefined>(() => {
+    const preview = this.preview();
+    if (preview !== null) return preview;
     const resolved = this.resolved();
     return resolved && resolved.target === this.target() ? resolved.layout : undefined;
   });

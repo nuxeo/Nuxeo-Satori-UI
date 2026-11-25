@@ -1,0 +1,569 @@
+<div class="layout-designer">
+  <h1 class="layout-designer__title">{{ 'layout-designer.title' | translate }}</h1>
+  <nav class="layout-designer__nav" [attr.aria-label]="'layout-designer.nav' | translate">
+    <a class="layout-designer__nav-link" routerLink="..">{{
+      'layout-designer.nav-layouts' | translate
+    }}</a>
+    <a class="layout-designer__nav-link" routerLink="." aria-current="page">{{
+      'layout-designer.nav-queues' | translate
+    }}</a>
+  </nav>
+  <p class="layout-designer__intro">{{ 'layout-designer.queue.intro' | translate }}</p>
+  <p class="layout-designer__note">{{ 'layout-designer.queue.not-a-control' | translate }}</p>
+
+  <div class="layout-designer__pickers">
+    <!-- Opened by its button, as a layout file is: each change of the id would read another file. -->
+    <mat-form-field class="layout-designer__picker" subscriptSizing="dynamic">
+      <mat-label>{{ 'layout-designer.queue.id' | translate }}</mat-label>
+      <input
+        matInput
+        data-picker="queue"
+        list="queue-designer-ids"
+        autocomplete="off"
+        [value]="idChosen()"
+        (input)="idChosen.set(valueOf($event))"
+      />
+      <datalist id="queue-designer-ids">
+        @for (each of menuQueueList(); track each) {
+          <option [value]="each"></option>
+        }
+      </datalist>
+    </mat-form-field>
+    <button
+      mat-stroked-button
+      type="button"
+      data-action="open"
+      [disabled]="!idValid()"
+      (click)="open(idChosen())"
+    >
+      {{ 'layout-designer.open' | translate }}
+    </button>
+    @if (failed(menuQueues()); as problem) {
+      <p class="layout-designer__message">
+        {{ 'layout-designer.queue.menu-failed' | translate: { problem } }}
+      </p>
+    } @else if (menuQueues().state === 'read' && menuQueueList().length === 0) {
+      <p class="layout-designer__message">{{ 'layout-designer.queue.menu-none' | translate }}</p>
+    }
+  </div>
+
+  @if (!id()) {
+    <p class="layout-designer__message">{{ 'layout-designer.queue.choose' | translate }}</p>
+  } @else if (source()?.state === 'reading') {
+    <nxs-spinner [diameter]="32" [label]="'layout-designer.queue.reading' | translate" />
+  } @else if (sourceProblem(); as problem) {
+    <nxs-banner
+      tone="error"
+      announce="alert"
+      data-source="failed"
+      [message]="
+        'layout-designer.queue.failed'
+          | translate: { id: id(), problem: problem.key ? (problem.key | translate) : problem.text }
+      "
+    />
+  }
+
+  @if (file(); as file) {
+    <div class="layout-designer__body">
+      <section class="layout-designer__editor" aria-labelledby="queue-designer-editor">
+        <h2 class="layout-designer__heading" id="queue-designer-editor" tabindex="-1">
+          {{ 'layout-designer.queue.editor' | translate: { id: id() } }}
+        </h2>
+
+        <section class="layout-designer__card" data-part="name">
+          <h3 class="layout-designer__card-heading">
+            {{ 'layout-designer.queue.name' | translate }}
+          </h3>
+          <div class="layout-designer__card-texts">
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>{{ 'layout-designer.queue.label' | translate }}</mat-label>
+              <input
+                matInput
+                data-text="label"
+                [value]="label()"
+                (change)="setName('label', valueOf($event))"
+              />
+            </mat-form-field>
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>{{ 'layout-designer.queue.label-key' | translate }}</mat-label>
+              <input
+                matInput
+                data-text="labelKey"
+                [value]="labelKey()"
+                (change)="setName('labelKey', valueOf($event))"
+              />
+            </mat-form-field>
+          </div>
+        </section>
+
+        <section class="layout-designer__card" data-part="columns">
+          <h3 class="layout-designer__card-heading">
+            {{ 'layout-designer.queue.columns' | translate }}
+          </h3>
+          <ol class="layout-designer__fields" data-list="columns">
+            @for (column of columns(); track $index; let first = $first, last = $last) {
+              <li class="layout-designer__field" [attr.data-column]="columnName(column)">
+                <span class="layout-designer__field-name">
+                  <code>{{ columnName(column) }}</code>
+                  @if (column.widget) {
+                    <span class="layout-designer__field-note">{{
+                      'layout-designer.field-widget' | translate: { widget: column.widget }
+                    }}</span>
+                  }
+                </span>
+                <span class="layout-designer__field-actions">
+                  <button
+                    mat-icon-button
+                    type="button"
+                    data-action="up"
+                    [disabled]="first"
+                    [attr.aria-label]="
+                      'layout-designer.move-up' | translate: { field: columnName(column) }
+                    "
+                    (click)="move('columns', column.index, -1)"
+                  >
+                    <nxs-icon name="arrow_up" />
+                  </button>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    data-action="down"
+                    [disabled]="last"
+                    [attr.aria-label]="
+                      'layout-designer.move-down' | translate: { field: columnName(column) }
+                    "
+                    (click)="move('columns', column.index, 1)"
+                  >
+                    <nxs-icon name="arrow_down" />
+                  </button>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    data-action="hide"
+                    [attr.aria-label]="
+                      'layout-designer.hide' | translate: { field: columnName(column) }
+                    "
+                    (click)="hideColumn(column)"
+                  >
+                    <nxs-icon name="view_off" />
+                  </button>
+                </span>
+              </li>
+            } @empty {
+              <li class="layout-designer__field layout-designer__field--none">
+                {{ 'layout-designer.queue.no-columns' | translate }}
+              </li>
+            }
+          </ol>
+          <div class="layout-designer__add">
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>{{ 'layout-designer.queue.add-column' | translate }}</mat-label>
+              <input
+                matInput
+                data-picker="add-column"
+                list="queue-designer-properties"
+                autocomplete="off"
+                [value]="toAdd().columns"
+                (input)="choose('columns', valueOf($event))"
+              />
+              <datalist id="queue-designer-properties">
+                @for (xpath of properties(); track xpath) {
+                  <option [value]="xpath"></option>
+                }
+              </datalist>
+            </mat-form-field>
+            <button
+              mat-stroked-button
+              type="button"
+              data-action="add-column"
+              [disabled]="toAdd().columns.trim() === ''"
+              (click)="add('columns')"
+            >
+              {{ 'layout-designer.add-button' | translate }}
+            </button>
+          </div>
+        </section>
+
+        @if (hidden().length > 0) {
+          <section class="layout-designer__hidden" aria-labelledby="queue-designer-hidden">
+            <h3 class="layout-designer__card-heading" id="queue-designer-hidden">
+              {{ 'layout-designer.queue.hidden' | translate }}
+            </h3>
+            <ul class="layout-designer__fields">
+              @for (column of hidden(); track $index) {
+                <li class="layout-designer__field" [attr.data-hidden]="column.name">
+                  <span class="layout-designer__field-name">
+                    <code>{{ column.name }}</code>
+                  </span>
+                  <button
+                    mat-button
+                    type="button"
+                    data-action="show"
+                    [attr.aria-label]="'layout-designer.show' | translate: { field: column.name }"
+                    (click)="showColumn(column)"
+                  >
+                    {{ 'layout-designer.show-button' | translate }}
+                  </button>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        <section class="layout-designer__card" data-part="sort">
+          <h3 class="layout-designer__card-heading">
+            {{ 'layout-designer.queue.sort' | translate }}
+          </h3>
+          <ol class="layout-designer__fields" data-list="sort">
+            @for (sort of sorts(); track $index; let first = $first, last = $last) {
+              <li class="layout-designer__entry" [attr.data-sort]="sort.field">
+                <div class="layout-designer__field">
+                  <span class="layout-designer__field-name">
+                    <code>{{ sort.field || ('layout-designer.queue.no-field' | translate) }}</code>
+                  </span>
+                  <span class="layout-designer__field-actions">
+                    <button
+                      mat-icon-button
+                      type="button"
+                      data-action="up"
+                      [disabled]="first"
+                      [attr.aria-label]="
+                        'layout-designer.move-up' | translate: { field: sort.field }
+                      "
+                      (click)="move('sort', sort.index, -1)"
+                    >
+                      <nxs-icon name="arrow_up" />
+                    </button>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      data-action="down"
+                      [disabled]="last"
+                      [attr.aria-label]="
+                        'layout-designer.move-down' | translate: { field: sort.field }
+                      "
+                      (click)="move('sort', sort.index, 1)"
+                    >
+                      <nxs-icon name="arrow_down" />
+                    </button>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      data-action="remove"
+                      [attr.aria-label]="
+                        'layout-designer.queue.remove-sort' | translate: { field: sort.field }
+                      "
+                      (click)="remove('sort', sort.index)"
+                    >
+                      <nxs-icon name="trash" />
+                    </button>
+                  </span>
+                </div>
+                <mat-form-field subscriptSizing="dynamic">
+                  <mat-label>{{
+                    'layout-designer.queue.order' | translate: { field: sort.field }
+                  }}</mat-label>
+                  <select
+                    matNativeControl
+                    data-picker="order"
+                    [value]="sort.order ?? ''"
+                    (change)="setOrder(sort, valueOf($event))"
+                  >
+                    @if (sort.order === null) {
+                      <option value="" selected>
+                        {{ 'layout-designer.queue.order-none' | translate }}
+                      </option>
+                    }
+                    <option value="asc" [selected]="sort.order === 'asc'">
+                      {{ 'layout-designer.queue.order-asc' | translate }}
+                    </option>
+                    <option value="desc" [selected]="sort.order === 'desc'">
+                      {{ 'layout-designer.queue.order-desc' | translate }}
+                    </option>
+                  </select>
+                </mat-form-field>
+              </li>
+            } @empty {
+              <li class="layout-designer__field layout-designer__field--none">
+                {{ 'layout-designer.queue.no-sort' | translate }}
+              </li>
+            }
+          </ol>
+          <div class="layout-designer__add">
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>{{ 'layout-designer.queue.add-sort' | translate }}</mat-label>
+              <select
+                matNativeControl
+                data-picker="add-sort"
+                [value]="toAdd().sort"
+                (change)="choose('sort', valueOf($event))"
+              >
+                <option value="">{{ 'layout-designer.queue.add-sort-choose' | translate }}</option>
+                @for (xpath of unsorted(); track xpath) {
+                  <option [value]="xpath" [selected]="xpath === toAdd().sort">{{ xpath }}</option>
+                }
+              </select>
+            </mat-form-field>
+            <button
+              mat-stroked-button
+              type="button"
+              data-action="add-sort"
+              [disabled]="toAdd().sort === ''"
+              (click)="add('sort')"
+            >
+              {{ 'layout-designer.add-button' | translate }}
+            </button>
+          </div>
+        </section>
+
+        <section class="layout-designer__card" data-part="facets">
+          <h3 class="layout-designer__card-heading">
+            {{ 'layout-designer.queue.facets' | translate }}
+          </h3>
+          <ol class="layout-designer__fields" data-list="facets">
+            @for (facet of facets(); track $index; let first = $first, last = $last) {
+              <li class="layout-designer__entry" [attr.data-facet]="facet.aggregate">
+                <div class="layout-designer__field">
+                  <span class="layout-designer__field-name">
+                    <code>{{ facet.aggregate }}</code>
+                  </span>
+                  <span class="layout-designer__field-actions">
+                    <button
+                      mat-icon-button
+                      type="button"
+                      data-action="up"
+                      [disabled]="first"
+                      [attr.aria-label]="
+                        'layout-designer.move-up' | translate: { field: facet.aggregate }
+                      "
+                      (click)="move('facets', facet.index, -1)"
+                    >
+                      <nxs-icon name="arrow_up" />
+                    </button>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      data-action="down"
+                      [disabled]="last"
+                      [attr.aria-label]="
+                        'layout-designer.move-down' | translate: { field: facet.aggregate }
+                      "
+                      (click)="move('facets', facet.index, 1)"
+                    >
+                      <nxs-icon name="arrow_down" />
+                    </button>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      data-action="remove"
+                      [attr.aria-label]="
+                        'layout-designer.queue.remove-facet' | translate: { field: facet.aggregate }
+                      "
+                      (click)="remove('facets', facet.index)"
+                    >
+                      <nxs-icon name="trash" />
+                    </button>
+                  </span>
+                </div>
+                <div class="layout-designer__card-texts">
+                  <mat-form-field subscriptSizing="dynamic">
+                    <mat-label>{{
+                      'layout-designer.queue.facet-label'
+                        | translate: { aggregate: facet.aggregate }
+                    }}</mat-label>
+                    <input
+                      matInput
+                      data-text="facet-label"
+                      [value]="facet.label"
+                      (change)="setFacet(facet, 'label', valueOf($event))"
+                    />
+                  </mat-form-field>
+                  <mat-form-field subscriptSizing="dynamic">
+                    <mat-label>{{
+                      'layout-designer.queue.facet-label-key'
+                        | translate: { aggregate: facet.aggregate }
+                    }}</mat-label>
+                    <input
+                      matInput
+                      data-text="facet-labelKey"
+                      [value]="facet.labelKey"
+                      (change)="setFacet(facet, 'labelKey', valueOf($event))"
+                    />
+                  </mat-form-field>
+                </div>
+              </li>
+            } @empty {
+              <li class="layout-designer__field layout-designer__field--none">
+                {{ 'layout-designer.queue.no-facets' | translate }}
+              </li>
+            }
+          </ol>
+          <div class="layout-designer__add">
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>{{ 'layout-designer.queue.add-facet' | translate }}</mat-label>
+              <input
+                matInput
+                data-picker="add-facet"
+                autocomplete="off"
+                [value]="toAdd().facets"
+                (input)="choose('facets', valueOf($event))"
+              />
+            </mat-form-field>
+            <button
+              mat-stroked-button
+              type="button"
+              data-action="add-facet"
+              [disabled]="toAdd().facets.trim() === ''"
+              (click)="add('facets')"
+            >
+              {{ 'layout-designer.add-button' | translate }}
+            </button>
+          </div>
+          <p class="layout-designer__message">
+            {{ 'layout-designer.queue.facet-hint' | translate }}
+          </p>
+        </section>
+
+        <section class="layout-designer__validation" aria-labelledby="queue-designer-validation">
+          <h3 class="layout-designer__card-heading" id="queue-designer-validation">
+            {{ 'layout-designer.validation' | translate }}
+          </h3>
+          <p class="layout-designer__message" role="status" data-actions>
+            @switch (packageActions().state) {
+              @case ('reading') {
+                {{ 'layout-designer.queue.actions-reading' | translate }}
+              }
+              @case ('failed') {
+                {{
+                  'layout-designer.queue.actions-failed'
+                    | translate: { problem: failed(packageActions()) }
+                }}
+              }
+              @default {
+                @if (hasPackageActions()) {
+                  {{ 'layout-designer.queue.actions-held' | translate }}
+                } @else {
+                  {{ 'layout-designer.queue.actions-none' | translate }}
+                }
+              }
+            }
+          </p>
+          <p
+            class="layout-designer__verdict"
+            role="status"
+            [attr.data-verdict]="
+              findings().length > 0 ? 'refused' : saveState() === 'checking' ? 'checking' : 'none'
+            "
+          >
+            @if (findings().length > 0) {
+              {{ 'layout-designer.findings-refused' | translate: { count: findings().length } }}
+            } @else if (saveState() === 'checking') {
+              {{ 'layout-designer.findings-checking' | translate }}
+            } @else {
+              {{ 'layout-designer.findings-none' | translate }}
+            }
+          </p>
+          @if (findings().length > 0) {
+            <ul class="layout-designer__findings">
+              @for (finding of findings(); track $index) {
+                <li class="layout-designer__finding" [attr.data-kind]="finding.kind">
+                  @if (finding.path) {
+                    <code>{{ finding.path }}</code
+                    >:
+                  }
+                  {{ finding.message }}
+                  <span class="layout-designer__kind">[{{ finding.kind }}]</span>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+
+        <section class="layout-designer__save" aria-labelledby="queue-designer-save">
+          <h3 class="layout-designer__card-heading" id="queue-designer-save">
+            {{ 'layout-designer.save' | translate }}
+          </h3>
+          <div class="layout-designer__save-actions">
+            <button
+              mat-flat-button
+              type="button"
+              data-action="download"
+              [disabled]="saveState() !== 'saveable'"
+              (click)="download()"
+            >
+              <nxs-icon name="download" />
+              {{ 'layout-designer.download' | translate: { file: fileName() } }}
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              data-action="reset"
+              [disabled]="!unsaved()"
+              (click)="reset()"
+            >
+              {{ 'layout-designer.reset' | translate }}
+            </button>
+          </div>
+          @switch (saveState()) {
+            @case ('refused') {
+              <p class="layout-designer__message" data-save="refused">
+                {{ 'layout-designer.save-refused' | translate }}
+              </p>
+            }
+            @case ('checking') {
+              <p class="layout-designer__message" data-save="checking">
+                {{ 'layout-designer.queue.save-checking' | translate }}
+              </p>
+            }
+          }
+          <p class="layout-designer__message">
+            {{ 'layout-designer.queue.save-where' | translate: { file: fileName() } }}
+          </p>
+          <p class="layout-designer__message">{{ 'layout-designer.no-publish' | translate }}</p>
+          <details class="layout-designer__json">
+            <summary>{{ 'layout-designer.file' | translate: { file: fileName() } }}</summary>
+            <pre class="layout-designer__json-text">{{ fileText() }}</pre>
+          </details>
+        </section>
+      </section>
+
+      <section class="layout-designer__preview" aria-labelledby="queue-designer-preview">
+        <h2 class="layout-designer__heading" id="queue-designer-preview">
+          {{ 'layout-designer.preview' | translate }}
+        </h2>
+        <p class="layout-designer__message">
+          {{ 'layout-designer.queue.preview-read-only' | translate }}
+        </p>
+        @if (hasRule()) {
+          <p class="layout-designer__message" data-preview="rule">
+            {{ 'layout-designer.queue.preview-rule' | translate }}
+          </p>
+        }
+        @if (pageNotes().refused) {
+          <nxs-banner
+            tone="error"
+            data-preview="refused"
+            [message]="
+              'layout-designer.queue.preview-refused'
+                | translate: { reason: pageNotes().notes.join('; ') }
+            "
+          />
+        } @else {
+          <lib-queue-page [id]="id() ?? ''" [content]="file" [readOnly]="true" />
+        }
+        @if (!pageNotes().refused && pageNotes().notes.length > 0) {
+          <div class="layout-designer__notes">
+            <h3 class="layout-designer__card-heading">
+              {{ 'layout-designer.queue.preview-notes' | translate }}
+            </h3>
+            <ul>
+              @for (note of pageNotes().notes; track $index) {
+                <li>{{ note }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </section>
+    </div>
+  }
+</div>
