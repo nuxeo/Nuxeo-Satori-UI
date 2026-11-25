@@ -35,8 +35,8 @@ is decision 5, still open ([decision log](../../../docs/business-apps/decisions.
    - sets a card's id, its heading text (`label`) and its heading key (`labelKey`). An empty heading
      text or key is taken out of the file rather than written empty.
 
-   A card of related records, a timeline or comments is listed with its heading, and its contents are
-   edited in the file. Every key the designer does not edit is kept as it was written, a key version 2
+   A card of related records, a timeline, comments, another system's fields or a checklist is listed
+   with its heading, and its contents are edited in the file. Every key the designer does not edit is kept as it was written, a key version 2
    does not have included.
 
 3. **Previews it** with the record page engine, `lib-record-page`, against a record of the type: the

@@ -268,6 +268,97 @@ describe('recordFacetSchemasToRead', () => {
       recordFacetSchemasToRead(MEMBER, schemas, file([{ id: 'a', fields: ['dc:title'] }])),
     ).toEqual([]);
   });
+
+  it("reads the schema of a checklist's property", () => {
+    const page = file([
+      { id: 'a', checklist: { field: 'aud:checklist', items: [{ id: 'x', label: 'X' }] } },
+    ]);
+    expect(recordFacetSchemasToRead(MEMBER, schemas, page)).toEqual([
+      { name: 'audit', prefix: 'aud' },
+    ]);
+  });
+});
+
+describe('a checklist', () => {
+  const CHECKLIST_SUBFIELDS = {
+    item: { type: 'string' },
+    done: { type: 'boolean' },
+    doneBy: { type: 'string' },
+    doneOn: { type: 'date' },
+  };
+  const CASE: DocumentTypeDefinition = {
+    name: 'Case',
+    schemas: [
+      {
+        name: 'case',
+        prefix: 'case',
+        fields: {
+          number: { type: 'string' },
+          checklist: { type: 'complex[]', fields: CHECKLIST_SUBFIELDS },
+          loose: { type: 'complex[]' },
+          tags: { type: 'string[]' },
+          steps: {
+            type: 'complex[]',
+            fields: { ...CHECKLIST_SUBFIELDS, done: { type: 'string' } },
+          },
+          partial: {
+            type: 'complex[]',
+            fields: { item: { type: 'string' }, done: { type: 'boolean' } },
+          },
+        },
+      },
+    ],
+  };
+  const card = (field: string, id = 'checklist') => ({
+    id,
+    checklist: { field, items: [{ id: 'reviewerAssigned', label: 'Reviewer assigned' }] },
+  });
+
+  it('keeps a card whose property holds the four subfields, each of its type', () => {
+    const { layout, skipped, notes } = resolveRecordLayout(
+      CASE,
+      file([{ id: 'a', fields: ['case:number'] }, card('case:checklist')]),
+    );
+    expect(skipped).toEqual([]);
+    expect(notes).toEqual([]);
+    expect(layout.cards.map((each) => each.id)).toEqual(['a', 'checklist']);
+    expect(layout.cards[1].checklist?.field).toBe('case:checklist');
+  });
+
+  it("leaves out a card whose property is neither the type's nor the facets'", () => {
+    const { layout, skipped } = resolveRecordLayout(CASE, file([card('case:todo')]));
+    expect(layout.cards).toEqual([]);
+    expect(skipped).toEqual([{ place: 'cards[0]', xpath: 'case:todo', reason: 'not-on-type' }]);
+  });
+
+  it('leaves out a card whose property cannot hold the items, and says why', () => {
+    const { layout, notes } = resolveRecordLayout(
+      CASE,
+      file([card('case:tags', 'a'), card('case:steps', 'b'), card('case:partial', 'c')]),
+    );
+    expect(layout.cards).toEqual([]);
+    expect(notes).toEqual([
+      'cards[0] left out: a checklist reads a list of complex values, and case:tags is a string[] property',
+      'cards[1] left out: "done" of case:steps is a string value, and a checklist reads it as a boolean',
+      'cards[2] left out: case:partial has no subfield "doneBy", which a checklist reads',
+    ]);
+  });
+
+  it('takes a property whose subfields the schema does not list as written, as a table does', () => {
+    const { layout, notes } = resolveRecordLayout(CASE, file([card('case:loose')]));
+    expect(notes).toEqual([]);
+    expect(layout.cards.map((each) => each.id)).toEqual(['checklist']);
+  });
+
+  it("keeps a card whose property a facet's schema brings", () => {
+    const audit: DocumentTypeSchema = {
+      name: 'audit',
+      prefix: 'aud',
+      fields: { checklist: { type: 'complex[]', fields: CHECKLIST_SUBFIELDS } },
+    };
+    const { layout } = resolveRecordLayout(CASE, file([card('aud:checklist')]), [audit]);
+    expect(layout.cards.map((each) => each.id)).toEqual(['checklist']);
+  });
 });
 
 describe('widgetAccepts', () => {

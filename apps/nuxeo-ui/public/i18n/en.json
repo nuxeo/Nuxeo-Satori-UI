@@ -1514,6 +1514,11 @@
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."
   },
   "document-layouts": {
+    "checklist": {
+      "count": "{{done}} of {{total}} done",
+      "done": "Done",
+      "not-done": "Not done"
+    },
     "external": {
       "empty": "Nothing found in the other system",
       "failed": "The other system's information could not be loaded",
@@ -1767,6 +1772,7 @@
     "save-where": "In a configuration package, the file is layouts/{{type}}/{{file}}. On the development server, npm run config:dev -- --layout {{type}}/view= followed by the downloaded file's path serves it. That command writes the whole folder again, so give it every other file you serve too.",
     "show": "Show {{field}} again",
     "show-button": "Show",
+    "shows-checklist": "This card shows a checklist. Its items are edited in the file.",
     "shows-comments": "This card shows the record's comments.",
     "shows-external": "This card shows a record of another system. Its fields are edited in the file.",
     "shows-related": "This card lists related records. Its columns are edited in the file.",

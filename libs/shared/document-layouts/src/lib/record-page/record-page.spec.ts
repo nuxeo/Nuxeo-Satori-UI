@@ -65,6 +65,15 @@ const MEMBER_TYPE: DocumentTypeDefinition = {
           type: 'complex',
           fields: { street: { type: 'string' }, city: { type: 'string' }, zip: { type: 'string' } },
         },
+        onboarding: {
+          type: 'complex[]',
+          fields: {
+            item: { type: 'string' },
+            done: { type: 'boolean' },
+            doneBy: { type: 'string' },
+            doneOn: { type: 'date' },
+          },
+        },
       },
     },
   ],
@@ -1431,6 +1440,120 @@ describe('RecordPageComponent', () => {
       });
       expect(root.querySelector('[data-card-id="policy"]')).toBeNull();
       expect(connectorRead).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a checklist', () => {
+    const ONBOARDING_PAGE = {
+      version: 2,
+      columns: 2,
+      cards: [
+        { id: 'member', label: 'Member', fields: ['member:phone'] },
+        {
+          id: 'onboarding',
+          label: 'Onboarding',
+          visibleWhen: 'test.rules.canSeeService',
+          checklist: {
+            field: 'member:onboarding',
+            items: [
+              { id: 'welcomeCall', label: 'Welcome call made' },
+              { id: 'cardSent', labelKey: 'test.onboarding.cardSent' },
+              { id: 'portal', label: 'Portal account opened' },
+            ],
+          },
+        },
+      ],
+    };
+    const ONBOARDED = [
+      { item: 'cardSent', done: true, doneBy: 'jdoe', doneOn: '2026-11-03T00:00:00.000Z' },
+      { item: 'welcomeCall', done: false, doneBy: 'jdoe', doneOn: '2026-11-02T00:00:00.000Z' },
+      { item: 'legacyStep', done: true, doneBy: 'jdoe', doneOn: '2026-11-01T00:00:00.000Z' },
+    ];
+    /** Each item as drawn: its parts, `null` for one not drawn, and its icon by name. */
+    const rowsOf = (root: HTMLElement) =>
+      [...root.querySelectorAll<HTMLElement>('[data-card-id="onboarding"] li')].map((row) => {
+        const part = (name: string): string | null =>
+          row.querySelector(`.record-page__checklist-${name}`)?.textContent?.trim() ?? null;
+        return {
+          item: row.dataset['item'],
+          done: row.dataset['done'],
+          label: part('label'),
+          state: part('state'),
+          by: part('by'),
+          on: part('on'),
+          icon: row.querySelector('mat-icon')?.getAttribute('data-mat-icon-name'),
+        };
+      });
+
+    it("draws the file's items, in its order, each done or not by the record, with who and when", async () => {
+      const root = await render(member({ 'member:onboarding': ONBOARDED }), ONBOARDING_PAGE);
+      const card = root.querySelector<HTMLElement>('[data-card-id="onboarding"]');
+      expect(card?.querySelector('h3')?.textContent?.trim()).toBe('Onboarding');
+      expect(card?.querySelector('ul')?.getAttribute('aria-label')).toBe('Onboarding');
+      expect(card?.querySelector('.record-page__checklist-count')?.textContent?.trim()).toBe(
+        '1 of 3 done',
+      );
+      expect(rowsOf(root)).toEqual([
+        // Not done: its entry's who and when are not shown.
+        {
+          item: 'welcomeCall',
+          done: 'false',
+          label: 'Welcome call made',
+          state: 'Not done',
+          by: null,
+          on: null,
+          icon: 'circle_dot',
+        },
+        // A key with no text shows the item's id, made readable; the user by name.
+        {
+          item: 'cardSent',
+          done: 'true',
+          label: 'Card sent',
+          state: 'Done',
+          by: 'Jane Doe',
+          on: 'November 3, 2026',
+          icon: 'circle_check',
+        },
+        // No entry: required by the file, and not done.
+        {
+          item: 'portal',
+          done: 'false',
+          label: 'Portal account opened',
+          state: 'Not done',
+          by: null,
+          on: null,
+          icon: 'circle_dot',
+        },
+      ]);
+      // An entry for an item the file does not list is not drawn.
+      expect(card?.textContent).not.toContain('legacyStep');
+      expect(card?.textContent).not.toContain('November 1, 2026');
+    });
+
+    it("hides the card while its rule does not pass, as any card's", async () => {
+      rules.canSeeService = false;
+      const root = await render(member({ 'member:onboarding': ONBOARDED }), ONBOARDING_PAGE);
+      expect(root.querySelector('[data-card-id="onboarding"]')).toBeNull();
+      expect(root.querySelector('[data-card-id="member"]')).not.toBeNull();
+    });
+
+    it('shows every item not done on a record that holds no entry', async () => {
+      const root = await render(member(), ONBOARDING_PAGE);
+      expect(rowsOf(root).map((row) => row.done)).toEqual(['false', 'false', 'false']);
+    });
+
+    it('leaves out a card whose property the type does not have', async () => {
+      const root = await render(member(), {
+        version: 2,
+        cards: [
+          { id: 'member', fields: ['member:phone'] },
+          {
+            id: 'todo',
+            checklist: { field: 'member:todo', items: [{ id: 'a', label: 'A' }] },
+          },
+        ],
+      });
+      expect(root.querySelector('[data-card-id="todo"]')).toBeNull();
     });
   });
 

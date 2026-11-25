@@ -132,7 +132,9 @@ install and no transpiler.
   whole, since a layout held to a model read in part would be refused for what was left out.
   `propertiesOf` gives a type's properties, its facets' included, by `<prefix>:<name>`.
 - **`layout-model.ts`** holds a layout to the model, when `validateLayoutV2` is given one and the
-  type: each finding is `unknown` or `parameter`, so the app's tolerant loading still applies. Not
+  type: each finding is `unknown` or `parameter`, so the app's tolerant loading still applies. A
+  checklist's property is held to it too: on the type, a list of complex values, with the four
+  subfields `CHECKLIST_SUBFIELDS` names, each of its type. Not
   held to it: a related list's columns, which are other records'; the properties a computation, a
   rule or a widget parameter names; a task form's fields; a vocabulary's `directory` against the
   property's own.
@@ -303,8 +305,8 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
 - **The rest of the package pipeline:** its first stage is built (package-pipeline.md); phase 3
   completes it.
 - **The app's use of it:** a `view` layout draws the record page, in `libs/shared/document-layouts`,
-  which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its timeline
-  and its comments. The other
+  which loads it with `validateLayoutV2` and `loadable`, and draws its related records, its
+  timeline, its comments, another system's fields and its checklists. The other
   modes and queues follow in phase 1, and actions and task forms in phase 2.
 - **The content model in the migration server.** The pipeline holds a package to a model when given
   one, and the layout designer, `libs/features/layout-designer`, holds the `view` file it edits to

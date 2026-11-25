@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Seed a Nuxeo server with the Payers kit's fictional records and people, so that its record pages,
- * queues and home have something to show: four members, three providers, eight claims, three cases
- * and four claim documents, and the six people who work them, in the three groups the kit's rules
- * name, from `data.mjs`. Each claim's lifecycle state is brought to its status, so the two are one.
+ * queues and home have something to show: four members, three providers, nine claims, four cases,
+ * two of them appeals with their checklists, and four claim documents, and the six people who work
+ * them, in the three groups the kit's rules name, from `data.mjs`. Each claim's lifecycle state is
+ * brought to its status, so the two are one.
  *
  *   node business-apps/packages/payers-claims-demo/demo/seed.mjs
  *
@@ -36,13 +37,19 @@
  * transition can bring to its status, such as one reviewed since that `data.mjs` has as submitted,
  * stops the run (exit 1), naming it; restoring it from the trash restores its state too.
  *
+ * **The appeals.** An appeal's checklist is written to `case:checklist`, version 0.4.1's, as
+ * `data.mjs` has it, and every other case's is emptied. Before anything is asked of the server,
+ * `data.mjs` is held to the Case page's checklist card (`appeals.mjs`): an appeal against a claim
+ * that is not denied, or an entry the card does not list, stops the run with exit 1, naming it.
+ *
  * **The people.** Each user is created, or put back to `data.mjs`'s values: name, e-mail, groups
  * and password. The seeded workspace and its folders give the demo's groups the permissions
  * `data.mjs` names, and only those: one of theirs it does not name is removed. Anyone else's stays.
  *
  * **It checks what it seeded.** Last, as `check` says: each user signs in, in their groups, with
  * the rights `GRANTS` implies on a claim and none to change a member; each claim is in the state
- * its status names; then the kit's seven page
+ * its status names; each case holds the checklist it was given, entry for entry; then the kit's
+ * seven page
  * providers return what it wrote, the three queues' aggregates count it, and each adjuster's
  * claims are what `payers_my_claims` returns to them, asked as they are, through `$currentUser`.
  * So a run that passes has run each of them on the server.
@@ -50,12 +57,14 @@
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
  *
- * Exit codes: 0, seeded and checked; 1, the server refused a write, stopped answering part way, or
- * a check failed; 2, a precondition, found before anything is written: no credentials, no demo
- * password, no server, credentials refused or not an administrator's, the package not installed
- * or older than 0.4.0, no /default-domain/workspaces, or a user or a group of the demo's names
- * that the seed did not create.
+ * Exit codes: 0, seeded and checked; 1, `data.mjs` disagrees with the Case page's checklist, the
+ * server refused a write, stopped answering part way, or a check failed; 2, a precondition, found
+ * before anything is written: no credentials, no demo password, no server, credentials refused or
+ * not an administrator's, the package not installed or older than 0.4.1, no
+ * /default-domain/workspaces, or a user or a group of the demo's names that the seed did not
+ * create.
  */
+import { appealProblems, readAppealChecklist } from './appeals.mjs';
 import {
   CASES,
   CLAIM_DOCUMENTS,
@@ -94,6 +103,8 @@ const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersCl
  */
 const WORKFLOW_MODEL = 'PayersClaimReview';
 const LIFECYCLE = readLifecycle();
+/** The Case page's checklist card, which version 0.4.1's `case:checklist` holds the state of. */
+const CHECKLIST = readAppealChecklist();
 const PAGE_PROVIDERS = [
   'member_claims',
   'member_cases',
@@ -161,6 +172,13 @@ try {
 
 async function seed() {
   console.log(`Seeding ${SERVER} with the Payers kit's fictional records.`);
+  // The script's own data first, before the server is asked anything: an appeal the Case page
+  // would show wrongly is data.mjs's fault, not the server's.
+  const disagreeing = appealProblems({ cases: CASES, claims: CLAIMS, users: USERS }, CHECKLIST);
+  if (disagreeing.length > 0)
+    throw new Error(
+      `data.mjs disagrees with the Case page's checklist:\n  ${disagreeing.join('\n  ')}`,
+    );
   await preflight();
   preflighting = false;
 
@@ -246,6 +264,7 @@ async function seed() {
       'case:due': kase.due,
       'case:assignee': kase.assignee,
       'case:summary': kase.summary,
+      'case:checklist': checklistOf(kase),
     });
     cases.set(kase.number, document.uid);
   }
@@ -287,12 +306,28 @@ async function seed() {
   );
   console.log(`A member's record page: ${APP}/#/doc/${members.get(MEMBERS[0].number)}`);
   console.log(`A provider's record page: ${APP}/#/doc/${providers.get(PROVIDERS[2].number)}`);
+  for (const kase of CASES.filter((each) => each.category === 'appeal'))
+    console.log(`An appeal's record page, ${kase.number}: ${APP}/#/doc/${cases.get(kase.number)}`);
+}
+
+/**
+ * A case's checklist as `case:checklist` holds it: an appeal's entries, each with its four
+ * subfields, or none for any other case, so a checklist written by hand is emptied again.
+ */
+function checklistOf(kase) {
+  return (kase.checklist ?? []).map(({ item, done, doneBy, doneOn }) => ({
+    item,
+    done,
+    doneBy,
+    doneOn,
+  }));
 }
 
 /**
  * The server answers, the credentials are accepted and are an administrator's, the package's
- * types are installed, version 0.3.0's search type among them, and version 0.4.0's claims review
- * workflow, and no user or group of the demo's names is someone else's.
+ * types are installed, version 0.3.0's search type among them, version 0.4.0's claims review
+ * workflow and version 0.4.1's case:checklist, and no user or group of the demo's names is someone
+ * else's.
  */
 async function preflight() {
   let me;
@@ -316,7 +351,7 @@ async function preflight() {
     throw new Precondition(
       missing.length === 1 && missing[0] === 'PayersClaimSearch'
         ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
-            'PayersClaimSearch type for its queues: upgrade it to 0.4.0 ' +
+            'PayersClaimSearch type for its queues: upgrade it to 0.4.1 ' +
             '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
         : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
             'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
@@ -325,7 +360,15 @@ async function preflight() {
     throw new Precondition(
       `${SERVER} has version 0.3.0 or older of the payers-claims-demo package, with no ` +
         `${WORKFLOW_MODEL} workflow and the platform's default lifecycle on claims: upgrade it to ` +
-        '0.4.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+        '0.4.1 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+    );
+  const [prefix, property] = CHECKLIST.field.split(':');
+  const schema = await find(`/config/schemas/${encodeURIComponent(prefix)}`);
+  if (!schema?.fields || !Object.hasOwn(schema.fields, property))
+    throw new Precondition(
+      `${SERVER} has version 0.4.0 or older of the payers-claims-demo package, with no ` +
+        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.4.1 ` +
+        '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
@@ -584,6 +627,9 @@ async function check(seeded) {
   const unsettled = await lifecycles(seeded);
   if (unsettled.length > 0)
     throw new Error(`The claims are not in their statuses' states:\n  ${unsettled.join('\n  ')}`);
+  const unchecked = await checklists(seeded);
+  if (unchecked.length > 0)
+    throw new Error(`The cases' checklists are not as seeded:\n  ${unchecked.join('\n  ')}`);
   const deadline = Date.now() + INDEX_WAIT_MS;
   for (;;) {
     const problems = await disagreements(seeded);
@@ -661,6 +707,33 @@ async function staff({ members, claims }) {
         );
     if (onMember.includes('WriteProperties'))
       problems.push(`${user.username} may change a member, and would see its Edit form`);
+  }
+  return problems;
+}
+
+/**
+ * Each seeded case, read again from the repository, holding the checklist it was given, entry for
+ * entry and in order: what the Case page reads each item's state from. A day comes back as the
+ * server writes a date, so it is compared by its day; a day the server moved, as a zone would, is
+ * a difference.
+ */
+async function checklists({ cases }) {
+  const problems = [];
+  const day = (value) => (typeof value === 'string' ? value.slice(0, 10) : value);
+  for (const kase of CASES) {
+    const document = await call('GET', `/id/${cases.get(kase.number)}`);
+    const held = document?.properties?.[CHECKLIST.field];
+    const read = (Array.isArray(held) ? held : [held]).map((entry) => ({
+      item: entry?.item ?? null,
+      done: entry?.done ?? null,
+      doneBy: entry?.doneBy ?? null,
+      doneOn: day(entry?.doneOn ?? null),
+    }));
+    const wanted = checklistOf(kase);
+    if (!Array.isArray(held) || JSON.stringify(read) !== JSON.stringify(wanted))
+      problems.push(
+        `${kase.number} holds ${JSON.stringify(held ?? null)}, not ${JSON.stringify(wanted)}`,
+      );
   }
   return problems;
 }

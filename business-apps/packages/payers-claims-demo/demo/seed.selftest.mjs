@@ -18,7 +18,10 @@
  * moves nothing, a trashed record
  * restored, a document of another type left alone, a user or a group the seed did not create left
  * alone, the demo's people put back, and checks that fail when a page provider, its aggregates or
- * a user's rights are wrong. It says nothing about whether a real server accepts
+ * a user's rights are wrong. Since 0.4.1, the appeals too: version 0.4.0 refused, each case's
+ * checklist written as `data.mjs` has it and put back when changed by hand, one read back otherwise
+ * failing the run, and `data.mjs` held to the Case page's checklist card (`appeals.mjs`) before the
+ * server is asked anything. It says nothing about whether a real server accepts
  * the stand-in model or answers as the stand-in does: only a run against one shows that.
  *
  * It runs the real `seed.mjs` as a command, against a server on 127.0.0.1, with a user and a
@@ -28,15 +31,19 @@
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CLAIMS } from './data.mjs';
+import { appealProblems, readAppealChecklist } from './appeals.mjs';
+import { CASES, CLAIMS, USERS } from './data.mjs';
 import { pathBetween, readLifecycle } from './lifecycle.mjs';
 
 const LIFECYCLE = readLifecycle();
-const SEED = process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
+const DEMO = dirname(fileURLToPath(import.meta.url));
+const SEED = process.argv[2] ?? join(DEMO, 'seed.mjs');
 const ROOT = '/default-domain/workspaces/payers-demo';
 const PAGE_PROVIDERS = [
   'member_claims',
@@ -72,13 +79,17 @@ function expect(condition, what, output = '') {
  * in step with each transition, as the model's event handler does; `statusOnly` answers the claim
  * of that number, read back by its id, in `submitted` whatever its state, as a server whose state
  * and status had come apart would. `workflowModel: false` answers as version 0.3.0, which has no
- * claims review workflow.
+ * claims review workflow, and `caseChecklist: false` as version 0.4.0, whose case schema has no
+ * checklist; `checklistDrift` answers the case of that number, read back by its id, with its first
+ * checklist entry not done, as a server that had dropped what was written would.
  */
 function standIn({
   user,
   password,
   administrator = true,
   workflowModel = true,
+  caseChecklist = true,
+  checklistDrift = null,
   statusOnly = null,
   noAggregations = false,
   guestFor = null,
@@ -169,6 +180,14 @@ function standIn({
     const properties = { ...document.properties };
     const blob = blobs.get(document.uid);
     if (blob) properties['file:content'] = { name: blob.name, length: String(blob.bytes.length) };
+    // A day written to a date comes back as Nuxeo writes a date: midnight UTC, with its time.
+    if (Array.isArray(properties['case:checklist']))
+      properties['case:checklist'] = properties['case:checklist'].map((entry) => ({
+        ...entry,
+        doneOn: /^\d{4}-\d{2}-\d{2}$/.test(entry.doneOn ?? '')
+          ? `${entry.doneOn}T00:00:00.000Z`
+          : entry.doneOn,
+      }));
     return { ...document, properties };
   };
   const write = (document, properties) => {
@@ -328,6 +347,31 @@ function standIn({
         return types.includes(path.slice('/config/types/'.length))
           ? send(200, {})
           : send(404, { message: 'no such type' });
+      // The case schema, as /config/schemas answers it: version 0.4.1's has the checklist.
+      if (method === 'GET' && path === '/config/schemas/case')
+        return types.includes('Case')
+          ? send(200, {
+              name: 'case',
+              prefix: 'case',
+              fields: {
+                number: 'string',
+                summary: 'string',
+                ...(caseChecklist
+                  ? {
+                      checklist: {
+                        type: 'complex[]',
+                        fields: {
+                          item: 'string',
+                          done: 'boolean',
+                          doneBy: 'string',
+                          doneOn: 'date',
+                        },
+                      },
+                    }
+                  : {}),
+              },
+            })
+          : send(404, { message: 'no such schema' });
       if (method === 'GET' && path.startsWith('/path/')) {
         const document = byPath.get(path.slice('/path'.length));
         return document ? send(200, view(document)) : send(404, { message: 'not found' });
@@ -355,9 +399,19 @@ function standIn({
           statusOnly !== null && document.properties['claim:number'] === statusOnly
             ? { state: LIFECYCLE.initial }
             : {};
+        // The one case `checklistDrift` names, read back with its first entry not done.
+        const shown = view(document);
+        if (checklistDrift !== null && document.properties['case:number'] === checklistDrift) {
+          const [first, ...rest] = shown.properties['case:checklist'] ?? [];
+          if (first)
+            shown.properties['case:checklist'] = [
+              { ...first, done: false, doneBy: null, doneOn: null },
+              ...rest,
+            ];
+        }
         if (method === 'GET')
           return send(200, {
-            ...view(document),
+            ...shown,
             ...drifted,
             ...(request.headers['enrichers-document'] === 'acls'
               ? {
@@ -477,9 +531,9 @@ function standIn({
 }
 
 /** A run of the real seed, as a command, with the environment given. */
-function seed(env) {
+function seed(env, script = SEED) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SEED], { env: { PATH: process.env.PATH, ...env } });
+    const child = spawn(process.execPath, [script], { env: { PATH: process.env.PATH, ...env } });
     let output = '';
     child.stdout.on('data', (data) => (output += data));
     child.stderr.on('data', (data) => (output += data));
@@ -495,16 +549,19 @@ async function against(options, body) {
   const server = standIn({ user, password, ...options });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
-  const run = (env = {}) =>
-    seed({
-      NUXEO_URL: url,
-      NUXEO_USER: user,
-      NUXEO_PASS: password,
-      PAYERS_DEMO_PASSWORD: demoPassword,
-      NUXEO_TIMEOUT_MS: '2000',
-      NUXEO_INDEX_WAIT_MS: '1500',
-      ...env,
-    });
+  const run = (env = {}, script = SEED) =>
+    seed(
+      {
+        NUXEO_URL: url,
+        NUXEO_USER: user,
+        NUXEO_PASS: password,
+        PAYERS_DEMO_PASSWORD: demoPassword,
+        NUXEO_TIMEOUT_MS: '2000',
+        NUXEO_INDEX_WAIT_MS: '1500',
+        ...env,
+      },
+      script,
+    );
   try {
     await body({ server, run, user, password, demoPassword });
   } catch (error) {
@@ -575,7 +632,7 @@ await against(
     const { status, output } = await run();
     expect(
       status === 2 &&
-        /version 0.2.0 or older .* upgrade it to 0.4.0/.test(output) &&
+        /version 0.2.0 or older .* upgrade it to 0.4.1/.test(output) &&
         server.calls.every((call) => call.startsWith('GET ')),
       'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
       output,
@@ -616,8 +673,8 @@ for (const renameOnTrash of [true, false]) {
     const first = await run();
     expect(first.status === 0, `${how}: a first run exits 0`, first.output);
     expect(
-      /28 created, 0 updated, 0 restored from the trash, 4 file\(s\) uploaded/.test(first.output),
-      `${how}: a first run creates 28 documents and uploads 4 files`,
+      /30 created, 0 updated, 0 restored from the trash, 4 file\(s\) uploaded/.test(first.output),
+      `${how}: a first run creates 30 documents and uploads 4 files`,
       first.output,
     );
     expect(
@@ -665,7 +722,7 @@ for (const renameOnTrash of [true, false]) {
     );
     expect(
       second.status === 0 &&
-        /0 created, 28 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
+        /0 created, 30 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
           second.output,
         ),
       `${how}: a second run creates and uploads nothing (${done(second.output)})`,
@@ -685,7 +742,7 @@ for (const renameOnTrash of [true, false]) {
     const third = await run();
     expect(
       third.status === 0 &&
-        /0 created, 28 updated, 1 restored from the trash/.test(third.output) &&
+        /0 created, 30 updated, 1 restored from the trash/.test(third.output) &&
         member.isTrashed === false &&
         member.path === `${ROOT}/members/member-100048` &&
         member.properties['member:status'] === 'active',
@@ -726,12 +783,212 @@ for (const renameOnTrash of [true, false]) {
   });
 }
 
+// The appeals: their checklists written, checked, and held to the Case page's checklist card.
+await against({ caseChecklist: false }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.4.1/.test(output) &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'version 0.4.0 of the package, whose case schema has no checklist, is exit 2, with nothing written',
+    output,
+  );
+});
+await against({}, async ({ server, run }) => {
+  const first = await run();
+  expect(first.status === 0, 'a first run, for the appeals, exits 0', first.output);
+  const checklist = (number) =>
+    at(server, `cases/${number.toLowerCase()}`)?.properties['case:checklist'];
+  const appeals = CASES.filter((kase) => kase.category === 'appeal');
+  expect(
+    appeals.length === 2,
+    'data.mjs seeds two appeals',
+    JSON.stringify(appeals.map((k) => k.number)),
+  );
+  expect(
+    appeals.every(
+      (kase) => JSON.stringify(checklist(kase.number)) === JSON.stringify(kase.checklist),
+    ),
+    "each appeal's checklist is written as data.mjs has it, entry for entry",
+    JSON.stringify(appeals.map((kase) => checklist(kase.number))),
+  );
+  expect(
+    CASES.filter((kase) => kase.category !== 'appeal').every(
+      (kase) => JSON.stringify(checklist(kase.number)) === '[]',
+    ),
+    'every other case is written with no checklist',
+  );
+  expect(
+    appeals.every((kase) => first.output.includes(`An appeal's record page, ${kase.number}: `)),
+    "the run prints each appeal's record page",
+    first.output,
+  );
+  // Changed by hand: the appeal's entry ticked, and a grievance given one. Both are put back.
+  const appeal = at(server, 'cases/case-2041');
+  appeal.properties['case:checklist'] = [
+    { item: 'medicalRecords', done: true, doneBy: 'dana.lee', doneOn: '2026-11-20' },
+  ];
+  at(server, 'cases/case-2042').properties['case:checklist'] = [
+    { item: 'appealLetter', done: true, doneBy: 'riley.brooks', doneOn: '2026-11-16' },
+  ];
+  const second = await run();
+  expect(
+    second.status === 0 &&
+      JSON.stringify(checklist('CASE-2041')) ===
+        JSON.stringify(CASES.find((kase) => kase.number === 'CASE-2041').checklist) &&
+      JSON.stringify(checklist('CASE-2042')) === '[]',
+    'a checklist changed by hand is put back, and one given to a grievance emptied',
+    second.output,
+  );
+});
+await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 &&
+      /The cases' checklists are not as seeded/.test(output) &&
+      /CASE-2043 holds /.test(output),
+    "a case read back with another checklist than it was given fails the seed's check",
+    output,
+  );
+});
+
+// data.mjs held to the Case page's checklist card, by `appeals.mjs`, as the seed holds it.
+{
+  const card = readAppealChecklist();
+  const problems = (cases, claims = CLAIMS) =>
+    appealProblems({ cases, claims, users: USERS }, card);
+  const appeal = CASES.find((kase) => kase.number === 'CASE-2041');
+  const withEntry = (entry) => [{ ...appeal, checklist: [...appeal.checklist, entry] }];
+  expect(
+    problems(CASES).length === 0,
+    "data.mjs agrees with the Case page's checklist",
+    problems(CASES).join('\n'),
+  );
+  expect(
+    card.items.map((item) => item.id).join() ===
+      'appealLetter,reviewerAssigned,medicalRecords,providerStatement,decisionLetter',
+    "the Case page's checklist is read from its layout, in its order",
+    JSON.stringify(card.items),
+  );
+  const cases = [
+    [
+      'an appeal against a claim that is not denied',
+      problems(
+        [appeal],
+        CLAIMS.map((claim) =>
+          claim.number === appeal.claim ? { ...claim, status: 'paid' } : claim,
+        ),
+      ),
+      /CASE-2041 appeals CLAIM-000144, which is paid, not denied/,
+    ],
+    [
+      'an appeal against no claim',
+      problems([{ ...appeal, claim: null }]),
+      /CASE-2041 is an appeal against no claim/,
+    ],
+    [
+      'an entry for an item the card does not list',
+      problems(
+        withEntry({ item: 'peerToPeer', done: true, doneBy: 'sam.patel', doneOn: '2026-11-06' }),
+      ),
+      /"peerToPeer" is not an item the Case page's checklist lists/,
+    ],
+    [
+      'an item twice',
+      problems(withEntry({ ...appeal.checklist[0] })),
+      /"appealLetter" is there twice/,
+    ],
+    [
+      'an item done by someone not of the demo',
+      problems(
+        withEntry({ item: 'decisionLetter', done: true, doneBy: 'someone', doneOn: '2026-11-06' }),
+      ),
+      /is done by someone, who is not one of the demo's people/,
+    ],
+    [
+      'an item done on a day that does not exist',
+      problems(
+        withEntry({
+          item: 'decisionLetter',
+          done: true,
+          doneBy: 'sam.patel',
+          doneOn: '2026-02-30',
+        }),
+      ),
+      /is done on 2026-02-30, which is not a day/,
+    ],
+    [
+      'an item neither done nor not done',
+      problems(withEntry({ item: 'decisionLetter', done: 'yes', doneBy: null, doneOn: null })),
+      /is neither done nor not done/,
+    ],
+    [
+      'an item not done that names someone',
+      problems(
+        withEntry({ item: 'decisionLetter', done: false, doneBy: 'sam.patel', doneOn: null }),
+      ),
+      /is not done, and still names someone or a day/,
+    ],
+    [
+      'a grievance with a checklist',
+      problems([
+        { ...CASES.find((kase) => kase.number === 'CASE-2042'), checklist: appeal.checklist },
+      ]),
+      /CASE-2042 is a grievance, and holds a checklist/,
+    ],
+  ];
+  for (const [what, found, pattern] of cases)
+    expect(
+      found.length === 1 && pattern.test(found[0]),
+      `data.mjs with ${what} is refused`,
+      found.join('\n'),
+    );
+  let thrown = '';
+  try {
+    readAppealChecklist(JSON.stringify({ version: 2, cards: [{ id: 'a', fields: ['dc:title'] }] }));
+  } catch (error) {
+    thrown = error.message;
+  }
+  expect(
+    /has 0 checklist cards, not one/.test(thrown),
+    'a Case layout with no checklist card is refused',
+    thrown,
+  );
+
+  // The seed itself refuses such data, before it asks the server anything: run from a copy of the
+  // kit whose data.mjs has CLAIM-000144 paid, the claim CASE-2041 appeals.
+  const copy = mkdtempSync(join(tmpdir(), 'payers-seed-'));
+  try {
+    const KIT = join(DEMO, '..');
+    for (const part of ['demo', 'workflow', 'bundle'])
+      cpSync(join(KIT, part), join(copy, part), { recursive: true });
+    const data = join(copy, 'demo', 'data.mjs');
+    const written = readFileSync(data, 'utf8');
+    const paid = written.replace(/(number: 'CLAIM-000144',[\s\S]*?status: )'denied'/, "$1'paid'");
+    expect(paid !== written, 'the copy of data.mjs has CLAIM-000144 paid');
+    writeFileSync(data, paid);
+    await against({}, async ({ server, run }) => {
+      const { status, output } = await run({}, join(copy, 'demo', 'seed.mjs'));
+      expect(
+        status === 1 &&
+          /data.mjs disagrees with the Case page's checklist/.test(output) &&
+          /CASE-2041 appeals CLAIM-000144, which is paid, not denied/.test(output) &&
+          server.calls.length === 0,
+        'the seed refuses an appeal against a claim that is not denied, before it asks the server anything',
+        output,
+      );
+    });
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+}
+
 // The claims' lifecycle.
 await against({ workflowModel: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.4.0/.test(
+      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.4.1/.test(
         output,
       ) &&
       server.calls.every((call) => call.startsWith('GET ')),

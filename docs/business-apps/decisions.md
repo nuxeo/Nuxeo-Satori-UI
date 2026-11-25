@@ -4,7 +4,7 @@ Every decision the business apps work depends on, in one place: who decides, by 
 the [development plan](development-plan.md), and what is already settled. Owners are proposals
 until phase 0 confirms them.
 
-Updated 24 November 2026.
+Updated 25 November 2026.
 
 ## Open: from the plan
 
@@ -51,6 +51,18 @@ way.
   the kit drops its workflow component, its zip, variable schemas, vocabulary and task forms, and
   claims go back to the default lifecycle, a minor version below 1.0.0; the task form engine, which
   is the platform's, stays. Decision 3 stays open: the workflow has no operation buttons.
+
+- **2, the Payers kit's appeals (25 November 2026).** Built against the same recommendation: the
+  kit's version 0.4.1 adds an appeal's checklist to its stand-in model, `case:checklist`, and to
+  its Case page a checklist and a timeline, with a second appeal and its denied claim in the seed,
+  and phase 2's demo step 6 is a steps file
+  ([the kit's README](../../business-apps/packages/payers-claims-demo/README.md#the-appeals)). An
+  appeal is a business record, a Case, and nothing in it is a workflow: no route model, no task,
+  and no lifecycle of its own. The checklist card is the platform's, layout version 2's
+  ([layout-v2.md](layout-v2.md), section 7), and stays whichever way decision 2 goes. If it goes
+  the other way, the kit drops the Case page's two cards, their labels, `case:checklist` and the
+  seed's second appeal, a minor version below 1.0.0, since a property and labels are removed.
+  Decision 3 stays open: the checklist is read-only, and ticks no item through a button or a chain.
 
 - **B and E, the app registry's first version (24 November 2026).** Built against the
   recommendations: `nuxeo-agentic-core` carries the registry, as a runtime essential (B), and it
