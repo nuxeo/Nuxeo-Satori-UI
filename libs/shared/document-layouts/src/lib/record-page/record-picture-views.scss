@@ -6,23 +6,33 @@
   margin: 0;
 }
 
-/* The picture fits its frame whole, never cropped, and the frame keeps its height while it loads. */
+/*
+  The picture fits its frame whole, never cropped, and the frame keeps its height while it loads.
+  Its padding holds what a host lays over the picture's edge, a review's pins and their focus
+  rings among them, inside the frame, which clips.
+*/
 .record-picture__frame {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 240px;
   max-height: 560px;
-  padding: 8px;
+  padding: 24px;
   border-radius: 8px;
   background: var(--mat-sys-surface-container);
   overflow: hidden;
 }
 
+/* Shrinks to the picture, so that an overlay laid over it at inset 0 covers the picture exactly. */
+.record-picture__stage {
+  position: relative;
+  max-width: 100%;
+}
+
 .record-picture__image {
   display: block;
   max-width: 100%;
-  max-height: 544px;
+  max-height: 512px;
   object-fit: contain;
 }
 

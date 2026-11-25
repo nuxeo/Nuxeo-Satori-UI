@@ -1,6 +1,6 @@
 # Brand assets (demo)
 
-The brand assets kit, version 0.1.0 ([development plan](../../../docs/business-apps/development-plan.md),
+The brand assets kit, version 0.1.1 ([development plan](../../../docs/business-apps/development-plan.md),
 phase 5, "Files as records: brand assets"), for the fictional outdoor apparel brand Acme Outdoor of
 the [prototype](../../../docs/prototype/business-apps/src/data-dam.js). All its data is fictional:
 no real brand, product, studio or person. The pictures are drawn by the seed, not photographed or
@@ -13,6 +13,11 @@ downloaded.
   while its rights end within 30 days, one once they have ended
   ([layout-v2.md](../../../docs/business-apps/layout-v2.md), "Banners"). Its rights end on
   `dc:expired`.
+- **A creative review on the asset page,** turned on by the layout file's `"review": {}`, with no
+  code: a reviewer pins a note to a point of the picture, the pins are listed beside it, and the
+  review goes in rounds, the earlier rounds' pins marked as past. The pins are Nuxeo's own
+  annotations on the asset (layout-v2.md, "Review"). Phase 5's demo step 4, as a steps file of its
+  own: [`scripts/beta-harness/steps/brand-assets-review.mjs`](../../../scripts/beta-harness/steps/brand-assets-review.mjs).
 - **A product page:** a product's details, its shots, and the shots its shot list still misses,
   each a related list over a page provider.
 - **Two queues, a menu and labels:** the asset library, with three facets from its page provider's
@@ -25,36 +30,38 @@ downloaded.
   `Picture`, for a look at the asset page in dev mode.
 - **The demo script,** as a steps file of the beta harness:
   [`scripts/beta-harness/steps/brand-assets-demo.mjs`](../../../scripts/beta-harness/steps/brand-assets-demo.mjs).
-- **Not installed anywhere yet.** The package is built and checked by the pipeline, and its asset
-  layout was seen on a live server in dev mode, on Pictures of the platform's own type (below, "What
-  was checked, and how"). The stand-in model, the product page, the queues and the demo script need
-  the package installed, which has not been done.
+- **On no shared server.** The package is built and checked by the pipeline. When its first
+  checks ran, no server had it, and its asset layout was seen in dev mode on Pictures of the
+  platform's own type (below, "What was checked, and how"). Version 0.1.0 has since been installed
+  on the local Nuxeo those checks ran on, and the review's steps file ran against its stand-in model
+  there; 0.1.1 is installed nowhere. The product page, the queues and the demo script have not run
+  on a shared server.
 
 ## What is in it
 
-| File                                                            | What it is                                                                       |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `bundle/agentic-ui-config/app.json`                             | The app: its name, version, platform range and groups                            |
-| `bundle/agentic-ui-config/layouts/AcmeAsset/view.layout.json`   | The asset page: two rights banners, then the asset, its rights and its history   |
-| `bundle/agentic-ui-config/layouts/AcmeProduct/view.layout.json` | The product page: the product, its missing shots and its shots                   |
-| `bundle/agentic-ui-config/layouts/AcmeShot/view.layout.json`    | A shot of the shot list, which a missing shot's row opens                        |
-| `bundle/agentic-ui-config/queues/library.json`                  | The asset library, the rights that end soonest first, with three facets          |
-| `bundle/agentic-ui-config/queues/products.json`                 | The products, the next launch first                                              |
-| `bundle/agentic-ui-config/navigation.json`                      | The menu: the two queues                                                         |
-| `bundle/agentic-ui-config/labels/en.json`                       | Its labels, in English: every key the files above name, and its fields' labels   |
-| `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the three layouts and the app                     |
-| `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers               |
-| `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                 |
-| `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged  |
-| `demo/seed.selftest.mjs`                                        | The seed's controls, against a stand-in for the REST API it calls. Not packaged  |
-| `package/package.xml`                                           | The Marketplace package: name, version, and what it depends on                   |
-| `build.mjs`                                                     | Version 1's builder: the generator's, byte for byte                              |
-| `content-model.json`                                            | The model as a server with this package installed is to answer it, for `--model` |
+| File                                                            | What it is                                                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `bundle/agentic-ui-config/app.json`                             | The app: its name, version, platform range and groups                                              |
+| `bundle/agentic-ui-config/layouts/AcmeAsset/view.layout.json`   | The asset page: two rights banners, the picture as a review, the asset, its rights and its history |
+| `bundle/agentic-ui-config/layouts/AcmeProduct/view.layout.json` | The product page: the product, its missing shots and its shots                                     |
+| `bundle/agentic-ui-config/layouts/AcmeShot/view.layout.json`    | A shot of the shot list, which a missing shot's row opens                                          |
+| `bundle/agentic-ui-config/queues/library.json`                  | The asset library, the rights that end soonest first, with three facets                            |
+| `bundle/agentic-ui-config/queues/products.json`                 | The products, the next launch first                                                                |
+| `bundle/agentic-ui-config/navigation.json`                      | The menu: the two queues                                                                           |
+| `bundle/agentic-ui-config/labels/en.json`                       | Its labels, in English: every key the files above name, and its fields' labels                     |
+| `bundle/OSGI-INF/brand-assets-demo-config.xml`                  | The component that contributes the three layouts and the app                                       |
+| `bundle/OSGI-INF/brand-assets-demo-model.xml`                   | **The stand-in model:** document types, lifecycles, page providers                                 |
+| `bundle/schemas/*.xsd`                                          | **The stand-in model's** schemas                                                                   |
+| `demo/seed.mjs`, `demo/data.mjs`, `demo/png.mjs`                | The seed script, its fictional records, and the pictures it draws. Not packaged                    |
+| `demo/seed.selftest.mjs`                                        | The seed's controls, against a stand-in for the REST API it calls. Not packaged                    |
+| `package/package.xml`                                           | The Marketplace package: name, version, and what it depends on                                     |
+| `build.mjs`                                                     | Version 1's builder: the generator's, byte for byte                                                |
+| `content-model.json`                                            | The model as a server with this package installed is to answer it, for `--model`                   |
 
 - **No bootstrap fragment.** On a shared server it would rebrand everyone's app.
 - **No home.** The kit has no KPIs yet: the menu opens the two queues.
 - **No operation button and no action file.** Decision 3 is open, so the pipeline refuses every
-  operation, and a lifecycle button for an asset waits for an asset lifecycle, with the review.
+  operation, and a lifecycle button for an asset waits for an asset lifecycle, with its approval.
 - **One version in three places:** `package.xml`'s, `app.json`'s `packageVersion` and the
   manifest's `Bundle-Version`. The pipeline's step 3 refuses any of them that differs.
 
@@ -84,12 +91,12 @@ component of its own so that it can be replaced whole: `brand-assets-demo-model.
 - **A missing shot is a shot with no asset.** Each product's shot list is a record per shot and
   colourway; `acme_product_missing_shots` asks for those whose `acmeshot:asset` is empty. Nothing
   but the seed sets the asset yet: a real model would, when an asset for the shot is approved,
-  which is the review's.
+  which the review does not do: it holds pins and rounds, not an approval.
 - **A product is named by its style number,** in an asset's `acmeasset:product` and a shot's
   `acmeshot:product`, not by its document id: the library's Product facet shows the number as each
   bucket's name, where an id would mean nothing to a reader.
-- **Every type has the platform's default lifecycle.** An asset lifecycle, with its review states,
-  is the review's.
+- **Every type has the platform's default lifecycle.** An asset lifecycle, with an approval state
+  that a review ends in, is not built.
 - **Created by the seed, not by hand:** no folder lists the types among its subtypes, so the
   Create menu does not offer them, and a picture uploaded by hand is a platform `Picture`.
 - **The names carry the brand's,** `Acme…` and `acme_…`, so that they do not collide with another
@@ -124,7 +131,7 @@ records.
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-It writes `dist/brand-assets-demo-0.1.0.zip`. Held to its content model
+It writes `dist/brand-assets-demo-0.1.1.zip`. Held to its content model
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 4):
 
 ```bash
@@ -132,8 +139,8 @@ npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
   --model business-apps/packages/brand-assets-demo/content-model.json
 ```
 
-**`content-model.json` was not exported from a server with the package installed,** since none
-has it yet. Its stock types, facets and schemas, Picture's among them, are what Nuxeo 2025.10.18
+**`content-model.json` was not exported from a server with the package installed:** none had
+it when it was written. Its stock types, facets and schemas, Picture's among them, are what Nuxeo 2025.10.18
 answered, exported with `npm run app-package:model`; the kit's three types and its three record
 schemas were written from the XSDs in the same form, and `AcmeAsset`'s facets and schemas are
 Picture's with `acmeasset` added, as Nuxeo reports a type that extends another. Export it again,
@@ -159,11 +166,11 @@ process, so stopping it stops the container. The image runs every `.sh` file in
 `/docker-entrypoint-initnuxeo.d/` before it starts the server; this one removes itself.
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.1.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.1.1.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.1.0.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/brand-assets-demo-0.1.1.zip --accept=true > /var/log/nuxeo/brand-kit-install.log 2>&1 || echo "brand kit: install failed, see /var/log/nuxeo/brand-kit-install.log"' 'rm -f "$0"' > /tmp/zz-brand-kit-install.sh && chmod 755 /tmp/zz-brand-kit-install.sh
 ```
 
 ```bash
@@ -279,9 +286,9 @@ As a steps file of the beta harness
 4. a product page: its shots, and the shot it is still missing;
 5. the layout files behind the pages: configuration, no code.
 
-The plan's demo steps 2 to 4, the print rendition refused by the server, a share link and a review
-with pins, are not this kit's yet: rights the server enforces, decision C and the review are out of
-its scope.
+The plan's demo steps 2 and 3, the print rendition refused by the server and a share link, are
+not this kit's yet: rights the server enforces and decision C are out of its scope. Step 4, the
+review, is the next section's.
 
 **What it needs:** the package installed and seeded today (above), the dev server serving the
 kit's files (above), Playwright (`scripts/beta-harness/README.md`, "Prerequisites"), and no asset,
@@ -293,15 +300,46 @@ NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-de
 
 `APP_URL` names the dev server if it is not on `http://localhost:4200`. The evidence goes to
 `~/Desktop/agentic-ui-evidence/beta/brand-assets-demo/`, outside the repository. **Not run end to
-end:** on the local server, without the package, it stops at its first precondition, with exit 2,
-as it should.
+end:** on the local server, before it had the package, it stopped at its first precondition, with
+exit 2, as it should. This README records no run since 0.1.0 was installed there.
+
+### The review: phase 5's demo step 4
+
+As a steps file of its own, which writes only what it creates: it draws a picture with
+`demo/png.mjs`, creates an asset from it in a folder of its own, and trashes the folder when it
+ends, whatever happened. The seeded records are not touched.
+
+1. a pin placed by clicking the picture, with a note, drawn where it was clicked and listed beside
+   the picture; choosing it in the list highlights it on the picture;
+2. round 1 closed and round 2 opened, round 1's pins still there, marked as past;
+3. a pin placed with the keyboard alone, and the pins reached with the arrow keys;
+4. the REST API's annotations, the same pins after a reload, and each pin on its point on a view
+   of another size;
+5. a reader, offered no pin, and a holder of `Comment`, offered a pin and not Close round: the
+   record's permissions answered in the browser, since the kit has no people. Hiding the control is
+   not the control: Nuxeo 2025 accepts an annotation from anyone who may read the asset.
+
+**What it needs:** the dev server serving the kit's asset layout for the type it uses: `AcmeAsset`
+where the package is installed, else the platform's `Picture` (the README's two `config:dev`
+commands above); Playwright; picture conversion on the server; and `NUXEO_USER` and `NUXEO_PASS`,
+someone who may create a folder and a picture and change it, so that Close round is offered. It
+creates a workspace of its own under `/default-domain/workspaces`, or works in a folder of
+`REVIEW_WORKSPACE`, a workspace path, when that is given.
+
+```bash
+NUXEO_USER=<user> NUXEO_PASS=<password> npm run beta:evidence -- brand-assets-review
+```
+
+**Run on the local Nuxeo 2025.10.18 (25 November 2026),** under the dev server, with the asset
+layout from `config:dev` and the stand-in model's `AcmeAsset` from the package's 0.1.0, which was
+already installed there: 30 of 30 checks passed, in a test workspace's folder, trashed at the end.
 
 ## What was checked, and how
 
 - **The package pipeline** builds it, with and without its content model, and refuses a copy whose
   asset layout puts a `date` widget on a text property, given the model.
 - **The seed's controls,** `demo/seed.selftest.mjs`, hold against the stand-in.
-- **On the local Nuxeo 2025.10.18, without the package:** the seed stops with exit 2 and writes
+- **On the local Nuxeo 2025.10.18, before it had the package:** the seed stops with exit 2 and writes
   nothing; `--preview` wrote the six pictures into the kit's workspace, twice, the second time
   updating and uploading nothing, and Nuxeo made each one's views. In headless Chromium, under the
   dev server with the preview's `config:dev` above, the asset page showed the warning banner on the
@@ -313,16 +351,25 @@ as it should.
 
 ## Not done yet
 
-- **The package is not installed anywhere,** so the stand-in model, the product page, the queues,
-  the full seed and the demo have not run on a server.
+- **Version 0.1.1 is not installed anywhere,** and 0.1.0 only on a local server, not a shared one:
+  the review was seen with its layout from `config:dev`, and the product page, the queues, the full
+  seed and the demo have not run on a shared server.
 - **A reference shows its stored value:** a shot's asset is its document id, until the
   `document-link` widget has its lookup, and an asset's product is its style number, not a link to
   the product.
 - **The library is a list, not a grid of previews,** as the prototype draws it: a queue's cells are
   one line of text.
-- **No home, no review, no video, no share links, and rights the server does not enforce:** each is
-  out of this version's scope. A banner is not a control: refusing a download whose rights have
+- **No home, no video, no share links, and rights the server does not enforce:** each is out of
+  this version's scope. A banner is not a control: refusing a download whose rights have
   ended is the server's, and the server does not refuse it yet.
+- **The review is not held to who may review on the server:** Nuxeo 2025 takes a pin, or a round's
+  close, from anyone who may read the asset, whatever the page offers.
+- **The review moves or removes nothing, and reopens no round.** Each pin is also one of the
+  asset's comments, which the Comments panel lists, and where Nuxeo lets a comment's author, or an
+  administrator, edit or delete it: editing its text there keeps it a pin, on its place and round.
+  Deleting a round's close renumbers the rounds after it.
+- **A pin does not say which file it was placed on:** replace the asset's picture, and every pin
+  shows on the new one.
 - **The banner's message names no date:** labels have no placeholders yet, so the rights card shows
   the day.
 - **The seed's and the demo's controls are not in CI:** the selftest needs Node alone and could be,
