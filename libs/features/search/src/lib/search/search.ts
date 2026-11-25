@@ -651,11 +651,13 @@ export class SearchComponent {
   }
 
   toggleSelection(id: string): void {
+    this.cancelSelection.next();
     const row = this.displayResults().find((r) => r.id === id);
     this.selectionService.toggle(id, row?.name ?? id);
   }
 
   toggleAll(): void {
+    this.cancelSelection.next();
     if (this.isAllSelected()) {
       this.selectionService.clear();
     } else {
@@ -680,6 +682,7 @@ export class SearchComponent {
   });
 
   selectPage(): void {
+    this.cancelSelection.next();
     const rows = this.displayResults();
     this.selectionService.selectAll(
       rows.map((row) => row.id),

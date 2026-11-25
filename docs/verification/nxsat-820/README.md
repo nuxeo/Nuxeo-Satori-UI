@@ -141,6 +141,12 @@ registered search-filter replacement through the shared extension outlet, with t
 as its fallback.
 Reset remains enabled when only customer URL filters are active, including after the last packaged
 filter is removed; actual button checks confirm it clears those filters through subsequent paging.
+Chrome checks also reproduce and verify Reset retaining keyboard focus after it clears the final
+filter; its unavailable state remains guarded against another activation.
+The selection menu keeps its trigger available during Select all, preserving focus and access to
+Clear while the unavailable page/all actions stay disabled.
+Header, page and individual checkbox selection changes cancel an earlier pending Select all, so its
+late response cannot overwrite the user's newer choice.
 
 ### Follow-up Copilot review — 25 November 2026
 

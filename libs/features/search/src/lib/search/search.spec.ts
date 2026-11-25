@@ -500,6 +500,34 @@ describe('SearchComponent', () => {
   });
 
   describe('selection', () => {
+    it.each(['header', 'page', 'individual'] as const)(
+      'keeps a newer %s selection when a pending select-all responds',
+      async (entry) => {
+        await fixture.whenStable();
+        vi.spyOn(component, 'displayResults').mockReturnValue([
+          row({ id: 'page-a', name: 'Page A' }),
+        ]);
+        const pending = new Subject<SearchResponseLike>();
+        mockSearchService.search.mockReturnValueOnce(pending);
+        component.selectAllResults();
+        if (entry === 'header') {
+          mockSelectionService.isAllSelected.mockReturnValueOnce(false);
+          component.toggleAll();
+        } else if (entry === 'page') component.selectPage();
+        else component.toggleSelection('page-a');
+        expect(component.selectingAll()).toBe(false);
+        const selectCalls = mockSelectionService.selectAll.mock.calls.length;
+        pending.next({ items: [resultItem({ id: 'late-result' })], aggregations: {} });
+        pending.complete();
+        expect(mockSelectionService.selectAll).toHaveBeenCalledTimes(selectCalls);
+        if (entry === 'individual')
+          expect(mockSelectionService.toggle).toHaveBeenLastCalledWith('page-a', 'Page A');
+        else
+          expect(mockSelectionService.selectAll).toHaveBeenLastCalledWith(['page-a'], {
+            'page-a': 'Page A',
+          });
+      },
+    );
     it.each(['header', 'shared'] as const)(
       'cancels a pending select-all when cleared through %s',
       async (entry) => {
@@ -930,7 +958,11 @@ describe('SearchComponent', () => {
         expect(el.querySelectorAll('.search-tabs button')).toHaveLength(1);
         const buttons = el.querySelectorAll<HTMLButtonElement>('.search-workspace__actions button');
         expect(buttons[0].disabled).toBe(true);
-        expect(buttons[1].disabled).toBe(true);
+        expect(buttons[1].disabled).toBe(false);
+        expect(buttons[1].getAttribute('aria-disabled')).toBe('true');
+        const reset = vi.spyOn(component, 'resetSearch');
+        buttons[1].click();
+        expect(reset).not.toHaveBeenCalled();
         component.keywordDraft.set('contract');
         component.applyKeywords();
         fixture.detectChanges();
@@ -1022,7 +1054,8 @@ describe('SearchComponent', () => {
       buttons[1].click();
       fixture.detectChanges();
       expect(component.selectedQuickFilters().size).toBe(0);
-      expect(buttons[1].disabled).toBe(true);
+      expect(buttons[1].disabled).toBe(false);
+      expect(buttons[1].getAttribute('aria-disabled')).toBe('true');
     });
 
     it('loads saved filter sets and opens the chosen search', () => {

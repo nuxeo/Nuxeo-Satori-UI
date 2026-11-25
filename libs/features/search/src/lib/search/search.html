@@ -56,7 +56,12 @@
         <button mat-button [disabled]="!hasFilters()" (click)="onSaveAs()">
           {{ 'search.workspace.save-search' | translate }}
         </button>
-        <button mat-button [disabled]="!canReset()" (click)="resetSearch()">
+        <button
+          mat-button
+          [disabled]="!canReset()"
+          [disabledInteractive]="true"
+          (click)="canReset() && resetSearch()"
+        >
           {{ 'search.workspace.reset' | translate }}
         </button>
       </div>
@@ -385,16 +390,15 @@
             <button
               mat-icon-button
               [matMenuTriggerFor]="selectionMenu"
-              [disabled]="selectingAll()"
               [attr.aria-label]="'search.workspace.selection-scope' | translate"
             >
               <mat-icon svgIcon="chevron_down" />
             </button>
             <mat-menu #selectionMenu="matMenu">
-              <button mat-menu-item (click)="selectPage()">
+              <button mat-menu-item [disabled]="selectingAll()" (click)="selectPage()">
                 {{ 'search.workspace.select-page' | translate }}
               </button>
-              <button mat-menu-item (click)="selectAllResults()">
+              <button mat-menu-item [disabled]="selectingAll()" (click)="selectAllResults()">
                 {{ 'search.workspace.select-all' | translate }}
               </button>
               <button mat-menu-item (click)="clearSelection()">
