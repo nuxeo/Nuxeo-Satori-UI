@@ -20,7 +20,8 @@ will do the work.
 | 5. Brand assets | A picture's asset page with its views, and banners on its rights end date; the brand assets kit's first version: the asset and product pages, the library with its facets, a stand-in model and a seed, built by the pipeline                                                                                                                                                                                                                               | The kit installed on a server and its demo run: its asset page is seen only in dev mode, on the platform's own Pictures. Video, review, share links (decision C), rights the server enforces                                                                                                                                                  |
 | 6. Designer     | Two slices of the designer, for administrators, configuration only: a record page, edit form or create form, its fields reordered, hidden, added and given their rules as configuration, drawn read-only on a real record by the record page or form engine; and a queue's name, columns, sort and facets, drawn read-only by the queue page against its page provider. A file is downloaded once the validator finds nothing                               | Plugins (decision 5, open: no customer code is loaded). Publishing and its approval step: the app registry has no write API. Actions in the designer. The byte-for-byte round trip                                                                                                                                                            |
 | 7. Elsewhere    | The connectors add-on's first slice, on D's recommendation: `Connector.Read`, a stand-in core system, and layout version 2's `external` card ([README](../../nuxeo-agentic-connectors/README.md))                                                                                                                                                                                                                                                           | Installed nowhere: its demo has not run on a server. Its security review. Caching, events and webhooks, a real connector, embedded panels (decision F), capture, e-signature, letters, retention and the languages                                                                                                                            |
-| 8 to 10         | Nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Everything                                                                                                                                                                                                                                                                                                                                    |
+| 8 and 9         | Nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Everything                                                                                                                                                                                                                                                                                                                                    |
+| 10. GA          | The offline half of the upgrade tests: the upgrade check, in the pipeline's step 3, which refuses a kit or platform upgrade that takes away what a customer's configuration overrides or names without a migration note and the version it needs ([package-pipeline.md](package-pipeline.md), section 10)                                                                                                                                                   | The server-side upgrade test, which installs a kit's version before with a customer's package and upgrades it. Everything else in the phase                                                                                                                                                                                                   |
 
 This status does not check phase 0's end-to-end required check or its agreement with the Beta team.
 
@@ -592,6 +593,22 @@ files itself.
 - documentation, tutorials and support playbooks;
 - `@nuxeo/satori-platform` 1.0, with each module's entry point, published;
 - every add-on and kit on the Marketplace.
+
+**Built so far,** 25 November 2026: the upgrade tests' offline half, the upgrade check
+([package-pipeline.md](package-pipeline.md), section 10). On every pull request, with no server,
+the pipeline's step 3 compares each kit, and the platform under it, with what they were at the
+commit its version is held to, and
+refuses an upgrade that removes or renames, without a migration note, a layout, queue, home, menu
+entry, label key, task form, component, property or page provider a customer may override or
+name; that changes a configuration layer's precedence; that drops a label key or a property the
+kit still names; that raises the version less than these need; or that takes from the platform an
+ID, widget, component, extension point or descriptor a kit names. Against each kit's version
+before, it found two upgrades the version rules had passed, payers 0.4.0's removed approve action
+and contracts 0.2.0's new address; both kits now carry their notes. Not built: the server-side
+half, which installs a kit's version before with a customer's package, upgrades both, and checks
+that the configuration served and the records made before are as they were (section 10 of the
+pipeline lists what it would add); and holding every documented ID, not only those a kit names, to
+the platform's version.
 
 **Demo:**
 
