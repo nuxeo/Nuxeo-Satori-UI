@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/app.schema.json",
+  "version": 2,
+  "id": "facilities",
+  "label": "Facilities",
+  "labelKey": "facilities.app",
+  "packageVersion": "0.1.0",
+  "platform": ">=0.2.0 <1.0.0",
+  "address": "facilities",
+  "groups": ["facilities-coordinators", "facilities-technicians"],
+  "branding": {
+    "applicationTitle": "Facilities"
+  }
+}
