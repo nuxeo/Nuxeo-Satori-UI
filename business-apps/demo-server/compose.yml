@@ -1,0 +1,63 @@
+# The shared demo server: Nuxeo and OpenSearch, at the versions the local Docker setup runs
+# (Nuxeo 2025.10.18, OpenSearch 2.13.0). See README.md beside this file.
+#
+# Only scripts/demo-server.mjs makes it, with a project name of its own (`-p satori-demo...`), after
+# copying the release candidate's packages and the one-off install script into the Nuxeo container
+# before its first start. Do not `up` it by hand: a container made without them is a bare Nuxeo,
+# and one made again loses what was installed in it while its volumes keep the records. Once made,
+# `stop` and `start` it, or `down --volumes` to remove it with its data.
+#
+# No secret is in this file. NUXEO_CLID, which the image needs to install the OpenSearch packages
+# from Nuxeo Connect, is passed through by name from the environment of the command that creates
+# the container.
+name: satori-demo
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    environment:
+      - discovery.type=single-node
+      # The entrypoint reads this, and skips the demo security configuration. OpenSearch is on the
+      # project's network only: none of its ports is published.
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl -fsS "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s" > /dev/null',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    labels:
+      org.nuxeo.satori.demo-server.candidate: ${DEMO_SERVER_CANDIDATE:-unknown}
+    restart: 'no'
+
+  nuxeo:
+    image: docker-private.packages.nuxeo.com/nuxeo/nuxeo:2025.10.18
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    environment:
+      # Installed by the image at the first start, from Nuxeo Connect, before the install script.
+      - NUXEO_PACKAGES=nuxeo-search-client-opensearch2 nuxeo-audit-opensearch2
+      # By name: its value comes from the creating command's environment, and is in no file.
+      - NUXEO_CLID
+    ports:
+      # 127.0.0.1 by default: the image's default Administrator password holds until the script
+      # changes it, seconds after the server first answers.
+      - '${DEMO_SERVER_BIND:-127.0.0.1}:${DEMO_SERVER_PORT:-18080}:8080'
+    volumes:
+      - nuxeo-data:/var/lib/nuxeo
+      - nuxeo-logs:/var/log/nuxeo
+    labels:
+      org.nuxeo.satori.demo-server.candidate: ${DEMO_SERVER_CANDIDATE:-unknown}
+    restart: 'no'
+
+volumes:
+  nuxeo-data:
+  nuxeo-logs:
+  opensearch-data:

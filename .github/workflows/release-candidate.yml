@@ -6,7 +6,8 @@ name: Release candidate
 #
 # - `controls`, on a pull request that touches the candidate or what its controls read, and on
 #   every push to a `staging/**` branch: release-candidate.selftest.mjs, which breaks each of its
-#   checks once and must see each refused. A check only ever seen green is an assertion.
+#   checks once and must see each refused. A check only ever seen green is an assertion. Then
+#   demo-server.selftest.mjs, for the demo server stood up from a candidate, offline.
 # - `candidate`, on a push to a `staging/**` branch only: the whole candidate. Every kit through
 #   the pipeline; the kits as a set; the demo steps a server run would execute, listed and not run;
 #   the client's production bundle; `mvn package` at the root; the packages as a set. Its release
@@ -48,6 +49,8 @@ on:
       - 'scripts/release-candidate-set.mjs'
       - 'scripts/release-candidate-demo.mjs'
       - 'scripts/release-candidate.selftest.mjs'
+      - 'scripts/demo-server*.mjs'
+      - 'business-apps/demo-server/**'
       - 'scripts/app-package.mjs'
       - 'scripts/verify-package-zip.mjs'
       - 'scripts/nuxeo-content-model.mjs'
@@ -97,6 +100,11 @@ jobs:
       # The command's own refusals it runs need Maven on the PATH, which the runner has too.
       - name: Controls for the release candidate
         run: node scripts/release-candidate.selftest.mjs
+
+      # The demo server's provisioning from a candidate (business-apps/demo-server/README.md),
+      # offline: Docker and Nuxeo are stand-ins, so nothing is pulled, started or published here.
+      - name: Controls for the demo server
+        run: node scripts/demo-server.selftest.mjs
 
   candidate:
     name: Assemble the release candidate
