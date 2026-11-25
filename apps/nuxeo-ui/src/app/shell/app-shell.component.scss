@@ -819,7 +819,7 @@ $ai-radius: 14px;
     display: flex;
     align-items: center;
     gap: 12px;
-    width: calc(100vw - 160px);
+    width: calc(100% - 48px);
     max-width: 100%;
     min-width: 0;
   }
@@ -844,9 +844,6 @@ $ai-radius: 14px;
   flex: 1;
   width: auto;
   max-width: 100%;
-}
-.search-expanded .header-search {
-  width: calc(100% - 48px);
 }
 @media (max-width: 600px) {
   /* Keep the mobile navigation toggle outside the expanded search field. */

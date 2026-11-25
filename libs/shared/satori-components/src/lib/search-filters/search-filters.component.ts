@@ -171,11 +171,13 @@ export class NxsSearchFiltersComponent {
     const group = [...this.groups().before, ...this.groups().after].find(
       (entry) => entry.field === menu,
     );
-    const value = group
-      ? group.labelKeys?.[values[0]]
-        ? this.translate.instant(group.labelKeys[values[0]])
-        : this.optionText(group, values[0])
-      : this.chipItems(menu as ChoiceField, values)[0]?.label;
+    let value: string | undefined;
+    if (group) {
+      const labelKey = group.labelKeys?.[values[0]];
+      value = labelKey ? this.translate.instant(labelKey) : this.optionText(group, values[0]);
+    } else {
+      value = this.chipItems(menu as ChoiceField, values)[0]?.label;
+    }
     return `${label}: ${value ?? values[0]}`;
   }
 
@@ -467,6 +469,9 @@ export class NxsSearchFiltersComponent {
   }
 
   protected addChoice(field: ChoiceField, value: string): void {
+    if (this.layout() === 'horizontal') {
+      this.hostElement.nativeElement.ownerDocument.getElementById(this.ids[field])?.focus();
+    }
     const text = { authors: this.authorText, collections: this.collectionText, tags: this.tagText };
     text[field].set('');
     if (field === 'tags') this.tagSuggestions.set([]);

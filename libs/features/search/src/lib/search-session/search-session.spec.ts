@@ -43,6 +43,7 @@ describe('SearchSession', () => {
     deleteSavedSearch: vi.fn((_id?: string): Observable<unknown> => of(undefined)),
   };
   const shared = {
+    keywordSyncVersion: signal(0),
     drawerFilters: signal<Record<string, string>>({}),
     items: signal<SearchResultItem[]>([]),
     aggregations: signal({}),
@@ -127,6 +128,56 @@ describe('SearchSession', () => {
     expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
       'contentViewData',
     );
+  });
+
+  it('retains presentation settings across a metadata save followed by a Files-only save', async () => {
+    const presentation = { layout: 'grid', columns: ['title', 'type'] };
+    searchService.getSavedSearchById.mockReturnValue(
+      of({ ...EMPTY_SAVED_PARAMS, contentViewData: JSON.stringify(presentation) }),
+    );
+    await firstValueFrom(session.openSavedSearch('view', 'My view'));
+    session.setFilters({ ...session.filters(), authors: ['alice'] });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'contentViewData',
+    );
+    session.setFilters({ ...session.filters(), filesOnly: true });
+    await firstValueFrom(session.save());
+    expect(searchService.updateSavedSearch).toHaveBeenLastCalledWith(
+      'view',
+      expect.objectContaining({
+        contentViewData: JSON.stringify({ ...presentation, nxsFilesOnly: true }),
+      }),
+    );
+  });
+
+  it('tracks No Containers removal across page recreation and preserves a newly opened saved scope', async () => {
+    const query = { quickFilters: 'noFolder', sortBy: null, sortOrder: null };
+    session.setPageQuery(query);
+    expect(session.filters().filesOnly).toBe(true);
+    session.setPageQuery({ ...query, quickFilters: '' });
+    expect(session.filters().filesOnly).toBeFalsy();
+    expect(session.request().quickFilters).toBeUndefined();
+    session.setPageQuery(query);
+    searchService.getSavedSearchById.mockReturnValue(
+      of({
+        ...EMPTY_SAVED_PARAMS,
+        contentViewData: JSON.stringify({ nxsFilesOnly: true }),
+      }),
+    );
+    await firstValueFrom(session.openSavedSearch('files', 'Files'));
+    session.setPageQuery({ ...query, quickFilters: '' });
+    expect(session.filters().filesOnly).toBe(true);
+    expect(session.request().quickFilters).toBe('noFolder');
+  });
+
+  it('requests keyword draft synchronization on reset and opening identical saved criteria', async () => {
+    const version = shared.keywordSyncVersion();
+    session.reset();
+    expect(shared.keywordSyncVersion()).toBe(version + 1);
+    searchService.getSavedSearchById.mockReturnValue(of({ ...EMPTY_SAVED_PARAMS }));
+    await firstValueFrom(session.openSavedSearch('empty', 'Empty search'));
+    expect(shared.keywordSyncVersion()).toBe(version + 2);
   });
 
   describe('the one search', () => {

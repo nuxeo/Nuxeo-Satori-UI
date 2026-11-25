@@ -9,6 +9,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
@@ -196,8 +197,16 @@ export class AppShellComponent implements OnDestroy {
   private readonly currentUrl = signal(this.router.url.split('?')[0]);
   readonly searchExpanded = computed(() => this.currentUrl() === '/search');
   private searchReturnUrl = '/dashboard';
+  private readonly appliedKeyword = computed(
+    () => this.searchState.drawerFilters()['ecm_fulltext'] ?? '',
+  );
   private readonly syncSearchKeywords = effect(() => {
-    this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
+    const term = this.appliedKeyword();
+    this.searchState.keywordSyncVersion();
+    untracked(() => {
+      this.clearGlobalSearch();
+      this.globalSearchTerm.set(term);
+    });
   });
 
   readonly pageTitle = computed(() => {
@@ -554,18 +563,27 @@ export class AppShellComponent implements OnDestroy {
   }
 
   onGlobalSearchFocus(): void {
-    if (!this.searchExpanded()) {
-      this.searchReturnUrl = this.router.url;
-      this.globalSearchTerm.set(this.searchState.drawerFilters()['ecm_fulltext'] ?? '');
-      this.drawerOpen.set(false);
-      this.activeDrawerItem.set(null);
-      void this.router.navigateByUrl('/search');
-    }
     this.globalSearchOpen.set(this.globalSearchTerm().trim().length >= 2);
     if (this.globalSearchOpen()) this.searchInput$.next(this.globalSearchTerm());
   }
 
+  onGlobalSearchActivate(): void {
+    if (!this.searchExpanded()) this.globalSearchTerm.set(this.appliedKeyword());
+    this.openSearchWorkspace();
+    this.onGlobalSearchFocus();
+  }
+
+  private openSearchWorkspace(): void {
+    if (!this.searchExpanded()) {
+      this.searchReturnUrl = this.router.url;
+      this.drawerOpen.set(false);
+      this.activeDrawerItem.set(null);
+      void this.router.navigateByUrl('/search');
+    }
+  }
+
   submitGlobalSearch(): void {
+    this.openSearchWorkspace();
     this.globalSearchOpen.set(false);
     this.searchInput$.next('');
     this.searchState.keywordRequest.set({ term: this.globalSearchTerm().trim() });
@@ -579,7 +597,7 @@ export class AppShellComponent implements OnDestroy {
   closeSearch(): void {
     this.searchState.keywordRequest.set(null);
     this.clearGlobalSearch();
-    void this.router.navigateByUrl(this.searchReturnUrl);
+    if (this.searchExpanded()) void this.router.navigateByUrl(this.searchReturnUrl);
   }
 
   onGlobalSearchFocusOut(event: FocusEvent): void {

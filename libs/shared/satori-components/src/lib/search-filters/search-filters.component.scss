@@ -222,6 +222,10 @@
   }
 }
 .filter-panel {
+  position: static;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
   width: min(336px, calc(100vw - 24px));
   max-height: min(560px, calc(100vh - 32px));
   display: flex;
@@ -278,6 +282,10 @@
   overflow: auto;
 }
 .filter-panel__choices {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
   display: flex;
   flex-direction: column;
   max-height: 280px;

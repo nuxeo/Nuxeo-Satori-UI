@@ -101,6 +101,24 @@ describe('NxsSearchFiltersComponent', () => {
     )!;
   const panel = () => document.querySelector<HTMLElement>('.filter-panel')!;
 
+  beforeEach(async () => {
+    getUserCollections = vi.fn((): Observable<SearchCollectionOption[]> =>
+      of([
+        { id: 'col-1', title: 'Claims', itemCount: 4 },
+        { id: 'col-2', title: 'Board', itemCount: 1 },
+      ]),
+    );
+    getTagSuggestions = vi.fn((term: string): Observable<string[]> =>
+      of(['annual', 'archive'].filter((tag) => tag.startsWith(term))),
+    );
+    await configure();
+    await render();
+  });
+
+  afterEach(() => {
+    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
+  });
+
   it('keeps date multi-selection and displays the selected range in its trigger', async () => {
     host.layout.set('horizontal');
     await render();
@@ -205,6 +223,33 @@ describe('NxsSearchFiltersComponent', () => {
     }
   });
 
+  it.each([
+    { menu: 'People', field: 'authors', value: 'Administrator' },
+    { menu: 'Collections', field: 'collections', value: 'col-1' },
+    { menu: 'Tags', field: 'tags', value: 'annual' },
+  ] as const)(
+    'keeps keyboard focus in the $menu input after choosing an option',
+    async ({ menu, field, value }) => {
+      host.layout.set('horizontal');
+      await render();
+      menuTrigger(menu).click();
+      await render();
+      const box = panel().querySelector<HTMLInputElement>('input')!;
+      if (field === 'tags') {
+        type(box, 'ann');
+        await new Promise((resolve) => setTimeout(resolve, 275));
+        await render();
+      }
+      const option = panel().querySelector<HTMLButtonElement>('.filter-option')!;
+      expect(option).not.toBeNull();
+      option.focus();
+      option.click();
+      await render();
+      expect(host.filters()[field]).toEqual([value]);
+      expect(document.activeElement).toBe(box);
+    },
+  );
+
   it('restores the latest trigger after switching panels and closing with Escape', async () => {
     host.layout.set('horizontal');
     await render();
@@ -285,20 +330,6 @@ describe('NxsSearchFiltersComponent', () => {
     return [...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option')];
   }
 
-  beforeEach(async () => {
-    getUserCollections = vi.fn((): Observable<SearchCollectionOption[]> =>
-      of([
-        { id: 'col-1', title: 'Claims', itemCount: 4 },
-        { id: 'col-2', title: 'Board', itemCount: 1 },
-      ]),
-    );
-    getTagSuggestions = vi.fn((term: string): Observable<string[]> =>
-      of(['annual', 'archive'].filter((tag) => tag.startsWith(term))),
-    );
-    await configure();
-    await render();
-  });
-
   /**
    * Creates the host with these providers added, so a test can register a component under an ID.
    * A reset discards the global translate providers, so `configure` brings them back.
@@ -317,10 +348,6 @@ describe('NxsSearchFiltersComponent', () => {
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
   }
-
-  afterEach(() => {
-    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
-  });
 
   describe('choices and counts', () => {
     it('lists every modification-date range with the server’s count, Modification Date open', () => {

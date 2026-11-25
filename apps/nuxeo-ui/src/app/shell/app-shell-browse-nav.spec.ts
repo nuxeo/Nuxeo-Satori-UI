@@ -63,8 +63,11 @@ describe('AppShellComponent — the Browse nav entry', () => {
 
   it('expands header search and closes back to the page it was opened from', () => {
     spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue('/browse/contracts');
+    const navigation = new Subject<NavigationEnd>();
+    spyOnProperty(TestBed.inject(Router), 'events', 'get').and.returnValue(navigation);
     const shell = TestBed.createComponent(AppShellComponent).componentInstance;
-    shell.onGlobalSearchFocus();
+    shell.onGlobalSearchActivate();
+    navigation.next(new NavigationEnd(1, '/search', '/search'));
     shell.onGlobalSearchInput('NEV');
     shell.submitGlobalSearch();
     expect(TestBed.inject(SearchAggregationService).keywordRequest()).toEqual({ term: 'NEV' });
@@ -77,7 +80,7 @@ describe('AppShellComponent — the Browse nav entry', () => {
     spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue('/dashboard');
     const shell = TestBed.createComponent(AppShellComponent).componentInstance;
     TestBed.inject(SearchAggregationService).drawerFilters.set({ ecm_fulltext: 'NEV' });
-    shell.onGlobalSearchFocus();
+    shell.onGlobalSearchActivate();
     expect(shell.globalSearchTerm()).toBe('NEV');
   });
 
@@ -117,7 +120,7 @@ describe('AppShellComponent — the Browse nav entry', () => {
     ).and.returnValue(of([{ id: 'test-user', displayLabel: 'NEV User', kind: 'user' }]));
     const fixture = TestBed.createComponent(AppShellComponent);
     TestBed.inject(SearchAggregationService).drawerFilters.set({ ecm_fulltext: 'NEV' });
-    fixture.componentInstance.onGlobalSearchFocus();
+    fixture.componentInstance.onGlobalSearchActivate();
     tick(251);
     expect(suggest).toHaveBeenCalledWith('NEV');
     expect(fixture.componentInstance.globalSearchResults()[0].displayLabel).toBe('NEV User');
@@ -131,6 +134,44 @@ describe('AppShellComponent — the Browse nav entry', () => {
     expect(shell.globalSearchTerm()).toBe('invoice');
     shell.clearSearchKeywords();
     expect(TestBed.inject(SearchAggregationService).keywordRequest()).toEqual({ term: '' });
+  });
+
+  it('keeps an unsubmitted keyword and its suggestions across metadata updates', () => {
+    const fixture = TestBed.createComponent(AppShellComponent);
+    const shell = fixture.componentInstance;
+    const state = TestBed.inject(SearchAggregationService);
+    state.drawerFilters.set({ ecm_fulltext: 'applied' });
+    fixture.detectChanges();
+    shell.onGlobalSearchInput('draft');
+    shell.globalSearchResults.set([{ id: 'draft-user', displayLabel: 'Draft user', kind: 'user' }]);
+    state.drawerFilters.set({ ecm_fulltext: 'applied', author: '["alice"]' });
+    fixture.detectChanges();
+    expect(shell.globalSearchTerm()).toBe('draft');
+    expect(shell.globalSearchResults()[0].id).toBe('draft-user');
+    state.keywordSyncVersion.update((version) => version + 1);
+    fixture.detectChanges();
+    expect(shell.globalSearchTerm()).toBe('applied');
+    expect(shell.globalSearchResults()).toEqual([]);
+  });
+
+  it('does not navigate or close the drawer when the Keywords input only receives focus', () => {
+    spyOnProperty(TestBed.inject(Router), 'url', 'get').and.returnValue('/browse/contracts');
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const shell = fixture.componentInstance;
+    shell.drawerOpen.set(true);
+    const input = fixture.nativeElement.querySelector(
+      '#global-header-search-input',
+    ) as HTMLInputElement;
+    input.dispatchEvent(new FocusEvent('focus'));
+    expect(navigated).toEqual([]);
+    expect(shell.drawerOpen()).toBeTrue();
+    input.value = 'invoice';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(navigated).toEqual(['/search']);
+    expect(TestBed.inject(SearchAggregationService).keywordRequest()).toEqual({ term: 'invoice' });
+    expect(shell.drawerOpen()).toBeFalse();
   });
 
   it('opens the folder the current browse URL names, and remembers it', () => {

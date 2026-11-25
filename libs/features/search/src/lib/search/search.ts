@@ -30,6 +30,7 @@ import {
   reduce,
   takeUntil,
   finalize,
+  merge,
 } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -90,7 +91,11 @@ import {
 
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
 import { SearchFiltersDrawerComponent } from '../search-filters-drawer/search-filters-drawer.component';
-import { SearchSession, type SearchResultsState } from '../search-session/search-session';
+import {
+  SEARCH_PAGE_SIZE,
+  SearchSession,
+  type SearchResultsState,
+} from '../search-session/search-session';
 
 export type SortDirection = 'asc' | 'desc' | null;
 export type ViewMode = 'grid' | 'table' | 'list';
@@ -321,13 +326,12 @@ export class SearchComponent {
   private readonly syncScope = effect(() => {
     const filesOnly = !!this.session.filters().filesOnly;
     untracked(() => {
-      if (!filesOnly && this.isQuickFilterSelected('noFolder')) this.toggleQuickFilter('noFolder');
+      if (filesOnly !== this.isQuickFilterSelected('noFolder')) this.toggleQuickFilter('noFolder');
     });
   });
   readonly keywordDraft = signal('');
-  private readonly syncKeywords = effect(() =>
-    this.keywordDraft.set(this.session.filters().fulltext),
-  );
+  private readonly appliedKeyword = computed(() => this.session.filters().fulltext);
+  private readonly syncKeywords = effect(() => this.keywordDraft.set(this.appliedKeyword()));
 
   applyKeywords(): void {
     this.session.setFilters({ ...this.session.filters(), fulltext: this.keywordDraft().trim() });
@@ -473,9 +477,6 @@ export class SearchComponent {
   private applyPageQuery(params: { get(name: string): string | null }): void {
     const quickFilters = params.get('quickFilters') ?? '';
     this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
-    if (this.parseQuickFilters(quickFilters).has('noFolder') && !this.session.filters().filesOnly) {
-      this.session.setFilters({ ...this.session.filters(), filesOnly: true });
-    }
 
     const sortBy = params.get('sortBy');
     const sortOrderRaw = params.get('sortOrder');
@@ -494,6 +495,9 @@ export class SearchComponent {
     this.session.setPageQuery({ quickFilters: quickFilters.trim(), sortBy, sortOrder });
 
     // The URL counts pages from one; the session from zero. No `page` means the first.
+    const pageSize = Number(params.get('pageSize'));
+    this.urlPageSize = [25, 40, 50, 100].includes(pageSize) ? pageSize : SEARCH_PAGE_SIZE;
+    this.session.setPageSize(this.urlPageSize);
     const page = Number.parseInt(params.get('page') ?? '', 10);
     this.urlPageIndex = Number.isFinite(page) && page > 1 ? page - 1 : 0;
     this.session.setPageIndex(this.urlPageIndex);
@@ -584,6 +588,7 @@ export class SearchComponent {
   readonly pager = signal({ pageIndex: 0, itemCount: 0, totalSize: -1, hasNextPage: false });
   /** The page the URL asked for, as the last applied URL; the URL follows the pager through it. */
   private urlPageIndex = 0;
+  private urlPageSize = SEARCH_PAGE_SIZE;
   readonly selectedCount = computed(() => this.selectionService.selectedCount());
   readonly SORTABLE_COLUMNS = new Set(['name', 'modified', 'contributor', 'author', 'created']);
 
@@ -698,7 +703,7 @@ export class SearchComponent {
             : EMPTY,
         ),
         reduce((items, page) => [...items, ...page.items], [] as SearchResultItem[]),
-        takeUntil(this.cancelSelection),
+        takeUntil(merge(this.cancelSelection, this.selectionService.cleared$)),
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.selectingAll.set(false)),
       )
@@ -1104,11 +1109,15 @@ export class SearchComponent {
     // filter change moved to is written back, replacing the history entry rather than adding one.
     effect(() => {
       const pageIndex = this.session.pageIndex();
+      const pageSize = this.session.pageSize();
       untracked(() => {
-        if (pageIndex === this.urlPageIndex) return;
+        if (pageIndex === this.urlPageIndex && pageSize === this.urlPageSize) return;
         void this.router.navigate([], {
           relativeTo: this.route,
-          queryParams: { page: pageIndex > 0 ? pageIndex + 1 : null },
+          queryParams: {
+            page: pageIndex > 0 ? pageIndex + 1 : null,
+            pageSize: pageSize === SEARCH_PAGE_SIZE ? null : pageSize,
+          },
           queryParamsHandling: 'merge',
           replaceUrl: true,
         });

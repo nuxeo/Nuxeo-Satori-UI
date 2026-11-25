@@ -109,7 +109,7 @@
             placeholder=" "
             [value]="globalSearchTerm()"
             (focus)="onGlobalSearchFocus()"
-            (click)="!searchExpanded() && onGlobalSearchFocus()"
+            (click)="!searchExpanded() && onGlobalSearchActivate()"
             (input)="onGlobalSearchInput($any($event.target).value)"
             (keydown.enter)="submitGlobalSearch()"
             (keydown.escape)="closeSearch()"

@@ -91,6 +91,7 @@ export class SearchSession {
   readonly hasFilters = computed(() => nxsHasSearchFilters(this.filters()));
 
   private readonly pageQuery = signal<SearchPageQuery>(EMPTY_PAGE_QUERY, { equal: samePageQuery });
+  private urlFilesOnly: boolean | undefined;
   private readonly attempt = signal(0);
   private readonly pageIndexSignal = signal(0);
   private readonly pageSizeSignal = signal(SEARCH_PAGE_SIZE);
@@ -168,6 +169,12 @@ export class SearchSession {
 
   /** The search page's URL changed: its quick filters and sort are part of the query. */
   setPageQuery(query: SearchPageQuery): void {
+    const filesOnly = query.quickFilters.split(',').some((value) => value.trim() === 'noFolder');
+    // The session outlives the search page while the document queue is open.
+    if (filesOnly || this.urlFilesOnly === true) {
+      this.setFilters({ ...this.filters(), filesOnly });
+    }
+    this.urlFilesOnly = filesOnly;
     this.pageQuery.set(query);
   }
 
@@ -189,8 +196,10 @@ export class SearchSession {
 
   /** Clears the filters and closes the open saved search. */
   reset(): void {
+    this.urlFilesOnly = undefined;
     this.closeSavedSearch();
     this.setFilters(NXS_EMPTY_SEARCH_FILTERS);
+    this.shared.keywordSyncVersion.update((version) => version + 1);
   }
 
   /** Forgets the open saved search, keeping the filters. */
@@ -232,11 +241,13 @@ export class SearchSession {
           ...(filesOnly ? { filesOnly: 'true' } : {}),
         });
         this.loadedParams = params;
+        this.urlFilesOnly = undefined;
         this.savedFilters.set(filters);
         // Opening a search starts it from the first page, even when its filters match the ones on
         // screen, which `setFilters` alone would not reset.
         this.setPageIndex(0);
         this.setFilters(filters);
+        this.shared.keywordSyncVersion.update((version) => version + 1);
       }),
       catchError((error: unknown) => {
         if (this.savedSearchId() === id) this.closeSavedSearch();
@@ -302,6 +313,7 @@ export class SearchSession {
           if (this.savedSearchId() !== id) return;
           this.savedFilters.set(filters);
           this.loadedParams = {
+            ...this.loadedParams,
             ...params,
             ...(contentViewData !== undefined ? { contentViewData } : {}),
           };

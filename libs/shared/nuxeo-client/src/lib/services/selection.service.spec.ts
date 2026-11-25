@@ -35,6 +35,18 @@ describe('SelectionService', () => {
     service = TestBed.inject(SelectionService);
   });
 
+  it('notifies every shared clear synchronously so pending selections can be cancelled', () => {
+    const onClear = vi.fn();
+    const subscription = service.cleared$.subscribe(onClear);
+    service.selectAll(['doc']);
+    service.clear();
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(service.selectedCount()).toBe(0);
+    service.resetUiState();
+    expect(onClear).toHaveBeenCalledTimes(2);
+    subscription.unsubscribe();
+  });
+
   describe('forgetPreviews', () => {
     it('nulls every retained preview while preserving ids, labels and types', () => {
       service.selectAll(

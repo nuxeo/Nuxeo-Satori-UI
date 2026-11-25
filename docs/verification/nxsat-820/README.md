@@ -83,6 +83,38 @@ expanded search header and dropdown presentation informed the implementation.
 
 ## Screenshots
 
+### Copilot regression verification — 25 November 2026
+
+The review found seven defects. The follow-up preserves saved-search presentation state across
+successive saves, keeps unsubmitted keywords during metadata changes, opens search only on explicit
+activation, synchronizes removal of the queue's No Containers filter, persists page size in links,
+cancels pending select-all work through every shared Clear action, and restores focus after choosing
+an author, collection or tag. Department and new search scopes remain excluded.
+
+Fresh browser checks against beta confirmed:
+
+- Shift+Tab from Settings focuses Keywords while remaining on Dashboard; Enter opens search with
+  NEV and returns 125 results.
+- Choosing nco-admin with Enter keeps the header's `draft keyword` text, returns 83 results for
+  the already-applied NEV query, and restores focus to Authors.
+- `/#/search?pageSize=25&page=2` shows 26–50 of 648 before and after a full reload.
+- Files returns 485 results; clearing No Containers in Queue and returning to Filter view restores
+  Files and folders and all 648 results.
+- Keyboard activation of the angular tag and Marketing Documents collection restores focus to
+  the respective input. Escape dismisses the panel; Reset restores all 648 results.
+- Native dialog/fieldset markup retains the dropdown layout and Date checkbox behavior.
+
+Automated regression tests additionally exercise consecutive metadata/Files saves and cancellation
+of an in-flight select-all request through the header checkbox and shared shell Clear action.
+These timing-sensitive cases are covered by controlled observable responses, not claimed as manual
+race-condition reproduction.
+
+![Draft keyword preserved and Authors focus restored](copilot-keyboard-focus.jpg)
+
+![Page size and result range preserved after reload](copilot-page-size.jpg)
+
+![Tags input retains keyboard focus after selection](copilot-tags-focus.jpg)
+
 Search workspace:
 
 ![Search workspace](search.jpg)

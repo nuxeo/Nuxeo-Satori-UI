@@ -5018,6 +5018,7 @@ class SearchAggregationService {
     readonly keywordRequest: import("@angular/core").WritableSignal<{
     term: string;
     } | null>;
+    readonly keywordSyncVersion: import("@angular/core").WritableSignal<number>;
     readonly aggregations: import("@angular/core").WritableSignal<SearchAggregations>;
     readonly items: import("@angular/core").WritableSignal<SearchResultItem[]>;
     readonly drawerFilters: import("@angular/core").WritableSignal<Record<string, string>>;
@@ -5116,6 +5117,7 @@ class SearchService {
     }
 }
 class SelectionService {
+    readonly cleared$: Observable<void>;
     readonly selectedIds: import("@angular/core").WritableSignal<Set<string>>;
     readonly selectedLabels: import("@angular/core").WritableSignal<Map<string, string>>;
     readonly selectedPreviews: import("@angular/core").WritableSignal<Map<string, SelectionPreview>>;

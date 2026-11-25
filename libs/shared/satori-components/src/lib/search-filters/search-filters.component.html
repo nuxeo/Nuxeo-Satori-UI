@@ -26,10 +26,10 @@
       (overlayOutsideClick)="outsidePanel($event)"
       (overlayKeydown)="panelKeydown($event)"
     >
-      <section
+      <dialog
+        open
         class="filter-panel"
         [class.filter-panel--compact]="activeMenu() === 'modified'"
-        role="dialog"
         [id]="ids.fulltext + '-panel'"
         [attr.aria-label]="panelTitle()"
         cdkTrapFocus
@@ -239,11 +239,11 @@
             </button>
           </footer>
         }
-      </section>
+      </dialog>
     </ng-template>
   }
   <ng-template #panelOptions let-group>
-    <div class="filter-panel__choices" role="group" [attr.aria-label]="group.titleKey | translate">
+    <fieldset class="filter-panel__choices" [attr.aria-label]="group.titleKey | translate">
       @for (option of group.options; track option.value) {
         <mat-checkbox
           [checked]="isChecked(group.field, option.value)"
@@ -261,7 +261,7 @@
       } @empty {
         <p>{{ 'satori-components.search-filters.no-available-results' | translate }}</p>
       }
-    </div>
+    </fieldset>
   </ng-template>
 } @else {
   <div class="nxs-search-filters__fields">

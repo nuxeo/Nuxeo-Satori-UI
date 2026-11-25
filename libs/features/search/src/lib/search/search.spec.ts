@@ -134,6 +134,7 @@ const EMPTY_SAVED_PARAMS: Record<string, string> = {
 };
 
 const mockSearchAggregationService = {
+  keywordSyncVersion: signal(0),
   savedSearchVersion: signal(0),
   keywordRequest: signal<{ term: string } | null>(null),
   drawerFilters: signal<Record<string, string>>({}),
@@ -157,6 +158,7 @@ const mockDocumentDetailService = {
 // so both `mockReturnValue(of(aDocument))` and a later `mock.someMethod = vi.fn()` fail to
 // typecheck. Neither shows up under `nx test`, which strips types through esbuild.
 const mockSelectionService = {
+  cleared$: new Subject<void>(),
   selectedCount: vi.fn(() => 0),
   isAllSelected: vi.fn(() => false),
   isIndeterminate: vi.fn(() => false),
@@ -338,6 +340,7 @@ describe('SearchComponent', () => {
     // `clearAllMocks` clears call history but NOT a `mockReturnValue` implementation, so every
     // override a test installs must be reset here or it leaks into later tests.
     mockSearchService.search.mockReturnValue(of({ items: [], aggregations: {} }));
+    mockSelectionService.clear.mockImplementation(() => mockSelectionService.cleared$.next());
     mockDocumentDetailService.fetchThumbnail.mockReturnValue(of(null));
     mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
     mockSearchAggregationService.keywordRequest.set(null);
@@ -483,6 +486,23 @@ describe('SearchComponent', () => {
   });
 
   describe('selection', () => {
+    it.each(['header', 'shared'] as const)(
+      'cancels a pending select-all when cleared through %s',
+      async (entry) => {
+        await fixture.whenStable();
+        const pending = new Subject<SearchResponseLike>();
+        mockSearchService.search.mockReturnValueOnce(pending);
+        component.selectAllResults();
+        if (entry === 'header') {
+          mockSelectionService.isAllSelected.mockReturnValueOnce(true);
+          component.toggleAll();
+        } else mockSelectionService.clear();
+        expect(component.selectingAll()).toBe(false);
+        pending.next({ items: [resultItem()], aggregations: {} });
+        pending.complete();
+        expect(mockSelectionService.selectAll).not.toHaveBeenCalled();
+      },
+    );
     it('selects only the displayed page, including AI results, without fetching more results', async () => {
       await fixture.whenStable();
       vi.spyOn(component, 'displayResults').mockReturnValue([
@@ -624,6 +644,43 @@ describe('SearchComponent', () => {
   });
 
   describe('separate search inputs', () => {
+    it('clears Files-only when No Containers is removed from the URL', async () => {
+      const session = TestBed.inject(SearchSession);
+      component['applyPageQuery'](convertToParamMap({ quickFilters: 'noFolder' }));
+      expect(session.filters().filesOnly).toBe(true);
+      component['applyPageQuery'](convertToParamMap({}));
+      await fixture.whenStable();
+      expect(session.filters().filesOnly).toBeFalsy();
+      expect(session.request().quickFilters).toBeUndefined();
+      expect(component.selectedQuickFilters().has('noFolder')).toBe(false);
+    });
+
+    it('retains a saved Files-only scope when first entering search without URL quick filters', async () => {
+      const session = TestBed.inject(SearchSession);
+      session.setFilters({ ...session.filters(), filesOnly: true });
+      component['applyPageQuery'](convertToParamMap({}));
+      await fixture.whenStable();
+      expect(session.filters().filesOnly).toBe(true);
+      expect(component.selectedQuickFilters().has('noFolder')).toBe(true);
+    });
+
+    it('hydrates page size before page index and writes both into deep links', async () => {
+      const session = TestBed.inject(SearchSession);
+      component['applyPageQuery'](convertToParamMap({ page: '5', pageSize: '25' }));
+      expect(session.request()).toEqual(expect.objectContaining({ pageIndex: 4, pageSize: 25 }));
+      const navigate = vi.spyOn(component['router'], 'navigate');
+      component.changePageSize(50);
+      await fixture.whenStable();
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: { page: null, pageSize: 50 },
+          replaceUrl: true,
+        }),
+      );
+      component['applyPageQuery'](convertToParamMap({ page: '5', pageSize: 'invalid' }));
+      expect(session.request()).toEqual(expect.objectContaining({ pageIndex: 4, pageSize: 40 }));
+    });
     it('discards stale Ask suggestions and recovers when the suggestions request fails', async () => {
       const pending = new Subject<{ suggestions: string[] }>();
       mockAiGatewayService.nlToNxqlSuggestions.mockReturnValueOnce(pending);
