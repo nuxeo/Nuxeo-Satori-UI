@@ -209,7 +209,7 @@ export class NxsSearchFiltersComponent {
   protected outsidePanel(event: MouseEvent): void {
     if (!event.composedPath().includes(this.hostElement.nativeElement)) {
       const target =
-        event.target instanceof HTMLElement
+        event.target instanceof Element
           ? event.target.closest<HTMLElement>('input, button, a, [tabindex]')
           : null;
       this.closePanel(false);

@@ -10,6 +10,7 @@ import {
   startWith,
   switchMap,
   tap,
+  throwError,
 } from 'rxjs';
 
 import {
@@ -241,7 +242,6 @@ export class SearchSession {
           ...(filesOnly ? { filesOnly: 'true' } : {}),
         });
         this.loadedParams = params;
-        this.urlFilesOnly = undefined;
         this.savedFilters.set(filters);
         // Opening a search starts it from the first page, even when its filters match the ones on
         // screen, which `setFilters` alone would not reset.
@@ -294,18 +294,23 @@ export class SearchSession {
       ...nxsSavedParamsToClear(this.loadedParams),
       ...nxsSearchFiltersToSavedParams(filters),
     };
-    let viewData: Record<string, unknown> = {};
+    let viewData: Record<string, unknown> | null = null;
     try {
       const stored: unknown = JSON.parse(this.loadedParams['contentViewData'] || '{}');
       if (stored && typeof stored === 'object' && !Array.isArray(stored))
         viewData = stored as Record<string, unknown>;
     } catch {
-      /* No structured view state to merge. */
+      /* Opaque legacy view data must not be overwritten with our scope flag. */
     }
-    const contentViewData =
-      filters.filesOnly || this.savedFilters()?.filesOnly || 'nxsFilesOnly' in viewData
-        ? JSON.stringify({ ...viewData, nxsFilesOnly: !!filters.filesOnly })
-        : undefined;
+    const writesScope =
+      filters.filesOnly ||
+      this.savedFilters()?.filesOnly ||
+      (viewData !== null && 'nxsFilesOnly' in viewData);
+    if (writesScope && viewData === null)
+      return throwError(() => new Error('Unsupported saved-search view data'));
+    const contentViewData = writesScope
+      ? JSON.stringify({ ...viewData, nxsFilesOnly: !!filters.filesOnly })
+      : undefined;
     return this.searchService
       .updateSavedSearch(id, {
         title: this.savedSearchTitle(),

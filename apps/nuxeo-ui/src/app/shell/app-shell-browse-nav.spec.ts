@@ -92,6 +92,31 @@ describe('AppShellComponent — the Browse nav entry', () => {
     expect(shell.globalSearchTerm()).toBe('NEV');
   });
 
+  it('returns focus from Close search to Keywords before the expanded actions disappear', () => {
+    const router = TestBed.inject(Router);
+    const navigation = new Subject<NavigationEnd>();
+    spyOnProperty(router, 'events', 'get').and.returnValue(navigation);
+    spyOnProperty(router, 'url', 'get').and.returnValue('/search');
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '#global-header-search-input',
+    ) as HTMLInputElement;
+    const close = fixture.nativeElement.querySelector(
+      '.header-search-actions button[aria-label]',
+    ) as HTMLButtonElement;
+    close.focus();
+    expect(document.activeElement).toBe(close);
+    close.click();
+    expect(document.activeElement).toBe(input);
+    expect(navigated).toEqual(['/dashboard']);
+    navigation.next(new NavigationEnd(1, '/dashboard', '/dashboard'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.header-search-actions')).toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(fixture.componentInstance.globalSearchOpen()).toBeFalse();
+  });
+
   for (const draft of ['invoice draft', '']) {
     it(`preserves the typed ${draft ? 'nonempty' : 'empty'} draft through click activation and navigation`, () => {
       const router = TestBed.inject(Router);

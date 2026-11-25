@@ -130,6 +130,37 @@ describe('SearchSession', () => {
     );
   });
 
+  it.each(['legacy opaque state', '["legacy"]', '"legacy"', 'null', 'false', '42'])(
+    'rejects Files persistence without replacing unsupported view data: %s',
+    async (contentViewData) => {
+      searchService.getSavedSearchById.mockReturnValueOnce(
+        of({ ...EMPTY_SAVED_PARAMS, contentViewData }),
+      );
+      await firstValueFrom(session.openSavedSearch('legacy', 'Legacy search'));
+      session.setFilters({ ...session.filters(), filesOnly: true });
+
+      await expect(firstValueFrom(session.save())).rejects.toThrow(
+        'Unsupported saved-search view data',
+      );
+      expect(searchService.updateSavedSearch).not.toHaveBeenCalled();
+      expect(session.savedSearchId()).toBe('legacy');
+      expect(session.dirty()).toBe(true);
+
+      session.setFilters({ ...session.filters(), filesOnly: false, authors: ['alice'] });
+      await firstValueFrom(session.save());
+      expect(searchService.updateSavedSearch.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+        'contentViewData',
+      );
+      expect(session.dirty()).toBe(false);
+
+      session.setFilters({ ...session.filters(), filesOnly: true });
+      await expect(firstValueFrom(session.save())).rejects.toThrow(
+        'Unsupported saved-search view data',
+      );
+      expect(searchService.updateSavedSearch).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('retains presentation settings across a metadata save followed by a Files-only save', async () => {
     const presentation = { layout: 'grid', columns: ['title', 'type'] };
     searchService.getSavedSearchById.mockReturnValue(
@@ -216,7 +247,7 @@ describe('SearchSession', () => {
     expect(searchService.updateSavedSearch).not.toHaveBeenCalled();
   });
 
-  it('tracks No Containers removal across page recreation and preserves a newly opened saved scope', async () => {
+  it('tracks No Containers removal across page recreation after reopening a Files saved search', async () => {
     const query = { quickFilters: 'noFolder', sortBy: null, sortOrder: null };
     session.setPageQuery(query);
     expect(session.filters().filesOnly).toBe(true);
@@ -224,7 +255,7 @@ describe('SearchSession', () => {
     expect(session.filters().filesOnly).toBeFalsy();
     expect(session.request().quickFilters).toBeUndefined();
     session.setPageQuery(query);
-    searchService.getSavedSearchById.mockReturnValue(
+    searchService.getSavedSearchById.mockReturnValueOnce(
       of({
         ...EMPTY_SAVED_PARAMS,
         contentViewData: JSON.stringify({ nxsFilesOnly: true }),
@@ -232,6 +263,22 @@ describe('SearchSession', () => {
     );
     await firstValueFrom(session.openSavedSearch('files', 'Files'));
     session.setPageQuery({ ...query, quickFilters: '' });
+    expect(session.filters().filesOnly).toBeFalsy();
+    expect(session.request().quickFilters).toBeUndefined();
+    expect(session.dirty()).toBe(true);
+  });
+
+  it('preserves a newly opened Files saved scope before its first URL synchronization', async () => {
+    const query = { quickFilters: '', sortBy: null, sortOrder: null };
+    session.setPageQuery(query);
+    searchService.getSavedSearchById.mockReturnValueOnce(
+      of({
+        ...EMPTY_SAVED_PARAMS,
+        contentViewData: JSON.stringify({ nxsFilesOnly: true }),
+      }),
+    );
+    await firstValueFrom(session.openSavedSearch('files', 'Files'));
+    session.setPageQuery(query);
     expect(session.filters().filesOnly).toBe(true);
     expect(session.request().quickFilters).toBe('noFolder');
   });

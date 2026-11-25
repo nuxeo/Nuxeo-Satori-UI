@@ -176,15 +176,17 @@
     </div>
 
     <div class="toolbar-actions">
-      <button
-        mat-icon-button
-        [attr.aria-label]="'search.switch-to-queue-view' | translate"
-        [matTooltip]="'search.switch-to-queue-view' | translate"
-        (click)="openQueue()"
-        [disabled]="busy()"
-      >
-        <mat-icon svgIcon="bullet_list" />
-      </button>
+      @if (queueItem()) {
+        <button
+          mat-icon-button
+          [attr.aria-label]="'search.switch-to-queue-view' | translate"
+          [matTooltip]="'search.switch-to-queue-view' | translate"
+          (click)="openQueue()"
+          [disabled]="busy()"
+        >
+          <mat-icon svgIcon="bullet_list" />
+        </button>
+      }
       <button
         mat-icon-button
         [matTooltip]="'search.search.export-csv' | translate"

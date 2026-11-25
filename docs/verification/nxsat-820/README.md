@@ -58,6 +58,9 @@ expanded search header and dropdown presentation informed the implementation.
 
 ## Integration fixes and automated evidence
 
+The counts in this section record the initial post-merge verification. Subsequent review fixes
+and their regressions are described below; the PR description records final-head CI and test counts.
+
 - Resolved source conflicts with main and regenerated the English fallback and public API snapshot.
 - Corrected the extension reference for the new sidebar and retained search queue descriptor.
 - Explicitly typed the expanded-filter signal so Windows and Linux builds emit the same API
@@ -82,6 +85,24 @@ expanded search header and dropdown presentation informed the implementation.
   with `inset-inline-start`; its lint, stylesheet and build checks are rerun separately.
 
 ## Screenshots
+
+### Additional review edge cases — 25 November 2026
+
+The next Copilot pass identified five further regressions. Controlled tests cover:
+
+- Rejecting a Files-scope save when legacy presentation data cannot be safely merged, without
+  sending an update or changing the cached state. Metadata-only saves still preserve that data.
+- Reopening a Files-only saved search while No Containers is already in the URL, then clearing
+  No Containers in Queue. The request drops the flag; first-time saved-scope hydration still works.
+- Hiding the queue button and blocking its handler when the resolved queue descriptor is absent,
+  including changes to availability after rendering.
+- Returning focus to the persistent Keywords input when the Close search button is activated.
+- Preserving focus on an external button when an SVG/path descendant dismisses a filter panel.
+
+The new queue and saved-state regressions failed before the fixes. The two focus tests inspect
+`document.activeElement`, including after the Close button is removed. Browser control was
+unavailable during this additional pass; the screenshots below are from the earlier signed-in
+verification and are not evidence of fresh manual checks for these five cases.
 
 ### Follow-up Copilot review — 25 November 2026
 

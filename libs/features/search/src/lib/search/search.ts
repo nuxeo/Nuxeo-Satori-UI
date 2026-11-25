@@ -9,6 +9,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import {
+  APP_SEARCH_QUEUE_ITEM,
   DescriptorLabelPipe,
   ExtensionOutletComponent,
   descriptorLabel,
@@ -242,6 +243,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
 })
 export class SearchComponent {
   readonly advancedFiltersOpen = signal(true);
+  protected readonly queueItem = inject(APP_SEARCH_QUEUE_ITEM);
   protected readonly searchState = inject(SearchAggregationService);
   private readonly headerSearch = effect(() => {
     const request = this.searchState.keywordRequest();
@@ -256,7 +258,7 @@ export class SearchComponent {
   });
 
   openQueue(): void {
-    if (this.busy()) return;
+    if (!this.queueItem() || this.busy()) return;
     const first = this.results()[0];
     let commands: string[] = [];
     if (first?.type === 'Collection') commands = ['/collections', first.id];

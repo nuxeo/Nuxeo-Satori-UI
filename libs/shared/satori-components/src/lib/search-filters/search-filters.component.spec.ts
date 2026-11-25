@@ -223,6 +223,30 @@ describe('NxsSearchFiltersComponent', () => {
     }
   });
 
+  it('keeps focus on an external icon button when its SVG child dismisses the panel', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').focus();
+    menuTrigger('People').click();
+    await render();
+    const external = document.createElement('button');
+    external.setAttribute('aria-label', 'External icon action');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    svg.append(path);
+    external.append(svg);
+    document.body.append(external);
+    try {
+      path.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      path.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await render();
+      expect(document.querySelector('.filter-panel')).toBeNull();
+      expect(document.activeElement).toBe(external);
+    } finally {
+      external.remove();
+    }
+  });
+
   it.each([
     { menu: 'People', field: 'authors', value: 'Administrator' },
     { menu: 'Collections', field: 'collections', value: 'col-1' },

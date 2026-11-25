@@ -612,6 +612,10 @@ export class AppShellComponent implements OnDestroy {
   closeSearch(): void {
     this.searchState.keywordRequest.set(null);
     this.clearGlobalSearch();
+    // The expanded Close button disappears on navigation; keep focus on the surviving input.
+    this.globalSearchContainer?.nativeElement
+      .querySelector<HTMLInputElement>('#global-header-search-input')
+      ?.focus();
     if (this.searchExpanded()) void this.router.navigateByUrl(this.searchReturnUrl);
   }
 

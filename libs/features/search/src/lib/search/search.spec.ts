@@ -44,7 +44,12 @@ import {
   type NxsBannerTone,
   type NxsCardInputs,
 } from '@nuxeo/satori-platform/components';
-import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
+import {
+  APP_SEARCH_QUEUE_ITEM,
+  PACKAGED_SEARCH_QUEUE_ITEM,
+  provideSatoriExtensions,
+  type NavItemDescriptor,
+} from '@nuxeo/satori-platform/extensions';
 
 type SearchResponseLike = {
   items: SearchResultItem[];
@@ -850,6 +855,44 @@ describe('SearchComponent', () => {
       const navigate = vi.spyOn(component['router'], 'navigate');
       component.openQueue();
       expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('hides and blocks the queue when its resolved descriptor is unavailable', async () => {
+      TestBed.resetTestingModule();
+      const queue = signal<NavItemDescriptor | null>(null);
+      await configure(
+        {},
+        {
+          rendered: true,
+          providers: [{ provide: APP_SEARCH_QUEUE_ITEM, useValue: queue }],
+        },
+      );
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+      vi.spyOn(component, 'results').mockReturnValue([resultItem()]);
+      const navigate = vi.spyOn(component['router'], 'navigate');
+      const queueButton = () =>
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+          'button[aria-label="Switch to Queue view"]',
+        );
+
+      expect(queueButton()).toBeNull();
+      component.openQueue();
+      expect(navigate).not.toHaveBeenCalled();
+
+      queue.set(PACKAGED_SEARCH_QUEUE_ITEM);
+      fixture.detectChanges();
+      expect(queueButton()).not.toBeNull();
+      queueButton()?.click();
+      expect(navigate).toHaveBeenCalledTimes(1);
+
+      queue.set(null);
+      fixture.detectChanges();
+      expect(queueButton()).toBeNull();
+      component.openQueue();
+      expect(navigate).toHaveBeenCalledTimes(1);
     });
 
     it('opens queue mode while retaining the existing search query parameters', async () => {
