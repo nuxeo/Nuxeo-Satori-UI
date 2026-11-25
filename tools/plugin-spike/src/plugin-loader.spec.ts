@@ -281,6 +281,7 @@ describe('loadPlugin refuses a bundle from anywhere but the plugin store', () =>
     ['an encoded slash', '/plugins/..%2fstatic/sample-plugin.js', 'encoded'],
     ['an encoded backslash', '/plugins/..%5Cstatic/sample-plugin.js', 'encoded'],
     ['an encoded dot inside a name', '/plugins/sample/sample-plugin%2ejs', 'encoded'],
+    ['a double-encoded slash', '/plugins/..%252fstatic/sample-plugin.js', 'encoded'],
     [
       'a user name on the allowed origin',
       'https://spike@plugins.test/plugins/sample/sample-plugin.js',

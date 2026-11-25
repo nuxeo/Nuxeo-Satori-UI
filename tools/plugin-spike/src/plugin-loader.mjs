@@ -26,9 +26,10 @@
  *    included; the pin is what refuses a rollback.
  * 6. `incompatible-api`: the plugin targets a plugin API version this host does not serve.
  * 7. `url-not-allowed`: the bundle's URL, once resolved, is not under an allowed prefix, or
- *    carries credentials, a query, a fragment or an encoded separator.
+ *    carries credentials, a query, a fragment, or an encoded separator, dot or percent sign.
  * 8. `element-already-defined`: something already defined the element the plugin declares, so
- *    step 12 could not tell whether the bundle defined it.
+ *    step 12 could not tell whether the bundle defined it. Two loads declaring the same element at
+ *    once would both pass this step; a product loader would take one load per element at a time.
  * 9. `fetch-failed`: the bundle could not be fetched.
  * 10. `integrity-mismatch`: the fetched bytes do not hash to the signed integrity.
  * 11. `execute-failed`: the executor refused or failed. In a browser the executor is a module
@@ -258,8 +259,8 @@ async function trustedKeyFor(trustedKeys, keyId) {
  *
  * The prefix is compared with the URL as the WHATWG parser normalises it, so `..` and `%2e%2e`
  * segments are resolved first. What normalising leaves alone is refused outright: credentials, a
- * query or a fragment (even an empty `?` or `#`), and an encoded `/`, `\` or `.` in the path,
- * which a store or proxy that decodes them could read as a way out of the prefix.
+ * query or a fragment (even an empty `?` or `#`), and an encoded `/`, `\`, `.` or `%` in the path,
+ * which a store or proxy that decodes them, once or twice, could read as a way out of the prefix.
  *
  * @param {string} url
  * @param {LoaderPolicy} policy
@@ -275,7 +276,7 @@ export function checkUrl(url, policy) {
   }
   if (resolved.username !== '' || resolved.password !== '')
     return { why: 'it carries credentials' };
-  if (/%(?:2f|5c|2e)/i.test(resolved.pathname)) {
+  if (/%(?:2f|5c|2e|25)/i.test(resolved.pathname)) {
     return { why: 'its path has an encoded separator or dot' };
   }
   const href = resolved.href;

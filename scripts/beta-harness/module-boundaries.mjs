@@ -105,9 +105,22 @@ export const PROBES = [
     root: 'tools/probe-spike',
     tags: ['type:spike'],
     realProject: 'tools/plugin-spike/project.json',
-    // Every target Nx resolves for the real project, inferred ones included: tests, lint and the
-    // type check, and nothing that builds, serves or publishes it.
-    allowedTargets: /^(?:test|lint|typecheck|eslint:lint|vitest:test|test-ci(?:--.+)?)$/,
+    // Every target Nx resolves for the real project, inferred ones included, by name and by what
+    // it runs: tests, lint and the type check, and nothing that builds, serves or publishes it. A
+    // target of an allowed name running anything else fails as well.
+    allowedTargets: [
+      { name: /^test$/, executor: '@nx/vitest:test' },
+      { name: /^lint$/, executor: '@nx/eslint:lint' },
+      { name: /^typecheck$/, executor: 'nx:run-commands', command: /^tsc -p \S+ --noEmit$/ },
+      { name: /^eslint:lint$/, executor: 'nx:run-commands', command: /^eslint \.$/ },
+      { name: /^vitest:test$/, executor: 'nx:run-commands', command: /^vitest run$/ },
+      { name: /^test-ci$/, executor: 'nx:noop' },
+      {
+        name: /^test-ci--.+$/,
+        executor: 'nx:run-commands',
+        command: /^vitest run \S+ --coverage\.reportsDirectory=\S+$/,
+      },
+    ],
   },
 ];
 
@@ -405,7 +418,7 @@ function realProjectTargetProblems() {
     try {
       if (shown.status !== 0) throw new Error(shown.stderr || shown.error?.message);
       const json = shown.stdout.slice(shown.stdout.indexOf('{'), shown.stdout.lastIndexOf('}') + 1);
-      targets = Object.keys(JSON.parse(json).targets ?? {});
+      targets = Object.entries(JSON.parse(json).targets ?? {});
     } catch (error) {
       return {
         code: 2,
@@ -418,11 +431,24 @@ function realProjectTargetProblems() {
     checked.push(`${name}'s ${targets.length} resolved targets`);
     if (targets.length === 0)
       problems.push(`nx resolves no target at all for ${name}, so none was checked`);
-    for (const target of targets.filter((candidate) => !probe.allowedTargets.test(candidate))) {
-      problems.push(
-        `nx resolves a \`${target}\` target for ${name} (${probe.realProject}), which only tests, ` +
-          'lints and type-checks; something could build or publish it',
-      );
+    for (const [target, config] of targets) {
+      const command = config?.options?.command ?? '';
+      const rule = probe.allowedTargets.find((candidate) => candidate.name.test(target));
+      if (!rule) {
+        problems.push(
+          `nx resolves a \`${target}\` target for ${name} (${probe.realProject}), which only tests, ` +
+            'lints and type-checks; something could build or publish it',
+        );
+      } else if (
+        config?.executor !== rule.executor ||
+        (rule.command && !rule.command.test(command))
+      ) {
+        problems.push(
+          `nx resolves ${name}'s \`${target}\` target as ${JSON.stringify(config?.executor)}` +
+            `${command ? ` (${JSON.stringify(command)})` : ''}, not ${rule.executor}` +
+            `${rule.command ? ` with ${rule.command}` : ''}: a target of an allowed name could build it`,
+        );
+      }
     }
   }
   return { code: problems.length > 0 ? 1 : 0, problems, checked };

@@ -7,10 +7,6 @@ is not wired into `apps/nuxeo-ui`, not exported from any library and not built i
 and two checks fail if it becomes so (section 9). Every key in it is generated for one run and
 trusted nowhere.
 
-This repository is public, so the report describes the prototype and the options. How the shell
-holds its sign-in, and which headers its page sends today, are left to the independent security
-review (section 8) and internal channels.
-
 ## The short version
 
 - **Loading a signed, pinned plugin at run time works, and costs little.** The prototype's loader
@@ -86,8 +82,9 @@ only the manifest runs before a byte is fetched:
 4. the deployment pins this plugin at this version and this hash;
 5. the shell serves the plugin API version the plugin targets;
 6. the URL, once normalised, is under an allowed prefix, with no credentials, no query or fragment
-   (not even an empty one), and no encoded `/`, `\` or `.` in its path;
-7. nothing has defined the plugin's element yet, so the last step can tell who defined it;
+   (not even an empty one), and no encoded `/`, `\`, `.` or `%` in its path;
+7. nothing has defined the plugin's element yet, so the last step can tell who defined it. Two loads
+   of the same element at once would both pass; a product loader would take one at a time;
 8. the bytes are fetched;
 9. the bytes hash to the signed `integrity` (SHA-384 or SHA-512 only);
 10. a module `<script>` with that `integrity`, in CORS mode, runs them, so the browser checks the
@@ -193,8 +190,7 @@ domain. The answers were the same in both, except where marked.
 
 What that means for a shell, reasoned rather than run:
 
-- **Whatever the shell keeps where its scripts can read it, an in-page plugin can read.** How the
-  shell holds its sign-in is for the security review.
+- **Whatever the shell keeps where its scripts can read it, an in-page plugin can read.**
 - **With a session cookie, a plugin cannot read the cookie but can call any Nuxeo API the user
   may,** by sending requests from the page.
 - **Whatever the shell sends from JavaScript, an in-page plugin can capture,** as the XHR probe
@@ -320,11 +316,11 @@ Angular ships a major release about every six months; this branch is on 22.2.3.
 - **A review of third-party plugins, a compatibility matrix per shell release, a bill of materials
   per plugin, and a log of refusals:** every refusal has a reason a deployment can count.
 - **An independent security review** before plugins go live, as the architecture's section 16
-  asks, which includes the shell's sign-in and page headers as a plugin would meet them.
+  asks.
 
 ## 9. Evidence
 
-- **Tests:** `npx nx test plugin-spike`, 54 tests in two files. `src/plugin-loader.spec.ts` covers
+- **Tests:** `npx nx test plugin-spike`, 55 tests in two files. `src/plugin-loader.spec.ts` covers
   the acceptance, each refusal with a faked host, the snapshot of the manifest, and the browser
   executor's script attributes with a fake document; `src/demo-server.spec.ts` runs the demo
   server on 127.0.0.1 and every scenario the host page runs through the real loader over HTTP.
@@ -334,27 +330,34 @@ Angular ships a major release about every six months; this branch is on 22.2.3.
   passed.
 - **Every other check, seen failing the same way:** removing the signature check failed 8 tests,
   the URL prefix 7, the pin's version and hash comparison 3, the unpinned-plugin check 1, the
-  line-break rule 1, the private-half rule 1, the plugin API check 1, the encoded-separator rule 3,
+  line-break rule 1, the private-half rule 1, the plugin API check 1, the encoded-separator rule 4,
   the query and fragment rule 3, the credentials rule 1, the already-defined rule 1, the snapshot 1,
   and the script's `integrity` or its CORS mode 1 each.
-- **`checkPluginSpikeIsolated`** in `scripts/review-guardrails.mjs` has five halves: no file
-  outside the spike but Markdown and its three guards names it or links into it; no asset
-  directory in `angular.json`, a `project.json`, a Storybook `main` file or a Vite config holds it;
-  its project is tagged `type:spike` alone and declares no target but `test`, `lint` and
-  `typecheck`; no private key is in it; and it imports nothing but its own files, Node's built-ins,
-  Vitest and, in the optional browser check, Playwright. The last covers its `.mjs` sources, which the module-boundary rule does not read. It
-  fails too when the spike is gone. Its selftest has 21 negative controls and 2 positive ones; with
-  each half broken in turn, that half's controls went red.
+- **`checkPluginSpikeIsolated`** in `scripts/review-guardrails.mjs` has five halves:
+  - no file outside the spike but Markdown and its three guards names it, and no symbolic link
+    points into it or at a directory holding it, by its target as written or as resolved;
+  - no asset directory in `angular.json`, a `project.json`, a Storybook `main` file or a Vite config
+    holds it, with Nx's path tokens replaced and globs cut back to their last literal directory;
+  - its project is tagged `type:spike` alone and declares no target but `test`, `lint` and
+    `typecheck`, each with its one executor, the type check only `tsc … --noEmit`;
+  - no private key is in it, armoured or not, for EC, Ed25519 and RSA;
+  - it imports nothing but its own files, Node's built-ins, Vitest and, in the optional browser
+    check, Playwright, read from literal specifiers, and refuses a specifier computed at run time.
+    This covers its `.mjs` sources, which the module-boundary rule does not read.
+
+  It fails too when the spike is gone. Its selftest has 30 negative controls and 3 positive ones;
+  with each part broken in turn, that part's controls went red.
+
 - **`npm run beta:module-boundaries`** holds 14 forbidden imports and 7 allowed ones, 8 of the
   forbidden ones about the spike: no app, experience, feature, module, engine, shared library or
   the published package may import it, and, in the files the rule reads, it may import nothing. It
-  refuses to run unless
-  `tools/plugin-spike/project.json` carries exactly the probe's tags, and it asks Nx for every
-  target the project resolves, the inferred ones included (8 today, all tests, lint or the type
-  check). Seen red with `type:spike` added to what an app may use, with a rule letting the spike use
-  shared code, with a second tag on the real project, and with a `build` target on it. An empty
-  allow-list for `type:spike` stayed green, correctly: Nx 23 reports a tagged target under an empty
-  list.
+  refuses to run unless `tools/plugin-spike/project.json` carries exactly the probe's tags, and it
+  asks Nx for every target the project resolves, the inferred ones included (8 today), and holds
+  each to the executor and command its name allows. Seen red with `type:spike` added to what an
+  app may use, with a rule letting the spike use shared code, with a second tag on the real
+  project, with a `build` target on it, and with its `test` target running a build executor. An
+  empty allow-list for `type:spike` stayed green, correctly: Nx 23 reports a tagged target under an
+  empty list.
 - **Browsers:** `node tools/plugin-spike/dev/browser-check.mjs chromium,webkit`, with Playwright
   1.64.1 from a checkout that installed it with `--no-save`, gave every scenario's outcome and the
   answers in section 4.3. It is not a gate. Firefox would not start in this environment ("Could

@@ -14025,12 +14025,20 @@ expectGreen(
 /* ---------------- checkPluginSpikeIsolated ---------------- */
 
 const SPIKE_PROJECT_FILE = 'tools/plugin-spike/project.json';
+const SPIKE_TARGETS = {
+  test: { executor: '@nx/vitest:test' },
+  lint: { executor: '@nx/eslint:lint' },
+  typecheck: {
+    executor: 'nx:run-commands',
+    options: { command: 'tsc -p tools/plugin-spike/tsconfig.json --noEmit' },
+  },
+};
 const spikeProject = (overrides = {}) =>
   `${JSON.stringify(
     {
       name: 'plugin-spike',
       tags: ['type:spike'],
-      targets: { test: {}, lint: {}, typecheck: {} },
+      targets: SPIKE_TARGETS,
       ...overrides,
     },
     null,
@@ -14054,6 +14062,11 @@ const SPIKE_OK = {
     "import { describe } from 'vitest';\nimport { where } from './plugin-loader.mjs';\n\ndescribe(where, () => {});\n",
   'libs/shared/ui/.storybook/main.ts':
     "export default { staticDirs: [{ from: '../../../../apps/nuxeo-ui/public/i18n', to: 'i18n' }] };\n",
+  'libs/shared/ui/project.json': `${JSON.stringify(
+    { name: 'ui', targets: { build: { options: { assets: ['{projectRoot}/src/assets'] } } } },
+    null,
+    2,
+  )}\n`,
   'libs/shared/ui/vite.config.mts':
     "export default { cacheDir: '../../../node_modules/.vite/libs/shared/ui', root: '.' };\n",
   'apps/nuxeo-ui/src/main.ts': "import './app/app';\n",
@@ -14063,6 +14076,7 @@ const SPIKE_OK = {
 // Assembled here so that no line of this file is itself a private key, armoured or not.
 const PEM_PRIVATE_HEADER = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ');
 const PKCS8_EC_PREFIX = ['MIGHAgEAMBMG', 'ByqGSM49AgEG', 'CCqGSM49AwEHBG0wawIBAQQg'].join('');
+const PKCS8_ED25519_PREFIX = ['MC4CAQAw', 'BQYDK2Vw', 'BCIEI'].join('');
 
 expectGreen('the spike, isolated, described in Markdown', 'checkPluginSpikeIsolated', SPIKE_OK);
 
@@ -14073,6 +14087,19 @@ expectGreen(
   {
     ...SPIKE_OK,
     'angular.json': angularWithAssets([{ glob: '**/*', input: 'tools/plugin' }, 'tools/a11y']),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an Nx {workspaceRoot} token naming another directory is read as that directory, not the root',
+  'checkPluginSpikeIsolated',
+  {
+    ...SPIKE_OK,
+    'libs/shared/ui/project.json': `${JSON.stringify({
+      name: 'ui',
+      targets: { build: { options: { assets: ['{workspaceRoot}/apps/nuxeo-ui/public'] } } },
+    })}\n`,
   },
 );
 
@@ -14129,6 +14156,56 @@ expectRed(
     git(['add', 'apps/nuxeo-ui/public/loader.mjs']);
   },
   /apps\/nuxeo-ui\/public\/loader\.mjs is a symbolic link into tools\/plugin-spike\//,
+);
+
+expectRed(
+  'a symbolic link to tools/, a directory holding the spike',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write, git, link) => {
+    link('apps/nuxeo-ui/public/t', '../../../tools');
+    git(['add', 'apps/nuxeo-ui/public/t']);
+  },
+  /apps\/nuxeo-ui\/public\/t is a symbolic link into tools\/plugin-spike\/, or to a directory holding it/,
+);
+
+expectRed(
+  'a symbolic link into the spike that dangles until the file it names is made',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write, git, link) => {
+    link('apps/nuxeo-ui/public/later.mjs', '../../../tools/plugin-spike/src/not-yet.mjs');
+    git(['add', 'apps/nuxeo-ui/public/later.mjs']);
+  },
+  /apps\/nuxeo-ui\/public\/later\.mjs is a symbolic link into tools\/plugin-spike\//,
+);
+
+expectRed(
+  'a string glob whose first wildcard falls inside a folder name, tools/plug*',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('angular.json', angularWithAssets(['tools/plug*'])),
+  /angular\.json copies the assets of "tools\/plug\*"/,
+);
+
+expectRed(
+  'a string glob over tools/plugin-*/**',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('angular.json', angularWithAssets(['tools/plugin-*/**'])),
+  /angular\.json copies the assets of "tools\/plugin-\*\/\*\*"/,
+);
+
+expectRed(
+  "an Nx {workspaceRoot} token naming tools/ in a project's assets",
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'libs/shared/ui/project.json',
+      `${JSON.stringify({ name: 'ui', targets: { build: { options: { assets: ['{workspaceRoot}/tools'] } } } })}\n`,
+    ),
+  /libs\/shared\/ui\/project\.json copies the assets of "\{workspaceRoot\}\/tools"/,
 );
 
 expectRed(
@@ -14218,9 +14295,41 @@ expectRed(
   (write) =>
     write(
       SPIKE_PROJECT_FILE,
-      spikeProject({ targets: { test: {}, lint: {}, typecheck: {}, build: {} } }),
+      spikeProject({ targets: { ...SPIKE_TARGETS, build: { executor: 'nx:run-commands' } } }),
     ),
   /has a `build` target/,
+);
+
+expectRed(
+  'a test target of the allowed name running a build executor',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      SPIKE_PROJECT_FILE,
+      spikeProject({ targets: { ...SPIKE_TARGETS, test: { executor: '@nx/js:tsc' } } }),
+    ),
+  /`test` target runs "@nx\/js:tsc", not @nx\/vitest:test/,
+);
+
+expectRed(
+  'a typecheck target whose tsc emits',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      SPIKE_PROJECT_FILE,
+      spikeProject({
+        targets: {
+          ...SPIKE_TARGETS,
+          typecheck: {
+            executor: 'nx:run-commands',
+            options: { command: 'tsc -p tools/plugin-spike/tsconfig.json --outDir dist/spike' },
+          },
+        },
+      }),
+    ),
+  /`typecheck` target runs "nx:run-commands" \("tsc -p/,
 );
 
 expectRed(
@@ -14277,6 +14386,26 @@ expectRed(
       `export const key = { kty: 'EC', d: '${'B'.repeat(43)}' };\n`,
     ),
   /key\.mjs holds a private key/,
+);
+
+expectRed(
+  'an unarmoured Ed25519 key in the spike',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('tools/plugin-spike/dev/ed.txt', `${PKCS8_ED25519_PREFIX}${'D'.repeat(40)}\n`),
+  /ed\.txt holds a private key/,
+);
+
+expectRed(
+  'a spike source importing a module named at run time',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'tools/plugin-spike/src/helper.mjs',
+      "const name = ['@nuxeo', 'satori-platform'].join('/');\nexport const load = () => import(name);\n",
+    ),
+  /helper\.mjs imports a module named at run time/,
 );
 
 expectRed(

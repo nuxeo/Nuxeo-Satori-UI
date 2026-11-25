@@ -29,7 +29,7 @@ material in this directory. Every session value on the host page is a planted fa
 | `dev/measure.mjs`         | What the checks cost, by bundle size, in Node; not a gate             |
 
 ```bash
-npx nx test plugin-spike                                # 54 tests, in Node
+npx nx test plugin-spike                                # 55 tests, in Node
 node tools/plugin-spike/dev/serve.mjs                   # then open http://127.0.0.1:4410/
 node tools/plugin-spike/dev/browser-check.mjs chromium,webkit
 ```

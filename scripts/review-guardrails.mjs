@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 import ts from 'typescript';
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { dirname, join, posix, relative } from 'node:path';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
+import { dirname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { sassLoadedUrls } from './beta-harness/stylesheet-scan.mjs';
@@ -13965,7 +13973,7 @@ function reEscapeForGuardrail(value) {
  *
  * Five halves, none implied by another:
  *
- * 1. **No file outside the spike names it or links into it.** Any tracked or untracked file,
+ * 1. **No file outside the spike names it or links into it, or to a directory holding it.** Any tracked or untracked file,
  *    except Markdown, which describes and builds nothing, and the three scripts that guard the
  *    spike and must name it. The module-boundary rule sees only imports between projects, and
  *    only in the file types `eslint.config.mjs` gives it, which leaves out `.mjs`; this sees every
@@ -13974,19 +13982,22 @@ function reEscapeForGuardrail(value) {
  *    too, whatever its name, since most of the spike's files never name their own directory.
  * 2. **No asset directory holds it.** An `assets` entry in `angular.json` or a `project.json` with
  *    `input: "tools"` would ship the spike without naming it, so half 1 cannot see it. Paths are
- *    normalised, and a glob is cut at its first wildcard. String paths in a Storybook `main` file
+ *    normalised, Nx's path tokens replaced, and a glob cut back to the `/` before its first
+ *    wildcard. String paths in a Storybook `main` file
  *    (its `staticDirs`, against `.storybook/`) and in a Vite or Vitest config (against the config's
  *    directory) are held to the same test.
  * 3. **Its project declares nothing that builds it:** tags exactly `type:spike`, which no
  *    depConstraint lists (`scripts/beta-harness/module-boundaries.mjs` proves that with probes),
- *    no `implicitDependencies`, and no declared target but `test`, `lint` and `typecheck`. Targets
+ *    no `implicitDependencies`, and no declared target but `test`, `lint` and `typecheck`, each
+ *    with its one executor, and the type check only `tsc … --noEmit`. Targets
  *    Nx infers from `nx.json` plugins are not in `project.json`; the module-boundaries gate reads
  *    the resolved project from Nx and holds those.
  * 4. **No private key in it,** by content (a PEM private key, a JWK's private `d` in JSON or in a
- *    script, an unarmoured PKCS#8 or SEC1 key) or by name (`.pem`, `.key`, `.p8`, `.p12`, `.pfx`,
+ *    script, an unarmoured EC, Ed25519 or RSA key) or by name (`.pem`, `.key`, `.p8`, `.p12`, `.pfx`,
  *    `.jwk`). The spike's keys are made in memory for each run.
  * 5. **It imports nothing but its own files, Node's built-ins, Vitest and Playwright,** the last
- *    for the optional browser check only, in every file type,
+ *    for the optional browser check only. It reads `import`, `export … from`, `import()` and
+ *    `require()` with literal specifiers in every script file, and refuses one named at run time,
  *    because the module-boundary rule does not read the spike's `.mjs` sources.
  *
  * The directory missing fails too, rather than passing on nothing: delete this check with the
@@ -14002,7 +14013,12 @@ const PLUGIN_SPIKE_NAMERS = new Set([
   'scripts/review-guardrails.selftest.mjs',
   'scripts/beta-harness/module-boundaries.mjs',
 ]);
-const PLUGIN_SPIKE_TARGETS = new Set(['test', 'lint', 'typecheck']);
+/** The targets the spike may declare, each with the one executor (and command) it may run. */
+const PLUGIN_SPIKE_TARGETS = new Map([
+  ['test', { executor: '@nx/vitest:test' }],
+  ['lint', { executor: '@nx/eslint:lint' }],
+  ['typecheck', { executor: 'nx:run-commands', command: /^tsc -p \S+ --noEmit$/ }],
+]);
 const PLUGIN_SPIKE_BARE_IMPORTS = new Set(['vitest', 'vitest/config', 'playwright']);
 const BINARY_FILE =
   /\.(png|jpe?g|gif|webp|ico|svgz|woff2?|ttf|otf|eot|zip|jar|gz|tgz|pdf|mp4|webm)$/i;
@@ -14011,17 +14027,31 @@ const PRIVATE_KEY_CONTENT = [
   /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/,
   // A JWK's private member, quoted as in JSON or bare as in a script: `"d": "…"`, `d: '…'`.
   /(?:["']d["']|(?<![\w$.])d)\s*:\s*["'`][A-Za-z0-9_-]{40,}["'`]/,
-  // PKCS#8 for EC and RSA, and SEC1 for EC, without their PEM armour.
-  /MIG[A-Za-z0-9+/]AgEAMBMGByqGSM49AgEG/,
+  // Without their PEM armour: PKCS#8 for EC (P-256, P-384, P-521), Ed25519 and RSA, and SEC1 for
+  // the same three curves. Other key types are not recognised.
+  /MI[GH][A-Za-z0-9+/]AgEAMB[AM]GByqGSM49AgEG/,
+  /MC4CAQAwBQYDK2VwBCIEI/,
   /MII[A-Za-z0-9+/]{3}IBADANBgkqhkiG9w0BAQEFAA/,
   /MHcCAQEE[A-Za-z0-9+/]{40}/,
+  /MI[GH][A-Za-z0-9+/]AgEBB[DE]/,
 ];
 const STORYBOOK_MAIN = /(^|\/)\.storybook\/main\.[cm]?[jt]s$/;
 const VITE_CONFIG = /(^|\/)vite(st)?\.config\.[cm]?[jt]s$/;
 
-/** Whether `path`, relative to the repository, is the spike's directory or one holding it. */
-function holdsPluginSpike(path) {
-  const literal = toPosixRel(String(path)).split(/[*?[{]/)[0];
+/**
+ * Whether `path`, relative to the repository, is the spike's directory or one holding it.
+ *
+ * Nx's `{workspaceRoot}` and `{projectRoot}` tokens are replaced first (`projectRoot` is the
+ * directory of the `project.json` read). A glob is cut back to the last `/` before its first
+ * wildcard, so `tools/plug*` is judged as `tools`, which holds the spike.
+ */
+function holdsPluginSpike(path, projectRoot = '.') {
+  const expanded = toPosixRel(String(path))
+    .replace(/\{workspaceRoot\}\/?/g, '')
+    .replace(/\{projectRoot\}/g, projectRoot);
+  const wildcard = expanded.search(/[*?[{]/);
+  const literal =
+    wildcard < 0 ? expanded : expanded.slice(0, expanded.lastIndexOf('/', wildcard) + 1);
   const normalised = posix.normalize(literal || '.').replace(/\/+$/, '');
   if (normalised === '..' || normalised.startsWith('../') || posix.isAbsolute(normalised)) {
     return false;
@@ -14055,22 +14085,33 @@ function checkPluginSpikeIsolated() {
   }
 
   // 1. Nothing outside the spike names it or links into it.
-  const spikeReal = existsSync(join(repoRoot, PLUGIN_SPIKE_ROOT))
-    ? realpathSync(join(repoRoot, PLUGIN_SPIKE_ROOT))
-    : null;
+  //
+  // A link fails when its target is in the spike or holds it, by the target as written as well as
+  // by where it resolves, so a link to `tools`, or one dangling until the file it names is made,
+  // fails too. Compared with `relative`, not a `/` prefix, because Windows paths use `\`.
+  const spikeDirs = [join(repoRoot, PLUGIN_SPIKE_ROOT)];
+  if (existsSync(spikeDirs[0])) spikeDirs.push(realpathSync(spikeDirs[0]));
+  const inside = (from, to) => {
+    const rest = relative(from, to);
+    return rest === '' || (!rest.startsWith('..') && !isAbsolute(rest));
+  };
+  const reachesSpike = (target) =>
+    spikeDirs.some((spike) => inside(spike, target) || inside(target, spike));
   for (const file of files) {
     if (inSpike(file)) continue;
     if (isLink(file)) {
-      let target = null;
+      const link = join(repoRoot, file);
+      const targets = [resolve(dirname(link), readlinkSync(link))];
       try {
-        target = realpathSync(join(repoRoot, file));
+        targets.push(realpathSync(link));
       } catch {
-        // A dangling link reaches nothing.
+        // Dangling: judged by the target as written.
       }
-      if (spikeReal && target && (target === spikeReal || target.startsWith(`${spikeReal}/`))) {
+      if (targets.some(reachesSpike)) {
         fail(
-          `${file} is a symbolic link into ${PLUGIN_SPIKE_ROOT}/. The spike informs decision 5 and ` +
-            'must not be reachable from the app, a library, a build or a workflow.',
+          `${file} is a symbolic link into ${PLUGIN_SPIKE_ROOT}/, or to a directory holding it. The ` +
+            'spike informs decision 5 and must not be reachable from the app, a library, a build or ' +
+            'a workflow.',
         );
       }
       continue;
@@ -14112,7 +14153,7 @@ function checkPluginSpikeIsolated() {
         if (key === 'assets' && Array.isArray(value)) {
           for (const asset of value) {
             const input = typeof asset === 'string' ? asset : asset?.input;
-            if (input !== undefined && holdsPluginSpike(input)) {
+            if (input !== undefined && holdsPluginSpike(input, posix.dirname(file))) {
               fail(
                 `${file} copies the assets of ${JSON.stringify(input)}, which holds ` +
                   `${PLUGIN_SPIKE_ROOT}/, into a build. Name a directory that does not contain it.`,
@@ -14165,11 +14206,22 @@ function checkPluginSpikeIsolated() {
       if (project.implicitDependencies !== undefined) {
         fail(`${projectFile} declares implicitDependencies; the spike depends on nothing.`);
       }
-      for (const target of Object.keys(project.targets ?? {})) {
-        if (!PLUGIN_SPIKE_TARGETS.has(target)) {
+      for (const [target, config] of Object.entries(project.targets ?? {})) {
+        const allowed = PLUGIN_SPIKE_TARGETS.get(target);
+        if (!allowed) {
           fail(
             `${projectFile} has a \`${target}\` target. The spike is tested, linted and ` +
               'type-checked, and never built, served or published.',
+          );
+        } else if (
+          config?.executor !== allowed.executor ||
+          (allowed.command && !allowed.command.test(config?.options?.command ?? ''))
+        ) {
+          fail(
+            `${projectFile}'s \`${target}\` target runs ${JSON.stringify(config?.executor)}` +
+              `${config?.options?.command ? ` (${JSON.stringify(config.options.command)})` : ''}, ` +
+              `not ${allowed.executor}${allowed.command ? ` with ${allowed.command}` : ''}: a target ` +
+              'of an allowed name could otherwise build it.',
           );
         }
       }
@@ -14205,6 +14257,17 @@ function checkPluginSpikeIsolated() {
       ...source.matchAll(/\bimport\s*\(\s*(["'`])([^"'`\n]+)\1/g),
       ...source.matchAll(/\brequire\s*\(\s*(["'`])([^"'`\n]+)\1/g),
     ].map((match) => match[2]);
+    // A specifier computed at run time cannot be checked, so it is refused: `import(name)`,
+    // `require(name)`, or a function `createRequire` returned, called on the spot.
+    if (
+      /\b(?:import|require)\s*\(\s*(?![\s"'`])/.test(source) ||
+      /createRequire\([^)]*\)\s*\(/.test(source)
+    ) {
+      fail(
+        `${file} imports a module named at run time, which this check cannot read. Name it with a ` +
+          'string literal.',
+      );
+    }
     for (const specifier of specifiers) {
       if (specifier.startsWith('node:') || PLUGIN_SPIKE_BARE_IMPORTS.has(specifier)) continue;
       if (specifier.startsWith('.')) {
