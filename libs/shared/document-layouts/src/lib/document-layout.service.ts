@@ -212,8 +212,14 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
 export const PREVIEW_RECORDS_QUERY =
   'SELECT * FROM Document WHERE ecm:primaryType = ? AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0 ORDER BY dc:modified DESC';
 
-/** A type's `view` file as it is served, or why there is none to open. */
-export type RecordLayoutSource =
+/** A layout file `layouts.json` lists: its type and its mode, as the server serves them. */
+export interface ServedLayout {
+  readonly type: string;
+  readonly mode: string;
+}
+
+/** A type's file for a mode as it is served, or why there is none to open. */
+export type LayoutSource =
   | { readonly url: string; readonly content: Record<string, unknown>; readonly problem?: never }
   | { readonly url: string; readonly problem: string; readonly content?: never };
 
@@ -223,6 +229,16 @@ export type RecordLayoutSource =
  */
 export type RecordLayoutPreview = { readonly notes: readonly string[] } & (
   | { readonly layout: ResolvedRecordLayout; readonly refused?: never; readonly notDrawn?: never }
+  | { readonly refused: string; readonly layout?: never; readonly notDrawn?: never }
+  | { readonly notDrawn: string; readonly layout?: never; readonly refused?: never }
+);
+
+/**
+ * The form an `edit` or `create` file draws, or why it draws none, as {@link RecordLayoutPreview}
+ * says it of a record page.
+ */
+export type FormLayoutPreview = { readonly notes: readonly string[] } & (
+  | { readonly layout: ResolvedFormLayout; readonly refused?: never; readonly notDrawn?: never }
   | { readonly refused: string; readonly layout?: never; readonly notDrawn?: never }
   | { readonly notDrawn: string; readonly layout?: never; readonly refused?: never }
 );
@@ -354,37 +370,39 @@ export class DocumentLayoutService {
   }
 
   /**
-   * The types whose record page is served: those `layouts.json` lists a `view` file for, each once,
-   * in its order. What the layout designer offers to open. Read anew on every call, never from the
+   * Every layout file the server serves, by type and mode, each once, in the order `layouts.json`
+   * lists them: what the layout designer offers to open. Read anew on every call, never from the
    * session's cache, which keeps an index it could not read as an empty one. Errors when the index
    * cannot be read or is not one, so that the caller can tell that from a server serving none.
    */
-  recordLayoutTypes(): Observable<readonly string[]> {
+  servedLayouts(): Observable<readonly ServedLayout[]> {
     return this.http.get<unknown>(layoutsIndexUrl(this.bootstrapUrl)).pipe(
       timeout(LAYOUT_LOAD_TIMEOUT_MS),
       map((raw) => {
         const index = readLayoutIndex(raw);
         if ('invalid' in index) throw new Error(index.invalid);
-        return [
-          ...new Set(
-            index.entries.filter((entry) => entry.mode === 'view').map((entry) => entry.type),
-          ),
-        ];
+        const seen = new Set<string>();
+        return index.entries.flatMap(({ type, mode }): ServedLayout[] => {
+          const key = `${type}/${mode}`;
+          if (seen.has(key)) return [];
+          seen.add(key);
+          return [{ type, mode }];
+        });
       }),
     );
   }
 
   /**
-   * A type's `view` file as it is served, its `content` unread: what the layout designer opens.
-   * Read anew on every call, never from the session's cache, so the designer opens the file the
-   * server answers now. `problem` says why there is none to open. Never errors.
+   * A type's file for `mode` as it is served, its `content` unread: what the layout designer
+   * opens. Read anew on every call, never from the session's cache, so the designer opens the file
+   * the server answers now. `problem` says why there is none to open. Never errors.
    */
-  recordLayoutSource(type: string): Observable<RecordLayoutSource> {
-    const url = layoutFileUrl(this.bootstrapUrl, type, 'view');
+  layoutSource(type: string, mode: string): Observable<LayoutSource> {
+    const url = layoutFileUrl(this.bootstrapUrl, type, mode);
     return this.http.get<unknown>(url).pipe(
       timeout(LAYOUT_LOAD_TIMEOUT_MS),
-      map((raw): RecordLayoutSource => {
-        const envelope = readLayoutEnvelope(raw, type, 'view');
+      map((raw): LayoutSource => {
+        const envelope = readLayoutEnvelope(raw, type, mode);
         return 'invalid' in envelope
           ? { url, problem: envelope.invalid }
           : { url, content: envelope.content };
@@ -395,7 +413,7 @@ export class DocumentLayoutService {
 
   /**
    * Up to `pageSize` live records of `type`, the last changed first, with their Dublin Core
-   * properties: those the layout designer offers to preview a record page with. One search,
+   * properties: those the layout designer offers to preview a record page or a form with. One search,
    * through the REST API as the reader, so only records they may read come back; versions,
    * proxies and trashed records are left out. The type is sent as a `queryParams` value, never in
    * the query's text ({@link PREVIEW_RECORDS_QUERY}). Not cached. Errors when the search fails,
@@ -464,6 +482,43 @@ export class DocumentLayoutService {
         }
         return this.resolveRecord(definition, file, documentSchemas, preview).pipe(
           map(({ layout, notes }) => ({ layout, notes: [...problems, ...notes] })),
+        );
+      }),
+    );
+  }
+
+  /**
+   * The form `content`, an `edit` or `create` file that need not be served, draws for a record of
+   * `type`: what the layout designer previews. It is read and resolved exactly as a served file is
+   * for the Edit and Create forms: against the type, and for an edit against the schemas the
+   * edited `document`'s own read reports too, as `lib-document-layout-form` resolves one. What the
+   * console would be told of the file is in `notes`, and the console is not told it; a read of the
+   * type or a schema that fails is still told, as on any page.
+   *
+   * `refused` when the form refuses the file, and the generated form would show instead;
+   * `notDrawn` when the type's schemas cannot be read. Nothing is cached for the file. Never errors.
+   */
+  previewFormLayout(
+    content: unknown,
+    mode: 'edit' | 'create',
+    type: string,
+    document: NuxeoDocument | null = null,
+  ): Observable<FormLayoutPreview> {
+    if (!isJsonObject(content)) {
+      return of({ refused: 'a layout file is a JSON object', notes: [] });
+    }
+    const documentSchemas =
+      mode === 'edit' && document
+        ? readDocumentSchemas('schemas' in document ? document.schemas : undefined)
+        : [];
+    const file = readFormLayout(content, mode, { rules: this.rules.registeredRuleIds() });
+    if ('invalid' in file) return of({ refused: file.invalid, notes: [] });
+    const notes = formFileNotes(type, mode, file);
+    return this.documentType(type).pipe(
+      switchMap((definition): Observable<FormLayoutPreview> => {
+        if (!definition) return of({ notDrawn: `the schemas of ${type} could not be read`, notes });
+        return this.formResolution(definition, mode, file, documentSchemas).pipe(
+          map((resolved) => ({ layout: resolved.layout, notes: [...notes, ...resolved.notes] })),
         );
       }),
     );
@@ -854,6 +909,23 @@ export class DocumentLayoutService {
     variables: ReadonlyMap<string, LayoutFieldType> = new Map(),
     source?: string,
   ): Observable<ResolvedFormLayout> {
+    return this.formResolution(definition, mode, file, documentSchemas, variables, source).pipe(
+      map(({ layout, notes }) => {
+        for (const note of notes) warn(note);
+        return layout;
+      }),
+    );
+  }
+
+  /** {@link resolveForm}, with what the console is to be told of the fields it left out. */
+  private formResolution(
+    definition: DocumentTypeDefinition,
+    mode: 'edit' | 'create' | 'task',
+    file: FormLayoutFile,
+    documentSchemas: readonly DocumentSchemaRef[],
+    variables: ReadonlyMap<string, LayoutFieldType> = new Map(),
+    source?: string,
+  ): Observable<{ readonly layout: ResolvedFormLayout; readonly notes: readonly string[] }> {
     const wanted = formFacetSchemasToRead(definition, documentSchemas, file);
     const reads: Observable<readonly (DocumentTypeSchema | null)[]> = wanted.length
       ? forkJoin(wanted.map(({ name }) => this.schema(name)))
@@ -865,9 +937,12 @@ export class DocumentLayoutService {
           wanted.filter((_, i) => !read[i]).map((ref) => [ref.prefix, ref.name]),
         );
         const { layout, skipped } = resolveFormLayout(definition, file, facets, variables);
-        for (const field of skipped)
-          warn(skippedMessage(definition.name, field, unread, mode, source));
-        return layout;
+        return {
+          layout,
+          notes: skipped.map((field) =>
+            skippedMessage(definition.name, field, unread, mode, source),
+          ),
+        };
       }),
     );
   }
@@ -1128,21 +1203,30 @@ export class DocumentLayoutService {
       );
       return null;
     }
-    for (const problem of file.problems) warn(`${type}/${mode} layout: ${problem}`);
-    const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
-    for (const field of cards.flatMap((card) => card.fields)) {
-      // A computed field is never edited, so only a property's input can differ.
-      const instead =
-        field.kind === 'property' &&
-        field.widget !== null &&
-        Object.hasOwn(FORM_INPUTS_SHOWN_AS_VERSION_1, field.widget)
-          ? FORM_INPUTS_SHOWN_AS_VERSION_1[field.widget]
-          : undefined;
-      if (instead)
-        warn(
-          `${type}/${mode} layout: ${field.place}: the widget "${field.widget}" is edited as ${instead} in this build`,
-        );
-    }
+    for (const note of formFileNotes(type, mode, file)) warn(note);
     return file;
   }
+}
+
+/**
+ * What the console is told of a version 2 form file once it is read: each part it leaves out, and
+ * each widget whose input this build draws otherwise.
+ */
+function formFileNotes(type: string, mode: string, file: FormLayoutFile): string[] {
+  const notes = file.problems.map((problem) => `${type}/${mode} layout: ${problem}`);
+  const cards = file.tabs ? file.tabs.flatMap((tab) => tab.cards) : file.cards;
+  for (const field of cards.flatMap((card) => card.fields)) {
+    // A computed field is never edited, so only a property's input can differ.
+    const instead =
+      field.kind === 'property' &&
+      field.widget !== null &&
+      Object.hasOwn(FORM_INPUTS_SHOWN_AS_VERSION_1, field.widget)
+        ? FORM_INPUTS_SHOWN_AS_VERSION_1[field.widget]
+        : undefined;
+    if (instead)
+      notes.push(
+        `${type}/${mode} layout: ${field.place}: the widget "${field.widget}" is edited as ${instead} in this build`,
+      );
+  }
+  return notes;
 }

@@ -61,10 +61,14 @@ describe('the proposal and the validator agree', () => {
     expect(examples.filter((example) => 'external' in example)).toHaveLength(1);
   });
 
+  it("finds the checklist's example among them", () => {
+    expect(examples.filter((example) => 'checklist' in example)).toHaveLength(1);
+  });
+
   examples.forEach((example, index) => {
     it(`example ${index + 1} has no finding`, () => {
       const form = JSON.stringify(example).includes('"checks"');
-      const card = ['fields', 'related', 'timeline', 'comments', 'external'].some(
+      const card = ['fields', 'related', 'timeline', 'comments', 'external', 'checklist'].some(
         (key) => key in example,
       );
       const file =
@@ -591,6 +595,125 @@ describe('the date rules', () => {
   });
 });
 
+describe('a checklist', () => {
+  const card = (checklist: unknown, more: Record<string, unknown> = {}) => ({
+    version: 2,
+    cards: [{ id: 'checklist', label: 'Checklist', checklist, ...more }],
+  });
+  const items = [
+    { id: 'medicalRecords', labelKey: 'payers.appeal.medicalRecords' },
+    { id: 'reviewer-assigned', label: 'Reviewer assigned' },
+  ];
+  const sound = (more: Record<string, unknown> = {}) =>
+    card({ field: 'case:checklist', items, ...more });
+
+  it("names the record's property and its items, each with a label or a key", () => {
+    expect(messages(sound())).toEqual([]);
+    // A rule on the card shows it for some records only, as any card's does.
+    expect(
+      messages(
+        card(
+          { field: 'case:checklist', items },
+          {
+            visibleWhen: {
+              type: 'app.rules.fieldIn',
+              parameters: [{ field: 'case:category' }, 'appeal'],
+            },
+          },
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('is refused outside view mode, and beside any other content', () => {
+    expect(messages(sound(), 'edit')).toEqual([
+      'cards[0].checklist: a checklist belongs in view mode only [structure]',
+    ]);
+    expect(messages(sound(), 'metadata')).toEqual([
+      'cards[0].checklist: a checklist belongs in view mode only [structure]',
+    ]);
+    expect(messages(card({ field: 'case:checklist', items }, { timeline: {} }))).toEqual([
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]',
+    ]);
+  });
+
+  it('needs a property of the record, never an ecm: or var: name', () => {
+    const refusal =
+      "cards[0].checklist.field: needs the record's property that holds its items, <prefix>:<name>, never an ecm: or var: name [structure]";
+    expect(messages(card({ items }))).toEqual([refusal]);
+    expect(messages(card({ field: 'checklist', items }))).toEqual([refusal]);
+    expect(messages(card({ field: 42, items }))).toEqual([refusal]);
+    expect(messages(card({ field: 'ecm:uuid', items }))).toEqual([refusal]);
+    expect(messages(card({ field: 'var:checklist', items }))).toEqual([refusal]);
+  });
+
+  it('needs at least one item, each an object with an id', () => {
+    const none = 'cards[0].checklist.items: needs a list of at least one item [structure]';
+    expect(messages(card({ field: 'case:checklist' }))).toEqual([none]);
+    expect(messages(card({ field: 'case:checklist', items: [] }))).toEqual([none]);
+    expect(messages(card({ field: 'case:checklist', items: { id: 'a' } }))).toEqual([none]);
+    expect(messages(card({ field: 'case:checklist', items: ['medicalRecords'] }))).toEqual([
+      'cards[0].checklist.items[0]: an item is { "id", "label" or "labelKey" } [structure]',
+    ]);
+    const badId = `an item's id is what the property's item holds for it: 1 to 64 letters, digits, ".", "_" or "-", starting with a letter or digit [structure]`;
+    expect(messages(card({ field: 'case:checklist', items: [{ label: 'No id' }] }))).toEqual([
+      `cards[0].checklist.items[0].id: ${badId}`,
+    ]);
+    expect(
+      messages(card({ field: 'case:checklist', items: [{ id: 'has space', label: 'x' }] })),
+    ).toEqual([`cards[0].checklist.items[0].id: ${badId}`]);
+    expect(
+      messages(card({ field: 'case:checklist', items: [{ id: 'x'.repeat(65), label: 'x' }] })),
+    ).toEqual([`cards[0].checklist.items[0].id: ${badId}`]);
+  });
+
+  it('refuses an item listed twice, and one with no words for it', () => {
+    expect(
+      messages(
+        card({
+          field: 'case:checklist',
+          items: [...items, { id: 'medicalRecords', label: 'Again' }],
+        }),
+      ),
+    ).toEqual([
+      'cards[0].checklist.items[2].id: the item "medicalRecords" is already listed at cards[0].checklist.items[0] [structure]',
+    ]);
+    expect(messages(card({ field: 'case:checklist', items: [{ id: 'quiet' }] }))).toEqual([
+      'cards[0].checklist.items[0]: needs a "label" or a "labelKey" [structure]',
+    ]);
+    expect(
+      messages(card({ field: 'case:checklist', items: [{ id: 'quiet', labelKey: 7 }] })),
+    ).toEqual(['cards[0].checklist.items[0].labelKey: must be a text [structure]']);
+  });
+
+  it("keeps its items' ids apart from the file's: a card and an item may share one", () => {
+    expect(
+      messages(card({ field: 'case:checklist', items: [{ id: 'checklist', label: 'Same' }] })),
+    ).toEqual([]);
+  });
+
+  it('names a key version 2 does not have as unknown, so the app leaves out only that card', () => {
+    expect(findings(sound({ editable: true }))).toEqual([
+      {
+        path: 'cards[0].checklist.editable',
+        kind: 'unknown',
+        message: '"editable" is not a key version 2 has',
+      },
+    ]);
+    expect(
+      messages(card({ field: 'case:checklist', items: [{ id: 'a', label: 'A', doneWhen: 'x' }] })),
+    ).toEqual([
+      'cards[0].checklist.items[0].doneWhen: "doneWhen" is not a key version 2 has [unknown]',
+    ]);
+  });
+
+  it('is refused when it is not an object', () => {
+    expect(messages(card(['case:checklist']))).toEqual([
+      'cards[0].checklist: checklist is an object [structure]',
+    ]);
+  });
+});
+
 describe('a timeline and comments', () => {
   const card = (content: Record<string, unknown>) => ({
     version: 2,
@@ -625,7 +748,7 @@ describe('a timeline and comments', () => {
 
   it('are refused beside fields, related records or each other', () => {
     const twice =
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external" [structure]';
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]';
     expect(messages(card({ timeline: {}, comments: {} }))).toEqual([twice]);
     expect(messages(card({ timeline: {}, fields: ['dc:title'] }))).toEqual([twice]);
     expect(
@@ -694,7 +817,7 @@ describe('a card from another system', () => {
         ),
       ),
     ).toEqual([
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external" [structure]',
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]',
     ]);
   });
 
@@ -997,7 +1120,7 @@ const refusals: readonly { what: string; file: unknown; mode?: LayoutMode; found
     what: 'a card with neither fields, related records, a timeline, comments nor another system',
     file: { version: 2, cards: [{ id: 'c' }] },
     found:
-      'cards[0]: a card has one of "fields", "related", "timeline", "comments" or "external" [structure]',
+      'cards[0]: a card has one of "fields", "related", "timeline", "comments", "external" or "checklist" [structure]',
   },
   {
     what: 'a timeline that is not an object',

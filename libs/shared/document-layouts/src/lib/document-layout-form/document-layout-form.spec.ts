@@ -19,6 +19,8 @@ import { DirectoryService, type NuxeoDocument } from '@nuxeo/satori-platform/nux
 import { Observable, Subject, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
+import { readFormLayout } from '../form-layout/form-layout';
+import { resolveFormLayout } from '../form-layout/resolve-form-layout';
 import { ResolvedLayout } from '../layout.model';
 import { DocumentLayoutFormComponent } from './document-layout-form';
 
@@ -277,6 +279,32 @@ describe('DocumentLayoutFormComponent', () => {
       expect(layoutFor).not.toHaveBeenCalled();
       expect(claimForm()?.document()?.uid).toBe('c1');
       expect(resolve.mock.calls.at(-1)?.[0]).toBe(EXTENSION_SLOTS.documentEdit);
+    });
+
+    // The layout designer's preview: the file it edits, drawn as it is, never what would replace it.
+    it('gives way to a preview, which draws the layout it is given and reads no served file', async () => {
+      slotEntries[EXTENSION_SLOTS.documentEdit] = [contributed()];
+      const file = readFormLayout(
+        { version: 2, cards: [{ id: 'claim', label: 'Preview', fields: ['claim:number'] }] },
+        'edit',
+        { rules: [] },
+      );
+      if ('invalid' in file) throw new Error(file.invalid);
+      const preview = resolveFormLayout(
+        {
+          name: 'Claim',
+          schemas: [{ name: 'claim', prefix: 'claim', fields: { number: { type: 'string' } } }],
+        },
+        file,
+      ).layout;
+      await render({ mode: 'edit', document: CLAIM, preview, disabled: true });
+      expect(host().querySelector('[data-layout-entry]')).toBeNull();
+      expect(claimForm()).toBeUndefined();
+      expect(layoutFor).not.toHaveBeenCalled();
+      expect(host().querySelector('[data-layout-source="version-2"]')).not.toBeNull();
+      expect(input$('dc:title')).toBeNull();
+      expect(input$('claim:number')?.value).toBe('CLM-1');
+      expect(input$('claim:number')?.disabled).toBe(true);
     });
 
     it('saves only once the component says its values are valid, and sends what it reported', async () => {

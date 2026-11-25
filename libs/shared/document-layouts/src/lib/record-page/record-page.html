@@ -103,6 +103,62 @@
           [source]="external.source"
           [stateHeadingLevel]="4"
         />
+      } @else if (card.checklist; as checklist) {
+        <!-- The file's items, each done or not by the record's own entry for it (layout-v2.md, section 7). -->
+        <div class="record-page__checklist">
+          <p class="record-page__checklist-count">
+            {{
+              'document-layouts.checklist.count'
+                | translate: { done: checklist.done, total: checklist.items.length }
+            }}
+          </p>
+          <!-- role="list": a list styled with no markers loses its role in Safari. Named here only
+               when the card has no heading, which names the section otherwise. -->
+          <ul
+            class="record-page__checklist-items"
+            role="list"
+            [attr.aria-label]="card.heading ? null : checklist.label"
+          >
+            @for (item of checklist.items; track item.id) {
+              <li
+                class="record-page__checklist-item"
+                [class.record-page__checklist-item--done]="item.done"
+                [attr.data-item]="item.id"
+                [attr.data-done]="item.done"
+              >
+                <nxs-icon
+                  class="record-page__checklist-icon"
+                  [name]="item.done ? 'circle_check' : 'circle_dot'"
+                />
+                <span class="record-page__checklist-text">
+                  <!-- The parts are read apart, by a screen reader as on screen: the hidden commas. -->
+                  <span class="record-page__checklist-label">{{ item.label }}</span>
+                  <span class="cdk-visually-hidden">, </span>
+                  <span class="record-page__checklist-state">{{
+                    (item.done
+                      ? 'document-layouts.checklist.done'
+                      : 'document-layouts.checklist.not-done'
+                    ) | translate
+                  }}</span>
+                  @if (item.by !== null || item.on !== null) {
+                    <span class="cdk-visually-hidden">, </span>
+                    <span class="record-page__checklist-meta">
+                      @if (item.by !== null) {
+                        <span class="record-page__checklist-by">{{ item.by }}</span>
+                      }
+                      @if (item.by !== null && item.on !== null) {
+                        <span class="cdk-visually-hidden">, </span>
+                      }
+                      @if (item.on !== null) {
+                        <span class="record-page__checklist-on">{{ item.on }}</span>
+                      }
+                    </span>
+                  }
+                </span>
+              </li>
+            }
+          </ul>
+        </div>
       } @else {
         <dl class="record-page__fields">
           @for (field of card.fields; track field.place) {

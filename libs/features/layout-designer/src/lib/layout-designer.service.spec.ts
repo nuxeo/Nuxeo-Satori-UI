@@ -1,9 +1,16 @@
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { DocumentLayoutService } from '@agentic-ui/shared/document-layouts';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
+import { HomeService, type HomeLoad } from '@agentic-ui/shared/home';
+import { QueueService, type QueueLoad } from '@agentic-ui/shared/queues';
 import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';
-import { DocumentDetailService, NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  DocumentDetailService,
+  NUXEO_API_ORIGIN,
+  type NuxeoDocument,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { lastValueFrom, of, throwError, toArray, type Observable } from 'rxjs';
 import type { Mock } from 'vitest';
 
@@ -21,9 +28,16 @@ describe('LayoutDesignerService', () => {
   let service: LayoutDesignerService;
   let detail: { getFullDocument: ReturnType<typeof vi.fn> };
   let previewRecords: Mock<(type: string, size: number) => Observable<readonly unknown[]>>;
+  let layouts: Record<string, Mock>;
+  let navigation: Mock<() => Observable<HomeLoad>>;
+  let queueLoad: Mock<(id: string) => Observable<QueueLoad>>;
+  let definitionFile: Mock<(path: string, developmentUrl: string | null) => Observable<unknown>>;
 
   beforeEach(() => {
+    definitionFile = vi.fn<(path: string, developmentUrl: string | null) => Observable<unknown>>();
     detail = { getFullDocument: vi.fn() };
+    navigation = vi.fn<() => Observable<HomeLoad>>();
+    queueLoad = vi.fn<(id: string) => Observable<QueueLoad>>();
     previewRecords = vi.fn<(type: string, size: number) => Observable<readonly unknown[]>>();
     TestBed.configureTestingModule({
       providers: [
@@ -33,13 +47,34 @@ describe('LayoutDesignerService', () => {
         { provide: DocumentDetailService, useValue: detail },
         {
           provide: DocumentLayoutService,
-          useValue: {
-            recordLayoutTypes: () => of(['Member']),
-            recordLayoutSource: () => of({ url: '/x', content: { version: 2 } }),
-            previewRecordLayout: () => of({ refused: 'no', notes: [] }),
-            previewRecords: (type: string, size: number) => previewRecords(type, size),
+          useFactory: () => {
+            layouts = {
+              servedLayouts: vi.fn(() =>
+                of([
+                  { type: 'Member', mode: 'view' },
+                  { type: 'Member', mode: 'metadata' },
+                  { type: 'Contract', mode: 'edit' },
+                  { type: 'Contract', mode: 'create' },
+                ]),
+              ),
+              layoutSource: vi.fn(() => of({ url: '/x', content: { version: 2 } })),
+              previewRecordLayout: vi.fn(() => of({ refused: 'no', notes: [] })),
+              previewFormLayout: vi.fn(() => of({ refused: 'no', notes: [] })),
+              previewRecords: vi.fn((type: string, size: number) => previewRecords(type, size)),
+            };
+            return layouts;
           },
         },
+        { provide: HomeService, useValue: { loadNavigation: () => navigation() } },
+        {
+          provide: APP_DEFINITION_FILES,
+          useValue: {
+            file: (path: string, developmentUrl: string | null) =>
+              definitionFile(path, developmentUrl),
+            labelLanguages: () => of([]),
+          },
+        },
+        { provide: QueueService, useValue: { load: (id: string) => queueLoad(id) } },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -129,6 +164,115 @@ describe('LayoutDesignerService', () => {
       const read = all(service.model());
       http.expectOne('/nuxeo/api/v1/config/types').flush('', { status: 401, statusText: 'x' });
       expect((await read).at(-1)).toEqual({ state: 'failed', problem: 'HTTP 401' });
+    });
+  });
+
+  describe('the layout files', () => {
+    it('lists the record pages and the edit and create forms the server serves, no other mode', async () => {
+      expect((await all(service.files())).at(-1)).toEqual({
+        state: 'read',
+        value: [
+          { type: 'Member', mode: 'view' },
+          { type: 'Contract', mode: 'edit' },
+          { type: 'Contract', mode: 'create' },
+        ],
+      });
+    });
+
+    it("reads a type's file for its mode, as it is served now", async () => {
+      expect((await all(service.source('Contract', 'edit'))).at(-1)).toEqual({
+        state: 'read',
+        value: { url: '/x', content: { version: 2 } },
+      });
+      expect(layouts['layoutSource']).toHaveBeenCalledWith('Contract', 'edit');
+    });
+
+    it('previews a form for the record it edits, through the form engine', () => {
+      const record = { uid: 'c1', type: 'Contract' } as NuxeoDocument;
+      service.previewForm({ version: 2 }, 'edit', 'Contract', record);
+      expect(layouts['previewFormLayout']).toHaveBeenCalledWith(
+        { version: 2 },
+        'edit',
+        'Contract',
+        record,
+      );
+    });
+  });
+
+  describe('the queues', () => {
+    it("offers the queues the app's menu opens, each once, and no id that cannot name one", async () => {
+      navigation.mockReturnValueOnce(
+        of({
+          kind: 'file',
+          content: {
+            version: 2,
+            entries: [
+              { id: 'home', page: 'home' },
+              { id: 'renewals', queue: 'up-for-renewal' },
+              { id: 'again', queue: 'up-for-renewal' },
+              { id: 'odd', queue: '../etc' },
+            ],
+          },
+        }),
+      );
+      expect(await all(service.queueIds())).toEqual([
+        { state: 'reading' },
+        { state: 'read', value: ['up-for-renewal'] },
+      ]);
+    });
+
+    it('offers none without a menu, and says why one could not be read', async () => {
+      navigation.mockReturnValueOnce(of({ kind: 'none' }));
+      expect((await all(service.queueIds())).at(-1)).toEqual({ state: 'read', value: [] });
+      navigation.mockReturnValueOnce(of({ kind: 'unreadable', reason: 'HTTP 500' }));
+      expect((await all(service.queueIds())).at(-1)).toEqual({
+        state: 'failed',
+        problem: 'HTTP 500',
+      });
+    });
+
+    it("reads a queue's file as the queue page does, and says why it could not", async () => {
+      queueLoad.mockReturnValueOnce(of({ kind: 'file', content: { version: 2 } }));
+      expect((await all(service.queueSource('up-for-renewal'))).at(-1)).toEqual({
+        state: 'read',
+        value: { version: 2 },
+      });
+      expect(queueLoad).toHaveBeenCalledWith('up-for-renewal');
+      queueLoad.mockReturnValueOnce(of({ kind: 'none' }));
+      expect((await all(service.queueSource('nope'))).at(-1)).toEqual({
+        state: 'failed',
+        problem: 'no queue is served there',
+      });
+      queueLoad.mockReturnValueOnce(of({ kind: 'unreadable', reason: 'it is not JSON' }));
+      expect((await all(service.queueSource('bad'))).at(-1)).toEqual({
+        state: 'failed',
+        problem: 'it is not JSON',
+      });
+    });
+  });
+
+  describe("the app's own actions", () => {
+    it('reads actions.json from the app registry alone: the development server serves none', async () => {
+      definitionFile.mockReturnValueOnce(of({ version: 2, actions: [] }));
+      expect((await all(service.packageActions())).at(-1)).toEqual({
+        state: 'read',
+        value: { version: 2, actions: [] },
+      });
+      expect(definitionFile).toHaveBeenCalledWith('actions.json', null);
+    });
+
+    it('reads none where nothing serves it, and says why one could not be read', async () => {
+      definitionFile.mockReturnValueOnce(
+        throwError(() => new HttpErrorResponse({ status: 404, statusText: 'Not Found' })),
+      );
+      expect((await all(service.packageActions())).at(-1)).toEqual({ state: 'read', value: null });
+      definitionFile.mockReturnValueOnce(
+        throwError(() => new HttpErrorResponse({ status: 500, statusText: 'Server Error' })),
+      );
+      expect((await all(service.packageActions())).at(-1)).toEqual({
+        state: 'failed',
+        problem: 'HTTP 500',
+      });
     });
   });
 

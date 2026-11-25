@@ -23,10 +23,10 @@ describe('the layout designer route', () => {
   const children = shell?.children ?? [];
   const designer = children.find((route) => route.path === 'administration/layout-designer');
 
-  /** The designer's own route, as the router loads it. */
-  async function page(): Promise<Route | undefined> {
+  /** One of the designer's own routes, as the router loads it: its layout files', or its queues'. */
+  async function page(path = ''): Promise<Route | undefined> {
     const loaded = (await designer?.loadChildren?.()) as Routes | undefined;
-    return loaded?.find((route) => route.path === '');
+    return loaded?.find((route) => route.path === path);
   }
 
   it("is a page of the shell, behind the shell's sign-in and the administrator gate", () => {
@@ -47,6 +47,15 @@ describe('the layout designer route', () => {
     const component = route?.component as Type<unknown> | undefined;
     expect(component ? reflectComponentType(component)?.selector : null).toBe(
       'lib-layout-designer-page',
+    );
+    expect(route?.canActivate).toEqual([fullAdministratorGuard]);
+  });
+
+  it("loads the designer's queues at queues, for administrators alone", async () => {
+    const route = await page('queues');
+    const component = route?.component as Type<unknown> | undefined;
+    expect(component ? reflectComponentType(component)?.selector : null).toBe(
+      'lib-queue-designer-page',
     );
     expect(route?.canActivate).toEqual([fullAdministratorGuard]);
   });
