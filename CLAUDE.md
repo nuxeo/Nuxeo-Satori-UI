@@ -101,6 +101,15 @@ Two traps that have each cost a phase:
   compared script `src` attributes instead of bundle bytes, a path check that was
   tautological under the dev base href, and a lockfile gate that matched dependency names
   but not versions. Break it deliberately, watch it go red, then trust it.
+- **A gate that reads `node_modules` must first check the install matches the lockfile.**
+  `node_modules` is not checked in, so it is an _input_ to the verdict, and a stale one makes
+  the gate judge a package the repository does not ship. `checkUpstreamCatalogueLanguages`
+  listed the installed `satori-ui` catalogues and failed `main` itself for weeks because a
+  developer's install predated the `1.0.0` bump — and because `.husky/pre-push` runs the
+  guardrails, that rejected every `git push` from every branch. Its advice ("list it in
+  `languages`") would have reintroduced the very 404 it exists to prevent. Before trusting a
+  directory listing, compare the installed version to `package-lock.json` and say so when they
+  differ: `npm ci` is the fix, not the config the gate is pointing at.
 - **Never run a bare `npm install` and commit the lockfile.** On macOS it prunes optional
   platform entries Linux needs and `npm ci` refuses the tree. Restore a known-good lock and
   merge new entries in.

@@ -4646,6 +4646,164 @@ const LOADER = 'apps/nuxeo-ui/src/app/i18n/app-translate-loader.ts';
 const VENDOR_LOCALES_MANIFEST = 'languages.json';
 
 /**
+ * The installed package a path inside `node_modules` belongs to, keyed as `package-lock.json`
+ * keys it, or `null` for a path that names no complete package.
+ *
+ * Used for two things: telling "this dependency is not installed" — which a clean checkout
+ * legitimately is — from "the dependency is installed and the directory this rule names is not
+ * there", which is a typo or a vendor that dropped the folder in a version bump; and looking the
+ * package up in the lockfile to check the install is faithful.
+ *
+ * Resolved through the repository root, and from the LAST `node_modules` segment, because review
+ * of this gate found three shapes where it silently handed back the pre-fix behaviour rather than
+ * a verdict — all of them the same failure, a package root that does not name the package whose
+ * files are about to be read:
+ *
+ * - An asset input may be written `./node_modules/…` and a lockfile key never is.
+ * - It may contain a parent segment, `apps/../node_modules/…`, which the directory read resolves
+ *   away but a key built by hand keeps.
+ * - A nested install — `node_modules/parent/node_modules/@scope/pkg` — resolved from the FIRST
+ *   segment names `node_modules/parent`, a different package whose version agreeing with its own
+ *   lock entry says nothing about the nested one.
+ *
+ * The first two were each fixed once by filtering the offending segment, and the second slipped
+ * through the first fix, so the spelling is no longer picked apart segment by segment: the path is
+ * put through the same `join`/`relative` pair that reads it, which collapses `.`, `..` and
+ * duplicate separators in one step and cannot be defeated by a spelling nobody thought of. One
+ * resolver, used by both rules, so the two cannot drift apart either.
+ */
+function installedPackageRootOf(path) {
+  const rel = toPosixRel(relative(repoRoot, join(repoRoot, path)));
+  // Outside the tree there is no lockfile entry to compare against, and no package to name.
+  if (rel === '' || rel === '..' || rel.startsWith('../')) return null;
+  const segments = rel.split('/');
+  const index = segments.lastIndexOf('node_modules');
+  if (index === -1) return null;
+  const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
+  // `node_modules` alone, or `node_modules/@scope`, names no package: nothing to look up.
+  if (segments.length < index + span) return null;
+  return segments.slice(0, index + span).join('/');
+}
+
+/**
+ * Whether a path resolves to somewhere inside the installed dependency tree.
+ *
+ * The companion to `installedPackageRootOf` returning `null`: that answer means "no ONE installed
+ * package owns this path", which covers both a repository path — nothing to verify, judge away —
+ * and a path inside `node_modules` that names no single package, such as a bare scope directory.
+ * The second is read and judged like any other, so without this distinction it skipped the drift
+ * check in silence and the rule stated an NXSAT-732 verdict about a stale install it never looked
+ * at. Telling the two apart is what lets the gate say which of them it is looking at.
+ */
+function isInsideNodeModules(path) {
+  const rel = toPosixRel(relative(repoRoot, join(repoRoot, path)));
+  if (rel === '' || rel === '..' || rel.startsWith('../')) return false;
+  return rel.split('/').includes('node_modules');
+}
+
+/** `package-lock.json`'s `packages` map, or why it could not be read. Parsed at most once. */
+let lockedPackagesCache;
+function lockedPackages() {
+  if (lockedPackagesCache !== undefined) return lockedPackagesCache;
+  if (!fileExists('package-lock.json')) {
+    lockedPackagesCache = { problem: 'package-lock.json is not in the tree' };
+    return lockedPackagesCache;
+  }
+  try {
+    const lock = JSON.parse(read('package-lock.json'));
+    const packages = lock?.packages;
+    lockedPackagesCache =
+      packages && typeof packages === 'object'
+        ? { packages }
+        : { problem: 'package-lock.json has no `packages` map' };
+  } catch (error) {
+    lockedPackagesCache = { problem: `package-lock.json does not parse (${error.message})` };
+  }
+  return lockedPackagesCache;
+}
+
+/**
+ * Whether the package installed at `packageRoot` is the version `package-lock.json` pins.
+ *
+ * Returns `{ state: 'match' }`, `{ state: 'drift', locked, installed }`, or
+ * `{ state: 'unknown', why }` when the question cannot be answered at all.
+ *
+ * ## Why a language rule reads the lockfile
+ *
+ * `checkUpstreamCatalogueLanguages` and `checkStorybookSatoriCatalogues` both decide what a build
+ * serves by listing a directory inside `node_modules`. That makes the installed tree an *input* to
+ * their verdict — and it was the one input neither validated. `node_modules` is not checked in, so
+ * a developer whose install predates a dependency bump is judged against a package the repository
+ * does not ship.
+ *
+ * That is not hypothetical, and it was not cheap. `@hylandsoftware/satori-ui` shipped bare-named
+ * catalogues beside the regional ones (`de.json` *and* `de-DE.json`) up to `1.0.0-alpha.201`;
+ * `1.0.0` ships regional names only. With `1.0.0` locked and an alpha still on disk, every bare
+ * name was "served" while the loader — correctly, for `1.0.0` — listed none of them, so this gate
+ * failed `main` itself. `.husky/pre-push` runs it, so that rejected every `git push` from every
+ * branch, on a tree where nothing was wrong.
+ *
+ * The verdict was not merely wrong, it was dangerous. Its remedy reads "list it in `languages`",
+ * and `upstreamCatalogueFor` prefers a name in `languages` over an alias — so listing `de` makes
+ * the loader request `de.json`, which `1.0.0` does not ship. Following this gate's own advice
+ * turns three working languages into a 404 and a console error on every page load and drops the
+ * `sat.*` keys with them, the accessible name of `sat-platform-nav`'s toggle included. That is
+ * NXSAT-732, the defect these rules exist to prevent, reintroduced by obeying one of them.
+ *
+ * So a stale install is reported as a stale install, and it fails rather than warns: these rules
+ * cannot judge their subject without a faithful install, and the remedy is one command.
+ */
+function installedVersionDrift(packageRoot) {
+  const lock = lockedPackages();
+  if (lock.problem) return { state: 'unknown', why: lock.problem };
+
+  const entry = lock.packages[packageRoot];
+  if (!entry) {
+    return { state: 'unknown', why: `package-lock.json has no entry for ${packageRoot}` };
+  }
+  // A `link` entry resolves to a workspace folder, whose version is its own business.
+  if (entry.link) return { state: 'unknown', why: `package-lock.json links ${packageRoot}` };
+  if (typeof entry.version !== 'string') {
+    return { state: 'unknown', why: `package-lock.json pins no version for ${packageRoot}` };
+  }
+
+  const manifest = `${packageRoot}/package.json`;
+  if (!fileExists(manifest)) return { state: 'unknown', why: `${manifest} is not there` };
+  let installed;
+  try {
+    installed = JSON.parse(read(manifest)).version;
+  } catch (error) {
+    return { state: 'unknown', why: `${manifest} does not parse (${error.message})` };
+  }
+  if (typeof installed !== 'string') {
+    return { state: 'unknown', why: `${manifest} declares no version` };
+  }
+
+  return installed === entry.version
+    ? { state: 'match' }
+    : { state: 'drift', locked: entry.version, installed };
+}
+
+/**
+ * The shared tail of both stale-install failures: what is wrong, and why its usual remedy is not.
+ *
+ * Phrased once because the trap is the same in both rules — the languages the gate can see belong
+ * to a version the repository does not ship — and because a message that only said "versions
+ * differ" would leave the reader free to go on editing the language list, which is the move that
+ * reintroduces NXSAT-732.
+ */
+function staleInstallRemedy(packageRoot, { locked, installed }) {
+  return (
+    `${packageRoot} is installed at ${installed}, but package-lock.json pins ${locked}. The ` +
+    'catalogues this gate can see are that stale version’s, not the ones the repository ' +
+    'ships, so it cannot judge which languages are served. Run `npm ci` and re-run the ' +
+    'guardrails. Do not reconcile the language list against what is on disk: a name listed in ' +
+    '`languages` wins over an alias, so listing one the locked version does not ship is a 404 ' +
+    'and a console error on every page load, which is NXSAT-732.'
+  );
+}
+
+/**
  * `UPSTREAM_FOLDERS` names exactly the languages the installed package actually ships.
  *
  * ## The defect this exists to make unrepeatable
@@ -4710,24 +4868,6 @@ function checkUpstreamCatalogueLanguages() {
         '`checkUpstreamCatalogueLanguages` the new shape — do not leave it asserting nothing.',
     );
     return;
-  }
-
-  /**
-   * The installed package directory a `node_modules` path belongs to, or `null` for a repo path.
-   *
-   * Used to tell "this dependency is not installed" — which a clean checkout legitimately is —
-   * from "the dependency is installed and the directory this rule names is not there", which is
-   * a typo or a vendor that dropped the folder in a version bump. Only the second can be judged,
-   * and it has to be judged: it means the build copies nothing and the loader 404s for every
-   * language.
-   */
-  function installedPackageRoot(inputDir) {
-    const segments = inputDir.split('/');
-    const index = segments.lastIndexOf('node_modules');
-    if (index === -1) return null;
-    const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
-    const root = segments.slice(0, index + span).join('/');
-    return segments.length > index + span - 1 ? root : null;
   }
 
   /**
@@ -4964,7 +5104,7 @@ function checkUpstreamCatalogueLanguages() {
           // typo, or a vendor that dropped the folder in a version bump. The build then copies
           // nothing and the loader 404s for **every** language, which is worse than the defect
           // NXSAT-732 reported, so it fails.
-          const packageRoot = installedPackageRoot(inputDir);
+          const packageRoot = installedPackageRootOf(inputDir);
           if (packageRoot === null) {
             fail(
               `the ${where} asset rule copies ${inputDir} to "${served}", but that directory ` +
@@ -4972,12 +5112,37 @@ function checkUpstreamCatalogueLanguages() {
             );
             readable = false;
           } else if (existsSync(join(repoRoot, packageRoot))) {
-            fail(
-              `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset rule ` +
-                `copies to "${served}". Either the path is a typo or this version of the package ` +
-                'dropped the directory — either way that build serves nothing from it and the ' +
-                'loader 404s for any language it was the source of.',
-            );
+            // "A typo, or a vendor that dropped the folder" holds only for a FAITHFUL install.
+            // A stale one missing a directory the locked version ships is neither, and both of
+            // those verdicts send the reader to edit `angular.json` when the fix is `npm ci`.
+            const drift = installedVersionDrift(packageRoot);
+            if (drift.state === 'drift') {
+              fail(
+                `${packageRoot} is installed at ${drift.installed} but package-lock.json pins ` +
+                  `${drift.locked}, and it has no ${inputDir}, which the ${where} asset rule ` +
+                  `copies to "${served}". A directory the locked version ships can be absent ` +
+                  'simply because the install is stale, so this gate cannot tell that from a ' +
+                  'wrong path or a dropped folder. Run `npm ci` and re-run the guardrails before ' +
+                  'editing the asset rule.',
+              );
+            } else {
+              // The verdict below rests on the install being the locked one just as much as the
+              // language comparison does, so where that could not be confirmed it is announced
+              // here too. Warning on one path and not the other stated a guess as a finding.
+              if (drift.state === 'unknown') {
+                warn(
+                  `whether ${packageRoot} is the version package-lock.json pins could not be ` +
+                    `confirmed before calling its missing ${inputDir} a typo or a dropped ` +
+                    `folder: ${drift.why}.`,
+                );
+              }
+              fail(
+                `${packageRoot} is installed but has no ${inputDir}, which the ${where} asset ` +
+                  `rule copies to "${served}". Either the path is a typo or this version of the ` +
+                  'package dropped the directory — either way that build serves nothing from it ' +
+                  'and the loader 404s for any language it was the source of.',
+              );
+            }
             readable = false;
           } else {
             warn(
@@ -4987,6 +5152,40 @@ function checkUpstreamCatalogueLanguages() {
             readable = false;
           }
           continue;
+        }
+
+        // The directory is there, so it is about to be listed — and that listing is only evidence
+        // about this repository if the package on disk is the one the lockfile pins. Checked here
+        // rather than once per rule because it is this read, not the folder's existence, that the
+        // verdict below rests on.
+        const versionedRoot = installedPackageRootOf(inputDir);
+        if (versionedRoot !== null) {
+          const drift = installedVersionDrift(versionedRoot);
+          if (drift.state === 'drift') {
+            fail(
+              `${staleInstallRemedy(versionedRoot, drift)} (The ${where} asset rule copies ` +
+                `${inputDir} to "${served}", which is where "${folderPath}" is served from.)`,
+            );
+            readable = false;
+            continue;
+          }
+          if (drift.state === 'unknown') {
+            warn(
+              `the languages "${folderPath}" claims to ship were compared against the ` +
+                `${inputDir} on disk without confirming it is the locked version: ${drift.why}.`,
+            );
+          }
+        } else if (isInsideNodeModules(inputDir)) {
+          // Inside `node_modules`, but naming no single package — a bare scope directory, say. It
+          // is read and judged like any other folder, so skipping the drift check here in silence
+          // let a stale install produce an NXSAT-732 verdict the gate had not checked.
+          warn(
+            `the languages "${folderPath}" claims to ship were judged from ${inputDir} without ` +
+              'confirming the install: that path is inside node_modules but does not name one ' +
+              'installed package, so there is no lockfile entry to compare it to. Point the ' +
+              "asset rule at a package's own directory and a stale install can be told from a " +
+              'vendor change.',
+          );
         }
 
         const unreadable = globs.filter((glob) => globCopies(glob, 'en.json') === null);
@@ -5992,6 +6191,8 @@ function checkStorybookSatoriCatalogues() {
       const served = new Set();
       const servedFrom = [];
       let judgeable = true;
+      /** Ancestor mounts skipped because their directory inside `node_modules` is not there. */
+      const skippedInstalls = [];
       for (const { dir, exact } of mounts) {
         if (dir.startsWith('..')) {
           if (exact) {
@@ -6004,26 +6205,96 @@ function checkStorybookSatoriCatalogues() {
           continue;
         }
         if (!fileExists(dir)) {
-          // A mount above the catalogue path with no catalogue folder serves nothing there.
-          if (!exact) continue;
-          const segments = dir.split('/');
-          const index = segments.indexOf('node_modules');
-          const span = segments[index + 1]?.startsWith('@') ? 3 : 2;
-          const packageRoot = index === -1 ? null : segments.slice(0, index + span).join('/');
+          // A mount above the catalogue path with no catalogue folder serves nothing there, which
+          // is ordinary configuration — a Storybook may mount `public/` at `/` and the catalogues
+          // separately. So this is not warned about per mount. But when the missing directory is
+          // inside `node_modules` it may be missing BECAUSE of the install, and the "add a
+          // `staticDirs` entry" verdict below would then diagnose an install as configuration.
+          if (!exact) {
+            if (isInsideNodeModules(dir)) {
+              const ancestorRoot = installedPackageRootOf(dir);
+              skippedInstalls.push({
+                dir,
+                root: ancestorRoot,
+                installed: ancestorRoot !== null && fileExists(ancestorRoot),
+                drift: ancestorRoot === null ? null : installedVersionDrift(ancestorRoot),
+              });
+            }
+            continue;
+          }
+          const packageRoot = installedPackageRootOf(dir);
           if (packageRoot && !fileExists(packageRoot)) {
             warn(
               `${packageRoot} is not installed, so the languages ${main} asks Satori for were ` +
                 `not checked against it${where}.`,
             );
           } else {
-            fail(
-              `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does ` +
-                'not exist. Either the path is a typo or the package no longer ships that folder.',
-            );
+            // As in `checkUpstreamCatalogueLanguages`: "a typo, or the package no longer ships
+            // it" is only a sound reading of a missing directory when the install is the locked
+            // one. A stale install can be missing a folder the locked version ships.
+            const drift = packageRoot === null ? null : installedVersionDrift(packageRoot);
+            if (drift?.state === 'drift') {
+              fail(
+                `${packageRoot} is installed at ${drift.installed} but package-lock.json pins ` +
+                  `${drift.locked}, and ${main}${where} serves ` +
+                  `${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which does not exist. A ` +
+                  'directory the locked version ships can be absent simply because the install ' +
+                  'is stale, so this gate cannot tell that from a wrong path or a dropped ' +
+                  'folder. Run `npm ci` and re-run the guardrails before editing `staticDirs`.',
+              );
+            } else {
+              // Announced for the same reason as in `checkUpstreamCatalogueLanguages`: this
+              // verdict assumes the install is the locked one, so where that could not be
+              // confirmed, say so rather than stating a guess as a finding.
+              if (drift?.state === 'unknown') {
+                warn(
+                  `whether ${packageRoot} is the version package-lock.json pins could not be ` +
+                    `confirmed before calling the missing ${dir} a typo or a dropped folder: ` +
+                    `${drift.why}.`,
+                );
+              }
+              fail(
+                `${main}${where} serves ${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}, which ` +
+                  'does not exist. Either the path is a typo or the package no longer ships that ' +
+                  'folder.',
+              );
+            }
           }
           judgeable = false;
           continue;
         }
+        // Same stale-install trap as `checkUpstreamCatalogueLanguages`, pointing the other way:
+        // this rule fails a language the folder does not serve, so a version that ships MORE
+        // catalogues than the locked one makes it pass a request that 404s on the real install.
+        // Lenience is the dangerous direction here, and it is invisible without this check.
+        const versionedRoot = installedPackageRootOf(dir);
+        if (versionedRoot !== null) {
+          const drift = installedVersionDrift(versionedRoot);
+          if (drift.state === 'drift') {
+            fail(
+              `${staleInstallRemedy(versionedRoot, drift)} (${main}${where} serves ` +
+                `${SATORI_STORYBOOK_CATALOGUE_DIR} from ${dir}.)`,
+            );
+            judgeable = false;
+            continue;
+          }
+          if (drift.state === 'unknown') {
+            warn(
+              `the languages ${main} asks Satori for were compared against the ${dir} on disk ` +
+                `without confirming it is the locked version: ${drift.why}.`,
+            );
+          }
+        } else if (isInsideNodeModules(dir)) {
+          // As in `checkUpstreamCatalogueLanguages`: a mount inside `node_modules` that names no
+          // single package is still read and judged, so the gate says it could not verify it.
+          warn(
+            `the languages ${main} asks Satori for were judged from ${dir} without confirming ` +
+              'the install: that path is inside node_modules but does not name one installed ' +
+              'package, so there is no lockfile entry to compare it to. Mount a package’s ' +
+              'own directory and a stale install can be told from a vendor change.',
+          );
+        }
+
         servedFrom.push(dir);
         for (const entry of readdirSync(join(repoRoot, dir))) {
           if (entry.endsWith('.json') && entry !== VENDOR_LOCALES_MANIFEST) {
@@ -6034,6 +6305,50 @@ function checkStorybookSatoriCatalogues() {
       if (!judgeable) continue;
 
       if (servedFrom.length === 0) {
+        // "Add a `staticDirs` entry" is the right advice only when the configuration is what is
+        // missing. An ancestor mount pointing into `node_modules` can serve nothing because the
+        // package is stale or absent, and then editing `staticDirs` is the wrong move entirely —
+        // the same misdiagnosis this branch removed from every other verdict in both rules.
+        const stale = skippedInstalls.find((skipped) => skipped.drift?.state === 'drift');
+        const absent = skippedInstalls.find(
+          (skipped) => skipped.root !== null && !skipped.installed,
+        );
+        if (stale) {
+          fail(
+            `${stale.root} is installed at ${stale.drift.installed} but package-lock.json pins ` +
+              `${stale.drift.locked}, and ${main}${where} serves nothing at ` +
+              `${SATORI_STORYBOOK_CATALOGUE_DIR} because ${stale.dir} is not there. A directory ` +
+              'the locked version ships can be absent simply because the install is stale, so ' +
+              'this need not be a `staticDirs` problem at all. Run `npm ci` and re-run the ' +
+              'guardrails before editing `staticDirs`.',
+          );
+          continue;
+        }
+        if (absent) {
+          // FAILS, and must. An earlier round of this branch made this a warning, reasoning that
+          // an uninstalled dependency cannot be judged — which is the convention elsewhere in
+          // this file and was still wrong here, because what this verdict asserts is not a claim
+          // about the package. The Storybook serves no catalogue at all at that path, so every
+          // `sat.*` key renders raw whatever the reason; the install only changes the remedy.
+          // Warning instead let the gate exit 0 on a tree `main` failed, which is the one thing
+          // `CLAUDE.md` is most emphatic about never doing.
+          fail(
+            `${absent.root} is not installed, and ${main}${where} serves nothing at ` +
+              `${SATORI_STORYBOOK_CATALOGUE_DIR} because ${absent.dir} is not there, so every ` +
+              '`sat.*` request 404s and the stories render raw keys. Run `npm ci` and re-run the ' +
+              'guardrails before editing `staticDirs` — the missing mount may be the install ' +
+              'rather than the configuration.',
+          );
+          continue;
+        }
+        const unverified = skippedInstalls.find((skipped) => skipped.drift?.state === 'unknown');
+        if (unverified) {
+          warn(
+            `whether ${unverified.root} is the version package-lock.json pins could not be ` +
+              `confirmed before calling the empty ${SATORI_STORYBOOK_CATALOGUE_DIR} a ` +
+              `\`staticDirs\` problem: ${unverified.drift.why}.`,
+          );
+        }
         fail(
           `${projectRoot}'s Storybook configures Satori's translation loader, but ${main}${where} ` +
             `serves nothing at ${SATORI_STORYBOOK_CATALOGUE_DIR}, so every \`sat.*\` request ` +
@@ -6041,6 +6356,36 @@ function checkStorybookSatoriCatalogues() {
             'node_modules/@hylandsoftware/satori-ui/i18n there.',
         );
         continue;
+      }
+
+      // Whatever a skipped ancestor mount says about its install explains a catalogue the
+      // Storybook cannot find, so ALL THREE answers reach the per-language verdicts, not only
+      // drift.
+      //
+      // Written as one lookup over the three states rather than a branch per state because that
+      // is the shape review kept finding one step along: drift was handled at the "serves
+      // nothing" branch while absent and unverifiable were not, then drift was handled here while
+      // those two were not. A verdict a stale install could explain needs the whole answer or
+      // none of it, and the advice below names what `satori-ui 1.0.0` ships — which is wrong to
+      // print at all when the installed version is unknown or is something else.
+      const skippedInstall =
+        skippedInstalls.find((skipped) => skipped.drift?.state === 'drift') ??
+        skippedInstalls.find((skipped) => skipped.root !== null && !skipped.installed) ??
+        skippedInstalls.find((skipped) => skipped.drift?.state === 'unknown');
+      if (skippedInstall) {
+        const why =
+          skippedInstall.drift?.state === 'drift'
+            ? `is installed at ${skippedInstall.drift.installed} but package-lock.json pins ` +
+              `${skippedInstall.drift.locked}`
+            : skippedInstall.installed === false
+              ? 'is not installed'
+              : `could not be checked against package-lock.json (${skippedInstall.drift?.why})`;
+        warn(
+          `${skippedInstall.root} ${why}, and ${main}${where} mounts ${skippedInstall.dir}, ` +
+            `which is not there. A catalogue missing below ${SATORI_STORYBOOK_CATALOGUE_DIR} may ` +
+            'be the install rather than the language asked for, so the advice below may name a ' +
+            'version this tree does not have. Run `npm ci` and re-run the guardrails.',
+        );
       }
 
       for (const { file, lang, via } of requested) {
@@ -11763,7 +12108,7 @@ function checkGeneratorsEsmSafe() {
           const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
           fail(
             `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
-              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
+              "this source with Node's native type stripping, where the module is ESM and it is " +
               'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
               'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
               'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +
