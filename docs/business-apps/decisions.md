@@ -118,6 +118,14 @@ way.
     access rules are not applied reader by reader: whoever may read the record sees its connector's
     fields. Token exchange, decision F, is what would change that.
 
+- **5, the spike its recommendation asks for (25 November 2026).** Built as the recommendation
+  says, "spike in phase 6": a prototype loader in `tools/plugin-spike`, which ships nothing, and
+  [its report](spikes/plugins-decision-5.md), which compares the template build with signed,
+  pinned plugins loaded at run time and ends with a recommendation and questions for the owners.
+  It loads no customer code into the shipped app, and the decision stays open. Once it is taken,
+  the prototype can go, with its two guards: `checkPluginSpikeIsolated` and the `type:spike` probes
+  in `scripts/beta-harness/module-boundaries.mjs`.
+
 ## From the Studio parity plan
 
 Taken on 19 November 2026 in the Studio parity plan, `docs/nuxeo-studio-parity-plan.md` on the

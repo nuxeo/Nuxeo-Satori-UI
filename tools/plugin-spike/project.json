@@ -1,0 +1,31 @@
+{
+  "name": "plugin-spike",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/plugin-spike/src",
+  "projectType": "library",
+  "tags": ["type:spike"],
+  "$tagsComment": "Decision 5's spike (docs/business-apps/spikes/plugins-decision-5.md), and nothing may depend on it: no depConstraint in eslint.config.mjs lists `type:spike`, and no rule has `type:spike` as its source, so in the file types that rule reads it may depend on no project of the workspace either. scripts/beta-harness/module-boundaries.mjs proves both with probes, refuses to pass unless this list is exactly ['type:spike'], and fails on any target Nx resolves here, inferred ones included, beyond tests, lint and the type check. checkPluginSpikeIsolated in scripts/review-guardrails.mjs fails on any reference to or link into this directory from the rest of the repository, on a declared target beyond test, lint and typecheck, on key material here, and on an import here of anything but these files, Node's built-ins and Vitest, which covers the .mjs sources the boundary rule does not read.",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/tools/plugin-spike"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "$comment": "Declared rather than inferred: @nx/eslint/plugin infers `eslint:lint`, which `nx affected -t lint` does not match (see tools/satori-generators/project.json)."
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "$comment": "Vitest strips types without checking them, and the sources are JavaScript with JSDoc types, so this is the only type check. No `build` target, on purpose: the spike is never built into anything.",
+      "cache": true,
+      "inputs": ["default"],
+      "options": {
+        "cwd": "",
+        "command": "tsc -p tools/plugin-spike/tsconfig.json --noEmit"
+      }
+    }
+  }
+}

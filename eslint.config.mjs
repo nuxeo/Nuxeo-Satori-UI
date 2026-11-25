@@ -220,6 +220,13 @@ export default [
               sourceTag: 'type:tool',
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:core'],
             },
+            // `type:spike` is in no rule here, on either side, on purpose. Decision 5's spike is a
+            // loader for code fetched at run time, and must be reachable from nothing: no rule
+            // lists the tag, so nothing may depend on it. No rule has it as its source either,
+            // which Nx reports as `projectWithoutTagsCannotHaveDependencies`, so it may depend on
+            // no project. `scripts/beta-harness/module-boundaries.mjs` proves both with probes.
+            // This rule reads the file types above only, and the spike's sources are mostly
+            // `.mjs`: `checkPluginSpikeIsolated` holds those to importing nothing of the workspace.
             // A customer extension library must see only what a customer sees: the
             // published platform entry points. **This rule cannot enforce that**, and the
             // limitation is worth stating rather than papering over.

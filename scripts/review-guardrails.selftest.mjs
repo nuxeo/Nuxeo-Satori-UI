@@ -41,7 +41,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -140,7 +140,16 @@ function withFixture(files, mutate, run, options = {}) {
       encoding: 'utf8',
     }).stdout.trim();
 
-    if (mutate) mutate(write, git);
+    /* `link` makes a symbolic link, for the one guardrail that must see through them
+     * (`checkPluginSpikeIsolated`). On Windows it needs the permission the dependency-tree controls
+     * already need (CLAUDE.md). */
+    const link = (relative, target) => {
+      const path = join(dir, relative);
+      mkdirSync(dirname(path), { recursive: true });
+      symlinkSync(target, path);
+    };
+
+    if (mutate) mutate(write, git, link);
 
     /* `shallow` runs the guardrail in a depth-1 clone of the fixture instead of the fixture itself.
      *
@@ -14011,6 +14020,279 @@ expectGreen(
    * reported "no numbered gate rows" for all fourteen controls: a check that had never read a
    * fixture, with its own controls unable to tell me so until they ran. */
   { ...INVENTORY_OK },
+);
+
+/* ---------------- checkPluginSpikeIsolated ---------------- */
+
+const SPIKE_PROJECT_FILE = 'tools/plugin-spike/project.json';
+const spikeProject = (overrides = {}) =>
+  `${JSON.stringify(
+    {
+      name: 'plugin-spike',
+      tags: ['type:spike'],
+      targets: { test: {}, lint: {}, typecheck: {} },
+      ...overrides,
+    },
+    null,
+    2,
+  )}\n`;
+const angularWithAssets = (assets) =>
+  `${JSON.stringify(
+    { projects: { 'nuxeo-ui': { architect: { build: { options: { assets } } } } } },
+    null,
+    2,
+  )}\n`;
+const SPIKE_OK = {
+  [SPIKE_PROJECT_FILE]: spikeProject(),
+  // The spike may name itself: half 1 looks only outside it. And it may import its own files,
+  // Node's built-ins and Vitest: half 5's false-positive control.
+  'tools/plugin-spike/src/plugin-loader.mjs':
+    "import { readFileSync } from 'node:fs';\nimport { helper } from './helper.mjs';\n\n" +
+    "export const where = 'tools/plugin-spike';\nexport const read = () => [readFileSync, helper];\n",
+  'tools/plugin-spike/src/helper.mjs': 'export const helper = 1;\n',
+  'tools/plugin-spike/src/plugin-loader.spec.ts':
+    "import { describe } from 'vitest';\nimport { where } from './plugin-loader.mjs';\n\ndescribe(where, () => {});\n",
+  'libs/shared/ui/.storybook/main.ts':
+    "export default { staticDirs: [{ from: '../../../../apps/nuxeo-ui/public/i18n', to: 'i18n' }] };\n",
+  'libs/shared/ui/vite.config.mts':
+    "export default { cacheDir: '../../../node_modules/.vite/libs/shared/ui', root: '.' };\n",
+  'apps/nuxeo-ui/src/main.ts': "import './app/app';\n",
+  'angular.json': angularWithAssets([{ glob: '**/*', input: 'apps/nuxeo-ui/public' }]),
+  'docs/business-apps/spikes/plugins-decision-5.md': 'The prototype is in tools/plugin-spike.\n',
+};
+// Assembled here so that no line of this file is itself a private key, armoured or not.
+const PEM_PRIVATE_HEADER = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ');
+const PKCS8_EC_PREFIX = ['MIGHAgEAMBMG', 'ByqGSM49AgEG', 'CCqGSM49AwEHBG0wawIBAQQg'].join('');
+
+expectGreen('the spike, isolated, described in Markdown', 'checkPluginSpikeIsolated', SPIKE_OK);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an asset directory whose name merely starts like the spike path is not an ancestor of it',
+  'checkPluginSpikeIsolated',
+  {
+    ...SPIKE_OK,
+    'angular.json': angularWithAssets([{ glob: '**/*', input: 'tools/plugin' }, 'tools/a11y']),
+  },
+);
+
+expectRed(
+  'an app source importing the loader',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'apps/nuxeo-ui/src/main.ts',
+      "import { loadPlugin } from '../../../tools/plugin-spike/src/plugin-loader.mjs';\n",
+    ),
+  /apps\/nuxeo-ui\/src\/main\.ts:1 names the plugin spike/,
+);
+
+expectRed(
+  'a path alias in tsconfig.base.json, which a library could import by name',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'tsconfig.base.json',
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            paths: { '@spike/loader': ['tools/plugin-spike/src/plugin-loader.mjs'] },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    ),
+  /tsconfig\.base\.json:\d+ names the plugin spike/,
+);
+
+expectRed(
+  "a script tag in an app's index.html",
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'apps/nuxeo-ui/src/index.html',
+      '<script type="module" src="/tools/plugin-spike/host/host.mjs"></script>\n',
+    ),
+  /apps\/nuxeo-ui\/src\/index\.html:1 names the plugin spike/,
+);
+
+expectRed(
+  'a symbolic link in an app into the spike, whose files never name their own directory',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write, git, link) => {
+    link('apps/nuxeo-ui/public/loader.mjs', '../../../tools/plugin-spike/src/helper.mjs');
+    git(['add', 'apps/nuxeo-ui/public/loader.mjs']);
+  },
+  /apps\/nuxeo-ui\/public\/loader\.mjs is a symbolic link into tools\/plugin-spike\//,
+);
+
+expectRed(
+  'an asset input that reaches tools/ through ..',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'angular.json',
+      angularWithAssets([{ glob: '**/*', input: 'apps/nuxeo-ui/../../tools' }]),
+    ),
+  /angular\.json copies the assets of "apps\/nuxeo-ui\/\.\.\/\.\.\/tools"/,
+);
+
+expectRed(
+  'a string asset that globs under tools/',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('angular.json', angularWithAssets(['tools/**/*'])),
+  /angular\.json copies the assets of "tools\/\*\*\/\*"/,
+);
+
+expectRed(
+  'a Storybook static directory holding the spike, which the published Storybook would serve',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'libs/shared/ui/.storybook/main.ts',
+      "export default { staticDirs: ['../../../../tools'] };\n",
+    ),
+  /libs\/shared\/ui\/\.storybook\/main\.ts names the path "\.\.\/\.\.\/\.\.\/\.\.\/tools", which holds tools\/plugin-spike\/, and a Storybook static directory publishes/,
+);
+
+expectRed(
+  'a spike source importing a library by a relative path',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'tools/plugin-spike/src/helper.mjs',
+      "export { helper } from '../../../libs/shared/util/src/index.ts';\n",
+    ),
+  /tools\/plugin-spike\/src\/helper\.mjs imports "\.\.\/\.\.\/\.\.\/libs\/shared\/util\/src\/index\.ts"/,
+);
+
+expectRed(
+  'a spike source importing a published entry point, in an .mjs file the boundary rule does not read',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'tools/plugin-spike/src/helper.mjs',
+      "export const load = () => import('@nuxeo/satori-platform/nuxeo-client');\n",
+    ),
+  /helper\.mjs imports "@nuxeo\/satori-platform\/nuxeo-client"/,
+);
+
+expectRed(
+  'an asset entry copying tools/, which ships the spike without naming it',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('angular.json', angularWithAssets([{ glob: '**/*', input: 'tools' }])),
+  /angular\.json copies the assets of "tools"/,
+);
+
+expectRed(
+  'an asset entry copying the whole repository, in the string form',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('angular.json', angularWithAssets(['./'])),
+  /angular\.json copies the assets of "\.\/"/,
+);
+
+expectRed(
+  'a second tag on the spike, which would make it importable',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write(SPIKE_PROJECT_FILE, spikeProject({ tags: ['type:spike', 'scope:shared'] })),
+  /has tags \["type:spike","scope:shared"\], not \["type:spike"\]/,
+);
+
+expectRed(
+  'a build target on the spike',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      SPIKE_PROJECT_FILE,
+      spikeProject({ targets: { test: {}, lint: {}, typecheck: {}, build: {} } }),
+    ),
+  /has a `build` target/,
+);
+
+expectRed(
+  'implicit dependencies on the spike',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write(SPIKE_PROJECT_FILE, spikeProject({ implicitDependencies: ['nuxeo-client'] })),
+  /declares implicitDependencies/,
+);
+
+expectRed(
+  "the spike's project.json deleted, leaving its tag nowhere",
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write, git) => git(['rm', '--quiet', SPIKE_PROJECT_FILE]),
+  /project\.json is missing/,
+);
+
+expectRed(
+  'the whole spike deleted, so the check would assert nothing',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write, git) => git(['rm', '--quiet', '-r', 'tools/plugin-spike']),
+  /holds no file, so it checked nothing/,
+);
+
+expectRed(
+  'a PEM private key committed in the spike',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('tools/plugin-spike/dev/fixture-key.txt', `${PEM_PRIVATE_HEADER}\nAAAA\n`),
+  /fixture-key\.txt holds a private key/,
+);
+
+expectRed(
+  "a JWK's private half committed in the spike",
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'tools/plugin-spike/dev/key.json',
+      `${JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'x', y: 'y', d: 'A'.repeat(43) })}\n`,
+    ),
+  /key\.json holds a private key/,
+);
+
+expectRed(
+  "a JWK's private half as a script literal, unquoted",
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) =>
+    write(
+      'tools/plugin-spike/dev/key.mjs',
+      `export const key = { kty: 'EC', d: '${'B'.repeat(43)}' };\n`,
+    ),
+  /key\.mjs holds a private key/,
+);
+
+expectRed(
+  'an unarmoured PKCS#8 key in the spike',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('tools/plugin-spike/dev/key.txt', `${PKCS8_EC_PREFIX}${'C'.repeat(40)}\n`),
+  /key\.txt holds a private key/,
+);
+
+expectRed(
+  'a file named like key material in the spike, whatever it holds',
+  'checkPluginSpikeIsolated',
+  SPIKE_OK,
+  (write) => write('tools/plugin-spike/dev/trusted.pem', 'not really a key\n'),
+  /trusted\.pem is named like key material/,
 );
 
 /* ---------------- report ---------------- */

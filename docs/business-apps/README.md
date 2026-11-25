@@ -61,6 +61,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
     the agent, and the feedback its first run found.
 12. [studio-migration-guide.md](studio-migration-guide.md): for a customer, migrating their own
     Studio package with one command, reading its report and filling in its decisions.
+13. [spikes/plugins-decision-5.md](spikes/plugins-decision-5.md): the spike for decision 5,
+    customer code built in from the template or loaded at run time, signed and pinned.
 
 ## Facts that hold
 
