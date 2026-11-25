@@ -17,7 +17,9 @@ Related: [`docs/beta-plan.md`](beta-plan.md) ·
 Every ID below follows `<owner>.<surface>.<name>` — `app.bulkActions.delete`, `app.rules.canWrite`,
 `app.navbar.browse`. Use your own owner prefix for anything you contribute (`acme.navbar.contracts`).
 Once published, **renaming one of our IDs is a breaking change** and will only happen in a major
-version.
+version. For the IDs a business app's kit names, the package pipeline holds us to that: removing
+or renaming one needs the major and a migration note
+([package-pipeline.md](business-apps/package-pipeline.md), section 10).
 
 ### Hiding an action is not a security control
 
