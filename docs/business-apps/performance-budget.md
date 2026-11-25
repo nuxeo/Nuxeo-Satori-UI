@@ -177,30 +177,34 @@ app's code is left as it is.
 ## Measured on 25 November 2026
 
 On an Apple Silicon Mac, Chromium 153 headless, the network above, no CPU slowdown, the build of
-the commit this page arrived with. Each line's limit is the budget's, above:
+staging merged into this page's branch (commit `f0a618af6`, no changes on top). Each line's limit is
+the budget's, above:
 
 | Measure                              | Measured |
 | ------------------------------------ | -------- |
 | First contentful paint               | 1320 ms  |
-| First page of results                | 1734 ms  |
+| First page of results                | 1736 ms  |
 | Requests to open the library         | 14       |
-| A page, median                       | 294 ms   |
-| A page, 95th percentile              | 298 ms   |
+| A page, median                       | 288 ms   |
+| A page, 95th percentile              | 299 ms   |
 | Requests per page                    | 1        |
-| A facet, slowest                     | 296 ms   |
+| A facet, slowest                     | 299 ms   |
 | Requests per facet                   | 1        |
-| The asset page's first view, slowest | 576 ms   |
+| The asset page's first view, slowest | 578 ms   |
 | Requests to open the asset page      | 20       |
 | Heap after 50 pages                  | 16.1 MB  |
 | Heap growth over 50 pages            | 2.9 MB   |
 
 The slowest first view is the first open, which also loads the asset page's code; the four after
-it took 297 to 312 ms.
+it took 295 to 313 ms.
 
-CPU_SLOWDOWN_RESULT
+Once more with a fourfold CPU slowdown (`--cpu 4`): 1528 ms to first paint, 1966 ms to the first
+page, 307 ms a page at the median, 657 ms to the slowest first view, and 2.9 MB of heap growth:
+within budget too, on every line.
 
-The controls, the same day, against the same build, each over on every line it names and failing
-the run:
+The controls, the same day, against the build before staging was merged in, whose own run was
+within 6 ms of the one above on every time and equal on every count: each control was over on
+every line it names, and failed the run:
 
 | Control      | Over budget on                                                                                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------------- |
