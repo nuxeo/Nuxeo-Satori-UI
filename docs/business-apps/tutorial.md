@@ -17,11 +17,14 @@ and CI builds it on every pull request.
 checkout of `staging/enterprise-grade-app`, on macOS with Node 24.22.1, against the local Docker
 Nuxeo (2025.10.18, container `nuxeo`, port 8080, with the Satori package and the other kits
 installed), signed in with its default administrator account from the environment. Every output
-quoted is that run's, with npm's own `> agentic-ui@0.0.0 ...` lines left out. Three things were not
-run, and each place says so: registering the MCP server with Claude Code, installing the package
-on a server, and a person outside the team doing all of it. The times are estimates for a person
-new to the repository, not measurements: measuring them is the plan's acceptance test, still to
-run.
+quoted is that run's, trimmed to the lines that matter, with npm's own `> agentic-ui@0.0.0 ...`
+lines left out. Part 1 was then followed a second time from an empty package, by a script that ran
+each command as written, wrote each file from this page, and held each quoted output to what the
+command printed: every one matched, and the package it built is the reference answer's, byte for
+byte, but for its README. Three things were not run, and each place says so: registering the MCP
+server with Claude Code, installing the package on a server, and a person outside the team doing
+all of it. The times are estimates for a person new to the repository, not measurements: measuring
+them is the plan's acceptance test, still to run.
 
 ## What you build
 
@@ -295,7 +298,7 @@ npm run app-package -- business-apps/packages/facilities-demo --platform 0.2.0 -
 ```text
 1 layout was held to the content model in business-apps/packages/facilities-demo/content-model.json.
 3 files: 3 passed, 0 refused.
-facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 <the zip's>
+facilities-demo 0.1.0: checked, built and verified: business-apps/packages/facilities-demo/dist/facilities-demo-0.1.0.zip, sha256 bb37d9b49cb9fc031cdd96d64d9c617f64283935e4f7061f63a27f727f34acf2
 ```
 
 `--platform` is the platform version the package is built for: `libs/platform`'s,
