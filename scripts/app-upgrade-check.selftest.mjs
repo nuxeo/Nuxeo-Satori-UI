@@ -11,7 +11,7 @@
  *
  * The platform controls give it copies of this repository's platform files, as it was and as it
  * is, through `--previous-platform` and `--root`. The git controls give it a scratch repository,
- * so that `--since` and `--export` are seen reading a commit.
+ * so that `--since`, `--export` and `--place-at` are seen reading a commit.
  *
  * Usage: node scripts/app-upgrade-check.selftest.mjs
  */

@@ -648,10 +648,10 @@ findings, listed above_. Given `--previous-platform` too, the platform's side. T
 both, from the same commit it holds the version to (section 8, "In CI"): the kit as it was, found
 with `--place-at` so that a renamed folder is not a new package, and the platform `--export` writes
 at that commit. So a pull request that removes an ID a kit names fails here, and the workflow runs
-on a change to the platform's sources for that reason. The workflow's step was run on this
-repository, 25 November 2026, against the staging branch (every kit kept) and against payers
-0.3.0's commit (payers kept by its note, which the summary carries under "Upgrading"; the other
-kits new); it has not run on GitHub yet.
+on a change to the platform's sources for that reason. The workflow's step, its fetch left out,
+was run on this repository, 25 November 2026, against the staging branch (every kit kept) and
+against payers 0.3.0's commit (payers kept by its note, which the summary carries under
+"Upgrading"; the other kits new); it has not run on GitHub yet.
 
 **Its controls:** `npm run app-upgrade:selftest` holds 51 negative controls and 12 sound ones. Each
 negative one breaks the demo, or a copy of the platform's files, in one way, and must be refused

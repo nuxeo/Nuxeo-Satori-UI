@@ -172,8 +172,8 @@ if (!options) {
 try {
   process.exit(await main(options));
 } catch (error) {
-  if (!(error instanceof Usage)) throw error;
-  console.error(`app-upgrade-check: ${error.message}`);
+  // Any run that ends here could not be made, so it exits 2: a crash must not read as "not kept".
+  console.error(error instanceof Usage ? `app-upgrade-check: ${error.message}` : error);
   process.exit(2);
 }
 
