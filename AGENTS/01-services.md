@@ -605,7 +605,8 @@ resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow 
 `resultWindow` reads one page's answer: `total`, the server's whole count or `null`; `moreThan`,
 the limit where it stopped counting (`-2` with `resultsCountLimit`); and `reach`, how many results
 the pages can reach at that page size when the search index's window, `resultsCountLimit`, is below
-the count. A page that ends past the window is HTTP 500, so a list never asks for one
+the count, or where the server says there is no next page short of its count. A page that ends past
+the window is HTTP 500, so a list never asks for one
 (`RecordListComponent`); a repository provider has no window (`docs/api-integrations.md`, section 33).
 
 ---

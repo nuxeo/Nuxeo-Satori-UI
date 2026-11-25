@@ -55,7 +55,7 @@ what was asked for, checked on the page itself: the expected first row, or the p
 | `heap.after50PagesMB`            | 64 MB   | A ceiling for the whole application after 50 pages, its code and services included: four times today's. It catches a gross change only; the next line catches a leak.                                                                                               |
 | `heap.growthMB`                  | 6 MB    | Twice today's 2.9 MB, which is warm-up, not pages held (below). A page of results, kept, costs about 0.2 MB of heap: the `hold-pages` control, keeping all 50, grew 13.3 MB. Six catches a list that keeps fifteen pages or more.                                   |
 | `window.requestsPast`            | 0       | A page that ends past the search index's window is HTTP 500 from Nuxeo: the person sees the list fail. None is ever asked for, over the whole run.                                                                                                                  |
-| `window.controlsPast`            | 0       | On page 200, the window's last whole page, no control offers a page past it: the pager's next is disabled, whatever the server says of a next page.                                                                                                                 |
+| `window.controlsPast`            | 0       | On page 200, the window's last whole page, no control offers a page past it: the pager's next is disabled.                                                                                                                                                          |
 | `window.totalsMisstated`         | 0       | Every pager from page 2 to page 200 names the server's whole count, 100,000, not the window's 10,000 nor a guess. The total is what the person reads to decide to narrow.                                                                                           |
 | `window.noticeMissing`           | 0       | On page 200 the list says, above its rows, how many results its pages reach and of how many, both numbers, and to narrow with the filters or a search. Without it, paging just stops.                                                                               |
 
@@ -63,8 +63,16 @@ The two heap lines are read after garbage collection, through the DevTools proto
 page 1 and once after page 50. The four `window.` lines count what must not happen at all, so
 their limit is 0; `budget.mjs` refuses any other limit for them, and 0 for any other line.
 
+**What the window's lines can and cannot tell apart.** They hold the app, end to end, against a
+server that answers as Nuxeo does, and Nuxeo's own `isNextPageAvailable` is already false on page 200. So an app that only follows that flag, as staging's did before this change, also keeps the
+first three lines at 0: they catch a regression that would page past the window, misstate the
+total or offer a way past the edge, and the `unwindowed` and `capped-count` controls show them going
+red. Of the four, only `window.noticeMissing` tells this change from the app before it, which fails
+it ("Measured", below). The app's own guard, for a server that offers a next page at the edge
+anyway, is held by `record-list.spec.ts`, not by this check.
+
 **Today's growth is warm-up.** Browsed to page 200 once, by a probe against the same stand-in rather
-than by this check, whose 50 pages are fixed: the heap grew 2.6 MB over the first 25 pages, then
+than by this check, which reads the heap after pages 1 and 50 only: the heap grew 2.6 MB over the first 25 pages, then
 about 5 kB a page, 13.2 MB at page 1, 16.1 MB at page 50 and 16.8 MB at page 200. A page of 50
 results is about 300 kB of JSON, 6 kB a record with every schema, which the browser holds in far
 less once parsed.

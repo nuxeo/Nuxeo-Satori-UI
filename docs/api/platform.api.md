@@ -1288,6 +1288,7 @@ class NxsDocumentListComponent {
     readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly totalMoreThan: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly loading: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly error: import("@angular/core").InputSignal<NxsErrorStatus | null>;
@@ -1397,6 +1398,11 @@ class NxsDocumentListComponent {
     };
     "totalSize": {
     "alias": "totalSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "totalMoreThan": {
+    "alias": "totalMoreThan";
     "required": false;
     "isSignal": true;
     };
@@ -2182,6 +2188,7 @@ class NxsPagerComponent {
     readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly itemCount: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly totalMoreThan: import("@angular/core").InputSignalWithTransform<number, unknown>;
     readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
     readonly label: import("@angular/core").InputSignal<string>;
@@ -2190,6 +2197,7 @@ class NxsPagerComponent {
     protected readonly first: import("@angular/core").Signal<number>;
     protected readonly last: import("@angular/core").Signal<number>;
     protected readonly knownTotal: import("@angular/core").Signal<number | null>;
+    protected readonly moreThan: import("@angular/core").Signal<number | null>;
     protected readonly canPrevious: import("@angular/core").Signal<boolean>;
     protected readonly canNext: import("@angular/core").Signal<boolean>;
     protected readonly ownLabel: import("@angular/core").Signal<string>;
@@ -2214,6 +2222,11 @@ class NxsPagerComponent {
     };
     "totalSize": {
     "alias": "totalSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "totalMoreThan": {
+    "alias": "totalMoreThan";
     "required": false;
     "isSignal": true;
     };
@@ -3957,7 +3970,7 @@ function wholeQueryBulkAction(id: string): WholeQueryBulkAction | null;
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-349 exported symbol(s).
+351 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -4908,6 +4921,7 @@ interface NuxeoPaginatedList<T> {
     entries: T[];
     totalSize: number;
     resultsCount?: number;
+    resultsCountLimit?: number;
     currentPageSize: number;
     currentPageIndex: number;
     numberOfPages: number;
@@ -5117,6 +5131,12 @@ const RECENTLY_EDITED_QUERY: string;
 const RECENTLY_VIEWED_QUERY: string;
 const REMOVE_DOCUMENT = "Remove";
 const RESTRICTED_IMPORT_LOCATION_MESSAGE_KEY = "browse.message.restricted-import-location";
+interface ResultWindow {
+    readonly total: number | null;
+    readonly moreThan: number | null;
+    readonly reach: number | null;
+    }
+}
 interface SavedSearch {
     uid: string;
     title: string;
@@ -5591,6 +5611,7 @@ function resolveNatureLabel(id: string | null | undefined, entries: DirectoryEnt
 function resolveNuxeoIconPath(path: string): string;
 function resolvePaginatedListTotal(res: PaginatedListMeta, pageSize: number, pageIndex: number): number;
 function resolveParentSourceName(directoryName: string, metadata?: DirectoryMetadata): string | null;
+function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow;
 function sanitizeDocumentCreateName(name: string): string;
 function sanitizeDocumentName(name: string): string;
 function shouldProbeContentLakeIngestStatus(doc: NuxeoDocument): boolean;

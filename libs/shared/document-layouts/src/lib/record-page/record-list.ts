@@ -174,8 +174,10 @@ const rowContext = (base: ExtensionRuleContext, row: NuxeoDocument): ExtensionRu
  * **The search index's window.** A page provider the search index serves refuses a page that ends
  * past its `max_result_window`, 10,000 results by default (`resultWindow`). The list never asks for
  * one: past the last page within the window it offers no next page, whatever the server says of
- * one, and refuses a page asked for beyond it. It still shows the server's whole count, and says,
- * above the rows, how many of them the pages reach and how to find the rest.
+ * one, and refuses a page asked for beyond it (`onPage`, the only way to another page but the
+ * first, to which other results, another order and another page size return). It still shows the
+ * server's whole count, and says, above the rows, how many of them the pages reach and how to find
+ * the rest.
  */
 @Component({
   selector: 'lib-record-list',
@@ -245,9 +247,15 @@ export class RecordListComponent {
   });
 
   /** Which results these are: another list, or other buckets chosen. Not the order. */
-  private readonly results = computed(() => JSON.stringify([this.identity(), this.chosen()]));
+  private readonly results = computed(() =>
+    // The page size too: a page index, and a window's reach, are counted in pages of it.
+    JSON.stringify([this.identity(), this.chosen(), this.list().pageSize]),
+  );
 
-  /** Another list, or other buckets chosen, starts on the first page; the order chosen stays. */
+  /**
+   * Another list, other buckets chosen, or another page size, starts on the first page; the order
+   * chosen stays.
+   */
   protected readonly pageIndex = linkedSignal({
     source: this.results,
     computation: () => 0,
@@ -538,7 +546,10 @@ export class RecordListComponent {
   private servable(index: number): boolean {
     if (!Number.isInteger(index) || index < 0) return false;
     const reach = this.window()?.reach ?? null;
-    return reach === null || (index + 1) * this.list().pageSize <= reach;
+    // As `resultWindow` counts a page size that is not a whole number from 1.
+    const { pageSize } = this.list();
+    const size = Number.isInteger(pageSize) && pageSize >= 1 ? pageSize : 1;
+    return reach === null || (index + 1) * size <= reach;
   }
 
   /**

@@ -229,6 +229,16 @@ describe("the synthetic library at the search index's window", () => {
     assert.throws(() => six.execute({ pageSize: 1, pageIndex: 10_000 }), PastWindowError);
   });
 
+  it('stops short of a count within it at a page size that does not divide it, as 9,886 at 910 a page did', () => {
+    // The library's pages are 100 at most, so 30: 9,995 assets, page 332 the last that ends within.
+    const within = createLibrary({ size: 9_995, today: TODAY });
+    const edge = within.execute({ pageSize: 30, pageIndex: 332 });
+    assert.equal(edge.resultsCount, 9_995);
+    assert.equal(edge.numberOfPages, 334);
+    assert.equal(edge.isNextPageAvailable, false);
+    assert.throws(() => within.execute({ pageSize: 30, pageIndex: 333 }), PastWindowError);
+  });
+
   it('for its controls, counts only as far as told, or leaves the window unsaid and still enforces it', () => {
     const capped = createLibrary({ today: TODAY, counted: RESULT_WINDOW });
     assert.equal(capped.execute().resultsCount, 10_000);
@@ -482,7 +492,7 @@ describe('the stand-in', () => {
 describe('the budget', () => {
   const budget = readBudget();
 
-  it('has a positive limit for every measure the check takes, and none for any other', () => {
+  it('has a limit for every measure the check takes, positive or 0 for one that must be none, and none for any other', () => {
     assert.deepEqual(Object.keys(budget.limits).sort(), MEASURES.map((m) => m.id).sort());
     for (const { id, none } of MEASURES) {
       assert.ok(none ? budget.limits[id] === 0 : budget.limits[id] > 0, id);

@@ -200,6 +200,23 @@ describe('resultWindow', () => {
     expect(resultWindow(full, 50).reach).toBeNull();
   });
 
+  it('ends the reach where the index stops short of its count within the window, at a page size that does not divide it', () => {
+    // 9,886 created since a given second, 910 a page: page 9 had no next page, page 10 was HTTP 500.
+    const counts = { totalSize: 9_886, resultsCount: 9_886, resultsCountLimit: 10_000 };
+    const edge = counted({ ...counts, currentPageIndex: 9, isNextPageAvailable: false });
+    expect(resultWindow(edge, 910)).toEqual({ total: 9_886, moreThan: null, reach: 9_100 });
+    // Before the edge the server offers a next page, and nothing yet says where the reach ends.
+    const before = counted({ ...counts, currentPageIndex: 8, isNextPageAvailable: true });
+    expect(resultWindow(before, 910).reach).toBeNull();
+    // A last page that ends with the results, or one past them, stops short of nothing.
+    const last = counted({ ...counts, currentPageIndex: 197, isNextPageAvailable: false });
+    expect(resultWindow(last, 50).reach).toBeNull();
+    const past = counted({ ...counts, currentPageIndex: 300, isNextPageAvailable: false });
+    expect(resultWindow(past, 50).reach).toBeNull();
+    // Nor does one whose server leaves the flag out.
+    expect(resultWindow(counted({ ...counts, currentPageIndex: 9 }), 910).reach).toBeNull();
+  });
+
   it('sets no reach for the repository, which reports no limit and pages past 10,000', () => {
     // nxql_search over every document: 11,902 counted, resultsCountLimit 0, page 10,000 served.
     const page = counted({ totalSize: 11_902, resultsCount: 11_902, resultsCountLimit: 0 });

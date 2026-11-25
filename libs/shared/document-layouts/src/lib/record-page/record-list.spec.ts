@@ -495,6 +495,30 @@ describe('RecordListComponent', () => {
       );
     });
 
+    it('says so where the index stops short of a count within the window, and asks for nothing past it', async () => {
+      // As measured: 9,886 results at 910 a page, page 9 the last served.
+      const WITHIN = { totalSize: 9_886, resultsCount: 9_886, resultsCountLimit: 10_000 };
+      const root = await render(['m1'], { ...CLAIMS, pageSize: 910 });
+      await answer([claim(1)], { ...WITHIN, numberOfPages: 11, isNextPageAvailable: true });
+      expect(notice(root)).toBe('');
+      list().pageChange.emit(9);
+      await settle();
+      await answer([claim(8_191)], {
+        ...WITHIN,
+        numberOfPages: 11,
+        currentPageIndex: 9,
+        isNextPageAvailable: false,
+      });
+      expect(list().hasNextPage()).toBe(false);
+      expect(list().totalSize()).toBe(9_886);
+      expect(notice(root)).toBe(
+        'Only the first 9,100 of these 9,886 records can be paged through. Search for the records you need to find the others.',
+      );
+      list().pageChange.emit(10);
+      await settle();
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
     it('says nothing of a window the query fits in, nor of a repository that pages past 10,000', async () => {
       const root = await render();
       await answer([claim(1)], { ...PAST, totalSize: 6, resultsCount: 6, numberOfPages: 1 });
@@ -547,16 +571,47 @@ describe('RecordListComponent', () => {
     });
 
     it('starts again without a window for other buckets, and reads theirs from their first page', async () => {
-      await render();
+      const root = await render();
       await answer([claim(1)], PAST);
+      expect(notice(root)).not.toBe('');
       fixture.componentRef.setInput('aggregates', { claim_status_agg: ['open'] });
       await settle();
+      // Before their first page answers, the last results' window is gone, not kept.
+      expect(list().loading()).toBe(true);
+      expect(notice(root)).toBe('');
       await answer([claim(2)], { ...PAST, totalSize: 40, resultsCount: 40, numberOfPages: 4 });
       list().pageChange.emit(3);
       await settle();
       expect(execute).toHaveBeenLastCalledWith(
         'member_claims',
         expect.objectContaining({ pageIndex: 3 }),
+      );
+    });
+
+    it('starts again on the first page for another page size, whose pages the window counts', async () => {
+      await render();
+      list().pageChange.emit(999);
+      await settle();
+      await answer([claim(9_991)], { ...PAST, currentPageIndex: 999 });
+      // Page 999 of 20 would end at 20,000: the list goes back to the first page instead.
+      fixture.componentRef.setInput('list', { ...CLAIMS, pageSize: 20 });
+      await settle();
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 0, pageSize: 20 }),
+      );
+      await answer([claim(1)], PAST);
+      list().pageChange.emit(500);
+      await settle();
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 0, pageSize: 20 }),
+      );
+      list().pageChange.emit(499);
+      await settle();
+      expect(execute).toHaveBeenLastCalledWith(
+        'member_claims',
+        expect.objectContaining({ pageIndex: 499, pageSize: 20 }),
       );
     });
   });

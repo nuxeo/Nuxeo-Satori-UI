@@ -111,7 +111,8 @@ export interface ResultWindow {
   readonly moreThan: number | null;
   /**
    * How many results the pages can reach at the page size given: the whole pages that end within
-   * the search index's window. `null` where no window cuts the results short.
+   * the search index's window, or, at a count within it, the end of the last page the server
+   * serves. Always fewer than `total`; `null` where no window cuts the results short.
    */
   readonly reach: number | null;
 }
@@ -134,10 +135,12 @@ export interface ResultWindow {
  * limit says that there are more than that many, and nothing of how far they can be paged. A page
  * size that is not a whole number from 1 counts as 1.
  *
- * A count within the limit sets no reach, since the repository's count limit looks the same and
- * pages on: the pages end with the results. One sliver is left to the server: at a page size that
- * does not divide the window, 30 of 10,000, a last page that would cross it (results 9,991 on) is
- * refused too, and there the index's own `isNextPageAvailable`, already false, stops the pager.
+ * A count within the limit does not set a reach by itself, since the repository's count limit
+ * looks the same and pages on to the end. But at a page size that does not divide the window, the
+ * index also refuses a last page that would cross it: measured over 9,886 results at 910 a page,
+ * page 9, results 8,191 to 9,100, had no next page, and page 10 was HTTP 500. So where the server
+ * says there is no next page although its count says there are more, which the repository never
+ * does, the page read is the last it serves, and the reach ends with it.
  */
 export function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number): ResultWindow {
   const counts = [page.totalSize, page.resultsCount].filter(
@@ -153,9 +156,12 @@ export function resultWindow(page: NuxeoPaginatedList<unknown>, pageSize: number
       page.resultsCount === COUNTED_PAST_LIMIT || page.totalSize === COUNTED_PAST_LIMIT;
     return { total, moreThan: stopped ? limit : null, reach: null };
   }
-  if (total <= limit) return { total, moreThan: null, reach: null };
   const size = Number.isInteger(pageSize) && pageSize >= 1 ? pageSize : 1;
-  return { total, moreThan: null, reach: Math.floor(limit / size) * size };
+  if (total > limit) return { total, moreThan: null, reach: Math.floor(limit / size) * size };
+  const index = page.currentPageIndex;
+  const end = Number.isInteger(index) && index >= 0 ? (index + 1) * size : null;
+  const stoppedShort = page.isNextPageAvailable === false && end !== null && end < total;
+  return { total, moreThan: null, reach: stoppedShort ? end : null };
 }
 
 /**
