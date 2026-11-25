@@ -19,11 +19,56 @@ class DownloadUseTest {
     }
 
     @Test
-    void theOriginalIsItsXpathItsFirstBlobHolderPlaceAndTheMainBlobRendition() {
+    void theOriginalIsItsXpathAndTheAliasesThatReturnItsBlob() {
+        DocumentModel doc = Fakes.asset().model();
         assertEquals(Use.ORIGINAL, classify("file:content", null));
         assertEquals(Use.ORIGINAL, classify("file;content", null));
-        assertEquals(Use.ORIGINAL, classify("blobholder:0", null));
-        assertEquals(Use.ORIGINAL, classify(null, "mainBlob"));
+        assertEquals(Use.ORIGINAL,
+                DownloadUse.classify(doc, KIT, "blobholder:0", Fakes.blob("original-digest"), null));
+        assertEquals(Use.ORIGINAL, DownloadUse.classify(doc, KIT, null, Fakes.blob("original-digest"), "mainBlob"));
+    }
+
+    /** An alias whose blob cannot be compared is not the original: a use no policy lists. */
+    @Test
+    void anAliasWithNoComparableBlobIsNotTheOriginal() {
+        assertEquals(Use.blob("blobholder:0"), classify("blobholder:0", null));
+        assertEquals(Use.rendition("mainBlob"), classify(null, "mainBlob"));
+        DocumentModel doc = Fakes.asset().model();
+        assertEquals(Use.blob("blobholder:0"), DownloadUse.classify(doc, KIT, "blobholder:0", Fakes.blob(null), null));
+    }
+
+    /**
+     * The review's case: the policy's original is another blob than the main one. Each alias
+     * returns the main blob, `file:content`, which the policy does not list: it is not the original,
+     * and so is refused, as the explicit xpath is.
+     */
+    @Test
+    void anAliasThatReturnsAnotherBlobThanThePoliciesOriginalIsNotTheOriginal() {
+        RightsPolicyDescriptor descriptor = Fakes.kitPolicy();
+        descriptor.original = new UseDescriptor(null, "files:files/0/file", "Print", false);
+        RightsPolicy policy = RightsPolicy.of(descriptor);
+        Fakes.Doc asset = Fakes.asset().original("main-digest");
+        asset.properties.put("files:files/0/file", (java.io.Serializable) Fakes.blob("attachment-digest"));
+        DocumentModel doc = asset.model();
+        org.nuxeo.ecm.core.api.Blob main = Fakes.blob("main-digest");
+        org.nuxeo.ecm.core.api.Blob attachment = Fakes.blob("attachment-digest");
+
+        assertEquals(Use.blob("blobholder:0"), DownloadUse.classify(doc, policy, "blobholder:0", main, null));
+        assertEquals(Use.rendition("mainBlob"), DownloadUse.classify(doc, policy, null, main, "mainBlob"));
+        assertEquals(Use.blob("file:content"), DownloadUse.classify(doc, policy, "file:content", main, null));
+        // The configured original itself, through its xpath or an alias that returns it.
+        assertEquals(Use.ORIGINAL, DownloadUse.classify(doc, policy, "files:files/0/file", attachment, null));
+        assertEquals(Use.ORIGINAL, DownloadUse.classify(doc, policy, "blobholder:0", attachment, null));
+
+        // And so refused, on an asset whose rights cover Print.
+        AssetRightsComponent component = Fakes.component(descriptor);
+        for (Object[] download : new Object[][] { { "blobholder:0", null }, { null, "mainBlob" },
+                { "file:content", null } }) {
+            assertEquals(Decision.Reason.NOT_CLEARED,
+                    component.decideDownload(doc, (String) download[0], main, (String) download[1]).decision().reason(),
+                    java.util.Arrays.toString(download));
+        }
+        assertEquals(true, component.decideDownload(doc, "files:files/0/file", attachment, null).decision().allowed());
     }
 
     @Test

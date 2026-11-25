@@ -6,8 +6,10 @@ package org.nuxeo.agentic.assets.rights;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A rights policy as the server applies it: read once from its descriptor, then never changed.
@@ -17,8 +19,8 @@ import java.util.Map;
  * <ul>
  * <li>a policy with no {@code rightsEnd} or no {@code channels} is <em>broken</em>, and refuses
  * every use of its type;</li>
- * <li>a use with both a channel and {@code preview="true"}, or with neither, is left out, so that
- * use is refused as one the policy does not list;</li>
+ * <li>a use with both a channel and {@code preview="true"}, or with neither, is refused as one the
+ * policy does not list, whatever other declaration of the same use comes before or after it;</li>
  * <li>a use listed twice keeps the stricter of the two: a channel over a preview, and the first
  * channel over a later one.</li>
  * </ul>
@@ -80,6 +82,7 @@ public final class RightsPolicy {
             broken = true;
         }
         Map<Use, Rule> rules = new LinkedHashMap<>();
+        Set<Use> malformed = new LinkedHashSet<>();
         String originalXpath = DEFAULT_ORIGINAL_XPATH;
         UseDescriptor original = descriptor.getOriginal();
         if (original != null) {
@@ -87,14 +90,14 @@ public final class RightsPolicy {
             if (xpath != null) {
                 originalXpath = xpath;
             }
-            put(rules, problems, Use.ORIGINAL, original);
+            put(rules, malformed, problems, Use.ORIGINAL, original);
         }
         for (UseDescriptor view : descriptor.getViews()) {
             String name = trimmed(view.getName());
             if (name == null) {
                 problems.add("a <view> with no name is left out");
             } else {
-                put(rules, problems, Use.view(name), view);
+                put(rules, malformed, problems, Use.view(name), view);
             }
         }
         for (UseDescriptor rendition : descriptor.getRenditions()) {
@@ -102,7 +105,7 @@ public final class RightsPolicy {
             if (name == null) {
                 problems.add("a <rendition> with no name is left out");
             } else {
-                put(rules, problems, Use.rendition(name), rendition);
+                put(rules, malformed, problems, Use.rendition(name), rendition);
             }
         }
         for (UseDescriptor blob : descriptor.getBlobs()) {
@@ -110,21 +113,26 @@ public final class RightsPolicy {
             if (xpath == null) {
                 problems.add("a <blob> with no xpath is left out");
             } else {
-                put(rules, problems, Use.blob(xpath), blob);
+                put(rules, malformed, problems, Use.blob(xpath), blob);
             }
         }
+        // A use declared wrongly once is refused, whatever else declares it, before or after.
+        rules.keySet().removeAll(malformed);
         return new RightsPolicy(type, rightsEnd, channels, originalXpath, rules, problems, broken);
     }
 
-    private static void put(Map<Use, Rule> rules, List<String> problems, Use use, UseDescriptor descriptor) {
+    private static void put(Map<Use, Rule> rules, Set<Use> malformed, List<String> problems, Use use,
+            UseDescriptor descriptor) {
         String channel = trimmed(descriptor.getChannel());
         boolean preview = descriptor.isPreview();
         if (channel != null && preview) {
-            problems.add(use + " has both a channel and preview=\"true\": it is left out, and refused");
+            problems.add(use + " has both a channel and preview=\"true\": it is refused, whatever else declares it");
+            malformed.add(use);
             return;
         }
         if (channel == null && !preview) {
-            problems.add(use + " has neither a channel nor preview=\"true\": it is left out, and refused");
+            problems.add(use + " has neither a channel nor preview=\"true\": it is refused, whatever else declares it");
+            malformed.add(use);
             return;
         }
         Rule rule = preview ? Rule.PREVIEW : new Rule(channel);

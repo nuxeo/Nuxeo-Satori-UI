@@ -37,14 +37,15 @@ only.
 
 For a document of a type a policy covers, each download is first named as a use:
 
-| The download                                                                                                      | The use                  |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| The policy's original xpath (`file:content` unless it names another), `blobholder:0`, or the `mainBlob` rendition | the original             |
-| `picture:views/<n>/content`, with `n` written plainly                                                             | the view, by its title   |
-| A rendition, by the name the platform passes                                                                      | the rendition, by name   |
-| Any other xpath                                                                                                   | that blob, by its xpath  |
-| No xpath: the document's main blob, by its digest                                                                 | the original             |
-| Anything else, such as a view's place the document does not have                                                  | unknown, so never listed |
+| The download                                                                                                                                                        | The use                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| The policy's original xpath (`file:content` unless it names another); `blobholder:0` or the `mainBlob` rendition when the blob it returns has the original's digest | the original                                      |
+| `blobholder:0` or `mainBlob` returning another blob, such as `file:content` when the original is an attachment                                                      | that blob or rendition, never listed by the alias |
+| `picture:views/<n>/content`, with `n` written plainly                                                                                                               | the view, by its title                            |
+| A rendition, by the name the platform passes                                                                                                                        | the rendition, by name                            |
+| Any other xpath                                                                                                                                                     | that blob, by its xpath                           |
+| No xpath: the document's main blob, by its digest                                                                                                                   | the original                                      |
+| Anything else, such as a view's place the document does not have                                                                                                    | unknown, so never listed                          |
 
 Then decided, the first that applies winning:
 
@@ -73,10 +74,10 @@ Then decided, the first that applies winning:
   included.
 - **A preview is decided without reading the rights fields,** so a mistake in them refuses the
   uses they decide and leaves the thumbnails alone.
-- **A mistake refuses.** A use with both a channel and `preview="true"`, or neither, is left out,
-  and so refused; a use listed twice as a channel and a preview keeps the channel, and listed
-  twice with two channels keeps the first; a policy with no type is left out. Each mistake is
-  logged as an error when the policy registers.
+- **A mistake refuses.** A use with both a channel and `preview="true"`, or neither, is refused,
+  whatever other declaration of the same use comes before or after it; a use listed twice as a
+  channel and a preview keeps the channel, and listed twice with two channels keeps the first; a
+  policy with no type is left out. Each mistake is logged as an error when the policy registers.
 - **A failure refuses.** The script the platform runs only hands its globals to
   `AssetRightsDownloadPermission`, inside a `try` that answers `false`; the Java never throws, and
   answers `false` when the service is not running. The platform reads a permission that throws, or
@@ -140,7 +141,7 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
   decide whether a rendition is offered for a document, with no rendition name in their context,
   and a refusal there is a "not available" error with no reason a client could show.
 - **Compiled and tested against those jars:** the module's sources and tests compile against the
-  server's own 2025.10.18 jars in place of the 11.5 ones Maven resolves, and all 59 tests pass
+  server's own 2025.10.18 jars in place of the 11.5 ones Maven resolves, and all 63 tests pass
   there.
 
 ## What it does not cover
@@ -296,7 +297,8 @@ The plan requires one before this is relied on. It should check:
    README says on the release it runs on, that the engine still lets the script reach the class,
    and that refusing every download when the class cannot load is the right failure.
 3. **The classification:** that only canonical xpaths are named, that `blobholder:0` and the
-   `mainBlob` rendition are the original on every type a policy covers, and that a view is
+   `mainBlob` rendition count as the original only when their blob has the original's digest, so a
+   rendition blob whose digest differs is refused, and that a view is
    trusted by its title.
 4. **Who may write the rights fields and view titles** on the kit's types, copies included, and
    whether they must be restricted to a rights manager.

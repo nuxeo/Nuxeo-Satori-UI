@@ -150,6 +150,42 @@ class RightsPolicyTest {
         assertEquals(2, policy.problems().size());
     }
 
+    /**
+     * The review's case: a malformed declaration of a use refuses it, whatever the order and
+     * whatever valid declaration of the same use comes with it. An expired asset is then refused
+     * the view, where a preview would have served it.
+     */
+    @Test
+    void aMalformedDeclarationRefusesItsUseInEitherOrderBesideAValidOne() throws Exception {
+        String rights = "<rightsEnd xpath=\"dc:expired\" /><channels xpath=\"acmeasset:channels\" />";
+        String preview = "<view name=\"OriginalJpeg\" preview=\"true\" />";
+        String[] malformed = { "<view name=\"OriginalJpeg\" channel=\"Print\" preview=\"true\" />",
+                "<view name=\"OriginalJpeg\" />" };
+        AssetFacts expired = new AssetFacts(LocalDate.of(2026, 11, 14), Set.of("Print"));
+        for (String bad : malformed) {
+            for (String order : new String[] { preview + bad, bad + preview }) {
+                RightsPolicy policy = parse("<policy type=\"AcmeAsset\">" + rights + order + "</policy>");
+                assertNull(policy.rule(Use.view("OriginalJpeg")), order);
+                assertEquals(Decision.refuse(Reason.NOT_CLEARED),
+                        AssetRights.decide(policy, expired, Use.view("OriginalJpeg"), LocalDate.of(2026, 11, 24)),
+                        order);
+                assertTrue(policy.problems().stream().anyMatch(problem -> problem.contains("refused")), order);
+            }
+        }
+    }
+
+    /** The same beside a valid channel declaration: the use is refused, not cleared. */
+    @Test
+    void aMalformedDeclarationRefusesItsUseBesideAValidChannel() throws Exception {
+        RightsPolicy policy = parse("<policy type=\"AcmeAsset\">"
+                + "<rightsEnd xpath=\"dc:expired\" /><channels xpath=\"acmeasset:channels\" />"
+                + "<rendition name=\"FullHD\" channel=\"E-commerce\" /><rendition name=\"FullHD\" />"
+                + "<view name=\"FullHD\" channel=\"E-commerce\" /></policy>");
+
+        assertNull(policy.rule(Use.rendition("FullHD")));
+        assertEquals(new Rule("E-commerce"), policy.rule(Use.view("FullHD")));
+    }
+
     @Test
     void anOriginalMayNameItsXpath() throws Exception {
         RightsPolicy policy = parse("""

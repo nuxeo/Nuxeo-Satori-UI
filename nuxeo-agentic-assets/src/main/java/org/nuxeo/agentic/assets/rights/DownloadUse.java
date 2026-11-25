@@ -25,6 +25,9 @@ import org.nuxeo.ecm.core.api.DocumentModel;
  * <li>a Picture's {@code blobholder:0} is {@code file:content}, its later blob holder places its
  * views, and the {@code mainBlob} rendition is its main blob.</li>
  * </ul>
+ * So {@code blobholder:0} and {@code mainBlob} return the main blob, which need not be the blob a
+ * policy names as its original: each is the original only when the blob it returns has the
+ * original's digest, and otherwise a use no policy lists.
  *
  * <p>Only canonical forms are named. Anything else, such as a view addressed another way or an
  * index the document does not have, is a use no policy lists, so it is refused.
@@ -48,7 +51,10 @@ public final class DownloadUse {
     public static Use classify(DocumentModel document, RightsPolicy policy, String xpath, Blob blob,
             String rendition) {
         if (rendition != null) {
-            return MAIN_BLOB_RENDITION.equals(rendition) ? Use.ORIGINAL : Use.rendition(rendition);
+            // The mainBlob rendition returns the document's main blob, which is the policy's
+            // original only when the policy's original is that blob.
+            return MAIN_BLOB_RENDITION.equals(rendition) && isOriginal(document, policy, blob) ? Use.ORIGINAL
+                    : Use.rendition(rendition);
         }
         if (xpath == null) {
             // Only Blob.BulkDownload was seen doing this, with the main blob. Anything else is unknown.
@@ -56,8 +62,13 @@ public final class DownloadUse {
         }
         // As DownloadServiceImpl.fixXPath reads one, though checkPermission has done it already.
         String path = xpath.replace(';', ':');
-        if (path.equals(policy.originalXpath()) || path.equals(MAIN_BLOB_HOLDER)) {
+        if (path.equals(policy.originalXpath())) {
             return Use.ORIGINAL;
+        }
+        if (path.equals(MAIN_BLOB_HOLDER)) {
+            // The main blob, as the type's blob holder gives it: the original only when it is the
+            // policy's original's blob, compared by digest.
+            return isOriginal(document, policy, blob) ? Use.ORIGINAL : Use.blob(path);
         }
         Matcher view = VIEW.matcher(path);
         if (view.matches()) {
@@ -67,6 +78,10 @@ public final class DownloadUse {
         return Use.blob(path);
     }
 
+    /**
+     * Whether {@code blob} is the policy's original: the blob at its xpath, by digest. A blob with no
+     * digest, or a document with nothing there, is not.
+     */
     private static boolean isOriginal(DocumentModel document, RightsPolicy policy, Blob blob) {
         if (blob == null || blob.getDigest() == null) {
             return false;
