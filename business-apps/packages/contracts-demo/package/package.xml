@@ -1,4 +1,4 @@
-<package type="addon" name="contracts-demo" version="0.2.0">
+<package type="addon" name="contracts-demo" version="0.2.1">
   <title>Contracts</title>
   <description>
     <p>The Contracts app definition, a Nuxeo Satori business app: its record pages, queues, actions and labels.</p>

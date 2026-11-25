@@ -1,4 +1,4 @@
-<package type="addon" name="brand-assets-demo" version="0.2.0">
+<package type="addon" name="brand-assets-demo" version="0.2.1">
   <title>Brand assets (demo)</title>
   <description>
     <p>The brand assets starter kit of the Nuxeo Satori business apps, for the fictional Acme Outdoor, with fictional data.</p>
