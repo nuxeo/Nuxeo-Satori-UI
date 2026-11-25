@@ -218,6 +218,51 @@
               "parameters": {}
             }
           ]
+        },
+        "checklist": {
+          "type": "complex[]",
+          "fields": {
+            "item": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "done": {
+              "type": "boolean",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "boolean",
+                  "parameters": {}
+                }
+              ]
+            },
+            "doneBy": {
+              "type": "string",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "string",
+                  "parameters": {}
+                }
+              ]
+            },
+            "doneOn": {
+              "type": "date",
+              "constraints": [
+                {
+                  "entity-type": "validation_constraint",
+                  "name": "date",
+                  "parameters": {}
+                }
+              ]
+            }
+          }
         }
       }
     },

@@ -44,6 +44,7 @@ export {
   type LayoutMode,
   type ValidationOptions,
 } from './lib/layout-v2';
+export { CHECKLIST_SUBFIELDS } from './lib/layout-model';
 export {
   placeFile,
   validateFile,
