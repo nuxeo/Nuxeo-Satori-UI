@@ -64,15 +64,17 @@ page 1 and once after page 50. The four `window.` lines count what must not happ
 their limit is 0; `budget.mjs` refuses any other limit for them, and 0 for any other line.
 
 **What the window's lines can and cannot tell apart.** They hold the app, end to end, against a
-server that answers as Nuxeo does, and Nuxeo's own `isNextPageAvailable` is already false on page 200. So an app that only follows that flag, as staging's did before this change, also keeps the
-first three lines at 0: they catch a regression that would page past the window, misstate the
-total or offer a way past the edge, and the `unwindowed` and `capped-count` controls show them going
-red. Of the four, only `window.noticeMissing` tells this change from the app before it, which fails
-it ("Measured", below). The app's own guard, for a server that offers a next page at the edge
-anyway, is held by `record-list.spec.ts`, not by this check.
+server that answers as Nuxeo does, and Nuxeo's own `isNextPageAvailable` is already false on page 200. So an app that only follows that flag, as the record list did before the window was read,
+would also keep the first three lines at 0: they catch a regression that pages past the window,
+misstates the total or offers a way past the edge, and the `unwindowed` and `capped-count` controls
+show them going red. Of the four, only `window.noticeMissing` tells the app with the notice from
+the one before it, which has none: reasoned from its code, not run. The app's own guard, for a
+server that offers a next page at the edge anyway, is held by `record-list.spec.ts`, not by this
+check.
 
 **Today's growth is warm-up.** Browsed to page 200 once, by a probe against the same stand-in rather
-than by this check, which reads the heap after pages 1 and 50 only: the heap grew 2.6 MB over the first 25 pages, then
+than by this check, which reads the heap after pages 1 and 50 only: the heap grew 2.6 MB over the
+first 25 pages, then
 about 5 kB a page, 13.2 MB at page 1, 16.1 MB at page 50 and 16.8 MB at page 200. A page of 50
 results is about 300 kB of JSON, 6 kB a record with every schema, which the browser holds in far
 less once parsed.
