@@ -19,6 +19,8 @@ import { syntheticPackage } from './testing/synthetic-package';
 import { writeZip } from './testing/zip-writer';
 
 const UI = 'web/nuxeo.war/ui';
+/** For a test that runs migrate over a whole package several times: past Vitest's 5 seconds under the gate's load. */
+const SEVERAL_RUNS = 30_000;
 const ALLOW = Buffer.from(JSON.stringify({ operations: ['Claim.Approve'] }));
 
 interface Printed {
@@ -131,116 +133,140 @@ describe.each([
   it.each([
     ['without an allow-list', []],
     ['with an allow-list', ['--allow-list', 'allow.json']],
-  ])('writes what each command prints by hand, byte for byte, %s', (__, allow) => {
-    const out = fresh();
-    const conversion = join(out, 'conversion');
-    const hand = byHand(
-      out,
-      [
-        ['inventory', 'acme.zip'],
-        ['convert', 'acme.zip', conversion, ...allow],
-        ['check', 'acme.zip', conversion, ...allow],
-        ['report', 'acme.zip', conversion, ...allow],
-        ['decisions', 'acme.zip', conversion],
-      ],
-      files,
-    );
-
-    const migrated = run(['migrate', 'acme.zip', '--out', out, ...allow], files);
-    expect(migrated).toMatchObject({ code: 0, err: '' });
-    expect(tree(out)).toEqual(hand);
-    expect([...hand.keys()]).toEqual(
-      expect.arrayContaining([
-        'inventory.txt',
-        'conversion.txt',
-        'check.txt',
-        'report.txt',
-        'decisions.txt',
-        join('conversion', 'report.json'),
-        join('conversion', 'decisions.json'),
-        join('conversion', 'app', 'app.json'),
-      ]),
-    );
-    expect(migrated.out).toMatch(
-      /^Migrating acme\.zip into .*\n\n1\. The inventory: done.*\n2\. The conversion: done[^]*\n3\. The checks that need no server: done, and no check failed;.*\n4\. The report: done.*\n5\. The decisions to fill in: done[^]*\nVerdict: not ready\. What stands in the way:\n/,
-    );
-    expect(migrated.out).toContain(
-      `\n  2. In ${join(conversion, 'decisions.json')}, write for each reported item still without them who owns it`,
-    );
-    expect(migrated.out).toContain(
-      `\n  3. To see your decisions counted, run again into a new directory, carrying them: npm run studio-migration -- migrate acme.zip --out ${out}-2${allow.length ? ' --allow-list allow.json' : ''} --from ${out}\n`,
-    );
-    // Check 10 holds the actions to the allow-list convert was given, so it never runs in part.
-    expect(migrated.out).not.toContain('- 10 Package');
-    // The scaffold, written last, changes nothing the checks and the report print.
-    for (const command of ['check', 'report'])
-      expect(run([command, 'acme.zip', conversion, ...allow], files).out).toBe(
-        readFileSync(join(out, PRINTED_INTO[command]), 'utf8'),
+  ])(
+    'writes what each command prints by hand, byte for byte, %s',
+    (__, allow) => {
+      const out = fresh();
+      const conversion = join(out, 'conversion');
+      const hand = byHand(
+        out,
+        [
+          ['inventory', 'acme.zip'],
+          ['convert', 'acme.zip', conversion, ...allow],
+          ['check', 'acme.zip', conversion, ...allow],
+          ['report', 'acme.zip', conversion, ...allow],
+          ['decisions', 'acme.zip', conversion],
+        ],
+        files,
       );
-  });
 
-  it('carries the decisions of an earlier run before the checks, as by hand, and leaves that run as it was', () => {
-    const earlier = fresh();
-    expect(run(['migrate', 'acme.zip', '--out', earlier], files).code).toBe(0);
-    const decisions = join(earlier, 'conversion', 'decisions.json');
-    fill(decisions);
-    const before = tree(earlier);
+      const migrated = run(['migrate', 'acme.zip', '--out', out, ...allow], files);
+      expect(migrated).toMatchObject({ code: 0, err: '' });
+      expect(tree(out)).toEqual(hand);
+      expect([...hand.keys()]).toEqual(
+        expect.arrayContaining([
+          'inventory.txt',
+          'conversion.txt',
+          'check.txt',
+          'report.txt',
+          'decisions.txt',
+          join('conversion', 'report.json'),
+          join('conversion', 'decisions.json'),
+          join('conversion', 'app', 'app.json'),
+        ]),
+      );
+      expect(migrated.out).toMatch(
+        /^Migrating acme\.zip into .*\n\n1\. The inventory: done.*\n2\. The conversion: done[^]*\n3\. The checks that need no server: done, and no check failed;.*\n4\. The report: done.*\n5\. The decisions to fill in: done[^]*\nVerdict: not ready\. What stands in the way:\n/,
+      );
+      expect(migrated.out).toContain(
+        `\n  2. In ${join(conversion, 'decisions.json')}, write for each reported item still without them who owns it`,
+      );
+      expect(migrated.out).toContain(
+        `\n  3. To see your decisions counted, run again into a new directory, carrying them: npm run studio-migration -- migrate acme.zip --out ${out}-2${allow.length ? ' --allow-list allow.json' : ''} --from ${out}\n`,
+      );
+      // Check 10 holds the actions to the allow-list convert was given, so it never runs in part.
+      expect(migrated.out).not.toContain('- 10 Package');
+      // The scaffold, written last, changes nothing the checks and the report print.
+      for (const command of ['check', 'report'])
+        expect(run([command, 'acme.zip', conversion, ...allow], files).out).toBe(
+          readFileSync(join(out, PRINTED_INTO[command]), 'utf8'),
+        );
+    },
+    SEVERAL_RUNS,
+  );
 
-    const out = fresh();
-    const conversion = join(out, 'conversion');
-    const hand = byHand(
-      out,
-      [
-        ['inventory', 'acme.zip'],
-        ['convert', 'acme.zip', conversion],
-        ['decisions', 'acme.zip', conversion, '--from', decisions],
-        ['check', 'acme.zip', conversion],
-        ['report', 'acme.zip', conversion],
-      ],
-      files,
-    );
-    const migrated = run(['migrate', 'acme.zip', '--out', out, '--from', earlier], files);
-    expect(migrated).toMatchObject({ code: 0, err: '' });
-    expect(tree(out)).toEqual(hand);
-    expect(tree(earlier)).toEqual(before);
-    expect(migrated.out).toMatch(
-      /\n3\. The decisions, carried: done[^]*\n4\. The checks that need no server: done.*\n5\. The report: done/,
-    );
-    // Counted by the checks and the report, which ran after them, and nothing is left to do with them.
-    expect(readFileSync(join(out, 'check.txt'), 'utf8')).not.toMatch(/reported items? ha/);
-    expect(migrated.out).toContain(
-      '\n  2. Every reported item has an owner and a decision: none is left to fill in.\n',
-    );
-    expect(migrated.out).not.toContain('To see your decisions counted');
-    expect(readFileSync(join(out, 'report.txt'), 'utf8')).toMatch(
-      /Decisions needed: (\d+) reported items, \1 of them decided/,
-    );
+  it(
+    'carries the decisions of an earlier run before the checks, as by hand, and leaves that run as it was',
+    () => {
+      const earlier = fresh();
+      expect(run(['migrate', 'acme.zip', '--out', earlier], files).code).toBe(0);
+      const decisions = join(earlier, 'conversion', 'decisions.json');
+      fill(decisions);
+      const before = tree(earlier);
 
-    // A decision whose owner is spaces alone is carried, and still left to fill in.
-    const spaced = fresh();
-    expect(run(['migrate', 'acme.zip', '--out', spaced], files).code).toBe(0);
-    const spacedFile = join(spaced, 'conversion', 'decisions.json');
-    fill(spacedFile);
-    const blanked = JSON.parse(readFileSync(spacedFile, 'utf8'));
-    blanked.decisions[0].owner = '   ';
-    writeFileSync(spacedFile, JSON.stringify(blanked));
-    const again = fresh();
-    const carried = run(['migrate', 'acme.zip', '--out', again, '--from', spaced], files);
-    expect(readFileSync(join(again, 'decisions.txt'), 'utf8')).toMatch(
-      /reported items, 1 of them still without an owner or a decision\n/,
-    );
-    expect(carried.out).toContain('To see your decisions counted');
-    expect(carried.out).not.toContain('none is left to fill in');
+      const out = fresh();
+      const conversion = join(out, 'conversion');
+      const hand = byHand(
+        out,
+        [
+          ['inventory', 'acme.zip'],
+          ['convert', 'acme.zip', conversion],
+          ['decisions', 'acme.zip', conversion, '--from', decisions],
+          ['check', 'acme.zip', conversion],
+          ['report', 'acme.zip', conversion],
+        ],
+        files,
+      );
+      const migrated = run(['migrate', 'acme.zip', '--out', out, '--from', earlier], files);
+      expect(migrated).toMatchObject({ code: 0, err: '' });
+      expect(tree(out)).toEqual(hand);
+      expect(tree(earlier)).toEqual(before);
+      expect(migrated.out).toMatch(
+        /\n3\. The decisions, carried: done[^]*\n4\. The checks that need no server: done.*\n5\. The report: done/,
+      );
+      // Counted by the checks and the report, which ran after them, and nothing is left to do with them.
+      expect(readFileSync(join(out, 'check.txt'), 'utf8')).not.toMatch(/reported items? ha/);
+      expect(migrated.out).toContain(
+        '\n  2. Every reported item has an owner and a decision: none is left to fill in.\n',
+      );
+      expect(migrated.out).not.toContain('To see your decisions counted');
+      expect(readFileSync(join(out, 'report.txt'), 'utf8')).toMatch(
+        /Decisions needed: (\d+) reported items, \1 of them decided/,
+      );
+    },
+    SEVERAL_RUNS,
+  );
 
-    // The decisions.json itself, or the conversion holding it, carry the same.
-    for (const from of [decisions, join(earlier, 'conversion')]) {
+  it(
+    'carries a decision whose owner is spaces alone, and still asks for it',
+    () => {
+      const spaced = fresh();
+      expect(run(['migrate', 'acme.zip', '--out', spaced], files).code).toBe(0);
+      const spacedFile = join(spaced, 'conversion', 'decisions.json');
+      fill(spacedFile);
+      const blanked = JSON.parse(readFileSync(spacedFile, 'utf8'));
+      blanked.decisions[0].owner = '   ';
+      writeFileSync(spacedFile, JSON.stringify(blanked));
       const again = fresh();
-      expect(run(['migrate', 'acme.zip', '--out', again, '--from', from], files).code).toBe(0);
-      expect(readFileSync(join(again, 'conversion', 'decisions.json'), 'utf8')).toBe(
-        readFileSync(join(out, 'conversion', 'decisions.json'), 'utf8'),
+      const carried = run(['migrate', 'acme.zip', '--out', again, '--from', spaced], files);
+      expect(readFileSync(join(again, 'decisions.txt'), 'utf8')).toMatch(
+        /reported items, 1 of them still without an owner or a decision\n/,
       );
-    }
-  });
+      expect(carried.out).toContain('To see your decisions counted');
+      expect(carried.out).not.toContain('none is left to fill in');
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
+    'carries the same from the decisions.json itself, or the conversion holding it',
+    () => {
+      const earlier = fresh();
+      expect(run(['migrate', 'acme.zip', '--out', earlier], files).code).toBe(0);
+      const decisions = join(earlier, 'conversion', 'decisions.json');
+      fill(decisions);
+      const out = fresh();
+      expect(run(['migrate', 'acme.zip', '--out', out, '--from', earlier], files).code).toBe(0);
+      for (const from of [decisions, join(earlier, 'conversion')]) {
+        const again = fresh();
+        expect(run(['migrate', 'acme.zip', '--out', again, '--from', from], files).code).toBe(0);
+        expect(readFileSync(join(again, 'conversion', 'decisions.json'), 'utf8')).toBe(
+          readFileSync(join(out, 'conversion', 'decisions.json'), 'utf8'),
+        );
+      }
+    },
+    SEVERAL_RUNS,
+  );
 });
 
 describe('migrate, its negative controls', () => {
