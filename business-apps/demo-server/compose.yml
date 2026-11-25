@@ -61,7 +61,20 @@ services:
       org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}
     restart: 'no'
 
+# The volumes and the network carry the run's mark too, so a run cleaning up after a failure can
+# tell its own from another's.
 volumes:
   nuxeo-data:
+    labels:
+      org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}
   nuxeo-logs:
+    labels:
+      org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}
   opensearch-data:
+    labels:
+      org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}
+
+networks:
+  default:
+    labels:
+      org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}

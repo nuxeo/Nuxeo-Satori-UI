@@ -24,10 +24,11 @@ export class Interrupted extends Error {}
 export const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
 /**
- * What a child of this command is given of its environment: what Docker, git, tar and Node need to
- * run, and nothing else. A list of what may pass rather than of what may not, so a credential under
- * a name nobody thought of, `*_API_KEY` say, passes to no child. `COMPOSE_*` is left out too: the
- * operator's COMPOSE_FILE or COMPOSE_PROJECT_NAME must not change which project a command reaches.
+ * What a child of this command is given of its environment: what git, tar and Node need to run, and
+ * nothing else. A list of what may pass rather than of what may not, so a credential under a name
+ * nobody thought of, `*_API_KEY` say, passes to no child, and a name that looks like a credential is
+ * taken out even of what the list lets pass. `COMPOSE_*` is left out too: the operator's
+ * COMPOSE_FILE or COMPOSE_PROJECT_NAME must not change which project a command reaches.
  */
 const PASSED = new Set([
   'PATH',
@@ -42,7 +43,28 @@ const PASSED = new Set([
   'TERM',
   'TZ',
 ]);
-const PASSED_PREFIXES = ['LC_', 'DOCKER_', 'XDG_'];
+const PASSED_PREFIXES = ['LC_', 'XDG_'];
+/** What the Docker CLI alone is given besides: where its daemon is, and how it reaches it. */
+const DOCKER_PASSED = new Set(['SSH_AUTH_SOCK']);
+const DOCKER_PREFIXES = ['DOCKER_'];
+/** A name that looks like a credential: never passed, whatever list would let it. */
+const CREDENTIAL = /(TOKEN|PASSWORD|PASSWD|SECRET|_PASS$|_CLID$|KEY|AUTH|CREDENTIAL)/i;
+
+/**
+ * The value of every variable whose name looks like a credential, needed by the run or not: what
+ * is taken out of what is printed, beside the run's own secrets. SSH_AUTH_SOCK names a socket.
+ */
+export const credentialValues = (env) =>
+  Object.entries(env)
+    .filter(
+      ([name, value]) =>
+        typeof value === 'string' && name !== 'SSH_AUTH_SOCK' && CREDENTIAL.test(name),
+    )
+    .map(([, value]) => value);
+
+/** A name listed passes; one that only begins as a listed prefix does, unless it looks like a credential. */
+const passes = (name, names, prefixes) =>
+  names.has(name) || (!CREDENTIAL.test(name) && prefixes.some((prefix) => name.startsWith(prefix)));
 
 /** `env` reduced to what may pass to a child, and the `extra` names a child of one kind needs. */
 export function quietEnvironment(env, extra = []) {
@@ -50,11 +72,22 @@ export function quietEnvironment(env, extra = []) {
     Object.entries(env).filter(
       ([name, value]) =>
         typeof value === 'string' &&
-        (PASSED.has(name) ||
-          extra.includes(name) ||
-          PASSED_PREFIXES.some((prefix) => name.startsWith(prefix))),
+        (passes(name, PASSED, PASSED_PREFIXES) || (extra.includes(name) && !CREDENTIAL.test(name))),
     ),
   );
+}
+
+/** What the Docker CLI is given: a quiet environment, and the `DOCKER_*` settings no other child gets. */
+export function dockerEnvironment(env) {
+  return {
+    ...quietEnvironment(env),
+    ...Object.fromEntries(
+      Object.entries(env).filter(
+        ([name, value]) =>
+          typeof value === 'string' && passes(name, DOCKER_PASSED, DOCKER_PREFIXES),
+      ),
+    ),
+  };
 }
 
 /**
@@ -62,7 +95,9 @@ export function quietEnvironment(env, extra = []) {
  * as text. `command` is `docker`, or the stand-in the controls give in DEMO_SERVER_DOCKER.
  * `compose` is what compose interpolates the file with: the port, the address, the candidate and
  * this run's mark. NUXEO_CLID goes to `compose create` alone, which writes it into the container's
- * environment; no other command, compose's or Docker's, is given it.
+ * environment; no other command, compose's or Docker's, is given it. So a `compose up` by hand,
+ * without `--no-recreate`, finds the container's configuration changed and makes it again: never
+ * `up` the project by hand (the README).
  */
 export function dockerCli({ command, env, compose, clid }) {
   return (args) => {
@@ -71,7 +106,7 @@ export function dockerCli({ command, env, compose, clid }) {
       encoding: 'utf8',
       maxBuffer: OUTPUT_LIMIT,
       env: {
-        ...quietEnvironment(env),
+        ...dockerEnvironment(env),
         ...(args[0] === 'compose' ? compose : {}),
         ...(sub === 'create' && clid ? { [CLID]: clid } : {}),
       },
@@ -79,9 +114,14 @@ export function dockerCli({ command, env, compose, clid }) {
   };
 }
 
-/** Whether a child ended because this process, or its terminal's group, was sent a stop. */
-export const stoppedBySignal = (result) =>
-  SIGNALS.includes(result.signal) || [130, 143, 129].includes(result.status);
+/**
+ * The stop that ended a child, or `null`: a signal, or the exit Maven, Nx and a shell give a child
+ * a signal stopped, 128 and the signal's number. A child that exits with one of those of its own
+ * accord is taken as stopped too, as `release-candidate.mjs` takes it.
+ */
+const EXITS = { 129: 'SIGHUP', 130: 'SIGINT', 143: 'SIGTERM' };
+export const stoppedBy = (result) =>
+  SIGNALS.includes(result.signal) ? result.signal : (EXITS[result.status] ?? null);
 
 /**
  * A function that takes every secret's value out of a text, and the forms a child may print it in:

@@ -106,7 +106,8 @@ Ctrl-C, interrupted.
 **When a step fails after step 7,** what was made is left as safe as it can be, and the output
 says which: not started yet, it is removed; started and not shown secured, it is stopped and kept
 for its logs; started and secured, it keeps running. Nothing is removed or stopped unless every
-container of the project carries this run's mark. Ctrl-C, or a stop sent to the command, is handled
+container, volume and network of the project carries this run's mark, which `compose.yml` gives
+each. Ctrl-C, or a stop sent to the command, is handled
 the same way. A run is then refused until the project is removed: it never builds on a half-made
 one.
 
@@ -119,11 +120,14 @@ one.
   use the machine's Docker.
 - **Never printed.** What a child prints, Docker or a seed, is printed with each secret taken out:
   its value, a `NUXEO_CLID`'s halves, which the image splits at `--`, and the Basic header of the
-  administrator and of each demo person the steps files name. A refusal names a variable, never its
-  value.
+  administrator and of each demo person the steps files name. So is the value of every variable
+  named as a credential is, `*TOKEN*`, `*PASSWORD*`, `*KEY*`, `*AUTH*` and the like, whether the
+  run needs it or not. A refusal names a variable, never its value.
 - **Only where needed.** A child is given only what it needs of the environment, by a list of what
-  may pass: `PATH`, `HOME`, the locale, `DOCKER_*` and a few more. So no token or key passes under any
-  name, and no `COMPOSE_*` can move a command to another project. `compose create` alone is given
+  may pass: `PATH`, `HOME`, the locale and a few more. A name that looks like a credential never
+  passes, whatever list would let it, and no `COMPOSE_*` can move a command to another project. The
+  Docker CLI alone is also given `DOCKER_*`, `DOCKER_PASSWORD`, `DOCKER_TOKEN` and their kind
+  excepted, and `SSH_AUTH_SOCK`, for a daemon reached over SSH. `compose create` alone is given
   `NUXEO_CLID`; a seed gets the administrator's password as `NUXEO_PASS` and its own demo password
   by name.
 - **Never on a command line, and never in an address.** The administrator's password goes in a
@@ -171,7 +175,9 @@ docker compose -f business-apps/demo-server/compose.yml -p satori-demo down --vo
 ```
 
 - **Never `up` it by hand.** The packages are installed in the container, not in an image: a
-  container made again is a bare Nuxeo whose volumes still hold records of the kits' types.
+  container made again is a bare Nuxeo whose volumes still hold records of the kits' types. And
+  `up` would make it again: only the command's own `create` gives the container `NUXEO_CLID`, so a
+  plain `up` finds its configuration changed. `start` never does.
 - **Nothing restarts it by itself** (`restart: 'no'`): a failed install must not loop. After the
   machine restarts, `start` it.
 - **A new candidate is a new server:** `down --volumes`, then run the command again, or give it
@@ -186,9 +192,9 @@ npm run demo-server:selftest
 
 Offline, in under half a minute: Docker is a stand-in that records every command and answers as
 Docker does, Nuxeo a stand-in HTTP server, and the candidate is written by the controls, its zips
-byte by byte. The kits' seeds, configuration and app definitions are the clone's, at HEAD. 129
-controls: 88 negative, each feeding in something broken or forbidden that must be refused or
-caught, and 41 positive.
+byte by byte. The kits' seeds, configuration and app definitions are the clone's, at HEAD. 138
+controls: 95 negative, each feeding in something broken or forbidden that must be refused or
+caught, and 43 positive.
 
 - **The plan:** the order, the add-on found by its bytes, the allow-list read from the commit, the
   seeds and their passwords. Refused: a candidate missing a dependency, one held at a version that
@@ -199,44 +205,53 @@ caught, and 41 positive.
   uncommitted changes.
 - **The arguments, the secrets, the script and the files:** each option's refusals; each secret
   unset or empty, the default, a short one, a shared one; the install script in the plan's order,
-  each step stopping the start, `mp-list` checked for every package, a hostile version quoted; each
-  kit's `config:dev` command holding its README's arguments; the compose file declaring the images,
-  services, volumes, the run's mark and the one port the plan describes.
+  each step stopping the start, a hostile version quoted; the script's own `mp-list` checks run by
+  bash, passing every package started or installed and stopping on one missing or only
+  downloaded; each kit's `config:dev` command holding its README's arguments; the compose file
+  declaring the images, services, volumes, network, the run's mark on each, and the one port the
+  plan describes.
 - **The machine:** the project's resources found by label and by name, and the developer's not;
   a port in use; the wait ended by its container stopping and by its deadline; the password
   changed, and refused against a server that refused the default first or keeps it after;
-  redaction of each form a secret takes; files made 0600 set readable; the commit's kit folder
-  unpacked and a seed run with exactly its environment.
+  redaction of each form a secret takes, and of every credential under any name; each child's
+  environment, Docker's settings to Docker alone and Docker's credentials to no child; a child's
+  stop read as its own signal; files made 0600 set readable; the commit's kit folder unpacked and
+  a seed run with exactly its environment.
 - **The command:** each secret unset, an existing project and a candidate missing a dependency
   refused with exit 2 and no Docker command that changes anything; a project another run made
   during the pull, refused before create; a container with another run's mark, touched in no way;
-  a dry run; a start that fails under umask 077, stopped, with every file it copied in readable;
-  a copy that fails, removed; a pull that fails, nothing made; a container that stops, its log
-  printed; a run that comes up, its calls in order; a run whose real seed, the contracts kit's,
-  refuses the stand-in, left running; a run interrupted while it waits, stopped with exit 130.
-  Docker's stand-in prints every secret in its logs, its exec answers and its failures, and no run
-  prints one, puts one on a command line, copies into a container compose did not answer, gives
-  `NUXEO_CLID` to anything but `compose create`, or pushes, builds, tags or logs in.
+  a create that fails, removed, and one beside another run's volume, left; a dry run; a start that
+  fails under umask 077, stopped, with every file it copied in readable; a copy that fails,
+  removed; a pull that fails, nothing made; a container that stops, its log printed; a run that
+  comes up, its calls in order; a run whose real seed, the contracts kit's, refuses the stand-in,
+  left running; Ctrl-C to the whole process group while it waits, stopped with exit 130. Every run
+  has Docker's credentials in its environment, and Docker's stand-in says every secret as it
+  pulls, creates and starts, in its logs, its exec answers and its failures. No run prints one,
+  puts one on a command line, gives one to a child, copies into a container compose did not
+  answer, gives `NUXEO_CLID` to anything but `compose create`, or pushes, builds, tags or logs in.
 
 CI runs them in `release-candidate.yml`'s controls job.
 
 **Seen failing,** on 25 November 2026: each guard taken out of the code one at a time, the
 controls run, and the code put back byte for byte. Each turned at least one control red:
 
-| Guard taken out                                        | Controls that failed                                                                |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| The command's refusal of unset secrets                 | 3: each secret unset, with exit 2                                                   |
-| The rule that finds an unset secret                    | 10: those 3, the rule's 6, and the dry run's report                                 |
-| The command's refusal of an existing project           | 2: the run's and the dry run's                                                      |
-| The match by compose's project label                   | 1                                                                                   |
-| The candidate's set rules in the install order         | 4: the missing dependency in the plan and the command, an unmet version, a conflict |
-| The redaction                                          | 4: the function's own, the seed's output, Docker's failure, a container's log       |
-| The copy's target, made `nuxeo:`                       | 2: what is copied where, and every target the container compose answered            |
-| `--no-recreate` on `compose up`                        | 4: every run that starts                                                            |
-| The modes set on the payload                           | 2: the function's own, and the copy under umask 077                                 |
-| Both interruption guards, in the wait and in the catch | 1: the interrupted run. Either one alone still exits 130                            |
-| The project asked again before create                  | 1                                                                                   |
-| The run's mark read before anything is copied in       | 1                                                                                   |
+| Guard taken out                                                        | Controls that failed                                                                                     |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| The command's refusal of unset secrets                                 | 3: each secret unset, with exit 2                                                                        |
+| The rule that finds an unset secret                                    | 10: those 3, the rule's 6, and the dry run's report                                                      |
+| The command's refusal of an existing project                           | 2: the run's and the dry run's                                                                           |
+| The match by compose's project label                                   | 1                                                                                                        |
+| The candidate's set rules in the install order                         | 4: the missing dependency in the plan and the command, an unmet version, a conflict                      |
+| The redaction                                                          | 6: the function's own, a seed's output, Docker's failure, a container's log, and two runs' success paths |
+| The copy's target, made `nuxeo:`                                       | 2: what is copied where, and every target the container compose answered                                 |
+| `--no-recreate` on `compose up`                                        | 4: every run that starts                                                                                 |
+| The modes set on the payload                                           | 2: the function's own, and the copy under umask 077                                                      |
+| Both interruption guards, in the wait and in the catch                 | 1: the run sent Ctrl-C. Either one alone still exits 130                                                 |
+| The project asked again before create                                  | 1                                                                                                        |
+| The run's mark read before anything is copied in                       | 1                                                                                                        |
+| `DOCKER_*` passed to every child, not to Docker alone                  | 2: a seed's environment, and every other child's                                                         |
+| Cleanup checking the containers' marks only, not volumes' or networks' | 1: a create that fails beside another run's volume                                                       |
+| Every stop read as Ctrl-C                                              | 1: a child's stop read as its own signal                                                                 |
 
 A first try at the missing dependency hung: with the refusal gone, the command went on to wait
 twenty minutes for a server that was never there. Every command the controls run now has a short
@@ -263,6 +278,8 @@ twenty minutes for a server that was never there. Every command the controls run
   - `nuxeoctl mp-list`'s lines as Nuxeo 2025 prints them: the script fails the start unless each
     package's `id: <name>-<version>)` is on a line saying started or installed, a form read from
     Nuxeo's documentation, never from this image;
+  - a Docker daemon reached other than through the local socket, `DOCKER_HOST=ssh://` with
+    `SSH_AUTH_SOCK` say: the Docker CLI is given both, and no proxy variable;
   - that `docker cp` into a container created and not started lands where the image reads it, and
     that the files, owned by root there, are read by the `nuxeo` user as their modes allow;
   - the OpenSearch keys in `90-demo-server.conf`, taken from the fix-bug skill's dedicated

@@ -60,6 +60,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   componentStatus,
+  credentialValues,
   dockerCli,
   dockerProblem,
   existingResources,
@@ -73,7 +74,7 @@ import {
   seedEnvironment,
   setAdministratorPassword,
   SIGNALS,
-  stoppedBySignal,
+  stoppedBy,
   unpackAtCommit,
   waitForServer,
   why,
@@ -162,8 +163,9 @@ const people = [
     );
   }),
 ];
+// The run's secrets, and the value of every variable named as a credential is, needed or not.
 const redact = redactor(
-  plan.secrets.map((name) => environment[name]),
+  [...plan.secrets.map((name) => environment[name]), ...credentialValues(environment)],
   people,
 );
 const say = (text) => process.stdout.write(redact(text));
@@ -243,10 +245,8 @@ async function checkpoint() {
 }
 /** A child that a stop ended is an interruption, whether or not this process's listener ran yet. */
 function interruptedIn(result) {
-  if (interruptedBy === null && !stoppedBySignal(result)) return;
-  throw new Interrupted(
-    interruptedBy ?? (SIGNALS.includes(result.signal) ? result.signal : 'SIGINT'),
-  );
+  const by = interruptedBy ?? stoppedBy(result);
+  if (by !== null) throw new Interrupted(by);
 }
 const step = (text) => say(`\n== ${text}\n`);
 /** A Docker command that must succeed, its output printed with every secret taken out. */
@@ -261,25 +261,31 @@ function must(args, what) {
   return result;
 }
 /**
- * Whether every container of the project carries this run's mark: what cleaning up after a
- * failure may touch. A project of none is this run's too, being what it made before any container.
+ * Whether every container, volume and network of the project carries this run's mark, as
+ * compose.yml labels each: what cleaning up after a failure may touch. A project with none of them
+ * leaves nothing to remove. One Docker cannot list is taken as not this run's.
  */
 function onlyOurs() {
-  const listed = docker([
-    'ps',
-    '--all',
-    '--filter',
-    `label=com.docker.compose.project=${options.project}`,
-    '--format',
-    `{{.Label "${RUN_LABEL}"}}`,
-  ]);
-  return (
-    listed.status === 0 &&
-    listed.stdout
-      .split('\n')
-      .filter(Boolean)
-      .every((mark) => mark === run)
-  );
+  return [
+    ['ps', '--all'],
+    ['volume', 'ls'],
+    ['network', 'ls'],
+  ].every((list) => {
+    const listed = docker([
+      ...list,
+      '--filter',
+      `label=com.docker.compose.project=${options.project}`,
+      '--format',
+      `{{.Label "${RUN_LABEL}"}}`,
+    ]);
+    return (
+      listed.status === 0 &&
+      listed.stdout
+        .split('\n')
+        .filter(Boolean)
+        .every((mark) => mark === run)
+    );
+  });
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'demo-server-'));
@@ -466,7 +472,7 @@ try {
     sayError('Nothing this run made is left, and nothing else was touched.');
   } else if (!onlyOurs()) {
     sayError(
-      `A container of ${options.project} carries another run's mark, so nothing of the project is touched. Look at it with docker compose -f ${COMPOSE_SHOWN} -p ${options.project} ps --all.`,
+      `A container, volume or network of ${options.project} carries another run's mark, or could not be listed, so nothing of the project is touched. Look at it with docker compose -f ${COMPOSE_SHOWN} -p ${options.project} ps --all.`,
     );
   } else if (!state.started) {
     const removed = docker(compose('down', '--volumes'));
