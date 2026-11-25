@@ -600,7 +600,9 @@ docker cp /tmp/zz-payers-kit-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ &&
   `Payers.RequestMedicalRecords allowed by payers-claims-demo.deployment.operations`, and the
   registry's leaving out the other:
   `docker exec nuxeo grep -n "Agentic UI app registry" /var/log/nuxeo/server.log` names
-  `payers.claim.referToInvestigations`;
+  `payers.claim.referToInvestigations`; and no line says
+  `is not nuxeo-agentic-core's operation on this server`, which would mean something replaced the
+  run endpoint or the guard, and no button runs;
 - as an adjuster, `GET /nuxeo/agentic-ui-apps/apps/payers-claims/actions.json` holds
   `payers.claim.requestRecords` and not `payers.claim.referToInvestigations`;
 - the rest is the steps file's, below: the button run, the chain's entry in the claim's history,

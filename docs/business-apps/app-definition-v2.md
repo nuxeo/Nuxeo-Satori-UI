@@ -395,9 +395,9 @@ provider, for the development server.
   allow-list again, its app, its groups and its permission, the record's type and state, then builds
   the parameters itself: literals from the file, fields from the record as the repository stores
   it, and the form's values, each from where and of the type the allow-list says, a required one
-  never empty. Anything else the request holds is refused, or never read. It runs the operation as
-  the person, in an Automation context of its own, then writes "App action run" to the record's
-  history.
+  never empty nor white space alone. Anything else the request holds is refused, or never read. It
+  runs the operation as the person, in an Automation context of its own, then writes "App action
+  run" to the record's history.
 - **A computation is refused as a parameter:** it is worked out in the browser, and the server,
   which builds the parameters, does not run one.
 - **A bulk action's parameters are literals,** and it has no form: it runs on many records at once,
