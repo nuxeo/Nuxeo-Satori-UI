@@ -416,19 +416,25 @@ describe('QueueDesignerPageComponent', () => {
     );
   });
 
-  it('names every button of the editor apart, a sort on a column and a facet included', async () => {
+  it('names every button of the editor apart, by the list it is in, a sort on a column included', async () => {
     // The sort is on contract:end, which is a column too: its buttons must not be the column's.
     await open({ ...RENEWALS, facets: [{ aggregate: 'contract_status' }, { aggregate: 'other' }] });
+    // A hidden column's Show is among them.
+    button('[data-column="dc:title"] [data-action="hide"]').click();
+    await settle();
     const names = [
       ...root().querySelectorAll<HTMLButtonElement>('.layout-designer__editor button[aria-label]'),
     ].map((each) => each.getAttribute('aria-label'));
     expect(names.length).toBeGreaterThan(10);
     expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
+    expect(names).toContain('Show the column dc:title again');
     const named = (list: string, action: string): string | null | undefined =>
       root()
         .querySelector(`[data-list="${list}"] > li:first-child [data-action="${action}"]`)
         ?.getAttribute('aria-label');
-    expect(named('columns', 'up')).toBe('Move contract:number up');
+    expect(named('columns', 'up')).toBe('Move the column contract:number up');
+    expect(named('columns', 'down')).toBe('Move the column contract:number down');
+    expect(named('columns', 'hide')).toBe('Hide the column contract:number');
     expect(named('sort', 'up')).toBe('Move the sort on contract:end up');
     expect(named('sort', 'down')).toBe('Move the sort on contract:end down');
     expect(named('facets', 'up')).toBe('Move the facet contract_status up');

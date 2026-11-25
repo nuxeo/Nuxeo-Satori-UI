@@ -118,7 +118,8 @@
                     data-action="up"
                     [disabled]="first"
                     [attr.aria-label]="
-                      'layout-designer.move-up' | translate: { field: columnName(column) }
+                      'layout-designer.queue.move-column-up'
+                        | translate: { field: columnName(column) }
                     "
                     (click)="move('columns', column.index, -1)"
                   >
@@ -130,7 +131,8 @@
                     data-action="down"
                     [disabled]="last"
                     [attr.aria-label]="
-                      'layout-designer.move-down' | translate: { field: columnName(column) }
+                      'layout-designer.queue.move-column-down'
+                        | translate: { field: columnName(column) }
                     "
                     (click)="move('columns', column.index, 1)"
                   >
@@ -141,7 +143,7 @@
                     type="button"
                     data-action="hide"
                     [attr.aria-label]="
-                      'layout-designer.hide' | translate: { field: columnName(column) }
+                      'layout-designer.queue.hide-column' | translate: { field: columnName(column) }
                     "
                     (click)="hideColumn(column)"
                   >
@@ -199,7 +201,9 @@
                     mat-button
                     type="button"
                     data-action="show"
-                    [attr.aria-label]="'layout-designer.show' | translate: { field: column.name }"
+                    [attr.aria-label]="
+                      'layout-designer.queue.show-column' | translate: { field: column.name }
+                    "
                     (click)="showColumn(column)"
                   >
                     {{ 'layout-designer.show-button' | translate }}
