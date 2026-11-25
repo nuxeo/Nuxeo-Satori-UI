@@ -165,6 +165,9 @@ function childEnv() {
   for (const name of TOKENS) delete env[name];
   return env;
 }
+// Taken out of this process's own environment too, before any child starts, so that a child
+// started without `childEnv()`, the library's `unzip` or git's batch read, inherits none either.
+for (const name of [...TOKENS, 'NUXEO_USER', 'NUXEO_PASS']) delete process.env[name];
 
 /** A command's result, with its output as text. */
 function run(command, args, options = {}) {
@@ -505,6 +508,7 @@ function kitAt(commit, path) {
     cwd: REPO,
     input: `${entries.map((entry) => entry.object).join('\n')}\n`,
     maxBuffer: OUTPUT_LIMIT * 4,
+    env: childEnv(),
   });
   if (batch.status !== 0)
     throw new Refused(`stage 2: git cat-file could not read ${path} at ${options.since}.`);
