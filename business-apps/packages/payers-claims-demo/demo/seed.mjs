@@ -64,7 +64,7 @@
  * /default-domain/workspaces, or a user or a group of the demo's names that the seed did not
  * create.
  */
-import { appealProblems, readAppealChecklist } from './appeals.mjs';
+import { appealProblems, checklistOnType, readAppealChecklist } from './appeals.mjs';
 import {
   CASES,
   CLAIM_DOCUMENTS,
@@ -318,8 +318,8 @@ function checklistOf(kase) {
   return (kase.checklist ?? []).map(({ item, done, doneBy, doneOn }) => ({
     item,
     done,
-    doneBy,
-    doneOn,
+    doneBy: doneBy ?? null,
+    doneOn: doneOn ?? null,
   }));
 }
 
@@ -362,9 +362,9 @@ async function preflight() {
         `${WORKFLOW_MODEL} workflow and the platform's default lifecycle on claims: upgrade it to ` +
         '0.4.1 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
-  const [prefix, property] = CHECKLIST.field.split(':');
-  const schema = await find(`/config/schemas/${encodeURIComponent(prefix)}`);
-  if (!schema?.fields || !Object.hasOwn(schema.fields, property))
+  // The Case type's schemas, as the record page reads them: the property is on the type, under
+  // the schema whose prefix the field names, whatever that schema is called.
+  if (!checklistOnType(await find('/config/types/Case'), CHECKLIST.field))
     throw new Precondition(
       `${SERVER} has version 0.4.0 or older of the payers-claims-demo package, with no ` +
         `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.4.1 ` +

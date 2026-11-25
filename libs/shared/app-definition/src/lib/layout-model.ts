@@ -38,14 +38,15 @@ const VARIABLE = 'var:';
 /**
  * What each entry of a checklist's property holds (layout-v2.md, section 7), by subfield, with
  * its type: the item's id, whether it is done, who did it, and the day. The record page reads them
- * by these names, so a schema written for a checklist uses them.
+ * by these names, held to this object's keys by its types (`record-checklist.ts`), so a schema
+ * written for a checklist uses them.
  */
-export const CHECKLIST_SUBFIELDS: Readonly<Record<string, string>> = {
+export const CHECKLIST_SUBFIELDS = {
   item: 'string',
   done: 'boolean',
   doneBy: 'string',
   doneOn: 'date',
-};
+} as const;
 
 /** Where a field's name is looked up: the type's properties, or a complex property's subfields. */
 interface Scope {

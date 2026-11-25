@@ -5,9 +5,12 @@
  *
  * The layout says what an appeal requires; `data.mjs` says how far each seeded appeal has got. So
  * `appealProblems` refuses data the page would show wrongly or not at all: an appeal not against a
- * denied claim, an entry for an item the card does not list, one listed twice, a done item with no
- * one of `USERS` or no day, a not-done one that still names someone or a day, and a checklist on a
- * case that is not an appeal.
+ * denied claim, an entry for an item the card does not list, one listed twice, a done item that
+ * does not say both who and when, someone not of `USERS` or a day that is not one, and a checklist
+ * on a case that is not an appeal. An entry not done may still say who and when.
+ *
+ * `checklistOnType` answers whether a server has the checklist's property, from its answer for the
+ * Case type, so the seed and the demo ask the type, not a schema named after the field's prefix.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -58,6 +61,22 @@ export function readAppealChecklist(text = readFileSync(CASE_LAYOUT, 'utf8')) {
   };
 }
 
+/**
+ * Whether the answer of `/config/types/Case`, `type`, has the checklist's property, `field`: a
+ * schema whose prefix is the field's, Nuxeo's `@prefix` or else its name, as the app reads one,
+ * with the property among its fields.
+ */
+export function checklistOnType(type, field) {
+  const [prefix, property] = String(field).split(':');
+  return (Array.isArray(type?.schemas) ? type.schemas : []).some(
+    (schema) =>
+      ((schema?.['@prefix'] || schema?.prefix || schema?.name) ?? '') === prefix &&
+      schema?.fields !== null &&
+      typeof schema?.fields === 'object' &&
+      Object.hasOwn(schema.fields, property),
+  );
+}
+
 /** What an appeal's checklist is, item by item in the card's order: its entry, or none. */
 export function appealRows(kase, checklist) {
   return checklist.items.map((item) => {
@@ -100,14 +119,17 @@ export function appealProblems({ cases, claims, users }, checklist) {
       }
       if (seen.has(entry.item)) problems.push(`${what} is there twice`);
       seen.add(entry.item);
+      // An entry not done may still say who and when, as one unticked or only asked for does:
+      // the page shows neither for it, and the demo checks that it does not.
+      const nobody = entry.doneBy === null || entry.doneBy === undefined;
+      const noDay = entry.doneOn === null || entry.doneOn === undefined;
       if (typeof entry.done !== 'boolean') problems.push(`${what} is neither done nor not done`);
-      else if (entry.done) {
-        if (!people.has(entry.doneBy))
-          problems.push(`${what} is done by ${entry.doneBy}, who is not one of the demo's people`);
-        if (!isDay(entry.doneOn))
-          problems.push(`${what} is done on ${entry.doneOn}, which is not a day`);
-      } else if (entry.doneBy !== null || entry.doneOn !== null)
-        problems.push(`${what} is not done, and still names someone or a day`);
+      else if (entry.done && (nobody || noDay))
+        problems.push(`${what} is done, and does not say both who did it and when`);
+      if (!nobody && !people.has(entry.doneBy))
+        problems.push(`${what} names ${entry.doneBy}, who is not one of the demo's people`);
+      if (!noDay && !isDay(entry.doneOn))
+        problems.push(`${what} names ${entry.doneOn} as its day, which is not a day`);
     }
   }
   return problems;

@@ -181,7 +181,7 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
   fails when a message has no control. It proves that every message has a control, not that every
   guard has one: two guards that give the same message look the same to it. The mutation checks
   are for guards.
-- **Mutation checks:** taking out any one of these 127 guards made a test fail. The helper that ran
+- **Mutation checks:** taking out any one of these 145 guards made a test fail. The helper that ran
   them refuses a mutation that does not apply exactly once, and one that breaks a suite instead of
   failing it.
   - **Layouts:**
@@ -287,6 +287,15 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - reading a `directoryResolver` that names no directory, or constraints that are not a list, as
       no binding;
     - putting an address part that is not a text into a message, which threw.
+  - **Checklists,** 18 more, run on 25 November 2026:
+    - a checklist allowed outside view mode, or not a card's content at all;
+    - an `ecm:` or `var:` property, or one not written `<prefix>:<name>`, accepted;
+    - an empty list of items, an item listed twice, an item with no words, any item id, and a
+      checklist that is not an object, accepted;
+    - the unknown keys of a checklist, or of an item, ignored;
+    - given the model: a property the type lacks, one that is not a list of complex values, a
+      subfield missing or of another type accepted; checklists not held to the model at all; and
+      `doneOn` read as a text.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;

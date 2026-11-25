@@ -1489,7 +1489,17 @@ describe('RecordPageComponent', () => {
       const root = await render(member({ 'member:onboarding': ONBOARDED }), ONBOARDING_PAGE);
       const card = root.querySelector<HTMLElement>('[data-card-id="onboarding"]');
       expect(card?.querySelector('h3')?.textContent?.trim()).toBe('Onboarding');
-      expect(card?.querySelector('ul')?.getAttribute('aria-label')).toBe('Onboarding');
+      // A list, named by the card's heading through its section, and not a second time.
+      expect(card?.getAttribute('aria-labelledby')).toBe('record-card-onboarding');
+      expect(card?.querySelector('ul')?.getAttribute('role')).toBe('list');
+      expect(card?.querySelector('ul')?.hasAttribute('aria-label')).toBe(false);
+      // Each item's parts are read apart, by the commas only a screen reader hears.
+      expect(
+        card
+          ?.querySelector('li[data-item="cardSent"] .record-page__checklist-text')
+          ?.textContent?.replace(/\s+/g, ' ')
+          .trim(),
+      ).toBe('Card sent, Done, Jane Doe, November 3, 2026');
       expect(card?.querySelector('.record-page__checklist-count')?.textContent?.trim()).toBe(
         '1 of 3 done',
       );
@@ -1528,6 +1538,21 @@ describe('RecordPageComponent', () => {
       // An entry for an item the file does not list is not drawn.
       expect(card?.textContent).not.toContain('legacyStep');
       expect(card?.textContent).not.toContain('November 1, 2026');
+    });
+
+    it('names the list itself when its card has no heading', async () => {
+      const root = await render(member({ 'member:onboarding': ONBOARDED }), {
+        version: 2,
+        cards: [
+          {
+            id: 'onboarding',
+            checklist: { field: 'member:onboarding', items: [{ id: 'portal', label: 'Portal' }] },
+          },
+        ],
+      });
+      const card = root.querySelector('[data-card-id="onboarding"]');
+      expect(card?.querySelector('h3')).toBeNull();
+      expect(card?.querySelector('ul')?.getAttribute('aria-label')).toBe('Onboarding');
     });
 
     it("hides the card while its rule does not pass, as any card's", async () => {

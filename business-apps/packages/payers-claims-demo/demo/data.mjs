@@ -307,11 +307,13 @@ export const CASES = [
       'The member appeals the denial of claim CLAIM-000144 as not medically necessary. Medical ' +
       'records were requested from the provider.',
     // Under way: two items done, the medical records requested and not received, and the
-    // provider's statement and the decision letter not started.
+    // provider's statement and the decision letter not started. Written in another order than
+    // the Case page's, which the page follows; and the medical records' entry, not done, still
+    // names who asked for them and when, which the page does not show for an item not done.
     checklist: [
-      { item: 'appealLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-11-02' },
       { item: 'reviewerAssigned', done: true, doneBy: 'morgan.chen', doneOn: '2026-11-05' },
-      { item: 'medicalRecords', done: false, doneBy: null, doneOn: null },
+      { item: 'medicalRecords', done: false, doneBy: 'sam.patel', doneOn: '2026-11-12' },
+      { item: 'appealLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-11-02' },
     ],
   },
   {

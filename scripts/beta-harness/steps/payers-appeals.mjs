@@ -11,10 +11,11 @@
  * whose state, done or not with who and when, the case's `case:checklist` holds; and a timeline
  * card, the case's audit. The steps:
  *
- *   1. The appeal under way, CASE-2041: the file's items, in its order, with the labels' words,
- *      the two done each with who and when, the three not done with neither, and the count; its
+ *   1. The appeal under way, CASE-2041: the file's items, in the file's order, which is not the
+ *      record's, with the labels' words, the two done each with who and when, the three not done
+ *      with neither, though one's entry still names who asked and when, and the count; its
  *      claim's link, which opens the claim, denied.
- *   2. Its timeline: the server's audit of the case, newest first, of the card's kinds only.
+ *   2. Its timeline: the server's audit of the case, of the card's kinds, newest first.
  *   3. The decided appeal, CASE-2043: the same items, in the same order, every one done, by the
  *      people and on the days the seed wrote. The items are the file's, the state the record's.
  *   4. A grievance, CASE-2042: no checklist, by the card's rule, and still its timeline.
@@ -42,8 +43,10 @@
  * and its count; the claim link's text, its address and the claim it opens, denied; the timeline's
  * entries against the server's audit, in order; the decided appeal's items the same as the one
  * under way's; the served Case layout the kit's file. Negative ones: no one and no day on an item
- * not done, two of them with no entry on the record at all; no timeline entry of a kind outside
- * the card's; no checklist on a grievance, whose timeline still draws.
+ * not done, one of whose entries still names both and two of which have no entry at all; no
+ * checklist on a grievance, whose timeline still draws; and, when the case's audit holds an event
+ * outside the card's kinds, none of those drawn. A seeded case's audit may hold none, and then the
+ * run says so in a note rather than count a check that could not fail.
  *
  * Not covered, and said in notes: ticking an item, which the card does not do (it is read-only,
  * and decision 3 builds no operation buttons); the server's own install (the dev server serves the
@@ -60,7 +63,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { APPEALS_SPECIALIST, CASES, CLAIMS, USERS } = await import(join(KIT, 'demo', 'data.mjs'));
-const { appealProblems, appealRows, readAppealChecklist } = await import(
+const { appealProblems, appealRows, checklistOnType, readAppealChecklist } = await import(
   join(KIT, 'demo', 'appeals.mjs')
 );
 const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
@@ -235,15 +238,30 @@ export default async function run(page, h) {
     problems.length === 0 && UNDER_WAY && DECIDED && GRIEVANCE,
     problems.join('; ') || 'CASE-2041, CASE-2043 or CASE-2042 is not in data.mjs',
   );
-  const [prefix, property] = CHECKLIST.field.split(':');
-  const schema = await page.request
-    .get(`${h.baseUrl}/nuxeo/api/v1/config/schemas/${prefix}`)
+  // What makes step 1's checks able to fail: the appeal under way's entries are written in
+  // another order than the file's, one not done still names who and when, and an item has none.
+  const fileOrder = CHECKLIST.items.map((item) => item.id);
+  const written = (UNDER_WAY?.checklist ?? []).map((entry) => entry.item);
+  const stale = (UNDER_WAY?.checklist ?? []).filter(
+    (entry) => entry.done === false && entry.doneBy !== null && entry.doneOn !== null,
+  );
+  const unrecorded = CHECKLIST.items.filter((item) => !written.includes(item.id));
+  h.requirePrecondition(
+    `${UNDER_WAY?.number}'s data tells the page's rules apart: entries out of the file's order, one not done naming who and when, and an item with no entry`,
+    JSON.stringify(written) !== JSON.stringify(fileOrder.filter((id) => written.includes(id))) &&
+      stale.length > 0 &&
+      unrecorded.length > 0,
+    `written ${JSON.stringify(written)}, file ${JSON.stringify(fileOrder)}, ` +
+      `${stale.length} stale, ${unrecorded.length} unrecorded: change data.mjs`,
+  );
+  const caseType = await page.request
+    .get(`${h.baseUrl}/nuxeo/api/v1/config/types/Case`)
     .then((r) => (r.ok() ? r.json() : null))
     .catch(unread);
   h.requirePrecondition(
     `the kit 0.4.1 or later is installed: ${CHECKLIST.field} is on the server`,
-    Boolean(schema?.fields && Object.hasOwn(schema.fields, property)),
-    `GET /config/schemas/${prefix} has no ${property}: install the kit (README)`,
+    checklistOnType(caseType, CHECKLIST.field),
+    `GET /config/types/Case has no ${CHECKLIST.field}: install the kit (README)`,
   );
 
   // Each case the demo opens, as the server holds it: the seed's, with the checklist it wrote, and
@@ -345,18 +363,16 @@ export default async function run(page, h) {
     `drawn ${JSON.stringify(underWay.rows.filter((row) => row.done === 'true'))}`,
   );
   const notDone = underWay.rows.filter((row) => row.done === 'false');
-  const unrecorded = CHECKLIST.items.filter(
-    (item) => !(UNDER_WAY.checklist ?? []).some((entry) => entry.item === item.id),
-  );
   h.check(
-    `each item not done shows Not done, with no one and no day, ${unrecorded.length} of them with no entry on the record`,
+    `each item not done shows Not done, with no one and no day: ${stale.map((entry) => entry.item).join(', ')} though its entry names both, and ${unrecorded.map((item) => item.id).join(', ')} with no entry at all`,
     sameJson(
       notDone,
       underWayRows.filter((row) => row.done === 'false'),
     ) &&
       notDone.every((row) => row.by === null && row.on === null) &&
-      unrecorded.length > 0 &&
-      unrecorded.every((item) => notDone.some((row) => row.item === item.id)),
+      [...stale.map((entry) => entry.item), ...unrecorded.map((item) => item.id)].every((id) =>
+        notDone.some((row) => row.item === id),
+      ),
     `drawn ${JSON.stringify(notDone)}`,
   );
   const doneCount = underWayRows.filter((row) => row.done === 'true').length;
@@ -419,11 +435,30 @@ export default async function run(page, h) {
     audit !== null && audited.length > 0 && sameJson(drawnTimeline, audited),
     `drawn ${JSON.stringify(drawnTimeline)}, audit ${JSON.stringify(audited)}`,
   );
-  h.check(
-    "no entry is of a kind outside the card's: no download, no login",
-    drawnTimeline.length > 0 && drawnTimeline.every((entry) => kinds.includes(entry.event)),
-    JSON.stringify(drawnTimeline.map((entry) => entry.event)),
-  );
+  // The negative side, only where it can fail: the case's whole audit, of every kind, and the
+  // entries of the kinds the card leaves out, none of which may be drawn.
+  const everything = await page.request
+    .get(`${h.baseUrl}/nuxeo/api/v1/id/${docs[UNDER_WAY.number].uid}/@audit`, {
+      params: new URLSearchParams([
+        ['pageSize', '100'],
+        ['currentPageIndex', '0'],
+      ]),
+    })
+    .then((r) => (r.ok() ? r.json() : null))
+    .catch(unread);
+  const outside = (everything?.entries ?? []).filter((entry) => !kinds.includes(entry.eventId));
+  if (outside.length > 0) {
+    h.check(
+      `none of the ${outside.length} audit entries of a kind the card leaves out is drawn`,
+      !drawnTimeline.some((entry) => outside.some((other) => other.id === entry.id)),
+      `left out ${JSON.stringify([...new Set(outside.map((entry) => entry.eventId))])}`,
+    );
+  } else {
+    h.note(
+      "the case's audit holds no event outside the timeline's kinds, so its filter is not told " +
+        'apart from no filter here: record-timeline.spec.ts holds its request to the kinds',
+    );
+  }
   await h.screenshot('appeal-timeline', page.locator('[data-card-id="history"]'));
 
   // ── 3. The decided appeal ──────────────────────────────────────────────────────────────────
@@ -488,7 +523,7 @@ export default async function run(page, h) {
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
   h.note(
     'ticking an item is not covered: the checklist card is read-only, and decision 3 builds no ' +
-      "operation buttons, so a case's checklist changes through its Edit form or the API",
+      "operation buttons, so a case's checklist changes through the REST API, as the seed writes it",
   );
   h.note(
     "the server's own install is not what the app read: under the dev server the Case layout " +

@@ -343,16 +343,20 @@ function standIn({
         );
         return send(200, view(byId.get(uid)));
       }
-      if (method === 'GET' && path.startsWith('/config/types/'))
-        return types.includes(path.slice('/config/types/'.length))
-          ? send(200, {})
-          : send(404, { message: 'no such type' });
-      // The case schema, as /config/schemas answers it: version 0.4.1's has the checklist.
-      if (method === 'GET' && path === '/config/schemas/case')
-        return types.includes('Case')
-          ? send(200, {
+      // A type, as /config/types answers it: the Case type with its schemas, version 0.4.1's case
+      // schema with the checklist, under its @prefix.
+      if (method === 'GET' && path.startsWith('/config/types/')) {
+        const type = path.slice('/config/types/'.length);
+        if (!types.includes(type)) return send(404, { message: 'no such type' });
+        if (type !== 'Case') return send(200, {});
+        return send(200, {
+          parent: 'Document',
+          facets: [],
+          schemas: [
+            { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+            {
               name: 'case',
-              prefix: 'case',
+              '@prefix': 'case',
               fields: {
                 number: 'string',
                 summary: 'string',
@@ -370,8 +374,10 @@ function standIn({
                     }
                   : {}),
               },
-            })
-          : send(404, { message: 'no such schema' });
+            },
+          ],
+        });
+      }
       if (method === 'GET' && path.startsWith('/path/')) {
         const document = byPath.get(path.slice('/path'.length));
         return document ? send(200, view(document)) : send(404, { message: 'not found' });
@@ -860,6 +866,12 @@ await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
   const appeal = CASES.find((kase) => kase.number === 'CASE-2041');
   const withEntry = (entry) => [{ ...appeal, checklist: [...appeal.checklist, entry] }];
   expect(
+    problems(
+      withEntry({ item: 'decisionLetter', done: false, doneBy: 'sam.patel', doneOn: '2026-11-20' }),
+    ).length === 0,
+    'an entry not done may still say who and when, as an item asked for and not received does',
+  );
+  expect(
     problems(CASES).length === 0,
     "data.mjs agrees with the Case page's checklist",
     problems(CASES).join('\n'),
@@ -896,14 +908,14 @@ await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
     [
       'an item twice',
       problems(withEntry({ ...appeal.checklist[0] })),
-      /"appealLetter" is there twice/,
+      /"reviewerAssigned" is there twice/,
     ],
     [
       'an item done by someone not of the demo',
       problems(
         withEntry({ item: 'decisionLetter', done: true, doneBy: 'someone', doneOn: '2026-11-06' }),
       ),
-      /is done by someone, who is not one of the demo's people/,
+      /names someone, who is not one of the demo's people/,
     ],
     [
       'an item done on a day that does not exist',
@@ -915,7 +927,7 @@ await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
           doneOn: '2026-02-30',
         }),
       ),
-      /is done on 2026-02-30, which is not a day/,
+      /names 2026-02-30 as its day, which is not a day/,
     ],
     [
       'an item neither done nor not done',
@@ -923,11 +935,16 @@ await against({ checklistDrift: 'CASE-2043' }, async ({ run }) => {
       /is neither done nor not done/,
     ],
     [
-      'an item not done that names someone',
+      'an item done that does not say when',
       problems(
-        withEntry({ item: 'decisionLetter', done: false, doneBy: 'sam.patel', doneOn: null }),
+        withEntry({ item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: null }),
       ),
-      /is not done, and still names someone or a day/,
+      /"decisionLetter" is done, and does not say both who did it and when/,
+    ],
+    [
+      'an item not done that names someone not of the demo',
+      problems(withEntry({ item: 'decisionLetter', done: false, doneBy: 'someone', doneOn: null })),
+      /names someone, who is not one of the demo's people/,
     ],
     [
       'a grievance with a checklist',

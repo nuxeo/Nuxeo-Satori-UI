@@ -1,3 +1,5 @@
+import type { CHECKLIST_SUBFIELDS } from '@agentic-ui/shared/app-definition';
+
 import type { LayoutLabel } from '../layout.model';
 import { type RecordValueContext, showValue, viewText } from './record-field-view';
 import type { RecordChecklistEntry } from './record-layout';
@@ -40,6 +42,12 @@ const isRecord = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * An entry's subfield, by one of the names `CHECKLIST_SUBFIELDS` gives, which the validator holds a
+ * schema to: a name renamed there no longer builds here. Its own value only, never an inherited one.
+ */
+const subfield = (entry: Json, name: keyof typeof CHECKLIST_SUBFIELDS): unknown => own(entry, name);
+
+/**
  * The record's entry for each item it names, the first one that names it: what the page reads as
  * that item's state. An entry that is not an object, or whose `item` is not a text, names none.
  */
@@ -47,7 +55,7 @@ export function checklistEntries(value: unknown): ReadonlyMap<string, Json> {
   const entries = new Map<string, Json>();
   for (const entry of Array.isArray(value) ? value : []) {
     if (!isRecord(entry)) continue;
-    const item = own(entry, 'item');
+    const item = subfield(entry, 'item');
     if (typeof item === 'string' && !entries.has(item)) entries.set(item, entry);
   }
   return entries;
@@ -62,7 +70,7 @@ export function checklistUsers(checklist: RecordChecklistEntry, value: unknown):
   const entries = checklistEntries(value);
   return checklist.items.flatMap((item) => {
     const entry = entries.get(item.id);
-    const by = entry && own(entry, 'done') === true ? own(entry, 'doneBy') : undefined;
+    const by = entry && subfield(entry, 'done') === true ? subfield(entry, 'doneBy') : undefined;
     return typeof by === 'string' && by !== '' ? [by] : [];
   });
 }
@@ -82,9 +90,9 @@ export function showChecklist(
   const entries = checklistEntries(value);
   const items = checklist.items.map((item): RecordChecklistItemShown => {
     const entry = entries.get(item.id);
-    const done = entry !== undefined && own(entry, 'done') === true;
-    const by = done && entry ? own(entry, 'doneBy') : undefined;
-    const on = done && entry ? own(entry, 'doneOn') : undefined;
+    const done = entry !== undefined && subfield(entry, 'done') === true;
+    const by = done && entry ? subfield(entry, 'doneBy') : undefined;
+    const on = done && entry ? subfield(entry, 'doneOn') : undefined;
     const day = showValue(
       { key: item.id, label: '', value: on, parameters: {}, definition: { type: 'date' } },
       'date',

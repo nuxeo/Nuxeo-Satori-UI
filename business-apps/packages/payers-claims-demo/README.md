@@ -92,7 +92,9 @@ three demo steps and its sixth are written for it, and the pipeline's controls
   change raises the minor. **0.4.1** is a patch raise: the pipeline counts 9 changes since 0.4.0,
   seven labels added and the Case layout changed, which need a patch, and leaves `case.xsd` to a
   person. Its change adds a property, `case:checklist`, and removes none, so nothing that read a
-  case before reads it differently, and a patch is enough.
+  case before reads it differently, and a patch is enough. One thing does break, which the rule
+  cannot see: a platform built before the checklist card refuses the new Case page ("Not done
+  yet", below).
 
 ## The stand-in model
 
@@ -534,8 +536,9 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
 - **The appeals are held to the Case page first.** Before it asks the server anything, the seed
   holds `data.mjs`'s cases to the Case layout's checklist card (`demo/appeals.mjs`): an appeal
   against a claim that is not denied, an entry for an item the card does not list or listed twice,
-  a done item with no one of the demo's people or no day, a not-done one that still names someone
-  or a day, or a checklist on a grievance, stops the run with exit 1, naming it.
+  a done item that does not say both who and when, someone not of the demo's people or a day that
+  does not exist, or a checklist on a grievance, stops the run with exit 1, naming it. An entry
+  not done may still say who and when, as CASE-2041's medical records do: the page shows neither.
 
 - **Each claim's lifecycle is its status.** After it writes a claim, the seed follows the fewest
   transitions of the claim lifecycle from the state the claim is in to its status
@@ -729,11 +732,14 @@ checklist ticks nothing, and the appeals have no operation buttons
 
 The demo, run as the appeals' specialist, `sam.patel`, who reads and changes nothing:
 
-1. the appeal under way, CASE-2041: the file's five items, in its order and words, the two done
-   each with who and the day, the three not done with neither, two of them with no entry on the
-   record at all, "2 of 5 done", and its claim's link, which opens CLAIM-000144, denied;
+1. the appeal under way, CASE-2041: the file's five items, in its order, which is not the order
+   the seed writes them in, and in its words; the two done each with who and the day; the three not
+   done with neither, though the medical records' entry still names who asked for them and when,
+   and two have no entry at all; "2 of 5 done"; and its claim's link, which opens CLAIM-000144,
+   denied;
 2. its timeline: the server's audit of the case, of the card's kinds, newest first, entry for
-   entry, and none of another kind;
+   entry; and, when the case's audit holds an event of another kind, none of those drawn. A seeded
+   case's may hold none, and the run then says so in a note;
 3. the decided appeal, CASE-2043: the same items in the same order, every one done, by the people
    and on the days the seed wrote;
 4. a grievance, CASE-2042: no checklist, by the card's rule, and its timeline still drawn;
