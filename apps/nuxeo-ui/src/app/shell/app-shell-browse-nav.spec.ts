@@ -9,12 +9,14 @@ import {
   PACKAGED_SEARCH_QUEUE_ITEM,
   type NavItemDescriptor,
 } from '@nuxeo/satori-platform/extensions';
-import { of, Subject } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
 
 import {
   BrowseContextService,
+  DocumentDetailService,
   SearchAggregationService,
   SearchService,
+  type GlobalSearchSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { appConfig } from '../app.config';
@@ -239,6 +241,96 @@ describe('AppShellComponent — the Browse nav entry', () => {
     tick(251);
     expect(suggest).toHaveBeenCalledWith('NEV');
     expect(fixture.componentInstance.globalSearchResults()[0].displayLabel).toBe('NEV User');
+    fixture.destroy();
+  }));
+
+  for (const reset of ['close', 'submit', 'saved-search'] as const) {
+    it(`cancels pending suggestions immediately on ${reset}`, fakeAsync(() => {
+      const pending = new Subject<GlobalSearchSuggestion[]>();
+      spyOn(TestBed.inject(SearchService), 'suggestFromSuggestersLauncher').and.returnValue(
+        pending,
+      );
+      const thumbnail = spyOn(
+        TestBed.inject(DocumentDetailService),
+        'fetchThumbnail',
+      ).and.returnValue(EMPTY);
+      const fixture = TestBed.createComponent(AppShellComponent);
+      fixture.detectChanges();
+      const shell = fixture.componentInstance;
+      shell.onGlobalSearchInput('NEV');
+      tick(251);
+      expect(pending.observed).toBeTrue();
+      if (reset === 'close') shell.closeSearch();
+      else if (reset === 'submit') shell.submitGlobalSearch();
+      else {
+        TestBed.inject(SearchAggregationService).keywordSyncVersion.update(
+          (version) => version + 1,
+        );
+        fixture.detectChanges();
+      }
+      expect(pending.observed).toBeFalse();
+      pending.next([{ id: 'stale', displayLabel: 'Stale document', kind: 'document' }]);
+      pending.error(new Error('Late cancelled response'));
+      expect(shell.globalSearchResults()).toEqual([]);
+      expect(shell.globalSearchLoading()).toBeFalse();
+      expect(shell.globalSearchError()).toBeNull();
+      expect(thumbnail).not.toHaveBeenCalled();
+      fixture.destroy();
+    }));
+  }
+
+  it('fetches the same keyword after closing and reopening within the debounce window', fakeAsync(() => {
+    const suggest = spyOn(
+      TestBed.inject(SearchService),
+      'suggestFromSuggestersLauncher',
+    ).and.returnValue(of([{ id: 'user', displayLabel: 'NEV User', kind: 'user' }]));
+    TestBed.inject(SearchAggregationService).drawerFilters.set({ ecm_fulltext: 'NEV' });
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const shell = fixture.componentInstance;
+    shell.onGlobalSearchFocus();
+    tick(251);
+    expect(suggest).toHaveBeenCalledTimes(1);
+    shell.closeSearch();
+    shell.onGlobalSearchActivate();
+    tick(251);
+    expect(suggest).toHaveBeenCalledTimes(2);
+    expect(shell.globalSearchResults()[0]?.displayLabel).toBe('NEV User');
+    fixture.destroy();
+  }));
+
+  it('cancels a pending suggestion debounce when search is closed', fakeAsync(() => {
+    const suggest = spyOn(
+      TestBed.inject(SearchService),
+      'suggestFromSuggestersLauncher',
+    ).and.returnValue(of([]));
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.onGlobalSearchInput('NEV');
+    tick(100);
+    fixture.componentInstance.closeSearch();
+    tick(251);
+    expect(suggest).not.toHaveBeenCalled();
+    fixture.destroy();
+  }));
+
+  it('cancels thumbnail loading when suggestions are cleared', fakeAsync(() => {
+    spyOn(TestBed.inject(SearchService), 'suggestFromSuggestersLauncher').and.returnValue(
+      of([{ id: 'doc', displayLabel: 'NEV document', kind: 'document' }]),
+    );
+    const thumbnail = new Subject<Blob>();
+    spyOn(TestBed.inject(DocumentDetailService), 'fetchThumbnail').and.returnValue(thumbnail);
+    const createUrl = spyOn(URL, 'createObjectURL').and.returnValue('blob:cancelled');
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.onGlobalSearchInput('NEV');
+    tick(251);
+    expect(thumbnail.observed).toBeTrue();
+    fixture.componentInstance.closeSearch();
+    expect(thumbnail.observed).toBeFalse();
+    thumbnail.next(new Blob(['late']));
+    expect(createUrl).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.thumbnailMap()).toEqual({});
     fixture.destroy();
   }));
 

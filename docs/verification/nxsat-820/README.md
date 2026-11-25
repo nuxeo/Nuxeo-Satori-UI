@@ -111,6 +111,15 @@ directions and clearing No Containers afterward, using the real Search page, dra
 Header activation, keyword submission and a customer navigation entry use the same scope-preserving
 destination behavior; browser component tests cover Files and Files-and-folders for each entry point.
 
+The final review summary prompted additional timing checks. Real-router tests reproduced competing
+scope and pager navigations on page three in both Files directions. One URL update now carries
+scope, page and page size together, preserving other quick filters and sort. The six routing,
+150 Search component and eight request-count tests pass after that change.
+Browser regressions also reproduce late suggestions after Clear and incorrect Close return paths.
+Suggestion reset now cancels pending timers, requests and thumbnails immediately while retaining
+the typing debounce. Search captures its return destination from completed navigation state,
+including drawer/custom-navigation entries, with Dashboard retained for an initial deep link.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:

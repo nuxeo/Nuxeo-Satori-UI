@@ -12,13 +12,12 @@ import {
   untracked,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { NavigationEnd, NavigationStart, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
   Subject,
   catchError,
-  debounceTime,
   distinctUntilChanged,
   filter,
   finalize,
@@ -26,6 +25,7 @@ import {
   of,
   switchMap,
   Subscription,
+  timer,
 } from 'rxjs';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -194,7 +194,8 @@ export class AppShellComponent implements OnDestroy {
 
   readonly highlightedSearchTerm = computed(() => this.globalSearchTerm().trim());
 
-  private readonly currentUrl = signal(this.router.url.split('?')[0]);
+  private lastCompletedUrl = this.router.url;
+  private readonly currentUrl = signal(this.lastCompletedUrl.split('?')[0]);
   readonly searchExpanded = computed(() => this.currentUrl() === '/search');
   private searchReturnUrl = '/dashboard';
   private hasKeywordDraft = false;
@@ -313,15 +314,27 @@ export class AppShellComponent implements OnDestroy {
 
     this.router.events
       .pipe(
-        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        filter(
+          (e): e is NavigationEnd | NavigationStart =>
+            e instanceof NavigationEnd || e instanceof NavigationStart,
+        ),
         takeUntilDestroyed(),
       )
       .subscribe((e) => {
+        if (e instanceof NavigationStart) {
+          // Initial deep-link navigation started before this shell existed. Only future entries
+          // have an origin to return to; keep Dashboard as the direct Search link's fallback.
+          if (e.url.split('?')[0] === '/search' && !this.searchExpanded()) {
+            this.searchReturnUrl = this.lastCompletedUrl;
+          }
+          return;
+        }
         const nextPath = e.urlAfterRedirects.split('?')[0];
         const previousPath = this.currentUrl();
         if (previousPath !== nextPath) {
           this.selectionService.clear();
         }
+        this.lastCompletedUrl = e.urlAfterRedirects;
         this.currentUrl.set(nextPath);
         this.refreshClipboardCount();
         if (nextPath !== '/search') {
@@ -352,7 +365,6 @@ export class AppShellComponent implements OnDestroy {
 
     this.searchInput$
       .pipe(
-        debounceTime(250),
         distinctUntilChanged(),
         switchMap((value) => {
           const term = value.trim();
@@ -362,12 +374,17 @@ export class AppShellComponent implements OnDestroy {
             return of<GlobalSearchSuggestion[]>([]);
           }
 
-          this.globalSearchLoading.set(true);
-          this.globalSearchError.set(null);
-
-          return this.searchService
-            .suggestFromSuggestersLauncher(term)
-            .pipe(finalize(() => this.globalSearchLoading.set(false)));
+          // Every input/reset cancels the previous timer/request immediately. Debounce only the
+          // next request, so a reset cannot be swallowed by a rapid same-keyword reopen.
+          return timer(250).pipe(
+            switchMap(() => {
+              this.globalSearchLoading.set(true);
+              this.globalSearchError.set(null);
+              return this.searchService
+                .suggestFromSuggestersLauncher(term)
+                .pipe(finalize(() => this.globalSearchLoading.set(false)));
+            }),
+          );
         }),
         takeUntilDestroyed(),
       )
@@ -589,7 +606,7 @@ export class AppShellComponent implements OnDestroy {
 
   private openSearchWorkspace(): void {
     if (!this.searchExpanded()) {
-      this.searchReturnUrl = this.router.url;
+      this.searchReturnUrl = this.lastCompletedUrl;
       this.drawerOpen.set(false);
       this.activeDrawerItem.set(null);
       void this.router.navigateByUrl(this.searchWorkspaceUrl());

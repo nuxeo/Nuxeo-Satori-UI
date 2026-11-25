@@ -326,12 +326,6 @@ export class SearchComponent {
       });
   }
 
-  private readonly syncScope = effect(() => {
-    const filesOnly = !!this.session.filters().filesOnly;
-    untracked(() => {
-      if (filesOnly !== this.isQuickFilterSelected('noFolder')) this.toggleQuickFilter('noFolder');
-    });
-  });
   readonly keywordDraft = signal('');
   private readonly appliedKeyword = computed(() => this.session.filters().fulltext);
   private readonly syncKeywords = effect(() => this.keywordDraft.set(this.appliedKeyword()));
@@ -1112,21 +1106,37 @@ export class SearchComponent {
       );
     });
 
-    // The page on screen is kept in the URL, so a deep link reopens it. A page the pager or a
-    // filter change moved to is written back, replacing the history entry rather than adding one.
+    // A filter change may update both scope and page. Write them together so competing
+    // navigations cannot merge the old URL and discard either half of the change.
     effect(() => {
+      const filesOnly = !!this.session.filters().filesOnly;
       const pageIndex = this.session.pageIndex();
       const pageSize = this.session.pageSize();
       untracked(() => {
-        if (pageIndex === this.urlPageIndex && pageSize === this.urlPageSize) return;
+        const scopeChanged = filesOnly !== this.isQuickFilterSelected('noFolder');
+        if (!scopeChanged && pageIndex === this.urlPageIndex && pageSize === this.urlPageSize)
+          return;
+        const scopeParams: { quickFilters?: string | null } = {};
+        if (scopeChanged) {
+          const selected = new Set(this.selectedQuickFilters());
+          if (filesOnly) selected.add('noFolder');
+          else selected.delete('noFolder');
+          this.selectedQuickFilters.set(selected);
+          scopeParams.quickFilters =
+            QUICK_FILTER_OPTIONS.map((option) => option.value)
+              .filter((value) => selected.has(value))
+              .join(',') || null;
+        }
         void this.router.navigate([], {
           relativeTo: this.route,
           queryParams: {
+            ...scopeParams,
             page: pageIndex > 0 ? pageIndex + 1 : null,
             pageSize: pageSize === SEARCH_PAGE_SIZE ? null : pageSize,
           },
           queryParamsHandling: 'merge',
-          replaceUrl: true,
+          // Scope changes remain navigable history; paging alone replaces the current entry.
+          replaceUrl: !scopeChanged,
         });
       });
     });

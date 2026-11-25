@@ -87,6 +87,39 @@ describe('Search drawer route and session integration', () => {
   });
 
   it.each([
+    { previousFiles: true, savedFiles: false },
+    { previousFiles: false, savedFiles: true },
+  ])(
+    'keeps a saved scope and the page reset in the same navigation on page three: $previousFiles → $savedFiles',
+    async ({ previousFiles, savedFiles }) => {
+      const quickFilters = previousFiles ? 'noFolder,onlyValidated' : 'onlyValidated';
+      const page = await harness.navigateByUrl(
+        `/search?quickFilters=${quickFilters}&page=3&pageSize=25&sortBy=dc:title`,
+        SearchComponent,
+      );
+      await drawer.whenStable();
+      expect(session.pageIndex()).toBe(2);
+      searchService.getSavedSearchById.mockReturnValueOnce(
+        of({
+          ecm_fulltext: 'saved',
+          contentViewData: JSON.stringify({ nxsFilesOnly: savedFiles }),
+        }),
+      );
+      page.selectFilterSet('scope', 'Scope');
+      await drawer.whenStable();
+      harness.detectChanges();
+      const query = router.parseUrl(router.url).queryParams;
+      expect(query['quickFilters']).toBe(savedFiles ? 'noFolder,onlyValidated' : 'onlyValidated');
+      expect(query['page']).toBeUndefined();
+      expect(query['pageSize']).toBe('25');
+      expect(query['sortBy']).toBe('dc:title');
+      expect(!!session.filters().filesOnly).toBe(savedFiles);
+      expect(session.request().pageIndex).toBe(0);
+      expect(session.dirty()).toBe(false);
+    },
+  );
+
+  it.each([
     { previousFiles: true, savedFiles: true },
     { previousFiles: true, savedFiles: false },
     { previousFiles: false, savedFiles: true },
