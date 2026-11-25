@@ -243,7 +243,7 @@ export default async function run(page, h) {
   const fileOrder = CHECKLIST.items.map((item) => item.id);
   const written = (UNDER_WAY?.checklist ?? []).map((entry) => entry.item);
   const stale = (UNDER_WAY?.checklist ?? []).filter(
-    (entry) => entry.done === false && entry.doneBy !== null && entry.doneOn !== null,
+    (entry) => entry.done === false && entry.doneBy != null && entry.doneOn != null,
   );
   const unrecorded = CHECKLIST.items.filter((item) => !written.includes(item.id));
   h.requirePrecondition(
@@ -279,7 +279,7 @@ export default async function run(page, h) {
     if (
       doc?.type !== 'Case' ||
       doc.properties?.['case:number'] !== kase.number ||
-      !sameJson(held, kase.checklist ?? [])
+      !sameJson(held, (kase.checklist ?? []).map(entryOf))
     )
       missing.push(`${kase.number} (${doc ? `checklist ${JSON.stringify(held)}` : 'not found'})`);
     docs[kase.number] = doc;
@@ -447,6 +447,11 @@ export default async function run(page, h) {
     .then((r) => (r.ok() ? r.json() : null))
     .catch(unread);
   const outside = (everything?.entries ?? []).filter((entry) => !kinds.includes(entry.eventId));
+  h.check(
+    "the case's audit is read with no kind filter, its first 100 entries, to tell the timeline's filter apart",
+    Array.isArray(everything?.entries),
+    `GET @audit with no kind answered ${everything === null ? 'nothing' : 'no list'}`,
+  );
   if (outside.length > 0) {
     h.check(
       `none of the ${outside.length} audit entries of a kind the card leaves out is drawn`,
@@ -455,8 +460,9 @@ export default async function run(page, h) {
     );
   } else {
     h.note(
-      "the case's audit holds no event outside the timeline's kinds, so its filter is not told " +
-        'apart from no filter here: record-timeline.spec.ts holds its request to the kinds',
+      "the case's audit, in its first 100 entries, holds no event outside the timeline's kinds, " +
+        'so its filter is not told apart from no filter here: record-timeline.spec.ts holds its ' +
+        'request to the kinds',
     );
   }
   await h.screenshot('appeal-timeline', page.locator('[data-card-id="history"]'));
