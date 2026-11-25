@@ -11,7 +11,8 @@ The app is a facilities work-order app for a fictional campus. It is none of the
 already here (Payers, brand assets, contracts), and every name in it is fictional. The finished
 package is in the repository as the reference answer,
 [`business-apps/packages/facilities-demo`](../../business-apps/packages/facilities-demo/README.md),
-and CI builds it on every pull request.
+and CI checks and builds it as it does every kit there, on each pull request that touches a
+package, the validator or the pipeline.
 
 **How this was checked.** Every command below was run, in the order given, on 25 November 2026, in a
 checkout of `staging/enterprise-grade-app`, on macOS with Node 24.22.1, against the local Docker
@@ -72,8 +73,9 @@ The app is for two groups, `facilities-coordinators`, who sort the work, and
   npm ci
   ```
 
-  It answered `v24.22.1`, and `npm ci` left `package-lock.json` unchanged. On Node 25, set
-  `NODE_OPTIONS=--no-experimental-webstorage` as well.
+  It answered `v24.22.1`, and `npm ci` left `package-lock.json` unchanged. Its warnings that some
+  packages' install scripts are not run, `esbuild` and `nx` among them, are expected. On Node 25,
+  set `NODE_OPTIONS=--no-experimental-webstorage` as well.
 
 - **A development Nuxeo whose model you may share,** here the local Docker one, with the Satori
   package installed. Never point these tools at production, or at a server with data you may not
@@ -84,12 +86,11 @@ The app is for two groups, `facilities-coordinators`, who sort the work, and
   export NUXEO_USER=<administrator> NUXEO_PASS=<password>
   ```
 
-- **Move the reference answer out of the way,** on a branch of your own, so that you build the
-  package from nothing and can compare yours with it at the end. Git keeps the reference; step 8
-  shows the comparison.
+- **Move the reference answer out of the way,** so that you build the package from nothing and
+  can compare yours with it at the end. Git keeps the reference: step 8 compares yours with it,
+  and step 10 puts it back. Commit nothing while you follow the tutorial.
 
   ```bash
-  git switch -c my-facilities-tutorial
   rm -r business-apps/packages/facilities-demo
   ```
 
@@ -101,7 +102,8 @@ The app is for two groups, `facilities-coordinators`, who sort the work, and
 
 Every name a package writes, a type, a property, a page provider, must exist on the server or be
 registered in the platform. So read the server first. Export its content model to a file outside
-the repository:
+the repository, here `/tmp/content-model.json`; on a machine others use too, pick a path of your
+own:
 
 ```bash
 npm run app-package:model -- --server http://localhost:8080/nuxeo --out /tmp/content-model.json
@@ -150,6 +152,9 @@ Generated business-apps/packages/facilities-demo
 The pipeline refuses a package that contributes nothing (step 5): add a record page first.
 ```
 
+- **"Step 5" there is the pipeline's step,** the zip, not this tutorial's: the pipeline numbers its
+  own steps 1 to 6 ([package-pipeline.md](package-pipeline.md), section 2). The generators' outputs
+  here are trimmed: they also list each file they created, and the commands to run next.
 - **No `--type` here.** With a model on the server, `--type=<Type> --model=...` would write the
   first record page too. A stand-in model needs the package to exist first, so the record pages
   come in step 3.
@@ -909,8 +914,8 @@ open that, choose Sign Out, and log in with your account. Signed in as the admin
 [agentic-ui-layouts] queues/open-work-orders.json: facilities_open_work_orders not read: HTTP 500
 ```
 
-- **Change a file, run `config:dev` again, reload the page.** The dev server sees a new file in
-  under a second; no restart.
+- **Change a file, run `config:dev` again, reload the page.** The dev server serves what
+  `config:dev` writes without a restart: under a second, as `scripts/dev-config.mjs` measured it.
 - **`app.json` is not served under `config:dev`:** the shell keeps the platform's name, and "Switch
   app" is the registry's, on a server.
 - **What `config:dev` serves wins over the server's registry,** for the home, the menu, the queues
@@ -1029,10 +1034,10 @@ written to the dev folder, `app.json` under `notServed` ("The app registry serve
 after sign-in"), `"devServer": { "answering": true, ... }`, and the pages to open, the home and
 the queue, as in step 9. It names the Edit form "the WorkOrder record page (edit)": it is the form.
 
-**An agent asked for an unregistered id is refused.** Asked for the field rule with
-`app.rules.fieldEquals`, which reads well and is not registered, the agent wrote it on
-`wo:resolution`, and `validate_package` answered `"passed": false`, `"refusedAt": { "step": 2 }`,
-and one finding:
+**An agent asked for an unregistered id is refused.** The field rule was written on
+`wo:resolution` with `app.rules.fieldEquals`, which reads well and is not registered, as an agent
+told to use it would write it. `validate_package` answered `"passed": false`,
+`"refusedAt": { "step": 2 }`, and one finding:
 
 ```json
 {
@@ -1094,3 +1099,11 @@ are.
 13. **What went well:** each generator says what it wrote and what to run next; the refusal for a
     home written by hand names the exact fix, `app-registry`; and every finding names the file, the
     place and the reason.
+
+**An independent follower,** an agent told to read part 1 alone, followed it from a fresh
+worktree on 25 November 2026. Every output matched through step 3's first command; then its
+environment refused it the first hand-written file, and it stopped there, as it was told to. What
+it found is fixed above: a fixed branch name that a second follower on the same machine could not
+create, the generator's "step 5" read as this page's, npm's warnings unmentioned, and a shared
+`/tmp` path. So steps 3 to 10 have been followed by the tutorial's author and its script only:
+the next follower, a person outside the team, is the acceptance test.

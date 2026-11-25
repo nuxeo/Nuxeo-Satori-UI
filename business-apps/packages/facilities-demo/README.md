@@ -2,8 +2,9 @@
 
 The app the [tutorial](../../../docs/business-apps/tutorial.md) builds, from an empty package, with
 the generators and the package pipeline: a small facilities work-order app for a fictional campus.
-Every name in it is fictional. CI checks and builds it on every pull request, as it does every
-package under `business-apps/packages/`, so a change to the generators, the validator or the
+Every name in it is fictional. CI checks and builds it as it does every package under
+`business-apps/packages/`, on each pull request that touches a package, the validator or the
+pipeline, so a change to the generators, the validator or the
 pipeline that would break the tutorial breaks this kit first.
 
 **Not installed anywhere.** It passes the pipeline, and its home, menu and queue were drawn in dev
