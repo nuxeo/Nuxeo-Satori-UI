@@ -97,6 +97,7 @@ import { spawnToolSync } from './beta-harness/package-command.mjs';
 import { withoutCredentials } from './nuxeo-content-model.mjs';
 import { demoSteps, demoStepsMarkdown } from './release-candidate-demo.mjs';
 import {
+  allowListArguments,
   bundleDifferences,
   descriptorOf,
   duplicatesAcross,
@@ -452,7 +453,18 @@ async function buildKits() {
     if (was !== '') held.add(was);
     const previous = was === '' ? null : kitAt(sinceCommit, was);
     await checkpoint();
-    const args = [APP_PACKAGE, directory, '--out', kitsOut, '--platform', platform.version];
+    // Against the allow-list of the deployment it is built for, as app-packages.yml builds it: its
+    // buttons' operations are refused without one.
+    const allowList = allowListArguments(directory);
+    const args = [
+      APP_PACKAGE,
+      directory,
+      '--out',
+      kitsOut,
+      '--platform',
+      platform.version,
+      ...allowList,
+    ];
     if (previous !== null) {
       if (platformBefore === null) {
         platformBefore = join(scratch, 'platform-before');
@@ -498,6 +510,7 @@ async function buildKits() {
       path: fromOut(zip),
       changes: existsSync(changes) ? fromOut(changes) : null,
       previous: previous?.version ?? null,
+      allowList: allowList.length > 0 ? fromRepo(allowList[1]) : null,
     });
   }
   if (refused.length > 0)
@@ -842,6 +855,7 @@ function write({ kits, bundle, server, demo }) {
       address: kit.read.app.address ?? kit.read.app.id,
       platform: kit.read.app.platform,
       heldTo: kit.previous,
+      allowList: kit.allowList,
       dependencies: kit.read.descriptor.dependencies,
       targetPlatform: kit.read.descriptor.targetPlatform,
     })),
@@ -892,6 +906,12 @@ function releaseNotes({ kits, bundle, server }) {
   ];
   for (const kit of kits) {
     lines.push(`### ${kit.name} ${kit.version}`, '');
+    if (kit.allowList !== null)
+      lines.push(
+        `Built against its deployment's allow-list, \`${kit.allowList}\`, as app-packages.yml builds it. ` +
+          'On a server the deployment contributes that allow-list itself, and the kit does not.',
+        '',
+      );
     if (kit.previous === null) {
       lines.push(
         `New: ${options.since} has no business-apps/packages/${basename(kit.directory)}, so nothing is compared.`,

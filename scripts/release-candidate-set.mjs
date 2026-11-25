@@ -31,7 +31,7 @@
  * reads one: the set is judged on the bytes the candidate ships, not on the sources they came from.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -593,6 +593,20 @@ export function descriptorOf(text) {
 /** A JSON file of a bundle, or `null` when it is not there. */
 function jsonIn(path) {
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, '')) : null;
+}
+
+/** Where a kit names the allow-list of the deployment it is built for, beside its bundle. */
+export const BUILD_ALLOW_LIST = ['deployment', 'build-allow-list.json'];
+
+/**
+ * The pipeline's arguments for the deployment's allow-list a kit is built against, as
+ * app-packages.yml passes them: `--allow-list` its `deployment/build-allow-list.json`, a file
+ * beside the bundle and never in it, or none, and then every operation its buttons run is refused
+ * (package-pipeline.md, section 7). A link there is not taken for the file.
+ */
+export function allowListArguments(kitDirectory) {
+  const file = join(kitDirectory, ...BUILD_ALLOW_LIST);
+  return lstatSync(file, { throwIfNoEntry: false })?.isFile() ? ['--allow-list', file] : [];
 }
 
 /**

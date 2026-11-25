@@ -50,7 +50,7 @@
  * step refuses (AppActionRunnerTest), and the chain's effect outside the server, which is fictional.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -68,6 +68,24 @@ const REFER_CHAIN = 'Payers.ReferToInvestigations';
 const RUN_ACTION = 'AgenticUi.RunAction';
 const ADJUSTER = 'dana.lee';
 const MEMBER_SERVICES = 'riley.brooks';
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. The people are
+ * the ones the preconditions below hold the run to: member services is signed in through the REST
+ * API alone, for the group refusal. The allow-list is the deployment's, not the kit's.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: { users: [ADJUSTER], who: 'an adjuster, in claims-adjusters and not claims-supervisors' },
+  signsInAs: [MEMBER_SERVICES],
+  needs: [
+    'the kit 0.5.0 or later installed, with nuxeo-agentic-ui from the same candidate',
+    "the kit's deployment contribution, deployment/payers-claims-demo-operations-config.xml, in nxserver/config/: the allow-list by which the registry serves Request medical records",
+    "the dev server serving the kit's Claim page and labels, or none of its labels",
+  ],
+};
 /** The run's mark, in the note it enters, so that its history entries are known again. */
 const RUN = `ops-${Date.now().toString(36)}`;
 

@@ -74,7 +74,7 @@ const SERVICES = USERS.find((user) => user.groups.includes('member-services'));
 /**
  * What a server run of this file needs, for the release candidate's list of demo steps
  * (`scripts/release-candidate.mjs`), which reads it without running anything here: the kit, the
- * seeds to run first, who `NUXEO_USER` must be, who the browser is signed in as besides, and what
+ * seeds to run first, who `NUXEO_USER` must be, who else it signs in as, and what
  * else must be in place. The people are the ones the preconditions below hold the run to.
  */
 export const serverRun = {
