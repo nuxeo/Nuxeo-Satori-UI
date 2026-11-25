@@ -312,6 +312,17 @@ class ShareLinkComponentTest {
         assertEquals(List.of("asset-a", "asset-b"), store.downloads.stream().map(ShareDownload::document).toList());
     }
 
+    /** The document read must be the link's own: one handed over for its id that is another is refused. */
+    @Test
+    void aDocumentThatIsNotTheLinksOwnIsNeverServed() {
+        Asset other = repository.add(new Asset("asset-b", new Color(30, 30, 200)));
+        Created toA = make(asset, "2026-12-14", "view:FullHD");
+        repository.answersWith.put("asset-a", other.id);
+        refused(Why.DOCUMENT_GONE, links.serve(toA.token(), "view:FullHD"));
+        refused(Why.DOCUMENT_GONE, links.page(toA.token()));
+        assertTrue(store.downloads.isEmpty());
+    }
+
     @Test
     void endedRightsEndTheLinkForEveryItemPreviewsIncluded() {
         Created created = make(asset, "2026-12-14", "view:FullHD", "view:Medium", "view:Thumbnail");

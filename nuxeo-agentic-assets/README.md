@@ -1,17 +1,19 @@
-# nuxeo-agentic-assets: an asset's rights, enforced on the server
+# nuxeo-agentic-assets: an asset's rights and its share links, enforced on the server
 
 The assets module's server add-on ([development plan](../docs/business-apps/development-plan.md),
-phase 5, "The rights and sharing add-on"), version 0.1.0: the rights half, without sharing. A
-Maven module beside `nuxeo-agentic-core`, with its own Marketplace package, `nuxeo-agentic-assets`.
+phase 5, "The rights and sharing add-on"), version 0.2.0: the rights, and share links. A Maven
+module beside `nuxeo-agentic-core`, with its own Marketplace package, `nuxeo-agentic-assets`.
+Publishing to channels and outside users are not built.
 
-**Built against an open decision.** Decision B, the packaging of the server tier, is open; this
-follows its recommendation, "`nuxeo-agentic-core` for the runtime essentials; one add-on per domain
-module" ([decisions.md](../docs/business-apps/decisions.md)). Share links, decision C, are not
-built.
+**Built against two open decisions.** Decision B, the packaging of the server tier, follows its
+recommendation, "`nuxeo-agentic-core` for the runtime essentials; one add-on per domain module".
+Share links follow decision C's recommendation, "Share links in phase 5, invited outside users in
+phase 8" ([decisions.md](../docs/business-apps/decisions.md)): links, and no outside user. Decision
+F, token sign-in, is not touched: no sign-in changes for anyone.
 
-**Needs its security review before anyone relies on it** (below, "For the security review"). It
-is not installed anywhere: it was built, tested, and checked against the server's own jars, read
-only.
+**Share links are a security control and a new path that needs no sign-in.** Neither half may be
+relied on before its security review (below, "For the security review"). Nothing here is installed
+anywhere: it was built, tested, and checked against the server's own jars, read only.
 
 ## The short version
 
@@ -32,6 +34,12 @@ only.
 - **It enforces nothing on its own.** A package contributes a rights policy for its document type;
   the brand assets kit contributes one for `AcmeAsset`
   ([its README](../business-apps/packages/brand-assets-demo/README.md), "Rights on the server").
+- **Share links** (below, "Share links"): a user who holds `WriteSecurity` on an asset makes a link
+  to some of its picture views, and its original where its rights allow, until a last day in UTC.
+  Anyone with the address opens it, without signing in, at `/nuxeo/agentic-share/`, and gets those
+  items only, watermarked on the server, while the link is neither revoked nor past its day and the
+  asset's rights still allow each one. Every download is logged, with the time, the link and the
+  item. The token is 256 bits; the server keeps its SHA-256 only.
 
 ## What it refuses, and how
 
@@ -154,7 +162,8 @@ Read from the Nuxeo LTS 2025.10.18 server in the local Docker container, read on
   their own workspace for one, can copy the asset there, write the copy's channels or rights end,
   and download the copy. Refusing that needs the rights fields written only by a rights manager,
   copies included, which this version does not do.
-- **Publishing and share links** are the rest of the plan's rights and sharing add-on: not built.
+- **Publishing to channels and outside-user invitations** are the rest of the plan's rights and
+  sharing add-on: not built. Share links are (below), with what they do not cover listed there.
 - **Regions, embargoes and the asset's lifecycle state,** which the prototype also weighs, are not
   read: the kit's stand-in model has regions as free text and no asset lifecycle.
 
@@ -195,6 +204,168 @@ title, and each rendition and blob the policy lists, each with `allowed`, `reaso
 `otherwise`, the answer for any use not listed. The client reads it in
 `libs/shared/nuxeo-client/src/lib/utils/asset-rights.ts`, and asks for it only after a 403.
 
+## Share links
+
+**A security control, and a new path that needs no sign-in.** A share link gives someone who has
+no account, and is not signed in, some of an asset's pictures. Its security review is the plan's
+condition for phase 5 being done (below, "For the security review"); until then nothing may rely
+on it, and it is installed nowhere.
+
+**Decision C, built against its recommendation,** "Share links in phase 5, invited outside users in
+phase 8": links, and no outside user. Nobody is invited, given an account or signed in. **Decision
+F is not touched:** no sign-in changes for a signed-in user, and no token a share link carries signs
+anyone in.
+
+### What Nuxeo already offers, and why a link does not use it
+
+Read from the local Nuxeo 2025.10.18's jars, read only, as above. Nuxeo's time-limited access for
+someone outside the company is `Document.AddPermission` with `email`, `begin` and `end`
+(`nuxeo-permissions`): an ACE for a transient principal, `transient/<email>`, with those dates, and
+a token from `TokenAuthenticationService.acquireToken` (`nuxeo-platform-login-token`), which
+`TransientUserPermissionHelper.addToken` asks for and the permission's email carries. That token
+signs its bearer in, through the `TOKEN_AUTH` plugin and the `X-Authentication-Token` header or the
+`token` parameter, as that principal, for the whole REST API and Automation, with whatever that
+principal may read. It is a `UUID.randomUUID()`, 122 random bits, kept as written, as the id of the
+`authTokens` directory, with a five-minute cache.
+
+That is the right base for phase 8's invited outside users, and the wrong one for a link, which
+must give only its listed pictures, watermarked, and nothing of the API: a signed-in principal reads
+every rendition, the original, the document's metadata and anything else Nuxeo serves it. So a
+share link signs no one in. It is a servlet that takes a token and answers bytes, deciding with
+Nuxeo's own pieces: a directory to keep the links in, as Nuxeo keeps `authTokens`; the document's
+permissions, through the user manager, for its creator; the picture views Nuxeo makes; and this
+add-on's rights policy.
+
+### How a link is made
+
+`ShareLink.Create`, an Automation operation, by a signed-in user, with the asset as its input:
+
+```json
+{
+  "input": "doc:<id>",
+  "params": { "renditions": ["view:FullHD", "original"], "end": "2026-12-14" }
+}
+```
+
+- **Who may:** whoever holds `WriteSecurity` on the asset, "Manage permissions", the permission
+  Nuxeo itself asks of anyone who gives someone else access to a document, an outside person by
+  email included. `Write` was the other candidate: it lets a user change the asset, not say who
+  else may see it. The same permission lists the links, revokes them, and reads their downloads.
+- **What it lists:** 1 to 10 items, each the asset's `original`, or one of its picture views by its
+  exact title, `view:<title>`. Not a rendition of the rendition service, not another blob, not a
+  view by its place.
+- **Until when:** a last day, `yyyy-MM-dd`, in UTC, from today to 90 days on: the link stops at the
+  first instant of the next day, in UTC, as an asset's rights end does.
+- **Only what the rights allow now:** each item is decided by the asset's rights policy as a
+  download of it would be, and refused when the rights have ended, a preview's included. A request
+  with any item refused makes no link, and says which and why: `{"refused": [{"rendition",
+"reason"}]}`, with the rights' codes and `no-such-rendition`.
+- **Not for** a version, a proxy, a document in the trash or a type no rights policy covers; a
+  document has at most 100 open links.
+- **The token:** 32 bytes from `SecureRandom`, 256 bits, written as 43 characters of base64url.
+  The answer carries it once, with the path the link opens at, `/nuxeo/agentic-share/<token>/`;
+  the server keeps its SHA-256 only, as the link's id. A lost address cannot be shown again: the
+  link is revoked and another made.
+
+### How a link opens
+
+`GET /nuxeo/agentic-share/<token>/` is the link's page; `.../original` and `.../view/<title>` are
+its items. The servlet has no authentication filter, on purpose
+(`OSGI-INF/deployment-fragment.xml`): nothing is decided by who the visitor is. Each request runs in
+a transaction of its own, with the system's rights, and an item is served only while all of these
+hold, in this order:
+
+1. the token has a token's form, checked before anything is read, and a link has its hash,
+   compared in constant time once found;
+2. the link is not revoked, and its last day has not passed, in UTC;
+3. the link lists the item;
+4. the link's creator, as the user directory has them now, with their groups, still holds
+   `WriteSecurity` on the document;
+5. the document, read by the id the link holds, is that document, live, and not in the trash;
+6. a rights policy covers its type, the asset's rights have not ended, a preview included, and the
+   policy allows the item's use: so an ended right, a channel taken off the asset, or a use the
+   policy no longer lists ends the link for that item;
+7. the document has the item: its first view of that title, or its original;
+8. the item is a JPEG or a PNG of at most 64 MiB and 24 million pixels, read from its header before
+   its pixels, and the watermark is drawn on it;
+9. the download is logged.
+
+- **Nothing in a request names a document.** The document is the link's; the path names only an
+  item of it. Anything else under the path is the refusal.
+- **One refusal for everything:** a token that is not one, a link that is not there, revoked,
+  past its day, an item it does not list, rights that refuse it: each is the same 404, byte for
+  byte. The server log says which, at `INFO`, with the link's label, the first 8 characters of its
+  id, and never the token; a token no link has is logged at `DEBUG` only, so that a scan writes no
+  line per request.
+- **The page** lists what the link may serve now, and opens nothing, the same 404, when that is
+  nothing. It is the server's, in English, with no script, no style sheet and nothing from another
+  address, everything written from the link escaped. It shows neither the asset's title nor any of
+  its metadata: until the architecture's outside-user portal is built, it is the share-link view.
+- **The watermark** is drawn on the server, in Java with ImageIO and Java 2D: the picture decoded
+  from memory, never a temporary file, the link's label and last day, `SHARED ab12cd34 UNTIL
+2026-12-14 UTC`, tiled across all of it at -30 degrees, light over dark, and the result written as
+  a new JPEG. Nothing of the file but its pixels goes through: its metadata, colour profile and any
+  embedded image are left behind. At most two are drawn at once, each holding a decoded picture; a
+  request that waits two seconds for its turn is answered 503, never with the file. A file that
+  cannot be marked is not served. A copy carries the label of the link it came from.
+- **Every answer** is sent with `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, a content
+  security policy that runs no script and frames nothing, `X-Frame-Options: DENY`, `X-Robots-Tag:
+noindex`, `nosniff` and `Cross-Origin-Resource-Policy: same-origin`. GET only: anything else is 405.
+- **Nothing is held in memory between requests:** each reads the link, the creator's permission,
+  the document and its rights again, so a revocation, a permission taken away or a right ended
+  holds from the next request on, on any node.
+
+### Where links are kept, and the download log
+
+Two directories, `agenticShareLinks` and `agenticShareDownloads`
+(`OSGI-INF/share-links-directories.xml`), on the server's directory template, as Nuxeo keeps
+`authTokens` and `aceinfo`: of the `system` type, which the REST API's directory list leaves out,
+readable by the group `__Nobody__` only, so by an administrator and by code run with the system's
+rights alone, with no cache. Every value is text: instants in UTC to the millisecond, always 24
+characters, so sorted as text they are sorted in time.
+
+| Directory               | Keeps                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `agenticShareLinks`     | The token's SHA-256 as its id, the repository, the document, the items, the last day, when and by whom it was made, and revoked |
+| `agenticShareDownloads` | One entry per item served: when, the link's id, the document and the item                                                       |
+
+The log keeps nothing about who downloaded: no address, no browser, no name. The link is what tells
+its owner which recipient it went to. The creator's and revoker's user names are kept, because the
+creator's permission is asked again at each opening, and they are staff, not the recipient.
+
+### The asset page
+
+The record page of an asset whose layout file has `"shareLinks": {}` lists its links, offers
+Revoke and a new link, and shows the downloads, to those who may manage them; it draws nothing
+for anyone the server answers 403 ([layout-v2.md](../docs/business-apps/layout-v2.md), "Share
+links"). The brand assets kit turns it on in 0.2.1. The operations:
+
+| Operation             | Input     | Parameters                           | Answers                                                                            |
+| --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
+| `ShareLink.Create`    | the asset | `renditions` (a list), `end` (a day) | `{ link, token, path }`, or `{ refused: [{ rendition, reason }] }` and no link     |
+| `ShareLink.List`      | the asset |                                      | `{ links }`, newest first, at most 200                                             |
+| `ShareLink.Revoke`    | the asset | `link` (its id)                      | `{ link }`; 404 for a link of another document                                     |
+| `ShareLink.Downloads` | the asset |                                      | `{ downloads: [{ time, link, rendition }], truncated }`, newest first, at most 200 |
+
+A link is `{ id, document, renditions, end, created, createdBy, revoked, revokedBy, state }`, its
+`state` `active`, `expired` or `revoked`. Each needs `WriteSecurity`: 403 otherwise.
+
+### What share links do not cover
+
+- **A copy taken before revocation.** Whoever opened the link has the watermarked bytes. Revoking
+  stops the next request, not what was saved. The watermark names the link; it does not stop a
+  copy, and a visible mark can be cropped, painted over or rebuilt by software.
+- **Rate limits.** A token of 256 bits cannot be guessed, so a limit is not what keeps links
+  secret; the server limits only how many pictures it marks at once. The architecture rate-limits
+  the share-link path at the edge, which an install must configure (below).
+- **Outside users and the portal:** decision C's phase 8. No one is invited, signed in or given an
+  account, and the page is not the portal.
+- **Renditions of the rendition service, PDFs, video and anything but a picture view or the
+  original**, and an original that is not a JPEG or a PNG, or is over the watermark's limits.
+- **The page in other languages:** it is the server's, in English, until the portal.
+- **Other nodes' caches:** none is used, so there is nothing to hold stale; a proxy or a CDN in
+  front of the server must honour `no-store`, which is the install's to check.
+
 ## Building and testing it
 
 From the repository's root, with JDK 21 and Maven:
@@ -204,19 +375,26 @@ mvn -pl nuxeo-agentic-assets -am package
 ```
 
 It runs the module's tests and writes the bundle and the Marketplace package,
-`nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.1.0.zip`. `build-marketplace.yml` builds it on
+`nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.2.0.zip`. `build-marketplace.yml` builds it on
 every pull request it runs for, without uploading or publishing it. The tests need no Nuxeo
 runtime: documents are proxies that answer only what the code reads.
 
-| Test                           | What it holds                                                                                                                            |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `AssetRightsTest`              | The decision, use by use, in its order, on the kit's policy                                                                              |
-| `DownloadUseTest`              | Which use a download is, canonical forms only                                                                                            |
-| `RightsPolicyTest`             | A policy read through XMap as the runtime reads it, each mistake a refusal, and the brand kit's own file                                 |
-| `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets |
-| `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                    |
-| `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                 |
-| `BundleTest`                   | The manifest's components, their classes, and the package's version                                                                      |
+| Test                           | What it holds                                                                                                                                                                                                                                        |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AssetRightsTest`              | The decision, use by use, in its order, on the kit's policy                                                                                                                                                                                          |
+| `DownloadUseTest`              | Which use a download is, canonical forms only                                                                                                                                                                                                        |
+| `RightsPolicyTest`             | A policy read through XMap as the runtime reads it, each mistake a refusal, and the brand kit's own file                                                                                                                                             |
+| `AssetRightsComponentTest`     | Policies replaced, removed and broken; unreadable rights refused; versions and proxies by their live document; containers holding assets                                                                                                             |
+| `DownloadPermissionScriptTest` | The contributed script run through Nashorn 15.7 as `checkPermission` runs it; every failure a `false`                                                                                                                                                |
+| `AssetRightsJsonEnricherTest`  | What the enricher writes                                                                                                                                                                                                                             |
+| `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations |
+| `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                  |
+| `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                             |
+| `ShareLinkComponentTest`       | Making a link: permission, items, day, rights now; opening it: every condition above, each refusal by its reason, the bytes marked and logged                                                                                                        |
+| `WatermarkerTest`              | The mark across the whole picture, light and dark; nothing but the pixels kept; formats, pixels and bytes refused                                                                                                                                    |
+| `ShareEndpointTest`            | GET only; the paths and nothing else; one refusal byte for byte; the headers on every answer; the page escaped and self-contained                                                                                                                    |
+| `DirectoryShareLinkStoreTest`  | Every call with the system's rights; text only, the token nowhere; what does not read back refused; newest first, truncated                                                                                                                          |
+| `ShareLinkJsonTest`            | What the operations answer, and the token in Create's answer only                                                                                                                                                                                    |
 
 Every guard was seen failing: each of 28 breakages, one at a time (a use not listed let through,
 the channel or the end day not checked, the script's `catch` removed, the point misnamed, the kit's
@@ -231,10 +409,13 @@ The version is `assets.package.version` in `pom.xml`, which `package.xml` takes,
 
 ## Installing it on a local Nuxeo
 
-**Not run yet.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. `nuxeoctl
-mp-install` refuses while the server runs, and the server is the container's main process, so a
-one-off script installs it when the container next starts, as the kits' READMEs do. Install the
-add-on with the brand assets kit 0.2.0, which depends on it, in one restart.
+**Not run for 0.2.0.** The local Nuxeo is the Docker container `nuxeo`, on port 8080. Read only, on
+25 November 2026, its package list shows `nuxeo-agentic-assets-0.1.0` and `brand-assets-demo-0.2.0`
+started: this upgrades both, to the add-on 0.2.0 and the kit 0.2.1, which depends on it, in one
+restart. `nuxeoctl mp-install` refuses while the server runs, and the server is the container's main
+process, so a one-off script installs them when the container next starts, as the kits' READMEs do.
+**Not before the share links' security review:** the upgrade opens `/nuxeo/agentic-share/` to
+anyone who can reach the server.
 
 **1. Build both,** from the repository's root:
 
@@ -246,18 +427,19 @@ mvn -pl nuxeo-agentic-assets -am package
 npm run app-package -- business-apps/packages/brand-assets-demo --platform 0.2.0
 ```
 
-**2. Into the container,** then the one-off script, which removes itself:
+**2. Into the container,** then the one-off script, which removes itself. `mp-install` given a
+package's later version upgrades the one installed:
 
 ```bash
-docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.1.0.zip nuxeo:/tmp/
+docker cp nuxeo-agentic-assets/target/nuxeo-agentic-assets-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/brand-assets-demo/dist/brand-assets-demo-0.2.1.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.1.0.zip /tmp/brand-assets-demo-0.2.0.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-assets-0.2.0.zip /tmp/brand-assets-demo-0.2.1.zip --accept=true > /var/log/nuxeo/asset-rights-install.log 2>&1 || echo "asset rights: install failed, see /var/log/nuxeo/asset-rights-install.log"' 'rm -f "$0"' > /tmp/zz-asset-rights-install.sh && chmod 755 /tmp/zz-asset-rights-install.sh
 ```
 
 ```bash
@@ -266,20 +448,42 @@ docker cp /tmp/zz-asset-rights-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ 
 
 **3. Check it,** once `http://localhost:8080/nuxeo/runningstatus` answers 200:
 
-- `/var/log/nuxeo/asset-rights-install.log` in the container lists both packages installed;
+- `/var/log/nuxeo/asset-rights-install.log` in the container lists both packages installed, at
+  0.2.0 and 0.2.1;
 - the server log's `Component Loading Status` has nothing pending or missing, and names
   `org.nuxeo.agentic.assets.rights`, `org.nuxeo.agentic.assets.rights.download`,
-  `org.nuxeo.agentic.assets.rights.enrichers` and `nuxeo.config.brand-assets-demo.rights`;
-- the server log has no `Asset rights:` error: a policy's mistakes are logged as it registers;
+  `org.nuxeo.agentic.assets.rights.enrichers`, `org.nuxeo.agentic.assets.share.directories`,
+  `org.nuxeo.agentic.assets.share`, `org.nuxeo.agentic.assets.share.operations` and
+  `nuxeo.config.brand-assets-demo.rights`;
+- the server log has no `Asset rights:` error and no `Share links:` error;
+- the generated `nxserver/nuxeo.war/WEB-INF/web.xml` maps the servlet `Agentic Share Links` on
+  `/agentic-share/*`, and no `NuxeoAuthenticationFilter` on that path;
+- `GET /nuxeo/agentic-share/` followed by any 43 characters of `[A-Za-z0-9_-]` and `/` answers
+  404, with `Cache-Control: no-store, max-age=0` and `Referrer-Policy: no-referrer`; and `POST` to
+  it, 405;
+- `GET /nuxeo/api/v1/directory` does not list `agenticShareLinks` or `agenticShareDownloads`, and
+  `GET /nuxeo/api/v1/directory/agenticShareLinks` as a user who is not an administrator answers no
+  entry;
 - once the kit is seeded, `GET /nuxeo/api/v1/path/default-domain/workspaces/acme-brand-assets/assets/ast-503`
   with the header `enrichers.document: assetRights` answers its `contextParameters.assetRights`,
   and `@blob/picture:views/<n>/content` on its `OriginalJpeg` view answers 403;
-- the demo: `npm run beta:evidence -- brand-assets-rights`
-  ([`scripts/beta-harness/steps/brand-assets-rights.mjs`](../scripts/beta-harness/steps/brand-assets-rights.mjs)).
+- the rights demo: `npm run beta:evidence -- brand-assets-rights`
+  ([`scripts/beta-harness/steps/brand-assets-rights.mjs`](../scripts/beta-harness/steps/brand-assets-rights.mjs));
+- the share links demo, the plan's demo step 3, by hand, with no steps file yet: on asset 501's page,
+  as a user who holds `WriteSecurity` on it, make a link for `FullHD` and `Medium`; open its address
+  in a private window, and see both watermarked with the link's label; the asset page's downloads
+  list them; Revoke it, reload the private window, and see "This link is not available". A link
+  to asset 503's original, or to anything of asset 505, is refused when it is made.
+
+**Before anyone outside the company has a link,** whatever reaches the server from outside must:
+rate-limit `/nuxeo/agentic-share/` per client, as the architecture's deployment table has it;
+keep and cache nothing of it, honouring `no-store`; and log no full request path, or keep such logs
+as secrets, since the path carries the token. Nothing here configures any of that.
 
 **Removing it:** remove the kit first, which depends on it, then the add-on, with
 `nuxeoctl mp-remove brand-assets-demo nuxeo-agentic-assets --accept=true` in the one-off script in
-place of `mp-install`. With it gone, no download is refused for rights.
+place of `mp-install`. With it gone, no download is refused for rights and no share link opens; its
+two directories' tables stay in the database until dropped by hand.
 
 ## For the security review
 
@@ -315,3 +519,58 @@ The plan requires one before this is relied on. It should check:
    answers `null`, "no policy", when the service is not running, while the permission refuses.
 10. **The cost:** a new script engine and one evaluation per download, for every document, which
     measured 0.7 to 2.8 ms with Nashorn 15.7 on JDK 21, and the log line per refusal.
+
+**Share links,** a new path that needs no sign-in, add these. The plan makes their review the
+condition for phase 5 being done:
+
+11. **Token entropy and storage:** 32 bytes of `SecureRandom` per token, the JVM's default
+    provider on the server; base64url, 43 characters, one canonical form; only the SHA-256 kept, with
+    no salt or key, on the argument that a 256-bit random token has no dictionary; the token in
+    Create's answer once, and nowhere the client keeps it. Whether a keyed hash is wanted anyway,
+    so that a copy of the database alone cannot be checked against a token seen elsewhere.
+12. **The timing of the comparison:** the store is asked for the link by the token's hash, which
+    the caller cannot choose the bits of, and the hash found is compared to the hash asked for
+    with `MessageDigest.isEqual`. Whether the directory's own lookup by id needs more than that.
+13. **Enumeration and rate limiting:** a token's form refused before the store is read; one 404
+    for every refusal, byte for byte, whatever the reason; the log line for an unknown token at
+    `DEBUG`. No per-client limit on the server: the edge must add one, and whether the server
+    needs its own, beyond two pictures marked at once.
+14. **Scope escape:** the document is the link's, never the request's; the path names an item of
+    it and nothing else; no authentication filter, so no session and no principal, and the
+    system's rights used only to read that document, its creator's permission and the two
+    directories. Whether anything else under `/nuxeo/` can be reached with a link's token (it is
+    no sign-in token: `TOKEN_AUTH` does not know it), and whether a view's title, which anyone who
+    may write the asset may change, can make a link serve a picture it was not made for: a link
+    names a view by its title, and serves whichever view has that title at the time.
+15. **Watermark removal:** a visible mark, tiled, light over dark, at -30 degrees, the link's label
+    and last day in it, on a new JPEG with no metadata. It can be cropped round, painted over or
+    rebuilt by software; it names the link a copy came from, and does not stop a copy. Whether an
+    invisible mark is wanted too.
+16. **Caching and proxies:** `no-store` on every answer, 200, 404, 405 and 503 alike; whether every
+    proxy and CDN in front of a customer's server honours it, and keeps no copy of a 200.
+17. **Referrer leakage:** `Referrer-Policy: no-referrer` and the page's own `<meta name="referrer">`;
+    the page loads nothing from elsewhere and links nowhere else. The token is still in the
+    address bar, the browser's history, and the server's and every proxy's access logs, which the
+    install must treat as secrets.
+18. **Revocation latency:** no cache in the directories or in the service, so a revocation holds
+    from the next request on, on any node, with the database's own isolation. A request already
+    being answered finishes, and what a visitor saved before is theirs.
+19. **Clock and time zone:** a link's last day and the rights end are days in UTC, decided by the
+    server's clock; the asset page shows the day in UTC and says so. A server whose clock is wrong
+    serves for the wrong days.
+20. **The log's privacy:** per download, the time, the link's id, the document and the item, and
+    nothing about the visitor; the creator's and revoker's user names on the link. The server's own
+    access log still holds the visitor's address and the path, with the token in it.
+21. **Interaction with the rights policy:** every item is decided at every request by the asset's
+    policy as a download of it would be, and refused once the rights have ended, a preview
+    included, which is stricter than a download; a link made for an item the rights refuse is not
+    made. The servlet reads the bytes itself, not through the download service, so the download
+    permission is not what refuses a link's item: this decision is. Whether a link should also be
+    refused when the asset's rights would refuse a download for another reason the policy adds
+    later.
+22. **The creator's permission:** asked again at every request, through the user manager, with the
+    creator's groups; a user no longer there refuses. Whether `WriteSecurity` is the right
+    permission to make a link, rather than `Write` or one of its own.
+23. **Denial of service:** at most two pictures marked at once, each at most 64 MiB and 24 million
+    pixels, read from the header first; a request waiting two seconds answered 503. Every page view
+    marks and logs each picture it shows.

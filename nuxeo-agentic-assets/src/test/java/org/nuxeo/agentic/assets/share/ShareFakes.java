@@ -278,6 +278,9 @@ final class ShareFakes {
         /** Every document id read, in order. */
         final List<String> read = new ArrayList<>();
 
+        /** An id answered with another document, as a repository that went wrong would. */
+        final Map<String, String> answersWith = new HashMap<>();
+
         Asset add(Asset asset) {
             documents.put(asset.id, asset);
             mayShare.computeIfAbsent(OWNER, user -> new HashSet<>()).add(asset.id);
@@ -287,13 +290,13 @@ final class ShareFakes {
         @Override
         public <T> T withDocument(String repository, String id, Function<DocumentModel, T> code) {
             read.add(id);
-            Asset asset = REPOSITORY.equals(repository) ? documents.get(id) : null;
+            Asset asset = REPOSITORY.equals(repository) ? documents.get(answersWith.getOrDefault(id, id)) : null;
             return code.apply(asset == null ? null : asset.model());
         }
 
         @Override
         public boolean hasPermission(String repository, String document, String username, String permission) {
-            return ShareLinkService.MANAGE_PERMISSION.equals(permission)
+            return "WriteSecurity".equals(permission)
                     && mayShare.getOrDefault(username, Set.of()).contains(document);
         }
     }
@@ -314,7 +317,7 @@ final class ShareFakes {
                     if (args.length != 2 || !(args[0] instanceof DocumentRef)) {
                         throw new UnsupportedOperationException("CoreSession.hasPermission with a principal");
                     }
-                    yield mayManage && ShareLinkService.MANAGE_PERMISSION.equals(args[1]);
+                    yield mayManage && "WriteSecurity".equals(args[1]);
                 }
                 case "getPrincipal" -> principal;
                 case "toString" -> "Session(" + user + ")";
