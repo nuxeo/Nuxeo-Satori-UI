@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.assets.rights" version="1.0">
+
+  <documentation>
+    An asset's rights, decided on the server for the downloads the platform's download service is
+    asked for: the rights policies packages contribute, one per document type, and the decision
+    the download permission and the assetRights enricher both read. Automation results, which the
+    platform hands over without naming their document, are not decided here.
+
+    A policy says where the type keeps its rights end and its channels, and which uses of an
+    asset each channel covers: its original, each picture view by its title, each rendition by
+    its name, any other blob by its xpath. A use the policy does not list is refused. A use the
+    policy marks as a preview is served whatever the rights. Any other use is refused once the
+    rights end day has passed, in UTC, or when the asset's channels do not hold the channel that
+    covers it. A version or a proxy has its live document's rights. A folder or a collection
+    holding a covered document is refused its renditions, but its thumbnail. Administrators are
+    refused like anyone else.
+  </documentation>
+
+  <implementation class="org.nuxeo.agentic.assets.rights.AssetRightsComponent" />
+
+  <service>
+    <provide interface="org.nuxeo.agentic.assets.rights.AssetRightsService" />
+  </service>
+
+  <extension-point name="policies">
+    <documentation>
+      One rights policy per document type.
+
+      <code>
+        <policy type="AcmeAsset">
+          <rightsEnd xpath="dc:expired" />
+          <channels xpath="acmeasset:channels" />
+          <original channel="Print" />
+          <view name="Medium" preview="true" />
+          <view name="FullHD" channel="E-commerce" />
+          <view name="OriginalJpeg" channel="Print" />
+          <rendition name="thumbnail" preview="true" />
+          <rendition name="FullHD" channel="E-commerce" />
+          <blob xpath="files:files/0/file" channel="Print" />
+        </policy>
+      </code>
+
+      rightsEnd names a date property: its day, in UTC, is the last day the rights cover; an empty
+      one sets no end. channels names a text or list property. The original is the blob at
+      original's xpath, file:content when it names none, and the platform's mainBlob rendition.
+      Each use takes either a channel or preview="true": one with both or neither is left out,
+      so the use is refused. A policy with no rightsEnd or no channels refuses every use of its
+      type, so a mistake refuses rather than lets through. A later policy for the same type
+      replaces it whole, and enabled="false" removes it.
+    </documentation>
+    <object class="org.nuxeo.agentic.assets.rights.RightsPolicyDescriptor" />
+  </extension-point>
+
+</component>
