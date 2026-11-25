@@ -412,6 +412,18 @@ describe.skipIf(process.platform === 'win32')(
         sort: 'acon:end',
       });
       // The generators read the model from disk, as `nx g` leaves it between runs.
+      const described = join(scratch, 'described');
+      flush(tree, KIT, described);
+      // A page provider of the search index, whose aggregates the queue's facets name.
+      tree.write(`${KIT}/content-model.json`, readFileSync(join(described, 'content-model.json')));
+      await appModelGenerator(tree, {
+        package: KIT,
+        type: 'AcmeContract',
+        pageProvider: 'acme_open_contracts',
+        where: "acon:status IN ('Draft', 'Active')",
+        sort: 'acon:end',
+        aggregates: 'acon:status,acon:currency',
+      });
       const written = join(scratch, 'written');
       flush(tree, KIT, written);
       const model = join(written, 'content-model.json');
@@ -429,6 +441,12 @@ describe.skipIf(process.platform === 'win32')(
         columns: 'acon:number,dc:title,acon:end',
         sort: 'acon:end',
       });
+      await appQueueGenerator(tree, {
+        package: KIT,
+        id: 'open',
+        pageProvider: 'acme_open_contracts',
+        columns: 'acon:number,dc:title,acon:status',
+      });
       // By hand, one at each place of the registry's that no generator writes, so that the
       // generators' copy of the pipeline's REGISTRY_FILES is held to it at every place.
       const byHand = (file: string, content: unknown) =>
@@ -436,6 +454,19 @@ describe.skipIf(process.platform === 'win32')(
           `${KIT}/bundle/agentic-ui-config/${file}`,
           `${JSON.stringify(content, null, 2)}\n`,
         );
+      // The facets, by hand, by the aggregates' ids app-model printed, and their labels.
+      const queueFile = `${KIT}/bundle/agentic-ui-config/queues/open.json`;
+      const queue = JSON.parse(tree.read(queueFile, 'utf-8') ?? '{}');
+      queue.facets = [
+        { aggregate: 'acon_status_agg', labelKey: 'acme-desk.facet.status' },
+        { aggregate: 'acon_currency_agg', labelKey: 'acme-desk.facet.currency' },
+      ];
+      tree.write(queueFile, `${JSON.stringify(queue, null, 2)}\n`);
+      const labelsFile = `${KIT}/bundle/agentic-ui-config/labels/en.json`;
+      const english = JSON.parse(tree.read(labelsFile, 'utf-8') ?? '{}');
+      english.labels['acme-desk.facet.status'] = 'Status';
+      english.labels['acme-desk.facet.currency'] = 'Currency';
+      tree.write(labelsFile, `${JSON.stringify(english, null, 2)}\n`);
       byHand('navigation.json', {
         version: 2,
         entries: [{ id: 'active', icon: 'inbox', queue: 'active' }],
@@ -449,6 +480,12 @@ describe.skipIf(process.platform === 'win32')(
             label: 'Active',
             kpi: { pageProvider: 'acme_active_contracts' },
             queue: 'active',
+          },
+          {
+            id: 'open',
+            label: 'Open, by status',
+            kpi: { pageProvider: 'acme_open_contracts', aggregate: 'acon_status_agg' },
+            queue: 'open',
           },
         ],
       });
@@ -487,6 +524,7 @@ describe.skipIf(process.platform === 'win32')(
         'home.json',
         'navigation.json',
         'queues/active.json',
+        'queues/open.json',
         'labels/en.json',
         'labels/fr-CA.json',
         'tasks/contractReview.approve.layout.json',
@@ -512,6 +550,65 @@ describe.skipIf(process.platform === 'win32')(
       const run = pipeline(directory, flags(directory));
       expect(run.output).toContain('"acon:owner" is not a property of the type "AcmeContract"');
       expect(run.output).toContain('step 2 refused it');
+      expect(run.status).toBe(1);
+    });
+
+    it("is refused for a facet whose aggregate its page provider, in the package's model, does not define", () => {
+      const directory = copy();
+      const file = join(directory, 'bundle/agentic-ui-config/queues/open.json');
+      const queue = JSON.parse(readFileSync(file, 'utf8'));
+      queue.facets[1].aggregate = 'acon_end_agg';
+      writeFileSync(file, JSON.stringify(queue));
+      const run = pipeline(directory, flags(directory));
+      expect(run.output).toContain(
+        'queues/open.json: facets[1].aggregate: the page provider "acme_open_contracts", defined in OSGI-INF/acme-demo-model.xml, has no aggregate "acon_end_agg": it defines acon_status_agg, acon_currency_agg [unknown]',
+      );
+      expect(run.output).toContain('step 2 refused it');
+      expect(run.status).toBe(1);
+    });
+
+    it("is refused for a facet on app-model's page provider of the repository, which answers none", () => {
+      const directory = copy();
+      const file = join(directory, 'bundle/agentic-ui-config/queues/open.json');
+      const queue = JSON.parse(readFileSync(file, 'utf8'));
+      queue.pageProvider = 'acme_active_contracts';
+      writeFileSync(file, JSON.stringify(queue));
+      const run = pipeline(directory, flags(directory));
+      expect(run.output).toContain(
+        'facets[0].aggregate: the page provider "acme_active_contracts", defined in OSGI-INF/acme-demo-model.xml, has no aggregate "acon_status_agg": it reads the repository',
+      );
+      expect(run.status).toBe(1);
+    });
+
+    it('is held to its own content model with no --model, as CI and validate_package run it', () => {
+      const sound = copy();
+      const passed = pipeline(sound, ['--platform', PLATFORM, '--out', join(sound, 'out')]);
+      expect(passed.output).toContain("The content model is the package's own content-model.json");
+      expect(passed.output).toContain('2 layouts were held to the content model');
+      expect(passed.status).toBe(0);
+      const directory = copy();
+      const form = join(
+        directory,
+        'bundle/agentic-ui-config/layouts/AcmeContract/edit.layout.json',
+      );
+      const layout = JSON.parse(readFileSync(form, 'utf8'));
+      layout.cards[0].fields.push('acon:owner');
+      writeFileSync(form, JSON.stringify(layout));
+      const run = pipeline(directory, ['--platform', PLATFORM, '--out', join(directory, 'out')]);
+      expect(run.output).toContain('"acon:owner" is not a property of the type "AcmeContract"');
+      expect(run.status).toBe(1);
+    });
+
+    it('is refused for a label key written by hand with no text, naming the key and the file', () => {
+      const directory = copy();
+      const file = join(directory, 'bundle/agentic-ui-config/home.json');
+      const home = JSON.parse(readFileSync(file, 'utf8'));
+      home.cards[1].labelKey = 'acme-desk.home.open';
+      writeFileSync(file, JSON.stringify(home));
+      const run = pipeline(directory, flags(directory));
+      expect(run.output).toContain(
+        `home.json: cards[1].labelKey: the label key "acme-desk.home.open" has no text in labels/en.json, or in the platform's catalogue [unknown]`,
+      );
       expect(run.status).toBe(1);
     });
 

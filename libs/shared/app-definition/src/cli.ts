@@ -1,6 +1,6 @@
 /**
  * npm run app-definition:validate -- <file or directory>... [--mode <mode>] [--allow-list <file>]
- *   [--registered <file>] [--platform <version>] [--model <file>]
+ *   [--registered <file>] [--platform <version>] [--model <file>] [--catalogue <file>]
  * node libs/shared/app-definition/src/bin.mjs model <file>
  * node libs/shared/app-definition/src/bin.mjs changes <previous package> <package>
  *
@@ -29,6 +29,11 @@
  *   type its path names: its properties, and the property types its widgets show. The file is
  *   `{ doctypes, facets, schemas }`, as `scripts/app-package-model.mjs` exports it from a server.
  *   The run says how many layouts it held to the model, and says so when there were none.
+ * - **Label keys,** given the platform's English catalogue with `--catalogue`, such as
+ *   `apps/nuxeo-ui/public/i18n/en.json`: every `labelKey` a package's file names must have a text
+ *   in its `labels/en.json` or in the catalogue, and the finding names the key. The catalogue is
+ *   read as the app reads it, its nested keys joined with dots. Without it, keys are not checked,
+ *   since a key the platform gives a text would otherwise be refused.
  * - **`model <file>`** reads a content model alone, as `--model` does, and exits 0 when the whole
  *   of it can be read, 1 with every problem when it cannot: the export checks its file with it.
  * - **Version 1 layouts** are left to the version 1 reader in `libs/shared/document-layouts`, and
@@ -62,7 +67,8 @@ export interface CliIo {
 
 const USAGE =
   'usage: app-definition validate <file or directory>... [--mode view|metadata|edit|create]' +
-  ' [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]\n' +
+  ' [--allow-list <file>] [--registered <file>] [--platform <version>] [--model <file>]' +
+  ' [--catalogue <file>]\n' +
   '       app-definition model <file>\n' +
   '       app-definition changes <previous package> <package>\n';
 const CANNOT_TELL =
@@ -81,6 +87,7 @@ export function main(argv: readonly string[], io: CliIo): number {
   let registeredFile: string | undefined;
   let platformVersion: string | undefined;
   let modelFile: string | undefined;
+  let catalogueFile: string | undefined;
   for (let index = 0; index < rest.length; index++) {
     const arg = rest[index];
     if (arg === '--mode') {
@@ -96,6 +103,8 @@ export function main(argv: readonly string[], io: CliIo): number {
       registeredFile = rest[++index];
     } else if (arg === '--model' && rest[index + 1] !== undefined) {
       modelFile = rest[++index];
+    } else if (arg === '--catalogue' && rest[index + 1] !== undefined) {
+      catalogueFile = rest[++index];
     } else if (arg === '--platform') {
       const value = rest[++index];
       if (value === undefined || !parseVersion(value)) {
@@ -138,6 +147,15 @@ export function main(argv: readonly string[], io: CliIo): number {
       return 2;
     }
     model = read;
+  }
+  let catalogue: ReadonlySet<string> | undefined;
+  if (catalogueFile !== undefined) {
+    const read = readCatalogue(catalogueFile);
+    if (typeof read === 'string') {
+      io.err(`${catalogueFile}: ${read}\n${USAGE}`);
+      return 2;
+    }
+    catalogue = read;
   }
 
   const apps = new Map<string, boolean>();
@@ -215,7 +233,7 @@ export function main(argv: readonly string[], io: CliIo): number {
       placed.file,
       content,
       contextOf(placed.root, contexts, problems),
-      { registries, operations, platformVersion, mode, model },
+      { registries, operations, platformVersion, mode, model, catalogue },
     );
     if (findings.length === 0) {
       passed++;
@@ -322,6 +340,34 @@ function readModel(path: string): ContentModel | string {
   const reading = readContentModel(content);
   if (reading.model) return reading.model;
   return `is not a content model:\n${reading.problems.map((problem) => `  - ${problem}`).join('\n')}`;
+}
+
+/**
+ * The keys of the platform's catalogue, as the app's translation service reads it: nested objects
+ * joined with dots, each key whose value is a text that is not empty. Or what is wrong with it.
+ */
+function readCatalogue(path: string): ReadonlySet<string> | string {
+  let content: unknown;
+  try {
+    content = readJson(path);
+  } catch (error) {
+    return `cannot be read as JSON: ${(error as Error).message}`;
+  }
+  if (!isRecord(content)) return 'a catalogue is { "<key>": "<text>" or { ... } }';
+  return textKeys(content);
+}
+
+/** The keys of `labels` with a text that is not empty, nested objects joined with dots. */
+function textKeys(
+  labels: Record<string, unknown>,
+  prefix = '',
+  into = new Set<string>(),
+): Set<string> {
+  for (const [key, value] of Object.entries(labels)) {
+    if (typeof value === 'string' && value.trim() !== '') into.add(`${prefix}${key}`);
+    else if (isRecord(value)) textKeys(value, `${prefix}${key}.`, into);
+  }
+  return into;
 }
 
 /** `model <file>`: whether the whole of a content model can be read, and every problem if not. */
@@ -545,11 +591,26 @@ function contextOf(
       problems.set(queuesRoot, `cannot be read: ${(error as Error).message}`);
     }
   } else if (existsSync(join(root || '.', 'app.json'))) queues = new Set();
+  const app = read('app.json');
+  // Its English labels: none when a package has no such file; unknown when the file cannot be
+  // read, which is reported, or when the directory is no package.
+  const english = read(join('labels', 'en.json'));
+  const labels =
+    english === null
+      ? undefined
+      : english === undefined
+        ? app === undefined
+          ? undefined
+          : new Set<string>()
+        : isRecord(english) && isRecord(english['labels'])
+          ? textKeys(english['labels'])
+          : new Set<string>();
   const context = {
-    app: read('app.json'),
+    app,
     actions: read('actions.json'),
     assets: new Set(assets),
     queues,
+    labels,
   };
   cache.set(root, context);
   return context;

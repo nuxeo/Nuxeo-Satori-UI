@@ -641,6 +641,141 @@ describe('app-definition validate', () => {
         expect(run(argv).code).toBe(2);
     });
   });
+
+  describe("label keys, given the platform's catalogue with --catalogue", () => {
+    /** The platform's catalogue, nested as the app's `public/i18n/en.json` is. */
+    const catalogue = { nav: { home: 'Home', blank: ' ' }, 'flat.key': 'Flat' };
+    const app = {
+      version: 2,
+      id: 'claims',
+      labelKey: 'claims.app',
+      packageVersion: '1.0.0',
+      platform: '>=0.2.0 <1.0.0',
+      groups: ['claims-adjusters'],
+    };
+    const page = {
+      version: 2,
+      cards: [
+        { id: 'claim', labelKey: 'claims.card.claim', fields: ['claim:number'] },
+        {
+          id: 'more',
+          labelKey: 'nav.home',
+          fields: [{ field: 'claim:status', labelKey: 'flat.key' }],
+        },
+      ],
+    };
+    const labels = {
+      version: 2,
+      labels: { 'claims.app': 'Claims', 'claims.card.claim': 'Claim' },
+    };
+    const check = (files: Record<string, unknown>, ...flags: string[]) => {
+      const root = packageWith({ ...files, 'catalogue.json': catalogue });
+      const result = run([
+        'validate',
+        join(root, 'pkg'),
+        '--catalogue',
+        join(root, 'catalogue.json'),
+        ...flags,
+      ]);
+      return { ...result, root };
+    };
+
+    it("passes keys with a text in the package's English labels or in the catalogue, nested or flat", () => {
+      const { code, out } = check({
+        'pkg/app.json': app,
+        'pkg/labels/en.json': labels,
+        'pkg/layouts/Claim/view.layout.json': page,
+      });
+      expect(out).toContain('3 files: 3 passed, 0 refused.');
+      expect(code).toBe(0);
+    });
+
+    it('refuses a key with a text in neither, naming the key, the file and the place', () => {
+      const broken = structuredClone(page);
+      broken.cards[0].labelKey = 'claims.card.claimz';
+      broken.cards[1].fields[0] = { field: 'claim:status', labelKey: 'nav.blank' };
+      const { code, out, root } = check({
+        'pkg/app.json': app,
+        'pkg/labels/en.json': labels,
+        'pkg/layouts/Claim/view.layout.json': broken,
+      });
+      const file = join(root, 'pkg', 'layouts/Claim/view.layout.json');
+      expect(out).toContain(
+        `${file}: cards[0].labelKey: the label key "claims.card.claimz" has no text in labels/en.json, or in the platform's catalogue [unknown]`,
+      );
+      // The catalogue's text of spaces is none.
+      expect(out).toContain(
+        `${file}: cards[1].fields[0].labelKey: the label key "nav.blank" has no text`,
+      );
+      expect(out).toContain('3 files: 2 passed, 1 refused.');
+      expect(code).toBe(1);
+    });
+
+    it('holds every file that names a key, app.json and a queue among them', () => {
+      const { code, out, root } = check({
+        'pkg/app.json': { ...app, labelKey: 'claims.appz' },
+        'pkg/labels/en.json': labels,
+        'pkg/queues/open.json': {
+          version: 2,
+          labelKey: 'claims.queue.open',
+          pageProvider: 'p',
+          columns: ['claim:number'],
+          facets: [{ aggregate: 'a', labelKey: 'nav.blank' }],
+        },
+      });
+      expect(out).toContain(
+        `${join(root, 'pkg', 'app.json')}: labelKey: the label key "claims.appz"`,
+      );
+      expect(out).toContain(
+        `${join(root, 'pkg', 'queues/open.json')}: labelKey: the label key "claims.queue.open"`,
+      );
+      expect(out).toContain(`facets[0].labelKey: the label key "nav.blank" has no text`);
+      expect(code).toBe(1);
+    });
+
+    it('holds a package with no labels/en.json to the catalogue alone', () => {
+      const { code, out } = check({
+        'pkg/app.json': app,
+        'pkg/labels/fr.json': labels,
+        'pkg/layouts/Claim/view.layout.json': page,
+      });
+      expect(out).toContain('the label key "claims.app" has no text');
+      expect(out).toContain('the label key "claims.card.claim" has no text');
+      expect(out).not.toContain('"nav.home"');
+      expect(code).toBe(1);
+    });
+
+    it('checks no key without --catalogue, nor in a file read without its package', () => {
+      const root = packageWith({
+        'pkg/app.json': { ...app, labelKey: 'claims.appz' },
+        'lone/layouts/Claim/view.layout.json': page,
+        'catalogue.json': catalogue,
+      });
+      expect(run(['validate', join(root, 'pkg')]).code).toBe(0);
+      const lone = run([
+        'validate',
+        join(root, 'lone'),
+        '--catalogue',
+        join(root, 'catalogue.json'),
+      ]);
+      expect(lone.out).toContain('1 file: 1 passed, 0 refused.');
+      expect(lone.code).toBe(0);
+    });
+
+    it('exits 2 for a catalogue it cannot read', () => {
+      const root = packageWith({ 'pkg/app.json': app, 'list.json': ['a'], 'text.json': 'x' });
+      for (const [file, message] of [
+        ['list.json', 'a catalogue is'],
+        ['text.json', 'cannot be read as JSON'],
+        ['absent.json', 'cannot be read as JSON'],
+      ]) {
+        const { code, err } = run(['validate', join(root, 'pkg'), '--catalogue', join(root, file)]);
+        expect(code).toBe(2);
+        expect(err).toContain(message);
+      }
+      expect(run(['validate', join(root, 'pkg'), '--catalogue']).code).toBe(2);
+    });
+  });
 });
 
 describe('app-definition changes', () => {

@@ -87,6 +87,23 @@ Run them from the repository's root. Never write `build.mjs`, `package.xml`, the
 component by hand: the generators write what the pipeline requires, byte for byte where it
 requires that.
 
+`--platform` in the commands below, and in what each generator says to run next, is the
+platform's version: `node -p "require('./libs/platform/package.json').version"`, which CI and
+`validate_package` pass too. It was `0.2.0` when this was written.
+
+**The order depends on where the model is.** On a customer's server the types exist, so the first
+example below holds: `app-package --type` writes the first record page from the model. **A demo
+kit with a stand-in model** has no model until `app-model` writes one, and `app-model` needs the
+package, so its order is:
+
+1. `app-package` without `--type`;
+2. `app-model --properties` for each type, then `app-model --pageProvider` for each page provider,
+   with `--aggregates` for one whose queue has facets or whose home counts buckets;
+3. `app-layout` and `app-form`, each with `--model=business-apps/packages/<name>/content-model.json`;
+4. `app-queue`, `app-action`, and the home and the menu by hand, then `app-registry`.
+
+The tutorial, `docs/business-apps/tutorial.md`, follows that order for the facilities kit.
+
 ```bash
 # The package, with its first record page from the model, and its app for the app registry
 npx nx g ./tools/satori-generators:app-package acme-contracts --owner=acme --title="Acme Contracts" \
@@ -120,7 +137,8 @@ What each writes, and what it leaves to you:
   reviewed `build.mjs`, under `business-apps/packages/<name>/`, which CI checks on every pull
   request. The component contributes the app to the app registry, so "Switch app" can list it on
   a server. A package with no record page is refused by the pipeline's step 5, so give it
-  `--type`.
+  `--type`, or, in a demo kit, write the first record page with `app-layout` once `app-model` has
+  written the model.
 - **The app's id and address.** `app-package` writes the address, where the shell is to open the
   app: its id unless `--address` gives another. It refuses one that is a platform route, as the
   pipeline refuses one written in `app.json`: `contracts`, `search`, `tasks` and the rest of
@@ -139,7 +157,10 @@ What each writes, and what it leaves to you:
   Attachments. The component contributes it, as it does the record page. A field rule in plain
   words is the next edit (below).
 - **`app-queue`:** the page provider, columns, sort and page size. Nothing checks its columns
-  against the model yet.
+  against the model yet. Facets are the next edit, by hand: `"facets": [{ "aggregate": "<id>",
+"labelKey": "<key>" }]`, each an aggregate the page provider defines, which
+  `describe_page_provider` lists for a server's. The pipeline refuses a facet whose aggregate a
+  page provider in the package's own model does not define.
 - **`app-action`:** a transition or an operation (`--operation`, with `--parameters` as JSON), on
   `record`, `row` or `bulk`, and `--queue` to offer it there. An id starting `app.` or `core.` is
   the platform's, and refused.
@@ -149,16 +170,19 @@ What each writes, and what it leaves to you:
   none. It takes out a file the package no longer holds.
 - **`app-model`, for a demo kit only:** a stand-in type with its schema, `--properties` such as
   `number,status=Draft|Active,value:double,end:date`, and page providers over it, `--pageProvider`
-  with `--where` and `--sort`, in a model component of its own that the manifest lists first. It
-  writes `content-model.json` beside `bundle/`: give that to the other generators and the pipeline
-  until a server has the package.
+  with `--where` and `--sort`, in a model component of its own that the manifest lists first. A
+  page provider reads the repository, which answers no aggregate; `--aggregates=<prefix>:<name>,...`
+  writes it from the search index instead, with a terms aggregate `<prefix>_<name>_agg` for each
+  property and the type's search document, so a queue's facets and a home's figures can name them.
+  It writes `content-model.json` beside `bundle/`: give that to the other generators until a server
+  has the package. The pipeline holds a package that ships a stand-in model to it by default.
 
   ```bash
   npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/acme-contracts \
     --type=Contract --properties="number,status=Draft|Active|Terminated,value:double,end:date"
   npx nx g ./tools/satori-generators:app-model --package=business-apps/packages/acme-contracts \
     --type=Contract --pageProvider=acme_active_contracts --where="contract:status = 'Active'" \
-    --sort=contract:end
+    --sort=contract:end --aggregates=contract:status
   ```
 
 Then edit what the generators wrote, as the person asks, following `layout-v2.md`:
@@ -185,12 +209,17 @@ Then edit what the generators wrote, as the person asks, following `layout-v2.md
 npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --model /tmp/content-model.json
 ```
 
-The MCP server's `validate_package` runs the same pipeline on the folder, as CI does, but takes no
-content model: use it for the CI view, and the command above for the model. Both must pass before
-you say anything works.
+The MCP server's `validate_package` runs the same pipeline on the folder, as CI does. It takes no
+content model: a package that ships a stand-in model is held to its own `content-model.json`, in
+both, and a package on a customer's server to none. So for a customer's package, use it for the CI
+view, and the command above for the model. Both must pass before you say anything works.
 
-- **Give it the model.** Without one, a field the type does not have and a widget that does not fit
-  its property both pass. With `--model` or `--model-server`, they are refused.
+- **Give it the server's model.** Without one, in a package that has no stand-in model, a field
+  the type does not have and a widget that does not fit its property both pass. With `--model` or
+  `--model-server`, they are refused.
+- **Every `labelKey` needs a text,** in the package's `labels/en.json` or the platform's catalogue:
+  the pipeline refuses one with neither, naming the key and the file. Add the text when you write
+  the key, not at the end.
 - **Give it the allow-list** when the package has an operation: `--allow-list <file>`, a file of
   `{ "operations": [...] }`; `validate_package` takes one as `allowList`, inside the repository.
   CI passes none yet, so a package with an operation fails CI until
@@ -200,8 +229,9 @@ you say anything works.
   check, rename an id to something unregistered, or run the pipeline without the model to get a
   pass.
 - **What it does not check yet** (`package-pipeline.md`, section 7): that a page provider exists,
-  a queue's or a related list's columns, the properties a rule or a computation names, and a
-  vocabulary widget's directory against its property's. Check those by reading the server.
+  a facet's aggregate on a page provider of the server's, a queue's or a related list's columns,
+  the properties a rule or a computation names, and a vocabulary widget's directory against its
+  property's. Check those by reading the server.
 
 ## 4. Preview in dev mode, as far as it goes
 

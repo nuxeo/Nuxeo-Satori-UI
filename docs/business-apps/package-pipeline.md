@@ -16,9 +16,16 @@ signing and publishing run only for a tag, and no tag has been pushed yet. Versi
   package goes to Nuxeo Marketplace preprod, as the platform's own package does.
 - **A package's own code never runs where the secrets are.** The job that holds them only checks,
   signs and publishes the zip the first job built.
-- **Held to the server's content model, when it is given one.** With `--model`, a model file
-  exported from a server, a layout whose widget does not show its property's type is refused, and
-  so is a field whose property the type does not have. It is opt in: with no model, these pass.
+- **Held to a content model.** With `--model`, a model file exported from a server, a layout whose
+  widget does not show its property's type is refused, and so is a field whose property the type
+  does not have. Given none, a package that ships a stand-in model, as the kits do, is held to its
+  own `content-model.json`, in CI too; a package on a customer's model, given none, passes these
+  (section 4).
+- **Every label key has a text,** in the package's `labels/en.json` or in the platform's English
+  catalogue. One with neither is refused, by its key and its file.
+- **A facet names an aggregate its page provider defines,** when the package's own model defines
+  that page provider; so does a home's figure. Only the search index answers aggregates, and a facet
+  on anything else is left out of the queue, said only in the browser's console.
 - **Its version is held to what changed.** Given the package as it was, a version that did not move
   when the content changed is refused, and so is one that moved less than the changes need: a
   queue removed needs a major. Each build writes what changed beside the zip (section 8).
@@ -49,7 +56,8 @@ the presales Payers model replaces it. Since 0.4.0 a third contributes phase 2's
 workflow: a route model, as a zip the bundle carries, with its variable schemas and chains. The
 builder holds its XML to what Nuxeo can load, as it does every component's; nothing in the pipeline
 checks the schemas, types, page providers or route model themselves, nor that a layout's page
-provider exists. The kit's own controls check its route model
+provider exists. The one thing step 2 reads in a page provider the package defines is the
+aggregates it lists, which a queue's facets and a home's figures must name (section 2). The kit's own controls check its route model
 ([its README](../../business-apps/packages/payers-claims-demo/README.md)).
 
 ## 2. The steps
@@ -61,16 +69,16 @@ one exception is a `package.xml` that is a symbolic link, whose name is not read
 The workflow, [`app-packages.yml`](../../.github/workflows/app-packages.yml), runs it on every
 package, and runs steps 7 and 8 for a tag.
 
-| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                            |
-| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version and, when one is given, its content model (section 4); the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files |
-| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8)                                                                                           |
-| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                             |
-| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                       |
-| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`                                                                                                                                           |
-| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                     |
-| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                   |
+| Step              | What is checked or done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The builder    | Nothing in the package is a symbolic link, and its `build.mjs` is the generator's, byte for byte, so the code that builds it is code this repository reviewed. A `package/install.xml` that is a folder is refused here, since no step before the builder reads it                                                                                                                                                                                                                                                                       |
+| 2. The definition | `bundle/agentic-ui-config/` has an `app.json`, and the validator finds nothing, given the deployment's allow-list, what it registers, its platform version, the platform's English catalogue, and a content model: the one given, or a stand-in package's own (section 4). Every label key has a text; a facet or a figure on the package's own page provider names an aggregate it defines; the layouts the component contributes are the ones the validator read, and so is the app it contributes to the app registry, with its files |
+| 3. The version    | `app.json`'s `packageVersion` and the manifest's `Bundle-Version` are `package.xml`'s version, and the tag, when publishing, is `app-package/<name>/<version>`. Given the package as it was, `--previous`, the version moved as far as the changes need (section 8)                                                                                                                                                                                                                                                                      |
+| 4. The build      | `build.mjs` writes the zip, refusing what the server would refuse                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 5. The zip        | `verify-package-zip.mjs` finds a well-formed Nuxeo Package. A zip it refuses is removed                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 6. The checksum   | The zip's SHA-256, beside it, in the form `sha256sum -c` reads. The build is reproducible, so the same source gives the same digest. Given `--previous`, the changelog beside it too, `<name>-<version>.changes.md`                                                                                                                                                                                                                                                                                                                      |
+| 7. Signed         | A build provenance attestation: GitHub's Sigstore attests that this repository's workflow built this zip from this commit                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 8. Published      | Nuxeo Marketplace preprod, through the same `nos-publish` step `build-marketplace.yml` uses                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Steps 1 to 6 need no install and no credential, only Node 24, as `.nvmrc` pins, and the system's
 `unzip`, which step 5 reads the zip back with. The one exception is opt in: a content model read
@@ -94,6 +102,28 @@ component path must also stay in `bundle/`: one that climbs out with `..`, is ab
 folder or a hard link is refused before it is read. Read, a component outside the package would
 have its layout attributes quoted back from wherever it is. A component that is missing is the
 builder's to refuse. A manifest that is a folder is refused at step 2 too, rather than read.
+
+Step 2 gives every label key a package names a text. The validator collects each `labelKey`, in
+every file of the app definition but the labels themselves and a module's settings, and looks it up
+as the app does (app-definition-v2.md, section 7): in the package's `labels/en.json`, then in the
+platform's English catalogue, `apps/nuxeo-ui/public/i18n/en.json`, its nested keys joined with
+dots. A key with a text in neither is a finding, with the key, the file and the place: on a page, a
+card would show its id made readable, and a field its property's name. Only English is checked,
+the language every other falls back to. The validator checks keys only when it is given the
+catalogue, `--catalogue`, which the pipeline always gives.
+
+Step 2 holds a queue's facets, and a home's figures, to the page providers the package defines. A
+facet is one of its page provider's aggregates, and only a page provider of the search index
+answers aggregates, and only those its definition lists: on any other, the queue leaves the facet
+out and the home's figure reads "Unavailable", each said only in the browser's console. So for a
+page provider that a component the manifest names defines, in an extension of
+`org.nuxeo.ecm.platform.query.api.PageProviderService`'s `providers` point, each facet's
+`aggregate`, and each figure's `kpi.aggregate`, must be the `id` of one of its `<aggregate>`
+entries. One that is not is a finding in the validator's form, naming the file, the place, the
+page provider, the component and the aggregates it does define; a `coreQueryPageProvider` with
+none is said to read the repository, and `app-model --aggregates` writes the indexed kind. A page
+provider the package does not define is the server's, which the pipeline does not read, and its
+facets are not checked; nor are those of one whose only definition is disabled.
 
 Step 2 holds the app the component contributes to the same files. The package contributes its app
 once, under the id its `app.json` gives, from `agentic-ui-config/app.json`, the file the validator
@@ -122,10 +152,21 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 ```
 
 It writes `dist/payers-claims-demo-0.4.0.zip` and its `.sha256` in the package. `--out` puts them
-elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator, and
-`--platform` its platform version; the workflow passes the version of `libs/platform`. `--model`
+elsewhere. `--allow-list` and `--registered` pass the deployment's to the validator. `--model`
 and `--model-server` give it the server's content model (section 4). `--previous` gives it the
 package as it was, to hold its version to (section 8).
+
+`--platform` is the version of the platform the package is to run on, which `app.json`'s
+`platform` range must hold. It is the `version` of `libs/platform/package.json`, the platform's
+own package, and nothing else in the repository says it:
+
+```bash
+node -p "require('./libs/platform/package.json').version"
+```
+
+The workflow passes that, and so does the Builder MCP server's `validate_package`. The commands on
+this page give `0.2.0`, the version when they were written: give yours. Left out, the range is not
+checked.
 
 Its negative controls break a copy of the demo package in one way each, and every one must be
 refused at its own step, for its own reason, with no zip left:
@@ -136,9 +177,10 @@ npm run app-package:selftest
 
 ## 4. The content model
 
-The validator checks a layout against itself and the registries. Only the server's content model
-says what each document type's properties are, so the pipeline holds layouts to it only when it is
-given one ([layout-v2.md](layout-v2.md), sections 3 and 11):
+The validator checks a layout against itself and the registries. Only a content model says what
+each document type's properties are, so the pipeline holds layouts to one only when it has one
+([layout-v2.md](layout-v2.md), sections 3 and 11): the file `--model` names, the server
+`--model-server` reads, or, given neither, the package's own stand-in, below.
 
 ```bash
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 \
@@ -176,12 +218,22 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
   neither refused nor built on a model nobody saw.
 - **The credentials** go in an `Authorization` header and nowhere else: an address that carries
   them is refused, so is plain HTTP to another machine, and a redirect is not followed.
+- **A package's own model, by default.** Given neither `--model` nor `--model-server`, a package
+  that ships a stand-in model, a component of its own that registers document types, as
+  `app-model` writes it, is held to the `content-model.json` beside its `bundle/`, which describes
+  that model, and the run says so first:
+  `The content model is the package's own content-model.json, since the package ships a stand-in
+model and no --model was given.` So CI and `validate_package`, which pass no model, refuse a
+  demo kit's misspelt property too. A `content-model.json` with no stand-in model behind it
+  describes a server, which may have changed since, and is not used unless `--model` names it; a
+  package on a customer's model is held to no model unless it is given one.
 - **The demo's model,** `content-model.json` beside the package, is the kit's stand-in model as a
   local Nuxeo with the package installed answers it, exported with `app-package:model` and cut down
   to the kit's five types, their facets and their schemas. All four record pages pass against it.
   The negative controls hold the demo to it: a widget that does not fit, a property the type does
   not have, an address part naming a missing subfield, and a type the model does not have are each
-  refused at step 2. The same broken layout with no model is built, which shows that it is the
+  refused at step 2, with `--model` and without it. The same broken layout in a copy with no
+  `content-model.json`, or whose components register no type, is built, which shows that it is the
   model that refuses it. A malformed model, and a server that refuses a read, each exit 2. A fake
   server answering as Nuxeo does proves the live read and the export: the credentials arrive on
   every read, each schema is read with `fetch-schema: fields`, a model whose property the widget
@@ -229,8 +281,14 @@ reaches only when the integration branch does, and a tag names exactly what is p
   moved to nuxeo/Nuxeo-Satori-Config; whether kits follow them, calling this pipeline from there,
   is open.
 - **Not exercised yet:** steps 7 and 8, which run only for a tag.
-- **The workflow passes no content model.** A package that carries its model could be held to it
-  on every pull request; whether kits commit their server's model, and where, is open.
+- **The workflow passes no server's content model.** A kit that ships a stand-in model is held to
+  its own `content-model.json` on every pull request (section 4). A package on a customer's model
+  is held to none there: whether such packages commit their server's model, and where, is open.
+- **A facet on the server's page provider.** The pipeline reads no server, so a facet whose page
+  provider the package does not define is not checked: `describe_page_provider` lists a server's
+  aggregates. Nor is an aggregate's type, a terms aggregate on a date, say.
+- **Label keys in other languages.** A key with an English text passes; one missing from
+  `labels/fr.json` falls back to English, and is not refused.
 - **A facet a record gains at run time.** A field whose property only such a facet brings is
   refused when a model is given, and the message names the facet. The record page shows it on a
   record that has the facet. Whether the pipeline should accept it, perhaps when a rule shows the

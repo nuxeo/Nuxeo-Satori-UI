@@ -1,18 +1,20 @@
 /**
  * A package as a whole (docs/business-apps/app-definition-v2.md, sections 1 and 11): which file of
  * an app definition a path is, and the checks that need more than one file. A file is always
- * checked with its package's `app.json`, `actions.json`, `assets/` and queues:
+ * checked with its package's `app.json`, `actions.json`, `assets/`, queues and English labels:
  *
  * - a queue's row and bulk actions may be the package's own, from `actions.json`;
  * - a module's settings must be for a module `app.json` turns on;
  * - a branding image in `assets/` must be in the package;
- * - a queue the home or the menu names must be in `queues/`.
+ * - a queue the home or the menu names must be in `queues/`;
+ * - given the platform's catalogue, a label key a file names must have a text in the package's
+ *   `labels/en.json` or in that catalogue.
  *
  * Reading files is the caller's: this stays plain TypeScript, for the browser as well as Node.
  */
 import { validateActions, placementsOf } from './actions';
 import { APP_ID, assetFile, validateApp } from './app';
-import { ID, type Finding } from './checker';
+import { ID, join, type Finding } from './checker';
 import type { ContentModel } from './content-model';
 import { validateHome, validateNavigation } from './home';
 import { describeLogoSrcForm } from './image-source';
@@ -94,6 +96,11 @@ export interface PackageContext {
    * the home and the menu name are not checked: the app reads `home.json` without its package.
    */
   readonly queues?: ReadonlySet<string>;
+  /**
+   * The keys its `labels/en.json` gives a text, none when it has no such file. Left out, as for a
+   * file read without its package, its label keys are not checked.
+   */
+  readonly labels?: ReadonlySet<string>;
 }
 
 export interface PackageOptions {
@@ -106,6 +113,12 @@ export interface PackageOptions {
   readonly mode?: LayoutMode;
   /** The server's content model: each layout is held to the type its path names. */
   readonly model?: ContentModel;
+  /**
+   * The keys of the platform's English catalogue. Given, with the package's labels, every
+   * `labelKey` a file names must have a text in one or the other: a key with neither shows a
+   * heading's id made readable, or nothing (section 7).
+   */
+  readonly catalogue?: ReadonlySet<string>;
 }
 
 const TASK = /^([A-Za-z][A-Za-z0-9_-]{0,127})\.([A-Za-z][A-Za-z0-9_-]{0,127})$/;
@@ -117,6 +130,54 @@ export function validateFile(
   content: unknown,
   context: PackageContext,
   options: PackageOptions = {},
+): Finding[] {
+  const findings = findingsOf(file, content, context, options);
+  // A labels file and a module's settings name no label key.
+  if (
+    options.catalogue === undefined ||
+    context.labels === undefined ||
+    file.kind === 'labels' ||
+    file.kind === 'module'
+  )
+    return findings;
+  return [...findings, ...untranslated(content, context.labels, options.catalogue)];
+}
+
+/**
+ * Every `labelKey` in a file, wherever it is, that has a text in neither the package's English
+ * labels nor the platform's catalogue: looked up in the package first, then in the platform's
+ * (section 7), English being the language every other falls back to.
+ */
+function untranslated(
+  content: unknown,
+  labels: ReadonlySet<string>,
+  catalogue: ReadonlySet<string>,
+): Finding[] {
+  const findings: Finding[] = [];
+  const visit = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) value.forEach((item, index) => visit(item, join(path, index)));
+    else if (isRecord(value))
+      for (const [key, item] of Object.entries(value)) {
+        const at = join(path, key);
+        if (key === 'labelKey' && typeof item === 'string') {
+          if (!labels.has(item) && !catalogue.has(item))
+            findings.push({
+              path: at,
+              kind: 'unknown',
+              message: `the label key "${item}" has no text in labels/en.json, or in the platform's catalogue`,
+            });
+        } else visit(item, at);
+      }
+  };
+  visit(content, '');
+  return findings;
+}
+
+function findingsOf(
+  file: PackageFile,
+  content: unknown,
+  context: PackageContext,
+  options: PackageOptions,
 ): Finding[] {
   const registries = options.registries ?? PACKAGED_REGISTRIES;
   // Findings about the file's name, which the file itself cannot see.
