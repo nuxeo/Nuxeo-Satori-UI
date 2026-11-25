@@ -354,7 +354,7 @@ export class SearchComponent {
     let originalOffset = 0;
     for (const character of title) {
       const range = { start: originalOffset, end: originalOffset + character.length };
-      for (let unit = 0; unit < character.toLowerCase().length; unit++) ranges.push(range);
+      ranges.push(...Array.from({ length: character.toLowerCase().length }, () => range));
       originalOffset = range.end;
     }
     const parts: { text: string; matched: boolean }[] = [];

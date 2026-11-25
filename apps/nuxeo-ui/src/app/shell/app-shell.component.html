@@ -130,8 +130,9 @@
             <button
               mat-button
               type="button"
-              (click)="clearSearchKeywords()"
+              (click)="globalSearchTerm() && clearSearchKeywords()"
               [disabled]="!globalSearchTerm()"
+              [disabledInteractive]="true"
             >
               {{ 'search.workspace.clear-search' | translate }}
             </button>

@@ -84,7 +84,7 @@ describe('Search selection menu browser behavior', () => {
     items[2].click();
     await settle();
     expect(fixture.componentInstance.selectingAll()).toBeFalse();
-    expect(requests.length).toBe(requestCount);
+    expect(requests).toHaveSize(requestCount);
     expect(document.activeElement).withContext('after clearing the selection').toBe(trigger);
   });
 });

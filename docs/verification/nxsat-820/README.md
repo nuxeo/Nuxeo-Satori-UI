@@ -153,6 +153,12 @@ regression cases cover expanding lowercase characters, expanded queries, repeate
 astral characters and contextual Greek lowercase behavior. Ten cases failed before the fix;
 all preserve the exact original title afterward, without changing search matching semantics.
 
+The expanded header's Clear action retains keyboard focus after emptying its keyword draft.
+Frame-settled Chrome regressions reproduce the previous focus loss for ordinary and whitespace-only
+drafts, then verify the disabled state remains focusable and cannot invoke Clear again. Adjacent
+Search actions were checked for the same self-disabling pattern; existing Reset, pager and selection
+focus regressions remain in place.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:
