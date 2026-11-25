@@ -1514,6 +1514,11 @@
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."
   },
   "document-layouts": {
+    "checklist": {
+      "count": "{{done}} of {{total}} done",
+      "done": "Done",
+      "not-done": "Not done"
+    },
     "external": {
       "empty": "Nothing found in the other system",
       "failed": "The other system's information could not be loaded",
@@ -1793,12 +1798,19 @@
       "facets": "Facets",
       "failed": "The queue {{id}} could not be opened: {{problem}}",
       "hidden": "Hidden columns",
+      "hide-column": "Hide the column {{field}}",
       "id": "Queue ID",
       "intro": "Open a queue of the app, change its name, columns, sort and facets, and see the queue page it draws from the server's search. Saving downloads the file: nothing is written to the server.",
       "label": "Name text",
       "label-key": "Name label key",
       "menu-failed": "The app's menu could not be read, so its queues are not offered: {{problem}}. Type a queue's ID.",
       "menu-none": "The app's menu names no queue. Type a queue's ID.",
+      "move-column-down": "Move the column {{field}} down",
+      "move-column-up": "Move the column {{field}} up",
+      "move-facet-down": "Move the facet {{field}} down",
+      "move-facet-up": "Move the facet {{field}} up",
+      "move-sort-down": "Move the sort on {{field}} down",
+      "move-sort-up": "Move the sort on {{field}} up",
       "name": "Name",
       "no-columns": "This queue has no column, which the validator refuses.",
       "no-facets": "No facet.",
@@ -1819,6 +1831,7 @@
       "remove-sort": "Remove the sort on {{field}}",
       "save-checking": "The queue can be downloaded once the app's own actions have been read.",
       "save-where": "In a configuration package, the file is queues/{{file}}. On the development server, npm run config:dev -- --queue followed by the downloaded file's path serves it, under its name. That command writes the whole folder again, so give it every other file you serve too.",
+      "show-column": "Show the column {{field}} again",
       "sort": "Sort"
     },
     "read-only-when": "Read-only while",
@@ -1843,6 +1856,7 @@
     "save-where": "In a configuration package, the file is layouts/{{type}}/{{file}}. On the development server, npm run config:dev -- --layout {{type}}/{{mode}}= followed by the downloaded file's path serves it. That command writes the whole folder again, so give it every other file you serve too.",
     "show": "Show {{field}} again",
     "show-button": "Show",
+    "shows-checklist": "This card shows a checklist. Its items are edited in the file.",
     "shows-comments": "This card shows the record's comments.",
     "shows-external": "This card shows a record of another system. Its fields are edited in the file.",
     "shows-related": "This card lists related records. Its columns are edited in the file.",

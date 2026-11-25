@@ -49,4 +49,24 @@
   <!-- The case specialist's user name. -->
   <xs:element name="assignee" type="xs:string" />
   <xs:element name="summary" type="xs:string" />
+
+  <!-- Since 0.4.1: an appeal's checklist, as layout version 2's checklist card reads one
+       (docs/business-apps/layout-v2.md, section 7). One entry per item done or under way: the
+       item's id, as the Case layout's checklist card lists it, whether it is done, who did it (a
+       user name) and the day. What an appeal requires is the layout's; an item it lists with no
+       entry here is not done. A grievance holds none. -->
+  <xs:element name="checklist" type="nxs:checklistEntries" />
+  <xs:complexType name="checklistEntries">
+    <xs:sequence>
+      <xs:element name="entry" type="nxs:checklistEntry" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="checklistEntry">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" />
+      <xs:element name="done" type="xs:boolean" />
+      <xs:element name="doneBy" type="xs:string" />
+      <xs:element name="doneOn" type="xs:date" />
+    </xs:sequence>
+  </xs:complexType>
 </xs:schema>
