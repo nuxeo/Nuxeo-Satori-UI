@@ -49,11 +49,11 @@ stood beside. What was checked is offline: its controls, and its dry run on a ca
 
 - **The secrets,** exported in the shell that runs the command:
 
-  | Variable                     | What it is                                                                                                                                                                                 |
-  | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | `NUXEO_CLID`                 | The server's Nuxeo Connect registration. The image installs the OpenSearch packages from Connect with it, as the local setup does                                                          |
-  | `DEMO_SERVER_ADMIN_PASSWORD` | The password the `Administrator` gets in place of the image's default. At least 12 characters, and not `Administrator`                                                                     |
-  | Each seed's demo password    | Today `PAYERS_DEMO_PASSWORD`, the Payers kit's six demo people's. Read from each seed's source, so a kit that adds one adds a variable. Not the administrator's: it is given to presenters |
+  | Variable                     | What it is                                                                                                                                                                                                            |
+  | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `NUXEO_CLID`                 | The server's Nuxeo Connect registration. The image installs the OpenSearch packages from Connect with it, as the local setup does                                                                                     |
+  | `DEMO_SERVER_ADMIN_PASSWORD` | The password the `Administrator` gets in place of the image's default. At least 12 characters, and not `Administrator`                                                                                                |
+  | Each seed's demo password    | Today `PAYERS_DEMO_PASSWORD`, the Payers kit's six demo people's. Read from each seed's source, so a kit that adds one adds a variable. At least 8 characters, and not the administrator's: it is given to presenters |
 
 ## Running it
 
@@ -82,29 +82,33 @@ npm run demo-server -- --candidate ../release-candidate-2026.0.2
 | `--dry-run` |               | Print the plan, and change nothing                                                                                                                                              |
 
 Exit codes: 0, the server is up, or the dry run printed its plan; 1, a step failed once something
-was made, and the output says what is left; 2, refused, and nothing was made.
+was made, and the output says what is left; 2, refused, and nothing was made, or a dry run whose
+run would be refused, for the project, the port or Docker; 128 and the signal's number, 130 for
+Ctrl-C, interrupted.
 
 ## What it does, in order
 
-| Step                             | What happens, and what refuses                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. The candidate                 | `manifest.json` in the release candidate's format. Every file `SHA256SUMS` lists, with its digest; no file it does not list, and no link. Every artifact the manifest names, with the manifest's digest. Each zip's `package.xml` names the package the manifest says                                                                                                                                                                                                 |
-| 2. The order                     | The server packages and the kits, each after the packages it depends on, with ties broken server packages first, then by name. Refused, naming each problem: a dependency the candidate does not hold or holds at a version Nuxeo does not count as meeting it, a conflict, a package named twice, a target platform outside a dependency's (the candidate's own rules, `release-candidate-set.mjs`), a target platform that leaves out Nuxeo 2025.10.18, and a cycle |
-| 3. The add-ons with no package   | A bundle the candidate ships that no package's `install/bundles/` carries, found by its bytes: today `nuxeo-agentic-connectors`, which has no Marketplace package yet. Its bundle goes into `nxserver/bundles/`, as its README installs it. No connector is contributed: its demo needs the stand-in core system and a token, and its security review is open                                                                                                         |
-| 4. The deployment's files        | Each kit's `deployment/*-config.xml` at the commit, such as the Payers kit's operation allow-list, for `nxserver/config/`, the one place the server reads it from. `deployment/build-allow-list.json` is a build input and is not placed. Two kits placing the same file name are refused                                                                                                                                                                             |
-| 5. The secrets                   | Each one set; the administrator's not the default nor short; no demo password the administrator's                                                                                                                                                                                                                                                                                                                                                                     |
-| 6. Docker, the project, the port | Docker and Compose v2 answer. No container, volume or network that compose labels as the project's, or that has one of its names. Nothing listening on the port                                                                                                                                                                                                                                                                                                       |
-| 7. Made, not started             | `compose pull`, then `compose create`. Into the Nuxeo container: [`90-demo-server.conf`](90-demo-server.conf), the OpenSearch settings, in `/etc/nuxeo/conf.d/`, which the image merges at its first start; the packages, bundles, configuration and a `plan.json` record in `/docker-entrypoint-initnuxeo.d/demo-server/`; the install script beside them                                                                                                            |
-| 8. One start                     | `compose up`. The image installs the Connect packages, then runs the install script: one `mp-install` of every package in the plan's order, the bundles, the configuration, `mp-list`, each step stopping the start when it fails. The script removes itself once every step passed, and logs to `/var/log/nuxeo/demo-server-install.log`                                                                                                                             |
-| 9. Secured                       | Once `/nuxeo/runningstatus` answers 200: the `Administrator` user read and written back with `DEMO_SERVER_ADMIN_PASSWORD`, then `/me` checked to answer the new password and refuse the default. A server that refused the default before the change is not one this run started, and is left alone                                                                                                                                                                   |
-| 10. Checked                      | The server log's last `Component Loading Status`: nothing pending, missing or unstarted                                                                                                                                                                                                                                                                                                                                                                               |
-| 11. Seeded                       | Each kit's `demo/seed.mjs`, at the commit, unpacked with `git archive`, in install order, as `Administrator`, with `NUXEO_URL` the server, `APP_URL` its app, and the demo password it reads. The facilities kit has none                                                                                                                                                                                                                                             |
-| 12. Printed                      | The server's address, the install log's, and how to run every demo steps file against it                                                                                                                                                                                                                                                                                                                                                                              |
+| Step                             | What happens, and what refuses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The candidate                 | `manifest.json` in the release candidate's format, with a version a candidate may carry, since the install script holds it. Every file `SHA256SUMS` lists, with its digest; no file it does not list, and no link inside it. Every artifact the manifest names, with the manifest's digest. Each zip's `package.xml` names the package the manifest says; the kits the manifest lists are the kits it ships; no two files share a name                                                                                                                                                                                                                                                                                                                                |
+| 2. The order                     | The server packages and the kits, each after the packages it depends on, with ties broken server packages first, then by name. Refused, naming each problem: a dependency the candidate does not hold or holds at a version Nuxeo does not count as meeting it, a conflict, a package named twice, a target platform outside a dependency's (the candidate's own rules, `release-candidate-set.mjs`), a target platform that leaves out Nuxeo 2025.10.18, and a cycle                                                                                                                                                                                                                                                                                                 |
+| 3. The add-ons with no package   | A bundle the candidate ships that no package's `install/bundles/` carries, found by its bytes: today `nuxeo-agentic-connectors`, which has no Marketplace package yet. Its bundle goes into `nxserver/bundles/`, as its README installs it. No connector is contributed: its demo needs the stand-in core system and a token, and its security review is open                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 4. The deployment's files        | Each kit's `deployment/*-config.xml` at the commit, such as the Payers kit's operation allow-list, for `nxserver/config/`, the one place the server reads it from. `deployment/build-allow-list.json` is a build input and is not placed. Two kits placing the same file name are refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 5. The secrets                   | Each one set; the administrator's not the default, and at least 12 characters; each demo password at least 8, and not the administrator's                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 6. Docker, the project, the port | Docker and Compose v2 answer. No container, volume or network that compose labels as the project's, or that has one of its names. Nothing listening on the port                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 7. Made, not started             | `compose pull`. The project checked again, since the pull can take minutes. `compose create --no-recreate`, every container labelled with this run's own mark, which is read back from the Nuxeo container before anything is copied in: a container with another run's mark is another run's, and is not touched. Into the container, every file set readable by anyone first, whatever the umask, since `docker cp` keeps modes and the files are not the `nuxeo` user's: [`90-demo-server.conf`](90-demo-server.conf), the OpenSearch settings, in `/etc/nuxeo/conf.d/`, which the image merges at its first start; the packages, bundles, configuration and a `plan.json` record in `/docker-entrypoint-initnuxeo.d/demo-server/`; the install script beside them |
+| 8. One start                     | `compose up --no-recreate`. The image installs the Connect packages, then runs the install script: one `mp-install --accept=true`, as the kits' READMEs run it, of every package in the plan's order; the bundles; the configuration; then `mp-list` must list every package of the candidate by its id, started or installed. Each step stops the start when it fails. The script removes itself once every step passed, and logs to `/var/log/nuxeo/demo-server-install.log`                                                                                                                                                                                                                                                                                        |
+| 9. Secured                       | Once `/nuxeo/runningstatus` answers 200: the `Administrator` user read and written back with `DEMO_SERVER_ADMIN_PASSWORD`, then `/me` checked to answer the new password and refuse the default. A server that refused the default before the change was changed by someone else first: nothing is written to it, and it is stopped                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 10. Checked                      | The server log's last `Component Loading Status`: nothing pending, missing or unstarted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 11. Seeded                       | Each kit's `demo/seed.mjs`, at the commit, unpacked with `git archive`, in install order, as `Administrator`, with `NUXEO_URL` the server, `APP_URL` its app, and the demo password it reads. The facilities kit has none                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 12. Printed                      | The server's address, the install log's, and how to run every demo steps file against it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 **When a step fails after step 7,** what was made is left as safe as it can be, and the output
-says which: not started yet, it is removed; started with the image's default password, it is
-stopped and kept for its logs; started and secured, it keeps running. A run is then refused until
-the project is removed: it never builds on a half-made one.
+says which: not started yet, it is removed; started and not shown secured, it is stopped and kept
+for its logs; started and secured, it keeps running. Nothing is removed or stopped unless every
+container of the project carries this run's mark. Ctrl-C, or a stop sent to the command, is handled
+the same way. A run is then refused until the project is removed: it never builds on a half-made
+one.
 
 ## The secrets, and what never sees them
 
@@ -113,10 +117,15 @@ the project is removed: it never builds on a half-made one.
   name, when it is created; the image writes it into the container's `instance.clid`, as it does
   for the local setup. Like any container environment, `docker inspect` shows it to whoever may
   use the machine's Docker.
-- **Never printed.** What a child prints, Docker or a seed, is printed with each secret's value
-  taken out, and a refusal names a variable, never its value.
-- **Only where needed.** Plain Docker commands get no secret; compose gets `NUXEO_CLID`; a seed gets
-  the administrator's and its own demo password, as `NUXEO_PASS` and by name, and no token.
+- **Never printed.** What a child prints, Docker or a seed, is printed with each secret taken out:
+  its value, a `NUXEO_CLID`'s halves, which the image splits at `--`, and the Basic header of the
+  administrator and of each demo person the steps files name. A refusal names a variable, never its
+  value.
+- **Only where needed.** A child is given only what it needs of the environment, by a list of what
+  may pass: `PATH`, `HOME`, the locale, `DOCKER_*` and a few more. So no token or key passes under any
+  name, and no `COMPOSE_*` can move a command to another project. `compose create` alone is given
+  `NUXEO_CLID`; a seed gets the administrator's password as `NUXEO_PASS` and its own demo password
+  by name.
 - **Never on a command line, and never in an address.** The administrator's password goes in a
   request's body once, and in `Authorization` headers.
 
@@ -175,45 +184,63 @@ docker compose -f business-apps/demo-server/compose.yml -p satori-demo down --vo
 npm run demo-server:selftest
 ```
 
-Offline, in about ten seconds: Docker is a stand-in that records every command, Nuxeo a stand-in
-HTTP server, and the candidate is written by the controls, its zips byte by byte. The kits' seeds,
-configuration and app definitions are the clone's, at HEAD. 109 controls, 77 of them negative:
+Offline, in under half a minute: Docker is a stand-in that records every command and answers as
+Docker does, Nuxeo a stand-in HTTP server, and the candidate is written by the controls, its zips
+byte by byte. The kits' seeds, configuration and app definitions are the clone's, at HEAD. 129
+controls: 88 negative, each feeding in something broken or forbidden that must be refused or
+caught, and 41 positive.
 
 - **The plan:** the order, the add-on found by its bytes, the allow-list read from the commit, the
   seeds and their passwords. Refused: a candidate missing a dependency, one held at a version that
   does not meet it, a target platform without Nuxeo 2025.10.18, a cycle, a conflict, a changed,
-  extra, missing or linked file, another format, a zip whose descriptor is not the manifest's, a
+  extra, missing or linked file, another format, a version a shell would read as more, a kit
+  shipped and not listed, two files of one name, a zip whose descriptor is not the manifest's, a
   path in `SHA256SUMS` outside the candidate, a commit the clone does not have, a kit built with
   uncommitted changes.
 - **The arguments, the secrets, the script and the files:** each option's refusals; each secret
   unset or empty, the default, a short one, a shared one; the install script in the plan's order,
-  each step stopping the start; each kit's `config:dev` command holding its README's arguments; the
-  compose file declaring the images, services, volumes and the one port the plan describes.
+  each step stopping the start, `mp-list` checked for every package, a hostile version quoted; each
+  kit's `config:dev` command holding its README's arguments; the compose file declaring the images,
+  services, volumes, the run's mark and the one port the plan describes.
 - **The machine:** the project's resources found by label and by name, and the developer's not;
   a port in use; the wait ended by its container stopping and by its deadline; the password
-  changed, and refused against a server that refused the default first or keeps it after.
+  changed, and refused against a server that refused the default first or keeps it after;
+  redaction of each form a secret takes; files made 0600 set readable; the commit's kit folder
+  unpacked and a seed run with exactly its environment.
 - **The command:** each secret unset, an existing project and a candidate missing a dependency
-  refused with exit 2 and no Docker command that changes anything; a dry run; a start that fails,
-  stopped; a copy that fails, removed; a pull that fails, nothing made; a container that stops,
-  its log printed; a run that comes up, its calls in order. No run prints a secret, puts one on a
-  command line, or pushes, builds, tags or logs in.
+  refused with exit 2 and no Docker command that changes anything; a project another run made
+  during the pull, refused before create; a container with another run's mark, touched in no way;
+  a dry run; a start that fails under umask 077, stopped, with every file it copied in readable;
+  a copy that fails, removed; a pull that fails, nothing made; a container that stops, its log
+  printed; a run that comes up, its calls in order; a run whose real seed, the contracts kit's,
+  refuses the stand-in, left running; a run interrupted while it waits, stopped with exit 130.
+  Docker's stand-in prints every secret in its logs, its exec answers and its failures, and no run
+  prints one, puts one on a command line, copies into a container compose did not answer, gives
+  `NUXEO_CLID` to anything but `compose create`, or pushes, builds, tags or logs in.
 
 CI runs them in `release-candidate.yml`'s controls job.
 
-**Seen failing,** on 25 November 2026, each refusal taken out of the code one at a time, the
-controls run, and the code put back byte for byte:
+**Seen failing,** on 25 November 2026: each guard taken out of the code one at a time, the
+controls run, and the code put back byte for byte. Each turned at least one control red:
 
-- the command's refusal of unset secrets: the three "unset, with exit 2" controls failed;
-- the rule that finds an unset secret: ten controls failed, those three, the six of the rule
-  itself, and the dry run's report;
-- the command's refusal of an existing project: the run's and the dry run's controls failed;
-- the match by compose's project label: its control failed;
-- the candidate's set rules in the install order: four failed, the missing dependency in the plan
-  and in the command, the unmet version and the conflict.
+| Guard taken out                                        | Controls that failed                                                                |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| The command's refusal of unset secrets                 | 3: each secret unset, with exit 2                                                   |
+| The rule that finds an unset secret                    | 10: those 3, the rule's 6, and the dry run's report                                 |
+| The command's refusal of an existing project           | 2: the run's and the dry run's                                                      |
+| The match by compose's project label                   | 1                                                                                   |
+| The candidate's set rules in the install order         | 4: the missing dependency in the plan and the command, an unmet version, a conflict |
+| The redaction                                          | 4: the function's own, the seed's output, Docker's failure, a container's log       |
+| The copy's target, made `nuxeo:`                       | 2: what is copied where, and every target the container compose answered            |
+| `--no-recreate` on `compose up`                        | 4: every run that starts                                                            |
+| The modes set on the payload                           | 2: the function's own, and the copy under umask 077                                 |
+| Both interruption guards, in the wait and in the catch | 1: the interrupted run. Either one alone still exits 130                            |
+| The project asked again before create                  | 1                                                                                   |
+| The run's mark read before anything is copied in       | 1                                                                                   |
 
-A first try at the last one hung: with the refusal gone, the command went on to wait twenty
-minutes for a server that was never there. Every command the controls run now has a short
-`--wait` and is killed after a minute, so a refusal taken out fails its control instead.
+A first try at the missing dependency hung: with the refusal gone, the command went on to wait
+twenty minutes for a server that was never there. Every command the controls run now has a short
+`--wait` and is killed after a minute, so a guard taken out fails its control instead.
 
 ## What was checked, and what was not
 
@@ -231,8 +258,13 @@ minutes for a server that was never there. Every command the controls run now ha
   `nuxeo` user, so the script can remove itself; `docker-private.packages.nuxeo.com/nuxeo/nuxeo:2025.10.18`
   is the tag of the version the local container runs.
 - **Not checked, since nothing was started.** The first run should look at each:
-  - that one `mp-install` of eight packages, ours after the two from Connect, installs them all:
-    the kits' READMEs ran it with two;
+  - that one `mp-install` of the candidate's six packages, after the two the image installs from
+    Connect, installs them all: the kits' READMEs ran it with two;
+  - `nuxeoctl mp-list`'s lines as Nuxeo 2025 prints them: the script fails the start unless each
+    package's `id: <name>-<version>)` is on a line saying started or installed, a form read from
+    Nuxeo's documentation, never from this image;
+  - that `docker cp` into a container created and not started lands where the image reads it, and
+    that the files, owned by root there, are read by the `nuxeo` user as their modes allow;
   - the OpenSearch keys in `90-demo-server.conf`, taken from the fix-bug skill's dedicated
     containers, and that the queues' aggregates answer;
   - the administrator's password change through `PUT /user/Administrator`, the way the Payers

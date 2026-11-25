@@ -34,6 +34,8 @@ services:
       retries: 30
     labels:
       org.nuxeo.satori.demo-server.candidate: ${DEMO_SERVER_CANDIDATE:-unknown}
+      # The run that made it: the command touches no container that does not carry its own mark.
+      org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}
     restart: 'no'
 
   nuxeo:
@@ -55,6 +57,8 @@ services:
       - nuxeo-logs:/var/log/nuxeo
     labels:
       org.nuxeo.satori.demo-server.candidate: ${DEMO_SERVER_CANDIDATE:-unknown}
+      # The run that made it: the command touches no container that does not carry its own mark.
+      org.nuxeo.satori.demo-server.run: ${DEMO_SERVER_RUN:-none}
     restart: 'no'
 
 volumes:

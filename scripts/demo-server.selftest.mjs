@@ -40,12 +40,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -62,8 +64,12 @@ import {
   Failure,
   portInUse,
   quietEnvironment,
+  readableByAnyone,
+  redactor,
+  runSeed,
   seedEnvironment,
   setAdministratorPassword,
+  unpackAtCommit,
   waitForServer,
 } from './demo-server-host.mjs';
 import {
@@ -543,6 +549,63 @@ function thePlan() {
     format instanceof Refusal && /in the format "something-else\/1"/.test(format.message),
     format?.message,
   );
+  const shell = thrown(() =>
+    readCandidate(
+      writeCandidate('shell', { manifest: (each) => ({ ...each, version: '2026.0.2$(id)' }) }),
+    ),
+  );
+  check(
+    "refused: a version that is not a release candidate's, which the install script would hold",
+    shell instanceof Refusal &&
+      /version "2026\.0\.2\$\(id\)" is not a release candidate's/.test(shell.message),
+    shell?.message,
+  );
+  const through = join(scratch, 'through-a-link');
+  symlinkSync(sound, through);
+  check(
+    'a candidate directory reached through a link is read, as long as nothing in it is one',
+    thrown(() => readCandidate(through)) === null,
+    thrown(() => readCandidate(through))?.message,
+    false,
+  );
+  const unlisted = thrown(() =>
+    buildPlan({
+      repo: REPO,
+      candidate: readCandidate(
+        writeCandidate('unlisted-kit', {
+          manifest: (each) => ({
+            ...each,
+            kits: each.kits.filter((kit) => kit.name !== 'contracts-demo'),
+          }),
+        }),
+      ),
+      options: OPTIONS,
+      parse,
+    }),
+  );
+  check(
+    'refused: a kit the candidate ships and its manifest does not list, which would be installed and never seeded',
+    unlisted instanceof Refusal &&
+      /ships the kits brand-assets-demo, contracts-demo/.test(unlisted.message),
+    unlisted?.message,
+  );
+  const sameName = soundPackages();
+  sameName.find((each) => each.name === 'facilities-demo').path =
+    'server/facilities-demo-0.1.0.zip';
+  sameName.find((each) => each.name === 'contracts-demo').path = 'kits/facilities-demo-0.1.0.zip';
+  const clash = thrown(() =>
+    buildPlan({
+      repo: REPO,
+      candidate: readCandidate(writeCandidate('same-name', { packages: sameName })),
+      options: OPTIONS,
+      parse,
+    }),
+  );
+  check(
+    'refused: two files of one name, which the payload would hold one of',
+    clash instanceof Refusal && /two files named facilities-demo-0\.1\.0\.zip/.test(clash.message),
+    clash?.message,
+  );
   const renamed = soundPackages();
   renamed.find((each) => each.name === 'payers-claims-demo').xml = packageXml({
     name: 'payers-claims-demo',
@@ -777,6 +840,12 @@ function theSecrets() {
     shared.some((each) => /PAYERS_DEMO_PASSWORD is the administrator's password/.test(each)),
     shared.join('; '),
   );
+  const shortDemo = secretProblems({ ...SECRETS, PAYERS_DEMO_PASSWORD: 'demo1' }, required);
+  check(
+    "refused: a demo users' password shorter than 8 characters, which could not be taken out of what is printed",
+    shortDemo.some((each) => /PAYERS_DEMO_PASSWORD is shorter than 8/.test(each)),
+    shortDemo.join('; '),
+  );
   const all = [
     ...required.flatMap((name) => secretProblems({ ...SECRETS, [name]: undefined }, required)),
     ...fallback,
@@ -802,23 +871,36 @@ function whatThePlanSays(plan) {
     'the install script installs every package in one nuxeoctl mp-install, in the plan’s order',
     JSON.stringify(zips) ===
       JSON.stringify(plan.install.map((each) => each.artifact.split('/').pop())) &&
-      /--accept=true --relax=false/.test(install),
+      / --accept=true >> /.test(install) &&
+      !install.includes('--relax'),
     install,
     false,
   );
-  const lines = script.split('\n').filter((line) => /^(nuxeoctl|cp|mkdir) /.test(line));
+  const listed = script.split('\n').filter((line) => line.startsWith('grep -F '));
+  check(
+    'then mp-list must list every package of the plan, by its id, started or installed',
+    JSON.stringify(listed.map((line) => /'id: ([^']+)\)'/.exec(line)?.[1])) ===
+      JSON.stringify(plan.install.map((each) => `${each.name}-${each.version}`)) &&
+      listed.every((line) => / \| grep -Eq 'started\|installed' \|\| fail '/.test(line)),
+    listed.join('\n'),
+    false,
+  );
+  const lines = script.split('\n').filter((line) => /^(nuxeoctl|cp|mkdir|grep) /.test(line));
   check(
     'each of its steps stops the start when it fails',
-    lines.length >= 4 && lines.every((line) => / \|\| fail '/.test(line)),
+    lines.length >= 10 && lines.every((line) => / \|\| fail '/.test(line)),
     lines.join('\n'),
+    false,
   );
   const removes = script.indexOf('rm -f "$0"');
   check(
     'it removes itself only after its last step, and places the configuration after the packages',
     removes > script.indexOf('nuxeoctl mp-list') &&
       script.indexOf('nxserver/config/') > script.indexOf('nuxeoctl mp-install') &&
-      script.indexOf('nxserver/bundles/') > script.indexOf('nuxeoctl mp-install'),
+      script.indexOf('nxserver/bundles/') > script.indexOf('nuxeoctl mp-install') &&
+      removes > script.lastIndexOf('grep -F '),
     '',
+    false,
   );
   check(
     'it holds no secret, by value or by name',
@@ -826,6 +908,17 @@ function whatThePlanSays(plan) {
       !script.includes(CLID) &&
       !script.includes(ADMIN_PASSWORD),
     '',
+    false,
+  );
+  const hostile = initScript({
+    ...plan,
+    candidate: { ...plan.candidate, version: "2026.0.2'$(touch /tmp/x)" },
+  });
+  check(
+    'a version that holds shell is written quoted, and never as a command',
+    hostile.includes("version='2026.0.2'\\''$(touch /tmp/x)'") &&
+      !/^[^#]*\$\(touch/m.test(hostile.replace(/^version=.*$/m, '')),
+    hostile.split('\n').slice(0, 8).join('\n'),
   );
 
   // Each kit's config:dev command holds the arguments its README's "Seeing it under nx serve" does.
@@ -880,6 +973,16 @@ function whatThePlanSays(plan) {
       /^ {6}- NUXEO_CLID$/m.test(compose) &&
       !/NUXEO_CLID[=:]/.test(compose),
     '',
+    false,
+  );
+  check(
+    "both services carry this run's mark, from the command",
+    (
+      compose.match(/^ {6}org\.nuxeo\.satori\.demo-server\.run: \$\{DEMO_SERVER_RUN:-none\}$/gm) ??
+      []
+    ).length === 2,
+    '',
+    false,
   );
   const ports = [...compose.matchAll(/^ {4}ports:\n {6}(?:#.*\n {6})*- '([^']+)'/gm)].map(
     ([, port]) => port,
@@ -889,6 +992,7 @@ function whatThePlanSays(plan) {
     JSON.stringify(ports) ===
       JSON.stringify(['${DEMO_SERVER_BIND:-127.0.0.1}:${DEMO_SERVER_PORT:-18080}:8080']),
     ports.join(', '),
+    false,
   );
 
   const steps = stepsText(plan);
@@ -1043,8 +1147,26 @@ async function theMachine() {
   const nuxeo = standInNuxeo();
   const port = await nuxeo.listen();
   const origin = `http://127.0.0.1:${port}`;
-  await waitForServer({ origin, deadline: Date.now() + 5000, stopped: () => null, interval: 10 });
-  check('the wait ends when runningstatus answers 200', true, '', false);
+  let tries = 0;
+  const waited = await thrownAsync(() =>
+    waitForServer({
+      origin,
+      deadline: Date.now() + 5000,
+      stopped: () => {
+        tries += 1;
+        return null;
+      },
+      interval: 10,
+    }),
+  );
+  check(
+    'the wait ends when runningstatus answers 200, having asked it',
+    waited === null &&
+      tries === 1 &&
+      nuxeo.requests.filter((each) => each.url === '/nuxeo/runningstatus').length === 1,
+    waited?.message,
+    false,
+  );
   const exited = await thrownAsync(async () =>
     waitForServer({
       origin: `http://127.0.0.1:${await freePort()}`,
@@ -1107,8 +1229,8 @@ async function theMachine() {
     }),
   );
   check(
-    'refused: a server that refuses the default before the change, which this run did not start',
-    first instanceof Failure && /not a server this run started fresh/.test(first.message),
+    'refused: a server that refuses the default before the change, which someone changed first',
+    first instanceof Failure && /someone changed it first/.test(first.message),
     first?.message,
   );
   check(
@@ -1183,59 +1305,196 @@ async function theMachine() {
     ...SECRETS,
     GH_TOKEN: 'x',
     NUXEO_PASS: 'y',
+    ACME_API_KEY: 'z',
+    COMPOSE_FILE: '/elsewhere/compose.yml',
+    COMPOSE_PROJECT_NAME: 'nuxeo',
   });
   check(
-    'Docker, git and tar are started with no secret and with what Docker needs',
+    'Docker, git and tar are given only what they need: no secret under any name, and no COMPOSE_* to move the project',
     JSON.stringify(Object.keys(quiet).sort()) === JSON.stringify(['DOCKER_HOST', 'HOME', 'PATH']),
     JSON.stringify(Object.keys(quiet)),
+  );
+
+  // What is printed: every secret taken out, in each form a child could print it.
+  const redact = redactor(Object.values(SECRETS), [
+    ['Administrator', SECRETS[ADMIN_PASSWORD]],
+    ['dana.lee', SECRETS.PAYERS_DEMO_PASSWORD],
+  ]);
+  const printed = redact(`a log: ${SECRET_FORMS.join(' | ')} and the rest`);
+  check(
+    'each secret is taken out of what is printed: its value, a CLID half, and a Basic header',
+    !SECRET_FORMS.some((form) => printed.includes(form)) &&
+      printed.startsWith('a log: ') &&
+      printed.endsWith(' and the rest'),
+    printed,
+  );
+  check(
+    'and nothing else is taken out',
+    redact('Release candidate 2026.0.2 from ef4daba56ed0') ===
+      'Release candidate 2026.0.2 from ef4daba56ed0',
+    '',
+    false,
+  );
+
+  // The payload's modes, whatever they were made with.
+  const staged = join(scratch, 'staged');
+  mkdirSync(join(staged, 'packages'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(staged, 'packages', 'a.zip'), 'x', { mode: 0o600 });
+  writeFileSync(join(staged, 'install.sh'), '#!/bin/bash\n', { mode: 0o600 });
+  chmodSync(staged, 0o700);
+  chmodSync(join(staged, 'packages'), 0o700);
+  readableByAnyone(staged, [join(staged, 'install.sh')]);
+  const modeOf = (path) => (statSync(path).mode & 0o777).toString(8);
+  check(
+    'files made 0600 and folders 0700 are set readable by anyone, the script and folders searchable too',
+    modeOf(staged) === '755' &&
+      modeOf(join(staged, 'packages')) === '755' &&
+      modeOf(join(staged, 'packages', 'a.zip')) === '644' &&
+      modeOf(join(staged, 'install.sh')) === '755',
+    [
+      staged,
+      join(staged, 'packages'),
+      join(staged, 'packages', 'a.zip'),
+      join(staged, 'install.sh'),
+    ]
+      .map(modeOf)
+      .join(' '),
+  );
+
+  // A seed: the commit's, unpacked, and run with the environment it is given.
+  const tree = join(scratch, 'commit-tree');
+  unpackAtCommit({
+    repo: REPO,
+    commit: HEAD,
+    folder: 'business-apps/packages/contracts-demo',
+    into: tree,
+    env: process.env,
+  });
+  check(
+    "the commit's kit folder is unpacked with its seed and the files the seed imports",
+    existsSync(join(tree, 'business-apps', 'packages', 'contracts-demo', 'demo', 'seed.mjs')) &&
+      existsSync(join(tree, 'business-apps', 'packages', 'contracts-demo', 'demo', 'data.mjs')),
+    '',
+    false,
+  );
+  const missingFolder = thrown(() =>
+    unpackAtCommit({
+      repo: REPO,
+      commit: HEAD,
+      folder: 'business-apps/packages/no-such-kit',
+      into: tree,
+      env: process.env,
+    }),
+  );
+  check(
+    'a failure: a folder the commit does not have',
+    missingFolder instanceof Failure,
+    missingFolder?.message,
+  );
+  const fakeSeed = join(scratch, 'fake-seed.mjs');
+  writeFileSync(
+    fakeSeed,
+    "console.log([process.env.NUXEO_URL, process.env.NUXEO_USER, process.env.NUXEO_PASS, process.env.PAYERS_DEMO_PASSWORD, String('NUXEO_CLID' in process.env)].join(' '));\nprocess.exit(3);\n",
+  );
+  const seeded = runSeed({
+    file: fakeSeed,
+    cwd: scratch,
+    env: seedEnvironment(
+      { ...process.env, ...SECRETS },
+      { origin, secret: SECRETS[ADMIN_PASSWORD], passwords: ['PAYERS_DEMO_PASSWORD'], app: origin },
+    ),
+  });
+  check(
+    'a seed runs with the server, the administrator, its demo password and no CLID, and its exit is kept',
+    seeded.status === 3 &&
+      seeded.stdout.trim() ===
+        [
+          origin,
+          'Administrator',
+          SECRETS[ADMIN_PASSWORD],
+          SECRETS.PAYERS_DEMO_PASSWORD,
+          'false',
+        ].join(' '),
+    seeded.stdout,
+    false,
+  );
+  check(
+    'and what it printed, its passwords among it, is printed with them taken out',
+    !SECRET_FORMS.some((form) => redact(seeded.stdout).includes(form)) &&
+      redact(seeded.stdout).includes(origin),
+    redact(seeded.stdout),
   );
 }
 
 // ── The command ───────────────────────────────────────────────────────────────────────────────
-const bin = join(scratch, 'bin');
-mkdirSync(bin);
-const FAKE = join(bin, 'fake-docker.mjs');
+const FAKE = join(scratch, 'fake-docker.mjs');
 /**
- * The stand-in Docker: every call recorded with whether NUXEO_CLID was in its environment and the
- * names of any password there; a copy's source recorded with its files, and a file's text. It
- * answers the commands the command makes and fails, with 99, any other: a push or a build is seen.
+ * The stand-in Docker. Every call is recorded: its arguments, whether NUXEO_CLID was in its
+ * environment, the run's mark compose was given, the names of any password there, and for a copy
+ * its source's files with their modes, or a file's mode and text. It keeps what a run made in a
+ * state file beside its configuration: that it pulled, and the mark `compose create` was given,
+ * which `inspect` and `ps --filter` answer with. It answers the commands the command makes, and
+ * fails, with 99, any other: a push or a build is seen, and so is a `create` or `up` that would
+ * recreate a container. Given `echo`, it prints those texts in its logs, its exec's answer and its
+ * failures, as a container that printed a secret would.
  */
 writeFileSync(
   FAKE,
-  `import { appendFileSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+  `import { appendFileSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const args = process.argv.slice(2);
 const config = JSON.parse(readFileSync(process.env.FAKE_DOCKER_CONFIG, 'utf8'));
-const verb = args[0] === 'compose' ? 'compose ' + (args[args.indexOf('-p') + 2] ?? args[1]) : args[0];
-const record = { args, verb, clid: 'NUXEO_CLID' in process.env, secrets: Object.keys(process.env).filter((name) => /PASSWORD|TOKEN|_PASS$/.test(name)) };
+const statePath = process.env.FAKE_DOCKER_CONFIG + '.state';
+const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : {};
+const save = () => writeFileSync(statePath, JSON.stringify(state));
+const verb = args[0] === 'compose' ? 'compose ' + (args.includes('-p') ? args[args.indexOf('-p') + 2] : args[1]) : args[0];
+const record = { args, verb, clid: 'NUXEO_CLID' in process.env, run: process.env.DEMO_SERVER_RUN ?? null, secrets: Object.keys(process.env).filter((name) => /PASSWORD|TOKEN|_PASS$|_CLID$|SECRET|KEY/.test(name)) };
 if (verb === 'cp') {
-  const files = (dir, prefix = '') => readdirSync(dir).flatMap((name) => statSync(join(dir, name)).isDirectory() ? files(join(dir, name), prefix + name + '/') : [prefix + name]);
+  const mode = (path) => (statSync(path).mode & 0o777).toString(8);
+  const files = (dir, prefix = '') => readdirSync(dir).flatMap((name) => statSync(join(dir, name)).isDirectory() ? [{ path: prefix + name + '/', mode: mode(join(dir, name)) }, ...files(join(dir, name), prefix + name + '/')] : [{ path: prefix + name, mode: mode(join(dir, name)) }]);
+  record.mode = mode(args[1]);
   record.copied = statSync(args[1]).isDirectory() ? files(args[1]) : readFileSync(args[1], 'utf8');
 }
 appendFileSync(process.env.FAKE_DOCKER_LOG, JSON.stringify(record) + '\\n');
-if ((config.fail ?? []).includes(verb)) { process.stderr.write('stand-in failure of ' + verb + '\\n'); process.exit(1); }
+const echo = (config.echo ?? []).join(' ');
+if ((config.fail ?? []).includes(verb)) { process.stderr.write('stand-in failure of ' + verb + ' ' + echo + '\\n'); process.exit(1); }
+if (verb === 'compose pull') { state.pulled = true; save(); }
+if (verb === 'compose create') { state.run = process.env.DEMO_SERVER_RUN; save(); }
+const mark = config.foreignRun ?? state.run ?? '';
 const out = {
   version: '27.0.0', 'compose version': '2.30.0',
-  ps: config.containers ?? 'nuxeo\\t\\nnuxeo-opensearch\\t\\n', volume: config.volumes ?? 'nuxeo-data\\t\\n', network: 'nuxeo-net\\t\\nbridge\\t\\n',
-  'compose pull': '', 'compose create': '', 'compose ps': 'a'.repeat(64), cp: '', inspect: config.inspect ?? 'running 0',
-  'compose logs': 'nuxeo-1  | the stand-in log\\n', exec: config.exec ?? '= Component Loading Status: Pending: 0 / Missing: 0 / Unstarted: 0 / Total: 3301\\n',
-  'compose stop': '', 'compose down': '',
+  ps: args.includes('--filter') ? (state.run || config.foreignRun ? mark + '\\n' + mark + '\\n' : '') : config.appearsAfterPull && state.pulled ? 'satori-demo-selftest-nuxeo-1\\tsatori-demo-selftest\\n' : (config.containers ?? 'nuxeo\\t\\nnuxeo-opensearch\\t\\n'),
+  volume: config.volumes ?? 'nuxeo-data\\t\\n', network: 'nuxeo-net\\t\\nbridge\\t\\n',
+  'compose pull': '', 'compose create': '', 'compose ps': 'a'.repeat(64), cp: '',
+  inspect: args.some((arg) => arg.includes('org.nuxeo.satori.demo-server.run')) ? mark : (config.inspect ?? 'running 0'),
+  'compose logs': 'nuxeo-1  | the stand-in log ' + echo + '\\n',
+  exec: (config.exec ?? '= Component Loading Status: Pending: 0 / Missing: 0 / Unstarted: 0 / Total: 3301') + ' ' + echo + '\\n',
+  'compose stop': '', 'compose down': '', 'compose up': '',
 };
-if (verb === 'compose up') { out['compose up'] = ''; if (config.upMarker) writeFileSync(config.upMarker, 'up'); }
+if ((verb === 'compose up' || verb === 'compose create') && !args.includes('--no-recreate')) { process.stderr.write(verb + ' without --no-recreate would recreate a container\\n'); process.exit(99); }
+if (verb === 'compose up' && config.upMarker) writeFileSync(config.upMarker, 'up');
 if (!(verb in out)) { process.stderr.write('the stand-in Docker does not answer ' + verb + '\\n'); process.exit(99); }
 process.stdout.write(out[verb]);
 `,
 );
-writeFileSync(join(bin, 'docker'), `#!/bin/sh\nexec '${process.execPath}' '${FAKE}' "$@"\n`, {
-  mode: 0o755,
-});
 
-/** The environment a command is run with: no credential of this shell's, the stand-in Docker first. */
+/**
+ * The environment a command is run with: none of this shell's credentials, the run's secrets, and a
+ * stand-in Docker of its own first on the PATH and in DEMO_SERVER_DOCKER, its log and configuration
+ * written into its wrapper, since the command passes Docker no variable of the controls'.
+ */
 function commandEnv(name, { secrets = SECRETS, config = {} } = {}) {
   const log = join(scratch, `${name}.docker.jsonl`);
   const configFile = join(scratch, `${name}.docker.json`);
   writeFileSync(configFile, JSON.stringify(config));
   writeFileSync(log, '');
+  const bin = join(scratch, `bin-${name}`);
+  mkdirSync(bin);
+  writeFileSync(
+    join(bin, 'docker'),
+    `#!/bin/sh\nexport FAKE_DOCKER_LOG='${log}'\nexport FAKE_DOCKER_CONFIG='${configFile}'\nexec '${process.execPath}' '${FAKE}' "$@"\n`,
+    { mode: 0o755 },
+  );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) => !/(TOKEN|PASSWORD|SECRET|_PASS$|_CLID$|^NUXEO_USER$)/i.test(key),
@@ -1243,13 +1502,7 @@ function commandEnv(name, { secrets = SECRETS, config = {} } = {}) {
   );
   for (const [key, value] of Object.entries(secrets)) if (value !== undefined) env[key] = value;
   return {
-    env: {
-      ...env,
-      PATH: `${bin}:${process.env.PATH}`,
-      DEMO_SERVER_DOCKER: join(bin, 'docker'),
-      FAKE_DOCKER_LOG: log,
-      FAKE_DOCKER_CONFIG: configFile,
-    },
+    env: { ...env, PATH: `${bin}:${process.env.PATH}`, DEMO_SERVER_DOCKER: join(bin, 'docker') },
     calls: () =>
       readFileSync(log, 'utf8')
         .split('\n')
@@ -1258,12 +1511,17 @@ function commandEnv(name, { secrets = SECRETS, config = {} } = {}) {
   };
 }
 
-/** The command, run to its end: its exit, its output, and the Docker calls it made. */
-function command(name, args, options) {
+/**
+ * The command, run to its end: its exit, its output, and the Docker calls it made. A command broken
+ * so that it goes on where it should refuse must fail its control, not hang it: every run passes a
+ * short --wait, and is killed after a minute. `umask` runs it under that umask.
+ */
+function command(name, args, { umask, ...options } = {}) {
   const { env, calls } = commandEnv(name, options);
-  // A command broken so that it goes on where it should refuse must fail its control, not hang it:
-  // the run against the stand-in is killed after a minute, and every run passes a short --wait.
-  const result = spawnSync(process.execPath, [SCRIPT, ...args], {
+  const [file, argv] = umask
+    ? ['/bin/sh', ['-c', `umask ${umask} && exec "$0" "$@"`, process.execPath, SCRIPT, ...args]]
+    : [process.execPath, [SCRIPT, ...args]];
+  const result = spawnSync(file, argv, {
     cwd: REPO,
     env,
     encoding: 'utf8',
@@ -1279,14 +1537,24 @@ function command(name, args, options) {
 }
 
 const READS = new Set(['version', 'compose version', 'ps', 'volume', 'network']);
-const printsNoSecret = (output) =>
-  !Object.values(SECRETS).some((value) => output.includes(value)) &&
-  !SECRETS[CLID].split('--').some((part) => output.includes(part));
+/** Every form a secret could be printed in: each value, the CLID's halves, the Basic headers. */
+const SECRET_FORMS = [
+  ...Object.values(SECRETS),
+  ...SECRETS[CLID].split('--'),
+  Buffer.from(`Administrator:${SECRETS[ADMIN_PASSWORD]}`).toString('base64'),
+  Buffer.from(`dana.lee:${SECRETS.PAYERS_DEMO_PASSWORD}`).toString('base64'),
+];
+const printsNoSecret = (output) => !SECRET_FORMS.some((form) => output.includes(form));
 const noSecretOnACommandLine = (calls) =>
-  !calls.some((call) =>
-    Object.values(SECRETS).some((value) => call.args.join(' ').includes(value)),
-  );
-
+  !calls.some((call) => SECRET_FORMS.some((form) => call.args.join(' ').includes(form)));
+/** The verbs that change something, in order: what a run did, not what it asked. */
+const changes = (calls) =>
+  calls
+    .map((call) => call.verb)
+    .filter(
+      (verb, index, verbs) =>
+        !READS.has(verb) && !(verb === 'inspect' && verbs[index - 1] === 'inspect'),
+    );
 async function theCommand() {
   const candidate = writeCandidate('command');
   const port = String(await freePort());
@@ -1300,6 +1568,7 @@ async function theCommand() {
     '--wait',
     '3',
   ];
+  const id = 'a'.repeat(64);
 
   for (const name of Object.keys(SECRETS)) {
     const run = command(`unset-${name}`, base, { secrets: { ...SECRETS, [name]: undefined } });
@@ -1311,7 +1580,6 @@ async function theCommand() {
         run.calls.length === 0,
       `exit ${run.status}, ${run.calls.length} Docker call(s): ${run.output.slice(-400)}`,
     );
-    check(`and ${name} unset, nothing printed of the others`, printsNoSecret(run.output), '');
   }
 
   const existing = command('existing', base, {
@@ -1326,6 +1594,23 @@ async function theCommand() {
       existing.calls.length > 0 &&
       existing.calls.every((call) => READS.has(call.verb)),
     `exit ${existing.status}; ${existing.calls.map((call) => call.verb).join(', ')}; ${existing.output.slice(-400)}`,
+  );
+  const appears = command('appears', base, { config: { appearsAfterPull: true } });
+  check(
+    'refused: a project another run made while this one pulled, asked again before create: exit 2, nothing created or removed',
+    appears.status === 2 &&
+      /already there \(container satori-demo-selftest-nuxeo-1\)/.test(appears.output) &&
+      JSON.stringify(changes(appears.calls)) === JSON.stringify(['compose pull']),
+    `exit ${appears.status}; ${changes(appears.calls).join(', ')}; ${appears.output.slice(-300)}`,
+  );
+  const foreign = command('foreign', base, { config: { foreignRun: 'another-run' } });
+  check(
+    "refused: a container carrying another run's mark after create: nothing copied into, stopped or removed",
+    foreign.status === 2 &&
+      /carries another run's mark/.test(foreign.output) &&
+      JSON.stringify(changes(foreign.calls)) ===
+        JSON.stringify(['compose pull', 'compose create', 'compose ps', 'inspect']),
+    `exit ${foreign.status}; ${changes(foreign.calls).join(', ')}; ${foreign.output.slice(-300)}`,
   );
 
   const missing = writeCandidate('command-missing', {
@@ -1363,7 +1648,6 @@ async function theCommand() {
     `exit ${dry.status}; ${dry.calls.map((call) => call.verb).join(', ')}`,
     false,
   );
-  check('a dry run prints no secret', printsNoSecret(dry.output), '', false);
   const unsetDry = command('dry-run-unset', [...base, '--dry-run'], { secrets: {} });
   check(
     'a dry run with no secret set says so, and still prints its plan',
@@ -1382,37 +1666,45 @@ async function theCommand() {
     dryExisting.output.slice(-300),
   );
 
-  const startFails = command('start-fails', base, { config: { fail: ['compose up'] } });
-  const verbs = startFails.calls.map((call) => call.verb);
-  const changing = verbs.filter((verb) => !READS.has(verb));
+  // A start that fails, under umask 077, with the stand-in printing every secret it could.
+  const startFails = command('start-fails', base, {
+    umask: '077',
+    config: { fail: ['compose up'], echo: SECRET_FORMS },
+  });
   check(
-    'a run whose start fails: pulled, created, copied in, started, then stopped and kept, exit 1',
+    'a run whose start fails: pulled, created, its mark read, copied in, started, then stopped and kept, exit 1',
     startFails.status === 1 &&
-      JSON.stringify(changing) ===
+      JSON.stringify(changes(startFails.calls)) ===
         JSON.stringify([
           'compose pull',
           'compose create',
           'compose ps',
+          'inspect',
           'cp',
           'cp',
           'cp',
           'compose up',
           'compose stop',
         ]) &&
-      /The project is stopped, with the image's default Administrator password, and kept for its logs/.test(
+      /The project is stopped, since its Administrator password was not shown changed, and kept for its logs/.test(
         startFails.output,
       ),
-    `exit ${startFails.status}; ${changing.join(', ')}; ${startFails.output.slice(-300)}`,
+    `exit ${startFails.status}; ${changes(startFails.calls).join(', ')}; ${startFails.output.slice(-300)}`,
   );
   const copies = startFails.calls.filter((call) => call.verb === 'cp');
   const payload = copies.find((call) => Array.isArray(call.copied))?.copied ?? [];
-  const script =
-    copies.find((call) => typeof call.copied === 'string' && call.copied.startsWith('#!/bin/bash'))
-      ?.copied ?? '';
+  const script = copies.find(
+    (call) => typeof call.copied === 'string' && call.copied.startsWith('#!/bin/bash'),
+  );
   check(
     'into the container before it starts: the OpenSearch settings, the packages, bundle, configuration and plan, and the install script',
-    copies[0]?.args[2]?.endsWith(':/etc/nuxeo/conf.d/90-demo-server.conf') &&
-      JSON.stringify(payload.slice().sort()) ===
+    copies[0]?.args[2] === `${id}:/etc/nuxeo/conf.d/90-demo-server.conf` &&
+      JSON.stringify(
+        payload
+          .filter((each) => !each.path.endsWith('/'))
+          .map((each) => each.path)
+          .sort(),
+      ) ===
         JSON.stringify(
           [
             'bundles/nuxeo-agentic-connectors-2026.0.2.jar',
@@ -1426,57 +1718,104 @@ async function theCommand() {
             'plan.json',
           ].sort(),
         ) &&
-      copies[2]?.args[2]?.endsWith(':/docker-entrypoint-initnuxeo.d/zz-demo-server-install.sh') &&
-      script.includes('nuxeoctl mp-install'),
+      copies[1]?.args[2] === `${id}:/docker-entrypoint-initnuxeo.d/` &&
+      copies[2]?.args[2] === `${id}:/docker-entrypoint-initnuxeo.d/zz-demo-server-install.sh` &&
+      script?.copied.includes('nuxeoctl mp-install'),
     JSON.stringify(copies.map((call) => call.args.slice(1))),
     false,
   );
-  // Every one but `compose version`, which asks about Compose itself, not a project.
-  const composeCalls = startFails.calls.filter(
+  const readable = (mode) => (Number.parseInt(mode, 8) & 0o004) !== 0;
+  const searchable = (mode) => (Number.parseInt(mode, 8) & 0o001) !== 0;
+  check(
+    "under umask 077, every file copied in is readable by the image's nuxeo user, and every folder and the script searchable",
+    readable(copies[0]?.mode ?? '0') &&
+      readable(copies[1]?.mode ?? '0') &&
+      searchable(copies[1]?.mode ?? '0') &&
+      payload.length > 0 &&
+      payload.every(
+        (each) => readable(each.mode) && (!each.path.endsWith('/') || searchable(each.mode)),
+      ) &&
+      readable(script?.mode ?? '0') &&
+      searchable(script?.mode ?? '0'),
+    JSON.stringify([
+      copies[0]?.mode,
+      copies[1]?.mode,
+      script?.mode,
+      payload.map((each) => `${each.path} ${each.mode}`),
+    ]),
+  );
+  const projectCalls = startFails.calls.filter(
     (call) => call.verb.startsWith('compose ') && call.verb !== 'compose version',
   );
   check(
-    'every compose command names the project and the file, and only compose is given NUXEO_CLID',
-    composeCalls.every(
-      (call) =>
-        call.args.includes('-p') &&
-        call.args[call.args.indexOf('-p') + 1] === 'satori-demo-selftest' &&
-        call.args.includes('-f'),
-    ) && startFails.calls.every((call) => call.clid === call.verb.startsWith('compose ')),
-    JSON.stringify(startFails.calls.map((call) => [call.verb, call.clid])),
+    'every compose command names the project and the file, and with the run’s mark',
+    projectCalls.length > 0 &&
+      projectCalls.every(
+        (call) =>
+          call.args[call.args.indexOf('-p') + 1] === 'satori-demo-selftest' &&
+          call.args.includes('-f') &&
+          /^[0-9a-f-]{36}$/.test(call.run ?? ''),
+      ),
+    JSON.stringify(projectCalls.map((call) => [call.args, call.run])),
   );
   check(
-    'no Docker command is given a password',
-    startFails.calls.every((call) => call.secrets.length === 0),
+    'only compose create is given NUXEO_CLID',
+    startFails.calls.every((call) => call.clid === (call.verb === 'compose create')),
+    JSON.stringify(startFails.calls.map((call) => [call.verb, call.clid])),
+  );
+  const targets = startFails.calls.filter((call) => ['cp', 'exec', 'inspect'].includes(call.verb));
+  check(
+    'every copy, exec and inspect names the container compose answered, and no other',
+    targets.length >= 4 &&
+      targets.every((call) =>
+        call.verb === 'cp' ? call.args[2].startsWith(`${id}:`) : call.args.includes(id),
+      ),
+    JSON.stringify(targets.map((call) => call.args)),
+  );
+  check(
+    'no Docker command is given a password, a token or a key, and compose create only NUXEO_CLID',
+    startFails.calls.every(
+      (call) =>
+        JSON.stringify(call.secrets) ===
+        JSON.stringify(call.verb === 'compose create' ? ['NUXEO_CLID'] : []),
+    ),
     JSON.stringify(startFails.calls.map((call) => call.secrets)),
   );
   check(
-    'no secret on a command line, and none printed',
-    noSecretOnACommandLine(startFails.calls) && printsNoSecret(startFails.output),
-    '',
+    'no secret on a command line, and none printed, though Docker printed each of them',
+    noSecretOnACommandLine(startFails.calls) &&
+      printsNoSecret(startFails.output) &&
+      /the secret, not printed|a secret, not printed/.test(startFails.output),
+    startFails.output.slice(-500),
   );
 
   const copyFails = command('copy-fails', base, { config: { fail: ['cp'] } });
-  const copyVerbs = copyFails.calls.map((call) => call.verb).filter((verb) => !READS.has(verb));
   check(
     'a run whose copy fails, never started: what it made is removed, exit 1',
     copyFails.status === 1 &&
-      JSON.stringify(copyVerbs) ===
-        JSON.stringify(['compose pull', 'compose create', 'compose ps', 'cp', 'compose down']) &&
+      JSON.stringify(changes(copyFails.calls)) ===
+        JSON.stringify([
+          'compose pull',
+          'compose create',
+          'compose ps',
+          'inspect',
+          'cp',
+          'compose down',
+        ]) &&
       /never started, is removed/.test(copyFails.output),
-    `exit ${copyFails.status}; ${copyVerbs.join(', ')}`,
+    `exit ${copyFails.status}; ${changes(copyFails.calls).join(', ')}`,
   );
   const pullFails = command('pull-fails', base, { config: { fail: ['compose pull'] } });
   check(
     'a run whose pull fails made nothing, and removes nothing: exit 2',
     pullFails.status === 2 &&
-      !pullFails.calls.some((call) =>
-        ['compose create', 'compose down', 'compose stop'].includes(call.verb),
-      ) &&
+      JSON.stringify(changes(pullFails.calls)) === JSON.stringify(['compose pull']) &&
       /docker login docker-private\.packages\.nuxeo\.com/.test(pullFails.output),
     `exit ${pullFails.status}; ${pullFails.output.slice(-300)}`,
   );
-  const exits = command('container-exits', base, { config: { inspect: 'exited 1' } });
+  const exits = command('container-exits', base, {
+    config: { inspect: 'exited 1', echo: SECRET_FORMS },
+  });
   check(
     'a run whose container stops before the server answers: its log printed, the project stopped, exit 1',
     exits.status === 1 &&
@@ -1485,64 +1824,70 @@ async function theCommand() {
       exits.calls.at(-1)?.verb === 'compose stop',
     `exit ${exits.status}; ${exits.output.slice(-400)}`,
   );
-
-  // A run that comes up: a candidate whose one kit has no seed, and the stand-in Nuxeo listening
-  // once the stand-in Docker has been asked to start it.
-  const small = writeCandidate('command-up', {
-    packages: soundPackages().filter((each) =>
-      ['nuxeo-agentic-ui', 'facilities-demo'].includes(each.name),
-    ),
-  });
-  const upPort = await freePort();
-  const marker = join(scratch, 'up.marker');
-  const { env, calls } = commandEnv('up', { config: { upMarker: marker } });
-  const nuxeo = standInNuxeo();
-  const child = spawn(
-    process.execPath,
-    [
-      SCRIPT,
-      '--candidate',
-      small,
-      '--project',
-      'satori-demo-selftest',
-      '--port',
-      String(upPort),
-      '--wait',
-      '30',
-    ],
-    { cwd: REPO, env },
+  check(
+    'and its log, which held every secret, is printed without them',
+    printsNoSecret(exits.output),
+    exits.output.slice(-400),
   );
-  let output = '';
-  child.stdout.on('data', (chunk) => (output += chunk));
-  child.stderr.on('data', (chunk) => (output += chunk));
-  const exited = new Promise((resolveNow) => child.on('exit', (status) => resolveNow(status)));
-  const killer = setTimeout(() => child.kill('SIGKILL'), 90_000);
-  let listening = false;
-  const watching = setInterval(async () => {
-    if (!listening && existsSync(marker)) {
-      listening = true;
-      await nuxeo.listen(upPort);
-    }
-  }, 50);
-  const status = await exited;
-  clearTimeout(killer);
-  clearInterval(watching);
-  if (listening) await nuxeo.close();
-  // The wait asks whether the container stopped before each try, so once or more.
-  const upVerbs = calls()
-    .map((call) => call.verb)
-    .filter(
-      (verb, index, verbs) =>
-        !READS.has(verb) && !(verb === 'inspect' && verbs[index - 1] === 'inspect'),
+
+  // Two runs against the stand-in Nuxeo, listening once the stand-in Docker is asked to start: a
+  // candidate whose one kit has no seed, which comes up; one whose kit's seed refuses the server.
+  async function upRun(name, packages, { interrupt = false } = {}) {
+    const small = writeCandidate(`command-${name}`, {
+      packages: soundPackages().filter((each) => packages.includes(each.name)),
+    });
+    const upPort = await freePort();
+    const marker = join(scratch, `${name}.marker`);
+    const { env, calls } = commandEnv(name, {
+      config: { upMarker: marker, echo: interrupt ? [] : SECRET_FORMS },
+    });
+    const nuxeo = standInNuxeo();
+    const child = spawn(
+      process.execPath,
+      [
+        SCRIPT,
+        '--candidate',
+        small,
+        '--project',
+        'satori-demo-selftest',
+        '--port',
+        String(upPort),
+        '--wait',
+        '30',
+      ],
+      { cwd: REPO, env },
     );
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const exited = new Promise((resolveNow) =>
+      child.on('exit', (status, signal) => resolveNow(status ?? signal)),
+    );
+    const killer = setTimeout(() => child.kill('SIGKILL'), 90_000);
+    let seen = false;
+    const watching = setInterval(async () => {
+      if (seen || !existsSync(marker)) return;
+      seen = true;
+      if (interrupt) setTimeout(() => child.kill('SIGINT'), 300);
+      else await nuxeo.listen(upPort);
+    }, 50);
+    const status = await exited;
+    clearTimeout(killer);
+    clearInterval(watching);
+    if (seen && !interrupt) await nuxeo.close();
+    return { status, output, calls: calls(), nuxeo };
+  }
+
+  const up = await upRun('up', ['nuxeo-agentic-ui', 'facilities-demo']);
   check(
     'a run that comes up: started once, the password changed, the log checked, exit 0, and its steps printed',
-    status === 0 &&
-      JSON.stringify(upVerbs) ===
+    up.status === 0 &&
+      JSON.stringify(changes(up.calls)) ===
         JSON.stringify([
           'compose pull',
           'compose create',
           'compose ps',
+          'inspect',
           'cp',
           'cp',
           'cp',
@@ -1550,36 +1895,59 @@ async function theCommand() {
           'inspect',
           'exec',
         ]) &&
-      nuxeo.requests.some((each) => each.method === 'PUT') &&
-      /The demo server is up: http:\/\/127\.0\.0\.1:\d+\/nuxeo/.test(output) &&
-      output.includes('facilities-demo 0.1.0: no steps file names this kit'),
-    `exit ${status}; ${upVerbs.join(', ')}; ${output.slice(-600)}`,
+      up.nuxeo.requests.some((each) => each.method === 'PUT') &&
+      /The demo server is up: http:\/\/127\.0\.0\.1:\d+\/nuxeo/.test(up.output) &&
+      up.output.includes('facilities-demo 0.1.0: no steps file names this kit'),
+    `exit ${up.status}; ${changes(up.calls).join(', ')}; ${up.output.slice(-600)}`,
     false,
   );
   check(
-    'a run that comes up prints no secret',
-    printsNoSecret(output) && noSecretOnACommandLine(calls()),
+    'a run that comes up prints no secret, though the stand-in printed each in its exec answer',
+    printsNoSecret(up.output) && noSecretOnACommandLine(up.calls),
     '',
-    false,
   );
+
+  const seeded = await upRun('seed-fails', ['nuxeo-agentic-ui', 'contracts-demo']);
+  const asked = seeded.nuxeo.requests.filter((each) =>
+    each.url.startsWith('/nuxeo/api/v1/config/types/Contract'),
+  );
+  check(
+    "a run whose seed refuses the server: the commit's seed ran as the administrator against this server, exit 1, and the secured server keeps running",
+    seeded.status === 1 &&
+      asked.length > 0 &&
+      /has no Contract type/.test(seeded.output) &&
+      /the seed of contracts-demo exited 2/.test(seeded.output) &&
+      /The server keeps running, with the Administrator password changed/.test(seeded.output) &&
+      !seeded.calls.some((call) => ['compose stop', 'compose down'].includes(call.verb)),
+    `exit ${seeded.status}; ${changes(seeded.calls).join(', ')}; ${seeded.output.slice(-600)}`,
+  );
+  check('and prints no secret', printsNoSecret(seeded.output), '');
+
+  const stopped = await upRun('interrupted', ['nuxeo-agentic-ui', 'facilities-demo'], {
+    interrupt: true,
+  });
+  check(
+    'a run interrupted while it waits for the server: the project stopped, exit 130',
+    stopped.status === 130 &&
+      /Interrupted \(SIGINT\)/.test(stopped.output) &&
+      stopped.calls.at(-1)?.verb === 'compose stop',
+    `exit ${stopped.status}; ${changes(stopped.calls).join(', ')}; ${stopped.output.slice(-400)}`,
+  );
+
   const all = [
     ...startFails.calls,
     ...copyFails.calls,
     ...exits.calls,
-    ...calls(),
+    ...up.calls,
+    ...seeded.calls,
     ...dry.calls,
     ...existing.calls,
   ];
   check(
-    'no run pushes, builds, tags or logs in, or names a container that is not its own',
+    'no run pushes, builds, tags or logs in',
     !all.some((call) =>
       ['push', 'build', 'tag', 'login', 'compose push', 'compose build'].includes(call.verb),
-    ) &&
-      !all.some((call) =>
-        call.args.some(
-          (arg) => arg === 'nuxeo' && call.verb !== 'compose ps' && call.verb !== 'compose logs',
-        ),
-      ),
+    ),
     JSON.stringify(all.map((call) => call.args.join(' '))),
   );
 }

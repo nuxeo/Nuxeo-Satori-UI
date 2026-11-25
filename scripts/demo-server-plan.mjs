@@ -22,7 +22,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { isIPv4 } from 'node:net';
 import { join } from 'node:path';
 
@@ -37,6 +37,8 @@ import {
 
 /** What `release-candidate.mjs` writes, and the only format this reads. */
 export const CANDIDATE_FORMAT = 'nuxeo-satori-release-candidate/1';
+/** A version `release-candidate.mjs` lets a candidate carry: digits, then a classifier. */
+const CANDIDATE_VERSION = /^[0-9]+(?:\.[0-9]+){0,2}(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?$/;
 
 /**
  * The stack `business-apps/demo-server/compose.yml` declares. The selftest holds the file to these
@@ -52,6 +54,13 @@ export const STACK = Object.freeze({
   connectPackages: ['nuxeo-search-client-opensearch2', 'nuxeo-audit-opensearch2'],
 });
 
+/**
+ * The label compose gives every container a run creates, with the run's own mark: a run touches no
+ * container without it, so a second run of the same project at the same time cannot be cleaned up
+ * by the first.
+ */
+export const RUN_LABEL = 'org.nuxeo.satori.demo-server.run';
+
 /** The platform a Nuxeo LTS server is, to a package's `<target-platform><name>`. */
 const PLATFORM_NAME = 'lts';
 
@@ -62,6 +71,7 @@ export const ADMIN_PASSWORD = 'DEMO_SERVER_ADMIN_PASSWORD';
 export const ADMINISTRATOR = 'Administrator';
 export const IMAGE_DEFAULT_SECRET = 'Administrator';
 const SHORTEST_ADMIN_SECRET = 12;
+const SHORTEST_DEMO_SECRET = 8;
 
 export const DEFAULTS = Object.freeze({
   project: 'satori-demo',
@@ -217,7 +227,8 @@ function filesUnder(directory, prefix = '') {
  * names is one of them, with the digest the manifest gives. So what is installed is what was built.
  */
 export function readCandidate(directory) {
-  const stat = lstatSync(directory, { throwIfNoEntry: false });
+  // The directory itself may be reached through a link; nothing inside it may be one.
+  const stat = statSync(directory, { throwIfNoEntry: false });
   if (!stat?.isDirectory())
     throw new Refusal(
       `${directory} is not a directory: give --candidate the directory release-candidate wrote.`,
@@ -255,6 +266,12 @@ export function readCandidate(directory) {
   }
   if (!Array.isArray(manifest.artifacts) || !Array.isArray(manifest.kits))
     throw new Refusal('manifest.json lists no artifacts or no kits.');
+  // The version is written into the install script and the containers' labels: a release
+  // candidate's, as `release-candidate.mjs` accepts one, and nothing a shell would read as more.
+  if (typeof manifest.version !== 'string' || !CANDIDATE_VERSION.test(manifest.version))
+    throw new Refusal(
+      `manifest.json's version ${JSON.stringify(manifest.version)} is not a release candidate's.`,
+    );
   for (const artifact of manifest.artifacts) {
     if (typeof artifact?.path !== 'string' || sums.get(artifact.path) !== artifact.sha256)
       throw new Refusal(
@@ -511,11 +528,18 @@ export function secretProblems(env, required) {
     else if (admin.length < SHORTEST_ADMIN_SECRET)
       problems.push(`${ADMIN_PASSWORD} is shorter than ${SHORTEST_ADMIN_SECRET} characters.`);
   }
-  for (const name of required.filter((each) => each !== CLID && each !== ADMIN_PASSWORD))
-    if (admin && env[name] === admin)
+  for (const name of required.filter((each) => each !== CLID && each !== ADMIN_PASSWORD)) {
+    const value = env[name];
+    if (!value) continue;
+    if (admin && value === admin)
       problems.push(
         `${name} is the administrator's password, and the demo users' is given to whoever presents.`,
       );
+    // The demo users may change the claims on a server others can reach; and a value this short
+    // could not be taken out of what is printed without taking out ordinary words.
+    else if (value.length < SHORTEST_DEMO_SECRET)
+      problems.push(`${name} is shorter than ${SHORTEST_DEMO_SECRET} characters.`);
+  }
   return problems;
 }
 
@@ -524,8 +548,14 @@ export const INIT_DIRECTORY = '/docker-entrypoint-initnuxeo.d';
 export const PAYLOAD = `${INIT_DIRECTORY}/demo-server`;
 export const INIT_SCRIPT = 'zz-demo-server-install.sh';
 export const INSTALL_LOG = '/var/log/nuxeo/demo-server-install.log';
+/** `mp-list`'s answer, kept beside the log: the `nuxeo` user may write in /var/log/nuxeo. */
+export const INSTALL_LIST = '/var/log/nuxeo/demo-server-packages.txt';
 
-/** A word for bash, single-quoted. Every name here is checked plain, so this is belt and braces. */
+/**
+ * A word for bash, single-quoted, so nothing in it is read as more: every file name, package name
+ * and version the script holds goes through this. The commit is forty hexadecimal digits and the
+ * candidate's version is checked as `readCandidate` reads it, and both are quoted all the same.
+ */
 const quoted = (text) => `'${String(text).replaceAll("'", "'\\''")}'`;
 const fileName = (path) => path.split('/').pop();
 
@@ -534,23 +564,30 @@ const fileName = (path) => path.split('/').pop();
  * them: one `nuxeoctl mp-install` of every package in dependency order, then the bundles of the
  * add-ons that have no package into `nxserver/bundles/`, then the deployment's configuration into
  * `nxserver/config/`. It stops the start at the first step that fails, so a server never runs with
- * half of a candidate, and removes itself only once every step passed. It holds no secret: the
- * image writes NUXEO_CLID itself, from the container's environment.
+ * half of a candidate: last, `nuxeoctl mp-list` must list every package of the candidate, by its
+ * id, as started or installed. It removes itself only once every step passed. It holds no secret:
+ * the image writes NUXEO_CLID itself, from the container's environment.
+ *
+ * `mp-install` is given `--accept=true` alone, as the kits' READMEs ran it. The plan has already
+ * held every package's target platform to the image's Nuxeo.
  */
 export function initScript(plan) {
   const step = (command, what) => `${command} >> "$log" 2>&1 || fail ${quoted(what)}`;
   const lines = [
     '#!/bin/bash',
-    `# The demo server's one-off install, written by scripts/demo-server.mjs for release candidate`,
-    `# ${plan.candidate.version} (${plan.candidate.commit}). The image runs it before the server starts;`,
-    '# it stops that start at the first step that fails, and removes itself once every step passed.',
+    "# The demo server's one-off install, written by scripts/demo-server.mjs for a release candidate.",
+    '# The image runs it before the server starts; it stops that start at the first step that fails,',
+    '# and removes itself once every step passed.',
     'set -u',
+    `version=${quoted(plan.candidate.version)}`,
+    `commit=${quoted(plan.candidate.commit)}`,
     `payload=${PAYLOAD}`,
     `log=${INSTALL_LOG}`,
+    `list=${INSTALL_LIST}`,
     'fail() { echo "demo server: $1, see $log"; cat "$log"; exit 1; }',
-    `echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) release candidate ${plan.candidate.version}" >> "$log"`,
+    'echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) release candidate $version, from $commit" >> "$log"',
     step(
-      `nuxeoctl mp-install ${plan.install.map((each) => `"$payload/packages/"${quoted(fileName(each.artifact))}`).join(' ')} --accept=true --relax=false`,
+      `nuxeoctl mp-install ${plan.install.map((each) => `"$payload/packages/"${quoted(fileName(each.artifact))}`).join(' ')} --accept=true`,
       'the packages could not be installed',
     ),
   ];
@@ -574,7 +611,12 @@ export function initScript(plan) {
       ),
     );
   lines.push(
-    step('nuxeoctl mp-list', 'the installed packages could not be listed'),
+    'nuxeoctl mp-list > "$list" 2>&1 || fail \'the installed packages could not be listed\'',
+    'cat "$list" >> "$log"',
+    ...plan.install.map(
+      (each) =>
+        `grep -F ${quoted(`id: ${each.name}-${each.version})`)} "$list" | grep -Eq 'started|installed' || fail ${quoted(`${each.name} ${each.version} is not installed, by nuxeoctl mp-list`)}`,
+    ),
     'rm -f "$0"',
     'echo "demo server: installed, see $log"',
     '',
@@ -671,6 +713,24 @@ export function buildPlan({ repo, candidate, options, parse }) {
   const { manifest } = candidate;
   const { packages, bundles } = readPackages(candidate);
   const install = installOrder(packages);
+  // The kits the manifest lists are the kits it ships: a kit listed with no zip would be seeded
+  // and never installed, and a zip not listed would be installed and never seeded.
+  const listed = manifest.kits.map((kit) => kit.name).sort();
+  const shipped = packages
+    .filter((each) => each.kind === 'kit')
+    .map((each) => each.name)
+    .sort();
+  if (JSON.stringify(listed) !== JSON.stringify(shipped))
+    throw new Refusal(
+      `manifest.json lists the kits ${listed.join(', ') || 'none'}, and ships the kits ${shipped.join(', ') || 'none'}.`,
+    );
+  // Every file goes into one folder of the payload by its name: two of one name would be one.
+  const names = [...install, ...bundles].map((each) => each.artifact.split('/').pop());
+  const twice = names.find((name, index) => names.indexOf(name) !== index);
+  if (twice !== undefined)
+    throw new Refusal(
+      `the candidate ships two files named ${twice}, which the payload cannot hold both of.`,
+    );
   const kits = kitFolders(manifest);
   const { commit, config, seeds, served } = fromCommit({ repo, manifest, kits, parse });
   const order = install.map((each) => each.name);

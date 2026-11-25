@@ -22,10 +22,12 @@
  *   4. Docker, and nothing of the project there yet: no container, volume or network compose labels
  *      as the project's or that has one of its names. And the port free. So it never touches a
  *      server it did not create, the developer's `nuxeo` among them.
- *   5. The images pulled, the containers created, not started, and into the Nuxeo container: the
- *      OpenSearch settings in `/etc/nuxeo/conf.d/`, the packages, bundles and configuration, and
- *      the one-off install script in `/docker-entrypoint-initnuxeo.d/`, which the image runs before
- *      the server's first start, as the kits' READMEs install them. One start.
+ *   5. The images pulled; the project checked again, and its containers created, not started, each
+ *      marked with this run's mark, which is checked before anything is copied in, stopped or
+ *      removed. Into the Nuxeo container: the OpenSearch settings in `/etc/nuxeo/conf.d/`, the
+ *      packages, bundles and configuration, and the one-off install script in
+ *      `/docker-entrypoint-initnuxeo.d/`, which the image runs before the server's first start, as
+ *      the kits' READMEs install them. One start.
  *   6. The server answering, the administrator's password changed from the image's default and the
  *      default checked refused, the server log's Component Loading Status clean, and each kit's
  *      seed run, in install order.
@@ -40,26 +42,18 @@
  * the controls' stand-in (`demo-server.selftest.mjs`).
  *
  * When a step after the containers are made fails, what was made is left as safe as it can be: not
- * started yet, it is removed; started with the image's default password, it is stopped and kept
- * for its logs; started and secured, it keeps running. Each way the command that removes it is
- * printed. An interruption is handled the same way.
+ * started yet, it is removed; started and not shown secured, it is stopped and kept for its logs;
+ * started and secured, it keeps running. Each way the command that removes it is printed. Ctrl-C,
+ * or a stop sent to this process, is handled the same way, and exits 128 and the signal's number.
  *
  * macOS and Linux. It has not been run against Docker yet (the README says what was checked).
  *
  * Exit codes: 0, the server is up, or the dry run printed its plan; 1, a step failed once something
- * was made, and what is left is said; 2, refused, and nothing was made; 128 and the signal's
- * number, interrupted.
+ * was made, and what is left is said; 2, refused, and nothing was made, or a dry run whose run would
+ * be refused; 128 and the signal's number, interrupted.
  */
-import { spawnSync } from 'node:child_process';
-import {
-  chmodSync,
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,15 +64,23 @@ import {
   dockerProblem,
   existingResources,
   Failure,
+  Interrupted,
   portInUse,
   quietEnvironment,
+  readableByAnyone,
+  redactor,
+  runSeed,
   seedEnvironment,
   setAdministratorPassword,
+  SIGNALS,
+  stoppedBySignal,
+  unpackAtCommit,
   waitForServer,
   why,
 } from './demo-server-host.mjs';
 import {
   ADMIN_PASSWORD,
+  ADMINISTRATOR,
   buildPlan,
   CLID,
   INIT_DIRECTORY,
@@ -88,6 +90,7 @@ import {
   planText,
   readCandidate,
   Refusal,
+  RUN_LABEL,
   secretProblems,
   stepsText,
   USAGE,
@@ -97,11 +100,11 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COMPOSE_SHOWN = 'business-apps/demo-server/compose.yml';
 const COMPOSE = join(REPO, ...COMPOSE_SHOWN.split('/'));
 const OPENSEARCH_SETTINGS = join(REPO, 'business-apps', 'demo-server', '90-demo-server.conf');
-const OUTPUT_LIMIT = 256 * 1024 * 1024;
 
 /**
- * The environment as it was given, read once. This process keeps none of its secrets after, so a
- * child started without an environment of its own, the library's `unzip` or git, inherits none.
+ * The environment as it was given, read once. This process keeps only what any child may have, so
+ * a child started without an environment of its own, the library's `unzip` or git, inherits no
+ * secret.
  */
 const environment = { ...process.env };
 const kept = quietEnvironment(environment);
@@ -146,25 +149,25 @@ try {
 }
 
 /**
- * Every secret's value, and the forms a child might print it in, to take out of what is printed.
- * A NUXEO_CLID's lines are joined by `--`, which the image splits.
+ * Every secret's value taken out of what is printed, in the forms a child may print it in: each
+ * value, a NUXEO_CLID's lines, and the Basic header of the administrator and of every demo person
+ * the steps files name, with their kit's password.
  */
-const secretValues = plan.secrets
-  .map((name) => environment[name])
-  .filter((value) => typeof value === 'string' && value.length >= 4);
-const redactions = [
-  ...secretValues,
-  ...secretValues.flatMap((value) => value.split('--').filter((part) => part.length >= 8)),
-  ...(environment[ADMIN_PASSWORD]
-    ? [Buffer.from(`Administrator:${environment[ADMIN_PASSWORD]}`).toString('base64')]
-    : []),
-].sort((a, b) => b.length - a.length);
-const redact = (text) =>
-  redactions.reduce(
-    (out, value) => out.split(value).join('<a secret, not printed>'),
-    `${text ?? ''}`,
-  );
+const people = [
+  [ADMINISTRATOR, environment[ADMIN_PASSWORD]],
+  ...plan.steps.flatMap((kit) => {
+    const secret = environment[plan.seeds.find((seed) => seed.kit === kit.name)?.passwords[0]];
+    return kit.files.flatMap((file) =>
+      [...file.runAs.users, ...file.signsInAs].map((user) => [user, secret]),
+    );
+  }),
+];
+const redact = redactor(
+  plan.secrets.map((name) => environment[name]),
+  people,
+);
 const say = (text) => process.stdout.write(redact(text));
+const sayError = (text) => process.stderr.write(redact(`${text}\n`));
 
 // ── 3. The secrets ──────────────────────────────────────────────────────────────────────────────
 const secretsSet = new Set(plan.secrets.filter((name) => environment[name]));
@@ -176,6 +179,8 @@ if (!options.dryRun && secretsRefused.length > 0)
   );
 
 // ── 4. Docker, the project and the port ─────────────────────────────────────────────────────────
+/** This run's mark, on every container it creates: nothing without it is copied into or removed. */
+const run = randomUUID();
 const docker = dockerCli({
   command: environment.DEMO_SERVER_DOCKER || 'docker',
   env: environment,
@@ -183,10 +188,13 @@ const docker = dockerCli({
     DEMO_SERVER_BIND: options.bind,
     DEMO_SERVER_PORT: String(options.port),
     DEMO_SERVER_CANDIDATE: `${plan.candidate.version}@${plan.candidate.commit}`,
-    ...(environment[CLID] ? { [CLID]: environment[CLID] } : {}),
+    DEMO_SERVER_RUN: run,
   },
+  clid: environment[CLID],
 });
 const compose = (...args) => ['compose', '-f', COMPOSE, '-p', options.project, ...args];
+const alreadyThere = (existing) =>
+  `the compose project ${options.project} is already there (${existing.join(', ')}). This never touches a server it did not create: give another --project, or remove that one if it is yours, with docker compose -f ${COMPOSE_SHOWN} -p ${options.project} down --volumes.`;
 const dockerSays = dockerProblem(docker);
 let existing = null;
 let dockerRefused = dockerSays;
@@ -201,11 +209,7 @@ if (dockerSays === null) {
 const portTaken = await portInUse(options.port, options.bind);
 const refusals = [
   ...(dockerRefused ? [dockerRefused] : []),
-  ...(existing?.length > 0
-    ? [
-        `the compose project ${options.project} is already there (${existing.join(', ')}). This never touches a server it did not create: give another --project, or remove that one if it is yours, with docker compose -f ${COMPOSE_SHOWN} -p ${options.project} down --volumes.`,
-      ]
-    : []),
+  ...(existing?.length > 0 ? [alreadyThere(existing)] : []),
   ...(portTaken ? [`${options.bind}:${options.port} is in use: give another --port.`] : []),
 ];
 
@@ -227,9 +231,8 @@ say(planText(plan, { secretsSet, existing, portFree: true, compose: COMPOSE_SHOW
 
 /** How far the run got, for what a failure leaves: made, started, secured. */
 const state = { made: false, started: false, secured: false };
-class Interrupted extends Error {}
 let interruptedBy = null;
-for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'])
+for (const signal of SIGNALS)
   process.on(signal, () => {
     interruptedBy ??= signal;
   });
@@ -238,16 +241,45 @@ async function checkpoint() {
   await new Promise((resolveNow) => setImmediate(resolveNow));
   if (interruptedBy !== null) throw new Interrupted(interruptedBy);
 }
+/** A child that a stop ended is an interruption, whether or not this process's listener ran yet. */
+function interruptedIn(result) {
+  if (interruptedBy === null && !stoppedBySignal(result)) return;
+  throw new Interrupted(
+    interruptedBy ?? (SIGNALS.includes(result.signal) ? result.signal : 'SIGINT'),
+  );
+}
 const step = (text) => say(`\n== ${text}\n`);
 /** A Docker command that must succeed, its output printed with every secret taken out. */
 function must(args, what) {
   const result = docker(args);
+  interruptedIn(result);
   if (result.stdout?.trim()) say(`${result.stdout.trimEnd()}\n`);
   if (result.status !== 0)
     throw new Failure(
-      `${what}: docker ${args.slice(0, args[0] === 'compose' ? 6 : 1).join(' ')} ${redact(why(result))}`,
+      `${what}: docker ${args.slice(0, args[0] === 'compose' ? 6 : 1).join(' ')} ${why(result)}`,
     );
   return result;
+}
+/**
+ * Whether every container of the project carries this run's mark: what cleaning up after a
+ * failure may touch. A project of none is this run's too, being what it made before any container.
+ */
+function onlyOurs() {
+  const listed = docker([
+    'ps',
+    '--all',
+    '--filter',
+    `label=com.docker.compose.project=${options.project}`,
+    '--format',
+    `{{.Label "${RUN_LABEL}"}}`,
+  ]);
+  return (
+    listed.status === 0 &&
+    listed.stdout
+      .split('\n')
+      .filter(Boolean)
+      .every((mark) => mark === run)
+  );
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'demo-server-'));
@@ -271,6 +303,7 @@ try {
     `${JSON.stringify(
       {
         candidate: plan.candidate,
+        run,
         install: plan.install.map(({ name, version, artifact }) => ({ name, version, artifact })),
         bundles: plan.bundles,
         config: plan.config.map(({ name, source }) => ({ name, source })),
@@ -280,11 +313,15 @@ try {
       2,
     )}\n`,
   );
-  // Readable by the image's `nuxeo` user, whatever this machine's umask: docker cp keeps the modes.
-  for (const folder of ['', 'packages', 'bundles', 'config'])
-    chmodSync(join(payload, folder), 0o755);
   const script = join(scratch, INIT_SCRIPT);
-  writeFileSync(script, initScript(plan), { mode: 0o755 });
+  writeFileSync(script, initScript(plan));
+  const settings = join(scratch, '90-demo-server.conf');
+  copyFileSync(OPENSEARCH_SETTINGS, settings);
+  // Readable by the image's `nuxeo` user whatever this machine's umask and the candidate's modes:
+  // docker cp keeps the modes, and in the container the files are not that user's.
+  readableByAnyone(payload);
+  readableByAnyone(script, [script]);
+  readableByAnyone(settings);
 
   step(
     `Pulling ${COMPOSE_SHOWN}'s images, with this machine's Docker login: minutes, the first time`,
@@ -296,16 +333,30 @@ try {
   await checkpoint();
 
   step(`Creating the project ${options.project}, not starting it`);
+  // Asked again: the pull can take minutes, and another run of the same project may have begun.
+  const since = existingResources(docker, options.project);
+  if (since.length > 0) throw new Refusal(alreadyThere(since));
   state.made = true;
-  must(compose('create'), 'the containers could not be created');
+  must(compose('create', '--no-recreate'), 'the containers could not be created');
   const id = must(
     compose('ps', '--all', '--quiet', 'nuxeo'),
     'the Nuxeo container could not be found',
   ).stdout.trim();
   if (!/^[0-9a-f]{12,64}$/.test(id))
     throw new Failure(`compose named no single Nuxeo container (${JSON.stringify(id)}).`);
+  const mark = must(
+    ['inspect', '--format', `{{index .Config.Labels "${RUN_LABEL}"}}`, id],
+    "the Nuxeo container's mark could not be read",
+  ).stdout.trim();
+  if (mark !== run) {
+    // Another run made the project between the check and the create: it is that run's, untouched.
+    state.made = false;
+    throw new Failure(
+      `the Nuxeo container compose answered carries another run's mark, so another run made ${options.project} at the same time; nothing of it is touched.`,
+    );
+  }
   must(
-    ['cp', OPENSEARCH_SETTINGS, `${id}:/etc/nuxeo/conf.d/90-demo-server.conf`],
+    ['cp', settings, `${id}:/etc/nuxeo/conf.d/90-demo-server.conf`],
     'the OpenSearch settings could not be copied in',
   );
   must(['cp', payload, `${id}:${INIT_DIRECTORY}/`], 'the packages could not be copied in');
@@ -322,8 +373,9 @@ try {
     'the project could not be started',
   );
   const exited = () => {
-    if (interruptedBy !== null) return `interrupted (${interruptedBy})`;
+    if (interruptedBy !== null) throw new Interrupted(interruptedBy);
     const status = docker(['inspect', '--format', '{{.State.Status}} {{.State.ExitCode}}', id]);
+    interruptedIn(status);
     const [now, exit] = status.stdout.trim().split(' ');
     if (status.status === 0 && (now === 'exited' || now === 'dead')) {
       const logs = docker(compose('logs', '--no-color', '--tail', '80', 'nuxeo'));
@@ -343,6 +395,7 @@ try {
   await setAdministratorPassword({ origin: plan.origin, secret: environment[ADMIN_PASSWORD] });
   state.secured = true;
   say("Changed: the new one signs in as Administrator, and the image's default is refused.\n");
+  await checkpoint();
 
   step("Checking the server log's Component Loading Status");
   const grep = docker([
@@ -353,6 +406,7 @@ try {
     'Component Loading Status',
     '/var/log/nuxeo/server.log',
   ]);
+  interruptedIn(grep);
   const status = componentStatus(grep.stdout ?? '');
   if (status === null)
     throw new Failure(
@@ -368,27 +422,16 @@ try {
   const commitTree = join(scratch, 'commit');
   for (const seed of plan.seeds) {
     step(`Seeding ${seed.kit}: ${seed.file}, at ${plan.candidate.commit.slice(0, 12)}`);
-    mkdirSync(commitTree, { recursive: true });
-    const archive = spawnSync(
-      'git',
-      ['archive', '--format=tar', plan.candidate.commit, '--', seed.folder],
-      {
-        cwd: REPO,
-        maxBuffer: OUTPUT_LIMIT,
-        env: quietEnvironment(environment),
-      },
-    );
-    if (archive.status !== 0)
-      throw new Failure(`git archive could not read ${seed.folder} at ${plan.candidate.commit}.`);
-    const unpacked = spawnSync('tar', ['-x', '-f', '-', '-C', commitTree], {
-      input: archive.stdout,
-      env: quietEnvironment(environment),
+    unpackAtCommit({
+      repo: REPO,
+      commit: plan.candidate.commit,
+      folder: seed.folder,
+      into: commitTree,
+      env: environment,
     });
-    if (unpacked.status !== 0) throw new Failure(`tar could not unpack ${seed.folder}.`);
-    const ran = spawnSync(process.execPath, [join(commitTree, ...seed.file.split('/'))], {
+    const ran = runSeed({
+      file: join(commitTree, ...seed.file.split('/')),
       cwd: commitTree,
-      encoding: 'utf8',
-      maxBuffer: OUTPUT_LIMIT,
       env: seedEnvironment(environment, {
         origin: plan.origin,
         secret: environment[ADMIN_PASSWORD],
@@ -397,6 +440,7 @@ try {
       }),
     });
     say(`${ran.stdout ?? ''}${ran.stderr ?? ''}`);
+    interruptedIn(ran);
     await checkpoint();
     if (ran.status !== 0)
       throw new Failure(
@@ -411,36 +455,37 @@ try {
       `Stop, start or remove it, with its data, from the repository's root: docker compose -f ${COMPOSE_SHOWN} -p ${options.project} stop | start | down --volumes\n`,
   );
 } catch (error) {
-  const interrupted = error instanceof Interrupted;
-  if (!(error instanceof Failure) && !interrupted && !(error instanceof Refusal))
-    console.error(error.stack ?? error);
-  console.error(
-    `\n${interrupted ? `Interrupted (${error.message})` : `Failed: ${redact(error.message)}`}`,
+  const signal = error instanceof Interrupted ? error.message : interruptedBy;
+  if (!(error instanceof Failure) && !(error instanceof Interrupted) && !(error instanceof Refusal))
+    sayError(error.stack ?? error);
+  sayError(
+    `\n${signal !== null ? `Interrupted (${signal})` : error instanceof Refusal ? `Refused: ${error.message}` : `Failed: ${error.message}`}`,
   );
   const removal = `docker compose -f ${COMPOSE_SHOWN} -p ${options.project} down --volumes`;
   if (!state.made) {
-    console.error('Nothing was made.');
-    code = interrupted ? 128 + constants.signals[error.message] : 2;
+    sayError('Nothing this run made is left, and nothing else was touched.');
+  } else if (!onlyOurs()) {
+    sayError(
+      `A container of ${options.project} carries another run's mark, so nothing of the project is touched. Look at it with docker compose -f ${COMPOSE_SHOWN} -p ${options.project} ps --all.`,
+    );
+  } else if (!state.started) {
+    const removed = docker(compose('down', '--volumes'));
+    sayError(
+      removed.status === 0
+        ? 'What it made, never started, is removed.'
+        : `What it made, never started, could not be removed (${why(removed)}): ${removal}`,
+    );
+  } else if (!state.secured) {
+    const stopped = docker(compose('stop'));
+    sayError(
+      `${stopped.status === 0 ? 'The project is stopped' : `The project could not be stopped (${why(stopped)})`}, since its Administrator password was not shown changed, and kept for its logs: docker compose -f ${COMPOSE_SHOWN} -p ${options.project} logs nuxeo. Remove it with ${removal}.`,
+    );
   } else {
-    if (!state.started) {
-      const removed = docker(compose('down', '--volumes'));
-      console.error(
-        removed.status === 0
-          ? `What it made, never started, is removed.`
-          : `What it made, never started, could not be removed (${redact(why(removed))}): ${removal}`,
-      );
-    } else if (!state.secured) {
-      const stopped = docker(compose('stop'));
-      console.error(
-        `${stopped.status === 0 ? 'The project is stopped' : `The project could not be stopped (${redact(why(stopped))})`}, with the image's default Administrator password, and kept for its logs: docker compose -f ${COMPOSE_SHOWN} -p ${options.project} logs nuxeo. Remove it with ${removal}.`,
-      );
-    } else {
-      console.error(
-        `The server keeps running, with the Administrator password changed. Remove it with ${removal}.`,
-      );
-    }
-    code = interrupted ? 128 + constants.signals[error.message] : 1;
+    sayError(
+      `The server keeps running, with the Administrator password changed. Remove it with ${removal}.`,
+    );
   }
+  code = signal !== null ? 128 + constants.signals[signal] : state.made ? 1 : 2;
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

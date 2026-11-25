@@ -906,7 +906,6 @@ This run proves the set holds together on paper. It does not install anything, s
 
 The first two, and the seeds, are what the [demo server](../../business-apps/demo-server/README.md)
 would show once it runs: from a candidate's output directory, on a server it makes for the purpose,
-one
-`nuxeoctl mp-install` of every package in dependency order, at one start, then the deployment's
+one `nuxeoctl mp-install` of every package in dependency order, at one start, then the deployment's
 configuration, the seeds, and the steps files' commands printed. Built on 25 November 2026, its
 controls and its dry run run offline; it has not been run against Docker yet.
