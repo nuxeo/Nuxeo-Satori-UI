@@ -13,7 +13,9 @@
  * trashed contract restored and put back, a trashed sibling whose name only looks like it left
  * alone, two trashed copies refused, a document of another type left alone, a server that hangs up
  * or pages forever stopping the run, the credentials never printed, and a check that fails when a
- * page provider leaves out a contract, holds one it should not, or is out of order.
+ * page provider leaves out a contract, holds one it should not, or is out of order, an ended
+ * contract left out of the renewals among them. One control reads the kit's labels, not the
+ * script: the queue's name says it holds ended contracts while the data expects one there.
  * It says nothing about whether a real server accepts the stand-in model or answers as the
  * stand-in does: only a run against one shows that, and none has run yet.
  *
@@ -24,13 +26,16 @@
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CONTRACTS, dayFrom } from './data.mjs';
+import { CONTRACTS, RENEWALS, dayFrom } from './data.mjs';
 
-const SEED = join(dirname(fileURLToPath(import.meta.url)), 'seed.mjs');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SEED = join(HERE, 'seed.mjs');
+const LABELS = join(HERE, '..', 'bundle', 'agentic-ui-config', 'labels', 'en.json');
 const HOLDER = '/default-domain/workspaces/contracts-demo/contracts';
 
 const failures = [];
@@ -44,8 +49,9 @@ function expect(condition, what, output = '') {
 /**
  * The stand-in server. `types` are the document types it has; `brokenProvider` makes one page
  * provider return nothing; `widenedProvider` makes one return every live contract;
- * `reversedRenewals` returns the renewals newest end first; `endlessProvider` always says there is
- * another page;
+ * `reversedRenewals` returns the renewals newest end first; `unendedRenewals` returns only those
+ * still to end, as a queue of contracts merely up for renewal would; `endlessProvider` always says
+ * there is another page;
  * `meStatus` answers `/me` with that status; `noWorkspaces` leaves out /default-domain/workspaces;
  * `hangUpOnFirstWrite` drops the connection on the first create; `pageSize` caps what a page
  * holds, so paging is exercised.
@@ -57,6 +63,7 @@ function standIn({
   brokenProvider = null,
   widenedProvider = null,
   reversedRenewals = false,
+  unendedRenewals = false,
   endlessProvider = null,
   meStatus = 200,
   noWorkspaces = false,
@@ -108,6 +115,7 @@ function standIn({
     contracts_up_for_renewal: () => {
       const found = contracts('Active')
         .filter((d) => d.properties['contract:end'] <= dayFrom(90))
+        .filter((d) => !unendedRenewals || d.properties['contract:end'] >= dayFrom(0))
         .sort(byEnd);
       return reversedRenewals ? found.reverse() : found;
     },
@@ -468,6 +476,36 @@ await against({ reversedRenewals: true }, async ({ run }) => {
     output,
   );
 });
+await against({ unendedRenewals: true }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    RENEWALS.overdue.length > 0 &&
+      status === 1 &&
+      new RegExp(`contracts_up_for_renewal does not return ${RENEWALS.overdue[0]}\\b`).test(
+        output,
+      ) &&
+      !RENEWALS.due.some((number) => output.includes(`does not return ${number}`)),
+    'a renewals page provider that leaves out the contracts already ended fails the run, naming the overdue one alone',
+    output,
+  );
+});
+
+// The kit's labels, not the script: the queue and the home's figure for it are named for the
+// ended contracts the data expects in the renewals. Under "Up for renewal" alone a browser
+// walkthrough found CTR-1007, ended ten days before, and flagged it.
+{
+  const { labels } = JSON.parse(readFileSync(LABELS, 'utf8'));
+  const names = ['contracts.queue.up-for-renewal', 'contracts.home.renewals'].map((key) => [
+    key,
+    labels[key],
+  ]);
+  const unnamed = names.filter(([, text]) => !/\boverdue\b/i.test(text ?? ''));
+  expect(
+    RENEWALS.overdue.length > 0 && unnamed.length === 0,
+    `the renewals queue's name and its home figure's say "overdue" while the data expects ${RENEWALS.overdue.join(', ') || 'no ended contract'} there`,
+    unnamed.map(([key, text]) => `${key}: ${JSON.stringify(text)}`).join('\n'),
+  );
+}
 
 // Last, over every run above, the refused ones included: no credential, as typed or as a header.
 {

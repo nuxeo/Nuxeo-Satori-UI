@@ -9,7 +9,11 @@
  *
  * `EXPECTED` says which contracts each of the kit's page providers returns, worked out from their
  * status and end as `contracts-demo-model.xml` defines the queries: active and ending within 90
- * days, active, and terminated. The seed checks each against the server.
+ * days or already ended, active, and terminated. The seed checks each against the server.
+ *
+ * The renewals queue holds an active contract already past its end on purpose, CTR-1007, and
+ * first, since it ended soonest. So the queue and the home's figure for it are named "Up for
+ * renewal or overdue", and `RENEWALS` holds its two kinds.
  */
 
 /** The workspace the records go in, and the folder that holds them. */
@@ -128,11 +132,20 @@ export const CONTRACTS = [
   },
 ];
 
+/** The renewals queue's contracts: active, and ending within 90 days or already ended, soonest end first. */
+const renewals = CONTRACTS.filter((c) => c.status === 'Active' && c.end <= 90).sort(
+  (a, b) => a.end - b.end,
+);
+
+/** The renewals queue's two kinds, by number: those already past their end, and those still to end. */
+export const RENEWALS = {
+  overdue: renewals.filter((c) => c.end < 0).map((c) => c.number),
+  due: renewals.filter((c) => c.end >= 0).map((c) => c.number),
+};
+
 /** The contracts each page provider returns, by number, as the stand-in model defines them. */
 export const EXPECTED = {
-  contracts_up_for_renewal: CONTRACTS.filter((c) => c.status === 'Active' && c.end <= 90)
-    .sort((a, b) => a.end - b.end)
-    .map((c) => c.number),
+  contracts_up_for_renewal: renewals.map((c) => c.number),
   contracts_active: CONTRACTS.filter((c) => c.status === 'Active').map((c) => c.number),
   contracts_terminated: CONTRACTS.filter((c) => c.status === 'Terminated').map((c) => c.number),
 };
