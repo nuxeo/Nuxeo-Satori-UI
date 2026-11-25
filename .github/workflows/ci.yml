@@ -312,8 +312,9 @@ jobs:
           # The business apps tiers' boundary rules (`scope:engine`, `scope:module`,
           # `scope:experience` in eslint.config.mjs). No project carries those tags until phase 1,
           # so `lint` has nothing to fail on. This lints imports between probe projects that
-          # carry them, in a throwaway Nx workspace under `tmp/`, with the real rule: 6 forbidden
-          # imports must be reported and 6 allowed ones must stay quiet. About 10 s.
+          # carry them, in a throwaway Nx workspace under `tmp/`, with the real rule: 14 forbidden
+          # imports must be reported and 7 allowed ones must stay quiet, eight of the forbidden
+          # ones keeping decision 5's spike (`type:spike`) out of every app and package. About 10 s.
           npm run beta:module-boundaries
           # The Storybook publication gate's controls: each Satori fingerprint must fail it.
           npm run storybook:publication-gate-selftest
