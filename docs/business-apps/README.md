@@ -65,6 +65,9 @@ Designer, the development plan and its decisions. Start here when you pick this 
     customer code built in from the template or loaded at run time, signed and pinned.
 14. [performance-budget.md](performance-budget.md): the brand assets library's budget at 100,000
     assets, proposed, and the check that holds it without a server.
+15. [administrator-guide.md](administrator-guide.md): for a Nuxeo administrator, what to install
+    and in what order, every server setting with its default, upgrading and removing a kit, the
+    demo server, the logs, and what is not ready for production.
 
 ## Facts that hold
 

@@ -184,22 +184,36 @@ docker cp nuxeo-agentic-connectors/target/nuxeo-agentic-connectors-2026.0.2-SNAP
 docker cp nuxeo-agentic-connectors/demo/payers-claim-payments-config.xml \
   nuxeo:/opt/nuxeo/server/nxserver/config/payers-claim-payments-config.xml
 
-# 2. The server's settings: the address, plain http for the stub, and a made-up demo token.
+# 2. The server's settings: the address, plain http for the stub, and a made-up demo token,
+#    appended to nuxeo.conf itself through standard input, so the token is on no command line.
 export CORE_SYSTEM_TOKEN=$(openssl rand -hex 16)
 umask 077
 P=nuxeo.agentic.connectors.payers.claimPayments
 printf '%s.address=http://host.docker.internal:8091\n%s.http.allowed=true\n%s.token=%s\n' \
   "$P" "$P" "$P" "$CORE_SYSTEM_TOKEN" > /tmp/70-connectors-demo.conf
-docker cp /tmp/70-connectors-demo.conf nuxeo:/etc/nuxeo/conf.d/70-connectors-demo.conf
+docker exec -i nuxeo sh -c 'cat >> /etc/nuxeo/nuxeo.conf' < /tmp/70-connectors-demo.conf
 rm /tmp/70-connectors-demo.conf
 
-# 3. Restart, and check the operation is there.
+# 3. Restart, and check the settings and the operation are there: 3 lines, and the operation.
 docker restart nuxeo
+docker exec nuxeo grep -c '^nuxeo\.agentic\.connectors\.payers\.claimPayments\.' /etc/nuxeo/nuxeo.conf
 curl -s -u "$NUXEO_USER:$NUXEO_PASS" http://localhost:8080/nuxeo/api/v1/automation/Connector.Read | head -c 200
 ```
 
+**Not `/etc/nuxeo/conf.d/`, on a container that has started before.** The image's
+`/docker-entrypoint.sh` merges `conf.d` into `/etc/nuxeo/nuxeo.conf` only at the container's
+first start, before it writes its `configured` marker (read from the local 2025.10.18 container;
+[`nuxeo-conf/README.md`](../nuxeo-conf/README.md) says so in its "Local mail setup"). A file
+copied there later is never read, and the connector answers 503 for want of its address. On a
+container not started yet, a `conf.d` file works.
+
 The Payers kit must be installed and seeded (its README), so that claims with the numbers the
-stub knows exist. To remove it all: delete the two files and the `conf.d` file, and restart.
+stub knows exist. To remove it all: delete the two files, delete the settings' lines from
+`nuxeo.conf`, and restart:
+
+```bash
+docker exec nuxeo sed -i '/^nuxeo\.agentic\.connectors\.payers\.claimPayments\./d' /etc/nuxeo/nuxeo.conf
+```
 
 ## The demo: a claim with live core-system data
 
@@ -242,8 +256,9 @@ This calls out of the server. The plan's phase 7 is not done until its security 
 - **Credentials.** From a server property or the environment only, named by the contribution and
   held to the connector's own names (`nuxeo.agentic.connectors.<id>.<name>`, `NUXEO_CONNECTOR_<ID>_<NAME>`), read
   per call, sent in one header, never logged, never in an answer or an error. Check: where each
-  server keeps them (`conf.d` files readable by the Nuxeo user only), their rotation, and that the
-  other system's account is read-only and scoped to what the connector needs.
+  server keeps them (`nuxeo.conf`, and any `conf.d` file it was made from, readable by the Nuxeo
+  user only), their rotation, and that the other system's account is read-only and scoped to what
+  the connector needs.
 - **Timeouts and size limits.** Connect timeout up to 10 s, a whole-call deadline up to 30 s, a
   body up to 1 MiB, at most 64 calls of a connector at once, each bounded in `Connector.of`. Check
   the defaults (2 s, 5 s, 256 KiB, 8) against the other system and the server's pools: a call
