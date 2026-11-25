@@ -257,22 +257,36 @@ async function trustedKeyFor(trustedKeys, keyId) {
 /**
  * Where the bundle is, resolved, or why it may not be fetched.
  *
- * The prefix is compared with the URL as the WHATWG parser normalises it, so `..` and `%2e%2e`
- * segments are resolved first. What normalising leaves alone is refused outright: credentials, a
- * query or a fragment (even an empty `?` or `#`), and an encoded `/`, `\`, `.` or `%` in the path,
- * which a store or proxy that decodes them, once or twice, could read as a way out of the prefix.
+ * The input is refused first if it holds a character a bundle's URL never needs: a quote, an
+ * angle bracket, a backtick, a backslash, white space or a control character, so nothing that
+ * reads as markup gets as far as the parser. The prefix is then compared with the URL as the
+ * WHATWG parser (`new URL`) normalises it, so `..` and `%2e%2e` segments are resolved first. What
+ * normalising leaves alone is refused outright: any scheme but `https:` and `http:` (so
+ * `javascript:`, `data:` and `blob:`), credentials, a query or a fragment (even an empty `?` or
+ * `#`), and an encoded `/`, `\`, `.` or `%` in the path, which a store or proxy that decodes them,
+ * once or twice, could read as a way out of the prefix.
+ *
+ * Both the loader's step 6 and the browser executor's `execute` call this, so no URL reaches a
+ * script's `src` without passing it.
  *
  * @param {string} url
- * @param {LoaderPolicy} policy
+ * @param {Pick<LoaderPolicy, 'allowedUrlPrefixes' | 'baseUrl'>} policy
  * @returns {{ href: string } | { why: string }}
  */
 export function checkUrl(url, policy) {
+  const control = [...String(url)].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f);
+  if (typeof url !== 'string' || control || /["'`<>\\\s]/.test(url)) {
+    return { why: 'it holds a character a bundle URL never needs' };
+  }
   if (/[?#]/.test(url)) return { why: 'it has a query or a fragment' };
   let resolved;
   try {
     resolved = new URL(url, policy.baseUrl);
   } catch {
     return { why: 'it does not parse' };
+  }
+  if (resolved.protocol !== 'https:' && resolved.protocol !== 'http:') {
+    return { why: 'it is not an https or http URL' };
   }
   if (resolved.username !== '' || resolved.password !== '')
     return { why: 'it carries credentials' };
@@ -421,6 +435,10 @@ export async function loadPlugin(manifest, policy, host) {
  * The browser's half of `LoaderHost`, used by the host page and by the sandboxed frame's page;
  * `plugin-loader.spec.ts` holds its `execute` to the attributes below with a fake document.
  *
+ * - `execute` checks the URL itself, with `checkUrl` and the same allowed prefixes, before it
+ *   creates the script, so a URL that did not come through `loadPlugin` is refused too. It sets
+ *   `src` as a property, never through markup: nothing here writes HTML.
+ *
  * - `fetchBytes` does **not** pass `integrity` to `fetch`, so a wrong hash reaches step 10 and is
  *   reported as `integrity-mismatch` rather than as an opaque network error.
  * - `execute` **does** pass it, on a module `<script>`, so the browser itself refuses to run bytes
@@ -430,9 +448,10 @@ export async function loadPlugin(manifest, policy, host) {
  *
  * @param {ScriptDocument} document  The page's `document`, or a test's fake of these members.
  * @param {{ get(name: string): unknown }} registry  The page's `customElements`.
+ * @param {Pick<LoaderPolicy, 'allowedUrlPrefixes' | 'baseUrl'>} policy  Where bundles may come from.
  * @returns {LoaderHost}
  */
-export function browserLoaderHost(document, registry) {
+export function browserLoaderHost(document, registry, policy) {
   return {
     async fetchBytes(url) {
       const response = await fetch(url, {
@@ -444,6 +463,16 @@ export function browserLoaderHost(document, registry) {
       return new Uint8Array(await response.arrayBuffer());
     },
     execute(url, integrity) {
+      const where = checkUrl(url, policy);
+      if ('why' in where) {
+        return Promise.reject(new Error(`refused to run ${JSON.stringify(url)}: ${where.why}`));
+      }
+      if (!INTEGRITY.test(integrity)) {
+        return Promise.reject(
+          new Error('refused to run a bundle without one sha384 or sha512 hash'),
+        );
+      }
+      const src = where.href;
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.type = 'module';
@@ -453,10 +482,10 @@ export function browserLoaderHost(document, registry) {
         script.addEventListener('load', () => resolve());
         script.addEventListener('error', () =>
           reject(
-            new Error(`the browser refused to run ${url} (its integrity check, or the network)`),
+            new Error(`the browser refused to run ${src} (its integrity check, or the network)`),
           ),
         );
-        script.src = url;
+        script.src = src;
         document.head.append(script);
       });
     },

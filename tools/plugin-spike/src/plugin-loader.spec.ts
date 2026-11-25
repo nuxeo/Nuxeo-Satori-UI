@@ -267,6 +267,8 @@ const URL_RULES = {
   encoded: 'encoded separator or dot',
   credentials: 'carries credentials',
   query: 'query or a fragment',
+  scheme: 'not an https or http URL',
+  characters: 'never needs',
 };
 
 describe('loadPlugin refuses a bundle from anywhere but the plugin store', () => {
@@ -290,6 +292,13 @@ describe('loadPlugin refuses a bundle from anywhere but the plugin store', () =>
     ['a query string', '/plugins/sample/sample-plugin.js?v=2', 'query'],
     ['an empty query', '/plugins/sample/sample-plugin.js?', 'query'],
     ['an empty fragment', '/plugins/sample/sample-plugin.js#', 'query'],
+    ['a javascript: scheme', 'javascript:alert(1)', 'scheme'],
+    ['a blob: scheme', 'blob:https://plugins.test/0b1c', 'scheme'],
+    ['a quote', "/plugins/sample/sample'plugin.js", 'characters'],
+    ['an angle bracket', '/plugins/sample/<sample>.js', 'characters'],
+    ['a space', '/plugins/sample/sample plugin.js', 'characters'],
+    ['a raw backslash', '/plugins\\..\\static/sample-plugin.js', 'characters'],
+    ['a control character', '/plugins/sample/sample\u0001plugin.js', 'characters'],
   ])('%s', async (_label, url, rule) => {
     const moved = await signManifest({ ...fields(), url }, trusted);
     const { host, fetched } = fakeHost();
@@ -433,7 +442,7 @@ describe('browserLoaderHost runs a bundle only through a script the browser chec
 
   it('a module script carrying the signed integrity, in CORS mode, and resolves on load', async () => {
     const { document, appended } = fakeDocument();
-    const host = browserLoaderHost(document, { get: () => undefined });
+    const host = browserLoaderHost(document, { get: () => undefined }, policy);
     const running = host.execute(`${ORIGIN}${URL_PATH}`, integrity);
     expect(appended).toHaveLength(1);
     const [script] = appended;
@@ -454,12 +463,57 @@ describe('browserLoaderHost runs a bundle only through a script the browser chec
 
   it('and rejects when the browser refuses the bytes', async () => {
     const { document, appended } = fakeDocument();
-    const running = browserLoaderHost(document, { get: () => undefined }).execute(
+    const running = browserLoaderHost(document, { get: () => undefined }, policy).execute(
       `${ORIGIN}${URL_PATH}`,
       integrity,
     );
     appended[0].dispatchEvent(new Event('error'));
     await expect(running).rejects.toThrow(/refused to run/);
+  });
+
+  // The executor checks a URL itself, so one that never went through `loadPlugin` is refused
+  // before any script exists, and nothing reaches `src` but a parsed, allowed https URL.
+  it.each([
+    ['a javascript: URL', 'javascript:alert(document.domain)'],
+    ['a javascript: URL with a leading space', ' javascript:alert(1)'],
+    ['a data: URL', 'data:text/javascript,alert(1)'],
+    ['a URL outside the prefix', 'https://elsewhere.test/plugins/sample/sample-plugin.js'],
+    ['a value carrying markup', '/plugins/sample/"><script>alert(1)</script>.js'],
+    ['a value carrying an event handler', "/plugins/sample/x.js' onerror='alert(1)"],
+  ])('and refuses %s without making a script', async (_label, url) => {
+    const { document, appended } = fakeDocument();
+    const host = browserLoaderHost(document, { get: () => undefined }, policy);
+    await expect(host.execute(url, integrity)).rejects.toThrow(/refused to run/);
+    expect(appended).toEqual([]);
+  });
+
+  it('and refuses an integrity that is not one strong hash, without making a script', async () => {
+    const { document, appended } = fakeDocument();
+    const host = browserLoaderHost(document, { get: () => undefined }, policy);
+    await expect(host.execute(`${ORIGIN}${URL_PATH}`, 'sha256-AAAA')).rejects.toThrow(
+      /refused to run/,
+    );
+    expect(appended).toEqual([]);
+  });
+});
+
+describe('loadPlugin refuses a script URL or markup before fetching anything', () => {
+  it.each([
+    ['a javascript: URL', { url: 'javascript:alert(document.domain)' }, 'url-not-allowed'],
+    ['a URL outside the prefix', { url: 'https://elsewhere.test/x.js' }, 'url-not-allowed'],
+    [
+      'markup in the URL',
+      { url: '/plugins/sample/"><img src=x onerror=alert(1)>.js' },
+      'url-not-allowed',
+    ],
+    ['markup for the element', { element: '<img src=x onerror=alert(1)>' }, 'malformed-manifest'],
+    ['markup for the id', { id: '<script>alert(1)</script>' }, 'malformed-manifest'],
+  ])('%s', async (_label, change, reason) => {
+    const signed = await signManifest({ ...fields(), ...change }, trusted);
+    const { host, fetched, executed } = fakeHost();
+    expect(await loadPlugin(signed, policy, host)).toMatchObject({ ok: false, reason });
+    expect(fetched).toEqual([]);
+    expect(executed).toEqual([]);
   });
 });
 

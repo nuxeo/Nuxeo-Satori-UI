@@ -74,13 +74,15 @@ async function getJson(url) {
 
 /**
  * A `LoaderHost` whose executor runs the verified bundle inside a sandboxed iframe instead of this
- * page. The loader's checks are the same; only where the bytes run differs.
+ * page. The loader's checks are the same; only where the bytes run differs. The frame is told the
+ * bundle's path, which it runs only if its own list holds it (`host/sandbox.mjs`).
  *
  * @param {HTMLElement} slot
+ * @param {import('../src/plugin-loader.mjs').LoaderPolicy} policy
  * @returns {{ host: import('../src/plugin-loader.mjs').LoaderHost, report: Promise<ProbeResult[]> }}
  */
-function framedLoaderHost(slot) {
-  const inPage = browserLoaderHost(document, customElements);
+function framedLoaderHost(slot, policy) {
+  const inPage = browserLoaderHost(document, customElements, policy);
   /** @type {PromiseWithResolvers<ProbeResult[]>} */
   const { promise: report, resolve: deliver } = Promise.withResolvers();
   let defined = false;
@@ -93,7 +95,11 @@ function framedLoaderHost(slot) {
           const frame = document.createElement('iframe');
           frame.setAttribute('sandbox', 'allow-scripts');
           frame.title = 'Sandboxed sample plugin';
-          const params = new URLSearchParams({ parent: location.origin, url, integrity });
+          const params = new URLSearchParams({
+            parent: location.origin,
+            bundle: new URL(url).pathname,
+            integrity,
+          });
           frame.src = `/host/sandbox.html#${params}`;
           const timer = setTimeout(() => reject(new Error('the frame never answered')), 5000);
           window.addEventListener('message', (event) => {
@@ -165,7 +171,7 @@ async function main() {
 
   for (const scenario of scenarios) {
     if (scenario.frame) {
-      const framed = framedLoaderHost(byId('framed-slot'));
+      const framed = framedLoaderHost(byId('framed-slot'), policy);
       const result = await loadPlugin(scenario.manifest, policy, framed.host);
       renderRow(scenario, result);
       results.push({ name: scenario.name, expected: scenario.expected, result });
@@ -179,7 +185,7 @@ async function main() {
     const result = await loadPlugin(
       scenario.manifest,
       policy,
-      browserLoaderHost(document, customElements),
+      browserLoaderHost(document, customElements, policy),
     );
     renderRow(scenario, result);
     results.push({ name: scenario.name, expected: scenario.expected, result });

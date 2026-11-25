@@ -81,14 +81,17 @@ only the manifest runs before a byte is fetched:
 3. the ECDSA P-256 signature verifies over a fixed text naming every field but `url`;
 4. the deployment pins this plugin at this version and this hash;
 5. the shell serves the plugin API version the plugin targets;
-6. the URL, once normalised, is under an allowed prefix, with no credentials, no query or fragment
-   (not even an empty one), and no encoded `/`, `\`, `.` or `%` in its path;
+6. the URL holds no quote, angle bracket, backtick, backslash, space or control character, and,
+   once parsed with `new URL()` and normalised, is an `https:` or `http:` URL (never `javascript:`,
+   `data:` or `blob:`) under an allowed prefix, with no credentials, no query or fragment (not even
+   an empty one), and no encoded `/`, `\`, `.` or `%` in its path;
 7. nothing has defined the plugin's element yet, so the last step can tell who defined it. Two loads
    of the same element at once would both pass; a product loader would take one at a time;
 8. the bytes are fetched;
 9. the bytes hash to the signed `integrity` (SHA-384 or SHA-512 only);
 10. a module `<script>` with that `integrity`, in CORS mode, runs them, so the browser checks the
-    bytes it runs;
+    bytes it runs. The executor repeats step 6 itself before it makes the script, and sets `src` as
+    a property after that check; nothing in the loader writes HTML or navigates;
 11. the element the manifest declares is defined.
 
 The host page runs nine scenarios, each with the outcome it advertises, the refusals first, since
@@ -320,19 +323,27 @@ Angular ships a major release about every six months; this branch is on 22.2.3.
 
 ## 9. Evidence
 
-- **Tests:** `npx nx test plugin-spike`, 55 tests in two files. `src/plugin-loader.spec.ts` covers
+- **Tests:** `npx nx test plugin-spike`, 74 tests in two files. `src/plugin-loader.spec.ts` covers
   the acceptance, each refusal with a faked host, the snapshot of the manifest, and the browser
-  executor's script attributes with a fake document; `src/demo-server.spec.ts` runs the demo
+  executor with a fake document: the script's attributes, and its refusal, before any script
+  exists, of a `javascript:` or `data:` URL, a URL outside the prefix and a value carrying markup.
+  The loader refuses the same, and markup for the element or the id, before fetching; `src/demo-server.spec.ts` runs the demo
   server on 127.0.0.1 and every scenario the host page runs through the real loader over HTTP.
 - **The tampered-bundle refusal, seen failing with its check removed:** with the loader's hash
   comparison disabled, three tests failed: both tampered-bundle tests, and the scenario test, where
   the tampered bundle then fell through to the stand-in for the browser's check. Restored, all
   passed.
 - **Every other check, seen failing the same way:** removing the signature check failed 8 tests,
-  the URL prefix 7, the pin's version and hash comparison 3, the unpinned-plugin check 1, the
-  line-break rule 1, the private-half rule 1, the plugin API check 1, the encoded-separator rule 4,
-  the query and fragment rule 3, the credentials rule 1, the already-defined rule 1, the snapshot 1,
-  and the script's `integrity` or its CORS mode 1 each.
+  the URL prefix 9, the character rule 8, the scheme rule 2 (the prefix also refuses those URLs),
+  the executor's own URL check 6, the executor's integrity check 1, the pin's version and hash
+  comparison 3, the unpinned-plugin check 1, the line-break rule 1, the private-half rule 1, the
+  plugin API check 1, the encoded-separator rule 4, the query and fragment rule 3, the credentials
+  rule 1, the already-defined rule 1, the snapshot 1, and the script's `integrity` or its CORS mode
+  1 each.
+- **CodeQL** (`js/xss` and `js/client-side-unvalidated-url-redirection`) flagged an earlier version,
+  where the frame's page took the bundle's URL from its own address and the executor set `src`
+  from it unchecked. The frame now runs only a path on its own fixed list, and the executor checks
+  every URL before `src`.
 - **`checkPluginSpikeIsolated`** in `scripts/review-guardrails.mjs` has five halves:
   - no file outside the spike but Markdown and its three guards names it, and no symbolic link
     points into it or at a directory holding it, by its target as written or as resolved;
