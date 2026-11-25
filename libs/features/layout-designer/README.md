@@ -272,8 +272,11 @@ in `nxserver/lib`; `CoreSession.CHANGE_TOKEN`, `CoreInstance.doPrivileged`,
 `nxserver/bundles`. The core module ships in the `nuxeo-agentic-ui` Marketplace package. On a local
 Docker Nuxeo, as the kits' READMEs install a package:
 
-1. **Build** from the repository's root: `mvn package`, which writes
-   `nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-*.zip`.
+1. **Build** the `nuxeo-agentic-ui` package with its version stamped, as `build-marketplace.yml`
+   does or `npm run release-candidate` (docs/business-apps/package-pipeline.md, section 11): it
+   writes `nuxeo-agentic-ui-package-<version>.zip`. A plain `mvn package` at the root writes
+   `nuxeo-agentic-ui-package/target/nuxeo-agentic-ui-package-*.zip` too, but its `package.xml`
+   says `@VERSION@`, which Nuxeo reads as 0.0.0, so it does not upgrade an installed one.
 2. **Switch the layer on** in `nuxeo.conf`, in the Docker image a file of `/etc/nuxeo/conf.d/`:
 
    ```properties
