@@ -1,5 +1,10 @@
-<div class="queue-page">
-  <h1 class="queue-page__title">{{ title() ?? ('queues.title' | translate) }}</h1>
+<div class="queue-page" [attr.data-read-only]="readOnly() || null">
+  <!-- Read-only, the page is a preview inside another page, under that page's own headings. -->
+  @if (readOnly()) {
+    <h3 class="queue-page__title">{{ title() ?? ('queues.title' | translate) }}</h3>
+  } @else {
+    <h1 class="queue-page__title">{{ title() ?? ('queues.title' | translate) }}</h1>
+  }
   @switch (view()) {
     @case ('loading') {
       <p class="queue-page__message" role="status">{{ 'queues.loading' | translate }}</p>
@@ -73,7 +78,7 @@
               [list]="shown.list"
               [parameters]="shown.queue.parameters"
               [label]="title() ?? shown.id"
-              [stateHeadingLevel]="2"
+              [stateHeadingLevel]="readOnly() ? 4 : 2"
               [source]="'queues/' + shown.id + '.json'"
               [aggregates]="chosen()"
               [selectable]="rowsSelectable()"

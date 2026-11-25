@@ -72,6 +72,7 @@ import {
   POWERUSER_ADMINISTRATION_DRAWER_ITEMS,
 } from '../../platform-nav-items';
 import { ThemingFeatureFlagService } from '../../theme/theming-feature-flag.service';
+import { adminDrawerPathActive } from './nav-drawer-admin-active';
 import { drawerDueKey } from './nav-drawer-due';
 import { drawerExpiredLabel } from './nav-drawer-expired';
 import { NxsDocumentTreeComponent } from '@nuxeo/satori-platform/components';
@@ -360,11 +361,7 @@ export class NavDrawerComponent {
   }
 
   isAdminDrawerPathActive(path: string): boolean {
-    const url = this.router.url.split('?')[0];
-    if (path === '/administration/users-groups') {
-      return url === path || url.startsWith(`${path}/`);
-    }
-    return url === path;
+    return adminDrawerPathActive(this.router.url, path);
   }
 
   onAdministrationItemClick(path: string): void {

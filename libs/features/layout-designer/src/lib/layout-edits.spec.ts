@@ -2,12 +2,21 @@ import {
   addProperty,
   cardsOf,
   insertField,
+  layoutFileName,
   layoutFileText,
   moveField,
+  newLayoutFile,
   removeField,
+  requiredChoice,
+  ruleFromText,
+  ruleText,
   setCardText,
+  setFieldRule,
   type LayoutJson,
 } from './layout-edits';
+
+/** A field with no rule. */
+const NONE = { required: undefined, readOnlyWhen: undefined, visibleWhen: undefined };
 
 /** The Member page of layout-v2.md, section 9, cut down: a card of fields and a related list. */
 const MEMBER: LayoutJson = {
@@ -52,9 +61,9 @@ describe('the layout edits', () => {
           labelKey: 'payers.member.card',
           shows: 'fields',
           fields: [
-            { index: 0, kind: 'computed', name: 'name', widget: null },
-            { index: 1, kind: 'property', name: 'member:phone', widget: 'phone' },
-            { index: 2, kind: 'property', name: 'member:ssn', widget: null },
+            { index: 0, kind: 'computed', name: 'name', widget: null, rules: NONE },
+            { index: 1, kind: 'property', name: 'member:phone', widget: 'phone', rules: NONE },
+            { index: 2, kind: 'property', name: 'member:ssn', widget: null, rules: NONE },
           ],
         },
         {
@@ -197,6 +206,96 @@ describe('the layout edits', () => {
         'claims',
       );
     });
+  });
+
+  describe('setFieldRule', () => {
+    const statusRule = { type: 'app.rules.fieldIn', parameters: [{ field: 'member:ssn' }, 'x'] };
+
+    it("writes a rule into a field object, keeping the field's other keys", () => {
+      const next = setFieldRule(MEMBER, member, 1, 'readOnlyWhen', 'app.rules.isLocked');
+      expect((fieldsOf(next) as unknown[])[1]).toEqual({
+        field: 'member:phone',
+        widget: 'phone',
+        readOnlyWhen: 'app.rules.isLocked',
+      });
+      expect(cardsOf(next)[0].fields[1].rules).toEqual({
+        ...NONE,
+        readOnlyWhen: 'app.rules.isLocked',
+      });
+    });
+
+    it('writes a string field as an object to hold a rule, and back once it holds none', () => {
+      const required = setFieldRule(MEMBER, member, 2, 'required', true);
+      expect((fieldsOf(required) as unknown[])[2]).toEqual({ field: 'member:ssn', required: true });
+      const shown = setFieldRule(required, member, 2, 'visibleWhen', statusRule);
+      const back = setFieldRule(
+        setFieldRule(shown, member, 2, 'required', undefined),
+        member,
+        2,
+        'visibleWhen',
+        undefined,
+      );
+      expect((fieldsOf(back) as unknown[])[2]).toBe('member:ssn');
+      // Nothing to take out of a string: it stays as it was.
+      expect(setFieldRule(MEMBER, member, 2, 'required', undefined)).toEqual(MEMBER);
+    });
+
+    it('changes neither the file it is given nor the rule, and nothing for a field not there', () => {
+      const before = structuredClone(MEMBER);
+      const next = setFieldRule(MEMBER, member, 2, 'visibleWhen', statusRule);
+      statusRule.parameters.push('y');
+      expect(MEMBER).toEqual(before);
+      expect(((fieldsOf(next) as unknown[])[2] as LayoutJson)['visibleWhen']).toEqual({
+        type: 'app.rules.fieldIn',
+        parameters: [{ field: 'member:ssn' }, 'x'],
+      });
+      // A field already an object holds a copy of the rule too.
+      const rule = { type: 'core.not', parameters: ['app.rules.canWrite'] };
+      const onObject = setFieldRule(MEMBER, member, 1, 'readOnlyWhen', rule);
+      rule.parameters.push('app.rules.isLocked');
+      expect(((fieldsOf(onObject) as unknown[])[1] as LayoutJson)['readOnlyWhen']).toEqual({
+        type: 'core.not',
+        parameters: ['app.rules.canWrite'],
+      });
+      expect(setFieldRule(MEMBER, member, 9, 'required', true)).toEqual(MEMBER);
+      expect(setFieldRule(MEMBER, { tab: null, card: 1 }, 0, 'required', true)).toEqual(MEMBER);
+    });
+  });
+
+  describe('rules as text', () => {
+    it('shows an ID as it is, any other rule as JSON, and none as nothing', () => {
+      expect(ruleText(undefined)).toBe('');
+      expect(ruleText('app.rules.canWrite')).toBe('app.rules.canWrite');
+      expect(ruleText({ type: 'core.not', parameters: ['app.rules.canWrite'] })).toBe(
+        '{\n  "type": "core.not",\n  "parameters": [\n    "app.rules.canWrite"\n  ]\n}',
+      );
+    });
+
+    it('reads JSON as what it says, anything else as an ID as written, and nothing as no rule', () => {
+      expect(ruleFromText('  ')).toBeUndefined();
+      expect(ruleFromText(' app.rules.canWrite ')).toBe('app.rules.canWrite');
+      expect(ruleFromText('{ "type": "core.not", "parameters": ["app.rules.canWrite"] }')).toEqual({
+        type: 'core.not',
+        parameters: ['app.rules.canWrite'],
+      });
+      expect(ruleFromText('true')).toBe(true);
+      // Broken JSON is kept as typed, for the validator to refuse as no rule's ID.
+      expect(ruleFromText('{ "type": ')).toBe('{ "type":');
+    });
+
+    it("says what a field's required is: no, always, or a rule", () => {
+      expect(requiredChoice(undefined)).toBe('no');
+      expect(requiredChoice(false)).toBe('no');
+      expect(requiredChoice(true)).toBe('always');
+      expect(requiredChoice('app.rules.canWrite')).toBe('rule');
+      expect(requiredChoice('')).toBe('rule');
+    });
+  });
+
+  it('starts a new file with one card and no field, named for its mode', () => {
+    expect(newLayoutFile()).toEqual({ version: 2, cards: [{ id: 'main', fields: [] }] });
+    expect(newLayoutFile()).not.toBe(newLayoutFile());
+    expect(layoutFileName('edit')).toBe('edit.layout.json');
   });
 
   it('writes the file as JSON, two spaces deep, with a last newline', () => {

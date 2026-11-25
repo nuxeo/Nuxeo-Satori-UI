@@ -1,4 +1,6 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
+import { APP_DEFINITION_FILES } from '@agentic-ui/shared/app-registry';
 import {
   PACKAGED_REGISTRIES,
   readContentModel,
@@ -8,9 +10,13 @@ import {
 } from '@agentic-ui/shared/app-definition';
 import {
   DocumentLayoutService,
+  type FormLayoutPreview,
+  type LayoutSource,
   type RecordLayoutPreview,
-  type RecordLayoutSource,
+  type ServedLayout,
 } from '@agentic-ui/shared/document-layouts';
+import { HomeService } from '@agentic-ui/shared/home';
+import { QueueService, isQueueId, type QueueRegistered } from '@agentic-ui/shared/queues';
 import {
   EXTENSION_SLOTS,
   ExtensionRuleRegistry,
@@ -36,6 +42,11 @@ export interface RecordChoice {
   readonly path: string;
 }
 
+/** The modes of a layout file the designer edits: the record page, and the edit and create forms. */
+export type DesignedMode = 'view' | 'edit' | 'create';
+
+export const DESIGNED_MODES: readonly DesignedMode[] = ['view', 'edit', 'create'];
+
 /** How many records of the type the designer offers to preview with. */
 export const RECORDS_OFFERED = 20;
 
@@ -57,6 +68,9 @@ function reading<T>(source: Observable<T>): Observable<Reading<T>> {
   );
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 /**
  * What the layout designer reads. Every request is a read: nothing here writes to the server, and
  * the designer saves only to the browser's downloads.
@@ -66,17 +80,31 @@ export class LayoutDesignerService {
   private readonly contentModel = inject(ContentModelService);
   private readonly detail = inject(DocumentDetailService);
   private readonly layouts = inject(DocumentLayoutService);
+  private readonly home = inject(HomeService);
+  private readonly queues = inject(QueueService);
+  private readonly definitionFiles = inject(APP_DEFINITION_FILES);
   private readonly rules = inject(ExtensionRuleRegistry);
   private readonly slots = inject(ExtensionSlotRegistry);
 
-  /** The types whose record page is served, which the designer may open. */
-  types(): Observable<Reading<readonly string[]>> {
-    return reading(this.layouts.recordLayoutTypes());
+  /**
+   * The layout files the server serves for a record page, an edit form or a create form, by type
+   * and mode, which the designer may open.
+   */
+  files(): Observable<Reading<readonly ServedLayout[]>> {
+    return reading(
+      this.layouts
+        .servedLayouts()
+        .pipe(
+          map((served) =>
+            served.filter((each) => (DESIGNED_MODES as readonly string[]).includes(each.mode)),
+          ),
+        ),
+    );
   }
 
-  /** A type's `view` file, as it is served now. */
-  source(type: string): Observable<Reading<RecordLayoutSource>> {
-    return reading(this.layouts.recordLayoutSource(type));
+  /** A type's file for `mode`, as it is served now. */
+  source(type: string, mode: DesignedMode): Observable<Reading<LayoutSource>> {
+    return reading(this.layouts.layoutSource(type, mode));
   }
 
   /**
@@ -138,5 +166,82 @@ export class LayoutDesignerService {
   /** The record page `content` draws for `document`, through the record page engine. */
   preview(content: unknown, document: NuxeoDocument): Observable<RecordLayoutPreview> {
     return this.layouts.previewRecordLayout(content, document);
+  }
+
+  /**
+   * The form `content` draws for a record of `type`, through the form engine: for an edit, the
+   * form of the edited `document`, held to its own schemas too, as the Edit form is.
+   */
+  previewForm(
+    content: unknown,
+    mode: 'edit' | 'create',
+    type: string,
+    document: NuxeoDocument | null,
+  ): Observable<FormLayoutPreview> {
+    return this.layouts.previewFormLayout(content, mode, type, document);
+  }
+
+  /**
+   * The queues the app's menu opens, by id, each once: those `navigation.json` names, as it is
+   * served now. A menu that is not served lists none; one that cannot be read says why.
+   */
+  queueIds(): Observable<Reading<readonly string[]>> {
+    return this.home.loadNavigation().pipe(
+      map((load): Reading<readonly string[]> => {
+        if (load.kind === 'unreadable') return { state: 'failed', problem: load.reason };
+        if (load.kind === 'none' || !isObject(load.content)) return { state: 'read', value: [] };
+        const entries = load.content['entries'];
+        const ids = (Array.isArray(entries) ? entries : []).flatMap((entry: unknown) =>
+          isObject(entry) && typeof entry['queue'] === 'string' && isQueueId(entry['queue'])
+            ? [entry['queue']]
+            : [],
+        );
+        return { state: 'read', value: [...new Set(ids)] };
+      }),
+      startWith(READING),
+    );
+  }
+
+  /** A queue's file, `queues/<id>.json`, as the queue page reads it now. */
+  queueSource(id: string): Observable<Reading<unknown>> {
+    return this.queues.load(id).pipe(
+      map((load): Reading<unknown> => {
+        if (load.kind === 'file') return { state: 'read', value: load.content };
+        return {
+          state: 'failed',
+          problem: load.kind === 'none' ? 'no queue is served there' : load.reason,
+        };
+      }),
+      startWith(READING),
+    );
+  }
+
+  /**
+   * The app's own actions, its `actions.json`, as the app registry serves it for the app open:
+   * what the pipeline adds to the registries a package's queues are checked with
+   * (`withPackageActions`). `null` when nothing serves it: the development server never does, and
+   * a registry serves it only for an app the person may see. Never errors.
+   */
+  packageActions(): Observable<Reading<unknown>> {
+    return this.definitionFiles.file('actions.json', null).pipe(
+      map((content): Reading<unknown> => ({ state: 'read', value: content })),
+      catchError((error: unknown) =>
+        of<Reading<unknown>>(
+          error instanceof HttpErrorResponse && error.status === 404
+            ? { state: 'read', value: null }
+            : { state: 'failed', problem: problemOf(error) },
+        ),
+      ),
+      startWith(READING),
+    );
+  }
+
+  /** What a queue may name: what this build registers, as the queue page reads a queue. */
+  queueRegistered(): QueueRegistered {
+    return {
+      rules: this.rules.registeredRuleIds(),
+      rowActions: this.slots.registeredIds(EXTENSION_SLOTS.rowActions),
+      bulkActions: this.slots.registeredIds(EXTENSION_SLOTS['bulk-actions']),
+    };
   }
 }

@@ -893,8 +893,9 @@ becomes. In version 2's terms:
   widget that does not show its property's type, and a table column naming a subfield its property
   lacks. Each is `unknown` or `parameter`, so loading stays tolerant. The pipeline holds a package
   to a model when it is given one ([package-pipeline.md](package-pipeline.md), section 4), and the
-  layout designer holds the file it edits to the server's model when it can read it, and saves none
-  with a finding ([its README](../../libs/features/layout-designer/README.md)); the migration server
+  layout designer holds the file it edits, a record page or an edit or create form, to the server's
+  model when it can read it, and saves none with a finding
+  ([its README](../../libs/features/layout-designer/README.md)); the migration server
   is still to call it. Its limits:
   - a property that only a facet given at run time brings is refused, though the record page shows
     it on a record with that facet;

@@ -2328,19 +2328,21 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
 
 ---
 
-## 37. Layout Designer — a Record Page's File, the Content Model and Records to Preview With
+## 37. Layout Designer — Layout Files and Queues, the Content Model and Records to Preview With
 
-| Field           | Value                                                                                                                                                    |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service**     | `LayoutDesignerService` (`libs/features/layout-designer/src/lib/layout-designer.service.ts`), with `DocumentLayoutService` and `ContentModelService`     |
-| **HTTP Method** | `GET`, and a `POST` that reads for a card from another system (section 38): the designer writes nothing, and saves the file as a download                |
-| **Endpoints**   | `<config>/layouts.json` and `<config>/layouts/<Type>/view.layout.json` — the record pages served, and one of them, each read anew, past the interceptors |
-|                 | `/nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas` — the content model the file is held to, read once per session                      |
-|                 | `/nuxeo/api/v1/config/types/<Type>` — the type the preview resolves the file against, as the record page reads it                                        |
-|                 | `/nuxeo/api/v1/config/schemas/<name>` — a schema the record's facets add that the file names, as the record page reads it                                |
-|                 | `/nuxeo/api/v1/search/lang/NXQL/execute` — the records of the type to preview with                                                                       |
-|                 | `/nuxeo/api/v1/id/<uid>` — the record the preview draws, read as the document page reads it (`getFullDocument`)                                          |
-| **Auth**        | The person's own, through the interceptors, but for the two configuration files, which the layout reads send with the session's cookies only             |
+| Field           | Value                                                                                                                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `LayoutDesignerService` (`libs/features/layout-designer/src/lib/layout-designer.service.ts`), with `DocumentLayoutService`, `ContentModelService`, `HomeService` and `QueueService`                                                   |
+| **HTTP Method** | `GET`, and a `POST` that reads for a card from another system (section 38): the designer writes nothing, and saves the file as a download                                                                                             |
+| **Endpoints**   | `<config>/layouts.json` and `<config>/layouts/<Type>/<mode>.layout.json` — the layout files served, and one of them, a record page (`view`), an edit form (`edit`) or a create form (`create`), each read anew, past the interceptors |
+|                 | `/nuxeo/api/v1/config/types`, `/config/facets` and `/config/schemas` — the content model the file is held to, read once per session                                                                                                   |
+|                 | `/nuxeo/api/v1/config/types/<Type>` — the type the preview resolves the file against, as the record page and the forms read it                                                                                                        |
+|                 | `/nuxeo/api/v1/config/schemas/<name>` — a schema the record's facets add that the file names, as the record page and the Edit form read it                                                                                            |
+|                 | `/nuxeo/api/v1/search/lang/NXQL/execute` — the records of the type to preview with                                                                                                                                                    |
+|                 | `/nuxeo/api/v1/id/<uid>` — the record the preview draws, read as the document page reads it (`getFullDocument`)                                                                                                                       |
+|                 | `<config>/navigation.json` and `<config>/queues/<id>.json`, or the app registry's — the queues the app's menu opens, and one of them, read as the menu and the queue page read them (`APP_DEFINITION_FILES`)                          |
+|                 | `/nuxeo/api/v1/search/pp/<pageProvider>/execute` — a queue's records, read by the queue page the preview draws, as section 33's queue reads them                                                                                      |
+| **Auth**        | The person's own, through the interceptors, but for the configuration files, which the layout and development reads send with the session's cookies only                                                                              |
 
 **The records query:**
 
@@ -2359,12 +2361,22 @@ to HTTP`, to anyone but an administrator for an action not opened over HTTP. A c
   writes nothing. Its related lists, timeline and lookups read what they read on the View tab, and
   a card from another system asks `Connector.Read` (section 38): a `POST` that reads, and writes
   nothing on the server.
+- **The preview draws a form read-only:** every input is read-only, and the designer offers no Save,
+  which a form's host owns, so no `PUT` or `POST` of the record is ever sent. Its lookups read what
+  the Edit form's read.
+- **The preview draws a queue read-only:** the queue page asks its page provider for each page, as
+  it does at `/queues/<id>`, but no row can be selected and no row action, bulk action or action over
+  the whole query is offered, so no bulk command is sent.
 - **Measured on the local server** (Nuxeo 2025.10.18, 24 November 2026, with the Payers kit served by
   `npm run config:dev`): the Member page opened with its first member previewed, every request a
   `GET`. The shell's own notification bell still posts its `Repository.Query` and
-  `Audit.QueryWithPageProvider` reads, as on every page.
+  `Audit.QueryWithPageProvider` reads, as on every page. On 25 November 2026, with the Contracts kit
+  served the same way: the Contract edit form was drawn for its first contract and changed, and the
+  renewals queue drawn from `contracts_up_for_renewal`, asked again in the other order. The only
+  request that was not a `GET` was the bell's `Audit.QueryWithPageProvider`.
 
-**Used by:** `LayoutDesignerPageComponent`, at `/#/administration/layout-designer`.
+**Used by:** `LayoutDesignerPageComponent`, at `/#/administration/layout-designer`, and
+`QueueDesignerPageComponent`, at `/#/administration/layout-designer/queues`.
 
 ---
 
