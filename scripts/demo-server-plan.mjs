@@ -67,9 +67,12 @@ const PLATFORM_NAME = 'lts';
 /** The secrets, by the environment variable each is read from. Never a value. */
 export const CLID = 'NUXEO_CLID';
 export const ADMIN_PASSWORD = 'DEMO_SERVER_ADMIN_PASSWORD';
-/** The image's administrator, who signs the seeds in, and the password the image gives them. */
+/**
+ * The image's administrator, who signs the seeds in, and the password the image gives them, which
+ * is their own name: public, documented, and what the run changes first.
+ */
 export const ADMINISTRATOR = 'Administrator';
-export const IMAGE_DEFAULT_SECRET = 'Administrator';
+export const IMAGE_DEFAULT_SECRET = ADMINISTRATOR;
 const SHORTEST_ADMIN_SECRET = 12;
 const SHORTEST_DEMO_SECRET = 8;
 

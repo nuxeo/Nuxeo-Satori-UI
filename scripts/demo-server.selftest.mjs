@@ -37,7 +37,7 @@
  * Usage: node scripts/demo-server.selftest.mjs
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   appendFileSync,
   chmodSync,
@@ -82,6 +82,7 @@ import {
   configDevCommand,
   DEFAULTS,
   fromCommit,
+  IMAGE_DEFAULT_SECRET,
   initScript,
   installOrder,
   kitFolders,
@@ -140,11 +141,18 @@ async function thrownAsync(fn) {
   }
 }
 
-/** Distinctive values, so that a print of any of them is found. */
+/**
+ * A value made for this run alone and kept in memory: distinctive, so that a print of it is found,
+ * and in no file, so that no secret scanner reads a password in the repository. `length` bytes of
+ * randomness, written as hexadecimal after a label that says what it stands in for.
+ */
+const canary = (label, length = 12) => `${label}-${randomBytes(length).toString('hex')}`;
+
+/** The run's secrets, made fresh each run. The CLID's two halves are joined as the image splits them. */
 const SECRETS = {
-  [CLID]: 'clid-selftest-4f1e--9a7c2b5d8e6f0a13',
-  [ADMIN_PASSWORD]: 'admin-selftest-Zq7vX2mPw9',
-  PAYERS_DEMO_PASSWORD: 'demo-selftest-Kp3wR8nTq1',
+  [CLID]: `${canary('clid')}--${randomBytes(8).toString('hex')}`,
+  [ADMIN_PASSWORD]: canary('admin'),
+  PAYERS_DEMO_PASSWORD: canary('demo'),
 };
 /**
  * Docker's own settings, in every command's environment: where its daemon is, which the Docker CLI
@@ -152,9 +160,9 @@ const SECRETS = {
  */
 const DOCKER_SETTINGS = {
   DOCKER_HOST: 'unix:///var/run/demo-server-selftest.sock',
-  DOCKER_PASSWORD: 'docker-selftest-password',
-  DOCKER_TOKEN: 'docker-selftest-token',
-  DOCKER_AUTH_CONFIG: '{"auths":{"selftest":{}}}',
+  DOCKER_PASSWORD: canary('docker'),
+  DOCKER_TOKEN: canary('docker'),
+  DOCKER_AUTH_CONFIG: JSON.stringify({ auths: { [canary('registry')]: {} } }),
 };
 
 const scratch = mkdtempSync(join(tmpdir(), 'demo-server-selftest-'));
@@ -832,13 +840,17 @@ function theSecrets() {
       empty.join('; '),
     );
   }
-  const fallback = secretProblems({ ...SECRETS, [ADMIN_PASSWORD]: 'Administrator' }, required);
+  const fallback = secretProblems({ ...SECRETS, [ADMIN_PASSWORD]: IMAGE_DEFAULT_SECRET }, required);
   check(
     "refused: the administrator's password left as the image's default",
     fallback.some((each) => /the image's default/.test(each)),
     fallback.join('; '),
   );
-  const weak = secretProblems({ ...SECRETS, [ADMIN_PASSWORD]: 'short-one' }, required);
+  // Ten characters: below the administrator's twelve.
+  const weak = secretProblems(
+    { ...SECRETS, [ADMIN_PASSWORD]: randomBytes(5).toString('hex') },
+    required,
+  );
   check(
     "refused: an administrator's password shorter than 12 characters",
     weak.some((each) => /shorter than 12/.test(each)),
@@ -853,7 +865,11 @@ function theSecrets() {
     shared.some((each) => /PAYERS_DEMO_PASSWORD is the administrator's password/.test(each)),
     shared.join('; '),
   );
-  const shortDemo = secretProblems({ ...SECRETS, PAYERS_DEMO_PASSWORD: 'demo1' }, required);
+  // Four characters: below the demo users' eight.
+  const shortDemo = secretProblems(
+    { ...SECRETS, PAYERS_DEMO_PASSWORD: randomBytes(2).toString('hex') },
+    required,
+  );
   check(
     "refused: a demo users' password shorter than 8 characters, which could not be taken out of what is printed",
     shortDemo.some((each) => /PAYERS_DEMO_PASSWORD is shorter than 8/.test(each)),
@@ -1071,7 +1087,7 @@ function whatThePlanSays(plan) {
 // ── The machine ───────────────────────────────────────────────────────────────────────────────
 /** A stand-in Nuxeo: runningstatus, the administrator's user and `/me`, with Basic credentials. */
 function standInNuxeo({ refuseDefault = false, keepDefault = false } = {}) {
-  let secret = 'Administrator';
+  let secret = IMAGE_DEFAULT_SECRET;
   const requests = [];
   const server = createServer((request, response) => {
     let body = '';
@@ -1091,8 +1107,8 @@ function standInNuxeo({ refuseDefault = false, keepDefault = false } = {}) {
         .split(':');
       const signedIn =
         user === 'Administrator' &&
-        !(refuseDefault && pass === 'Administrator') &&
-        (pass === secret || (keepDefault && pass === 'Administrator'));
+        !(refuseDefault && pass === IMAGE_DEFAULT_SECRET) &&
+        (pass === secret || (keepDefault && pass === IMAGE_DEFAULT_SECRET));
       if (!signedIn) return send(401);
       if (request.url === '/nuxeo/api/v1/user/Administrator' && request.method === 'GET')
         return send(200, {
@@ -1331,9 +1347,9 @@ async function theMachine() {
       PATH: '/bin',
       ...SECRETS,
       NUXEO_USER: 'someone',
-      NUXEO_PASS: 'theirs',
-      SATORI_GH_READONLY_TOKEN: 'token-value',
-      OTHER_DEMO_PASSWORD: 'other',
+      NUXEO_PASS: canary('theirs'),
+      SATORI_GH_READONLY_TOKEN: canary('token'),
+      OTHER_DEMO_PASSWORD: canary('other'),
       NUXEO_INDEX_WAIT_MS: '90000',
       ...DOCKER_SETTINGS,
     },
@@ -1366,10 +1382,10 @@ async function theMachine() {
     SSH_AUTH_SOCK: '/tmp/agent.sock',
     ...DOCKER_SETTINGS,
     ...SECRETS,
-    GH_TOKEN: 'x',
-    NUXEO_PASS: 'y',
-    ACME_API_KEY: 'z',
-    LC_SECRET_KEY: 'w',
+    GH_TOKEN: canary('token'),
+    NUXEO_PASS: canary('pass'),
+    ACME_API_KEY: canary('key'),
+    LC_SECRET_KEY: canary('key'),
     COMPOSE_FILE: '/elsewhere/compose.yml',
     COMPOSE_PROJECT_NAME: 'nuxeo',
   };
