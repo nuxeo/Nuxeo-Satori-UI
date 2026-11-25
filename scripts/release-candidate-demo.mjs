@@ -6,7 +6,7 @@
  * A kit's demo is a steps file under `scripts/beta-harness/steps/` that names the kit's folder.
  * Each one declares what a server run of it needs, `export const serverRun`, beside the
  * preconditions that hold the run to it: the kit, the seeds to run first, who `NUXEO_USER` must be,
- * who it signs the browser in as besides, and what else must be in place. The rest is read from the
+ * who else it signs in as, in the browser or through the REST API, and what else must be in place. The rest is read from the
  * file's source, so it cannot disagree with what the file does:
  *
  * - its steps, the labels of its `h.step(...)` calls in the order they are written, a template's
@@ -252,7 +252,9 @@ export function demoStepsMarkdown(listing) {
         }`,
       );
       lines.push(`- **NUXEO_USER:** ${users}${each.runAs.who}`);
-      lines.push(`- **Signs the browser in as:** ${each.signsInAs.join(', ') || 'no one else'}`);
+      lines.push(
+        `- **Also signs in as**, in the browser or through the REST API: ${each.signsInAs.join(', ') || 'no one else'}`,
+      );
       lines.push(`- **Environment it reads:** ${each.environment.join(', ') || 'none'}`);
       lines.push(`- **Needs:** ${each.needs.join('; ') || 'nothing else'}`);
       // Bullets, not numbers: most labels carry the demo script's own step numbers.
