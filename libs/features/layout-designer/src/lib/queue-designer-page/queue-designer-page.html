@@ -525,12 +525,19 @@
           <p class="layout-designer__message">
             {{ 'layout-designer.queue.save-where' | translate: { file: fileName() } }}
           </p>
-          <p class="layout-designer__message">{{ 'layout-designer.no-publish' | translate }}</p>
+          <p class="layout-designer__message">{{ 'layout-designer.publish-where' | translate }}</p>
           <details class="layout-designer__json">
             <summary>{{ 'layout-designer.file' | translate: { file: fileName() } }}</summary>
             <pre class="layout-designer__json-text">{{ fileText() }}</pre>
           </details>
         </section>
+
+        <lib-layer-panel
+          [path]="layerPath()"
+          [file]="file"
+          [saveable]="saveState() === 'saveable'"
+          (openVersion)="openFromLayer($event)"
+        />
       </section>
 
       <section class="layout-designer__preview" aria-labelledby="queue-designer-preview">

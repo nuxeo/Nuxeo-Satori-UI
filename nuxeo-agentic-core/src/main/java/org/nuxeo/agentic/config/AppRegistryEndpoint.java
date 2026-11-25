@@ -27,6 +27,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * envelope, as the development server serves {@code home.json}. Anything else, an app the person
  * may not see included, is 404, as a file a package does not have is.
  *
+ * An app's deployment layer in force ({@link LayerService#live}) is served over its package: a
+ * live file at its path, in place of the package's file there or beside the package's files, and
+ * listed in the app's {@code files}, with its version under {@code layer}. Only live versions: a
+ * draft is never in what this is built from.
+ *
  * <b>Seeing an app is not a security control.</b> The groups decide which apps the shell offers a
  * person, so that a claims adjuster is not shown the payroll app. They do not decide what anyone
  * may read: an app definition holds no record, and the records its queues, homes and pages show
@@ -79,6 +84,8 @@ final class AppRegistryEndpoint {
 
     private final AllowList allowList;
 
+    private final LayerService.Live live;
+
     /** Each app's files by path, {@code app.json} first, rendered once. */
     private final Map<String, Map<String, Resource>> files = new HashMap<>();
 
@@ -97,8 +104,20 @@ final class AppRegistryEndpoint {
     }
 
     AppRegistryEndpoint(ConfigSnapshot snapshot, AllowList allowList) {
+        this(snapshot, allowList, LayerService.Live.NONE);
+    }
+
+    /**
+     * @param live each app's deployment layer in force ({@link LayerService#live}): a live file is
+     *            served in place of the package's file at its path, or beside the package's files
+     *            for a path the package has none at, such as a layout. Drafts are never in it, and
+     *            it holds no {@code actions.json}: a layer's queues name the actions served here,
+     *            after the allow-list, which is what {@link LayerService} checks them against.
+     */
+    AppRegistryEndpoint(ConfigSnapshot snapshot, AllowList allowList, LayerService.Live live) {
         this.snapshot = snapshot;
         this.allowList = allowList;
+        this.live = live;
         List<Diagnostic> all = new ArrayList<>(snapshot.diagnostics());
         for (ConfigSnapshot.App app : snapshot.apps()) {
             Map<String, Resource> byPath = new LinkedHashMap<>();
@@ -115,23 +134,32 @@ final class AppRegistryEndpoint {
                     byPath.put(file.path(), resource(file.bytes()));
                 }
             }
+            live.of(app.id()).forEach((path, file) -> byPath.put(path, resource(file.body())));
             files.put(app.id(), byPath);
         }
         this.diagnostics = List.copyOf(all);
     }
 
-    /**
-     * The registry for this snapshot and allow-list: the one last built when neither has changed
-     * since, so that file bodies and ETags change only when one does; otherwise a new one, whose
-     * actions' diagnostics are logged once, as the snapshot's are when it is built.
-     */
+    /** The registry for this snapshot and allow-list, with no deployment layer. */
     static AppRegistryEndpoint current(ConfigSnapshot snapshot, AllowList allowList) {
+        return current(snapshot, allowList, LayerService.Live.NONE);
+    }
+
+    /**
+     * The registry for this snapshot, allow-list and deployment layer in force: the one last built
+     * when none has changed since, so that file bodies and ETags change only when one does;
+     * otherwise a new one, whose actions' diagnostics are logged once, as the snapshot's are when it
+     * is built. The servlet and {@code AgenticUi.RunAction} ask it with the same three, so that they
+     * share one.
+     */
+    static AppRegistryEndpoint current(ConfigSnapshot snapshot, AllowList allowList, LayerService.Live live) {
         AppRegistryEndpoint built = current;
-        if (built == null || built.snapshot != snapshot || built.allowList != allowList) {
+        if (built == null || built.snapshot != snapshot || built.allowList != allowList || built.live != live) {
             synchronized (AppRegistryEndpoint.class) {
                 built = current;
-                if (built == null || built.snapshot != snapshot || built.allowList != allowList) {
-                    built = new AppRegistryEndpoint(snapshot, allowList);
+                if (built == null || built.snapshot != snapshot || built.allowList != allowList
+                        || built.live != live) {
+                    built = new AppRegistryEndpoint(snapshot, allowList, live);
                     for (Diagnostic diagnostic : built.diagnostics.subList(snapshot.diagnostics().size(),
                             built.diagnostics.size())) {
                         log.warn("Agentic UI app registry: {}", diagnostic.message());
@@ -149,6 +177,10 @@ final class AppRegistryEndpoint {
 
     AllowList allowList() {
         return allowList;
+    }
+
+    LayerService.Live live() {
+        return live;
     }
 
     /**
@@ -231,6 +263,8 @@ final class AppRegistryEndpoint {
             entry.put("source", app.provenance().source());
             ArrayNode paths = entry.putArray("files");
             files.get(app.id()).keySet().forEach(paths::add);
+            ObjectNode layer = entry.putObject("layer");
+            live.of(app.id()).forEach((path, file) -> layer.put(path, file.version()));
             entry.set("content", app.app());
         }
         listing.set("diagnostics", diagnostics(diagnostics, inForce, viewer.administrator()));

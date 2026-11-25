@@ -1,0 +1,76 @@
+:host {
+  display: block;
+}
+
+.layer-panel {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Each class twice, as on the designer's pages: the shell's `.mat-typography` heading and paragraph
+   rules are more specific than one class. */
+.layer-panel__heading.layer-panel__heading,
+.layer-panel__version-heading.layer-panel__version-heading {
+  margin: 0;
+  font: var(--mat-sys-title-small);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.layer-panel__note.layer-panel__note,
+.layer-panel__message.layer-panel__message,
+.layer-panel__meta.layer-panel__meta,
+.layer-panel__comparison.layer-panel__comparison {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+  letter-spacing: normal;
+}
+
+/* The three versions side by side once the panel is wide enough, one under another until then. */
+.layer-panel__versions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+@container (min-width: 48rem) {
+  .layer-panel__versions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.layer-panel__version {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.layer-panel__json {
+  margin: 0;
+  padding: 8px;
+  max-block-size: 20rem;
+  overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 4px;
+  font: var(--mat-sys-body-small);
+  font-family: monospace;
+  white-space: pre;
+}
+
+.layer-panel__difference-list,
+.layer-panel__findings,
+.layer-panel__trail-list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  font: var(--mat-sys-body-small);
+}
+
+.layer-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

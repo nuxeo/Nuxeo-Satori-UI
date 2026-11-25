@@ -218,7 +218,7 @@ function run(args, cwd = REPO) {
  */
 function expectUpgrade(
   what,
-  { from = VERSION, to = VERSION, before = nothing, after = nothing, platform },
+  { from = VERSION, to = VERSION, before = nothing, after = nothing, platform, deployment },
   expected,
 ) {
   if (expected.refused) negative++;
@@ -236,6 +236,12 @@ function expectUpgrade(
       change(copy);
     }
     const args = [directory, '--previous', previous];
+    if (deployment !== undefined) {
+      const file = join(scratch, 'layer.json');
+      writeFileSync(file, typeof deployment === 'string' ? deployment : JSON.stringify(deployment));
+      args.push('--deployment', file);
+    }
+    if (expected.json) args.push('--json');
     if (platform)
       args.push(
         '--previous-platform',
@@ -243,14 +249,26 @@ function expectUpgrade(
         '--root',
         platformWith(scratch, 'platform-now', platform.after),
       );
-    const { status, output } = run(args);
+    const { status, output, stdout } = run(args);
     const problems = [];
-    const wanted = expected.refused ? 1 : 0;
+    const wanted = expected.status ?? (expected.refused ? 1 : 0);
     if (status !== wanted) problems.push(`exit ${status}, not ${wanted}`);
     for (const line of expected.refused ?? expected.kept)
       if (!output.includes(line)) problems.push(`no "${line}"`);
     for (const line of expected.never ?? [])
       if (output.includes(line)) problems.push(`"${line}" is in the output`);
+    if (expected.json) {
+      let reading = null;
+      try {
+        reading = JSON.parse(stdout);
+      } catch {
+        problems.push('the output is not one JSON document');
+      }
+      if (reading) {
+        const problem = expected.json(reading);
+        if (problem) problems.push(problem);
+      }
+    }
     if (problems.length > 0)
       failures.push(`${what}: ${problems.join('; ')}\n${output.trim().replace(/^/gm, '    ')}`);
   } finally {
@@ -1232,6 +1250,93 @@ for (const [args, why] of [
     rmSync(scratch, { recursive: true, force: true });
   }
 }
+
+// --- A deployment's own layer over the kit -----------------------------------------------------------
+
+/** A server's deployment layer, as GET /nuxeo/agentic-ui-apps/layer.json exports it. */
+const layer = (files, app = 'payers-claims') => ({
+  format: 'nuxeo-agentic-ui-layer/1',
+  apps: [{ id: app, files: files.map(([path, version]) => ({ path, version, sha256: 'x' })) }],
+});
+const CLAIM_VIEW = `${ROOT}/layouts/Claim/view.layout.json`;
+/** The Claim record page with one card more, as a kit's new version might add. */
+const addCard = (directory) =>
+  jsonEdit(directory, CLAIM_VIEW, (file) =>
+    file.cards.push({ id: 'kit-added', label: 'Added by the kit', fields: ['dc:title'] }),
+  );
+
+expectUpgrade(
+  "a kit's new version changing a layout the deployment overrides: kept, with a warning",
+  { to: MINOR, after: addCard, deployment: layer([['layouts/Claim/view.layout.json', 3]]) },
+  {
+    kept: [
+      'every configuration is kept',
+      'warning: layout Claim/view:',
+      `changes layouts/Claim/view.layout.json, which this deployment overrides at version 3`,
+      'The override still wins',
+    ],
+  },
+);
+expectUpgrade(
+  'the same, read as JSON: the warning is in the package, and the exit code is 0',
+  { to: MINOR, after: addCard, deployment: layer([['layouts/Claim/view.layout.json', 3]]) },
+  {
+    kept: [],
+    json: (reading) =>
+      reading.kept === true &&
+      reading.packages[0].warnings.length === 1 &&
+      reading.packages[0].warnings[0].path === 'layouts/Claim/view.layout.json' &&
+      reading.packages[0].warnings[0].version === 3
+        ? null
+        : `the JSON has no warning for the override: ${JSON.stringify(reading.packages?.[0]?.warnings)}`,
+  },
+);
+expectUpgrade(
+  'a changed layout the deployment does not override: no warning',
+  { to: MINOR, after: addCard, deployment: layer([['queues/my-claims.json', 1]]) },
+  { kept: ['every configuration is kept'], never: ['warning:'] },
+);
+expectUpgrade(
+  "an override of a file the kit's new version leaves as it was: no warning",
+  { to: PATCH, deployment: layer([['layouts/Claim/view.layout.json', 2], ['queues/my-claims.json', 1]]) },
+  { kept: ['every configuration is kept'], never: ['warning:'] },
+);
+expectUpgrade(
+  "another app's overrides: none of this kit's files, and said",
+  { to: MINOR, after: addCard, deployment: layer([['layouts/Claim/view.layout.json', 3]], 'staff-directory') },
+  { kept: ["overrides none of the app payers-claims's files"], never: ['warning:'] },
+);
+expectUpgrade(
+  'a queue the deployment overrides, removed with its note: kept, with a warning that says removed',
+  {
+    to: MINOR,
+    after: (directory) => {
+      removeQueue(directory, 'pending-determination');
+      notes(directory, [
+        { version: MINOR, item: 'queue pending-determination', note: 'Gone.' },
+        { version: MINOR, item: 'menu-entry pending', note: 'Gone.' },
+      ]);
+    },
+    deployment: layer([['queues/pending-determination.json', 1]]),
+  },
+  {
+    kept: [
+      'every configuration is kept',
+      'warning: queue pending-determination:',
+      'removes queues/pending-determination.json',
+    ],
+  },
+);
+expectUpgrade(
+  'a deployment file that is not the export: the command cannot be run, exit 2',
+  { to: MINOR, after: addCard, deployment: '{"apps":[]}' },
+  { refused: ["it is not the export", 'nuxeo-agentic-ui-layer/1'], status: 2 },
+);
+expectUpgrade(
+  'a deployment file naming what no layer holds: exit 2',
+  { to: MINOR, after: addCard, deployment: layer([['home.json', 1]]) },
+  { refused: ['its path a layout or a queue'], status: 2 },
+);
 
 if (failures.length > 0) {
   console.error(`app-upgrade-check selftest: ${failures.length} control(s) did not hold:\n`);

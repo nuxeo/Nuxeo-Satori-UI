@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import {
   PACKAGED_REGISTRIES,
@@ -22,6 +23,24 @@ import { BehaviorSubject, Subject, firstValueFrom, of, startWith, type Observabl
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import type { LayoutJson } from '../layout-edits';
 import { LayoutDesignerPageComponent } from './layout-designer-page';
+import { LayerPanelComponent } from '../layer/layer-panel';
+
+/**
+ * The deployment layer's panel, as the page hands it the file open: what it is given is what is
+ * checked here. The panel itself, and every request it makes, is held by `layer-panel.spec.ts`.
+ */
+@Component({
+  selector: 'lib-layer-panel',
+  standalone: true,
+  template: '<p class="stub-layer-panel">{{ path() }}</p>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class StubLayerPanelComponent {
+  readonly path = input<string | null>(null);
+  readonly file = input<unknown>(null);
+  readonly saveable = input(false);
+  readonly openVersion = output<unknown>();
+}
 
 /** The record page, as the designer hands it a preview: what it is given is what is checked. */
 @Component({
@@ -232,8 +251,8 @@ describe('LayoutDesignerPageComponent', () => {
       ],
     });
     TestBed.overrideComponent(LayoutDesignerPageComponent, {
-      remove: { imports: [RecordPageComponent, DocumentLayoutFormComponent] },
-      add: { imports: [StubRecordPageComponent, StubFormComponent] },
+      remove: { imports: [RecordPageComponent, DocumentLayoutFormComponent, LayerPanelComponent] },
+      add: { imports: [StubRecordPageComponent, StubFormComponent, StubLayerPanelComponent] },
     });
     fixture = TestBed.createComponent(LayoutDesignerPageComponent);
     page = fixture.componentInstance;
@@ -279,6 +298,28 @@ describe('LayoutDesignerPageComponent', () => {
   it('says that hiding the page is not a security control', async () => {
     await settle();
     expect(root().textContent).toContain('that is not a security control');
+  });
+
+  it("hands the deployment layer's panel the file open, as edited, and whether it may be saved", async () => {
+    await open();
+    const panel = fixture.debugElement.query(By.directive(StubLayerPanelComponent))
+      .componentInstance as StubLayerPanelComponent;
+    expect(panel.path()).toBe('layouts/Member/view.layout.json');
+    expect(panel.file()).toEqual(MEMBER_VIEW);
+    expect(panel.saveable()).toBe(true);
+
+    page.file.set({ ...MEMBER_VIEW, bogus: true } as LayoutJson);
+    await settle();
+    expect(panel.saveable()).toBe(false);
+
+    // A version the panel opens becomes the file edited, a change to the one opened.
+    const draft = { version: 2, cards: [{ id: 'member', fields: ['member:phone'] }] };
+    panel.openVersion.emit(draft);
+    await settle();
+    expect(page.file()).toEqual(draft);
+    expect(page.unsaved()).toBe(true);
+    panel.openVersion.emit(['not', 'a', 'file']);
+    expect(page.file()).toEqual(draft);
   });
 
   it('offers each type its three files, served or new, and opens one with its first record previewed', async () => {

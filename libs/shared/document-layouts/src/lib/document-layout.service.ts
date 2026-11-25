@@ -674,17 +674,58 @@ export class DocumentLayoutService {
   private recordFile(type: string): Observable<RecordLayoutFile | null> {
     let cached = this.recordFiles.get(type);
     if (!cached) {
-      cached = this.index().pipe(
-        switchMap((index) =>
-          index.entries.some((entry) => entry.type === type && entry.mode === 'view')
-            ? this.fetchRecordFile(type)
-            : of(null),
+      cached = this.layerFile(type, 'view').pipe(
+        switchMap((layer) =>
+          layer
+            ? of(this.readRecordFile(type, layer.url, layer.content))
+            : this.index().pipe(
+                switchMap((index) =>
+                  index.entries.some((entry) => entry.type === type && entry.mode === 'view')
+                    ? this.fetchRecordFile(type)
+                    : of(null),
+                ),
+              ),
         ),
         shareReplay({ bufferSize: 1, refCount: false }),
       );
       this.recordFiles.set(type, cached);
     }
     return cached;
+  }
+
+  /**
+   * The app open's own version of a type's file, from its deployment layer, as the app registry
+   * serves it to the app's groups after sign-in, with no envelope
+   * (docs/business-apps/app-definition-v2.md, section 10, "The deployment layer"): `null` when the
+   * app open has none, which costs no request, and when it cannot be read, which the console is
+   * told. It wins over the file the packages contribute, which everyone reads before sign-in.
+   */
+  private layerFile(
+    type: string,
+    mode: 'view' | 'edit' | 'create',
+  ): Observable<{ readonly url: string; readonly content: Record<string, unknown> } | null> {
+    const path = `layouts/${type}/${mode}.layout.json`;
+    return this.definitionFiles.file(path, null).pipe(
+      timeout(LAYOUT_LOAD_TIMEOUT_MS),
+      map((content) => {
+        if (typeof content === 'object' && content !== null && !Array.isArray(content))
+          return {
+            url: `the app's deployment layer, ${path}`,
+            content: content as Record<string, unknown>,
+          };
+        warn(
+          `${type}/${mode} layout from the app's deployment layer ignored: it is not a JSON object`,
+        );
+        return null;
+      }),
+      catchError((error: unknown) => {
+        if (!(error instanceof HttpErrorResponse && error.status === 404))
+          warn(
+            `${type}/${mode} layout not loaded from the app's deployment layer, so the package's shows: ${describe(error)}`,
+          );
+        return of(null);
+      }),
+    );
   }
 
   /**
@@ -701,24 +742,30 @@ export class DocumentLayoutService {
           warn(`${type}/view layout from ${url} ignored: ${envelope.invalid}`);
           return null;
         }
-        const file = readRecordLayout(envelope.content, {
-          rules: this.rules.registeredRuleIds(),
-          rowActions: this.slots.registeredIds(EXTENSION_SLOTS.rowActions),
-        });
-        if ('invalid' in file) {
-          warn(
-            `${type}/view layout from ${url} refused, showing the document page: ${file.invalid}`,
-          );
-          return null;
-        }
-        for (const problem of file.problems) warn(`${type}/view layout: ${problem}`);
-        return file;
+        return this.readRecordFile(type, url, envelope.content);
       }),
       catchError((error: unknown) => {
         warn(`${type}/view layout not loaded from ${url}: ${describe(error)}`);
         return of(null);
       }),
     );
+  }
+
+  private readRecordFile(
+    type: string,
+    url: string,
+    content: Record<string, unknown>,
+  ): RecordLayoutFile | null {
+    const file = readRecordLayout(content, {
+      rules: this.rules.registeredRuleIds(),
+      rowActions: this.slots.registeredIds(EXTENSION_SLOTS.rowActions),
+    });
+    if ('invalid' in file) {
+      warn(`${type}/view layout from ${url} refused, showing the document page: ${file.invalid}`);
+      return null;
+    }
+    for (const problem of file.problems) warn(`${type}/view layout: ${problem}`);
+    return file;
   }
 
   /**
@@ -1118,14 +1165,23 @@ export class DocumentLayoutService {
     const key = `${type}/${mode}`;
     let cached = this.files.get(key);
     if (!cached) {
-      cached = this.index().pipe(
+      const packaged = this.index().pipe(
         switchMap((index) =>
           index.entries.some((entry) => entry.type === type && entry.mode === mode)
             ? this.fetchFile(type, mode)
             : of(null),
         ),
-        shareReplay({ bufferSize: 1, refCount: false }),
       );
+      // A form of the app open's deployment layer wins over the packages'; it is version 2.
+      cached = (
+        mode === 'edit' || mode === 'create'
+          ? this.layerFile(type, mode).pipe(
+              switchMap((layer) =>
+                layer ? of(this.formFile(type, mode, layer.url, layer.content)) : packaged,
+              ),
+            )
+          : packaged
+      ).pipe(shareReplay({ bufferSize: 1, refCount: false }));
       this.files.set(key, cached);
     }
     return cached;

@@ -5,15 +5,22 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.nuxeo.ecm.core.schema.SchemaManager;
 import org.nuxeo.runtime.api.Framework;
+import org.nuxeo.runtime.cluster.ClusterService;
 import org.nuxeo.runtime.model.ComponentContext;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.DefaultComponent;
 import org.nuxeo.runtime.model.RuntimeContext;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Collects the configuration packages contribute and builds the snapshot the servlet serves.
@@ -48,6 +55,12 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
 
     /** The state of the override directory {@link #snapshot} was built from. */
     private volatile String overrideStamp;
+
+    /**
+     * Each app's deployment layer: switched off until {@link #start} reads
+     * {@value LayerSettings#ENABLED_PROPERTY}, and on a server that has not set it.
+     */
+    private volatile LayerService layer = LayerService.SWITCHED_OFF;
 
     @Override
     public void registerContribution(Object contribution, String extensionPoint, ComponentInstance contributor) {
@@ -99,7 +112,50 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
     @Override
     public void start(ComponentContext context) {
         activateDevOverrides(Framework::getProperty);
+        activateLayer(Framework::getProperty, new RepositoryLayerStore(RepositoryLayerStore.REPOSITORY),
+                () -> ServerContentModel.of(Framework.getService(SchemaManager.class)), CLUSTER_LOCK);
         getSnapshot();
+    }
+
+    /**
+     * The cluster's lock for an app's changes, which runs the work at once on a server that is not
+     * in a cluster. Tried for 30 seconds, every 100 ms. A server without the cluster service, which
+     * Nuxeo LTS 2025 deploys in {@code nuxeo-runtime-cluster}, is a server of one.
+     */
+    static final LayerService.AppLock CLUSTER_LOCK = (key, work) -> {
+        ClusterService cluster = Framework.getService(ClusterService.class);
+        if (cluster == null) {
+            work.run();
+        } else {
+            cluster.runAtomically(key, Duration.ofSeconds(30), Duration.ofMillis(100), work);
+        }
+    };
+
+    /**
+     * Decide, once, whether the deployment layer is switched on, and build it when it is. As for the
+     * development overrides, the property lookup is passed in, so that the default, off, is tested.
+     *
+     * @param model the server's content model, read for each check
+     */
+    void activateLayer(UnaryOperator<String> properties, LayerStore store,
+            Supplier<JsonNode> model, LayerService.AppLock lock) {
+        LayerSettings settings = LayerSettings.from(properties);
+        if (!settings.enabled()) {
+            layer = LayerService.SWITCHED_OFF;
+            return;
+        }
+        layer = new LayerService(settings, store, new NashornDeploymentValidator(model, settings), this::getSnapshot,
+                AgenticUiAppsServlet::allowList, Clock.systemUTC(), lock);
+        log.warn("Agentic UI configuration: the DEPLOYMENT LAYER IS ON ({}=true). Administrators may change an app's "
+                + "layouts and queues for everyone in its groups from the designer; {}. Every change is in the "
+                + "server's log and in the layer's trail.", LayerSettings.ENABLED_PROPERTY,
+                settings.selfApproval() ? "an administrator may approve their own change ("
+                        + LayerSettings.SELF_APPROVAL_PROPERTY + "=true)" : "a second administrator approves each one");
+    }
+
+    /** Each app's deployment layer, switched off unless the server switched it on. */
+    LayerService layerService() {
+        return layer;
     }
 
     /**
@@ -126,6 +182,7 @@ public class AgenticUiConfigComponent extends DefaultComponent implements Agenti
         snapshot = null;
         overrides = null;
         overrideStamp = null;
+        layer = LayerService.SWITCHED_OFF;
     }
 
     @Override
