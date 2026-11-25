@@ -734,8 +734,13 @@ describe('app-definition validate', () => {
     });
 
     it('passes a key beside a literal label, which wins, and leaves a file of another version alone', () => {
-      const shown = structuredClone(page);
-      shown.cards[0] = { ...shown.cards[0], label: 'Claim', labelKey: 'claims.card.claimz' };
+      const shown = {
+        ...page,
+        cards: [
+          { ...page.cards[0], label: 'Claim', labelKey: 'claims.card.claimz' },
+          page.cards[1],
+        ],
+      };
       const { code, out, root } = check({
         'pkg/app.json': app,
         'pkg/labels/en.json': labels,

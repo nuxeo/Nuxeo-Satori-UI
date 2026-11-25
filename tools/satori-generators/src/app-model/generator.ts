@@ -693,19 +693,26 @@ export default async function appModelGenerator(tree: Tree, options: AppModelSch
   const written: string[] = [];
   // The search schema's file is the search document's alone: another schema read from it, such as
   // a type's own schema that happens to be named so, would be written over.
-  const taken = search
-    ? [...markup.matchAll(/<schema(?=[ \t\r\n/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g)].find(
-        ([tag]) =>
-          attribute(tag, 'src') === `schemas/${search.file}` &&
-          attribute(tag, 'name') !== search.schema,
-      )
-    : undefined;
+  // A file there already is written again only when it is this search schema's, as an earlier run
+  // registered it: one no entry reads, or one written by hand for something else, is left alone.
+  const schemaTags = search
+    ? [...markup.matchAll(/<schema(?=[ \t\r\n/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g)]
+    : [];
+  const readFrom = (tag: string) => attribute(tag, 'src') === `schemas/${search?.file}`;
+  const taken = schemaTags.some(
+    ([tag]) => readFrom(tag) && attribute(tag, 'name') !== search?.schema,
+  );
+  const ours = schemaTags.some(
+    ([tag]) => readFrom(tag) && attribute(tag, 'name') === search?.schema,
+  );
   if (
     search &&
-    (taken !== undefined || schemaPath === `${pkg.root}/bundle/schemas/${search.file}`)
+    (taken ||
+      schemaPath === `${pkg.root}/bundle/schemas/${search.file}` ||
+      (!ours && tree.exists(`${pkg.root}/bundle/schemas/${search.file}`)))
   ) {
     throw new Error(
-      `schemas/${search.file}, where the search document's schema ${search.schema} goes, is another schema's: give the type another --schema.`,
+      `schemas/${search.file}, where the search document's schema ${search.schema} goes, is another schema's, or a file no entry of ${modelFile} registers as ${search.schema}: give the type another --schema, or register or remove the file.`,
     );
   }
 

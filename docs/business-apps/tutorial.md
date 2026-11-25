@@ -99,8 +99,8 @@ The app is for two groups, `facilities-coordinators`, who sort the work, and
   out and log in with this account.
 
 - **The platform version,** which the pipeline's `--platform` takes, and which every generator's
-  next step writes as `--platform <platform version>`: the `version` of `libs/platform/package.json`,
-  the platform's own package. Nothing else in the repository says it.
+  next step writes as `--platform <platform version>`: the `version` of
+  `libs/platform/package.json`, the platform's own package. Nothing else in the repository says it.
 
   ```bash
   node -p "require('./libs/platform/package.json').version"

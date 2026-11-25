@@ -363,6 +363,15 @@ describe('app-model generator', () => {
       expect(read(tree, SEARCH_XSD)).toBe(xsd);
     });
 
+    it("leaves alone a file at the search schema's place that no entry registers", async () => {
+      await contract();
+      tree.write(SEARCH_XSD, '<!-- written by hand, for something else -->\n');
+      const before = read(tree, MODEL);
+      await expect(open()).rejects.toThrow('or a file no entry of');
+      expect(read(tree, MODEL)).toBe(before);
+      expect(read(tree, SEARCH_XSD)).toBe('<!-- written by hand, for something else -->\n');
+    });
+
     it('refuses an aggregate on a type the content model does not describe', async () => {
       await expect(generate({ pageProvider: 'p', aggregates: 'contract:status' })).rejects.toThrow(
         'write its --properties first',

@@ -57,7 +57,8 @@ workflow: a route model, as a zip the bundle carries, with its variable schemas 
 builder holds its XML to what Nuxeo can load, as it does every component's; nothing in the pipeline
 checks the schemas, types, page providers or route model themselves, nor that a layout's page
 provider exists. The one thing step 2 reads in a page provider the package defines is the
-aggregates it lists, which a queue's facets and a home's figures must name (section 2). The kit's own controls check its route model
+aggregates it lists, which a queue's facets and a home's figures must name (section 2). The kit's
+own controls check its route model
 ([its README](../../business-apps/packages/payers-claims-demo/README.md)).
 
 ## 2. The steps
@@ -221,20 +222,24 @@ npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.
 - **A package's own model, by default.** Given neither `--model` nor `--model-server`, a package
   that ships a stand-in model, a component of its own that registers document types, as
   `app-model` writes it, is held to the `content-model.json` beside its `bundle/`, which describes
-  that model, and the run says so first:
-  `The content model is the package's own content-model.json, since the package ships a stand-in
-model and no --model was given.` So CI and `validate_package`, which pass no model, refuse a
-  demo kit's misspelt property too. A `content-model.json` with no stand-in model behind it
-  describes a server, which may have changed since, and is not used unless `--model` names it; a
-  package on a customer's model is held to no model unless it is given one.
+  that model, and the run says so first, in a line that begins
+  `The content model is the package's own content-model.json`. So CI and `validate_package`,
+  which pass no model, refuse a demo kit's misspelt property too. A `content-model.json` with no
+  stand-in model behind it describes a server, which may have changed since, and is not used
+  unless `--model` names it; a package on a customer's model is held to no model unless it is
+  given one. So is a package whose only document types are `append="true"`, which add to the
+  server's. The package's own file that cannot be read as a content model refuses the package at
+  step 2, since it is the package's, not the command's.
 - **The demo's model,** `content-model.json` beside the package, is the kit's stand-in model as a
   local Nuxeo with the package installed answers it, exported with `app-package:model` and cut down
   to the kit's five types, their facets and their schemas. All four record pages pass against it.
   The negative controls hold the demo to it: a widget that does not fit, a property the type does
   not have, an address part naming a missing subfield, and a type the model does not have are each
-  refused at step 2, with `--model` and without it. The same broken layout in a copy with no
-  `content-model.json`, or whose components register no type, is built, which shows that it is the
-  model that refuses it. A malformed model, and a server that refuses a read, each exit 2. A fake
+  refused at step 2 with `--model`, and the first two without it too, by the kit's own model. The
+  same broken layout in a copy with no `content-model.json`, or whose components register no type
+  or only append to the server's, is built, which shows that it is the model that refuses it. A
+  `--model` file that cannot be read, and a server that refuses a read, each exit 2; the package's
+  own `content-model.json` that cannot be read is refused at step 2, as the package's defect. A fake
   server answering as Nuxeo does proves the live read and the export: the credentials arrive on
   every read, each schema is read with `fetch-schema: fields`, a model whose property the widget
   does not fit refuses the layout, and the exported file is the model the server answered. Run

@@ -99,7 +99,8 @@ package, so its order is:
 1. `app-package` without `--type`;
 2. `app-model --properties` for each type, then `app-model --pageProvider` for each page provider,
    with `--aggregates` for one whose queue has facets or whose home counts buckets;
-3. `app-layout` and `app-form`, each with `--model=business-apps/packages/<name>/content-model.json`;
+3. `app-layout` and `app-form`, each given the kit's own model,
+   `--model=business-apps/packages/<name>/content-model.json`;
 4. `app-queue`, `app-action`, and the home and the menu by hand, then `app-registry`.
 
 The tutorial, `docs/business-apps/tutorial.md`, follows that order for the facilities kit.
