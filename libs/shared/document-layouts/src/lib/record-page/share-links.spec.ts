@@ -32,6 +32,11 @@ describe('what a picture offers to share', () => {
           { title: 'Medium', content: { data: 'y' } },
           { title: 'Pending' },
           { content: { data: 'x' } },
+          { title: 'Web/print', content: { data: 'x' } },
+          { title: 'Web\\print', content: { data: 'x' } },
+          { title: ' Padded', content: { data: 'x' } },
+          { title: 'x'.repeat(65), content: { data: 'x' } },
+          { title: 'x'.repeat(64), content: { data: 'x' } },
           'nonsense',
         ],
       }),
@@ -40,6 +45,7 @@ describe('what a picture offers to share', () => {
       { item: 'original', title: null },
       { item: 'view:Medium', title: 'Medium' },
       { item: 'view:FullHD', title: 'FullHD' },
+      { item: `view:${'x'.repeat(64)}`, title: 'x'.repeat(64) },
     ]);
   });
 

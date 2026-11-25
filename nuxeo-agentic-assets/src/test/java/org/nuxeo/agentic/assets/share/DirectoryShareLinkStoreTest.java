@@ -205,6 +205,7 @@ class DirectoryShareLinkStoreTest {
                 Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"original\":\"\"}"),
                 Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"view:Medium\":\"9a1b\"}"),
                 Map.entry("sha256", "{}"), Map.entry("sha256", "{\"view:FullHD\":\"5e2c\"}"),
+                Map.entry("digests", "{\"view:FullHD\":\"0f3e\",\"original\":\"9a1b\",\"view:Medium\":\"1\"}"),
                 Map.entry("lastDay", "14/12/2026"), Map.entry("created", "2026-11-24T12:00:00Z"),
                 Map.entry("createdBy", ""), Map.entry("revoked", "yesterday"), Map.<String, Object> entry("document", 7))) {
             Directories directories = new Directories();

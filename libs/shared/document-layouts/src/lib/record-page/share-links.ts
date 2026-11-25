@@ -22,6 +22,24 @@ export const SHARE_LINK_DEFAULT_DAYS = 7;
 /** How many items one link may list: the server's bound. */
 export const SHARE_LINK_MAX_ITEMS = 10;
 
+/** The longest view title a link may name: the server's bound. */
+export const SHARE_LINK_MAX_TITLE = 64;
+
+/**
+ * Whether the server takes `title` as a view's name in a link: 1 to {@link SHARE_LINK_MAX_TITLE}
+ * characters, no space at either end, and no control character, `/` or `\`, which an address cannot
+ * carry in a path. A view whose title is not one is not offered: the server would refuse it.
+ */
+export function isShareableTitle(title: string): boolean {
+  return (
+    title.length > 0 &&
+    title.length <= SHARE_LINK_MAX_TITLE &&
+    title === title.trim() &&
+    // eslint-disable-next-line no-control-regex
+    !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff/\\]/.test(title)
+  );
+}
+
 /** One item the page offers to share: its id for the server, and what the page calls it. */
 export interface ShareableItem {
   readonly item: ShareLinkItem;
@@ -36,7 +54,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * What the record offers to share: its original file, when it has one in `file:content`, then each
  * picture view that has a file and a title of its own, in the order Nuxeo lists them, each title
  * once. A view with no title is not offered: the server names a view by its title, and the
- * `View 3` the picture's views show for one is not one it has. Offering an item is not deciding
+ * `View 3` the picture's views show for one is not one it has; nor is one whose title the server
+ * would not take ({@link isShareableTitle}). Offering an item is not deciding
  * it: the server refuses what the asset's rights do not allow.
  */
 export function shareableItems(document: NuxeoDocument): ShareableItem[] {
@@ -49,7 +68,7 @@ export function shareableItems(document: NuxeoDocument): ShareableItem[] {
   for (const view of views) {
     if (!isRecord(view) || !isRecord(view['content'])) continue;
     const title = view['title'];
-    if (typeof title !== 'string' || title.trim() === '' || seen.has(title)) continue;
+    if (typeof title !== 'string' || !isShareableTitle(title) || seen.has(title)) continue;
     seen.add(title);
     items.push({ item: shareLinkViewItem(title), title });
   }

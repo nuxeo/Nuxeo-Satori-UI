@@ -513,10 +513,13 @@ class ShareLinkComponentTest {
 
     @Test
     void theOriginalReplacedEndsTheLinkForIt() {
-        Created created = make(asset, "2026-12-14", "original");
+        Created created = make(asset, "2026-12-14", "original", "view:FullHD");
         asset.properties.put("file:content",
                 (java.io.Serializable) ShareFakes.blob(ShareFakes.jpeg(320, 240, Color.BLACK), "image/jpeg"));
         refused(Why.CHANGED, links.serve(created.token(), "original"));
+        // The page, which reads no bytes, leaves it out by its digest.
+        assertEquals(List.of("view:FullHD"),
+                assertInstanceOf(Page.class, links.page(created.token())).items().stream().map(ShareItem::id).toList());
     }
 
     @Test

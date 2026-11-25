@@ -191,7 +191,9 @@ class WatermarkerTest {
      */
     @Test
     void aLongThinPictureIsRefusedBeforeItIsMarked() throws Exception {
-        for (int[] size : new int[][] { { 24_000_000, 1 }, { 16_385, 1 }, { 1, 16_385 } }) {
+        // 16385 by 1464 is within the pixels, the budget and the tiles: its side alone refuses it.
+        for (int[] size : new int[][] { { 24_000_000, 1 }, { 16_385, 1 }, { 1, 16_385 }, { 16_385, 1464 },
+                { 1464, 16_385 } }) {
             byte[] thin = ShareFakes.png(1, 1, Color.RED);
             claimSize(thin, size[0], size[1]);
             long started = System.nanoTime();
@@ -200,6 +202,11 @@ class WatermarkerTest {
                     () -> Arrays.toString(size));
             assertTrue(System.nanoTime() - started < 1_000_000_000L, "refused at once");
         }
+        // At the side, let through to be decoded.
+        byte[] edge = ShareFakes.png(1, 1, Color.RED);
+        claimSize(edge, 16_384, 1464);
+        assertEquals(WatermarkException.Kind.NOT_AN_IMAGE, assertThrows(WatermarkException.class,
+                () -> watermarker.watermark(ShareFakes.blob(edge, "image/png"), TEXT)).kind());
         // Within the side, still too many tiles for a picture one pixel high.
         assertTrue(Watermarker.layout(16_384, 1, TEXT, "ab12cd34").tiles() > Watermarker.MAX_TILES);
         byte[] strip = ShareFakes.png(1, 1, Color.RED);

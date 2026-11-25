@@ -257,18 +257,19 @@ add-on's rights policy.
   candidate: it lets a user change the asset, not say who else may see it. `WriteSecurity` alone
   lists the links, revokes them, and reads their downloads: stopping a link is not sharing.
 - **What it lists:** 1 to 10 items, each the asset's `original`, or one of its picture views by its
-  exact title, `view:<title>`. Not a rendition of the rendition service, not another blob, not a
-  view by its place.
+  exact title, `view:<title>`, which holds no `/` or `\`. Not a rendition of the rendition
+  service, not another blob, not a view by its place.
 - **Until when:** a last day, `yyyy-MM-dd`, in UTC, from today to 90 days on: the link stops at the
   first instant of the next day, in UTC, as an asset's rights end does.
 - **Only what the rights allow now:** each item is decided by the asset's rights policy as a
   download of it would be, and refused when the rights have ended, a preview's included. A request
   with any item refused makes no link, and says which and why: `{"refused": [{"rendition",
 "reason"}]}`, with the rights' codes and `no-such-rendition`.
-- **Bound to the files:** each item's file digest is recorded with the link, and an item is
-  served only while the document's file for it still has that digest. A view renamed onto another
-  file, a picture replaced, or its views made again as other files, ends the link for that item; a
-  file with no digest is not shared, answered `no-such-rendition`.
+- **Bound to the files:** each item's file digest, as the store gives it, and the SHA-256 of its
+  bytes are recorded with the link. An item is served only while the document's file for it still
+  has that digest, and the bytes read for it that SHA-256. A view renamed onto another file, a
+  picture replaced, or its views made again as other files, ends the link for that item; a file
+  with no digest is not shared, answered `no-such-rendition`.
 - **Not for** a version, a proxy, a document in the trash or a type no rights policy covers; a
   document has at most 100 open links, and keeps at most 1000 in all.
 - **The token:** 32 bytes from `SecureRandom`, 256 bits, written as 43 characters of base64url.
@@ -297,9 +298,10 @@ hold, in this order:
    policy no longer lists ends the link for that item;
 7. the document has the item with the file the link was made for: a view of that title, or its
    original, with the digest the link recorded;
-8. the item is a JPEG or a PNG of at most 64 MiB and 24 million pixels, whose decoded pixels and
-   marked copy take at most 200 MiB, all read from its header before its pixels, and the watermark
-   is drawn on it;
+8. the bytes read for it, at most 64 MiB, have the SHA-256 the link recorded, and are a JPEG or a
+   PNG of at most 24 million pixels, no side over 16384, whose decoding and marking take at most
+   200 MiB as counted, the file twice included, and whose text is drawn at most 20000 times: all
+   read from its header before its pixels; and the watermark is drawn on it;
 9. the download is logged.
 
 - **Nothing in a request names a document.** The document is the link's; the path names only an
@@ -317,10 +319,15 @@ hold, in this order:
   from memory, never a temporary file, the link's label and last day, `SHARED ab12cd34 UNTIL
 2026-12-14 UTC`, tiled across all of it at -30 degrees, light over dark, and the result written as
   a new JPEG. Nothing of the file but its pixels goes through: its metadata, colour profile and any
-  embedded image are left behind. At most two are drawn at once, each holding a decoded picture, and
-  one at a time for any one link; a request that waits two seconds for a turn, or whose link has one
-  being drawn, is answered 503, never with the file. A file that
-  cannot be marked is not served. A copy carries the label of the link it came from.
+  embedded image are left behind. A picture too small for the whole text along its diagonal
+  carries the label alone, so that a thumbnail's copy names its link too. At most two pictures are
+  drawn at once, each holding a decoded picture, and one at a time for any one link: a link's page
+  asks for all its pictures at once, and they wait for their link's turn, up to 10 seconds, then for
+  one of the two, up to 2; a request that waits longer is answered 503, never with the file. Links
+  share 64 turns, so two links on one turn wait for each other. A file that cannot be marked is not
+  served. A copy carries the label of the link it came from.
+- **A failure refuses:** an exception anywhere, an `Error` such as running out of memory while a
+  picture is decoded, or a transaction that does not commit, is answered with the same 404.
 - **Every answer** is sent with `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, a content
   security policy that runs no script and frames nothing, `X-Frame-Options: DENY`, `X-Robots-Tag:
 noindex`, `nosniff` and `Cross-Origin-Resource-Policy: same-origin`. GET only: anything else is 405.
@@ -412,8 +419,8 @@ runtime: documents are proxies that answer only what the code reads.
 | `BundleTest`                   | The manifest's components, their classes, and the package's version; the share servlet mapped with no authentication filter; the two directories readable by `__Nobody__`, of the `system` type, with no cache and their fields; the four operations |
 | `ShareTokenTest`               | 256 bits from the generator given, every bit varying; one canonical form; the SHA-256 kept; hashes compared exactly                                                                                                                                  |
 | `ShareLinkTest`                | A link's state at the edges of its last day in UTC, revoked whatever the time; the items a link may list                                                                                                                                             |
-| `ShareLinkComponentTest`       | Making a link: permission, items, day, rights now; opening it: every condition above, each refusal by its reason, the bytes marked and logged                                                                                                        |
-| `WatermarkerTest`              | The mark across the whole picture, light and dark; nothing but the pixels kept; formats, pixels and bytes refused                                                                                                                                    |
+| `ShareLinkComponentTest`       | Making a link: the permission and the sharing group, items, day, rights now, each item's digest and SHA-256; opening it: every condition above, each refusal by its reason, the bytes marked and logged; one turn per link                           |
+| `WatermarkerTest`              | The mark across the whole picture, light and dark, the label whole on a thumbnail; nothing but the pixels kept; formats, bytes, pixels, sides, tiles and the budget refused from the header                                                          |
 | `ShareEndpointTest`            | GET only; the paths and nothing else; one refusal byte for byte; the headers on every answer; the page escaped and self-contained                                                                                                                    |
 | `DirectoryShareLinkStoreTest`  | Every call with the system's rights; text only, the token nowhere; what does not read back refused; newest first, truncated                                                                                                                          |
 | `ShareLinkJsonTest`            | What the operations answer, and the token in Create's answer only                                                                                                                                                                                    |
@@ -425,6 +432,24 @@ served, a nested collection not looked for, a proxy's live fields written, and t
 the tests red, and the build unbroken was green. **What the tests cannot reach:** the privileged
 lookup of a version's live document and the container query run against fakes here; the query's
 text is held exactly, but neither has run on a repository.
+
+**The share links' guards were seen failing too:** each of 80 breakages, one at a
+time, turned the tests red, and the build unbroken was green. Among them: a link that never
+expires or expires a day late; a revocation not read; an item the link does not list served, or
+`rendition/` mapped; another document served, or another document's link revoked; ended rights
+not checked when serving, on the page or when making a link, previews included; the rights
+decision ignored; a creator's permission or group not asked, or asked for `Read`; a token compared
+loosely, not checked for its form, of 128 bits, not from the generator given, or kept in place of
+its hash; the file served unmarked, the watermark not drawn or drawn once, its limits on bytes,
+pixels, sides, tiles and memory removed, metadata kept; the turns removed; the download not
+logged, or a failure to log still serving; Create, List or Downloads with no permission, or
+`Write` in place of `WriteSecurity`; a view or the original served whatever its file; the
+`no-store`, `no-referrer` or `DENY` header dropped; an expired link answered apart; the page not
+escaped; the directories readable by `Everyone`, cached, or not `system`; the authentication filter
+mapped on the path. The script that broke them is not in the repository; the list is in the pull
+request. **What the tests cannot reach:** the directories, the repository, the user manager, the
+servlet container and Automation are fakes here, so the operations' statuses, the directories'
+tables and the servlet's mapping have not run on a server.
 
 The version is `assets.package.version` in `pom.xml`, which `package.xml` takes, and the manifest's
 `Bundle-Version` repeats; `BundleTest` refuses a build where they differ.
@@ -566,9 +591,9 @@ condition for phase 5 being done:
     it and nothing else; no authentication filter, so no session and no principal, and the
     system's rights used only to read that document, its creator's permission and the two
     directories. Whether anything else under `/nuxeo/` can be reached with a link's token (it is
-    no sign-in token: `TOKEN_AUTH` does not know it), and whether a view's title, which anyone who
-    may write the asset may change, can make a link serve a picture it was not made for: a link
-    names a view by its title, and serves whichever view has that title at the time.
+    no sign-in token: `TOKEN_AUTH` does not know it). A view's title, which anyone who may write the
+    asset may change, no longer decides what a link serves: each item is bound to its file's digest
+    and its bytes' SHA-256 (item 24).
 15. **Watermark removal:** a visible mark, tiled, light over dark, at -30 degrees, the link's label
     and last day in it, on a new JPEG with no metadata. It can be cropped round, painted over or
     rebuilt by software; it names the link a copy came from, and does not stop a copy. Whether an
@@ -578,10 +603,14 @@ condition for phase 5 being done:
 17. **Referrer leakage:** `Referrer-Policy: no-referrer` and the page's own `<meta name="referrer">`;
     the page loads nothing from elsewhere and links nowhere else. The token is still in the
     address bar, the browser's history, and the server's and every proxy's access logs, which the
-    install must treat as secrets.
+    install must treat as secrets; and in the traces of the server's OpenCensus filter on every
+    path, which records the request's address whenever tracing is exported.
 18. **Revocation latency:** no cache in the directories or in the service, so a revocation holds
     from the next request on, on any node, with the database's own isolation. A request already
-    being answered finishes, and what a visitor saved before is theirs.
+    being answered finishes, and what a visitor saved before is theirs. The creator's groups and
+    permission are asked through the user manager, whose principal cache is the server's
+    `default-cache`, with a 20-minute lifetime on the local server: a change made through Nuxeo
+    clears it, one made in LDAP or by single sign-on provisioning is seen up to 20 minutes late.
 19. **Clock and time zone:** a link's last day and the rights end are days in UTC, decided by the
     server's clock; the asset page shows the day in UTC and says so. A server whose clock is wrong
     serves for the wrong days.
@@ -599,12 +628,15 @@ condition for phase 5 being done:
     `nuxeo.agentic.share.groups` names, asked again of the creator at every request, through the
     user manager, with their groups; a user no longer there refuses. Whether that is the right
     pair, rather than a permission of its own, given that `Everything` grants every permission on
-    a user's own workspace; and the rights fields, which whoever may write an asset may write, and
-    which decide its links.
+    a user's own workspace; the principal cache's delay (item 18); and the rights fields, which
+    whoever may write an asset may write, and which decide its links.
 23. **Denial of service:** at most two pictures marked at once, and one per link, each at most
-    64 MiB, 24 million pixels and 200 MiB decoded and marked, read from the header first; a request
-    waiting two seconds answered 503. Every page view marks and logs each picture it shows.
-24. **Binding to the files:** an item is served only while its file has the digest recorded when
-    the link was made, compared as text; whether a view's digest is stable enough on the release
+    64 MiB, 24 million pixels, 16384 a side, 20000 tiles of text and 200 MiB as counted, read from
+    the header first; a request waiting its turns longer than 10 and 2 seconds answered 503. The
+    count is not the JVM's peak, which runs higher: up to twice it was measured. Every page view
+    marks and logs each picture it shows.
+24. **Binding to the files:** an item is served only while its file has the digest the store gave
+    it when the link was made, and the bytes read have the SHA-256 recorded then, so that a store
+    whose digest is MD5 does not decide alone; whether a view's file is stable enough on the release
     it runs on for a link not to end by itself, and whether ending it when a picture is replaced is
     what customers want.
