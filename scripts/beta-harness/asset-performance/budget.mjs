@@ -1,8 +1,9 @@
 /**
  * The asset library's performance budget, and the judgement of a run against it: what
  * `check.mjs` fails on. The numbers are in `budget.json`, the reasoning in
- * `docs/business-apps/performance-budget.md`; `asset-performance.selftest.mjs` holds the page's
- * table to the file, so the two cannot say different things.
+ * `docs/business-apps/performance-budget.md`; `asset-performance.selftest.mjs` fails when the
+ * page's budget table, the one marked `<!-- table: measure -->`, and the file differ. It is the
+ * only place on the page that states a limit.
  *
  * Pure: no browser, no server. A measure that is missing, or not a finite number, fails its
  * line rather than passing it, so a scenario that never ran cannot read as within budget.

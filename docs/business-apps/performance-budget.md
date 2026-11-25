@@ -176,29 +176,43 @@ app's code is left as it is.
 
 ## Measured on 25 November 2026
 
-On an Apple Silicon Mac, Chromium 153 headless, the network above, no CPU slowdown:
+On an Apple Silicon Mac, Chromium 153 headless, the network above, no CPU slowdown, the build of
+the commit this page arrived with. Each line's limit is the budget's, above:
 
-| Measure                              | Measured | Limit   |
-| ------------------------------------ | -------- | ------- |
-| First contentful paint               | 1276 ms  | 1800 ms |
-| First page of results                | 1682 ms  | 2500 ms |
-| Requests to open the library         | 14       | 20      |
-| A page, median                       | 283 ms   | 500 ms  |
-| A page, 95th percentile              | 297 ms   | 1000 ms |
-| Requests per page                    | 1        | 1       |
-| A facet, slowest                     | 286 ms   | 1000 ms |
-| Requests per facet                   | 1        | 1       |
-| The asset page's first view, slowest | 563 ms   | 1000 ms |
-| Requests to open the asset page      | 20       | 25      |
-| Heap after 50 pages                  | 16.1 MB  | 64 MB   |
-| Heap growth over 50 pages            | 2.9 MB   | 10 MB   |
+| Measure                              | Measured |
+| ------------------------------------ | -------- |
+| First contentful paint               | 1320 ms  |
+| First page of results                | 1734 ms  |
+| Requests to open the library         | 14       |
+| A page, median                       | 294 ms   |
+| A page, 95th percentile              | 298 ms   |
+| Requests per page                    | 1        |
+| A facet, slowest                     | 296 ms   |
+| Requests per facet                   | 1        |
+| The asset page's first view, slowest | 576 ms   |
+| Requests to open the asset page      | 20       |
+| Heap after 50 pages                  | 16.1 MB  |
+| Heap growth over 50 pages            | 2.9 MB   |
 
-Once, with a fourfold CPU slowdown (`--cpu 4`): 1536 ms to first paint, 1971 ms to the first page,
-305 ms a page, 574 ms to the first view, and the same heap: within budget too.
+The slowest first view is the first open, which also loads the asset page's code; the four after
+it took 297 to 312 ms.
 
-The controls, the same day: `slow` was over on the first page (2862 ms), paging (1165 ms median,
-1173 ms at the 95th), the facets (1168 ms) and the first view (1115 ms), and within on every request
-and heap line. FETCH_ALL_RESULT HOLD_PAGES_RESULT
+CPU_SLOWDOWN_RESULT
+
+The controls, the same day, against the same build, each over on every line it names and failing
+the run:
+
+| Control      | Over budget on                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `slow`       | first page 2851 ms; a page 1165 ms median, 1166 ms at the 95th; facets 1168 ms; first view 1147 ms                  |
+| `big-bundle` | first paint 2480 ms; first page 2888 ms                                                                             |
+| `fetch-all`  | first page 66,863 ms; 1014 requests to open the library; facets 3507 ms and 41 requests                             |
+| `twice`      | 28 requests to open the library; a page 560 ms median and 2 requests; 2 requests a facet; 40 to open the asset page |
+| `hold-pages` | heap growth 13.3 MB                                                                                                 |
+| `ballast`    | heap after 50 pages 92.4 MB                                                                                         |
+
+Each was within budget on the lines it does not touch, but for the slower pages `twice`'s extra
+requests cost and the slower facets of `fetch-all`.
 
 ### Requests per action
 
