@@ -20,6 +20,7 @@ import { NxsConfirmDialogComponent, provideNxsComponents } from '@nuxeo/satori-p
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { BehaviorSubject, Subject, firstValueFrom, of, startWith, type Observable } from 'rxjs';
 
+import { controlContract } from '../control-contract.testing';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import type { LayoutJson } from '../layout-edits';
 import { LayoutDesignerPageComponent } from './layout-designer-page';
@@ -860,5 +861,86 @@ describe('LayoutDesignerPageComponent', () => {
       button('[data-action="download"]').click();
       expect(clicked).toEqual([{ download: 'create.layout.json' }]);
     });
+
+    it("keeps a form's keyboard contract: every control's element, name, state and order", async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      change('[data-field="member:status"] [data-rule="required-choice"]', 'rule');
+      await settle();
+      expect(controlContract(root())).toEqual([
+        'a "Layout files"',
+        'a "Queues"',
+        'select "Layout file" [Choose a file | Member: record page | Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
+        'button "Open"',
+        'select "Preview with" [Jane Doe | John Roe]',
+        'h2 "The Member edit form" tabindex=-1',
+        'input "Card ID"',
+        'input "Heading text"',
+        'input "Heading label key"',
+        'button "Move member:phone up" disabled',
+        'button "Move member:phone down"',
+        'button "Hide member:phone"',
+        'summary "Rules of member:phone (1)"',
+        'select "Required" [Not required | Always | While a rule passes]',
+        'textarea "Read-only while"',
+        'textarea "Shown while"',
+        'button "Move member:status up"',
+        'button "Move member:status down"',
+        'button "Hide member:status"',
+        'summary "Rules of member:status (1)"',
+        'select "Required" [Not required | Always | While a rule passes]',
+        'textarea "Required while"',
+        'textarea "Read-only while"',
+        'textarea "Shown while"',
+        'button "Move member:email up"',
+        'button "Move member:email down" disabled',
+        'button "Hide member:email"',
+        'summary "Rules of member:email (1)"',
+        'select "Required" [Not required | Always | While a rule passes]',
+        'textarea "Required while"',
+        'textarea "Read-only while"',
+        'textarea "Shown while"',
+        'select "Add a property" [Choose a property | dc:title | member:birthDate]',
+        'button "Add" disabled',
+        'button "Download edit.layout.json" disabled',
+        'button "Undo every change"',
+        'summary "edit.layout.json as it will be saved"',
+      ]);
+    });
+  });
+
+  it("keeps a record page's keyboard contract: every control's element, name, state and order", async () => {
+    await open();
+    button('[data-field="member:phone"] [data-action="hide"]').click();
+    await settle();
+    expect(controlContract(root())).toEqual([
+      'a "Layout files"',
+      'a "Queues"',
+      'select "Layout file" [Choose a file | Member: record page | Member: edit form | Member: create form, a new file | Claim: record page | Claim: edit form, a new file | Claim: create form, a new file]',
+      'button "Open"',
+      'select "Preview with" [Jane Doe | John Roe]',
+      'h2 "The Member record page" tabindex=-1',
+      'input "Card ID"',
+      'input "Heading text"',
+      'input "Heading label key"',
+      'button "Move age up" disabled',
+      'button "Move age down"',
+      'button "Hide age"',
+      'summary "Rules of age (0)"',
+      'textarea "Shown while"',
+      'button "Move member:status up"',
+      'button "Move member:status down" disabled',
+      'button "Hide member:status"',
+      'summary "Rules of member:status (0)"',
+      'textarea "Shown while"',
+      'select "Add a property" [Choose a property | dc:title | member:birthDate | member:email | member:phone]',
+      'button "Add" disabled',
+      'input "Card ID"',
+      'input "Heading text"',
+      'input "Heading label key"',
+      'button "Show member:phone again"',
+      'button "Download view.layout.json"',
+      'button "Undo every change"',
+      'summary "view.layout.json as it will be saved"',
+    ]);
   });
 });

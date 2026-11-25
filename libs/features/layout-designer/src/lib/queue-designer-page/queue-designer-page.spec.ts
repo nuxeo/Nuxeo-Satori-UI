@@ -7,6 +7,7 @@ import { QueuePageComponent } from '@agentic-ui/shared/queues';
 import { NxsConfirmDialogComponent, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import { BehaviorSubject, Subject, firstValueFrom, of, startWith } from 'rxjs';
 
+import { controlContract } from '../control-contract.testing';
 import { LayoutDesignerService, type Reading } from '../layout-designer.service';
 import type { LayoutJson } from '../layout-edits';
 import { QueueDesignerPageComponent } from './queue-designer-page';
@@ -515,5 +516,53 @@ describe('QueueDesignerPageComponent', () => {
     const held = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(held);
     expect(held.defaultPrevented).toBe(true);
+  });
+
+  it("keeps the queue's keyboard contract: every control's element, name, state and order", async () => {
+    // A sort with no order, so that the order picker offers its "none" too.
+    await open({
+      ...RENEWALS,
+      sort: [{ field: 'contract:end', order: 'asc' }, { field: 'dc:title' }],
+    });
+    button('[data-column="dc:title"] [data-action="hide"]').click();
+    await settle();
+    expect(controlContract(root())).toEqual([
+      'a "Layout files"',
+      'a "Queues"',
+      'input "Queue ID" suggests',
+      'button "Open"',
+      'h2 "The up-for-renewal queue" tabindex=-1',
+      'input "Name text"',
+      'input "Name label key"',
+      'button "Move the column contract:number up" disabled',
+      'button "Move the column contract:number down"',
+      'button "Hide the column contract:number"',
+      'button "Move the column contract:end up"',
+      'button "Move the column contract:end down" disabled',
+      'button "Hide the column contract:end"',
+      'input "Add a column: a property" suggests',
+      'button "Add" disabled',
+      'button "Show the column dc:title again"',
+      'button "Move the sort on contract:end up" disabled',
+      'button "Move the sort on contract:end down"',
+      'button "Remove the sort on contract:end"',
+      'select "Order of contract:end" [Ascending | Descending]',
+      'button "Move the sort on dc:title up"',
+      'button "Move the sort on dc:title down" disabled',
+      'button "Remove the sort on dc:title"',
+      'select "Order of dc:title" [As the page provider sorts | Ascending | Descending]',
+      'select "Sort on a column" [Choose a column | contract:number]',
+      'button "Add" disabled',
+      'button "Move the facet contract_status up" disabled',
+      'button "Move the facet contract_status down" disabled',
+      'button "Remove the facet contract_status"',
+      'input "Name of the facet contract_status"',
+      'input "Label key of the facet contract_status"',
+      'input "Add a facet: an aggregate\'s ID"',
+      'button "Add" disabled',
+      'button "Download up-for-renewal.json"',
+      'button "Undo every change"',
+      'summary "up-for-renewal.json as it will be saved"',
+    ]);
   });
 });
