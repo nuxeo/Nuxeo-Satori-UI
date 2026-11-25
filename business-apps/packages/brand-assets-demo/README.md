@@ -29,6 +29,10 @@ downloaded.
   aggregates (Rights, Shot and Product), and the products.
 - **A stand-in model,** until a brand team's own arrives: the types, schemas and page providers
   those files name. It is fictional, and replaced whole when theirs comes.
+- **A performance budget at 100,000 assets,** for the library and the asset page, checked against
+  a stand-in for the server rather than a seeded one:
+  [performance-budget.md](../../../docs/business-apps/performance-budget.md), and
+  `npm run beta:asset-performance`. It does not measure the server's own query time.
 - **A seed script** writes two products, six pictures and the products' shot list into the kit's
   own workspace, and nowhere else. Run it twice and nothing is added the second time. With
   `--preview`, before the package is installed, it writes the six pictures as the platform's own

@@ -1,0 +1,17 @@
+{
+  "$comment": "The brand assets library's performance budget at 100,000 assets, which scripts/beta-harness/asset-performance/check.mjs fails on. Each limit's reasoning is in docs/business-apps/performance-budget.md, whose table must match this file (asset-performance.selftest.mjs). Change a limit only with that page's reasoning changed beside it.",
+  "limits": {
+    "library.firstContentfulPaintMs": 1800,
+    "library.firstPageMs": 2500,
+    "library.openRequests": 20,
+    "paging.medianMs": 500,
+    "paging.p95Ms": 1000,
+    "paging.requestsPerPage": 1,
+    "facets.maxMs": 1000,
+    "facets.requestsPerChoice": 1,
+    "asset.firstViewMs": 1000,
+    "asset.requests": 25,
+    "heap.after50PagesMB": 64,
+    "heap.growthMB": 6
+  }
+}

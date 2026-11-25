@@ -63,6 +63,8 @@ Designer, the development plan and its decisions. Start here when you pick this 
     Studio package with one command, reading its report and filling in its decisions.
 13. [spikes/plugins-decision-5.md](spikes/plugins-decision-5.md): the spike for decision 5,
     customer code built in from the template or loaded at run time, signed and pinned.
+14. [performance-budget.md](performance-budget.md): the brand assets library's budget at 100,000
+    assets, proposed, and the check that holds it without a server.
 
 ## Facts that hold
 
