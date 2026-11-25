@@ -52,7 +52,7 @@
  * yet, so the approve button is left out of the queue's rows).
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -64,6 +64,32 @@ const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { CASES, CLAIMS, MEMBERS, USERS } = await import(join(KIT, 'demo', 'data.mjs'));
 /** The route model's zip, relative to the bundle, as the kit's workflow component names it. */
 const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
+
+/** A demo adjuster and nothing else, as the run's own user must be: step 1 signs in as them. */
+const adjustersOnly = (user) =>
+  JSON.stringify(user?.groups) === JSON.stringify(['claims-adjusters']);
+/** The member services person step 4 signs the browser in as. */
+const SERVICES = USERS.find((user) => user.groups.includes('member-services'));
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here: the kit, the
+ * seeds to run first, who `NUXEO_USER` must be, who the browser is signed in as besides, and what
+ * else must be in place. The people are the ones the preconditions below hold the run to.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: {
+    users: USERS.filter(adjustersOnly).map((user) => user.username),
+    who: 'a demo adjuster, in claims-adjusters and in no other group',
+  },
+  signsInAs: [SERVICES.username],
+  needs: [
+    'the kit 0.3.0 or later installed, and no claim or case the seed did not write',
+    "the dev server with `npm run config:dev` serving the kit's files",
+  ],
+};
 
 /** The session `AuthService` keeps, which the app's interceptor reads: helpers.mjs's key. */
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -293,8 +319,6 @@ export default async function run(page, h) {
   await h.step('Preconditions: the kit installed and seeded, its files served, its people');
   const { username: adjuster } = requireStepCredentials('sign the demo in as an adjuster');
   const adjusterRecord = USERS.find((user) => user.username === adjuster);
-  const adjustersOnly = (user) =>
-    JSON.stringify(user?.groups) === JSON.stringify(['claims-adjusters']);
   h.requirePrecondition(
     'the run signs in as one of the demo adjusters, in no other group',
     adjustersOnly(adjusterRecord),
@@ -317,7 +341,7 @@ export default async function run(page, h) {
   );
 
   const demoPassword = process.env['PAYERS_DEMO_PASSWORD'] ?? '';
-  const services = USERS.find((user) => user.groups.includes('member-services'));
+  const services = SERVICES;
   h.requirePrecondition(
     'PAYERS_DEMO_PASSWORD is set, for member services',
     demoPassword !== '',

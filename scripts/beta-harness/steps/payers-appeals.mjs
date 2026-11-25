@@ -53,7 +53,7 @@
  * layout from `config:dev`); and who may change a case's checklist through the API.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireStepCredentials } from '../helpers.mjs';
@@ -67,6 +67,25 @@ const { appealProblems, appealRows, checklistOnType, readAppealChecklist } = awa
   join(KIT, 'demo', 'appeals.mjs')
 );
 const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
+
+/**
+ * What a server run of this file needs, for the release candidate's list of demo steps
+ * (`scripts/release-candidate.mjs`), which reads it without running anything here. The person is
+ * the one the preconditions below hold the run to; it signs no one else in.
+ */
+export const serverRun = {
+  kit: basename(KIT),
+  seeds: ['demo/seed.mjs'],
+  runAs: {
+    users: [APPEALS_SPECIALIST],
+    who: "the appeals' case specialist, in member-services and neither claims group",
+  },
+  signsInAs: [],
+  needs: [
+    'the kit 0.4.1 or later installed',
+    "the dev server with `npm run config:dev` serving the kit's Case layout and labels",
+  ],
+};
 
 const CASE_LAYOUT = 'layouts/Case/view.layout.json';
 const CASES_FOLDER = '/default-domain/workspaces/payers-demo/cases';
