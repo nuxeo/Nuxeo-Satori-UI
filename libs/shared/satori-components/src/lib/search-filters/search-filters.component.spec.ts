@@ -289,6 +289,20 @@ describe('NxsSearchFiltersComponent', () => {
     expect(focus).toHaveBeenCalled();
   });
 
+  it('keeps focus on the latest trigger when a switched panel closes before rendering', async () => {
+    host.layout.set('horizontal');
+    await render();
+    menuTrigger('People').click();
+    await render();
+    const coverage = menuTrigger('Coverage');
+    coverage.focus();
+    coverage.click();
+    coverage.click();
+    await render();
+    expect(document.querySelector('.filter-panel')).toBeNull();
+    expect(document.activeElement).toBe(coverage);
+  });
+
   async function render(): Promise<void> {
     fixture.detectChanges();
     await fixture.whenStable();

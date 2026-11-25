@@ -14,10 +14,11 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
   type WritableSignal,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { A11yModule } from '@angular/cdk/a11y';
+import { A11yModule, CdkTrapFocus } from '@angular/cdk/a11y';
 import { CdkOverlayOrigin, OverlayModule, type ConnectedPosition } from '@angular/cdk/overlay';
 import { MatRadioModule } from '@angular/material/radio';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -126,6 +127,7 @@ export class NxsSearchFiltersComponent {
   ];
   protected readonly activeMenu = signal<FilterMenu | null>(null);
   protected readonly panelOrigin = signal<CdkOverlayOrigin | null>(null);
+  private readonly panelFocusTrap = viewChild(CdkTrapFocus);
   protected readonly scopeDraft = signal(false);
   protected readonly panelPositions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
@@ -192,10 +194,22 @@ export class NxsSearchFiltersComponent {
       this.closePanel();
       return;
     }
+    const switchingPanel = this.activeMenu() !== null;
     this.panelOrigin.set(origin);
     this.scopeDraft.set(!!this.filters().filesOnly);
     this.activeMenu.set(menu);
     if (menu === 'collections') this.onCollectionsFocus();
+    if (switchingPanel) {
+      // The existing trap captures only on creation; a different trigger reuses its dialog.
+      afterNextRender(
+        () => {
+          if (this.activeMenu() === menu && this.panelOrigin() === origin) {
+            void this.panelFocusTrap()?.focusTrap.focusInitialElementWhenReady();
+          }
+        },
+        { injector: this.injector },
+      );
+    }
   }
 
   protected closePanel(restoreFocus = true): void {

@@ -166,6 +166,11 @@ page-size changes. Saved-search label handling was compared with main: criteria 
 keep the saved identity and dirty state, while reset, failure, rename and Save As update the existing
 title binding. No speculative label behavior was introduced.
 
+Switching between open filter dropdowns now recaptures focus inside the newly active dialog,
+matching initial opening. A real Chrome control failed only at switched-dialog entry before the fix
+and passes afterward, including Escape restoring the latest trigger. The dialog remains non-modal;
+a rapid-close control verifies queued recapture does not move focus after dismissal.
+
 ### Follow-up Copilot review — 25 November 2026
 
 Four additional findings are addressed:
