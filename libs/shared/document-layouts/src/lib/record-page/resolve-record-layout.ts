@@ -56,6 +56,8 @@ export interface ResolvedRecordLayout {
   readonly columns: number;
   readonly banners: readonly RecordBannerEntry[];
   readonly preview: RecordPreview;
+  /** Whether the picture shows as a review, pins and rounds: only ever with a `picture` preview. */
+  readonly review: boolean;
   readonly tabs: readonly ResolvedRecordTab[] | null;
   readonly cards: readonly ResolvedRecordCard[];
   /**
@@ -202,7 +204,7 @@ export function resolveRecordLayout(
 ): {
   readonly layout: ResolvedRecordLayout;
   readonly skipped: readonly SkippedRecordField[];
-  /** What the console is told about a table's columns, each note whole. */
+  /** What the console is told about a table's columns and a review left out, each note whole. */
   readonly notes: readonly string[];
 } {
   const properties = propertyDefinitions([...type.schemas, ...facetSchemas]);
@@ -273,12 +275,18 @@ export function resolveRecordLayout(
         .map((tab) => ({ ...tab, cards: cards(tab.cards) }))
         .filter((tab) => tab.cards.length > 0)
     : null;
+  // A review is drawn on the picture, so a record that shows none has nothing to review.
+  const review = file.review && preview === 'picture';
+  if (file.review && !review) {
+    notes.push('review: a review is drawn on a picture, and this record shows none; left out');
+  }
   return {
     layout: {
       type: type.name,
       columns: file.columns,
       banners: file.banners,
       preview,
+      review,
       tabs,
       cards: tabs ? [] : cards(file.cards),
       properties,

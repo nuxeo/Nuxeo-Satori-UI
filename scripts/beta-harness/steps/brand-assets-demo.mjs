@@ -10,9 +10,9 @@
  *   5. The layout files behind the pages: configuration, no code.
  *
  * The plan's step 2, the print rendition refused by the server, is its own steps file,
- * `brand-assets-rights.mjs`, since it needs `nuxeo-agentic-assets`. Steps 3 and 4 (share links,
- * review with pins) are not this kit's yet: decision C and the review are out of its scope, and
- * said in notes.
+ * `brand-assets-rights.mjs`, since it needs `nuxeo-agentic-assets`. Step 3, share links, is not
+ * this kit's yet: decision C is out of its scope, and said in a note. Step 4, the review with pins,
+ * is `brand-assets-review.mjs`, which writes what it reviews.
  *
  * The records, titles and dates it expects are read from the kit's own files, `demo/data.mjs` and
  * `bundle/agentic-ui-config/`, and each asset's rights end date from the server, where the seed
@@ -44,8 +44,9 @@
  * downloading the cleared asset's once, which its rights cover, and no code in the bundle.
  *
  * Not covered, and said in notes: the server's own install (the dev server reads the layouts from
- * `config:dev`, not from the package), the plan's demo steps 2 to 4, and the views being made for
- * a record of the kit's own type right after an upload, which the seed checks, not the demo.
+ * `config:dev`, not from the package), the plan's demo steps 2 and 3, step 4, which is the review's
+ * own steps file, and the views being made for a record of the kit's own type right after an
+ * upload, which the seed checks, not the demo.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
@@ -621,7 +622,10 @@ export default async function run(page, h) {
   );
   h.note(
     "the plan's demo step 2, the print rendition refused by the server, is brand-assets-rights; " +
-      "steps 3 and 4, a share link and a review with pins, are not this kit's yet: decision C and " +
-      'the review are out of its scope',
+      "step 3, a share link, is not this kit's yet: decision C is out of its scope",
+  );
+  h.note(
+    "the plan's demo step 4, the review with pins, is not run here: brand-assets-review is its " +
+      'steps file, which creates the asset it reviews rather than writing on a seeded one',
   );
 }

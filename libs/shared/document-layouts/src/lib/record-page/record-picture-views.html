@@ -9,14 +9,18 @@
   <figure class="record-picture__figure" [attr.data-view]="view.title">
     <div class="record-picture__frame" [attr.aria-busy]="imageUrl() === null && failure() === null">
       @if (imageUrl(); as url) {
-        <img
-          class="record-picture__image"
-          [src]="url"
-          [alt]="
-            'document-layouts.picture.alt'
-              | translate: { title: document().title, view: view.title }
-          "
-        />
+        <!-- The stage is the picture's own box, so that what a host lays over it lies on the picture. -->
+        <div class="record-picture__stage">
+          <img
+            class="record-picture__image"
+            [src]="url"
+            [alt]="
+              'document-layouts.picture.alt'
+                | translate: { title: document().title, view: view.title }
+            "
+          />
+          <ng-content select="[libRecordPictureOverlay]" />
+        </div>
       } @else if (refusal(); as refused) {
         <!-- The server's rights refused this view: their reason, never the client's guess. -->
         <nxs-banner
