@@ -18,6 +18,7 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsBannerComponent,
   NxsCommentsComponent,
+  NxsIconComponent,
   type NxsBannerTone,
   type NxsTagStatus,
 } from '@nuxeo/satori-platform/components';
@@ -46,6 +47,7 @@ import {
   viewText,
 } from './record-field-view';
 import { listParameters } from './list-parameters';
+import { type RecordChecklistShown, checklistUsers, showChecklist } from './record-checklist';
 import { RECORD_PAGE_TIME_ZONE, RECORD_PAGE_TODAY } from './record-clock';
 import {
   type Labels,
@@ -147,6 +149,12 @@ export interface RecordExternalShown {
   readonly source: string;
 }
 
+/** A checklist's card, as the page draws it: its items, read from the open record. */
+export interface RecordChecklistCardShown extends RecordChecklistShown {
+  /** The list's name for assistive technology: the card's heading, or its id. */
+  readonly label: string;
+}
+
 export interface RecordCardShown {
   readonly id: string;
   readonly heading: string | null;
@@ -160,6 +168,8 @@ export interface RecordCardShown {
   readonly comments: RecordCommentsEntry | null;
   /** For a card from another system; `null` for any other card. */
   readonly external: RecordExternalShown | null;
+  /** For a checklist's card; `null` for any other card. */
+  readonly checklist: RecordChecklistCardShown | null;
 }
 
 export interface RecordPageShown {
@@ -181,10 +191,14 @@ export interface RecordPageShown {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Every field of the page, in reading order: the tabs' cards, or the page's own. */
+/** Every card of the page, in reading order: the tabs' cards, or the page's own. */
+function cardsOf(layout: ResolvedRecordLayout): readonly ResolvedRecordCard[] {
+  return layout.tabs ? layout.tabs.flatMap((tab) => tab.cards) : layout.cards;
+}
+
+/** Every field of the page, in reading order. */
 function fieldsOf(layout: ResolvedRecordLayout): ResolvedRecordField[] {
-  const cards = layout.tabs ? layout.tabs.flatMap((tab) => tab.cards) : layout.cards;
-  return cards.flatMap((card) => card.fields);
+  return cardsOf(layout).flatMap((card) => card.fields);
 }
 
 /** The first field on the page that shows the property, or `undefined` when none does. */
@@ -203,11 +217,13 @@ function fieldShowing(
  * them; each field shows a property through a registered widget, or what a registered
  * computation works out from the record; a rule shows or hides a banner, a tab, a card or a field.
  * A card may list related records instead, or show the record's timeline or its comments, or fields
- * of a record in another system, read on the server through a connector (`lib-record-external`). Banners
- * come first, then, for a Picture, its views (`lib-record-picture-views`), then the cards.
+ * of a record in another system, read on the server through a connector (`lib-record-external`), or
+ * a checklist: the items the file requires, each done or not by the record's own property, with who
+ * and when (`record-checklist.ts`). Banners come first, then, for a Picture, its views
+ * (`lib-record-picture-views`), then the cards.
  *
- * Its fields are read-only; the comments card is where a user writes, and the server decides what
- * it accepts. A hidden field is hidden from this page only: the REST API still returns it to
+ * Its fields and checklists are read-only; the comments card is where a user writes, and the
+ * server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
  * anyone the server lets read it, so nothing here is a security control.
  */
 @Component({
@@ -219,6 +235,7 @@ function fieldShowing(
     NgTemplateOutlet,
     NxsBannerComponent,
     NxsCommentsComponent,
+    NxsIconComponent,
     RecordExternalComponent,
     RecordListComponent,
     RecordPictureViewsComponent,
@@ -317,6 +334,12 @@ export class RecordPageComponent {
         if (definition && !fieldShowing(layout, xpath))
           named(null, {}, definition, properties[xpath]);
       }
+      // Who did each item a checklist shows done, named as a `user` field names them.
+      for (const card of cardsOf(layout)) {
+        if (!card.checklist) continue;
+        for (const user of checklistUsers(card.checklist, properties[card.checklist.field]))
+          named('user', {}, { type: 'string' }, user);
+      }
       return collector.lookups();
     },
     { equal: sameLookups },
@@ -395,6 +418,17 @@ export class RecordPageComponent {
                   source: `${layout.type}/view layout: ${card.place}`,
                 }
               : null,
+            checklist: card.checklist
+              ? {
+                  ...showChecklist(
+                    card.checklist,
+                    document.properties[card.checklist.field],
+                    (label) => this.text(label) ?? '',
+                    context,
+                  ),
+                  label: heading ?? humanize(card.id),
+                }
+              : null,
           };
         })
         .filter(
@@ -403,7 +437,8 @@ export class RecordPageComponent {
             (card.related?.list.columns.length ?? 0) > 0 ||
             card.timeline !== null ||
             card.comments !== null ||
-            (card.external?.external.fields.length ?? 0) > 0,
+            (card.external?.external.fields.length ?? 0) > 0 ||
+            card.checklist !== null,
         );
     if (layout.tabs) {
       const tabs = layout.tabs

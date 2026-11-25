@@ -1,10 +1,18 @@
 <div class="layout-designer">
   <h1 class="layout-designer__title">{{ 'layout-designer.title' | translate }}</h1>
+  <nav class="layout-designer__nav" [attr.aria-label]="'layout-designer.nav' | translate">
+    <a class="layout-designer__nav-link" routerLink="." aria-current="page">{{
+      'layout-designer.nav-layouts' | translate
+    }}</a>
+    <a class="layout-designer__nav-link" routerLink="queues">{{
+      'layout-designer.nav-queues' | translate
+    }}</a>
+  </nav>
   <p class="layout-designer__intro">{{ 'layout-designer.intro' | translate }}</p>
   <p class="layout-designer__note">{{ 'layout-designer.not-a-control' | translate }}</p>
 
   <div class="layout-designer__pickers">
-    @switch (types().state) {
+    @switch (files().state) {
       @case ('reading') {
         <nxs-spinner [diameter]="24" [label]="'layout-designer.types-reading' | translate" />
       }
@@ -12,11 +20,11 @@
         <nxs-banner
           tone="error"
           announce="alert"
-          [message]="'layout-designer.types-failed' | translate: { problem: failed(types()) }"
+          [message]="'layout-designer.types-failed' | translate: { problem: failed(files()) }"
         />
       }
       @default {
-        @if (typeList().length === 0) {
+        @if (choices().length === 0) {
           <p class="layout-designer__message">{{ 'layout-designer.types-none' | translate }}</p>
         } @else {
           <!-- Opened by its button, not as the choice changes: arrow keys on a closed select change it
@@ -26,12 +34,28 @@
             <select
               matNativeControl
               data-picker="type"
-              [value]="typeChosen()"
-              (change)="typeChosen.set(valueOf($event))"
+              [value]="fileChosen()"
+              (change)="fileChosen.set(valueOf($event))"
             >
               <option value="">{{ 'layout-designer.type-choose' | translate }}</option>
-              @for (each of typeList(); track each) {
-                <option [value]="each" [selected]="each === typeChosen()">{{ each }}</option>
+              @for (group of choices(); track group.type) {
+                <optgroup [label]="group.type">
+                  @for (choice of group.choices; track choice.key) {
+                    <option [value]="choice.key" [selected]="choice.key === fileChosen()">
+                      @if (choice.served) {
+                        {{
+                          'layout-designer.choice'
+                            | translate: { type: choice.type, mode: modeName(choice.mode) }
+                        }}
+                      } @else {
+                        {{
+                          'layout-designer.choice-new'
+                            | translate: { type: choice.type, mode: modeName(choice.mode) }
+                        }}
+                      }
+                    </option>
+                  }
+                </optgroup>
               }
             </select>
           </mat-form-field>
@@ -39,8 +63,8 @@
             mat-stroked-button
             type="button"
             data-action="open"
-            [disabled]="typeChosen() === ''"
-            (click)="open(typeChosen())"
+            [disabled]="fileChosen() === ''"
+            (click)="open(fileChosen())"
           >
             {{ 'layout-designer.open' | translate }}
           </button>
@@ -67,7 +91,10 @@
             </p>
           } @else {
             <mat-form-field class="layout-designer__picker" subscriptSizing="dynamic">
-              <mat-label>{{ 'layout-designer.record' | translate }}</mat-label>
+              <mat-label>{{
+                (mode() === 'create' ? 'layout-designer.folder' : 'layout-designer.record')
+                  | translate
+              }}</mat-label>
               <select
                 matNativeControl
                 data-picker="record"
@@ -96,7 +123,10 @@
       tone="error"
       announce="alert"
       data-source="failed"
-      [message]="'layout-designer.source-failed' | translate: { type: type(), problem }"
+      [message]="
+        'layout-designer.source-failed'
+          | translate: { type: type(), mode: modeName(mode()), problem }
+      "
     />
   }
 
@@ -104,8 +134,13 @@
     <div class="layout-designer__body">
       <section class="layout-designer__editor" aria-labelledby="layout-designer-editor">
         <h2 class="layout-designer__heading" id="layout-designer-editor" tabindex="-1">
-          {{ 'layout-designer.editor' | translate: { type: type() } }}
+          {{ 'layout-designer.editor' | translate: { type: type(), mode: modeName(mode()) } }}
         </h2>
+        @if (isNew()) {
+          <p class="layout-designer__message" data-new>
+            {{ 'layout-designer.new-file' | translate: { type: type(), file: fileName() } }}
+          </p>
+        }
 
         @for (card of cards(); track card.path) {
           <section
@@ -155,57 +190,153 @@
               @case ('fields') {
                 <ol class="layout-designer__fields">
                   @for (field of card.fields; track $index; let first = $first, last = $last) {
-                    <li class="layout-designer__field" [attr.data-field]="fieldName(field)">
-                      <span class="layout-designer__field-name">
-                        <code>{{ fieldName(field) }}</code>
-                        @if (field.kind === 'computed') {
-                          <span class="layout-designer__field-note">{{
-                            'layout-designer.field-computed' | translate
-                          }}</span>
-                        }
-                        @if (field.widget) {
-                          <span class="layout-designer__field-note">{{
-                            'layout-designer.field-widget' | translate: { widget: field.widget }
-                          }}</span>
-                        }
-                      </span>
-                      <span class="layout-designer__field-actions">
-                        <button
-                          mat-icon-button
-                          type="button"
-                          data-action="up"
-                          [disabled]="first"
-                          [attr.aria-label]="
-                            'layout-designer.move-up' | translate: { field: fieldName(field) }
-                          "
-                          (click)="moveUp(card, field)"
-                        >
-                          <nxs-icon name="arrow_up" />
-                        </button>
-                        <button
-                          mat-icon-button
-                          type="button"
-                          data-action="down"
-                          [disabled]="last"
-                          [attr.aria-label]="
-                            'layout-designer.move-down' | translate: { field: fieldName(field) }
-                          "
-                          (click)="moveDown(card, field)"
-                        >
-                          <nxs-icon name="arrow_down" />
-                        </button>
-                        <button
-                          mat-icon-button
-                          type="button"
-                          data-action="hide"
-                          [attr.aria-label]="
-                            'layout-designer.hide' | translate: { field: fieldName(field) }
-                          "
-                          (click)="hide(card, field)"
-                        >
-                          <nxs-icon name="view_off" />
-                        </button>
-                      </span>
+                    <li class="layout-designer__entry" [attr.data-field]="fieldName(field)">
+                      <div class="layout-designer__field">
+                        <span class="layout-designer__field-name">
+                          <code>{{ fieldName(field) }}</code>
+                          @if (field.kind === 'computed') {
+                            <span class="layout-designer__field-note">{{
+                              'layout-designer.field-computed' | translate
+                            }}</span>
+                          }
+                          @if (field.widget) {
+                            <span class="layout-designer__field-note">{{
+                              'layout-designer.field-widget' | translate: { widget: field.widget }
+                            }}</span>
+                          }
+                          @if (isForm() && field.kind === 'property') {
+                            @switch (requiredOf(field)) {
+                              @case ('always') {
+                                <span class="layout-designer__field-note" data-note="required">{{
+                                  'layout-designer.field-required' | translate
+                                }}</span>
+                              }
+                              @case ('rule') {
+                                <span class="layout-designer__field-note" data-note="required">{{
+                                  'layout-designer.field-required-rule' | translate
+                                }}</span>
+                              }
+                            }
+                          }
+                        </span>
+                        <span class="layout-designer__field-actions">
+                          <button
+                            mat-icon-button
+                            type="button"
+                            data-action="up"
+                            [disabled]="first"
+                            [attr.aria-label]="
+                              'layout-designer.move-up' | translate: { field: fieldName(field) }
+                            "
+                            (click)="moveUp(card, field)"
+                          >
+                            <nxs-icon name="arrow_up" />
+                          </button>
+                          <button
+                            mat-icon-button
+                            type="button"
+                            data-action="down"
+                            [disabled]="last"
+                            [attr.aria-label]="
+                              'layout-designer.move-down' | translate: { field: fieldName(field) }
+                            "
+                            (click)="moveDown(card, field)"
+                          >
+                            <nxs-icon name="arrow_down" />
+                          </button>
+                          <button
+                            mat-icon-button
+                            type="button"
+                            data-action="hide"
+                            [attr.aria-label]="
+                              'layout-designer.hide' | translate: { field: fieldName(field) }
+                            "
+                            (click)="hide(card, field)"
+                          >
+                            <nxs-icon name="view_off" />
+                          </button>
+                        </span>
+                      </div>
+                      @if (field.kind !== 'other') {
+                        <details class="layout-designer__rules" data-rules>
+                          <summary>
+                            {{
+                              'layout-designer.rules'
+                                | translate: { field: fieldName(field), count: rulesSet(field) }
+                            }}
+                          </summary>
+                          <div class="layout-designer__rules-body">
+                            @if (isForm() && field.kind === 'property') {
+                              <mat-form-field subscriptSizing="dynamic">
+                                <mat-label>{{ 'layout-designer.required' | translate }}</mat-label>
+                                <select
+                                  matNativeControl
+                                  data-rule="required-choice"
+                                  [value]="requiredOf(field)"
+                                  (change)="setRequired(card, field, valueOf($event))"
+                                >
+                                  <option value="no" [selected]="requiredOf(field) === 'no'">
+                                    {{ 'layout-designer.required-no' | translate }}
+                                  </option>
+                                  <option
+                                    value="always"
+                                    [selected]="requiredOf(field) === 'always'"
+                                  >
+                                    {{ 'layout-designer.required-always' | translate }}
+                                  </option>
+                                  <option value="rule" [selected]="requiredOf(field) === 'rule'">
+                                    {{ 'layout-designer.required-rule' | translate }}
+                                  </option>
+                                </select>
+                              </mat-form-field>
+                              @if (requiredOf(field) === 'rule') {
+                                <mat-form-field subscriptSizing="dynamic">
+                                  <mat-label>{{
+                                    'layout-designer.required-when' | translate
+                                  }}</mat-label>
+                                  <textarea
+                                    matInput
+                                    rows="3"
+                                    data-rule="required"
+                                    [placeholder]="'layout-designer.rule-placeholder' | translate"
+                                    [value]="ruleOf(field, 'required')"
+                                    (change)="setRule(card, field, 'required', valueOf($event))"
+                                  ></textarea>
+                                </mat-form-field>
+                              }
+                              <mat-form-field subscriptSizing="dynamic">
+                                <mat-label>{{
+                                  'layout-designer.read-only-when' | translate
+                                }}</mat-label>
+                                <textarea
+                                  matInput
+                                  rows="2"
+                                  data-rule="readOnlyWhen"
+                                  [placeholder]="'layout-designer.rule-placeholder' | translate"
+                                  [value]="ruleOf(field, 'readOnlyWhen')"
+                                  (change)="setRule(card, field, 'readOnlyWhen', valueOf($event))"
+                                ></textarea>
+                              </mat-form-field>
+                            }
+                            <mat-form-field subscriptSizing="dynamic">
+                              <mat-label>{{
+                                'layout-designer.visible-when' | translate
+                              }}</mat-label>
+                              <textarea
+                                matInput
+                                rows="2"
+                                data-rule="visibleWhen"
+                                [placeholder]="'layout-designer.rule-placeholder' | translate"
+                                [value]="ruleOf(field, 'visibleWhen')"
+                                (change)="setRule(card, field, 'visibleWhen', valueOf($event))"
+                              ></textarea>
+                            </mat-form-field>
+                            <p class="layout-designer__message">
+                              {{ 'layout-designer.rule-hint' | translate }}
+                            </p>
+                          </div>
+                        </details>
+                      }
                     </li>
                   } @empty {
                     <li class="layout-designer__field layout-designer__field--none">
@@ -269,6 +400,11 @@
                   {{ 'layout-designer.shows-external' | translate }}
                 </p>
               }
+              @case ('checklist') {
+                <p class="layout-designer__message">
+                  {{ 'layout-designer.shows-checklist' | translate }}
+                </p>
+              }
             }
           </section>
         }
@@ -325,12 +461,16 @@
           <p
             class="layout-designer__verdict"
             role="status"
-            [attr.data-verdict]="findings().length === 0 ? 'none' : 'refused'"
+            [attr.data-verdict]="
+              findings().length > 0 ? 'refused' : saveState() === 'checking' ? 'checking' : 'none'
+            "
           >
-            @if (findings().length === 0) {
-              {{ 'layout-designer.findings-none' | translate }}
-            } @else {
+            @if (findings().length > 0) {
               {{ 'layout-designer.findings-refused' | translate: { count: findings().length } }}
+            } @else if (saveState() === 'checking') {
+              {{ 'layout-designer.findings-checking' | translate }}
+            } @else {
+              {{ 'layout-designer.findings-none' | translate }}
             }
           </p>
           @if (findings().length > 0) {
@@ -362,7 +502,7 @@
               (click)="download()"
             >
               <nxs-icon name="download" />
-              {{ 'layout-designer.download' | translate: { file: fileName } }}
+              {{ 'layout-designer.download' | translate: { file: fileName() } }}
             </button>
             <button
               mat-stroked-button
@@ -387,11 +527,14 @@
             }
           }
           <p class="layout-designer__message">
-            {{ 'layout-designer.save-where' | translate: { type: type(), file: fileName } }}
+            {{
+              'layout-designer.save-where'
+                | translate: { type: type(), mode: mode(), file: fileName() }
+            }}
           </p>
           <p class="layout-designer__message">{{ 'layout-designer.no-publish' | translate }}</p>
           <details class="layout-designer__json">
-            <summary>{{ 'layout-designer.file' | translate: { file: fileName } }}</summary>
+            <summary>{{ 'layout-designer.file' | translate: { file: fileName() } }}</summary>
             <pre class="layout-designer__json-text">{{ fileText() }}</pre>
           </details>
         </section>
@@ -409,7 +552,7 @@
           />
         } @else if (record()?.state === 'reading') {
           <nxs-spinner [diameter]="32" [label]="'layout-designer.record-reading' | translate" />
-        } @else if (preview(); as shown) {
+        } @else if (recordPreview(); as shown) {
           @if (shown.preview.layout; as layout) {
             <lib-record-page [document]="shown.record" [layout]="layout" [readOnly]="true" />
           } @else if (shown.preview.refused; as reason) {
@@ -425,20 +568,58 @@
               [message]="'layout-designer.preview-not-drawn' | translate: { reason }"
             />
           }
-          @if (shown.preview.notes.length > 0) {
-            <div class="layout-designer__notes">
-              <h3 class="layout-designer__card-heading">
-                {{ 'layout-designer.preview-notes' | translate }}
-              </h3>
-              <ul>
-                @for (note of shown.preview.notes; track $index) {
-                  <li>{{ note }}</li>
-                }
-              </ul>
-            </div>
+        } @else if (formPreview(); as shown) {
+          @if (shown.preview.layout; as layout) {
+            <p class="layout-designer__message" data-preview="form">
+              @if (shown.mode === 'edit') {
+                {{ 'layout-designer.form-edit' | translate: { title: shown.record.title } }}
+              } @else {
+                {{
+                  'layout-designer.form-create'
+                    | translate: { type: shown.record.type, folder: shown.parentPath ?? '/' }
+                }}
+              }
+            </p>
+            <!-- Read-only, and the designer offers no Save: the host owns Save, so nothing is sent. -->
+            <lib-document-layout-form
+              [mode]="shown.mode"
+              [document]="shown.mode === 'edit' ? shown.record : null"
+              [type]="shown.record.type"
+              [parentPath]="shown.parentPath"
+              [preview]="layout"
+              [disabled]="true"
+              [headingLevel]="3"
+            />
+          } @else if (shown.preview.refused; as reason) {
+            <nxs-banner
+              tone="error"
+              data-preview="refused"
+              [message]="'layout-designer.form-refused' | translate: { reason }"
+            />
+          } @else if (shown.preview.notDrawn; as reason) {
+            <nxs-banner
+              tone="warning"
+              data-preview="not-drawn"
+              [message]="'layout-designer.form-not-drawn' | translate: { reason }"
+            />
           }
         } @else {
           <p class="layout-designer__message">{{ 'layout-designer.preview-none' | translate }}</p>
+        }
+        @if (previewNotes().length > 0) {
+          <div class="layout-designer__notes">
+            <h3 class="layout-designer__card-heading">
+              {{
+                (formPreview() ? 'layout-designer.form-notes' : 'layout-designer.preview-notes')
+                  | translate
+              }}
+            </h3>
+            <ul>
+              @for (note of previewNotes(); track $index) {
+                <li>{{ note }}</li>
+              }
+            </ul>
+          </div>
         }
       </section>
     </div>

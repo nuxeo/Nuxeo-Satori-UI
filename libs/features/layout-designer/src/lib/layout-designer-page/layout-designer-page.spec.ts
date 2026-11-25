@@ -1,13 +1,17 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import {
   PACKAGED_REGISTRIES,
   readContentModel,
   type ContentModel,
 } from '@agentic-ui/shared/app-definition';
 import {
+  DocumentLayoutFormComponent,
   RecordPageComponent,
+  type FormLayoutPreview,
   type RecordLayoutPreview,
+  type ResolvedFormLayout,
   type ResolvedRecordLayout,
 } from '@agentic-ui/shared/document-layouts';
 import { MatDialog } from '@angular/material/dialog';
@@ -31,6 +35,46 @@ class StubRecordPageComponent {
   readonly layout = input.required<ResolvedRecordLayout>();
   readonly readOnly = input(false);
 }
+
+/** The form, as the designer hands it a preview. */
+@Component({
+  selector: 'lib-document-layout-form',
+  standalone: true,
+  template: '<p class="stub-form">{{ mode() }}</p>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class StubFormComponent {
+  readonly mode = input.required<'edit' | 'create' | 'task'>();
+  readonly document = input<NuxeoDocument | null>(null);
+  readonly type = input<string | null>(null);
+  readonly parentPath = input<string | null>(null);
+  readonly preview = input<ResolvedFormLayout | null>(null);
+  readonly disabled = input(false);
+  readonly headingLevel = input<number>(3);
+}
+
+/** The Member edit form, cut down to what the edits reach. */
+const MEMBER_EDIT: LayoutJson = {
+  version: 2,
+  cards: [
+    {
+      id: 'member',
+      fields: [
+        { field: 'member:phone', widget: 'phone', required: true },
+        'member:status',
+        {
+          field: 'member:email',
+          required: {
+            type: 'app.rules.fieldIn',
+            parameters: [{ field: 'member:status' }, 'Active'],
+          },
+        },
+      ],
+    },
+  ],
+};
+
+const FORM_LAYOUT = { version: 2, kind: 'edit', type: 'Member' } as unknown as ResolvedFormLayout;
 
 /** The Member page of the Payers kit, cut down to what the edits reach. */
 const MEMBER_VIEW: LayoutJson = {
@@ -92,6 +136,12 @@ describe('LayoutDesignerPageComponent', () => {
   let model: BehaviorSubject<Reading<ContentModel>>;
   let source: Subject<Reading<{ url: string; content?: LayoutJson; problem?: string }>>;
   let previewed: unknown[];
+  /** Each form preview asked for: the file, its mode, the type and the record. */
+  let formsPreviewed: [unknown, string, string, string | undefined][];
+  /** Each file read: its type and mode. */
+  let read: [string, string][];
+  /** What the form preview answers, or `null` for the form drawn. */
+  let formAnswer: FormLayoutPreview | null;
   let created: Blob[];
   let clicked: { download: string }[];
   /** The confirmation dialog: what it was asked, and what the person answers. */
@@ -99,10 +149,21 @@ describe('LayoutDesignerPageComponent', () => {
   let answer: true | undefined;
 
   const service = () => ({
-    types: () => of({ state: 'read', value: ['Member', 'Claim'] }),
+    files: () =>
+      of({
+        state: 'read',
+        value: [
+          { type: 'Member', mode: 'view' },
+          { type: 'Member', mode: 'edit' },
+          { type: 'Claim', mode: 'view' },
+        ],
+      }),
     model: () => model,
     // As the service's every reading does: `reading` first, at once.
-    source: () => source.pipe(startWith({ state: 'reading' } as const)),
+    source: (type: string, mode: string) => {
+      read.push([type, mode]);
+      return source.pipe(startWith({ state: 'reading' } as const));
+    },
     records: () =>
       of({
         state: 'read',
@@ -117,12 +178,26 @@ describe('LayoutDesignerPageComponent', () => {
       previewed.push(structuredClone(content));
       return of({ layout: LAYOUT, notes: ['Member/view layout: a note'] });
     },
+    previewForm: (
+      content: unknown,
+      mode: string,
+      type: string,
+      record: NuxeoDocument | null,
+    ): Observable<FormLayoutPreview> => {
+      formsPreviewed.push([structuredClone(content), mode, type, record?.uid]);
+      return of(
+        formAnswer ?? { layout: FORM_LAYOUT, notes: [`Member/${mode} layout: a form note`] },
+      );
+    },
   });
 
   beforeEach(() => {
     model = new BehaviorSubject<Reading<ContentModel>>({ state: 'read', value: MODEL });
     source = new Subject();
     previewed = [];
+    formsPreviewed = [];
+    read = [];
+    formAnswer = null;
     created = [];
     clicked = [];
     asked = [];
@@ -142,6 +217,7 @@ describe('LayoutDesignerPageComponent', () => {
     TestBed.configureTestingModule({
       imports: [LayoutDesignerPageComponent],
       providers: [
+        provideRouter([]),
         provideNxsComponents(),
         { provide: LayoutDesignerService, useFactory: service },
         {
@@ -156,8 +232,8 @@ describe('LayoutDesignerPageComponent', () => {
       ],
     });
     TestBed.overrideComponent(LayoutDesignerPageComponent, {
-      remove: { imports: [RecordPageComponent] },
-      add: { imports: [StubRecordPageComponent] },
+      remove: { imports: [RecordPageComponent, DocumentLayoutFormComponent] },
+      add: { imports: [StubRecordPageComponent, StubFormComponent] },
     });
     fixture = TestBed.createComponent(LayoutDesignerPageComponent);
     page = fixture.componentInstance;
@@ -173,12 +249,12 @@ describe('LayoutDesignerPageComponent', () => {
     fixture.detectChanges();
   }
 
-  /** Opens the Member page, served as `content`. */
-  async function open(content: LayoutJson = MEMBER_VIEW): Promise<void> {
+  /** Opens the Member file `key` names, served as `content`. */
+  async function open(content: LayoutJson = MEMBER_VIEW, key = 'Member/view'): Promise<void> {
     await settle();
-    page.open('Member');
+    page.open(key);
     await settle();
-    source.next({ state: 'read', value: { url: '/layouts/Member/view.layout.json', content } });
+    source.next({ state: 'read', value: { url: `/layouts/${key}.layout.json`, content } });
     await settle();
   }
 
@@ -205,10 +281,19 @@ describe('LayoutDesignerPageComponent', () => {
     expect(root().textContent).toContain('that is not a security control');
   });
 
-  it('offers the served record pages, and opens one with its first record previewed', async () => {
+  it('offers each type its three files, served or new, and opens one with its first record previewed', async () => {
     await open();
     const options = [...root().querySelectorAll<HTMLOptionElement>('[data-picker="type"] option')];
-    expect(options.map((option) => option.value)).toEqual(['', 'Member', 'Claim']);
+    expect(options.map((option) => [option.value, option.textContent?.trim()])).toEqual([
+      ['', 'Choose a file'],
+      ['Member/view', 'Member: record page'],
+      ['Member/edit', 'Member: edit form'],
+      ['Member/create', 'Member: create form, a new file'],
+      ['Claim/view', 'Claim: record page'],
+      ['Claim/edit', 'Claim: edit form, a new file'],
+      ['Claim/create', 'Claim: create form, a new file'],
+    ]);
+    expect(read).toEqual([['Member', 'view']]);
     expect(page.recordUid()).toBe('m1');
     expect(fieldNames()).toEqual(['age', 'member:phone', 'member:status']);
     expect(previewed).toEqual([MEMBER_VIEW]);
@@ -383,6 +468,9 @@ describe('LayoutDesignerPageComponent', () => {
       model.next({ state: 'reading' });
       await open();
       expect(page.saveState()).toBe('checking');
+      expect(root().querySelector('[data-verdict]')?.textContent).toContain(
+        'The validator finds nothing so far.',
+      );
       expect(root().querySelector('[data-save="checking"]')).not.toBeNull();
       page.download();
       expect(created).toEqual([]);
@@ -420,7 +508,7 @@ describe('LayoutDesignerPageComponent', () => {
 
   it('says why a file could not be opened, and offers nothing to edit', async () => {
     await settle();
-    page.open('Member');
+    page.open('Member/view');
     await settle();
     source.next({ state: 'read', value: { url: '/x', problem: 'HTTP 404' } });
     await settle();
@@ -428,6 +516,20 @@ describe('LayoutDesignerPageComponent', () => {
     expect(page.file()).toBeNull();
     expect(page.saveState()).toBe('nothing');
     expect(root().querySelector('[data-action="download"]')).toBeNull();
+
+    // Opened again, it is read again; once open, it is not.
+    page.open('Member/view');
+    await settle();
+    expect(read).toEqual([
+      ['Member', 'view'],
+      ['Member', 'view'],
+    ]);
+    source.next({ state: 'read', value: { url: '/x', content: MEMBER_VIEW } });
+    await settle();
+    expect(page.file()).toEqual(MEMBER_VIEW);
+    page.open('Member/view');
+    await settle();
+    expect(read).toHaveLength(2);
   });
 
   it('opens a type by its button, not as the picker changes', async () => {
@@ -435,7 +537,7 @@ describe('LayoutDesignerPageComponent', () => {
     const picker = root().querySelector<HTMLSelectElement>('[data-picker="type"]');
     if (!picker) throw new Error('no type picker');
     expect(button('[data-action="open"]').disabled).toBe(true);
-    picker.value = 'Member';
+    picker.value = 'Member/view';
     picker.dispatchEvent(new Event('change'));
     await settle();
     expect(page.type()).toBeNull();
@@ -458,8 +560,8 @@ describe('LayoutDesignerPageComponent', () => {
       await open();
       button('[data-field="member:phone"] [data-action="hide"]').click();
       await settle();
-      page.typeChosen.set('Claim');
-      page.open('Claim');
+      page.fileChosen.set('Claim/view');
+      page.open('Claim/view');
       await settle();
       expect(asked).toEqual([
         {
@@ -467,17 +569,17 @@ describe('LayoutDesignerPageComponent', () => {
           data: {
             title: 'Discard your changes?',
             message:
-              'Your changes to the Member layout have not been downloaded, and will be lost.',
+              'Your changes to the Member record page have not been downloaded, and will be lost.',
             confirmLabel: 'Discard changes',
           },
         },
       ]);
       expect(page.type()).toBe('Member');
-      expect(page.typeChosen()).toBe('Member');
+      expect(page.fileChosen()).toBe('Member/view');
       expect(page.hidden().map((field) => field.name)).toEqual(['member:phone']);
 
       answer = true;
-      page.open('Claim');
+      page.open('Claim/view');
       await settle();
       expect(page.type()).toBe('Claim');
       expect(page.file()).toBeNull();
@@ -486,7 +588,7 @@ describe('LayoutDesignerPageComponent', () => {
 
     it('opens another type without asking when nothing is changed', async () => {
       await open();
-      page.open('Claim');
+      page.open('Claim/view');
       await settle();
       expect(asked).toEqual([]);
       expect(page.type()).toBe('Claim');
@@ -525,5 +627,197 @@ describe('LayoutDesignerPageComponent', () => {
     button('[data-action="reset"]').click();
     await settle();
     expect(document.activeElement?.id).toBe('layout-designer-editor');
+  });
+
+  describe('forms', () => {
+    /** Sets a picker or a field, as the person does, and lets it say so. */
+    const change = (selector: string, value: string): void => {
+      const element = root().querySelector<
+        HTMLSelectElement | HTMLTextAreaElement | HTMLInputElement
+      >(selector);
+      if (!element) throw new Error(`no ${selector}`);
+      element.value = value;
+      element.dispatchEvent(new Event('change'));
+    };
+
+    const stubForm = (): StubFormComponent | undefined =>
+      fixture.debugElement.query((node) => node.componentInstance instanceof StubFormComponent)
+        ?.componentInstance as StubFormComponent | undefined;
+
+    const fields = (): unknown[] =>
+      ((page.file()?.['cards'] as LayoutJson[])[0]['fields'] as unknown[]) ?? [];
+
+    it('opens an edit form, and previews it with the form engine, read-only, for the record', async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      expect(read).toEqual([['Member', 'edit']]);
+      expect(fieldNames()).toEqual(['member:phone', 'member:status', 'member:email']);
+      expect(formsPreviewed).toEqual([[MEMBER_EDIT, 'edit', 'Member', 'm1']]);
+      expect(previewed).toEqual([]);
+      expect(root().querySelector('lib-record-page')).toBeNull();
+      const form = stubForm();
+      expect(form?.mode()).toBe('edit');
+      expect(form?.document()?.uid).toBe('m1');
+      expect(form?.preview()).toBe(FORM_LAYOUT);
+      // Read-only, so that nothing typed there could be saved; the page offers no Save of its own.
+      expect(form?.disabled()).toBe(true);
+      expect(root().textContent).toContain(
+        'The edit form of Jane Doe, read-only. Nothing is saved: Save is not offered here.',
+      );
+      expect(root().textContent).toContain('Member/edit layout: a form note');
+      expect(root().querySelector('.layout-designer__notes h3')?.textContent?.trim()).toBe(
+        'What the form leaves out, and why',
+      );
+      expect(
+        [...root().querySelectorAll('[data-note="required"]')].map((note) =>
+          note.closest('[data-field]')?.getAttribute('data-field'),
+        ),
+      ).toEqual(['member:phone', 'member:email']);
+
+      button('[data-action="download"]').click();
+      expect(clicked).toEqual([{ download: 'edit.layout.json' }]);
+    });
+
+    it("says, in a form's own words, why no form is drawn and what it leaves out", async () => {
+      formAnswer = {
+        notDrawn: 'the schemas of Member could not be read',
+        notes: ['Member/edit layout: left out'],
+      };
+      await open(MEMBER_EDIT, 'Member/edit');
+      expect(stubForm()).toBeUndefined();
+      expect(root().querySelector('[data-preview="not-drawn"]')?.textContent).toContain(
+        'No form is drawn for this record: the schemas of Member could not be read',
+      );
+      expect(root().querySelector('.layout-designer__notes h3')?.textContent?.trim()).toBe(
+        'What the form leaves out, and why',
+      );
+    });
+
+    it('makes a field required always, or not, writing a string field as an object and back', async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      change('[data-field="member:status"] [data-rule="required-choice"]', 'always');
+      await settle();
+      expect(fields()[1]).toEqual({ field: 'member:status', required: true });
+      expect(formsPreviewed.at(-1)?.[0]).toEqual(page.file());
+
+      change('[data-field="member:status"] [data-rule="required-choice"]', 'no');
+      change('[data-field="member:phone"] [data-rule="required-choice"]', 'no');
+      await settle();
+      expect(fields()[0]).toEqual({ field: 'member:phone', widget: 'phone' });
+      expect(fields()[1]).toBe('member:status');
+      expect(page.saveState()).toBe('saveable');
+
+      page.open('Member/view');
+      await settle();
+      expect((asked[0] as { data: { message: string } }).data.message).toBe(
+        'Your changes to the Member edit form have not been downloaded, and will be lost.',
+      );
+    });
+
+    it("writes a field's rules as configuration, the rule's ID or its JSON", async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      change('[data-field="member:status"] [data-rule="readOnlyWhen"]', ' app.rules.isLocked ');
+      change(
+        '[data-field="member:status"] [data-rule="visibleWhen"]',
+        '{ "type": "app.rules.inGroup", "parameters": ["members"] }',
+      );
+      await settle();
+      expect(fields()[1]).toEqual({
+        field: 'member:status',
+        readOnlyWhen: 'app.rules.isLocked',
+        visibleWhen: { type: 'app.rules.inGroup', parameters: ['members'] },
+      });
+      expect(
+        root().querySelector<HTMLTextAreaElement>(
+          '[data-field="member:status"] [data-rule="visibleWhen"]',
+        )?.value,
+      ).toBe(JSON.stringify({ type: 'app.rules.inGroup', parameters: ['members'] }, null, 2));
+      expect(page.findings()).toEqual([]);
+      // Emptied, each is taken out, and the field written as it was.
+      change('[data-field="member:status"] [data-rule="readOnlyWhen"]', '');
+      change('[data-field="member:status"] [data-rule="visibleWhen"]', '  ');
+      await settle();
+      expect(fields()[1]).toBe('member:status');
+    });
+
+    it('refuses to save a form whose rule is not one, whatever calls it', async () => {
+      await open(MEMBER_EDIT, 'Member/edit');
+      // A rule chosen and not yet written is written empty, which the validator refuses.
+      change('[data-field="member:status"] [data-rule="required-choice"]', 'rule');
+      await settle();
+      expect(fields()[1]).toEqual({ field: 'member:status', required: '' });
+      expect(page.findings().map((finding) => [finding.path, finding.kind])).toEqual([
+        ['cards[0].fields[1].required', 'structure'],
+      ]);
+      expect(page.saveState()).toBe('refused');
+      expect(button('[data-action="download"]').disabled).toBe(true);
+      page.download();
+      expect(created).toEqual([]);
+
+      change('[data-field="member:status"] [data-rule="required"]', 'app.rules.canWrite');
+      await settle();
+      expect(page.saveState()).toBe('saveable');
+
+      // JSON that is not JSON is written as it was typed, as a rule's ID, and the validator
+      // refuses it: the designer does not guess what was meant.
+      change('[data-field="member:status"] [data-rule="visibleWhen"]', '{ "type": "app.rules.');
+      await settle();
+      expect(fields()[1]).toMatchObject({ visibleWhen: '{ "type": "app.rules.' });
+      expect(page.findings().map((finding) => finding.path)).toEqual([
+        'cards[0].fields[1].visibleWhen',
+      ]);
+      page.download();
+      expect(created).toEqual([]);
+      expect(clicked).toEqual([]);
+    });
+
+    it('checks a form in its own mode: a card only a record page has is refused', async () => {
+      const withList: LayoutJson = {
+        version: 2,
+        cards: [
+          { id: 'member', fields: ['member:phone'] },
+          { id: 'claims', related: { pageProvider: 'member_claims', columns: ['claim:number'] } },
+        ],
+      };
+      await open(withList, 'Member/edit');
+      expect(page.findings().map((finding) => [finding.path, finding.kind])).toEqual([
+        ['cards[1].related', 'structure'],
+      ]);
+      expect(page.saveState()).toBe('refused');
+    });
+
+    it('offers no required or read-only rule on a record page, where only forms have them', async () => {
+      await open();
+      expect(root().querySelector('[data-rule="required-choice"]')).toBeNull();
+      expect(root().querySelector('[data-rule="readOnlyWhen"]')).toBeNull();
+      expect(root().querySelectorAll('[data-rule="visibleWhen"]')).toHaveLength(3);
+    });
+
+    it("opens a create form the server does not serve as a new file, previewed in the record's folder", async () => {
+      await settle();
+      page.open('Member/create');
+      await settle();
+      expect(read).toEqual([]);
+      expect(root().querySelector('[data-new]')?.textContent).toContain(
+        'The server serves no create.layout.json for Member: this is a new file',
+      );
+      expect(page.file()).toEqual({ version: 2, cards: [{ id: 'main', fields: [] }] });
+      expect(page.unsaved()).toBe(false);
+
+      page.choose(page.cards()[0], 'member:phone');
+      page.add(page.cards()[0]);
+      await settle();
+      expect(fields()).toEqual(['member:phone']);
+      expect(formsPreviewed.at(-1)).toEqual([page.file(), 'create', 'Member', 'm1']);
+      const form = stubForm();
+      expect(form?.mode()).toBe('create');
+      expect(form?.document()).toBeNull();
+      expect(form?.type()).toBe('Member');
+      expect(form?.parentPath()).toBe('/default-domain/workspaces/payers-demo');
+      expect(form?.disabled()).toBe(true);
+      expect(page.unsaved()).toBe(true);
+
+      button('[data-action="download"]').click();
+      expect(clicked).toEqual([{ download: 'create.layout.json' }]);
+    });
   });
 });
