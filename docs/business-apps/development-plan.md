@@ -456,8 +456,8 @@ the designer's three slices, at `/#/administration/layout-designer` and its `que
   operation, and runs none (decision 3 stays open). The queue page draws each change read-only
   against the server's page provider: no row can be selected and no action is offered.
 - **Byte for byte (demo step 3):** what the designer saves is the file's JSON value as the
-  repository's Prettier lays it out afresh. Opened and saved unedited, 15 of the four kits' 19
-  record pages, edit forms and queues come back byte for byte; four cannot by design, since each
+  repository's Prettier lays it out afresh. Opened and saved unedited, 17 of the five kits' 25
+  record pages, edit forms and queues come back byte for byte; eight cannot by design, since each
   keeps an object across lines that fits on one, as Prettier keeps what its author wrote, and the
   server serves the designer the value, not the text. Each single edit the tests make on a kit's
   file changes only the edited place, though not every edit can be, since the value is laid out

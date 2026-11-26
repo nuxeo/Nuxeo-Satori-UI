@@ -95,6 +95,14 @@ export const NOT_BYTE_FOR_BYTE: Readonly<Record<string, string>> = {
     'four required fields, such as { "field": "dc:title", "required": true }, are each written across four lines',
   'business-apps/packages/facilities-demo/bundle/agentic-ui-config/queues/open-work-orders.json':
     'its one sort, { "field": "wo:due", "order": "asc" }, is written across four lines',
+  'business-apps/packages/moves-demo/bundle/agentic-ui-config/layouts/DamageClaim/view.layout.json':
+    'two fields, such as { "field": "dmg:move", "widget": "document-link", "parameters": … }, are each written across five lines',
+  'business-apps/packages/moves-demo/bundle/agentic-ui-config/layouts/DamageClaim/edit.layout.json':
+    'one field, { "field": "dmg:amountClaimed", "widget": "currency", "parameters": … }, is written across five lines',
+  'business-apps/packages/moves-demo/bundle/agentic-ui-config/queues/moves-this-week.json':
+    'its one sort, { "field": "move:loadDate", "order": "asc" }, is written across four lines',
+  'business-apps/packages/moves-demo/bundle/agentic-ui-config/queues/open-claims.json':
+    'its one sort, { "field": "dmg:filedOn", "order": "asc" }, is written across four lines',
   'business-apps/packages/payers-claims-demo/bundle/agentic-ui-config/layouts/Case/view.layout.json':
     'its history card, { "id": "history", "labelKey": …, "timeline": { "pageSize": 10 } }, is written across five lines',
 };

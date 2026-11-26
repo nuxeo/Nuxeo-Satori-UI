@@ -11,7 +11,7 @@
  *
  * Then each single edit made here changes only the edited place: every line outside the list or
  * object the edit is made in is the same bytes before and after, at the same place. It is measured
- * against what the designer writes of the file unedited, which is the file itself but for the four
+ * against what the designer writes of the file unedited, which is the file itself but for those
  * listed. Not every edit of every file can be confined, as the README says; none made here on a
  * kit's file fails to be.
  *

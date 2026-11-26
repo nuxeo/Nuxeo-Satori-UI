@@ -190,17 +190,26 @@ that means:
   very bytes. The designer opens the file's JSON value, as the server serves it inside its answer,
   never its text: whatever of the text is not in the value cannot come back, and the rule above is
   what is written instead.
-- **Every file round-trips but four,** of the 19 record pages, edit forms and queues in the four kits
-  (no kit has a create form yet). Those four are each Prettier's own, with an object their author
+- **17 of the 25 files round-trip,** the record pages, edit forms and queues of the five kits (no
+  kit has a create form yet). The other eight are each Prettier's own, with an object their author
   wrote across lines though it fits on one: Prettier keeps that as written (`objectWrap: "preserve"`,
   its default, which `.prettierrc` keeps), and the value does not say it. The designer writes those
   objects on one line, and nothing else differs, as Prettier with `objectWrap: "collapse"` shows.
-  They are left as their authors wrote them, never changed to fit the designer:
+  They are left as their authors wrote them, never changed to fit the designer, and listed, with
+  why, in `NOT_BYTE_FOR_BYTE` (`src/lib/kit-files.testing.ts`), which the spec holds to the kits:
   - `contracts-demo/…/queues/up-for-renewal.json`: its one sort, across four lines;
   - `facilities-demo/…/layouts/WorkOrder/edit.layout.json`: four required fields, across four lines
     each;
   - `facilities-demo/…/queues/open-work-orders.json`: its one sort, across four lines;
+  - `moves-demo/…/layouts/DamageClaim/view.layout.json`: two fields, across five lines each;
+  - `moves-demo/…/layouts/DamageClaim/edit.layout.json`: one field, across five lines;
+  - `moves-demo/…/queues/moves-this-week.json` and `…/queues/open-claims.json`: each its one sort,
+    across four lines;
   - `payers-claims-demo/…/layouts/Case/view.layout.json`: its history card, across five lines.
+
+  The moves kit came into the branch while this was built: the walk found its four, and nothing was
+  changed but the list.
+
 - **A single edit changes only the edited place,** for each edit the spec makes on each kit's
   file: moving, hiding and adding a field or a column; a card's id and heading; a field's rule; a
   queue's name, sort, facets and actions. Every line outside the list or object the edit is made in
@@ -212,10 +221,10 @@ that means:
   one line again, and what holds it too, if that was all that broke it: removing one of a card's two
   `{ "field": …, "required": true }` fields can put a short file back on one line. Prettier would
   not do that to the file a person edits, since it keeps the objects as written. No edit the spec
-  makes on a kit's file does it today. And for the four files above, an edit is confined against
+  makes on a kit's file does it today. And for the eight files above, an edit is confined against
   what the designer writes of them unedited: against the file in the repository, the change also
   draws their objects on one line.
-- **By design, beyond those four:** what a hand-written file says that its value does not is lost
+- **By design, beyond those eight:** what a hand-written file says that its value does not is lost
   the same way. A blank line between entries; a number written `1.50` or `1e3` rather than as
   Prettier prints it; a text written with an escape JSON does not need, such as `\u00e9` or `\/`; a
   key written twice; and the place of a key that is a whole number, such as `"2"`, which a JSON value
@@ -490,7 +499,7 @@ layer stays in `/agentic-ui-layers` until an administrator deletes it.
 - **A queue whose rule is not for the administrator** previews as the queue page shows it to them:
   "not shown". Every Payers queue has one: `unassigned-claims` and `my-claims` are for
   `claims-adjusters`, and `pending-determination` for `claims-supervisors` and `member-services`.
-- **Four kits' files are not written back byte for byte,** by design: the
+- **Eight kits' files are not written back byte for byte,** by design: the
   [list and why](#byte-for-byte). The designer reads a file's JSON value, never its text.
 - **Rules on the document page's own state.** Where the document page is not open, nothing publishes
   its state about the record: locked, a favourite, followed, in the clipboard, versioned, an action in
