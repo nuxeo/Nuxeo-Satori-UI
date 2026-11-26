@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/app.schema.json",
+  "version": 2,
+  "id": "vehicle-titles",
+  "label": "Vehicle Deals and Titles",
+  "labelKey": "vehicle-titles.app",
+  "packageVersion": "0.1.0",
+  "platform": ">=0.2.0 <1.0.0",
+  "address": "vehicle-titles",
+  "groups": ["vehicle-deal-desk", "vehicle-title-clerks"],
+  "branding": {
+    "applicationTitle": "Vehicle Deals and Titles"
+  }
+}

@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+<!--
+  STAND-IN MODEL, written by the app-model generator for a demo, until a real model arrives.
+
+  Everything here is fictional: the document types, schemas and page providers the package's
+  layouts, queues and home name, and nothing more. When a real model arrives, from Studio or a
+  model package, this file and schemas/ are replaced by it, and the layouts follow its property
+  names. Records of these types must be deleted from a server before its model goes: a document
+  whose type is gone cannot be read.
+
+  Its own component, apart from the configuration one, so that it can be replaced whole. It
+  contributes nothing to org.nuxeo.agentic.ui.config, so it needs none of Satori's defaults.
+-->
+<component name="nuxeo.config.vehicle-titles-demo.model" version="1.0">
+  <!-- Registers after the platform's own types, as a Studio project's bundle does. -->
+  <require>org.nuxeo.runtime.started</require>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="schema">
+    <schema name="vehicletitle" prefix="vtitle" src="schemas/vehicletitle.xsd" />
+    <schema name="vehicledeal" prefix="vdeal" src="schemas/vehicledeal.xsd" />
+    <schema name="vehicletitle_search" prefix="vtitlesearch" src="schemas/vehicletitlesearch.xsd" />
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.schema.TypeService" point="doctype">
+    <!-- Not a folder and holds no file, so it opens as a record page. -->
+    <doctype name="VehicleTitle" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="vehicletitle" />
+    </doctype>
+    <!-- Not a folder, and holds no file of its own: its attachments are files:files. So it
+         opens as a record page. -->
+    <doctype name="VehicleDeal" extends="Document">
+      <schema name="common" />
+      <schema name="dublincore" />
+      <schema name="files" />
+      <schema name="vehicledeal" />
+    </doctype>
+    <!-- The search document of VehicleTitle's page providers of the search index, as DefaultSearch
+         is default_search's. Never saved: it holds the buckets a queue's facets send back. No
+         folder lists it among its subtypes, and it is hidden from navigation. -->
+    <doctype name="VehicleTitleSearch" extends="Document">
+      <facet name="HiddenInNavigation" />
+      <schema name="vehicletitle_search" />
+    </doctype>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.core.lifecycle.LifeCycleService" point="types">
+    <types>
+      <type name="VehicleTitle">default</type>
+    </types>
+    <types>
+      <type name="VehicleDeal">default</type>
+    </types>
+  </extension>
+
+  <extension target="org.nuxeo.ecm.platform.query.api.PageProviderService" point="providers">
+    <coreQueryPageProvider name="vtitles_title_sales">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'VehicleDeal' AND (vdeal:title = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="vdeal:soldOn" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="vtitles_title_trade_ins">
+      <pattern quoteParameters="true" escapeParameters="true">
+        SELECT * FROM Document WHERE ecm:primaryType = 'VehicleDeal' AND (vdeal:tradeInTitle = ?)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="vdeal:soldOn" ascending="false" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <genericPageProvider name="vtitles_awaiting_lien_release"
+        class="org.nuxeo.ecm.platform.query.nxql.SearchServicePageProvider">
+      <searchDocumentType>VehicleTitleSearch</searchDocumentType>
+      <whereClause>
+        <fixedPart>
+          ecm:primaryType = 'VehicleTitle' AND (vtitle:status = 'Awaiting lien release')
+          AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+        </fixedPart>
+      </whereClause>
+      <aggregates>
+        <aggregate id="vtitle_lienHolder_agg" type="terms" parameter="vtitle:lienHolder">
+          <field schema="vehicletitle_search" name="vtitle_lienHolder_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+        <aggregate id="vtitle_issuingState_agg" type="terms" parameter="vtitle:issuingState">
+          <field schema="vehicletitle_search" name="vtitle_issuingState_agg" />
+          <properties>
+            <property name="size">10</property>
+          </properties>
+        </aggregate>
+      </aggregates>
+      <sort column="vtitle:payoffSentOn" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </genericPageProvider>
+    <coreQueryPageProvider name="vtitles_overdue_titles">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'VehicleTitle' AND (vtitle:status &lt;&gt; 'Issued' AND vtitle:openedOn &lt; NOW('-P31D'))
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="vtitle:openedOn" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+    <coreQueryPageProvider name="vtitles_deals_missing_documents">
+      <pattern>
+        SELECT * FROM Document WHERE ecm:primaryType = 'VehicleDeal' AND (vdeal:status IN ('Contracted', 'Funded', 'Delivered') AND vdocs:checklist/*/done = 0)
+        AND ecm:isVersion = 0 AND ecm:isProxy = 0 AND ecm:isTrashed = 0
+      </pattern>
+      <sort column="vdeal:soldOn" ascending="true" />
+      <pageSize>50</pageSize>
+      <maxPageSize>100</maxPageSize>
+    </coreQueryPageProvider>
+  </extension>
+</component>

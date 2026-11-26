@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "home", "labelKey": "vehicle-titles.nav.home", "icon": "home", "page": "home" },
+    {
+      "id": "vehicle-deals-missing-documents",
+      "icon": "inbox",
+      "queue": "vehicle-deals-missing-documents"
+    },
+    { "id": "vehicle-titles-overdue", "icon": "list", "queue": "vehicle-titles-overdue" },
+    {
+      "id": "vehicle-titles-awaiting-lien-release",
+      "icon": "list",
+      "queue": "vehicle-titles-awaiting-lien-release",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["vehicle-title-clerks"] }
+    }
+  ]
+}

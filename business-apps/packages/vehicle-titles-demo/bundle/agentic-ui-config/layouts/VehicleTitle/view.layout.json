@@ -1,0 +1,200 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "overdue",
+      "tone": "negative",
+      "labelKey": "vehicle-titles.banner.title.overdue",
+      "visibleWhen": {
+        "type": "core.every",
+        "parameters": [
+          {
+            "type": "app.rules.dateAfter",
+            "parameters": ["today", { "field": "vtitle:openedOn" }, 30]
+          },
+          {
+            "type": "core.not",
+            "parameters": [
+              {
+                "type": "app.rules.fieldIn",
+                "parameters": [{ "field": "vtitle:status" }, "Issued"]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "awaiting-lien-release",
+      "tone": "warning",
+      "labelKey": "vehicle-titles.banner.title.awaitingLienRelease",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "vtitle:status" }, "Awaiting lien release"]
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "title",
+      "labelKey": "vehicle-titles.card.vehicleTitle.title",
+      "fields": [
+        "vtitle:number",
+        "vtitle:issuingState",
+        {
+          "field": "vtitle:status",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": {
+              "Awaiting title": "warning",
+              "Awaiting lien release": "warning",
+              "In hand": "info",
+              "Submitted to state": "info",
+              "Issued": "positive"
+            }
+          }
+        },
+        "vtitle:owner",
+        { "field": "vtitle:clerk", "widget": "user" }
+      ]
+    },
+    {
+      "id": "vehicle",
+      "labelKey": "vehicle-titles.card.vehicleTitle.vehicle",
+      "fields": ["vtitle:vin", "vtitle:vehicle"]
+    },
+    {
+      "id": "lien",
+      "labelKey": "vehicle-titles.card.vehicleTitle.lien",
+      "fields": [
+        "vtitle:lienHolder",
+        { "field": "vtitle:payoffSentOn", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysAwaitingRelease",
+          "labelKey": "vehicle-titles.field.daysAwaitingRelease",
+          "widget": "number",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "vtitle:payoffSentOn" }, "today", "days"]
+          },
+          "visibleWhen": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "vtitle:status" }, "Awaiting lien release"]
+          }
+        },
+        { "field": "vtitle:lienReleasedOn", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "dates",
+      "labelKey": "vehicle-titles.card.vehicleTitle.dates",
+      "fields": [
+        { "field": "vtitle:openedOn", "widget": "date", "parameters": { "format": "long" } },
+        {
+          "id": "daysOpen",
+          "labelKey": "vehicle-titles.field.daysOpen",
+          "widget": "number",
+          "computed": {
+            "type": "core.dateDiff",
+            "parameters": [{ "field": "vtitle:openedOn" }, "today", "days"]
+          },
+          "visibleWhen": {
+            "type": "core.not",
+            "parameters": [
+              {
+                "type": "app.rules.fieldIn",
+                "parameters": [{ "field": "vtitle:status" }, "Issued"]
+              }
+            ]
+          }
+        },
+        { "field": "vtitle:submittedOn", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "vtitle:issuedOn", "widget": "date", "parameters": { "format": "long" } }
+      ]
+    },
+    {
+      "id": "sales",
+      "labelKey": "vehicle-titles.card.vehicleTitle.sales",
+      "span": 2,
+      "related": {
+        "pageProvider": "vtitles_title_sales",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "vdeal:number",
+          "vdeal:buyer",
+          {
+            "field": "vdeal:status",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Working": "info",
+                "Contracted": "warning",
+                "Funded": "positive",
+                "Delivered": "positive",
+                "Cancelled": "negative"
+              }
+            }
+          },
+          { "field": "vdeal:price", "widget": "currency", "parameters": { "currency": "USD" } },
+          { "field": "vdeal:salesperson", "widget": "user" },
+          { "field": "vdeal:soldOn", "widget": "date" }
+        ],
+        "sort": [{ "field": "vdeal:soldOn", "order": "desc" }],
+        "pageSize": 10
+      }
+    },
+    {
+      "id": "trade-ins",
+      "labelKey": "vehicle-titles.card.vehicleTitle.tradeIns",
+      "span": 2,
+      "related": {
+        "pageProvider": "vtitles_title_trade_ins",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          "vdeal:number",
+          "vdeal:buyer",
+          {
+            "field": "vdeal:status",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": {
+                "Working": "info",
+                "Contracted": "warning",
+                "Funded": "positive",
+                "Delivered": "positive",
+                "Cancelled": "negative"
+              }
+            }
+          },
+          {
+            "field": "vdeal:tradeInAllowance",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          {
+            "field": "vdeal:tradeInPayoff",
+            "widget": "currency",
+            "parameters": { "currency": "USD" }
+          },
+          { "field": "vdeal:soldOn", "widget": "date" }
+        ],
+        "sort": [{ "field": "vdeal:soldOn", "order": "desc" }],
+        "pageSize": 10
+      }
+    },
+    {
+      "id": "notes",
+      "labelKey": "vehicle-titles.card.vehicleTitle.notes",
+      "span": 2,
+      "fields": [{ "field": "vtitle:notes", "widget": "long-text" }]
+    },
+    {
+      "id": "history",
+      "labelKey": "vehicle-titles.card.vehicleTitle.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

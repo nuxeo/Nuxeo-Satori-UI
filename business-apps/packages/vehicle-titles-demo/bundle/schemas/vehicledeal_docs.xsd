@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- STAND-IN, written by hand: app-model writes no complex property. A vehicle deal's checklist of
+     required documents, as layout version 2's checklist card reads one
+     (docs/business-apps/layout-v2.md, section 7): one entry per item received or under way, the
+     item's id as the VehicleDeal page's checklist cards list it, whether it is in, who ticked it (a
+     user name) and the day. Which documents a deal requires is the layout's; an item with no entry
+     here is not in. Fictional, like the kit. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/vehicle-titles-demo/vehicledeal_docs"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/vehicle-titles-demo/vehicledeal_docs">
+
+  <xs:element name="checklist" type="nxs:checklistEntries" />
+  <xs:complexType name="checklistEntries">
+    <xs:sequence>
+      <xs:element name="entry" type="nxs:checklistEntry" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="checklistEntry">
+    <xs:sequence>
+      <xs:element name="item" type="xs:string" />
+      <xs:element name="done" type="xs:boolean" />
+      <xs:element name="doneBy" type="xs:string" />
+      <xs:element name="doneOn" type="xs:date" />
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
