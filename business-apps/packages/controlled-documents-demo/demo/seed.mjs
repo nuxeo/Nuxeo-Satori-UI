@@ -2,7 +2,7 @@
 /**
  * Seed a Nuxeo server with the controlled documents kit's fictional register, so that its record
  * page, queue and home have something to show: five engineering documents, from `data.mjs`, nine
- * revisions in all, under /default-domain/workspaces/controlled-documents-demo/register.
+ * revisions in all, under /default-domain/workspaces/controlled-documents/register.
  *
  *   node business-apps/packages/controlled-documents-demo/demo/seed.mjs
  *
@@ -204,6 +204,15 @@ async function create(parent, name, type, properties) {
   const created = await call('POST', `/path${pathOf(parent)}`, {
     json: { 'entity-type': 'document', name, type, properties },
   });
+  // The server may store a document under another name than the one asked for: Nuxeo cuts a name
+  // to `nuxeo.path.segment.maxsize`, 24 characters by default, without a word. Every later step
+  // finds its places by path, so a renamed one would be looked for where it is not.
+  if (created?.path !== `${parent}/${name}`)
+    throw new Error(
+      `${parent}/${name} was created as ${created?.path}: the server named it otherwise. Nuxeo ` +
+        'cuts a name longer than nuxeo.path.segment.maxsize, 24 characters by default. Give it a ' +
+        'shorter name in data.mjs.',
+    );
   tally.created++;
   console.log(`  created  ${parent}/${name}`);
   return created;

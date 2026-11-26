@@ -8,9 +8,14 @@
  * marks the one before it superseded. The numbers are the server's: the seed never writes one.
  */
 
-/** The workspace and the folder the records go in, under /default-domain/workspaces. */
+/**
+ * The workspace and the folder the records go in, under /default-domain/workspaces. A name is 24
+ * characters at most: Nuxeo cuts a longer one to `nuxeo.path.segment.maxsize`, 24 by default, and
+ * says nothing, so `controlled-documents-demo` was stored as `controlled-documents-dem` and the
+ * seed's next request, to the name it had asked for, found nothing.
+ */
 export const WORKSPACE = {
-  name: 'controlled-documents-demo',
+  name: 'controlled-documents',
   title: 'Controlled documents (demo)',
 };
 export const FOLDER = { name: 'register', title: 'Document register' };
