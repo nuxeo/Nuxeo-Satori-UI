@@ -118,7 +118,10 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 /** The files a deployment layer holds (`LayerPaths` in nuxeo-agentic-core), and how each is named. */
 const LAYER_FILES = [
-  [/^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/, (match) => `layout ${match[1]}/${match[2]}`],
+  [
+    /^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/,
+    (match) => `layout ${match[1]}/${match[2]}`,
+  ],
   [/^queues\/([^/]+)\.json$/, (match) => `queue ${match[1]}`],
 ];
 
@@ -166,9 +169,19 @@ export async function serverCheck({
 
   const findings = [];
   const said = [
-    "what the package names of the platform is held by the offline half, in CI, with --previous-platform: it is not compared here.",
+    'what the package names of the platform is held by the offline half, in CI, with --previous-platform: it is not compared here.',
   ];
-  const context = { nuxeo, kit, before, kitModel, beforeModel, server: found, findings, said, result };
+  const context = {
+    nuxeo,
+    kit,
+    before,
+    kitModel,
+    beforeModel,
+    server: found,
+    findings,
+    said,
+    result,
+  };
   context.model = await readServerModel(where.base, credentials, { fetch: nuxeo.fetch }).catch(
     (error) => {
       if (error instanceof Refusal) throw error;
@@ -206,7 +219,9 @@ export function guardedFetch(base, credentials, reads, fetchImpl) {
     if (method !== 'GET' || init.body !== undefined)
       throw new Refusal(`a ${method} with a body was about to be sent; this check only reads.`);
     if (url.origin !== root.origin || rest === null || !READS.some((path) => path.test(rest)))
-      throw new Refusal(`${url.origin}${url.pathname} is not one of the addresses this check reads.`);
+      throw new Refusal(
+        `${url.origin}${url.pathname} is not one of the addresses this check reads.`,
+      );
     const headers = new Headers(init.headers ?? {});
     headers.set('authorization', authorization);
     if (!headers.has('accept')) headers.set('accept', 'application/json');
@@ -318,11 +333,17 @@ async function identify(nuxeo, kit, kitModel, username) {
   // Who the requests run as, judged by the harness's identity guard before anything else is read.
   const me = await nuxeo.get('/api/v1/me');
   const { problem } = judgeMe(
-    { status: me.status, body: me.body, ...(me.status === 200 ? {} : { error: nuxeoMessage(me.body).slice(2) }) },
+    {
+      status: me.status,
+      body: me.body,
+      ...(me.status === 200 ? {} : { error: nuxeoMessage(me.body).slice(2) }),
+    },
     username,
   );
   if (problem)
-    throw new Refusal(`${nuxeo.base} is not identified: ${problem}. Check NUXEO_USER and NUXEO_PASS.`);
+    throw new Refusal(
+      `${nuxeo.base} is not identified: ${problem}. Check NUXEO_USER and NUXEO_PASS.`,
+    );
   if (me.body.isAdministrator !== true)
     throw new Refusal(
       `${username} is not an administrator of ${nuxeo.base}, so every count would be of the records ` +
@@ -336,8 +357,11 @@ async function identify(nuxeo, kit, kitModel, username) {
       .filter((name) => typeof name === 'string'),
   );
   if (distribution['entity-type'] !== 'serverInfo' || bundles.size === 0)
-    throw new Refusal(`${nuxeo.base}'s /management/distribution is not a Nuxeo's: it lists no bundles.`);
-  const nuxeoVersion = text(distribution.distributionVersion) ?? text(distribution.applicationVersion);
+    throw new Refusal(
+      `${nuxeo.base}'s /management/distribution is not a Nuxeo's: it lists no bundles.`,
+    );
+  const nuxeoVersion =
+    text(distribution.distributionVersion) ?? text(distribution.applicationVersion);
   if (!bundles.has(PLATFORM_BUNDLE))
     throw new Refusal(
       `${nuxeo.base} is Nuxeo ${nuxeoVersion ?? '(no version)'} with no ${PLATFORM_BUNDLE}: nuxeo-agentic-ui is not installed there.`,
@@ -357,12 +381,15 @@ async function identify(nuxeo, kit, kitModel, username) {
     headers: { accept: 'text/html', 'accept-language': 'en' },
   });
   if (listing.status !== 200 || !/<tr\b/.test(listing.text))
-    problems.push(`the package manager's listing, /site/connectClient/packages/local, answered ${listing.status}`);
+    problems.push(
+      `the package manager's listing, /site/connectClient/packages/local, answered ${listing.status}`,
+    );
   else {
     const rows = packageRows(listing.text, kit.name);
     const running = rows.filter((row) => row.state === 'running' || row.state === 'started');
     const waiting = rows.filter((row) => row.state === 'installed');
-    if (running.length === 1) sources.push({ from: 'the package manager', version: running[0].version });
+    if (running.length === 1)
+      sources.push({ from: 'the package manager', version: running[0].version });
     else if (running.length > 1)
       throw new Refusal(
         `the package manager lists ${list(running.map((row) => row.version))} of ${kit.name} running at once, so which is installed is not known.`,
@@ -375,17 +402,24 @@ async function identify(nuxeo, kit, kitModel, username) {
     else problems.push(`the package manager lists no ${kit.name} running`);
   }
   const app = text(kit.files.get('app.json')?.id);
-  const registry = await nuxeo.json('/agentic-ui-apps/apps.json');
+  const listed = await nuxeo.get('/agentic-ui-apps/apps.json');
+  const registry =
+    listed.status === 200 && isRecord(listed.body) ? listed.body : { apps: [], diagnostics: [] };
   const entry = (Array.isArray(registry.apps) ? registry.apps : []).find(
     (each) => isRecord(each) && each.id === app,
   );
-  if (app === undefined) problems.push(`${kit.shown} has no app.json, so the app registry was not asked`);
+  if (listed.status !== 200)
+    problems.push(`the app registry, /agentic-ui-apps/apps.json, answered ${listed.status}`);
+  else if (app === undefined)
+    problems.push(`${kit.shown} has no app.json, so the app registry was not asked`);
   else if (entry === undefined)
     problems.push(
       `the app registry lists no app ${app} to ${username}, who is in none of its groups, or it is not served`,
     );
   else if (entry.bundle !== kitModel.bundle)
-    problems.push(`the app registry serves ${app} from ${entry.bundle}, not from ${kitModel.bundle}`);
+    problems.push(
+      `the app registry serves ${app} from ${entry.bundle}, not from ${kitModel.bundle}`,
+    );
   else if (typeof entry.content?.packageVersion === 'string')
     sources.push({ from: 'the app registry', version: entry.content.packageVersion });
   if (sources.length === 0)
@@ -399,7 +433,9 @@ async function identify(nuxeo, kit, kitModel, username) {
         'is installed is not known. A server not restarted since an install, or another package that contributes the app, does this.',
     );
   if (!parseVersion(versions[0]))
-    throw new Refusal(`the version of ${kit.name} installed, ${versions[0]}, is not a semantic version.`);
+    throw new Refusal(
+      `the version of ${kit.name} installed, ${versions[0]}, is not a semantic version.`,
+    );
   return {
     user: me.body.id,
     nuxeo: nuxeoVersion,
@@ -434,7 +470,16 @@ function packageRows(html, name) {
         .toLowerCase(),
     );
     const state = cells.find((cell) =>
-      ['running', 'started', 'installed', 'installing', 'downloaded', 'downloading', 'remote', 'unknown'].includes(cell),
+      [
+        'running',
+        'started',
+        'installed',
+        'installing',
+        'downloaded',
+        'downloading',
+        'remote',
+        'unknown',
+      ].includes(cell),
     );
     rows.push({ version, state: state ?? null });
   }
@@ -476,22 +521,35 @@ async function heldTo(nuxeo, server, kit, kitModel, given) {
   const theirs = (Array.isArray(index.layouts) ? index.layouts : []).filter(
     (layout) => isRecord(layout) && layout.bundle === kitModel.bundle,
   );
+  const another = (what) =>
+    new Refusal(
+      `the server's ${kit.name} ${installed} ${what}, so it is another build of ${installed} than ${before.shown}, ` +
+        'the package the upgrade is held to. ' +
+        (before === kit
+          ? 'nuxeoctl mp-install skips a version already installed as unchanged: remove it first (administrator guide, section 5). '
+          : '') +
+        'Give --previous the package as it was built and installed.',
+    );
   for (const layout of theirs) {
-    const path = `layouts/${layout.type}/${layout.mode}.layout.json`;
-    if (!before.files.has(path) || !NAME.test(layout.type ?? '') || !NAME.test(layout.mode ?? ''))
-      continue;
+    if (!NAME.test(layout.type ?? '') || !NAME.test(layout.mode ?? ''))
+      throw new Refusal(
+        `/agentic-ui-config/layouts.json names a layout "${layout.type}/${layout.mode}", which this does not ask for.`,
+      );
+    // The file the layout was read from, as the server says it, below the package's
+    // agentic-ui-config/; otherwise the place the pipeline gives a layout.
+    const path =
+      typeof layout.source === 'string' && layout.source.startsWith('agentic-ui-config/')
+        ? layout.source.slice('agentic-ui-config/'.length)
+        : `layouts/${layout.type}/${layout.mode}.layout.json`;
+    if (!before.files.has(path))
+      throw another(
+        `serves the ${layout.mode} layout of ${layout.type} records from ${path}, which the package does not have`,
+      );
     const served = await nuxeo.json(
-      `/agentic-ui-config/layouts/${encodeURIComponent(layout.type)}/${encodeURIComponent(layout.mode)}.layout.json`,
+      `/agentic-ui-config/layouts/${segment(layout.type)}/${segment(layout.mode)}.layout.json`,
     );
     if (canonical(served.content) !== canonical(before.files.get(path)))
-      throw new Refusal(
-        `the server's ${kit.name} ${installed} serves ${path} otherwise than ${before.shown} does, so it is another build ` +
-          `of ${installed} than the package the upgrade is held to. ` +
-          (before === kit
-            ? 'nuxeoctl mp-install skips a version already installed as unchanged: remove it first (administrator guide, section 5). '
-            : '') +
-          'Give --previous the package as it was built and installed.',
-      );
+      throw another(`serves ${path} otherwise than the package does`);
   }
   return before;
 }
@@ -502,7 +560,16 @@ async function heldTo(nuxeo, server, kit, kitModel, given) {
  * Records of a type, a schema or a property the upgrade removes or changes, and of a type whose new
  * lifecycle does not have their state, counted on the server.
  */
-async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findings, said, result }) {
+async function records({
+  nuxeo,
+  kit,
+  kitModel,
+  beforeModel,
+  model,
+  findings,
+  said,
+  result,
+}) {
   const noteFor = (item) => {
     const note = result.covered.find((each) => each.item === item)?.note;
     return note ? ` The kit's note for ${item}, at ${note.version}: ${note.note}` : '';
@@ -525,7 +592,10 @@ async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findi
   );
   const carriers = (schema) => ({
     types: Object.entries(model.doctypes ?? {})
-      .filter(([, type]) => isRecord(type) && Array.isArray(type.schemas) && type.schemas.includes(schema))
+      .filter(
+        ([, type]) =>
+          isRecord(type) && Array.isArray(type.schemas) && type.schemas.includes(schema),
+      )
       .map(([name]) => name),
     facets: (model.facets ?? [])
       .filter(
@@ -536,7 +606,9 @@ async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findi
       )
       .map((facet) => facet.name),
   });
-  const removedTypes = [...beforeModel.doctypes.keys()].filter((type) => !kitModel.doctypes.has(type));
+  const removedTypes = [...beforeModel.doctypes.keys()].filter(
+    (type) => !kitModel.doctypes.has(type),
+  );
 
   for (const type of removedTypes)
     add(
@@ -555,12 +627,17 @@ async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findi
       const { types, facets } = carriers(name);
       const live = types.filter((type) => !removedTypes.includes(type));
       if (live.length === 0 && facets.length === 0) {
-        said.push(`no type or facet on the server carries the schema ${name}, which the upgrade removes.`);
+        said.push(
+          `no type or facet on the server carries the schema ${name}, which the upgrade removes.`,
+        );
         continue;
       }
       add(
         `schema ${name}`,
-        await count(nuxeo, `SELECT * FROM Document WHERE ${anyOf('ecm:primaryType', live, 'ecm:mixinType', facets)}`),
+        await count(
+          nuxeo,
+          `SELECT * FROM Document WHERE ${anyOf('ecm:primaryType', live, 'ecm:mixinType', facets)}`,
+        ),
         'removes',
         {
           what: `carry the schema ${name}, which ${kit.name} ${kit.version} no longer has: what its properties hold stays in the repository, read by nothing.`,
@@ -584,14 +661,19 @@ async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findi
         said.push(`${xpath} is a complex property, which is not counted by its values.`);
         continue;
       }
-      add(`property ${xpath}`, await count(nuxeo, `SELECT * FROM Document WHERE ${held}`), changed ? 'changes' : 'removes', {
-        what: changed
-          ? `hold a value of ${xpath}, whose type changes from ${type} to ${now.properties.get(property)}: a value the new type cannot hold fails to load.`
-          : `hold a value of ${xpath}, which the new version's schema ${name} no longer has: the value stays in the repository, read by no layout, queue or search.`,
-        do: changed
-          ? `Before installing, convert each value to one the new type holds, or clear it.`
-          : `Before installing, copy each value into a property the new version has, if it is wanted.`,
-      });
+      add(
+        `property ${xpath}`,
+        await count(nuxeo, `SELECT * FROM Document WHERE ${held}`),
+        changed ? 'changes' : 'removes',
+        {
+          what: changed
+            ? `hold a value of ${xpath}, whose type changes from ${type} to ${now.properties.get(property)}: a value the new type cannot hold fails to load.`
+            : `hold a value of ${xpath}, which the new version's schema ${name} no longer has: the value stays in the repository, read by no layout, queue or search.`,
+          do: changed
+            ? `Before installing, convert each value to one the new type holds, or clear it.`
+            : `Before installing, copy each value into a property the new version has, if it is wanted.`,
+        },
+      );
     }
   }
 
@@ -600,10 +682,15 @@ async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findi
     const is = kitModel.doctypes.get(type);
     if (is === undefined) continue;
     for (const schema of was.schemas.filter((each) => !is.schemas.includes(each))) {
-      add(`type ${type}`, await count(nuxeo, `SELECT * FROM Document WHERE ecm:primaryType = ${quoted(type)}`), 'changes', {
-        what: `are of the type ${type}, which no longer carries the schema ${schema}: what they hold there stays in the repository, read by nothing.`,
-        do: `Before installing, copy what they hold of ${schema} into properties the new version's ${type} has, if it is wanted.`,
-      });
+      add(
+        `type ${type}`,
+        await count(nuxeo, `SELECT * FROM Document WHERE ecm:primaryType = ${quoted(type)}`),
+        'changes',
+        {
+          what: `are of the type ${type}, which no longer carries the schema ${schema}: what they hold there stays in the repository, read by nothing.`,
+          do: `Before installing, copy what they hold of ${schema} into properties the new version's ${type} has, if it is wanted.`,
+        },
+      );
     }
   }
 
@@ -651,7 +738,8 @@ async function records({ nuxeo, kit, before, kitModel, beforeModel, model, findi
  */
 function holding(xpath, field) {
   const [prefix, name] = xpath.split(':');
-  if (!NAME.test(prefix) || !NAME.test(name)) throw new Refusal(`${xpath} is not a name NXQL is given here.`);
+  if (!NAME.test(prefix) || !NAME.test(name))
+    throw new Refusal(`${xpath} is not a name NXQL is given here.`);
   const type = isRecord(field) ? field.type : field;
   if (typeof type !== 'string' || type.startsWith('complex')) return null;
   return type.endsWith('[]') ? `${xpath}/* IS NOT NULL` : `${xpath} IS NOT NULL`;
@@ -681,7 +769,12 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
     said.push('the upgrade changes no page provider the server has.');
     return;
   }
+  // Which search client answers each: a help for the finding's text, not what is checked.
   const listing = await nuxeo.get('/api/v1/management/page-providers');
+  if (listing.status !== 200)
+    said.push(
+      `/api/v1/management/page-providers answered ${listing.status}: which search client answers each page provider is not said.`,
+    );
   const indexed = new Map(
     (Array.isArray(listing.body) ? listing.body : [])
       .filter((entry) => isRecord(entry) && typeof entry.name === 'string')
@@ -690,11 +783,19 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
   const named = namedProviders(kit);
   for (const [name, provider] of changed) {
     const item = `page-provider ${name}`;
-    const definition = await nuxeo.get(`/api/v1/search/pp/${encodeURIComponent(name)}`);
-    if (definition.status !== 200 || !isRecord(definition.body)) {
-      said.push(`the server has no page provider ${name} yet, so it is answered only after the upgrade.`);
+    const definition = await nuxeo.get(`/api/v1/search/pp/${segment(name)}`);
+    // Nuxeo 2025 answers a name it does not have 200 with the body null (the Builder MCP server's
+    // describePageProvider says so); any other failure is a read not made.
+    if (definition.status === 404 || (definition.status === 200 && definition.body === null)) {
+      said.push(
+        `the server has no page provider ${name} yet, so it is answered only after the upgrade.`,
+      );
       continue;
     }
+    if (definition.status !== 200 || !isRecord(definition.body))
+      throw new Refusal(
+        `/api/v1/search/pp/${name} answered ${definition.status}${nuxeoMessage(definition.body)}.`,
+      );
     if (provider.aggregates.length === 0) {
       said.push(`${name} changes, and has no aggregate to answer.`);
       continue;
@@ -714,7 +815,7 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
       );
       continue;
     }
-    const run = await nuxeo.get(`/api/v1/search/pp/${encodeURIComponent(name)}/execute`, {
+    const run = await nuxeo.get(`/api/v1/search/pp/${segment(name)}/execute`, {
       query: { pageSize: 1, currentPageIndex: 0, queryParams: parameters },
       headers: { properties: 'common' },
     });
@@ -732,7 +833,9 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
     const answered = isRecord(run.body.aggregations) ? run.body.aggregations : {};
     for (const aggregate of provider.aggregates) {
       if (!theirs.has(aggregate.id)) {
-        said.push(`${name}'s aggregate ${aggregate.id} is new in ${kit.version}: the server answers it only after the upgrade.`);
+        said.push(
+          `${name}'s aggregate ${aggregate.id} is new in ${kit.version}: the server answers it only after the upgrade.`,
+        );
         continue;
       }
       if (isRecord(answered[aggregate.id])) continue;
@@ -745,7 +848,7 @@ async function pageProviders({ nuxeo, kit, kitModel, beforeModel, findings, said
           `The server answers ${name} without its aggregate ${aggregate.id}${repository ? ': it is answered by the repository, which answers no aggregate' : ''}, ` +
           `so the facets and home figures that read it show nothing.${from}`,
         steps:
-          'Aggregates come from the search index: answer the page provider from it, as the kit\'s own are (a SearchServicePageProvider with the index as its search client), before installing.',
+          "Aggregates come from the search index: answer the page provider from it, as the kit's own are (a SearchServicePageProvider with the index as its search client), before installing.",
       });
     }
   }
@@ -783,7 +886,9 @@ async function workflows({ nuxeo, kit, kitModel, beforeModel, findings, said }) 
   for (const [id] of replaced) {
     const model = models.find((each) => each.name === id);
     if (model === undefined || typeof model.id !== 'string' || !UUID.test(model.id)) {
-      said.push(`the server has no route model ${id}: it is imported at the next start, with nothing running on it.`);
+      said.push(
+        `the server has no route model ${id}: it is imported at the next start, with nothing running on it.`,
+      );
       continue;
     }
     const running = await count(
@@ -819,11 +924,19 @@ async function workflows({ nuxeo, kit, kitModel, beforeModel, findings, said }) 
 async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, said }) {
   const exported = await nuxeo.get('/agentic-ui-apps/layer.json');
   if (exported.status === 404 && exported.body?.error === 'not-found') {
-    said.push(`the deployment layer is switched off on this server: no override of ${server.app ?? 'the app'} to hold to the new version.`);
+    said.push(
+      `the deployment layer is switched off on this server: no override of ${server.app ?? 'the app'} to hold to the new version.`,
+    );
     return;
   }
-  if (exported.status !== 200 || exported.body?.format !== 'nuxeo-agentic-ui-layer/1' || !Array.isArray(exported.body.apps))
-    throw new Refusal(`the deployment layer's export, /agentic-ui-apps/layer.json, answered ${exported.status}${nuxeoMessage(exported.body)}.`);
+  if (
+    exported.status !== 200 ||
+    exported.body?.format !== 'nuxeo-agentic-ui-layer/1' ||
+    !Array.isArray(exported.body.apps)
+  )
+    throw new Refusal(
+      `the deployment layer's export, /agentic-ui-apps/layer.json, answered ${exported.status}${nuxeoMessage(exported.body)}.`,
+    );
   const app = exported.body.apps.find((each) => isRecord(each) && each.id === server.app);
   const files = Array.isArray(app?.files) ? app.files.filter(isRecord) : [];
   if (files.length === 0) {
@@ -832,13 +945,18 @@ async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, 
   }
   // The content model the server has after the upgrade: its own, with the package's stand-in types.
   const after = withPackageModel(model, kitModel.contentModel);
-  const definition = { app: kit.files.get('app.json') ?? null, actions: kit.files.get('actions.json') ?? null };
+  const definition = {
+    app: kit.files.get('app.json') ?? null,
+    actions: kit.files.get('actions.json') ?? null,
+  };
   for (const file of files) {
     const name = layerItem(file.path);
     if (typeof file.path !== 'string' || name === undefined)
-      throw new Refusal(`the deployment layer's export names ${JSON.stringify(file.path)}, which is no file of a layer.`);
+      throw new Refusal(
+        `the deployment layer's export names ${JSON.stringify(file.path)}, which is no file of a layer.`,
+      );
     const state = await nuxeo.json(
-      `/agentic-ui-apps/apps/${encodeURIComponent(server.app)}/layer/${file.path.split('/').map(encodeURIComponent).join('/')}`,
+      `/agentic-ui-apps/apps/${segment(server.app)}/layer/${file.path.split('/').map(segment).join('/')}`,
     );
     const ours = kit.files.get(file.path);
     const packaged = isRecord(state.package) ? state.package.content : undefined;
@@ -852,7 +970,7 @@ async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, 
           `deployment layer overrides at version ${file.version}. The override keeps winning, so ${server.app}'s people see none of the kit's change.`,
         steps:
           ours === undefined
-            ? "After the upgrade the override is the only version of the file: keep it, or roll it back to drop it."
+            ? 'After the upgrade the override is the only version of the file: keep it, or roll it back to drop it.'
             : "After the upgrade, open the file in the layout designer and take the kit's change into a new draft, or roll the override back to the package's version.",
       });
     if (state.packageChanged === true)
@@ -861,16 +979,24 @@ async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, 
         check: 'layer',
         item: name,
         what: `The override of ${file.path} was made on another version of the kit's file than the one in force now: it may undo what an upgrade before this one brought.`,
-        steps: 'Compare the override with the package\'s file in the layout designer, before or after the upgrade.',
+        steps:
+          "Compare the override with the package's file in the layout designer, before or after the upgrade.",
       });
     for (const [which, version] of [
       ['live', isRecord(state.live) ? state.live : null],
       ['draft', isRecord(state.draft) ? state.draft : null],
     ]) {
       if (version === null || version.content === undefined) continue;
-      const answer = validateDeploymentFile({ path: file.path, content: version.content, model: after, ...definition });
+      const answer = validateDeploymentFile({
+        path: file.path,
+        content: version.content,
+        model: after,
+        ...definition,
+      });
       const problems =
-        'refused' in answer ? [answer.refused] : answer.findings.map((each) => `${each.path || '(the file)'}: ${each.message}`);
+        'refused' in answer
+          ? [answer.refused]
+          : answer.findings.map((each) => `${each.path || '(the file)'}: ${each.message}`);
       if (problems.length === 0) continue;
       findings.push(
         which === 'live'
@@ -881,7 +1007,8 @@ async function deploymentLayer({ nuxeo, kit, kitModel, model, server, findings, 
               what:
                 `The override of ${file.path} in force, version ${version.version ?? file.version}, does not fit ${kit.name} ${kit.version}: ${problems.slice(0, 3).join('; ')}` +
                 `${problems.length > 3 ? `, and ${problems.length - 3} more` : ''}. After the upgrade the registry no longer serves it, and serves the package's file instead.`,
-              steps: "Before installing, change the override so that it fits the new version, in the layout designer, or roll it back to the package's file.",
+              steps:
+                "Before installing, change the override so that it fits the new version, in the layout designer, or roll it back to the package's file.",
             }
           : {
               severity: 'warning',
@@ -911,7 +1038,10 @@ function withPackageModel(server, own) {
   if (!isRecord(own)) return server;
   const byName = (mine, theirs) => {
     const names = new Set((mine ?? []).filter(isRecord).map((each) => each.name));
-    return [...(theirs ?? []).filter((each) => !isRecord(each) || !names.has(each.name)), ...(mine ?? [])];
+    return [
+      ...(theirs ?? []).filter((each) => !isRecord(each) || !names.has(each.name)),
+      ...(mine ?? []),
+    ];
   };
   return {
     doctypes: { ...(server.doctypes ?? {}), ...(isRecord(own.doctypes) ? own.doctypes : {}) },
@@ -942,11 +1072,13 @@ async function vocabularies({ nuxeo, kit, kitModel, beforeModel, findings, said 
     return;
   }
   for (const [name, directory] of changed) {
-    if (!NAME.test(name)) throw new Refusal(`the vocabulary "${name}" is not a name this asks the server for.`);
+    if (!NAME.test(name))
+      throw new Refusal(`the vocabulary "${name}" is not a name this asks the server for.`);
     const ids = new Set();
     let found = true;
+    let whole = false;
     for (let page = 0; page < VOCABULARY_PAGES; page++) {
-      const answer = await nuxeo.get(`/api/v1/directory/${encodeURIComponent(name)}`, {
+      const answer = await nuxeo.get(`/api/v1/directory/${segment(name)}`, {
         query: { pageSize: VOCABULARY_PAGE, currentPageIndex: page },
       });
       if (answer.status === 404) {
@@ -954,13 +1086,27 @@ async function vocabularies({ nuxeo, kit, kitModel, beforeModel, findings, said 
         break;
       }
       if (answer.status !== 200 || !Array.isArray(answer.body?.entries))
-        throw new Refusal(`/api/v1/directory/${name} answered ${answer.status}${nuxeoMessage(answer.body)}.`);
-      for (const entry of answer.body.entries)
-        if (isRecord(entry)) ids.add(String(entry.id ?? entry.properties?.id));
-      if (answer.body.isNextPageAvailable !== true) break;
+        throw new Refusal(
+          `/api/v1/directory/${name} answered ${answer.status}${nuxeoMessage(answer.body)}.`,
+        );
+      for (const entry of answer.body.entries) {
+        const id = isRecord(entry) ? (entry.id ?? entry.properties?.id) : undefined;
+        if (typeof id === 'string' || typeof id === 'number') ids.add(String(id));
+      }
+      if (answer.body.isNextPageAvailable !== true) {
+        whole = true;
+        break;
+      }
     }
+    // A vocabulary read in part would make every entry past the part look missing.
+    if (found && !whole)
+      throw new Refusal(
+        `the server's vocabulary ${name} has more than ${VOCABULARY_PAGE * VOCABULARY_PAGES} entries, more than this reads.`,
+      );
     if (!found) {
-      said.push(`the server has no vocabulary ${name}: it is made from ${directory.file} at the next start.`);
+      said.push(
+        `the server has no vocabulary ${name}: it is made from ${directory.file} at the next start.`,
+      );
       continue;
     }
     const missing = directory.ids.filter((id) => !ids.has(id));
@@ -988,7 +1134,9 @@ async function vocabularies({ nuxeo, kit, kitModel, beforeModel, findings, said 
         steps: `Note them before installing, and add them again after, or add them to ${directory.file}.`,
       });
     if ((missing.length === 0 || always) && (extra.length === 0 || !always))
-      said.push(`the server's vocabulary ${name} answers as ${kit.version}'s ${directory.file} expects.`);
+      said.push(
+        `the server's vocabulary ${name} answers as ${kit.version}'s ${directory.file} expects.`,
+      );
   }
 }
 
@@ -996,7 +1144,9 @@ async function vocabularies({ nuxeo, kit, kitModel, beforeModel, findings, said 
 
 /** What the server reports wrong with the app before the upgrade: a new error can then be told. */
 function diagnostics({ server, kitModel, findings, said }) {
-  const ofApp = (Array.isArray(server.registry.diagnostics) ? server.registry.diagnostics : []).filter(
+  const ofApp = (
+    Array.isArray(server.registry.diagnostics) ? server.registry.diagnostics : []
+  ).filter(
     (each) =>
       isRecord(each) &&
       each.level === 'error' &&
@@ -1009,7 +1159,7 @@ function diagnostics({ server, kitModel, findings, said }) {
       check: 'diagnostics',
       item: `app ${server.app}`,
       what: `The server reports, before the upgrade: ${message}`,
-      steps: 'Note it: after the upgrade, an error that was not here is the upgrade\'s.',
+      steps: "Note it: after the upgrade, an error that was not here is the upgrade's.",
     });
   for (const message of new Set(server.errors))
     findings.push({
@@ -1017,7 +1167,7 @@ function diagnostics({ server, kitModel, findings, said }) {
       check: 'diagnostics',
       item: 'runtime',
       what: `The server's runtime reports an error, before the upgrade: ${message}`,
-      steps: 'Note it: after the upgrade, an error that was not here is the upgrade\'s.',
+      steps: "Note it: after the upgrade, an error that was not here is the upgrade's.",
     });
   if (ofApp.length === 0 && server.errors.length === 0)
     said.push(`the server reports no error for ${server.app ?? 'the app'}, and its runtime none.`);
@@ -1039,7 +1189,9 @@ export function packageModel(kit) {
   };
   const manifest = inBundle('META-INF/MANIFEST.MF');
   const symbolic = manifest
-    ? /^Bundle-SymbolicName:[ \t]*([^;\s]+)/im.exec(readFileSync(manifest, 'utf8').replace(/\r?\n[ \t]/g, ''))?.[1]
+    ? /^Bundle-SymbolicName:[ \t]*([^;\s]+)/im.exec(
+        readFileSync(manifest, 'utf8').replace(/\r?\n[ \t]/g, ''),
+      )?.[1]
     : undefined;
   const model = {
     bundle: symbolic ?? null,
@@ -1056,20 +1208,27 @@ export function packageModel(kit) {
     const file = inBundle(component.path);
     if (file === null) continue;
     const xml = componentXmlOf(readFileSync(file, 'utf8'));
-    for (const [, tag, body] of xml.matchAll(new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g'))) {
+    for (const [, tag, body] of xml.matchAll(
+      new RegExp(`<extension${TAG}([\\s\\S]*?)</extension[ \\t\\r\\n]*>`, 'g'),
+    )) {
       const { target = '', point = '' } = attributesOf(tag);
       if (point === 'schema')
         for (const [, schemaTag] of body.matchAll(new RegExp(`<schema${TAG}`, 'g'))) {
           const { name, prefix, src } = attributesOf(schemaTag);
           if (!name || !src) continue;
           const xsd = inBundle(src);
-          model.schemas.set(name, { prefix: prefix || name, properties: xsd === null ? null : xsdProperties(readFileSync(xsd, 'utf8')) });
+          model.schemas.set(name, {
+            prefix: prefix || name,
+            properties: xsd === null ? null : xsdProperties(readFileSync(xsd, 'utf8')),
+          });
         }
       if (point === 'doctype')
         for (const { attributes, inner } of elements(body, 'doctype')) {
           if (!attributes.name) continue;
           model.doctypes.set(attributes.name, {
-            schemas: [...inner.matchAll(new RegExp(`<schema${TAG}`, 'g'))].map(([, each]) => attributesOf(each).name).filter(Boolean),
+            schemas: [...inner.matchAll(new RegExp(`<schema${TAG}`, 'g'))]
+              .map(([, each]) => attributesOf(each).name)
+              .filter(Boolean),
           });
         }
       if (point === 'lifecycle')
@@ -1084,13 +1243,19 @@ export function packageModel(kit) {
           for (const state of elements(inner, 'state'))
             if (state.attributes.name)
               states.set(state.attributes.name, {
-                initial: state.attributes.initial === 'true' || state.attributes.name === attributes.defaultInitial,
-                out: [...state.inner.matchAll(/<transition[ \t\r\n]*>([^<]*)<\/transition[ \t\r\n]*>/g)].map(([, each]) => each.trim()),
+                initial:
+                  state.attributes.initial === 'true' ||
+                  state.attributes.name === attributes.defaultInitial,
+                out: [
+                  ...state.inner.matchAll(/<transition[ \t\r\n]*>([^<]*)<\/transition[ \t\r\n]*>/g),
+                ].map(([, each]) => each.trim()),
               });
           model.lifecycles.set(attributes.name, { states, destinations });
         }
       if (point === 'types' && target.endsWith('LifeCycleService'))
-        for (const [, typeTag, policy] of body.matchAll(new RegExp(`<type${TAG}([^<]*)</type[ \\t\\r\\n]*>`, 'g'))) {
+        for (const [, typeTag, policy] of body.matchAll(
+          new RegExp(`<type${TAG}([^<]*)</type[ \\t\\r\\n]*>`, 'g'),
+        )) {
           const { name } = attributesOf(typeTag);
           if (name && policy.trim()) model.lifecycleOf.set(name, policy.trim());
         }
@@ -1110,7 +1275,8 @@ export function packageModel(kit) {
         for (const [, resource] of body.matchAll(new RegExp(`<template-resource${TAG}`, 'g'))) {
           const { id, path } = attributesOf(resource);
           const zip = id && path ? inBundle(path) : null;
-          if (zip !== null) model.routeModels.set(id, createHash('sha256').update(readFileSync(zip)).digest('hex'));
+          if (zip !== null)
+            model.routeModels.set(id, createHash('sha256').update(readFileSync(zip)).digest('hex'));
         }
       if (point === 'directories')
         for (const { attributes, inner } of elements(body, 'directory')) {
@@ -1119,7 +1285,9 @@ export function packageModel(kit) {
           if (csv === null) continue;
           model.directories.set(attributes.name, {
             file: dataFile,
-            policy: /<createTablePolicy[ \t\r\n]*>([^<]*)<\/createTablePolicy/.exec(inner)?.[1]?.trim() ?? null,
+            policy:
+              /<createTablePolicy[ \t\r\n]*>([^<]*)<\/createTablePolicy/.exec(inner)?.[1]?.trim() ??
+              null,
             ids: csvIds(readFileSync(csv, 'utf8')),
           });
         }
@@ -1161,7 +1329,11 @@ function elements(xml, name) {
       }
     }
     if (end === -1) break;
-    found.push({ attributes, inner: xml.slice(open.lastIndex, end), whole: xml.slice(start, close.lastIndex) });
+    found.push({
+      attributes,
+      inner: xml.slice(open.lastIndex, end),
+      whole: xml.slice(start, close.lastIndex),
+    });
     open.lastIndex = close.lastIndex;
   }
   return found;
@@ -1173,23 +1345,36 @@ function elements(xml, name) {
  */
 function xsdProperties(source) {
   const xml = withoutCdata(withoutCommentsOrInstructions(source));
-  const schema = /<(?:[\w.-]+:)?schema\b[^>]*>([\s\S]*)<\/(?:[\w.-]+:)?schema[ \t\r\n]*>/.exec(xml)?.[1] ?? '';
+  const schema =
+    /<(?:[\w.-]+:)?schema\b[^>]*>([\s\S]*)<\/(?:[\w.-]+:)?schema[ \t\r\n]*>/.exec(xml)?.[1] ?? '';
   const prefix = /<([\w.-]+:)?schema\b/.exec(xml)?.[1] ?? '';
   const top = [];
   for (const kind of ['element', 'simpleType', 'complexType'])
     for (const each of elements(schema, `${prefix}${kind}`)) top.push({ kind, ...each });
   // Only those not inside another top-level one: an inline type's own elements are not properties.
-  const nested = (candidate) => top.some((other) => other !== candidate && other.whole.includes(candidate.whole) && other.whole.length > candidate.whole.length);
+  const nested = (candidate) =>
+    top.some(
+      (other) =>
+        other !== candidate &&
+        other.whole.includes(candidate.whole) &&
+        other.whole.length > candidate.whole.length,
+    );
   const named = new Map(
-    top.filter((each) => each.kind !== 'element' && each.attributes.name && !nested(each)).map((each) => [each.attributes.name, each.whole.replace(/\s+/g, ' ')]),
+    top
+      .filter((each) => each.kind !== 'element' && each.attributes.name && !nested(each))
+      .map((each) => [each.attributes.name, each.whole.replace(/\s+/g, ' ')]),
   );
   const properties = new Map();
-  for (const element of top.filter((each) => each.kind === 'element' && each.attributes.name && !nested(each))) {
+  for (const element of top.filter(
+    (each) => each.kind === 'element' && each.attributes.name && !nested(each),
+  )) {
     const type = element.attributes.type;
     const local = type?.slice(type.indexOf(':') + 1);
     properties.set(
       element.attributes.name,
-      type ? `${type}${named.has(local) ? ` = ${named.get(local)}` : ''}` : element.inner.replace(/\s+/g, ' ').trim(),
+      type
+        ? `${type}${named.has(local) ? ` = ${named.get(local)}` : ''}`
+        : element.inner.replace(/\s+/g, ' ').trim(),
     );
   }
   return properties;
@@ -1225,7 +1410,12 @@ function csvIds(source) {
   row.push(cell);
   if (row.some((each) => each !== '')) rows.push(row);
   const column = (rows[0] ?? []).findIndex((name) => name.trim() === 'id');
-  return column === -1 ? [] : rows.slice(1).map((each) => (each[column] ?? '').trim()).filter(Boolean);
+  return column === -1
+    ? []
+    : rows
+        .slice(1)
+        .map((each) => (each[column] ?? '').trim())
+        .filter(Boolean);
 }
 
 // --- Output ---------------------------------------------------------------------------------------
@@ -1257,15 +1447,21 @@ function report({ where, server, kit, before, result, findings, said, reads }, a
         ? `refused, ${count} finding(s):`
         : `every configuration is kept, and nothing on the server needs doing first${findings.length > 0 ? `, ${findings.length} warning(s)` : ''}.`),
   );
-  for (const finding of result.findings) out(`  - ${finding.side}, ${finding.item}: ${finding.what}`);
+  for (const finding of result.findings)
+    out(`  - ${finding.side}, ${finding.item}: ${finding.what}`);
   for (const finding of errors)
-    out(`  - server, ${finding.check}, ${finding.item}: ${finding.what} What to do: ${finding.steps}`);
+    out(
+      `  - server, ${finding.check}, ${finding.item}: ${finding.what} What to do: ${finding.steps}`,
+    );
   for (const each of result.covered)
     console.log(`  kept by the note for ${each.item}, at ${each.note.version}: ${each.note.note}`);
   for (const warning of result.warnings) console.log(`  warning: ${warning.item}: ${warning.what}`);
   for (const finding of findings.filter((each) => each.severity === 'warning'))
-    console.log(`  warning: server, ${finding.check}, ${finding.item}: ${finding.what} What to do: ${finding.steps}`);
-  for (const problem of server.unread) console.log(`  note: the version was not read there: ${problem}.`);
+    console.log(
+      `  warning: server, ${finding.check}, ${finding.item}: ${finding.what} What to do: ${finding.steps}`,
+    );
+  for (const problem of server.unread)
+    console.log(`  note: the version was not read there: ${problem}.`);
   for (const line of [...result.said, ...said]) console.log(`  note: ${line}`);
   return refused ? 1 : 0;
 }
@@ -1278,10 +1474,16 @@ function canonical(value) {
     Array.isArray(each)
       ? each.map(sorted)
       : isRecord(each)
-        ? Object.fromEntries(Object.keys(each).sort().map((key) => [key, sorted(each[key])]))
+        ? Object.fromEntries(
+            Object.keys(each)
+              .sort()
+              .map((key) => [key, sorted(each[key])]),
+          )
         : each;
   if (value === undefined) return 'undefined';
-  const top = isRecord(value) ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== '$schema')) : value;
+  const top = isRecord(value)
+    ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== '$schema'))
+    : value;
   return JSON.stringify(sorted(top));
 }
 
@@ -1289,6 +1491,22 @@ function walk(value, visit) {
   visit(value);
   if (Array.isArray(value)) for (const item of value) walk(item, visit);
   else if (isRecord(value)) for (const item of Object.values(value)) walk(item, visit);
+}
+
+/**
+ * One path segment, encoded, as the Builder MCP server's `segment`: `.` and `..` are refused, not
+ * encoded, since a URL parser reads them, and their percent-encoded spellings, as moves up the path.
+ */
+function segment(value) {
+  if (
+    typeof value !== 'string' ||
+    value === '' ||
+    value === '.' ||
+    value === '..' ||
+    /%2e/i.test(value)
+  )
+    throw new Refusal(`"${value}" is not a name this asks the server for.`);
+  return encodeURIComponent(value);
 }
 
 function nuxeoMessage(body) {

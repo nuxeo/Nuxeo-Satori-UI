@@ -42,6 +42,13 @@ on:
       - 'scripts/verify-package-zip.mjs'
       - 'scripts/app-upgrade-check.mjs'
       - 'scripts/app-upgrade-check.selftest.mjs'
+      # The server half, and what it reads a server with.
+      - 'scripts/app-upgrade-server.mjs'
+      - 'scripts/app-upgrade-server.selftest.mjs'
+      - 'scripts/beta-harness/identity-guard.mjs'
+      - 'tools/builder-mcp/src/page-providers.ts'
+      - 'tools/builder-mcp/src/nuxeo.ts'
+      - 'tools/builder-mcp/src/shapes.ts'
       - 'docs/extension-reference.md'
       - 'docs/business-apps/platform-upgrade-notes.json'
       - 'nuxeo-agentic-core/src/main/**'
@@ -65,6 +72,13 @@ on:
       - 'scripts/verify-package-zip.mjs'
       - 'scripts/app-upgrade-check.mjs'
       - 'scripts/app-upgrade-check.selftest.mjs'
+      # The server half, and what it reads a server with.
+      - 'scripts/app-upgrade-server.mjs'
+      - 'scripts/app-upgrade-server.selftest.mjs'
+      - 'scripts/beta-harness/identity-guard.mjs'
+      - 'tools/builder-mcp/src/page-providers.ts'
+      - 'tools/builder-mcp/src/nuxeo.ts'
+      - 'tools/builder-mcp/src/shapes.ts'
       - 'docs/extension-reference.md'
       - 'docs/business-apps/platform-upgrade-notes.json'
       - 'nuxeo-agentic-core/src/main/**'
@@ -122,6 +136,8 @@ jobs:
           set -euo pipefail
           node scripts/app-package.selftest.mjs
           node scripts/app-upgrade-check.selftest.mjs
+          # The server half's, against a stand-in Nuxeo on the runner: no server and no credential.
+          node scripts/app-upgrade-server.selftest.mjs
 
       - name: Check, build and verify each package
         env:

@@ -437,12 +437,38 @@ after sign-in.
    changes no exit code: your override keeps winning, so the kit's change does not show until an
    administrator takes it into a new draft, or rolls the override back.
 
-3. **Install the new version** with the one-off script. `mp-install` upgrades a kit, removing the
+3. **Check the upgrade against your running server,** before you stop it. The server half reads
+   the server, `GET` only, as an administrator, with `NUXEO_USER` and `NUXEO_PASS` in your
+   environment, and changes nothing there
+   ([package-pipeline.md, section 10](package-pipeline.md#on-a-server-before-the-install)):
+
+   ```bash
+   node scripts/app-upgrade-check.mjs <the new kit> --server https://<host>/nuxeo --previous <the kit as installed>
+   ```
+
+   It reads the version installed from the server, refuses a server it cannot identify, and reads
+   your own layer's export itself, so `--deployment` is not given. Then it says, with what to do
+   before you install:
+   - records of a type, a schema or a property the upgrade removes or changes, and records in a
+     state the new lifecycle does not have, counted;
+   - a page provider the kit changes that your server does not answer with its aggregates;
+   - workflows still running on a route model the kit replaces, which keep their old steps: let
+     them finish, or cancel them;
+   - an override in your deployment layer, live or a draft, that the new version would no longer
+     accept, and one whose file the upgrade changes;
+   - a vocabulary entry the new version adds that your server will not load;
+   - the errors your server already reports, so that a new one afterwards can be told.
+
+   An error is exit 1; a warning leaves the exit code alone; exit 2 is a server it could not
+   identify, or a read it could not make. Run on the local Docker Nuxeo for payers 0.6.1 over the
+   0.6.1 installed, 26 November 2026: kept, with the one error the registry already reported.
+
+4. **Install the new version** with the one-off script. `mp-install` upgrades a kit, removing the
    version before first, and the records stay: so the Payers kit went from 0.2.0 to 0.3.0, on 23
    November 2026. A rebuild of a version already installed is skipped as unchanged: run
    `nuxeoctl mp-remove <kit> --accept=true` first, in the same script
    ([Payers README](../../business-apps/packages/payers-claims-demo/README.md#installing-it-on-a-local-nuxeo)).
-4. **Follow the kit's README for its version.** Payers 0.6.1 gives the supervisor's step the
+5. **Follow the kit's README for its version.** Payers 0.6.1 gives the supervisor's step the
    variables facet Nuxeo's task completion needs, so a workflow started under 0.6.0 has a
    supervisor's approval that cannot be completed: cancel it. Payers 0.6.0 needs a
    `nuxeo-agentic-ui` whose layout engine knows a checklist's `tickable`, or the Case page's
@@ -450,12 +476,13 @@ after sign-in.
    0.5.0 needs a `nuxeo-agentic-ui` with the allow-list, and the allow-list in `nxserver/config/`;
    Payers 0.4.0 adds a claim lifecycle, so claims seeded under 0.3.0 wait in `project` until the
    seed runs again. None of the three was run on a server ([Payers README](../../business-apps/packages/payers-claims-demo/README.md)).
-5. **Check it,** as after an install: the install log, `Component Loading Status`, and no new error
-   in the diagnostics ([section 8](#8-logs-and-diagnostics)).
+6. **Check it,** as after an install: the install log, `Component Loading Status`, and no new error
+   in the diagnostics ([section 8](#8-logs-and-diagnostics)), against the errors step 3 noted.
 
 **Not built:** the server-side upgrade test, which would install a version and a customer's
 configuration, upgrade both and check that the customer's component still starts and that records
-made before still open. Nor has the Admin Center's install path been rehearsed
+made before still open. Step 3 reads a running server before an install and installs nothing. Nor
+has the Admin Center's install path been rehearsed
 ([package-pipeline.md](package-pipeline.md), section 10).
 
 ## 6. Removing a kit safely
@@ -616,7 +643,8 @@ decision G, are not built: the registry knows groups only
 - **The release candidate:** assembled offline, and it installs nothing. CI runs it on every push
   to a `staging/**` branch ([`release-candidate.yml`](../../.github/workflows/release-candidate.yml);
   [package-pipeline.md](package-pipeline.md), section 11).
-- **The upgrade check:** its offline half only; the server-side test is not built
+- **The upgrade check:** its offline half, and its server half, which reads a running server
+  before an install; the server-side test that installs and upgrades is not built
   ([package-pipeline.md](package-pipeline.md), section 10).
 - **Publishing:** never run ([tutorial.md](tutorial.md), step 10). Signatures and promotion after
   approval are a proposal, and nothing of them is built

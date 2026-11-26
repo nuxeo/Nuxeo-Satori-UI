@@ -184,7 +184,10 @@ const PLATFORM_KINDS = new Map([
  * each: a record page, an edit or a create form, and a queue.
  */
 const OVERRIDABLE = [
-  [/^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/, (match) => `layout ${match[1]}/${match[2]}`],
+  [
+    /^layouts\/([^/]+)\/(view|edit|create)\.layout\.json$/,
+    (match) => `layout ${match[1]}/${match[2]}`,
+  ],
   [/^queues\/([^/]+)\.json$/, (match) => `queue ${match[1]}`],
 ];
 
@@ -202,7 +205,9 @@ try {
   // Any run that ends here could not be made, so it exits 2: a crash must not read as "not kept".
   // The server half's refusals are said as the command's own errors are: the message alone.
   console.error(
-    error instanceof Usage || error?.name === 'Refusal' ? `app-upgrade-check: ${error.message}` : error,
+    error instanceof Usage || error?.name === 'Refusal'
+      ? `app-upgrade-check: ${error.message}`
+      : error,
   );
   process.exit(2);
 }
@@ -221,7 +226,14 @@ function parse(argv) {
       options[key] = { ref: value, path: argv[index + 2] };
       index += 2;
     } else if (
-      ['--since', '--previous', '--previous-platform', '--root', '--deployment', '--server'].includes(arg)
+      [
+        '--since',
+        '--previous',
+        '--previous-platform',
+        '--root',
+        '--deployment',
+        '--server',
+      ].includes(arg)
     ) {
       const key = arg.slice(2);
       if (!given(value) || options[key] !== undefined) return null;
@@ -295,8 +307,7 @@ async function main(options) {
       offline: (before) => check(before, kit, { previous: null, current, notes }),
     });
   }
-  const deployment =
-    options.deployment === undefined ? null : readDeployment(options.deployment);
+  const deployment = options.deployment === undefined ? null : readDeployment(options.deployment);
   if (options.previous !== undefined) {
     const previous =
       options['previous-platform'] === undefined
@@ -466,7 +477,11 @@ function readDeployment(path) {
       `--deployment ${shown}: ${what}. It is the deployment layer's export, as GET /nuxeo/agentic-ui-apps/layer.json answers it: ` +
         '{ "format": "nuxeo-agentic-ui-layer/1", "apps": [{ "id", "files": [{ "path", "version" }] }] }.',
     );
-  if (!isRecord(content) || content.format !== 'nuxeo-agentic-ui-layer/1' || !Array.isArray(content.apps))
+  if (
+    !isRecord(content) ||
+    content.format !== 'nuxeo-agentic-ui-layer/1' ||
+    !Array.isArray(content.apps)
+  )
     throw wrong('it is not the export');
   const apps = new Map();
   for (const app of content.apps) {
@@ -1582,7 +1597,8 @@ function report(results, asJson, gone = []) {
       out(`  - ${finding.side}, ${finding.item}: ${finding.what}`);
     for (const [note, items] of byNote(result.covered))
       console.log(`  kept by the note for ${list(items)}, at ${note.version}: ${note.note}`);
-    for (const warning of result.warnings) console.log(`  warning: ${warning.item}: ${warning.what}`);
+    for (const warning of result.warnings)
+      console.log(`  warning: ${warning.item}: ${warning.what}`);
     for (const line of result.said) console.log(`  note: ${line}`);
   }
   if (results.length === 0) console.log('No package to check.');
