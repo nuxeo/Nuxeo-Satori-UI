@@ -497,6 +497,37 @@ describe('app-model generator', () => {
       );
     });
 
+    it("writes a document property as another record's id, which app-layout shows as a link", async () => {
+      await generate({ properties: 'number, counterparty:document' });
+      const xsd = read(tree, `${ROOT}/bundle/schemas/contract.xsd`);
+      expect(xsd).toContain(
+        '  xmlns:ref="http://www.nuxeo.org/ecm/schemas/core/external-references/"\n',
+      );
+      expect(xsd).toContain(
+        '  <xs:element name="counterparty">\n' +
+          '    <xs:simpleType>\n' +
+          '      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />\n',
+      );
+      const fields = model().schemas.find(
+        (each: { name: string }) => each.name === 'contract',
+      ).fields;
+      expect(fields.counterparty).toEqual({
+        type: 'string',
+        constraints: [{ name: 'documentResolver', parameters: { store: 'id' } }],
+      });
+      const asRead = readModel(model(), 'content-model.json');
+      expect(asRead.schemas.get('contract')?.properties.get('counterparty')).toMatchObject({
+        type: 'string',
+        document: true,
+      });
+      // A schema with no document property names no ref namespace.
+      await generate({ type: 'Other', properties: 'a' });
+      expect(read(tree, `${ROOT}/bundle/schemas/other.xsd`)).not.toContain('xmlns:ref');
+      await expect(generate({ type: 'Third', properties: 'a:document[]' })).rejects.toThrow(
+        'has the type "document[]"',
+      );
+    });
+
     it("gives a type Nuxeo's own facets, Versionable with the uid schema, when first written", async () => {
       await generate({ properties: 'number', facets: 'Versionable, Commentable' });
       expect(doctype('Contract')).toBe(

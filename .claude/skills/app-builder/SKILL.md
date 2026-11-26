@@ -259,6 +259,9 @@ What each writes, and what it leaves to you:
   has the package. The pipeline holds a package that ships a stand-in model to it by default.
   `--buckets` is how many buckets each aggregate answers, ten unless given: give more for a facet
   on a team larger than ten. And what a kit's model needs besides flat properties:
+  - **A link to another record:** a property of the type `document`, such as `policy:document`,
+    which holds the record's id as Nuxeo's document resolver does, so that `app-layout` shows it
+    as a `document-link`. Give the link its `types` by hand, for a `show` field.
   - **A checklist,** for a checklist card: a property of the type `checklist`, such as
     `steps:checklist` in `--properties`, the list of entries the card reads (`item`, `done`,
     `doneBy`, `doneOn`). Never write that schema by hand.

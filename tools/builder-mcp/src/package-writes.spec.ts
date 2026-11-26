@@ -1202,7 +1202,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
             generator('app-package', { owner: 'acme', title: 'Acme Onboarding' }),
             generator('app-model', {
               type: 'Customer',
-              properties: 'number,status=Open|Done,steps:checklist',
+              properties: 'number,status=Open|Done,steps:checklist,account:document',
               facets: 'Versionable',
               attachments: true,
             }),
@@ -1222,6 +1222,10 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
       expect(Object.keys(described.doctypes)).toEqual(['Customer', 'Request', 'CustomerRegister']);
       // The checklist card on the generated record page, held to the property's shape.
       const page = JSON.parse(read(pkg, view));
+      // Another record's id, which app-layout shows as a link from the model alone.
+      expect(read(pkg, view)).toContain(
+        '{ "field": "customer:account", "widget": "document-link" }',
+      );
       page.cards.push({
         id: 'steps',
         label: 'Steps',

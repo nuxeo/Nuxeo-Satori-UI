@@ -194,11 +194,11 @@ function parseProperty(text: string): Property {
   const written = (match?.[2] ?? 'string').trim();
   const list = written.endsWith('[]');
   const type = list ? written.slice(0, -2) : written;
-  if (type === 'checklist' && !list && match?.[3] === undefined)
+  if ((type === 'checklist' || type === 'document') && !list && match?.[3] === undefined)
     return { name, type, list: false, values: [] };
   if (!SIMPLE.includes(type) || (list && type === 'boolean')) {
     throw new Error(
-      `--properties: "${name}" has the type "${written}"; a stand-in property is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[], or checklist, a checklist card's entries.`,
+      `--properties: "${name}" has the type "${written}"; a stand-in property is ${SIMPLE.join(', ')}, or a list of one but boolean, such as string[]; checklist, a checklist card's entries; or document, another record's id.`,
     );
   }
   const values =
@@ -226,10 +226,20 @@ function parseProperty(text: string): Property {
 }
 
 /** A property as the content model describes it: its type, or a checklist's entries. */
-function described(property: Property): string | { type: string; fields: Record<string, string> } {
-  return property.type === 'checklist'
-    ? { type: 'complex[]', fields: { ...CHECKLIST } }
-    : `${property.type}${property.list ? '[]' : ''}`;
+function described(
+  property: Property,
+):
+  | string
+  | { type: string; fields: Record<string, string> }
+  | { type: string; constraints: { name: string; parameters: Record<string, string> }[] } {
+  if (property.type === 'checklist') return { type: 'complex[]', fields: { ...CHECKLIST } };
+  // Another record's id, as Nuxeo's documentResolver stores it: app-layout shows it as a link.
+  if (property.type === 'document')
+    return {
+      type: 'string',
+      constraints: [{ name: 'documentResolver', parameters: { store: 'id' } }],
+    };
+  return `${property.type}${property.list ? '[]' : ''}`;
 }
 
 /** `text` safe inside an XML element or a double-quoted attribute. */
@@ -275,6 +285,16 @@ function schemaFile(
         '  </xs:complexType>\n'
       );
     }
+    if (property.type === 'document') {
+      return (
+        `  <!-- Another record's id, which Nuxeo resolves to the document it names. -->\n` +
+        `  <xs:element name="${property.name}">\n` +
+        '    <xs:simpleType>\n' +
+        '      <xs:restriction base="xs:string" ref:resolver="documentResolver" ref:store="id" />\n' +
+        '    </xs:simpleType>\n' +
+        '  </xs:element>\n'
+      );
+    }
     if (property.values.length > 0) {
       return (
         `  <xs:element name="${property.name}">\n` +
@@ -299,6 +319,9 @@ function schemaFile(
     '<xs:schema\n' +
     `  targetNamespace="${namespace}"\n` +
     '  xmlns:xs="http://www.w3.org/2001/XMLSchema"\n' +
+    (properties.some((property) => property.type === 'document')
+      ? '  xmlns:ref="http://www.nuxeo.org/ecm/schemas/core/external-references/"\n'
+      : '') +
     `  xmlns:nxs="${namespace}">\n\n` +
     (listTypes.length > 0 ? `${listTypes.join('\n')}\n` : '') +
     elements.join('') +
