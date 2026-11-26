@@ -288,14 +288,14 @@ not the same on every LTS 2025 server (`event` on 2025.10, `routes` on the build
 module's newest version needs).
 
 **What it costs a read** (`RecordAccessCostTest`, 26 November 2026, on a laptop): a person's request
-for a document that is no record, read, written as JSON and committed, 118 to 228 µs over five runs;
-the same request for a record under retention, 190 to 315 µs; so a logged view adds **71 to 114 µs a
-read**, the highest while the repository's gates ran beside it. Best of three rounds of 400 reads
+for a document that is no record, read, written as JSON and committed, 102 to 228 µs over six runs;
+the same request for a record under retention, 190 to 315 µs; so a logged view adds **71 to 126 µs a
+read**, the two highest while the repository's gates ran beside it. Best of three rounds of 400 reads
 each; the test refuses more than 2 ms. For a document that is no record under retention, the check
 reads only what the document already holds.
 
 **What it costs afterwards,** off the reader's time: the add-on's writer builds the view's entry and
-adds it to the audit in the background, one work and one write per read transaction, **40 to 41 µs
+adds it to the audit in the background, one work and one write per read transaction, **40 to 47 µs
 an entry** on the tests' audit, a JPA store in H2 (the same test, measured, not bounded). On a server
 the write goes to the audit's own store, on LTS 2025 OpenSearch, one request per transaction, where
 the platform batches its own entries through a stream; on a server whose work queues are streams,
