@@ -1,0 +1,80 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as CheckboxStories from './checkbox.stories';
+
+<Meta of={CheckboxStories} name="Overview" />
+
+# Checkbox
+
+The checkbox is a tick box whose state you hold. It shows what you give it in `checked`, and a click
+or Space asks you for the other state through `checkedChange`. It does not tick itself: you set
+`checked`, to the state asked for while it is saved, or once the server accepts it. Use it where
+ticking saves something that can be refused, so that a refusal leaves the box as you say, with
+nothing in it to undo.
+
+## Key features
+
+- **Owned state.** A click asks; it changes nothing until you set `checked`. A refused save leaves
+  the box as you set it, with nothing to undo.
+- **Named by its words.** Its content is its label, and its accessible name. Clicking the words
+  ticks it too.
+- **Disabled without losing focus.** `disabled` keeps it in the tab order, announced as unavailable,
+  so a box disabled while its change is saved keeps the keyboard's focus.
+- **Follows your theme.** It is Angular Material's checkbox, in your theme's colours.
+
+## Demo showcase
+
+<Canvas of={CheckboxStories.Owned} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsCheckboxComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-checkbox
+  [checked]="item.done"
+  [disabled]="saving()"
+  [describedBy]="'meta-' + item.id"
+  (checkedChange)="save(item, $event)"
+  >{{ item.label }}</nxs-checkbox
+>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+Every input is optional. In `save`, set `checked` to the state asked for, or wait until the server
+accepts it; either way, set it back if the server refuses. It needs no providers.
+
+## Examples
+
+### Not ticked
+
+Click it: it asks for `true`, and stays as it is, since nothing here sets `checked`.
+
+<Canvas of={CheckboxStories.Unticked} />
+
+### Ticked
+
+<Canvas of={CheckboxStories.Ticked} />
+
+### Disabled
+
+<Canvas of={CheckboxStories.Disabled} />
+
+## Accessibility
+
+- **Name.** Its words are its accessible name. Give it words that say what is ticked, such as
+  "Medical records received", not "Done".
+- **State.** It is a native checkbox, so its state is announced as checked or not checked.
+- **Description.** `describedBy` names an element whose text is read after its name, such as who
+  ticked it and when.
+- **Keyboard.** Tab reaches it, Space asks for the other state. Disabled, it stays reachable and is
+  announced as unavailable (`aria-disabled`), and Space asks for nothing.
+- **Progress.** It shows no progress of its own. While a change is saved, disable it and show a named
+  spinner beside it.

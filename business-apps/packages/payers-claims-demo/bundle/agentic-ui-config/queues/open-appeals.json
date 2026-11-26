@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "payers.queue.appeals",
+  "pageProvider": "payers_open_appeals",
+  "columns": [
+    "case:number",
+    { "field": "case:member", "widget": "document-link" },
+    { "field": "case:claim", "widget": "document-link" },
+    {
+      "field": "case:state",
+      "widget": "status-badge",
+      "parameters": { "tones": { "open": "info", "inReview": "warning" } }
+    },
+    { "field": "case:assignee", "widget": "user" },
+    { "field": "case:due", "widget": "date" }
+  ],
+  "sort": [{ "field": "case:due", "order": "asc" }],
+  "pageSize": 50,
+  "facets": [
+    { "aggregate": "case_state_agg", "labelKey": "payers.facet.caseState" },
+    { "aggregate": "case_assignee_agg", "labelKey": "payers.facet.assignee" }
+  ],
+  "visibleWhen": {
+    "type": "app.rules.inGroup",
+    "parameters": ["member-services", "claims-supervisors"]
+  }
+}

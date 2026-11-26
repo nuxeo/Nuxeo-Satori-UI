@@ -53,6 +53,7 @@ const PAGE_PROVIDERS = [
   'payers_unassigned_claims',
   'payers_my_claims',
   'payers_pending_claims',
+  'payers_open_appeals',
 ];
 /** `seed.mjs`'s marker on a user or a group it created. */
 const MARKER = 'Payers kit demo (fictional)';
@@ -79,8 +80,11 @@ function expect(condition, what, output = '') {
  * in step with each transition, as the model's event handler does; `statusOnly` answers the claim
  * of that number, read back by its id, in `submitted` whatever its state, as a server whose state
  * and status had come apart would. `workflowModel: false` answers as version 0.3.0, which has no
- * claims review workflow, and `caseChecklist: false` as version 0.4.0, whose case schema has no
- * checklist; `checklistDrift` answers the case of that number, read back by its id, with its first
+ * claims review workflow, `caseChecklist: false` as version 0.4.0, whose case schema has no
+ * checklist, and `openAppeals: false` as version 0.5.1, whose queues' search document has no field
+ * for the open-appeals queue's facets, and `openAppealsDrift` answers that page provider wrongly:
+ * `'decided'` with every appeal, the decided one among them, and `'grievance'` with every case
+ * not decided, grievances among them; `checklistDrift` answers the case of that number, read back by its id, with its first
  * checklist entry not done, as a server that had dropped what was written would.
  */
 function standIn({
@@ -89,6 +93,8 @@ function standIn({
   administrator = true,
   workflowModel = true,
   caseChecklist = true,
+  openAppeals = true,
+  openAppealsDrift = null,
   checklistDrift = null,
   statusOnly = null,
   noAggregations = false,
@@ -224,6 +230,15 @@ function standIn({
       live().filter(
         (d) => d.type === 'Claim' && ['inReview', 'pended'].includes(d.properties['claim:status']),
       ),
+    // Version 0.6.0's: appeals not yet decided, open or in review.
+    payers_open_appeals: () =>
+      live().filter(
+        (d) =>
+          d.type === 'Case' &&
+          (openAppealsDrift === 'grievance' || d.properties['case:category'] === 'appeal') &&
+          (openAppealsDrift === 'decided' ||
+            ['open', 'inReview'].includes(d.properties['case:state'])),
+      ),
   };
   /** A terms aggregate over the records found, as the search index answers it. */
   const terms = (found, property) => {
@@ -342,6 +357,20 @@ function standIn({
           (acls.get(uid) ?? []).filter((ace) => ace.id !== body.params.id),
         );
         return send(200, view(byId.get(uid)));
+      }
+      // A schema, as /config/schemas answers it: the queues' search document, with version 0.6.0's
+      // fields for the open-appeals queue's facets.
+      if (method === 'GET' && path === '/config/schemas/payers_claim_search') {
+        if (!types.includes('PayersClaimSearch')) return send(404, { message: 'no such schema' });
+        return send(200, {
+          name: 'payers_claim_search',
+          '@prefix': 'claimsearch',
+          fields: {
+            claim_status_agg: 'string[]',
+            claim_adjuster_agg: 'string[]',
+            ...(openAppeals ? { case_state_agg: 'string[]', case_assignee_agg: 'string[]' } : {}),
+          },
+        });
       }
       // A type, as /config/types answers it: the Case type with its schemas, version 0.4.1's case
       // schema with the checklist, under its @prefix.
@@ -513,13 +542,19 @@ function standIn({
         // A provider that always says there is another page.
         if (endlessProvider === execute[1])
           return send(200, { ...page(found, index), isNextPageAvailable: true });
-        // The three queue page providers answer their aggregates, as the search index does.
+        // The four queue page providers answer their aggregates, as the search index does.
         const queues = {
           payers_unassigned_claims: ['claim_status_agg'],
           payers_my_claims: ['claim_status_agg'],
           payers_pending_claims: ['claim_status_agg', 'claim_adjuster_agg'],
+          payers_open_appeals: ['case_state_agg', 'case_assignee_agg'],
         };
-        const property = { claim_status_agg: 'claim:status', claim_adjuster_agg: 'claim:adjuster' };
+        const property = {
+          claim_status_agg: 'claim:status',
+          claim_adjuster_agg: 'claim:adjuster',
+          case_state_agg: 'case:state',
+          case_assignee_agg: 'case:assignee',
+        };
         const aggregations = Object.fromEntries(
           noAggregations === execute[1] || noAggregations === true
             ? []
@@ -638,7 +673,7 @@ await against(
     const { status, output } = await run();
     expect(
       status === 2 &&
-        /version 0.2.0 or older .* upgrade it to 0.4.1/.test(output) &&
+        /version 0.2.0 or older .* upgrade it to 0.6.0/.test(output) &&
         server.calls.every((call) => call.startsWith('GET ')),
       'version 0.2.0 of the package, with no queue search type, is exit 2, with nothing written',
       output,
@@ -679,15 +714,15 @@ for (const renameOnTrash of [true, false]) {
     const first = await run();
     expect(first.status === 0, `${how}: a first run exits 0`, first.output);
     expect(
-      /30 created, 0 updated, 0 restored from the trash, 4 file\(s\) uploaded/.test(first.output),
-      `${how}: a first run creates 30 documents and uploads 4 files`,
+      /32 created, 0 updated, 0 restored from the trash, 4 file\(s\) uploaded/.test(first.output),
+      `${how}: a first run creates 32 documents and uploads 4 files`,
       first.output,
     );
     expect(
-      /People: 9 created, 0 updated, 5 permission\(s\) granted, 0 removed, for 6 users in 3 groups/.test(
+      /People: 9 created, 0 updated, 6 permission\(s\) granted, 0 removed, for 6 users in 3 groups/.test(
         first.output,
       ),
-      `${how}: a first run creates 6 users and 3 groups, and grants 5 permissions`,
+      `${how}: a first run creates 6 users and 3 groups, and grants 6 permissions`,
       first.output,
     );
     // Each claim brought from submitted to its status, along the fewest transitions, and kept so.
@@ -728,7 +763,7 @@ for (const renameOnTrash of [true, false]) {
     );
     expect(
       second.status === 0 &&
-        /0 created, 30 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
+        /0 created, 32 updated, 0 restored from the trash, 0 file\(s\) uploaded/.test(
           second.output,
         ),
       `${how}: a second run creates and uploads nothing (${done(second.output)})`,
@@ -748,7 +783,7 @@ for (const renameOnTrash of [true, false]) {
     const third = await run();
     expect(
       third.status === 0 &&
-        /0 created, 30 updated, 1 restored from the trash/.test(third.output) &&
+        /0 created, 32 updated, 1 restored from the trash/.test(third.output) &&
         member.isTrashed === false &&
         member.path === `${ROOT}/members/member-100048` &&
         member.properties['member:status'] === 'active',
@@ -794,7 +829,7 @@ await against({ caseChecklist: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.4.1/.test(output) &&
+      /version 0.4.0 or older .* no case:checklist .* upgrade it to 0.6.0/.test(output) &&
       server.calls.every((call) => call.startsWith('GET ')),
     'version 0.4.0 of the package, whose case schema has no checklist, is exit 2, with nothing written',
     output,
@@ -807,8 +842,8 @@ await against({}, async ({ server, run }) => {
     at(server, `cases/${number.toLowerCase()}`)?.properties['case:checklist'];
   const appeals = CASES.filter((kase) => kase.category === 'appeal');
   expect(
-    appeals.length === 2,
-    'data.mjs seeds two appeals',
+    appeals.length === 3,
+    'data.mjs seeds three appeals',
     JSON.stringify(appeals.map((k) => k.number)),
   );
   expect(
@@ -844,6 +879,53 @@ await against({}, async ({ server, run }) => {
         JSON.stringify(CASES.find((kase) => kase.number === 'CASE-2041').checklist) &&
       JSON.stringify(checklist('CASE-2042')) === '[]',
     'a checklist changed by hand is put back, and one given to a grievance emptied',
+    second.output,
+  );
+});
+// Version 0.6.0's open-appeals queue: a server on 0.5.1 has no field for its facets.
+await against({ openAppeals: false }, async ({ server, run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 2 &&
+      /version 0.5.1 or older .* no open-appeals queue: upgrade it to 0.6.0/.test(output) &&
+      server.calls.every((call) => call.startsWith('GET ')),
+    'version 0.5.1 of the package, with no open-appeals queue, is exit 2, with nothing written',
+    output,
+  );
+});
+// The open appeals the seed checks: the appeals not decided, and neither the decided one nor a
+// grievance, however open. A queue that holds either fails the run, naming it.
+await against({ openAppealsDrift: 'decided' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /payers_open_appeals holds CASE-2043, which it should not/.test(output),
+    'an open-appeals queue that holds the decided appeal fails the run',
+    output,
+  );
+});
+await against({ openAppealsDrift: 'grievance' }, async ({ run }) => {
+  const { status, output } = await run();
+  expect(
+    status === 1 && /payers_open_appeals holds CASE-2042, which it should not/.test(output),
+    'an open-appeals queue that holds an open grievance fails the run',
+    output,
+  );
+});
+await against({}, async ({ server, run }) => {
+  const first = await run();
+  const held = (number) =>
+    first.status === 0 && at(server, `cases/${number.toLowerCase()}`) !== undefined;
+  expect(
+    held('CASE-2041') && held('CASE-2044') && /queues\/open-appeals/.test(first.output),
+    'a first run seeds the two open appeals, and prints their queue',
+    first.output,
+  );
+  // A decided appeal reopened by hand is put back, and so leaves the queue again.
+  at(server, 'cases/case-2043').properties['case:state'] = 'inReview';
+  const second = await run();
+  expect(
+    second.status === 0 && at(server, 'cases/case-2043').properties['case:state'] === 'decided',
+    'a decided appeal reopened by hand is put back as decided',
     second.output,
   );
 });
@@ -1005,7 +1087,7 @@ await against({ workflowModel: false }, async ({ server, run }) => {
   const { status, output } = await run();
   expect(
     status === 2 &&
-      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.4.1/.test(
+      /version 0.3.0 or older .* no PayersClaimReview workflow .* upgrade it to 0.6.0/.test(
         output,
       ) &&
       server.calls.every((call) => call.startsWith('GET ')),
@@ -1158,8 +1240,9 @@ await against({ membersWrite: true }, async ({ run }) => {
   expect(
     status === 1 &&
       /riley.brooks may change a member/.test(output) &&
-      /riley.brooks holds WriteProperties on a claim/.test(output),
-    'a server that lets every member change records fails the run: member services may not',
+      /riley.brooks holds WriteProperties on a claim/.test(output) &&
+      /dana.lee may change an appeal, and would be offered its checklist's tick boxes/.test(output),
+    'a server that lets every member change records fails the run: member services may not change a claim, nor adjusters a case',
     output,
   );
 });
@@ -1194,16 +1277,17 @@ await against({ indexLag: 3 }, async ({ run }) => {
 });
 
 // The aggregates the queues' facets and the home's KPIs read must be answered, by each queue.
-for (const pageProvider of [
-  'payers_unassigned_claims',
-  'payers_my_claims',
-  'payers_pending_claims',
+for (const [pageProvider, aggregate] of [
+  ['payers_unassigned_claims', 'claim_status_agg'],
+  ['payers_my_claims', 'claim_status_agg'],
+  ['payers_pending_claims', 'claim_status_agg'],
+  ['payers_open_appeals', 'case_state_agg'],
 ]) {
   await against({ noAggregations: pageProvider }, async ({ run }) => {
     const { status, output } = await run();
     expect(
       status === 1 &&
-        new RegExp(`${pageProvider}( as \\S+)? answered no claim_status_agg`).test(output),
+        new RegExp(`${pageProvider}( as \\S+)? answered no ${aggregate}`).test(output),
       `${pageProvider} answering no aggregates fails the run`,
       output,
     );

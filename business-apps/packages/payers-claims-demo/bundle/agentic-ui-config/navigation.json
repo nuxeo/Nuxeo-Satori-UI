@@ -33,6 +33,15 @@
         "parameters": ["claims-supervisors", "member-services"]
       }
     },
+    {
+      "id": "appeals",
+      "icon": "gavel",
+      "queue": "open-appeals",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["claims-supervisors", "member-services"]
+      }
+    },
     { "id": "tasks", "labelKey": "payers.nav.tasks", "icon": "tasks", "page": "app.navbar.tasks" },
     {
       "id": "search",

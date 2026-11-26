@@ -1,0 +1,9 @@
+<mat-checkbox
+  class="nxs-checkbox__control"
+  [checked]="checked()"
+  [disabled]="disabled()"
+  [disabledInteractive]="true"
+  [aria-describedby]="description()"
+  (click)="request($event)"
+  ><ng-content
+/></mat-checkbox>

@@ -28,11 +28,13 @@ export const GROUPS = [
 
 /**
  * What each group may do, by place in the seeded workspace: `''` is the workspace, which its
- * folders inherit, and `claims` its claims folder. Hiding something from a group is not a control;
- * a permission is. Every group reads every record, and adjusters and supervisors may also change
- * claims, which approving one needs. No demo group may change a member, so none of the demo's
- * people is offered a member's Edit form, which lists every property, the social security number
- * among them.
+ * folders inherit, `claims` its claims folder and `cases` its cases folder. Hiding something from a
+ * group is not a control; a permission is. Every group reads every record, and adjusters and
+ * supervisors may also change claims, which approving one needs. Since 0.6.0, member services may
+ * change cases, so that the appeals' specialist ticks an appeal's checklist on its page: the Case
+ * page offers a tick box only to someone who may write the case. No demo group may change a member,
+ * so none of the demo's people is offered a member's Edit form, which lists every property, the
+ * social security number among them.
  */
 export const GRANTS = [
   { place: '', group: 'claims-adjusters', permission: 'Read' },
@@ -40,6 +42,7 @@ export const GRANTS = [
   { place: '', group: 'member-services', permission: 'Read' },
   { place: 'claims', group: 'claims-adjusters', permission: 'ReadWrite' },
   { place: 'claims', group: 'claims-supervisors', permission: 'ReadWrite' },
+  { place: 'cases', group: 'member-services', permission: 'ReadWrite' },
 ];
 
 /**
@@ -72,7 +75,8 @@ export const WORKFLOW_SUPERVISOR = 'jordan.kim';
 
 /**
  * The appeals demo's person (`scripts/beta-harness/steps/payers-appeals.mjs`): the case specialist
- * the appeals below are assigned to, in member services, who reads them and changes nothing.
+ * most appeals below are assigned to, in member services, who reads them, opens the open-appeals
+ * queue, and ticks an item of an appeal's checklist, then puts it back as the seed wrote it.
  */
 export const APPEALS_SPECIALIST = 'sam.patel';
 
@@ -271,6 +275,20 @@ export const CLAIMS = [
     adjuster: 'morgan.chen',
     diagnosis: 'M54.50',
   },
+  // Since 0.6.0: denied, and appealed in CASE-2044, which is open. Morgan Chen's, as CLAIM-000145
+  // is, so none of what phase 1's demo counts as Dana Lee or as member services changes.
+  {
+    number: 'CLAIM-000146',
+    member: 'MEMBER-100051',
+    provider: 'PRV-201',
+    serviceDate: '2026-10-28',
+    received: '2026-11-02',
+    billedAmount: 3420,
+    allowedAmount: 0,
+    status: 'denied',
+    adjuster: 'morgan.chen',
+    diagnosis: 'L40.0',
+  },
 ];
 
 /**
@@ -349,6 +367,23 @@ export const CASES = [
       { item: 'providerStatement', done: true, doneBy: 'riley.brooks', doneOn: '2026-08-14' },
       { item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: '2026-08-28' },
     ],
+  },
+  {
+    number: 'CASE-2044',
+    title: 'Appeal of denied specialty medication',
+    member: 'MEMBER-100051',
+    claim: 'CLAIM-000146',
+    category: 'appeal',
+    state: 'open',
+    received: '2026-11-21',
+    due: '2026-12-21',
+    assignee: 'riley.brooks',
+    summary:
+      'The member appeals the denial of claim CLAIM-000146 for a specialty medication. The ' +
+      'appeal letter was received; no reviewer is assigned yet.',
+    // Since 0.6.0. Open, and due after CASE-2041, so the open-appeals queue lists it second, in
+    // another state and for another specialist: its order and both its facets can be told apart.
+    checklist: [{ item: 'appealLetter', done: true, doneBy: 'riley.brooks', doneOn: '2026-11-21' }],
   },
 ];
 

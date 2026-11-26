@@ -35,6 +35,7 @@
       <file path="queues/unassigned-claims.json" />
       <file path="queues/my-claims.json" />
       <file path="queues/pending-determination.json" />
+      <file path="queues/open-appeals.json" />
       <file path="labels/en.json" />
       <file path="actions.json" />
       <!-- The claims review workflow's task forms, one per step with a task

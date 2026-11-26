@@ -310,6 +310,9 @@ npx nx run-many -t lint,typecheck,test -p shared-app-definition
     - given the model: a property the type lacks, one that is not a list of complex values, a
       subfield missing or of another type accepted; checklists not held to the model at all; and
       `doneOn` read as a text.
+  - **A checklist's `tickable`,** 3 more, run on 26 November 2026: a value other than `true` or
+    `false` accepted; `tickable` refused in a checklist, as a key version 2 does not have; and
+    `tickable` accepted on a card's own keys, so on a card of any kind.
   - **Versions:**
     - a caret on `0.x` reaching the next minor version;
     - a prerelease ranked equal to its release;

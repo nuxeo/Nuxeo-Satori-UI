@@ -1,7 +1,7 @@
 /**
  * The Payers kit's appeals: business apps phase 2's demo step 6, end to end
  * (docs/business-apps/development-plan.md, phase 2, "Demo"), on the kit in
- * `business-apps/packages/payers-claims-demo`, version 0.4.1 or later.
+ * `business-apps/packages/payers-claims-demo`, version 0.6.0 or later.
  *
  *   6. Open an appeal case with its checklist and timeline.
  *
@@ -21,6 +21,14 @@
  *   4. A grievance, CASE-2042: no checklist, by the card's rule, and still its timeline.
  *   5. The configuration behind it: the Case layout served is the kit's file, and the bundle holds
  *      no code.
+ *   6. The open appeals, version 0.6.0's queue: member services' home counts them and opens it,
+ *      its menu lists it, and it lists the appeals not decided, the nearest due first, in the
+ *      server's order, with neither the decided appeal nor a grievance; its State facet counts
+ *      them, and narrowed to one state on the server, it keeps that state's appeal only.
+ *   7. Ticking an item, version 0.6.0's `"tickable": true` on the Case page: the specialist, who
+ *      may change cases, ticks an item on the appeal under way; the server holds it done, by them,
+ *      today, and every other entry as it was, and its audit says who changed the case; the page
+ *      says so. Unticked, the entry stays, not done. Then the checklist the seed wrote is put back.
  *
  * The rows, names and days it expects are read from the kit's own files: `demo/data.mjs` for the
  * cases, their claims and the people, and the Case layout and the labels for the items and their
@@ -29,28 +37,35 @@
  *
  * What it needs, and refuses to run without (exit 2):
  *
- * - The kit installed on the local Nuxeo, version 0.4.1 or later (its `case:checklist`), and
- *   seeded with `demo/seed.mjs`, which writes the appeals, their claims and the people.
+ * - The kit installed on the local Nuxeo, version 0.6.0 or later (its open-appeals queue, and
+ *   member services' right to change cases), and seeded with `demo/seed.mjs`, which writes the
+ *   appeals, their claims and the people.
  * - **The run's own user is the appeals' specialist:** `NUXEO_USER` is `APPEALS_SPECIALIST` of
  *   `data.mjs`, in `member-services` and neither claims group, and `NUXEO_PASS` the demo password.
- *   It reads and changes nothing, so it signs no one else in.
- * - The dev server with `npm run config:dev` serving the kit's Case layout and labels (the kit's
- *   README, "Seeing it under nx serve").
+ *   It signs no one else in. It changes one thing, step 7's tick, and puts it back.
+ * - The dev server with `npm run config:dev` serving the kit's Case layout, home, menu, queues and
+ *   labels (the kit's README, "Seeing it under nx serve").
  *
  *   NUXEO_USER=sam.patel NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-appeals
  *
  * Load-bearing checks: each appeal's checklist rows, item by item, against the file and the seed,
  * and its count; the claim link's text, its address and the claim it opens, denied; the timeline's
  * entries against the server's audit, in order; the decided appeal's items the same as the one
- * under way's; the served Case layout the kit's file. Negative ones: no one and no day on an item
- * not done, one of whose entries still names both and two of which have no entry at all; no
- * checklist on a grievance, whose timeline still draws; and, when the case's audit holds an event
- * outside the card's kinds, none of those drawn. A seeded case's audit may hold none, and then the
- * run says so in a note rather than count a check that could not fail.
+ * under way's; the served Case layout the kit's file; the open appeals' rows against the seed and
+ * the server's own answer, in order, the home's figure and the facet's counts, and the narrowed
+ * rows; the tick's entry on the server, done, by the specialist, today, the audit's author of the
+ * change, and the card drawn from it; the untick's entry kept, not done. Negative ones: no one and
+ * no day on an item not done, one of whose entries still names both and two of which have no entry
+ * at all; no checklist on a grievance, whose timeline still draws; when the case's audit holds an
+ * event outside the card's kinds, none of those drawn, and, when it holds none, a note rather than
+ * a check that could not fail; neither the decided appeal nor an open grievance in the queue, and
+ * the other state's appeal gone once narrowed; and every other entry of the checklist unchanged by
+ * the tick.
  *
- * Not covered, and said in notes: ticking an item, which the card does not do (it is read-only,
- * and decision 3 builds no operation buttons); the server's own install (the dev server serves the
- * layout from `config:dev`); and who may change a case's checklist through the API.
+ * Not covered, and said in notes: the server's own install (the dev server serves the files from
+ * `config:dev`); someone who may not change a case, who is offered no tick box, which the record
+ * page's own tests show, as they show a refused write leaving the card as it was; and who may
+ * change a case's checklist through the API, which the server's permissions decide.
  */
 import { readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -63,9 +78,15 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const KIT = join(REPO, 'business-apps', 'packages', 'payers-claims-demo');
 const CONFIG = join(KIT, 'bundle', 'agentic-ui-config');
 const { APPEALS_SPECIALIST, CASES, CLAIMS, USERS } = await import(join(KIT, 'demo', 'data.mjs'));
-const { appealProblems, appealRows, checklistOnType, readAppealChecklist } = await import(
-  join(KIT, 'demo', 'appeals.mjs')
-);
+const {
+  OPEN_APPEALS,
+  appealProblems,
+  appealRows,
+  checklistOnType,
+  isOpenAppeal,
+  readAppealChecklist,
+  readOpenAppeals,
+} = await import(join(KIT, 'demo', 'appeals.mjs'));
 const { ZIP_PATH: ROUTE_MODEL_ZIP } = await import(join(KIT, 'workflow', 'route-model.mjs'));
 
 /**
@@ -82,13 +103,16 @@ export const serverRun = {
   },
   signsInAs: [],
   needs: [
-    'the kit 0.4.1 or later installed',
-    "the dev server with `npm run config:dev` serving the kit's Case layout and labels",
+    'the kit 0.6.0 or later installed',
+    "the dev server with `npm run config:dev` serving the kit's Case layout, home, menu, queues and labels",
   ],
 };
 
 const CASE_LAYOUT = 'layouts/Case/view.layout.json';
 const CASES_FOLDER = '/default-domain/workspaces/payers-demo/cases';
+/** The open-appeals queue's file, and the files the home and the menu that open it are. */
+const APPEALS_QUEUE = 'queues/open-appeals.json';
+const SERVED = [CASE_LAYOUT, 'labels/en.json', 'home.json', 'navigation.json', APPEALS_QUEUE];
 
 /** The demo's three cases: the appeal under way, the decided one, and a grievance. */
 const UNDER_WAY = CASES.find((kase) => kase.number === 'CASE-2041');
@@ -109,6 +133,52 @@ const unread = () => null;
 const kitFile = (path) => JSON.parse(readFileSync(join(CONFIG, path), 'utf8'));
 const labels = kitFile('labels/en.json').labels;
 const CHECKLIST = readAppealChecklist();
+/** The open-appeals queue as the stand-in model contributes it: the states it holds, its sort. */
+const OPEN = readOpenAppeals();
+
+/** The appeals the queue holds, in its order: the stand-in model's sort, by the seeded value. */
+function openAppealRows() {
+  const field = OPEN.sort.field?.slice(OPEN.sort.field.indexOf(':') + 1);
+  return CASES.filter((kase) => isOpenAppeal(kase, OPEN))
+    .sort(
+      (a, b) => (OPEN.sort.ascending ? 1 : -1) * String(a[field]).localeCompare(String(b[field])),
+    )
+    .map((kase) => kase.number);
+}
+
+/** Counts of `items` by `key`, as a plain object with sorted keys. */
+function countBy(items, key) {
+  const counts = {};
+  for (const item of items) counts[key(item)] = (counts[key(item)] ?? 0) + 1;
+  return canonical(counts);
+}
+
+/** The case numbers of the queue's rows, in the order drawn. */
+function readCaseRows(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.queue-page tbody tr')]
+      .map((row) => /CASE-\d+/.exec(row.textContent ?? '')?.[0] ?? null)
+      .filter(Boolean),
+  );
+}
+
+/** A facet's buckets as drawn, `{ key: count }`. */
+function readFacet(page, aggregate) {
+  return page.evaluate(
+    (id) =>
+      Object.fromEntries(
+        [
+          ...document.querySelectorAll(
+            `fieldset.queue-facet[data-aggregate="${id}"] .queue-facet__bucket`,
+          ),
+        ].map((bucket) => {
+          const match = /^\s*(\S+)\s*\((\d+)\)/.exec(bucket.textContent ?? '');
+          return match ? [match[1], Number(match[2])] : [bucket.textContent, null];
+        }),
+      ),
+    aggregate,
+  );
+}
 
 /**
  * The timeline's kinds when its card names none: layout-v2.md's "default kinds", read from the
@@ -282,6 +352,11 @@ export default async function run(page, h) {
     checklistOnType(caseType, CHECKLIST.field),
     `GET /config/types/Case has no ${CHECKLIST.field}: install the kit (README)`,
   );
+  h.requirePrecondition(
+    "the Case page opts its checklist in to ticking, as the kit's 0.6.0 does",
+    CHECKLIST.tickable === true,
+    `the Case layout's checklist has no "tickable": true`,
+  );
 
   // Each case the demo opens, as the server holds it: the seed's, with the checklist it wrote, and
   // each appeal's claim the denied one data.mjs names.
@@ -336,15 +411,62 @@ export default async function run(page, h) {
       .then((r) => (r.ok() ? r.json() : null))
       .catch(unread),
   );
-  const servedLabels = await page.request
-    .get(`${h.baseUrl}/agentic-ui-config/labels/en.json`)
+  const differing = [];
+  for (const file of SERVED.filter((each) => each !== CASE_LAYOUT)) {
+    const served = await page.request
+      .get(`${h.baseUrl}/agentic-ui-config/${file}`)
+      .then((r) => (r.ok() ? r.json() : null))
+      .catch(unread);
+    if (!sameJson(unwrap(served).content, kitFile(file))) differing.push(file);
+  }
+  if (!sameJson(servedLayout.content, kitFile(CASE_LAYOUT))) differing.push(CASE_LAYOUT);
+  h.requirePrecondition(
+    "the dev server serves the kit's Case page, home, menu, open-appeals queue and labels",
+    differing.length === 0,
+    `not the kit's: ${differing.join(', ')}. Run the README's config:dev command, then restart ` +
+      'the dev server',
+  );
+
+  // What makes step 6's checks able to fail: two open appeals, in two states and due on two days,
+  // a decided appeal and an open grievance, which the queue must leave out.
+  const open = CASES.filter((kase) => isOpenAppeal(kase, OPEN));
+  const expectedQueue = openAppealRows();
+  h.requirePrecondition(
+    'data.mjs seeds two open appeals in two states, a decided one and an open grievance',
+    open.length >= 2 &&
+      new Set(open.map((kase) => kase.state)).size >= 2 &&
+      new Set(open.map((kase) => kase.due)).size === open.length &&
+      CASES.some((kase) => kase.category === 'appeal' && !isOpenAppeal(kase, OPEN)) &&
+      CASES.some((kase) => kase.category !== 'appeal' && OPEN.states.includes(kase.state)),
+    `open ${JSON.stringify(open.map((kase) => [kase.number, kase.state, kase.due]))}: change data.mjs`,
+  );
+  // The demo counts exactly: a case on the server the seed did not write would be in its figures.
+  const served = await page.request
+    .get(`${h.baseUrl}/nuxeo/api/v1/search/pp/${OPEN_APPEALS}/execute`, {
+      params: { pageSize: '100', currentPageIndex: '0' },
+      headers: { properties: '*' },
+    })
+    .then((r) => (r.ok() ? r.json() : null))
+    .catch(unread);
+  const servedOrder = (served?.entries ?? []).map((entry) => entry.properties?.['case:number']);
+  h.requirePrecondition(
+    `the server's ${OPEN_APPEALS} holds the seeded open appeals and nothing else`,
+    served !== null && sameJson([...servedOrder].sort(), [...expectedQueue].sort()),
+    `it answered ${served === null ? 'nothing' : JSON.stringify(servedOrder)}, the seed ` +
+      `${JSON.stringify(expectedQueue)}: install the kit 0.6.0, run demo/seed.mjs, and use a server ` +
+      'without other appeals',
+  );
+  // What step 7 needs: the specialist may change the appeal, as 0.6.0's seed grants member services.
+  const mayWrite = await page.request
+    .get(`${h.baseUrl}/nuxeo/api/v1/id/${docs[UNDER_WAY.number]?.uid}`, {
+      headers: { 'enrichers-document': 'permissions' },
+    })
     .then((r) => (r.ok() ? r.json() : null))
     .catch(unread);
   h.requirePrecondition(
-    "the dev server serves the kit's Case page and its labels",
-    sameJson(servedLayout.content, kitFile(CASE_LAYOUT)) &&
-      sameJson(servedLabels, kitFile('labels/en.json')),
-    "not the kit's: run the README's config:dev command, then restart the dev server",
+    `${APPEALS_SPECIALIST} may change ${UNDER_WAY.number}, so its page offers tick boxes`,
+    (mayWrite?.contextParameters?.permissions ?? []).includes('WriteProperties'),
+    `their permissions there are ${JSON.stringify(mayWrite?.contextParameters?.permissions ?? null)}: run demo/seed.mjs of 0.6.0`,
   );
 
   // ── 1. The appeal under way ────────────────────────────────────────────────────────────────
@@ -543,19 +665,307 @@ export default async function run(page, h) {
     `code in the bundle: ${code.join(', ')}`,
   );
 
+  // ── 6. The open appeals ────────────────────────────────────────────────────────────────────
+  await h.step('6.6 The open appeals: from the home and the menu, in order, and narrowed');
+  await h.goTo('/#/home');
+  await page
+    .waitForFunction(
+      () =>
+        document.querySelector('li.home-card[data-card-id="appeals"] .home-card__figure') !==
+          null && document.querySelector('.home-page [role="status"]') === null,
+      undefined,
+      { timeout: 30_000 },
+    )
+    .catch(deferred);
+  const homeCard = await page
+    .evaluate(() => {
+      const card = document.querySelector('li.home-card[data-card-id="appeals"]');
+      return card
+        ? {
+            title: card.querySelector('.home-card__title, .home-card__queue')?.textContent?.trim(),
+            figure: card.querySelector('.home-card__figure')?.textContent?.trim() ?? null,
+            link: card.querySelector('a.home-card__link')?.getAttribute('href') ?? null,
+          }
+        : null;
+    })
+    .catch(unread);
+  h.check(
+    `member services' home counts the ${expectedQueue.length} open appeals, from ${OPEN_APPEALS}`,
+    homeCard?.figure === String(expectedQueue.length) &&
+      homeCard?.title === labels['payers.home.appeals'],
+    JSON.stringify(homeCard),
+  );
+  const menu = await page
+    .evaluate(() =>
+      [...document.querySelectorAll('a[data-nav-id^="appMenu."]')].map((a) =>
+        a.getAttribute('data-nav-id'),
+      ),
+    )
+    .catch(unread);
+  h.check(
+    "member services' menu lists the open appeals",
+    Array.isArray(menu) && menu.includes('appMenu.appeals'),
+    JSON.stringify(menu),
+  );
+  await page
+    .locator('li.home-card[data-card-id="appeals"] a.home-card__link')
+    .click({ timeout: 10_000 })
+    .catch(deferred);
+  await page.waitForURL(/#\/queues\/open-appeals$/, { timeout: 15_000 }).catch(deferred);
+  await page
+    .waitForFunction(
+      (count) => document.querySelectorAll('.queue-page tbody tr').length === count,
+      expectedQueue.length,
+      { timeout: 30_000 },
+    )
+    .catch(deferred);
+  const queueRows = await readCaseRows(page).catch(unread);
+  h.check(
+    'the home opens /queues/open-appeals, titled from its labelKey',
+    page.url().endsWith('#/queues/open-appeals') &&
+      (await page.locator('.queue-page__title').textContent().catch(unread))?.trim() ===
+        labels['payers.queue.appeals'],
+    page.url(),
+  );
+  h.check(
+    `the queue lists the appeals not decided, the nearest due first, in the server's order: ${expectedQueue.join(', ')}`,
+    sameJson(queueRows, expectedQueue) && sameJson(queueRows, servedOrder),
+    `drawn ${JSON.stringify(queueRows)}, server ${JSON.stringify(servedOrder)}`,
+  );
+  const leftOut = CASES.filter(
+    (kase) => !isOpenAppeal(kase, OPEN) && OPEN.states.includes(kase.state),
+  ).map((kase) => kase.number);
+  h.check(
+    `neither the decided appeal, ${DECIDED.number}, nor an open grievance, ${leftOut.join(', ')}, is in it`,
+    Array.isArray(queueRows) &&
+      !queueRows.includes(DECIDED.number) &&
+      leftOut.every((number) => !queueRows.includes(number)),
+    JSON.stringify(queueRows),
+  );
+  const stateFacet = await readFacet(page, 'case_state_agg').catch(unread);
+  h.check(
+    'the State facet counts the open appeals by state, from the aggregate',
+    sameJson(
+      stateFacet,
+      countBy(open, (kase) => kase.state),
+    ),
+    `drawn ${JSON.stringify(stateFacet)}`,
+  );
+  // One state, held by some of the open appeals only, so that choosing it narrows the queue.
+  const chosen = open.find((kase) => open.some((other) => other.state !== kase.state)).state;
+  const narrowed = page
+    .waitForRequest(
+      (request) =>
+        request.url().includes(`/search/pp/${OPEN_APPEALS}/execute`) &&
+        new URL(request.url()).searchParams.get('case_state_agg') === JSON.stringify([chosen]),
+      { timeout: 15_000 },
+    )
+    .catch(unread);
+  await page
+    .locator('fieldset.queue-facet[data-aggregate="case_state_agg"] .queue-facet__bucket', {
+      hasText: new RegExp(`^\\s*${chosen}\\b`),
+    })
+    .locator('input')
+    .click()
+    .catch(deferred);
+  const sentNarrowed = await narrowed;
+  const expectedNarrowed = expectedQueue.filter(
+    (number) => CASES.find((kase) => kase.number === number).state === chosen,
+  );
+  await page
+    .waitForFunction(
+      (count) => document.querySelectorAll('.queue-page tbody tr').length === count,
+      expectedNarrowed.length,
+      { timeout: 15_000 },
+    )
+    .catch(deferred);
+  const narrowedRows = await readCaseRows(page).catch(unread);
+  h.check(
+    `narrowed to ${chosen} on the server, the queue keeps ${expectedNarrowed.join(', ')} only`,
+    sentNarrowed !== null && sameJson(narrowedRows, expectedNarrowed),
+    `request ${sentNarrowed ? 'sent' : 'not seen'}, drawn ${JSON.stringify(narrowedRows)}`,
+  );
+  await h.screenshot('open-appeals-queue');
+
+  // ── 7. Ticking an item ─────────────────────────────────────────────────────────────────────
+  await h.step('6.7 Tick an item on the appeal under way, untick it, and put it back');
+  const caseUid = docs[UNDER_WAY.number].uid;
+  // An item the appeal has no entry for: ticking it adds one, and every other entry stays.
+  const item = CHECKLIST.items.find(
+    (each) => !(UNDER_WAY.checklist ?? []).some((entry) => entry.item === each.id),
+  );
+  const seeded = (UNDER_WAY.checklist ?? []).map(entryOf);
+  /** The case's checklist as the server holds it now, each entry's day as the seed writes one. */
+  const heldNow = async () => {
+    const held = (await read(`/id/${caseUid}`))?.properties?.[CHECKLIST.field];
+    return Array.isArray(held) ? held.map(entryOf) : null;
+  };
+  await h.goToDoc(caseUid);
+  await caseSettled(page, ['case', 'checklist', 'history']);
+  const boxes = await page
+    .evaluate(() =>
+      [
+        ...document.querySelectorAll(
+          '.record-page__card[data-card-id="checklist"] li input[type="checkbox"]',
+        ),
+      ].map((input) => ({
+        item: input.closest('li')?.getAttribute('data-item'),
+        name: [...(input.labels ?? [])].map((label) => label.textContent?.trim()).join(' '),
+        checked: input.checked,
+      })),
+    )
+    .catch(unread);
+  const rows = expectedRows(UNDER_WAY);
+  h.check(
+    'the specialist, who may change the case, is offered a tick box per item, named by its words, ticked as the record says',
+    sameJson(
+      boxes,
+      rows.map((row) => ({ item: row.item, name: row.label, checked: row.done === 'true' })),
+    ),
+    JSON.stringify(boxes),
+  );
+  const box = page.locator(
+    `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"] input[type="checkbox"]`,
+  );
+  const tickedAt = Date.now();
+  /** A day, `YYYY-MM-DD`, as this machine's zone has it: the browser's, which writes the tick's. */
+  const localDay = (ms) => new Intl.DateTimeFormat('en-CA', { dateStyle: 'short' }).format(ms);
+  const whenPut = () =>
+    page
+      .waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' && response.url().includes(`/api/v1/id/${caseUid}`),
+        { timeout: 15_000 },
+      )
+      .catch(unread);
+  // Whatever happens in between, the checklist the seed wrote is put back, last.
+  try {
+    const putTick = whenPut();
+    await box.click({ timeout: 10_000 }).catch(deferred);
+    const tickAnswer = await putTick;
+    await page
+      .waitForSelector(
+        `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"][data-done="true"]`,
+        { timeout: 15_000 },
+      )
+      .catch(deferred);
+    const afterTick = await heldNow();
+    const tickEntry = afterTick?.find((entry) => entry.item === item?.id);
+    // The ticker's day, as the seed writes a day: a midnight crossed during the click is either.
+    const days = new Set([localDay(tickedAt), localDay(Date.now())]);
+    h.check(
+      `the tick is written: ${item?.id} done, by ${APPEALS_SPECIALIST}, today, and every other entry as the seed wrote it`,
+      tickAnswer?.status() === 200 &&
+        tickEntry?.done === true &&
+        tickEntry?.doneBy === APPEALS_SPECIALIST &&
+        days.has(tickEntry?.doneOn) &&
+        sameJson(
+          afterTick.filter((entry) => entry.item !== item?.id),
+          seeded,
+        ),
+      `PUT ${tickAnswer?.status() ?? 'not seen'}; held ${JSON.stringify(afterTick)}; today ${[...days].join(' or ')}`,
+    );
+    const tickedRow = (await readCase(page)).rows.find((row) => row.item === item?.id);
+    const shownDay = typeof tickEntry?.doneOn === 'string' ? longDay(tickEntry.doneOn) : null;
+    h.check(
+      `the page shows it done, by ${nameOf(APPEALS_SPECIALIST)}, on ${shownDay}`,
+      shownDay !== null &&
+        tickedRow?.done === 'true' &&
+        tickedRow?.state === 'Done' &&
+        tickedRow?.by === nameOf(APPEALS_SPECIALIST) &&
+        tickedRow?.on === shownDay,
+      JSON.stringify(tickedRow),
+    );
+    // Who changed the case is the server's to record: its audit of the case, newest first.
+    let author = null;
+    for (let attempt = 0; attempt < 10 && author === null; attempt++) {
+      const entries =
+        (
+          await page.request
+            .get(`${h.baseUrl}/nuxeo/api/v1/id/${caseUid}/@audit`, {
+              params: new URLSearchParams([
+                ['pageSize', '5'],
+                ['sortBy', 'eventDate'],
+                ['sortOrder', 'desc'],
+                ['eventId', 'documentModified'],
+              ]),
+            })
+            .then((r) => (r.ok() ? r.json() : null))
+            .catch(unread)
+        )?.entries ?? [];
+      author =
+        entries.find((entry) => Date.parse(entry.eventDate ?? '') >= tickedAt - 5_000) ?? null;
+      if (author === null) await page.waitForTimeout(1000);
+    }
+    h.check(
+      `the server's audit records the change to the case, by ${APPEALS_SPECIALIST}`,
+      author?.principalName === APPEALS_SPECIALIST,
+      JSON.stringify(author),
+    );
+    await h.screenshot('appeal-item-ticked', page.locator('[data-card-id="checklist"]'));
+
+    const putUntick = whenPut();
+    await box.click({ timeout: 10_000 }).catch(deferred);
+    const untickAnswer = await putUntick;
+    await page
+      .waitForSelector(
+        `.record-page__card[data-card-id="checklist"] li[data-item="${item?.id}"][data-done="false"]`,
+        { timeout: 15_000 },
+      )
+      .catch(deferred);
+    const afterUntick = await heldNow();
+    const untickEntry = afterUntick?.find((entry) => entry.item === item?.id);
+    const untickedRow = (await readCase(page)).rows.find((row) => row.item === item?.id);
+    h.check(
+      `unticked, the entry stays, not done, and the page shows ${item?.id} not done, with no one and no day`,
+      untickAnswer?.status() === 200 &&
+        untickEntry?.done === false &&
+        untickEntry?.doneBy === APPEALS_SPECIALIST &&
+        untickedRow?.state === 'Not done' &&
+        untickedRow?.by === null &&
+        untickedRow?.on === null,
+      `held ${JSON.stringify(untickEntry)}; drawn ${JSON.stringify(untickedRow)}`,
+    );
+  } finally {
+    // Put back as the seed wrote it, so that the next run's preconditions hold.
+    const putBack = await page.request
+      .put(`${h.baseUrl}/nuxeo/api/v1/id/${caseUid}`, {
+        data: {
+          'entity-type': 'document',
+          properties: {
+            [CHECKLIST.field]: (UNDER_WAY.checklist ?? []).map(
+              ({ item: id, done, doneBy, doneOn }) => ({
+                item: id,
+                done,
+                doneBy: doneBy ?? null,
+                doneOn: doneOn ?? null,
+              }),
+            ),
+          },
+        },
+      })
+      .catch(unread);
+    const restored = await heldNow();
+    h.check(
+      `${UNDER_WAY.number}'s checklist is put back as the seed wrote it`,
+      putBack?.ok() === true && sameJson(restored, seeded),
+      `PUT ${putBack?.status() ?? 'failed'}; held ${JSON.stringify(restored)}. Run demo/seed.mjs to put it back`,
+    );
+  }
+
   // ── Health ─────────────────────────────────────────────────────────────────────────────────
   await h.step('Health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
   h.note(
-    'ticking an item is not covered: the checklist card is read-only, and decision 3 builds no ' +
-      "operation buttons, so a case's checklist changes through the REST API, as the seed writes it",
+    "the server's own install is not what the app read: under the dev server the Case layout, " +
+      'home, menu and queue come from config:dev',
   );
   h.note(
-    "the server's own install is not what the app read: under the dev server the Case layout " +
-      'comes from config:dev',
+    'someone who may not change a case is offered no tick box, and a refused write leaves the ' +
+      "card as it was: the record page's own tests show both (record-page.checklist-ticks.spec.ts)",
   );
   h.note(
-    "who may change a case's checklist is the server's permissions, not the card: the demo's " +
-      'groups read cases and change none',
+    "who may change a case's checklist is the server's permissions, not the card: since 0.6.0 " +
+      'member services may change cases, and the claims groups may not',
   );
 }

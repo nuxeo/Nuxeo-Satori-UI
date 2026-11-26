@@ -76,6 +76,37 @@ export function checklistUsers(checklist: RecordChecklistEntry, value: unknown):
 }
 
 /**
+ * The property's value with one item ticked, `done` `true`, or unticked: what a tick on the page
+ * writes back, whole, as the Edit form writes a list (layout-v2.md, section 7).
+ *
+ * - **The record's entries stay, in their order:** an entry for an item the file does not list, a
+ *   second entry for an item, one that is not an object, and every subfield besides the four.
+ * - **The item's first entry,** the one the page reads its state from, changes. Ticked, it holds
+ *   `done` `true`, `by` as `doneBy` and `on` as `doneOn`; unticked, it keeps its entry with `done`
+ *   `false`, and the who and when it held, which the page does not show for an item not done.
+ * - **An item with no entry** gets one at the end when ticked. Unticked, there is nothing to change,
+ *   and the value is answered as it was.
+ *
+ * Who and when are the client's: `by` is the signed-in user's name and `on` the page's clock. The
+ * server's audit log, and the record's timeline, say who changed the property and when.
+ */
+export function tickedChecklist(
+  value: unknown,
+  item: string,
+  done: boolean,
+  by: string,
+  on: string,
+): unknown[] {
+  const entries: unknown[] = Array.isArray(value) ? [...value] : [];
+  const first = entries.findIndex((entry) => isRecord(entry) && subfield(entry, 'item') === item);
+  const written = (entry: Json): Json =>
+    done ? { ...entry, item, done: true, doneBy: by, doneOn: on } : { ...entry, done: false };
+  if (first >= 0) entries[first] = written(entries[first] as Json);
+  else if (done) entries.push(written({}));
+  return entries;
+}
+
+/**
  * The card's items, from the property's value, `value`. An item is done only when its entry's
  * `done` is `true`: a missing entry, `false`, or anything else is not done, and shows neither who
  * nor when, whatever the entry still holds. An entry for an item the file does not list is not

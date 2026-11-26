@@ -162,6 +162,11 @@ export interface RecordChecklistEntry {
   /** `<prefix>:<name>`. */
   readonly field: string;
   readonly items: readonly RecordChecklistItem[];
+  /**
+   * The file's opt-in to a tick box on each item, `"tickable": true`, offered to someone the
+   * record's permissions let change it. `false` when the file does not say so.
+   */
+  readonly tickable: boolean;
 }
 
 export interface RecordCardEntry {
@@ -659,7 +664,7 @@ function checklistOf(raw: Json): RecordChecklistEntry {
       const id = String(item['id']);
       return { id, label: labelOf(item, [], humanize(id)) };
     });
-  return { field: String(raw['field']), items };
+  return { field: String(raw['field']), items, tickable: raw['tickable'] === true };
 }
 
 /** A timeline as the file writes it, its defaults filled in and its events each named once. */

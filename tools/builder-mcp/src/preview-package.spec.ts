@@ -185,6 +185,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
           'layouts/Provider/view.layout.json',
           'navigation.json',
           'queues/my-claims.json',
+          'queues/open-appeals.json',
           'queues/pending-determination.json',
           'queues/unassigned-claims.json',
           'tasks/PayersClaimReview.determine.layout.json',
@@ -240,6 +241,7 @@ describe.skipIf(!PIPELINE_TESTS_RUN)(
         expect(preview.pages.map((page) => page.url).filter(Boolean)).toEqual([
           `${origin}/#/home`,
           `${origin}/#/queues/my-claims`,
+          `${origin}/#/queues/open-appeals`,
           `${origin}/#/queues/pending-determination`,
           `${origin}/#/queues/unassigned-claims`,
           `${origin}/#/tasks`,

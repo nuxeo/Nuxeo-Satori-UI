@@ -416,6 +416,19 @@ The same field in both, holding a note, looked up from its uid. It searches the 
 
 The same field and calendar button in both, holding 31 December. A typed date is read in the order the user's language writes dates, and the calendar is Angular Material's under either theme; Satori has no date field of its own.
 
+### Checkbox
+
+| Field           | Value                       |
+| --------------- | --------------------------- |
+| Component       | `NxsCheckboxComponent`      |
+| Registered ID   | —                           |
+| With Satori     | Same component; theme only  |
+| Storybook story | `inputs-checkbox--unticked` |
+
+![Checkbox: without Satori on the left, with Satori on the right](checkbox-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same Material checkbox in both, with its words beside it; the theme sets the box's colour and the type. Its owner holds its state, so a click asks and changes nothing until the owner says.
+
 ### Pager
 
 | Field           | Value                            |
@@ -1078,6 +1091,7 @@ The components in the library today:
 | Tag input                       | —                                                                                                                            | Same component; theme only   |
 | Document reference input        | —                                                                                                                            | Same component; theme only   |
 | Date input                      | —                                                                                                                            | Same component; theme only   |
+| Checkbox                        | —                                                                                                                            | Same component; theme only   |
 | Pager                           | —                                                                                                                            | Same component; theme only   |
 | Document list                   | —                                                                                                                            | Same component; theme only   |
 | Document tree                   | —                                                                                                                            | Same component; theme only   |

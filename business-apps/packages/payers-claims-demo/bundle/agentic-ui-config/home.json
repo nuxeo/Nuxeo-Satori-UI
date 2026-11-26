@@ -45,6 +45,16 @@
         "type": "app.rules.inGroup",
         "parameters": ["member-services", "claims-supervisors"]
       }
+    },
+    {
+      "id": "appeals",
+      "labelKey": "payers.home.appeals",
+      "kpi": { "pageProvider": "payers_open_appeals" },
+      "queue": "open-appeals",
+      "visibleWhen": {
+        "type": "app.rules.inGroup",
+        "parameters": ["member-services", "claims-supervisors"]
+      }
     }
   ]
 }

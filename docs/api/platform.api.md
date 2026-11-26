@@ -200,7 +200,7 @@ function textDirectionForLanguage(language: string | null | undefined): TextDire
 
 ## @nuxeo/satori-platform/components
 
-208 exported symbol(s).
+209 exported symbol(s).
 
 ```ts
 const NXS_ADMIN_GROUP_DETAILS_PAGE_ID = "nxs.components.adminGroupDetailsPage";
@@ -881,6 +881,35 @@ class NxsChangePasswordDialogComponent {
 }
 interface NxsChangePasswordDialogData {
     readonly username: string;
+    }
+}
+class NxsCheckboxComponent {
+    readonly checked: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly describedBy: import("@angular/core").InputSignal<string | null>;
+    readonly checkedChange: import("@angular/core").OutputEmitterRef<boolean>;
+    protected readonly description: import("@angular/core").Signal<string>;
+    protected request(event: Event): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCheckboxComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsCheckboxComponent, "nxs-checkbox", never, {
+    "checked": {
+    "alias": "checked";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "describedBy": {
+    "alias": "describedBy";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "checkedChange": "checkedChange";
+    }, never, ["*"], true, never>;
     }
 }
 interface NxsChipItem {

@@ -601,8 +601,13 @@
       "type": "object",
       "required": ["field", "items"],
       "additionalProperties": false,
-      "description": "View mode only. The items a record must have done, in order, each shown done or not, with who and when, from one of the record's properties. Read-only: the card ticks nothing.",
+      "description": "View mode only. The items a record must have done, in order, each shown done or not, with who and when, from one of the record's properties. Read-only unless tickable is true.",
       "properties": {
+        "tickable": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the page offers a tick box on each item to someone the record's permissions let change it. A tick writes the item's entry: done, the signed-in user's name as doneBy and today as doneOn, a calendar day, written by the client; unticking keeps the entry with done false. The server's audit log and the record's timeline say who really changed it. Not a security control: the server's permissions decide."
+        },
         "field": {
           "$ref": "#/$defs/xpath",
           "description": "The record's property that holds each item's state: a list of complex values with the subfields item (text), done (boolean), doneBy (a user name) and doneOn (a date). Never an ecm: or var: name."

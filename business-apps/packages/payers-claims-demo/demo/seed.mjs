@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Seed a Nuxeo server with the Payers kit's fictional records and people, so that its record pages,
- * queues and home have something to show: four members, three providers, nine claims, four cases,
- * two of them appeals with their checklists, and four claim documents, and the six people who work
- * them, in the three groups the kit's rules name, from `data.mjs`. Each claim's lifecycle state is
+ * queues and home have something to show: four members, three providers, ten claims, five cases,
+ * three of them appeals with their checklists, and four claim documents, and the six people who
+ * work them, in the three groups the kit's rules name, from `data.mjs`. Each claim's lifecycle state is
  * brought to its status, so the two are one.
  *
  *   node business-apps/packages/payers-claims-demo/demo/seed.mjs
@@ -45,14 +45,15 @@
  * **The people.** Each user is created, or put back to `data.mjs`'s values: name, e-mail, groups
  * and password. The seeded workspace and its folders give the demo's groups the permissions
  * `data.mjs` names, and only those: one of theirs it does not name is removed. Anyone else's stays.
+ * Since 0.6.0, member services may change cases, so the appeals' specialist ticks an appeal's
+ * checklist on its page.
  *
  * **It checks what it seeded.** Last, as `check` says: each user signs in, in their groups, with
- * the rights `GRANTS` implies on a claim and none to change a member; each claim is in the state
- * its status names; each case holds the checklist it was given, entry for entry; then the kit's
- * seven page
- * providers return what it wrote, the three queues' aggregates count it, and each adjuster's
- * claims are what `payers_my_claims` returns to them, asked as they are, through `$currentUser`.
- * So a run that passes has run each of them on the server.
+ * the rights `GRANTS` implies on a claim and on a case, and none to change a member; each claim is
+ * in the state its status names; each case holds the checklist it was given, entry for entry; then
+ * the kit's eight page providers return what it wrote, the four queues' aggregates count it, and
+ * each adjuster's claims are what `payers_my_claims` returns to them, asked as they are, through
+ * `$currentUser`. So a run that passes has run each of them on the server.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
@@ -60,11 +61,18 @@
  * Exit codes: 0, seeded and checked; 1, `data.mjs` disagrees with the Case page's checklist, the
  * server refused a write, stopped answering part way, or a check failed; 2, a precondition, found
  * before anything is written: no credentials, no demo password, no server, credentials refused or
- * not an administrator's, the package not installed or older than 0.4.1, no
+ * not an administrator's, the package not installed or older than 0.6.0, no
  * /default-domain/workspaces, or a user or a group of the demo's names that the seed did not
  * create.
  */
-import { appealProblems, checklistOnType, readAppealChecklist } from './appeals.mjs';
+import {
+  OPEN_APPEALS,
+  appealProblems,
+  checklistOnType,
+  isOpenAppeal,
+  readAppealChecklist,
+  readOpenAppeals,
+} from './appeals.mjs';
 import {
   CASES,
   CLAIM_DOCUMENTS,
@@ -113,9 +121,18 @@ const PAGE_PROVIDERS = [
   'payers_unassigned_claims',
   'payers_my_claims',
   'payers_pending_claims',
+  OPEN_APPEALS,
 ];
 /** The statuses `payers_pending_claims` holds, as the stand-in model's query names them. */
 const PENDING = ['inReview', 'pended'];
+/** Version 0.6.0's open-appeals queue, read from the stand-in model: the appeals it holds, its facets. */
+const OPEN = readOpenAppeals();
+/**
+ * The queues' search document's schema, which version 0.6.0 gives the open-appeals queue's facets'
+ * fields: what tells that version apart, as `case:checklist` tells 0.4.1 apart.
+ */
+const SEARCH_SCHEMA = 'payers_claim_search';
+const APPEALS_FACET = 'case_state_agg';
 /**
  * How a user or a group the seed created is known again: a user's `company`, a group's
  * `description`. One without it is not the seed's, and is left alone.
@@ -308,6 +325,7 @@ async function seed() {
   console.log(`A provider's record page: ${APP}/#/doc/${providers.get(PROVIDERS[2].number)}`);
   for (const kase of CASES.filter((each) => each.category === 'appeal'))
     console.log(`An appeal's record page, ${kase.number}: ${APP}/#/doc/${cases.get(kase.number)}`);
+  console.log(`The open appeals, for member services: ${APP}/#/queues/open-appeals`);
 }
 
 /**
@@ -351,7 +369,7 @@ async function preflight() {
     throw new Precondition(
       missing.length === 1 && missing[0] === 'PayersClaimSearch'
         ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
-            'PayersClaimSearch type for its queues: upgrade it to 0.4.1 ' +
+            'PayersClaimSearch type for its queues: upgrade it to 0.6.0 ' +
             '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
         : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
             'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
@@ -360,14 +378,26 @@ async function preflight() {
     throw new Precondition(
       `${SERVER} has version 0.3.0 or older of the payers-claims-demo package, with no ` +
         `${WORKFLOW_MODEL} workflow and the platform's default lifecycle on claims: upgrade it to ` +
-        '0.4.1 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+        '0.6.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   // The Case type's schemas, as the record page reads them: the property is on the type, under
   // the schema whose prefix the field names, whatever that schema is called.
   if (!checklistOnType(await find('/config/types/Case'), CHECKLIST.field))
     throw new Precondition(
       `${SERVER} has version 0.4.0 or older of the payers-claims-demo package, with no ` +
-        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.4.1 ` +
+        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.6.0 ` +
+        '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
+    );
+  // Version 0.6.0's open-appeals queue: its facets' fields on the queues' search document, as the
+  // server lists the schema's fields.
+  const search = await find(`/config/schemas/${SEARCH_SCHEMA}`);
+  if (
+    !(search?.fields !== null && typeof search?.fields === 'object') ||
+    !Object.hasOwn(search.fields, APPEALS_FACET)
+  )
+    throw new Precondition(
+      `${SERVER} has version 0.5.1 or older of the payers-claims-demo package, with no ` +
+        'open-appeals queue: upgrade it to 0.6.0 ' +
         '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
@@ -609,10 +639,11 @@ async function upload({ fileName, bytes }) {
  * as themself and in their groups, and may change what `GRANTS` lets them change, and no member.
  * Then the page providers: for each member and each provider, exactly the claims and cases seeded
  * for it; for each claim number, at least the documents seeded for it, since another record on the
- * server could carry the same number; and in each of the three queues, every seeded claim that
- * belongs there, none of the seeded claims that do not, and its aggregates counting at least the
- * seeded claims in each bucket. Another claim on the server may be in a queue: the seed checks what
- * it wrote, and the demo, which counts exactly, refuses such a server (exit 2).
+ * server could carry the same number; and in each of the three claim queues, every seeded claim
+ * that belongs there, none of the seeded claims that do not, and its aggregates counting at least
+ * the seeded claims in each bucket, and in the open-appeals queue the same of the seeded cases.
+ * Another record on the server may be in a queue: the seed checks what it wrote, and the demo,
+ * which counts exactly, refuses such a server (exit 2).
  *
  * The queue page providers read the search index, which is written a moment after the repository,
  * so a disagreement among them is asked again, once a second, until INDEX_WAIT_MS has passed. Not
@@ -648,17 +679,19 @@ async function check(seeded) {
 }
 
 /**
- * Each user signs in with the demo password as themself, in their groups, and holds on a claim and
- * on a member exactly the rights `GRANTS` implies: adjusters and supervisors may change a claim
- * (`WriteProperties`) and move its lifecycle (`WriteLifeCycle`, which approving needs); no one may
- * change a member, whose Edit form would list the social security number. Read through the
+ * Each user signs in with the demo password as themself, in their groups, and holds on a claim, on
+ * a case and on a member exactly the rights `GRANTS` implies: adjusters and supervisors may change
+ * a claim (`WriteProperties`) and move its lifecycle (`WriteLifeCycle`, which approving needs);
+ * member services may change a case, and so tick an appeal's checklist, and no one else may; no one
+ * may change a member, whose Edit form would list the social security number. Read through the
  * `permissions` enricher, as each user, so a permission from anywhere counts: an inherited one, or
  * one given to `members`.
  */
-async function staff({ members, claims }) {
+async function staff({ members, claims, cases }) {
   const problems = [];
   const memberId = members.get(MEMBERS[0].number);
   const claimId = claims.get(CLAIMS[0].number);
+  const caseId = cases.get(CASES.find((kase) => kase.category === 'appeal').number);
   for (const user of USERS) {
     const authorization = basic(user.username, demoPassword);
     let me;
@@ -685,21 +718,30 @@ async function staff({ members, claims }) {
         })
       )?.contextParameters?.permissions ?? [];
     let onClaim;
+    let onCase;
     let onMember;
     try {
       onClaim = await rights(claimId);
+      onCase = await rights(caseId);
       onMember = await rights(memberId);
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
       problems.push(`${user.username} cannot read the seeded records (${error.status})`);
       continue;
     }
-    const mayChangeClaims = GRANTS.some(
-      (entry) =>
-        entry.place === 'claims' &&
-        user.groups.includes(entry.group) &&
-        entry.permission === 'ReadWrite',
-    );
+    const mayChange = (place) =>
+      GRANTS.some(
+        (entry) =>
+          entry.place === place &&
+          user.groups.includes(entry.group) &&
+          entry.permission === 'ReadWrite',
+      );
+    const mayChangeClaims = mayChange('claims');
+    if (onCase.includes('WriteProperties') !== mayChange('cases'))
+      problems.push(
+        `${user.username} ${mayChange('cases') ? 'may not change' : 'may change'} an appeal, ` +
+          `and ${mayChange('cases') ? 'would not' : 'would'} be offered its checklist's tick boxes`,
+      );
     for (const right of ['WriteProperties', 'WriteLifeCycle'])
       if (onClaim.includes(right) !== mayChangeClaims)
         problems.push(
@@ -802,23 +844,24 @@ async function disagreements({ members, providers, claims, cases, documents }) {
   }
 
   /**
-   * A queue's page provider holds every seeded claim that `belongs`, and none that does not, and
-   * each of its aggregates counts at least the seeded claims in each bucket: another claim on the
-   * server may be in the queue, or in the same bucket.
+   * A queue's page provider holds every seeded record that `belongs`, and none that does not, and
+   * each of its aggregates counts at least the seeded records in each bucket: another record on the
+   * server may be in the queue, or in the same bucket. The records are the claims, unless `records`
+   * and their `ids` say otherwise, as the open appeals' cases do.
    */
   const queue = async (
     pageProvider,
     belongs,
     aggregates,
-    { parameter, authorization, as } = {},
+    { parameter, authorization, as, records = CLAIMS, ids = claims } = {},
   ) => {
     const name = `${pageProvider}${as ? ` as ${as}` : ''}`;
     const found = await results(pageProvider, parameter, authorization);
-    for (const claim of CLAIMS) {
-      const held = found.includes(claims.get(claim.number));
-      if (belongs(claim) && !held) problems.push(`${name} does not hold ${claim.number}`);
-      if (!belongs(claim) && held)
-        problems.push(`${name} holds ${claim.number}, which it should not`);
+    for (const record of records) {
+      const held = found.includes(ids.get(record.number));
+      if (belongs(record) && !held) problems.push(`${name} does not hold ${record.number}`);
+      if (!belongs(record) && held)
+        problems.push(`${name} holds ${record.number}, which it should not`);
     }
     const page = await call(
       'GET',
@@ -835,9 +878,9 @@ async function disagreements({ members, providers, claims, cases, documents }) {
         continue;
       }
       const wanted = new Map();
-      for (const claim of CLAIMS.filter(belongs))
-        if (claim[property] !== null)
-          wanted.set(claim[property], (wanted.get(claim[property]) ?? 0) + 1);
+      for (const record of records.filter(belongs))
+        if (record[property] !== null)
+          wanted.set(record[property], (wanted.get(record[property]) ?? 0) + 1);
       for (const [key, count] of wanted) {
         const counted = buckets.find((bucket) => bucket.key === key)?.docCount ?? 0;
         if (counted < count)
@@ -863,6 +906,14 @@ async function disagreements({ members, providers, claims, cases, documents }) {
       authorization: basic(user.username, demoPassword),
       as: user.username,
     });
+  // The open appeals: every seeded appeal not yet decided, and no grievance, by state and by
+  // specialist.
+  await queue(
+    OPEN_APPEALS,
+    (kase) => isOpenAppeal(kase, OPEN),
+    OPEN.aggregates.map(({ id, property }) => [id, property.slice(property.indexOf(':') + 1)]),
+    { records: CASES, ids: cases },
+  );
 
   return problems;
 }

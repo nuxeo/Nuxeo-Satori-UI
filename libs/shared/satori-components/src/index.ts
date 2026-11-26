@@ -16,6 +16,7 @@ export {
   type NxsAssetCard,
 } from './lib/asset-grid/asset-grid.component';
 export { NxsBannerComponent } from './lib/banner/banner.component';
+export { NxsCheckboxComponent } from './lib/checkbox/checkbox.component';
 export { NxsChipSetComponent } from './lib/chip-set/chip-set.component';
 export {
   NxsColumnPickerComponent,

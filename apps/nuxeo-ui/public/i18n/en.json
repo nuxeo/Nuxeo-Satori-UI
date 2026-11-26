@@ -1530,7 +1530,11 @@
     "checklist": {
       "count": "{{done}} of {{total}} done",
       "done": "Done",
-      "not-done": "Not done"
+      "not-done": "Not done",
+      "saving": "Saving",
+      "tick-failed": "The checklist could not be saved. Try again.",
+      "tick-forbidden": "You do not have permission to change this checklist.",
+      "tick-not-accepted": "The server did not accept this change to the checklist."
     },
     "external": {
       "empty": "Nothing found in the other system",

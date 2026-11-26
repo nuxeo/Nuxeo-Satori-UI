@@ -11,9 +11,10 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 
 - **Four record pages, as layout files:** Member, Claim, Case and Provider. The Member page is
   [layout-v2.md](../../../docs/business-apps/layout-v2.md)'s section 9, word for word.
-- **Three queues, a home for two groups, a menu and labels:** claims adjusters see the unassigned
-  claims and their own; member services, and supervisors, see the claims pending determination.
-  The home's KPIs count from the queues' page providers, through their aggregates.
+- **Four queues, a home for two groups, a menu and labels:** claims adjusters see the unassigned
+  claims and their own; member services, and supervisors, see the claims pending determination
+  and, since 0.6.0, the open appeals. The home's KPIs count from the queues' page providers,
+  through their aggregates.
 - **A stand-in model,** until the presales Payers model arrives: the types, schemas and page
   providers those files name, and since 0.4.0 a claim lifecycle. It is fictional, and replaced
   whole when theirs comes.
@@ -31,8 +32,10 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 - **The appeals,** version 0.4.1's: an appeal is a Case of the category `appeal`, opened against a
   denied claim, which it links to. Its record page adds a checklist, layout version 2's
   `checklist` card, whose items the Case layout lists and whose state, done or not with who and
-  when, the case's `case:checklist` holds, and its timeline. The seed writes two appeals, one under
-  way and one decided. Phase 2's demo step 6 is written for them, in
+  when, the case's `case:checklist` holds, and its timeline. Since 0.6.0 the checklist is
+  tickable, `"tickable": true`, for someone who may change the case, as member services may, and
+  the open appeals have a queue of their own. The seed writes three appeals, two open and one
+  decided. Phase 2's demo step 6 is written for them, in
   [`scripts/beta-harness/steps/payers-appeals.mjs`](../../../scripts/beta-harness/steps/payers-appeals.mjs)
   ([below](#the-appeals)). **Not run on a server yet** either.
 - **Two operation buttons,** version 0.5.0's: Request medical records, for adjusters on a claim in
@@ -56,14 +59,15 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 | `bundle/agentic-ui-config/app.json`                            | The app: its name, version, platform range and groups                                      |
 | `bundle/agentic-ui-config/layouts/Member/view.layout.json`     | The Member record page: section 9's                                                        |
 | `bundle/agentic-ui-config/layouts/Claim/view.layout.json`      | The Claim record page                                                                      |
-| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page, with an appeal's checklist and every case's timeline                 |
+| `bundle/agentic-ui-config/layouts/Case/view.layout.json`       | The Case record page, with an appeal's checklist, tickable, and every case's timeline      |
 | `bundle/agentic-ui-config/layouts/Provider/view.layout.json`   | The Provider record page, with the claims it billed                                        |
 | `bundle/agentic-ui-config/layouts/Member/metadata.layout.json` | Version 1: the Properties panel beside the Member page, without the social security number |
 | `bundle/agentic-ui-config/queues/unassigned-claims.json`       | Adjusters: claims no one holds yet, with a Status facet                                    |
 | `bundle/agentic-ui-config/queues/my-claims.json`               | Adjusters: the claims they hold, through `$currentUser`                                    |
 | `bundle/agentic-ui-config/queues/pending-determination.json`   | Member services and supervisors: claims in review or pended                                |
+| `bundle/agentic-ui-config/queues/open-appeals.json`            | Member services and supervisors: appeals not decided, the nearest due first                |
 | `bundle/agentic-ui-config/home.json`                           | The home: KPI cards for adjusters and for member services                                  |
-| `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the three queues, and two platform pages                               |
+| `bundle/agentic-ui-config/navigation.json`                     | The menu: the home, the four queues, and two platform pages                                |
 | `bundle/agentic-ui-config/actions.json`                        | Mark as paid, a lifecycle transition, and the two operation buttons                        |
 | `bundle/agentic-ui-config/tasks/*.layout.json`                 | The claims review workflow's two task forms, one per step with a task                      |
 | `bundle/agentic-ui-config/labels/en.json`                      | Its labels, in English: every key the files above name                                     |
@@ -82,7 +86,7 @@ four demo steps and its sixth are written for it, and the pipeline's controls
 | `workflow/platform-check.mjs`, `PlatformCheck.java`            | The route model held to the local Nuxeo's own classes, with no deploy                      |
 | `demo/seed.mjs`, `demo/data.mjs`, `demo/seed.selftest.mjs`     | The seed script, its fictional records and people, and its controls. Not packaged          |
 | `demo/lifecycle.mjs`                                           | The claim lifecycle, read from the stand-in model, for the seed and its controls           |
-| `demo/appeals.mjs`                                             | The Case page's checklist, read from its layout, and the seeded appeals held to it         |
+| `demo/appeals.mjs`                                             | The Case page's checklist and the open-appeals queue, read from the kit's files            |
 | `package/package.xml`                                          | The Marketplace package: name, version, and what it depends on                             |
 | `build.mjs`                                                    | Version 1's builder: the generator's, byte for byte                                        |
 | `content-model.json`                                           | The stand-in model as the server answers it, for `--model`                                 |
@@ -116,7 +120,13 @@ four demo steps and its sixth are written for it, and the pipeline's controls
   case, provider and claim document schemas, `layout.schema.claim`, `case`, `provider` and
   `claimdoc` (app-definition-v2.md, section 7). Without one, the last is headed "Claimdoc", its
   schema's name made readable. The member's panel has a layout file of its own, which names its
-  heading.
+  heading. **0.6.0** is a minor raise, more than the patch the pipeline asks for: it counts 11
+  changes since 0.5.1, a queue and four labels added and the home, the menu and the Case layout
+  changed, and leaves the configuration and model components and `claimsearch.xsd` to a person.
+  Those add a page provider and two fields of the queues' search document, and remove none. The
+  minor says the kit does something new: the open-appeals queue, and the Case page's checklist
+  ticked on the page. A platform built before `tickable` leaves that card out ("Not done yet",
+  below). The seed it comes with also gives member services the right to change cases.
 - **Migration notes:** `upgrade-notes.json`, outside the zip. The upgrade check refuses a removal
   that a customer's configuration may rely on without one
   ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 10), and found
@@ -136,7 +146,7 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
 | `Case`              | `case`                                | `number`, `member`, `claim`, `category`, `state`, `received`, `due`, `assignee`, `summary`, and since 0.4.1 `checklist`                                     |
 | `Provider`          | `provider`                            | `number`, `npi`, `specialty`, `network`, `phone`, `address`. Its name is its `dc:title`                                                                     |
 | `ClaimDocument`     | `claimdoc`, on a File                 | `claim`, the claim's number, and `category`                                                                                                                 |
-| `PayersClaimSearch` | `payers_claim_search` (`claimsearch`) | The claim queues' search document, never saved: `claim_status_agg` and `claim_adjuster_agg`, the facets a queue sends back. Hidden                          |
+| `PayersClaimSearch` | `payers_claim_search` (`claimsearch`) | The queues' search document, never saved: `claim_status_agg`, `claim_adjuster_agg`, and since 0.6.0 `case_state_agg` and `case_assignee_agg`. Hidden        |
 
 - **A reference is the document's id.** `claim:member`, `claim:provider`, `case:member` and
   `case:claim` hold the `ecm:uuid` of what they point to, through Nuxeo's document resolver. That
@@ -166,20 +176,21 @@ a component of its own so that it can be replaced whole: `payers-claims-demo-mod
 - **The names are plain:** `Member`, `Claim`, `member_claims` and the rest. On a server shared with
   another model that uses them, the two would collide. The presales model sets the real ones.
 
-| Page provider              | Given                    | Returns                                                                                        |
-| -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `member_claims`            | A member's `ecm:uuid`    | The member's claims, latest service first                                                      |
-| `member_cases`             | A member's `ecm:uuid`    | The member's cases, latest change first                                                        |
-| `provider_claims`          | A provider's `ecm:uuid`  | The claims the provider billed                                                                 |
-| `payers_claim_documents`   | A claim's `claim:number` | The claim's documents                                                                          |
-| `payers_unassigned_claims` | Nothing                  | Claims with no adjuster, submitted or in review, oldest first. Aggregate: `claim_status_agg`   |
-| `payers_my_claims`         | An adjuster's user name  | The claims they hold, latest service first. Aggregate: `claim_status_agg`                      |
-| `payers_pending_claims`    | Nothing                  | Claims in review or pended, oldest first. Aggregates: `claim_status_agg`, `claim_adjuster_agg` |
+| Page provider              | Given                    | Returns                                                                                                      |
+| -------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `member_claims`            | A member's `ecm:uuid`    | The member's claims, latest service first                                                                    |
+| `member_cases`             | A member's `ecm:uuid`    | The member's cases, latest change first                                                                      |
+| `provider_claims`          | A provider's `ecm:uuid`  | The claims the provider billed                                                                               |
+| `payers_claim_documents`   | A claim's `claim:number` | The claim's documents                                                                                        |
+| `payers_unassigned_claims` | Nothing                  | Claims with no adjuster, submitted or in review, oldest first. Aggregate: `claim_status_agg`                 |
+| `payers_my_claims`         | An adjuster's user name  | The claims they hold, latest service first. Aggregate: `claim_status_agg`                                    |
+| `payers_pending_claims`    | Nothing                  | Claims in review or pended, oldest first. Aggregates: `claim_status_agg`, `claim_adjuster_agg`               |
+| `payers_open_appeals`      | Nothing                  | Since 0.6.0: appeals open or in review, nearest due first. Aggregates: `case_state_agg`, `case_assignee_agg` |
 
 Each binds what it is given as a quoted literal, and leaves out versions, proxies and trashed
 records.
 
-- **The three queue page providers read the search index,** not the repository: a queue's facets
+- **The four queue page providers read the search index,** not the repository: a queue's facets
   and a KPI's buckets are aggregates, which only the index answers. They are
   `SearchServicePageProvider`, the class Nuxeo 2025 gives `default_search`, each with the search
   document `PayersClaimSearch`. An aggregate's id, its field there and the parameter the app sends
@@ -373,7 +384,7 @@ and on no server; the demo server's own allow-list is narrower ([below](#the-ope
 npm run app-package -- business-apps/packages/payers-claims-demo --platform 0.2.0 --allow-list business-apps/packages/payers-claims-demo/deployment/build-allow-list.json
 ```
 
-It writes `dist/payers-claims-demo-0.5.1.zip`.
+It writes `dist/payers-claims-demo-0.6.0.zip`.
 
 After changing the route model's source, write its zip again first, and commit it:
 
@@ -383,9 +394,11 @@ node business-apps/packages/payers-claims-demo/workflow/build-route-model.mjs
 
 Held to the package as it was, as a pull request's check holds it
 ([package-pipeline.md](../../../docs/business-apps/package-pipeline.md), section 8), it also writes
-`dist/payers-claims-demo-0.5.1.changes.md`. Run on 25 November 2026 against the staging branch's
-0.5.0: 4 changes, which need a patch version, and 0.5.1 raises the patch. 0.5.0's run, against
-0.4.1: 13 changes, which needed a patch, and 0.5.0 raised the minor.
+`dist/payers-claims-demo-0.6.0.changes.md`. Run on 26 November 2026 against the staging branch's
+0.5.1, with the platform as it was there (`--previous-platform`, the upgrade check): 11 changes,
+which need a patch version, and 0.6.0 raises the minor. 0.5.1's run, against 0.5.0: 4 changes,
+which needed a patch, and 0.5.1 raised the patch. 0.5.0's, against 0.4.1: 13 changes, which needed
+a patch, and 0.5.0 raised the minor.
 
 ```bash
 mkdir -p /tmp/base && git archive origin/staging/enterprise-grade-app business-apps/packages/payers-claims-demo | tar -x -C /tmp/base
@@ -625,6 +638,28 @@ and no change to the allow-list. Build the kit as in step 1 above, then in step 
 server already has the one 0.5.0 needs. The Properties panel then heads a claim's, a case's, a
 provider's and a claim document's schema section with the kit's label.
 
+### Over version 0.5.1: version 0.6.0, with the open appeals and the tickable checklist
+
+**Not run yet.** 0.6.0 needs a `nuxeo-agentic-ui` whose layout engine knows `tickable`, this
+branch's or later: an older one leaves the Case page's checklist card out, and says why in the
+console. Build both packages as for 0.5.0, then in step 3 copy and name
+`payers-claims-demo-0.6.0.zip` in place of 0.5.0's. The allow-list does not change. Then check, once
+`http://localhost:8080/nuxeo/runningstatus` answers 200:
+
+- the install log lists the kit removed and 0.6.0 installed, and the server log's
+  `Component Loading Status` has nothing pending or missing;
+- the queues' search document has the open appeals' fields:
+  `GET /nuxeo/api/v1/config/schemas/payers_claim_search` lists `case_state_agg` and
+  `case_assignee_agg`;
+- as member services, `GET /nuxeo/api/v1/search/pp/payers_open_appeals/execute` answers, with the
+  aggregations `case_state_agg` and `case_assignee_agg`;
+- `/nuxeo/agentic-ui-config/layouts/Case/view.layout.json` holds the checklist with
+  `"tickable": true`.
+
+**Then seed it again** (below). It writes the third appeal, CASE-2044, and its denied claim,
+CLAIM-000146, and gives `member-services` `ReadWrite` on the cases folder. Nothing needs deleting
+first: 0.6.0 removes no type, schema, property or page provider.
+
 ### Removing it
 
 **First delete the seeded workspace,** `/default-domain/workspaces/payers-demo`, and empty it
@@ -670,26 +705,30 @@ export PAYERS_DEMO_PASSWORD=<a password for the demo users>
 node business-apps/packages/payers-claims-demo/demo/seed.mjs
 ```
 
-- **What it writes:** four members, three providers, nine claims, four cases and four claim
-  documents, under `/default-domain/workspaces/payers-demo`. Two of the cases are appeals, each
-  against a denied claim and with its checklist: CASE-2041, under way, two of five items done, and
-  CASE-2043, decided, every item done, against CLAIM-000145, which 0.4.1 adds. Morgan Chen holds
-  that claim, so none of what phase 1's demo counts as Dana Lee or as member services changes.
+- **What it writes:** four members, three providers, ten claims, five cases and four claim
+  documents, under `/default-domain/workspaces/payers-demo`. Three of the cases are appeals, each
+  against a denied claim and with its checklist: CASE-2041, in review, two of five items done;
+  CASE-2043, decided, every item done, against CLAIM-000145, which 0.4.1 adds; and CASE-2044,
+  open, its appeal letter received, against CLAIM-000146, which 0.6.0 adds, due after CASE-2041
+  and assigned to another specialist, so that the open-appeals queue's order and facets can be
+  told apart. Morgan Chen holds both added claims, so none of what phase 1's demo counts as Dana
+  Lee or as member services' claims changes.
 - **And the people:** six fictional users, in the three groups the kit's rules name.
 
   | User           | Groups                                   | Works                                     |
   | -------------- | ---------------------------------------- | ----------------------------------------- |
   | `dana.lee`     | `claims-adjusters`                       | Most of the claims                        |
-  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | Two claims, one pended and one denied     |
-  | `riley.brooks` | `member-services`                        | Two cases                                 |
-  | `sam.patel`    | `member-services`                        | The two appeals, and the appeals demo     |
+  | `morgan.chen`  | `claims-adjusters`, `claims-supervisors` | Three claims, one pended and two denied   |
+  | `riley.brooks` | `member-services`                        | Two grievances and the open appeal        |
+  | `sam.patel`    | `member-services`                        | Two appeals, and the appeals demo         |
   | `alex.rivera`  | `claims-adjusters`                       | The workflow demo's claims, as adjuster   |
   | `jordan.kim`   | `claims-supervisors`                     | The workflow demo's claims, as supervisor |
 
   Every group may read the workspace; adjusters and supervisors may also change claims, which
-  approving one needs. No demo group may change a member, so none of the demo's people is offered
-  the Member edit form, which would list the social security number. The seed checks both as each
-  user, wherever the permission comes from. The last two hold none of the seeded claims, so what
+  approving one needs, and since 0.6.0 member services may change cases, so that the appeals'
+  specialist is offered the Case page's tick boxes. No demo group may change a member, so none of
+  the demo's people is offered the Member edit form, which would list the social security number.
+  The seed checks each as each user, wherever the permission comes from. The last two hold none of the seeded claims, so what
   the workflow demo does never changes the figures phase 1's demo counts.
 
 - **The appeals are held to the Case page first.** Before it asks the server anything, the seed
@@ -714,21 +753,22 @@ node business-apps/packages/payers-claims-demo/demo/seed.mjs
   and stops the run with exit 2.
 - **It checks what it wrote:** last, it signs in as each user, and checks their groups and what
   they may change, once, reads each claim back, in the state its status names, and each case,
-  holding the checklist it was given, entry for entry. Then it runs
-  the seven page providers and compares what they return with
-  what it seeded, each queue's aggregates included, asking `payers_my_claims` for each adjuster's
-  claims as that adjuster. A queue may hold claims the seed did not write: the seed checks its
-  own, and the demo refuses such a server. The search index lags the repository, so the page
+  holding the checklist it was given, entry for entry. Then it runs the eight page providers and
+  compares what they return with what it seeded, each queue's aggregates included, asking
+  `payers_my_claims` for each adjuster's claims as that adjuster, and `payers_open_appeals` for the
+  appeals not decided and no grievance, by state and by specialist. A queue may hold records the
+  seed did not write: the seed checks its own, and the demo refuses such a server. The search index lags the repository, so the page
   providers are asked again, once a second, for up to `NUXEO_INDEX_WAIT_MS` (60 seconds).
 - **What it needs:** Node 24, nothing to install. `NUXEO_USER`, `NUXEO_PASS` and
   `PAYERS_DEMO_PASSWORD` have no default, and `NUXEO_USER` must be an administrator: only one may
   create users and groups. `NUXEO_URL` defaults to `http://localhost:8080`. Exit 2 means a
   precondition is not met: no credentials, no demo password, no server, credentials refused or not
-  an administrator's, the package not installed or older than 0.4.1, no
+  an administrator's, the package not installed or older than 0.6.0, no
   `/default-domain/workspaces`, or a user or a group of the demo's names that the seed did not
   create.
 
-It prints a member's and a provider's record page, and each appeal's, on the app at `APP_URL`
+It prints a member's and a provider's record page, each appeal's, and the open appeals' queue, on
+the app at `APP_URL`
 (`http://localhost:4200` by default, `npx nx serve nuxeo-ui`).
 
 ### Seeing it under `nx serve`
@@ -740,7 +780,7 @@ instead (`app-config.tokens.ts`), served from the git-ignored
 kit's layouts, home, menu, queues, labels and task forms there, from the repository's root:
 
 ```bash
-C=business-apps/packages/payers-claims-demo/bundle/agentic-ui-config && npm run config:dev -- --layout Member/view=$C/layouts/Member/view.layout.json --layout Member/metadata=$C/layouts/Member/metadata.layout.json --layout Claim/view=$C/layouts/Claim/view.layout.json --layout Case/view=$C/layouts/Case/view.layout.json --layout Provider/view=$C/layouts/Provider/view.layout.json --home $C/home.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/unassigned-claims.json --queue $C/queues/my-claims.json --queue $C/queues/pending-determination.json --task PayersClaimReview.determine=$C/tasks/PayersClaimReview.determine.layout.json --task PayersClaimReview.supervisorApproval=$C/tasks/PayersClaimReview.supervisorApproval.layout.json
+C=business-apps/packages/payers-claims-demo/bundle/agentic-ui-config && npm run config:dev -- --layout Member/view=$C/layouts/Member/view.layout.json --layout Member/metadata=$C/layouts/Member/metadata.layout.json --layout Claim/view=$C/layouts/Claim/view.layout.json --layout Case/view=$C/layouts/Case/view.layout.json --layout Provider/view=$C/layouts/Provider/view.layout.json --home $C/home.json --navigation $C/navigation.json --labels en=$C/labels/en.json --queue $C/queues/unassigned-claims.json --queue $C/queues/my-claims.json --queue $C/queues/pending-determination.json --queue $C/queues/open-appeals.json --task PayersClaimReview.determine=$C/tasks/PayersClaimReview.determine.layout.json --task PayersClaimReview.supervisorApproval=$C/tasks/PayersClaimReview.supervisorApproval.layout.json
 ```
 
 Then start the dev server, or restart it: it serves only the files that were there when it
@@ -876,8 +916,8 @@ Phase 2's demo step 6, "Open an appeal case with its checklist and timeline", as
 the beta harness,
 [`scripts/beta-harness/steps/payers-appeals.mjs`](../../../scripts/beta-harness/steps/payers-appeals.mjs).
 It is built on decision 2's recommendation, as the workflow is, and decision 3 stays open: the
-checklist ticks nothing, and the appeals have no operation buttons
-([decisions.md](../../../docs/business-apps/decisions.md)).
+appeals have no operation buttons, and a tick on the checklist is a document update, as the Edit
+form's, not a button or a chain ([decisions.md](../../../docs/business-apps/decisions.md)).
 
 - **An appeal is a Case,** of the category `appeal`, not a type of its own: the model's Case already
   holds a claim, a member, a state and an assignee, and the Member page's cases card lists appeals
@@ -888,8 +928,20 @@ checklist ticks nothing, and the appeals have no operation buttons
   received" to "Decision letter sent"; `history` is the case's timeline, its default kinds of
   event, ten at a time. Both are configuration: the items and their words are the layout's and the
   labels', and what is done, by whom and when is the case's `case:checklist`.
+- **Since 0.6.0, the checklist is ticked on the page,** `"tickable": true` on its card
+  ([layout-v2.md](../../../docs/business-apps/layout-v2.md), section 7), by someone who may change
+  the case: member services, by the seed's permissions. A tick writes `case:checklist` through the
+  document update the Edit form sends, the item's entry done, `doneBy` the person signed in and
+  `doneOn` today, a day as the seed writes one; unticking keeps the entry, not done. Who and when are what the app sends: the
+  case's audit, and its timeline, say who really changed it. Not a security control: the server's
+  permissions decide, and a claims adjuster, who may not change a case, sees no tick box.
+- **Since 0.6.0, the open appeals have a queue,** `queues/open-appeals.json`, on member services'
+  and supervisors' menu and home: the appeals open or in review, the nearest due first, with the
+  case, its member, its claim, its state, its specialist and its due day, and two facets, State and
+  Assigned to, from `payers_open_appeals`'s aggregates. A decided appeal, and a grievance however
+  open, is not in it.
 
-The demo, run as the appeals' specialist, `sam.patel`, who reads and changes nothing:
+The demo, run as the appeals' specialist, `sam.patel`, who changes one thing, a tick it puts back:
 
 1. the appeal under way, CASE-2041: the file's five items, in its order, which is not the order
    the seed writes them in, and in its words; the two done each with who and the day; the three not
@@ -902,20 +954,33 @@ The demo, run as the appeals' specialist, `sam.patel`, who reads and changes not
 3. the decided appeal, CASE-2043: the same items in the same order, every one done, by the people
    and on the days the seed wrote;
 4. a grievance, CASE-2042: no checklist, by the card's rule, and its timeline still drawn;
-5. the Case layout the dev server serves is the kit's file, and the bundle holds no code.
+5. the Case layout the dev server serves is the kit's file, and the bundle holds no code;
+6. the open appeals: member services' home counts them and opens their queue, its menu lists it,
+   and the queue lists CASE-2041 then CASE-2044, the nearest due first, as the server orders them,
+   with neither the decided appeal nor the open grievance; its State facet counts them, and narrowed
+   to one state on the server it keeps that state's appeal only;
+7. a tick: on CASE-2041 the specialist ticks the provider's statement, which has no entry; the
+   server holds it done, by `sam.patel`, today, with every other entry as the seed wrote it, the
+   case's audit names `sam.patel` as who changed it, and the page shows it done, by Sam Patel,
+   today. Unticked, the entry stays, not done, and the page shows neither who nor when. Then the
+   checklist the seed wrote is put back, through the REST API, and checked.
 
 ```bash
 NUXEO_USER=sam.patel NUXEO_PASS="$PAYERS_DEMO_PASSWORD" npm run beta:evidence -- payers-appeals
 ```
 
-**What it needs:** the package 0.4.1 installed and seeded, the dev server serving the kit's files
-(above), and Playwright. Exit 2 means a precondition is not met, and says which: the run's user is
-not `sam.patel`, in `member-services` and neither claims group; `data.mjs` disagrees with the Case
-page's checklist; the package is older than 0.4.1; a case is missing or does not hold the checklist
-the seed wrote; an appeal's claim is not denied on the server; or the dev server serves another
-Case page or other labels. **Not run yet:** the kit 0.4.1 is installed nowhere. What was run, on
-25 November 2026, is the record page engine's tests, which draw the checklist from a layout and a
-record, and the seed's controls against their stand-in server, which write and check both appeals.
+**What it needs:** the package 0.6.0 installed and seeded with its seed, the dev server serving
+the kit's files (above), and Playwright. Exit 2 means a precondition is not met, and says which:
+the run's user is not `sam.patel`, in `member-services` and neither claims group; `data.mjs`
+disagrees with the Case page's checklist, or seeds too few open appeals to tell the queue's order
+and facets apart; the package is older than 0.6.0; a case is missing or does not hold the
+checklist the seed wrote, as after a run stopped between its tick and putting it back; an appeal's
+claim is not denied on the server; the server's open-appeals queue holds an appeal the seed did not
+write; `sam.patel` may not change the appeal; or the dev server serves another Case page, home,
+menu, queue or labels. **Not run yet:** the kit 0.6.0 is installed nowhere. What was run, on
+26 November 2026, is the record page engine's tests, which draw the checklist from a layout and a
+record and tick it against a stand-in of the document update, and the seed's controls against
+their stand-in server, which write and check the three appeals and the open-appeals queue.
 
 ### The operation buttons' demo
 
@@ -970,7 +1035,7 @@ built on the decision log's proposed answers to B and E, which are open
 | The five layouts             | Yes                                                                                 | Yes                                          |
 | `home.json`                  | From the registry, to the demo groups                                               | Yes, and it wins over the registry's         |
 | `navigation.json`            | From the registry, to the demo groups                                               | Yes, and it wins over the registry's         |
-| The three queues             | From the registry, to the demo groups                                               | Yes, and they win over the registry's        |
+| The four queues              | From the registry, to the demo groups                                               | Yes, and they win over the registry's        |
 | `labels/en.json`             | From the registry, to the demo groups                                               | Yes, and it wins over the registry's         |
 | `actions.json`               | From the registry, with only what the server's allow-list lets run, read at startup | No: the app reads it from the registry alone |
 | `app.json`                   | From the registry: it lists the app                                                 | No                                           |
@@ -1019,19 +1084,25 @@ included, is shown no app. The demo itself still runs on a development server, a
   lifecycle permission from the groups and have the chains follow it as the system; it is for the
   security review phase 2 needs. Hiding a button is not a control.
 - **Not run by the demo:** a supervisor sending a determination back.
-- **The appeals have not run on a server:** the kit 0.4.1 is not installed, so demo step 6's
-  steps file has not run, and no server has answered `case:checklist` as `content-model.json`
-  writes it by hand (above).
-- **No one ticks a checklist item in the app.** The card is read-only, and decision 3 builds no
-  operation buttons. A case's checklist changes through the REST API, as the seed writes it; the
-  kit lays out no Edit form for a Case, and no demo group may change one. Who and when are what the
-  writer sends, not stamped: nothing on the server writes `doneBy` and `doneOn` from the change. A
-  chain that did would be server code in the kit, as `PayersClaim.KeepStatus` is.
+- **The appeals have not run on a server:** the kit 0.6.0 is not installed, so demo step 6's
+  steps file has not run, no server has answered `case:checklist` as `content-model.json` writes it
+  by hand (above), and no server has run `payers_open_appeals` or a tick.
+- **Who and when on a ticked item are the client's.** The app writes `doneBy` and `doneOn` as any
+  client writing the property through the REST API does, and nothing on the server stamps them from
+  the change, so another client may write anything there. The case's audit log, and its timeline,
+  are what say who changed the case. A chain that stamped them would be server code in the kit, as
+  `PayersClaim.KeepStatus` is.
+- **Member services may change a whole case,** not only its checklist, since 0.6.0's seed gives
+  them `ReadWrite` on the cases folder: the platform's generated Edit form is offered to them on a
+  Case, which the kit lays out no Edit form for. A case holds no field the demo hides from them.
 - **An appeal is not a workflow yet.** Nothing moves `case:state` with the checklist: an appeal
   whose items are all done is not decided by that, and one decided with items not done is shown as
-  it is. The prototype's appeal review workflow is not built.
-- **No appeals queue.** An appeal is opened from its member's cases card, or by its address; the
-  prototype's appeals queue and its deadlines are not built.
+  it is. The prototype's appeal review workflow is not built, and its task forms with it.
+- **The open appeals' deadlines are not flagged.** The queue lists the due day, the nearest first;
+  the prototype's warning on an appeal near or past its deadline is not built.
+- **A platform built before `tickable` leaves the Case page's checklist out,** and the console says
+  why: `tickable` is a checklist's key it does not have, which leaves out that card, not the page.
+  The platform's version is still 0.2.0, so the kit's range does not say so.
 - **A platform built before the checklist card refuses the Case page,** and shows the document
   page, since `checklist` is a card's content it does not know, a structural error to it. The
   platform's version is still 0.2.0, as it was before the card, so the kit's range, `>=0.2.0`,

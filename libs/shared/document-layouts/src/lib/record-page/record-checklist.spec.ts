@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LayoutLabel } from '../layout.model';
-import { checklistEntries, checklistUsers, showChecklist } from './record-checklist';
+import {
+  checklistEntries,
+  checklistUsers,
+  showChecklist,
+  tickedChecklist,
+} from './record-checklist';
 import type { RecordValueContext } from './record-field-view';
 import type { RecordChecklistEntry } from './record-layout';
 
@@ -35,6 +40,7 @@ const CHECKLIST: RecordChecklistEntry = {
     { id: 'reviewerAssigned', label: { literal: 'Reviewer assigned', keys: [], fallback: null } },
     { id: 'decisionLetter', label: { literal: 'Decision letter sent', keys: [], fallback: null } },
   ],
+  tickable: false,
 };
 
 describe('showChecklist', () => {
@@ -197,5 +203,62 @@ describe('checklistUsers', () => {
         { item: 'reviewerAssigned', done: true, doneBy: '' },
       ]),
     ).toEqual(['sam.patel']);
+  });
+});
+
+describe('tickedChecklist', () => {
+  const ON = '2026-11-26T09:30:00.000Z';
+  const RECORD = [
+    { item: 'reviewerAssigned', done: true, doneBy: 'morgan.chen', doneOn: '2026-11-04' },
+    { item: 'legacyStep', done: true, doneBy: 'riley.brooks', doneOn: '2026-10-01' },
+    'not an entry',
+    { item: 'medicalRecords', done: false, doneBy: 'sam.patel', doneOn: '2026-11-12', note: 'x' },
+    { item: 'medicalRecords', done: true, doneBy: 'jordan.kim', doneOn: '2026-11-13' },
+  ];
+
+  it("ticks the item's first entry with who and when, and keeps every other entry as it was", () => {
+    const written = tickedChecklist(RECORD, 'medicalRecords', true, 'sam.patel', ON);
+    expect(written).toEqual([
+      RECORD[0],
+      RECORD[1],
+      'not an entry',
+      { item: 'medicalRecords', done: true, doneBy: 'sam.patel', doneOn: ON, note: 'x' },
+      RECORD[4],
+    ]);
+    // The record's own value is not changed: the page shows it until the server answers.
+    expect(RECORD[3]).toEqual({
+      item: 'medicalRecords',
+      done: false,
+      doneBy: 'sam.patel',
+      doneOn: '2026-11-12',
+      note: 'x',
+    });
+  });
+
+  it('unticks by keeping the entry, with done false and the who and when it held', () => {
+    expect(tickedChecklist(RECORD, 'reviewerAssigned', false, 'sam.patel', ON)).toEqual([
+      { item: 'reviewerAssigned', done: false, doneBy: 'morgan.chen', doneOn: '2026-11-04' },
+      ...RECORD.slice(1),
+    ]);
+  });
+
+  it('adds an entry at the end for an item ticked with none, and nothing for one unticked', () => {
+    expect(tickedChecklist(RECORD, 'decisionLetter', true, 'sam.patel', ON)).toEqual([
+      ...RECORD,
+      { item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: ON },
+    ]);
+    expect(tickedChecklist(RECORD, 'decisionLetter', false, 'sam.patel', ON)).toEqual(RECORD);
+    for (const value of [undefined, null, 'done', { item: 'decisionLetter' }])
+      expect(tickedChecklist(value, 'decisionLetter', true, 'sam.patel', ON)).toEqual([
+        { item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: ON },
+      ]);
+  });
+
+  it('reads an entry by its own item only, never an inherited one', () => {
+    const inherited = Object.create({ item: 'decisionLetter' }) as object;
+    expect(tickedChecklist([inherited], 'decisionLetter', true, 'sam.patel', ON)).toEqual([
+      inherited,
+      { item: 'decisionLetter', done: true, doneBy: 'sam.patel', doneOn: ON },
+    ]);
   });
 });

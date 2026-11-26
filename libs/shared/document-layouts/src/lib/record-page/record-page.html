@@ -157,43 +157,58 @@
             class="record-page__checklist-items"
             role="list"
             [attr.aria-label]="card.heading ? null : checklist.label"
+            [attr.aria-busy]="checklist.ticking !== null ? 'true' : null"
           >
             @for (item of checklist.items; track item.id) {
               <li
                 class="record-page__checklist-item"
                 [class.record-page__checklist-item--done]="item.done"
+                [class.record-page__checklist-item--tickable]="checklist.tickable"
                 [attr.data-item]="item.id"
                 [attr.data-done]="item.done"
               >
-                <nxs-icon
-                  class="record-page__checklist-icon"
-                  [name]="item.done ? 'circle_check' : 'circle_dot'"
-                />
-                <span class="record-page__checklist-text">
-                  <!-- The parts are read apart, by a screen reader as on screen: the hidden commas. -->
-                  <span class="record-page__checklist-label">{{ item.label }}</span>
-                  <span class="cdk-visually-hidden">, </span>
-                  <span class="record-page__checklist-state">{{
-                    (item.done
-                      ? 'document-layouts.checklist.done'
-                      : 'document-layouts.checklist.not-done'
-                    ) | translate
-                  }}</span>
-                  @if (item.by !== null || item.on !== null) {
-                    <span class="cdk-visually-hidden">, </span>
-                    <span class="record-page__checklist-meta">
-                      @if (item.by !== null) {
-                        <span class="record-page__checklist-by">{{ item.by }}</span>
-                      }
-                      @if (item.by !== null && item.on !== null) {
-                        <span class="cdk-visually-hidden">, </span>
-                      }
-                      @if (item.on !== null) {
-                        <span class="record-page__checklist-on">{{ item.on }}</span>
-                      }
-                    </span>
-                  }
-                </span>
+                @if (checklist.tickable) {
+                  <!-- A tick box named by the item's words, which shows the record's state, or the
+                       one a tick is writing, and is described by the state, who and when below. -->
+                  @let detail = detailId(card.id, item.id);
+                  @let writing = checklist.ticking?.item === item.id;
+                  <nxs-checkbox
+                    class="record-page__checklist-box"
+                    [checked]="writing ? checklist.ticking!.done : item.done"
+                    [disabled]="checklist.busy"
+                    [describedBy]="detail"
+                    (checkedChange)="tick(card, item, $event)"
+                    ><span class="record-page__checklist-label">{{
+                      item.label
+                    }}</span></nxs-checkbox
+                  >
+                  <span class="record-page__checklist-detail" [id]="detail">
+                    <ng-container
+                      [ngTemplateOutlet]="checklistState"
+                      [ngTemplateOutletContext]="{ $implicit: item, first: true }"
+                    />
+                    @if (writing) {
+                      <nxs-spinner
+                        class="record-page__checklist-saving"
+                        diameter="16"
+                        [label]="'document-layouts.checklist.saving' | translate"
+                      />
+                    }
+                  </span>
+                } @else {
+                  <nxs-icon
+                    class="record-page__checklist-icon"
+                    [name]="item.done ? 'circle_check' : 'circle_dot'"
+                  />
+                  <span class="record-page__checklist-text">
+                    <!-- The parts are read apart, by a screen reader as on screen: the hidden commas. -->
+                    <span class="record-page__checklist-label">{{ item.label }}</span>
+                    <ng-container
+                      [ngTemplateOutlet]="checklistState"
+                      [ngTemplateOutletContext]="{ $implicit: item, first: false }"
+                    />
+                  </span>
+                }
               </li>
             }
           </ul>
@@ -214,6 +229,32 @@
         </dl>
       }
     </section>
+  }
+</ng-template>
+
+<!-- An item's state, and who and when for one done, each part read apart by the hidden commas.
+     `first`: nothing before it to set it apart from, as the tick box's words are its own name. -->
+<ng-template #checklistState let-item let-first="first">
+  @if (!first) {
+    <span class="cdk-visually-hidden">, </span>
+  }
+  <span class="record-page__checklist-state">{{
+    (item.done ? 'document-layouts.checklist.done' : 'document-layouts.checklist.not-done')
+      | translate
+  }}</span>
+  @if (item.by !== null || item.on !== null) {
+    <span class="cdk-visually-hidden">, </span>
+    <span class="record-page__checklist-meta">
+      @if (item.by !== null) {
+        <span class="record-page__checklist-by">{{ item.by }}</span>
+      }
+      @if (item.by !== null && item.on !== null) {
+        <span class="cdk-visually-hidden">, </span>
+      }
+      @if (item.on !== null) {
+        <span class="record-page__checklist-on">{{ item.on }}</span>
+      }
+    </span>
   }
 </ng-template>
 

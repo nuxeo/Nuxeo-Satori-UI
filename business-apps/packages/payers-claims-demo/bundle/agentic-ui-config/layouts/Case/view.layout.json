@@ -68,6 +68,7 @@
       },
       "checklist": {
         "field": "case:checklist",
+        "tickable": true,
         "items": [
           { "id": "appealLetter", "labelKey": "payers.appeal.appealLetter" },
           { "id": "reviewerAssigned", "labelKey": "payers.appeal.reviewerAssigned" },
