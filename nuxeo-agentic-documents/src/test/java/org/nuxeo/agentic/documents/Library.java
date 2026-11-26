@@ -73,6 +73,121 @@ final class Library {
         nextTransaction();
     }
 
+    // ------------------------------------------------------------------ transmittals and reviews
+
+    /** Not a recipient, nor a reviewer, but may write where transmittals and reviews are. */
+    static final String DAVE = "dave";
+
+    /** A recipient who may read transmittals and receipts, and write none. */
+    static final String ERIN = "erin";
+
+    static final String TRANSMITTALS = "/library/transmittals";
+
+    static final String REVIEWS = "/library/reviews";
+
+    static final String TRANSMITTAL = "TestTransmittal";
+
+    static final String CYCLE = "TestReviewCycle";
+
+    /**
+     * The folders transmittals and review cycles go in, below the library:
+     *
+     * <pre>
+     * /library/transmittals  bob, carol and dave ReadWrite, erin Read (alice by the library)
+     * /library/reviews       bob and dave ReadWrite (alice by the library)
+     * </pre>
+     *
+     * So bob may write a cycle and its comments, and read the revisions, not write them.
+     */
+    static void createDesks(CoreSession admin) {
+        DocumentModel transmittals = admin.createDocument(admin.createDocumentModel("/library", "transmittals",
+                "Folder"));
+        ACP acp = new ACPImpl();
+        ACL acl = acp.getOrCreateACL();
+        for (String user : List.of(BOB, CAROL, DAVE)) {
+            acl.add(new ACE(user, "ReadWrite", true));
+        }
+        acl.add(new ACE(ERIN, "Read", true));
+        admin.setACP(transmittals.getRef(), acp, true);
+        DocumentModel reviews = admin.createDocument(admin.createDocumentModel("/library", "reviews", "Folder"));
+        ACP reviewsAcp = new ACPImpl();
+        reviewsAcp.getOrCreateACL().add(new ACE(BOB, "ReadWrite", true));
+        reviewsAcp.getOrCreateACL().add(new ACE(DAVE, "ReadWrite", true));
+        admin.setACP(reviews.getRef(), reviewsAcp, true);
+        admin.save();
+        nextTransaction();
+    }
+
+    /** A transmittal as the session's user issues it: subject, documents, recipients, purpose, due in days. */
+    static DocumentModel issue(CoreSession session, String name, List<String> documents, List<String> recipients,
+            String purpose, int dueInDays) {
+        DocumentModel doc = issueModel(session, documents, recipients, purpose, dueInDays);
+        doc.setPathInfo(TRANSMITTALS, name);
+        return session.createDocument(doc);
+    }
+
+    /** A transmittal not yet created, in the transmittals folder. */
+    static DocumentModel issueModel(CoreSession session, List<String> documents, List<String> recipients,
+            String purpose, int dueInDays) {
+        DocumentModel doc = session.createDocumentModel(TRANSMITTALS, "tr", TRANSMITTAL);
+        doc.setPropertyValue("dc:title", "Drawings for " + purpose);
+        doc.setPropertyValue(ControlledDocuments.TRM_DOCUMENTS, (java.io.Serializable) documents);
+        doc.setPropertyValue(ControlledDocuments.TRM_RECIPIENTS, (java.io.Serializable) recipients);
+        doc.setPropertyValue(ControlledDocuments.TRM_PURPOSE, purpose);
+        doc.setPropertyValue(ControlledDocuments.TRM_DUE_DATE, day(dueInDays));
+        return doc;
+    }
+
+    /** The receipts of a transmittal, by recipient, read by the administrator. */
+    static java.util.Map<String, DocumentModel> receipts(String repository, String transmittalId) {
+        return inTransaction(() -> CoreInstance.doPrivileged(repository, (CoreSession s) -> {
+            java.util.Map<String, DocumentModel> byRecipient = new java.util.TreeMap<>();
+            for (DocumentModel receipt : s.query("SELECT * FROM Document WHERE ecm:mixinType = 'TransmittalReceipt' "
+                    + "AND trr:transmittal = '" + transmittalId + "' AND ecm:isVersion = 0")) {
+                byRecipient.put(text(receipt, ControlledDocuments.TRR_RECIPIENT), receipt);
+            }
+            return byRecipient;
+        }));
+    }
+
+    /** A receipt answered as the session's user. */
+    static DocumentModel answer(CoreSession session, String receiptId, String status, String comment) {
+        DocumentModel receipt = session.getDocument(new IdRef(receiptId));
+        receipt.setPropertyValue(ControlledDocuments.TRR_STATUS, status);
+        receipt.setPropertyValue(ControlledDocuments.TRR_COMMENT, comment);
+        return session.saveDocument(receipt);
+    }
+
+    /** A review cycle opened as the session's user on the revision with that id. */
+    static DocumentModel openCycle(CoreSession session, String name, String revisionId, List<String> reviewers) {
+        DocumentModel doc = session.createDocumentModel(REVIEWS, name, CYCLE);
+        doc.setPropertyValue(ControlledDocuments.RVW_DOCUMENT, revisionId);
+        doc.setPropertyValue(ControlledDocuments.RVW_REVIEWERS, (java.io.Serializable) reviewers);
+        return session.createDocument(doc);
+    }
+
+    /** A thread's first comment resolved, or opened again, as the session's user. */
+    static DocumentModel resolve(CoreSession session, String commentId, String status, String resolution) {
+        DocumentModel comment = session.getDocument(new IdRef(commentId));
+        comment.setPropertyValue(ControlledDocuments.RVWC_STATUS, status);
+        comment.setPropertyValue(ControlledDocuments.RVWC_RESOLUTION, resolution);
+        return session.saveDocument(comment);
+    }
+
+    /** A cycle asked to close as the session's user. */
+    static DocumentModel close(CoreSession session, String cycleId) {
+        DocumentModel cycle = session.getDocument(new IdRef(cycleId));
+        cycle.setPropertyValue(ControlledDocuments.RVW_STATUS, ControlledDocuments.CLOSED);
+        return session.saveDocument(cycle);
+    }
+
+    /** A day {@code days} from today, at its UTC midnight, as Nuxeo stores a day. */
+    static java.util.Calendar day(int days) {
+        java.util.Calendar day = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        day.setTimeInMillis(TransmittalListener.startOfToday() + days * 24L * 60 * 60 * 1000);
+        return day;
+    }
+
     /** Start the series again from 1, so a test can name the numbers it expects. */
     static void resetSeries(String... ids) {
         for (String id : ids) {
@@ -84,6 +199,17 @@ final class Library {
     static NuxeoPrincipal principal(String user) {
         return ADMINISTRATOR.equals(user) ? new UserPrincipal(user, List.of("administrators"), false, true)
                 : new UserPrincipal(user, List.of("members"), false, false);
+    }
+
+    /** The refusal a piece of work as the user gets, in a transaction of its own, rolled back. */
+    static org.nuxeo.ecm.core.api.NuxeoException refusedAs(String repository, String user,
+            Function<CoreSession, ?> work) {
+        try {
+            inTransactionAs(repository, user, work);
+        } catch (org.nuxeo.ecm.core.api.NuxeoException e) {
+            return e;
+        }
+        throw new AssertionError("not refused");
     }
 
     /** A session as the user, in the thread's current transaction. */

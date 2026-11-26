@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/queue.schema.json",
+  "version": 2,
+  "labelKey": "controlled-documents.queue.transmittals",
+  "pageProvider": "controlled_documents_transmittals",
+  "columns": [
+    { "field": "trm:number", "labelKey": "controlled-documents.field.transmittalNumber" },
+    { "field": "dc:title", "labelKey": "controlled-documents.field.subject" },
+    {
+      "field": "trm:purpose",
+      "labelKey": "controlled-documents.field.transmittalPurpose",
+      "widget": "vocabulary",
+      "parameters": { "directory": "ControlledDocumentsPurpose" }
+    },
+    {
+      "field": "trm:dueDate",
+      "labelKey": "controlled-documents.field.dueDate",
+      "widget": "date"
+    },
+    {
+      "field": "trm:issuedBy",
+      "labelKey": "controlled-documents.field.issuedBy",
+      "widget": "user"
+    },
+    {
+      "field": "trm:issuedAt",
+      "labelKey": "controlled-documents.field.issuedAt",
+      "widget": "date"
+    }
+  ],
+  "sort": [
+    {
+      "field": "trm:issuedAt",
+      "order": "desc"
+    }
+  ],
+  "pageSize": 50
+}

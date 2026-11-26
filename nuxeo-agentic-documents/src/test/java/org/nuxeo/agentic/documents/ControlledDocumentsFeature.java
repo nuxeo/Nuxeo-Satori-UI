@@ -20,5 +20,8 @@ import org.nuxeo.runtime.test.runner.RunnerFeature;
 @RepositoryConfig(cleanup = Granularity.METHOD)
 @Deploy("org.nuxeo.agentic.documents")
 @Deploy("org.nuxeo.agentic.documents.test:OSGI-INF/test-documents-contrib.xml")
+// Nuxeo's own Comment and CommentRoot types and their schemas, as the server has them: the review
+// cycles' comments are those (Comments, which writes them as the platform's comment manager does).
+@Deploy("org.nuxeo.ecm.platform.comment:OSGI-INF/comment-schemas-contrib.xml")
 public class ControlledDocumentsFeature implements RunnerFeature {
 }

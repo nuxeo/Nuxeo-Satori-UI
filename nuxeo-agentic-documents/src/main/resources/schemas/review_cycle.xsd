@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<!-- The ReviewCycle facet's schema, prefix rvw: one review of one controlled document's revision.
+     The opener writes the revision, the reviewers and a due day, once, when they open it, and asks
+     for closed; the add-on's listener gives the rest, and refuses any other change. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/review_cycle"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/review_cycle">
+
+  <!-- The id of the revision reviewed, and its number and revision. -->
+  <xs:element name="document" type="xs:string" />
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="revision" type="xs:string" />
+  <!-- The user names who review it. -->
+  <xs:element name="reviewers" type="nxs:stringList" />
+  <xs:element name="dueDate" type="xs:date" />
+  <!-- open, then closed. -->
+  <xs:element name="status" type="xs:string" />
+  <xs:element name="openedBy" type="xs:string" />
+  <xs:element name="openedAt" type="xs:dateTime" />
+  <xs:element name="closedBy" type="xs:string" />
+  <xs:element name="closedAt" type="xs:dateTime" />
+  <!-- How many threads it had to resolve when it closed. -->
+  <xs:element name="comments" type="xs:long" />
+
+  <xs:simpleType name="stringList">
+    <xs:list itemType="xs:string" />
+  </xs:simpleType>
+
+</xs:schema>

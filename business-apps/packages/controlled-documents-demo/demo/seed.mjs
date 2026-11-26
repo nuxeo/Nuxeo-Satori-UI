@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 /**
  * Seed a Nuxeo server with the controlled documents kit's fictional register, so that its record
- * page, queue and home have something to show: five engineering documents, from `data.mjs`, nine
- * revisions in all, under /default-domain/workspaces/controlled-documents/register.
+ * pages, queues and home have something to show: five engineering documents, from `data.mjs`, nine
+ * revisions in all, under /default-domain/workspaces/controlled-documents/register; and, since the
+ * kit's version 0.2.0, the demo's three people, a transmittal issued to two of them, and a review
+ * cycle with two threads, one resolved.
  *
  *   node business-apps/packages/controlled-documents-demo/demo/seed.mjs
  *
- * The kit's package and `nuxeo-agentic-documents` must be installed first: the records are of the
- * stand-in model's type, `EngineeringDocument`, which the add-on numbers.
+ * The kit's package, version 0.2.0 or later, and `nuxeo-agentic-documents` 0.2.0 must be installed
+ * first: the records are of the stand-in model's types, which the add-on numbers and guards.
  *
  * Environment:
- *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset. An account
- *                            that may create a workspace in /default-domain/workspaces.
+ *   NUXEO_USER, NUXEO_PASS   required, with no default. An empty value counts as unset. An
+ *                            administrator: the seed creates users and groups, and a workspace in
+ *                            /default-domain/workspaces.
+ *   CONTROLLED_DOCUMENTS_DEMO_PASSWORD
+ *                            required, with no default: the password the demo's people are given,
+ *                            and signed in with to issue, answer, comment and resolve as themselves.
  *   NUXEO_URL                the server, default http://localhost:8080
  *   APP_URL                  the app, for the links printed at the end,
  *                            default http://localhost:4200
@@ -19,34 +25,61 @@
  *
  * **The server numbers, the seed never does.** A chain's first revision is created naming its
  * series, `docctl:series`; each later one naming the revision before it, `docctl:supersedes`. The
- * server gives the number and the revision, and marks the one before superseded. The seed writes
- * no `docctl:` property on an update: the server refuses any change to them.
+ * server gives the number and the revision, and marks the one before superseded. A transmittal is
+ * created naming its documents by number, and the server gives its number and its receipts. The
+ * seed writes no property the server gives.
  *
- * **It creates no user and no group.** The kit's groups, `document-controllers` and `engineers`,
- * and the people in them, are the server's. The originators, in `data.mjs`, are user names only.
+ * **Each person acts as themselves.** The transmittal is issued by its issuer, each receipt
+ * answered by its recipient, the review cycle opened by its opener, each thread written by its
+ * reviewer and resolved by the opener, each signed in with the demo password: the add-on refuses
+ * anyone else, an administrator included.
+ *
+ * **The people are the seed's.** It creates the kit's groups, `document-controllers` and
+ * `engineers`, and `data.mjs`'s users in them, each marked as the seed's, and gives the groups
+ * `ReadWrite` on the workspace. A user or a group of those names that the seed did not create stops
+ * the run before anything is written.
  *
  * **Safe to run twice.** Every revision has a fixed place. One already there has `data.mjs`'s
  * other values written over its own; one missing is created, superseding the revision before it,
  * which must then be current. A place that holds a document of another type, or a chain whose
  * revision before a missing one is no longer current, stops the run. A revision in the trash is
- * not looked for: restore it first, or the seed creates its place again.
+ * not looked for: restore it first, or the seed creates its place again. A transmittal and a
+ * review cycle already there are left as they are, since the server keeps them as written; a
+ * receipt is answered, and a thread written or resolved, only when it has not been yet.
  *
  * **It checks what it seeded.** Last, every revision is read back: a chain shares one number, no
  * two chains share one, each revision is the one `data.mjs` names, the last is current and the
  * others superseded, linked both ways. Then the kit's page providers are asked: the current
  * documents' must return each chain's last revision and none of the others, the superseded ones'
- * the others, and the revisions' each chain whole. Another document on the server may be in them:
- * the seed checks its own.
+ * the others, and the revisions' each chain whole. The transmittal is read back with its receipts,
+ * one per recipient, those `data.mjs` acknowledges acknowledged; and the review cycle with its
+ * threads, those it resolves resolved; each through the page providers the kit's pages and queues
+ * read. Another document on the server may be in them: the seed checks its own.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
  *
  * Exit codes: 0, seeded and checked; 1, the server refused a write, stopped answering part way, a
  * place held another type, a chain could not be continued, or a check failed; 2, a precondition,
- * found before anything is written: no credentials, no server, or one that does not answer /me as
- * Nuxeo does, credentials refused, the package not installed, or no /default-domain/workspaces.
+ * found before anything is written: no credentials or no demo password, no server, or one that does
+ * not answer /me as Nuxeo does, credentials refused, the package not installed or older than 0.2.0,
+ * no /default-domain/workspaces, or a user or group of the demo's names not the seed's.
  */
-import { CHAINS, FOLDER, WORKSPACE, revisionsOf } from './data.mjs';
+import {
+  CHAINS,
+  FOLDER,
+  GRANTS,
+  GROUPS,
+  MARKER,
+  REVIEW,
+  REVIEWS,
+  TRANSMITTAL,
+  TRANSMITTALS,
+  USERS,
+  WORKSPACE,
+  dayFrom,
+  revisionsOf,
+} from './data.mjs';
 
 const EXIT_PRECONDITION = 2;
 const SERVER = (process.env['NUXEO_URL'] || 'http://localhost:8080').replace(/\/+$/, '');
@@ -56,10 +89,14 @@ const TIMEOUT_MS = Number(process.env['NUXEO_TIMEOUT_MS']) || 30_000;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
 const TYPE = 'EngineeringDocument';
+/** The types version 0.2.0 of the package adds, which the transmittal and the review need. */
+const TYPES_0_2 = ['Transmittal', 'TransmittalReceipt', 'ReviewCycle', 'TransmittalRegister'];
 
 const WORKSPACES = '/default-domain/workspaces';
 const ROOT = `${WORKSPACES}/${WORKSPACE.name}`;
 const HOLDER = `${ROOT}/${FOLDER.name}`;
+const SENT = `${ROOT}/${TRANSMITTALS.name}`;
+const REVIEWED = `${ROOT}/${REVIEWS.name}`;
 
 /** A precondition the environment or the server does not meet: fix it, not the script. */
 class Precondition extends Error {}
@@ -72,7 +109,7 @@ class HttpError extends Error {
   }
 }
 
-const tally = { created: 0, updated: 0 };
+const tally = { created: 0, updated: 0, answered: 0, people: 0, granted: 0 };
 /** Whether the run is still in its preflight, where no answer at all means no server. */
 let preflighting = true;
 
@@ -85,7 +122,19 @@ if (!username || !password) {
   );
   process.exit(EXIT_PRECONDITION);
 }
-const AUTHORIZATION = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+const demoPassword = process.env['CONTROLLED_DOCUMENTS_DEMO_PASSWORD'];
+if (!demoPassword) {
+  console.error(
+    "CONTROLLED_DOCUMENTS_DEMO_PASSWORD must be set, and has no default: the password the demo's " +
+      'people are given, and signed in with. Export it first:\n' +
+      '  export CONTROLLED_DOCUMENTS_DEMO_PASSWORD=<password>',
+  );
+  process.exit(EXIT_PRECONDITION);
+}
+const basic = (user, secret) => `Basic ${Buffer.from(`${user}:${secret}`).toString('base64')}`;
+const AUTHORIZATION = basic(username, password);
+/** How a request is signed when it is a demo person's own. */
+const as = (user) => basic(user, demoPassword);
 
 try {
   await seed();
@@ -103,11 +152,17 @@ async function seed() {
   await preflight();
   preflighting = false;
 
+  for (const group of GROUPS) await ensureGroup(group);
+  for (const user of USERS) await ensureUser(user);
+
   await ensureFolder(WORKSPACES, WORKSPACE.name, 'Workspace', {
     'dc:title': WORKSPACE.title,
     'dc:description': 'Fictional engineering documents for the controlled documents kit.',
   });
+  await grant(await call('GET', `/path${pathOf(ROOT)}`));
   await ensureFolder(ROOT, FOLDER.name, 'Folder', { 'dc:title': FOLDER.title });
+  await ensureFolder(ROOT, TRANSMITTALS.name, TRANSMITTALS.type, { 'dc:title': TRANSMITTALS.title });
+  await ensureFolder(ROOT, REVIEWS.name, REVIEWS.type, { 'dc:title': REVIEWS.title });
 
   const today = new Date();
   /** Each chain's revisions as stored, in order. */
@@ -128,16 +183,34 @@ async function seed() {
     );
   console.log('  checked  numbers, revisions, supersession, and the three page providers');
 
-  const { created, updated } = tally;
-  console.log(`\nDone: ${created} created, ${updated} updated. The server holds what was seeded.`);
+  const transmittal = await ensureTransmittal(seeded, today);
+  const cycle = await ensureReview(seeded, today);
+  const more = [
+    ...(await transmittalDisagreements(transmittal, seeded)),
+    ...(await reviewDisagreements(cycle, seeded)),
+  ];
+  if (more.length > 0)
+    throw new Error(
+      `What the server holds is not the transmittal and the review seeded:\n  ${more.join('\n  ')}`,
+    );
+  console.log('  checked  the transmittal, its receipts, the review cycle and its threads');
+
+  const { created, updated, answered, people, granted } = tally;
+  console.log(
+    `\nDone: ${created} created, ${updated} updated, ${answered} answered or resolved, ` +
+      `${people} people created or updated, ${granted} permissions granted. The server holds what ` +
+      'was seeded.',
+  );
   console.log(`The home: ${APP}/#/home`);
   console.log(`The current documents: ${APP}/#/queues/current`);
   const pumpHouse = seeded.get('pump-house-ga');
   console.log(`A superseded revision, with its banner: ${APP}/#/doc/${pumpHouse[0].uid}`);
   console.log(`The current revision of it: ${APP}/#/doc/${pumpHouse.at(-1).uid}`);
+  console.log(`The transmittal ${transmittal.properties['trm:number']}: ${APP}/#/doc/${transmittal.uid}`);
+  console.log(`The review cycle: ${APP}/#/doc/${cycle.uid}`);
 }
 
-/** The server answers, the credentials are accepted, the package's type is installed. */
+/** The server answers, the credentials are accepted, the package's types are installed. */
 async function preflight() {
   try {
     await call('GET', '/me');
@@ -157,8 +230,94 @@ async function preflight() {
         'controlled-documents-demo package first (business-apps/packages/controlled-documents-demo/README.md), ' +
         'then run this again.',
     );
+  for (const name of TYPES_0_2)
+    if ((await find(`/config/types/${name}`)) === null)
+      throw new Precondition(
+        `${SERVER} has version 0.1.0 of the controlled-documents-demo package, with no ${name} type: ` +
+          'upgrade it and nuxeo-agentic-documents to 0.2.0 ' +
+          '(business-apps/packages/controlled-documents-demo/README.md), then run this again.',
+      );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
+  // Before anything is written: a user or a group of the demo's names that is not the seed's.
+  for (const { name } of GROUPS) {
+    const group = await find(`/group/${encodeURIComponent(name)}`);
+    if (group !== null && group.properties?.description !== MARKER)
+      throw new Precondition(
+        `${SERVER} has a group ${name} that the seed did not create, so it is left alone. ` +
+          'Seed another server, or rename that group.',
+      );
+  }
+  for (const { username: id } of USERS) {
+    const user = await find(`/user/${encodeURIComponent(id)}`);
+    if (user !== null && user.properties?.company !== MARKER)
+      throw new Precondition(
+        `${SERVER} has a user ${id} that the seed did not create, so it is left alone. ` +
+          'Seed another server, or rename that user.',
+      );
+  }
+}
+
+/** The group, created with no members, or left as it is when the seed created it before. */
+async function ensureGroup({ name, label }) {
+  const existing = await find(`/group/${encodeURIComponent(name)}`);
+  if (existing !== null) return;
+  await call('POST', '/group', {
+    json: {
+      'entity-type': 'group',
+      groupname: name,
+      grouplabel: label,
+      properties: { groupname: name, grouplabel: label, description: MARKER },
+    },
+  });
+  tally.people++;
+  console.log(`  created  group ${name}`);
+}
+
+/** The user, created or put back to `data.mjs`'s values and the demo password. */
+async function ensureUser({ username: id, firstName, lastName, groups }) {
+  const properties = {
+    username: id,
+    firstName,
+    lastName,
+    email: `${id}@example.com`,
+    company: MARKER,
+    groups,
+    password: demoPassword,
+  };
+  const existing = await find(`/user/${encodeURIComponent(id)}`);
+  if (existing === null) {
+    await call('POST', '/user', { json: { 'entity-type': 'user', id, properties } });
+    console.log(`  created  user ${id}`);
+  } else {
+    await call('PUT', `/user/${encodeURIComponent(id)}`, {
+      json: { 'entity-type': 'user', id, properties },
+    });
+    console.log(`  updated  user ${id}`);
+  }
+  tally.people++;
+}
+
+/** The groups' permissions on the workspace, `data.mjs`'s `GRANTS`, in its local ACL. */
+async function grant(workspace) {
+  const { contextParameters } = await call('GET', `/id/${workspace.uid}`, {
+    headers: { 'enrichers-document': 'acls' },
+  });
+  const local = (contextParameters?.acls ?? []).find((acl) => acl.name === 'local');
+  const held = (local?.aces ?? []).map((ace) => ({
+    group: ace.username?.id ?? ace.username,
+    permission: ace.permission,
+    current: ace.granted === true && (ace.status ?? 'effective') === 'effective',
+  }));
+  for (const { group, permission } of GRANTS) {
+    if (held.some((ace) => ace.group === group && ace.permission === permission && ace.current))
+      continue;
+    await call('POST', '/automation/Document.AddPermission', {
+      json: { input: `doc:${workspace.uid}`, params: { permission, users: [group], acl: 'local' } },
+    });
+    tally.granted++;
+    console.log(`  granted  ${permission} on ${ROOT} to ${group}`);
+  }
 }
 
 /** A folder at `parent/name`: created when it is not there, refused when it is another type. */
@@ -200,9 +359,120 @@ async function ensureRevision(chain, revision, before) {
   return create(HOLDER, revision.name, TYPE, { ...revision.properties, ...controlled });
 }
 
-async function create(parent, name, type, properties) {
+/**
+ * The transmittal, issued by its issuer when it is not there: its documents named by the numbers
+ * of their chains, which the server resolves to each one's current revision. Then each receipt
+ * `data.mjs` acknowledges, answered by its recipient, unless it has been.
+ */
+async function ensureTransmittal(seeded, today) {
+  const path = `${SENT}/${TRANSMITTAL.name}`;
+  let transmittal = await find(`/path${pathOf(path)}`);
+  if (transmittal === null) {
+    transmittal = await create(
+      SENT,
+      TRANSMITTAL.name,
+      'Transmittal',
+      {
+        'dc:title': TRANSMITTAL.title,
+        'dc:description': TRANSMITTAL.message,
+        'trm:documents': TRANSMITTAL.chains.map(
+          (key) => seeded.get(key)[0].properties['docctl:number'],
+        ),
+        'trm:recipients': TRANSMITTAL.recipients,
+        'trm:purpose': TRANSMITTAL.purpose,
+        'trm:dueDate': dayFrom(TRANSMITTAL.dueInDays, today),
+      },
+      as(TRANSMITTAL.issuer),
+    );
+  } else refuseOther(transmittal, path, 'Transmittal');
+  for (const recipient of TRANSMITTAL.acknowledgedBy) {
+    const receipt = (await receiptsOf(transmittal.uid)).find(
+      (entry) => entry.properties['trr:recipient'] === recipient,
+    );
+    if (receipt === undefined || receipt.properties['trr:status'] !== 'awaiting') continue;
+    await call('PUT', `/id/${receipt.uid}`, {
+      json: {
+        'entity-type': 'document',
+        properties: { 'trr:status': 'acknowledged', 'trr:comment': 'Received, thank you.' },
+      },
+      authorization: as(recipient),
+    });
+    tally.answered++;
+    console.log(`  answered ${receipt.path}, as ${recipient}`);
+  }
+  return call('GET', `/id/${transmittal.uid}`);
+}
+
+/**
+ * The review cycle, opened by its opener on the chain's current revision when it is not there.
+ * Then each thread, written by its reviewer when no thread of theirs says it, and resolved by the
+ * opener when `data.mjs` gives a resolution and it is open.
+ */
+async function ensureReview(seeded, today) {
+  const path = `${REVIEWED}/${REVIEW.name}`;
+  let cycle = await find(`/path${pathOf(path)}`);
+  if (cycle === null) {
+    cycle = await create(
+      REVIEWED,
+      REVIEW.name,
+      'ReviewCycle',
+      {
+        'dc:title': `Review of ${revisionLabel(seeded, REVIEW.chain)}`,
+        'rvw:document': seeded.get(REVIEW.chain).at(-1).uid,
+        'rvw:reviewers': REVIEW.reviewers,
+        'rvw:dueDate': dayFrom(REVIEW.dueInDays, today),
+      },
+      as(REVIEW.opener),
+    );
+  } else refuseOther(cycle, path, 'ReviewCycle');
+  for (const thread of REVIEW.threads) {
+    let written = (await threadsOf(cycle.uid)).find(
+      (entry) =>
+        entry.properties['comment:author'] === thread.by &&
+        entry.properties['comment:text'] === thread.text,
+    );
+    if (written === undefined) {
+      if (cycle.properties['rvw:status'] !== 'open') continue;
+      const comment = await call('POST', `/id/${cycle.uid}/@comment`, {
+        json: { 'entity-type': 'comment', parentId: cycle.uid, text: thread.text },
+        authorization: as(thread.by),
+      });
+      tally.created++;
+      console.log(`  wrote    a thread in ${path}, as ${thread.by}`);
+      written = await call('GET', `/id/${comment.id}`);
+    }
+    if (thread.resolution === undefined || written.properties['rvwc:status'] !== 'open') continue;
+    await call('PUT', `/id/${written.uid}`, {
+      json: {
+        'entity-type': 'document',
+        properties: { 'rvwc:status': 'resolved', 'rvwc:resolution': thread.resolution },
+      },
+      authorization: as(REVIEW.opener),
+    });
+    tally.answered++;
+    console.log(`  resolved ${thread.by}'s thread in ${path}, as ${REVIEW.opener}`);
+  }
+  return call('GET', `/id/${cycle.uid}`);
+}
+
+/** The chain's current revision, by number and revision: the review cycle's title names it. */
+function revisionLabel(seeded, key) {
+  const last = seeded.get(key).at(-1);
+  return `${last.properties['docctl:number']} revision ${last.properties['docctl:revision']}`;
+}
+
+async function receiptsOf(transmittalId) {
+  return entriesOf('controlled_documents_transmittal_receipts', [transmittalId]);
+}
+
+async function threadsOf(cycleId) {
+  return entriesOf('controlled_documents_cycle_threads', [cycleId]);
+}
+
+async function create(parent, name, type, properties, authorization) {
   const created = await call('POST', `/path${pathOf(parent)}`, {
     json: { 'entity-type': 'document', name, type, properties },
+    authorization,
   });
   // The server may store a document under another name than the one asked for: Nuxeo cuts a name
   // to `nuxeo.path.segment.maxsize`, 24 characters by default, without a word. Every later step
@@ -300,15 +570,100 @@ async function providerDisagreements(seeded) {
   return problems;
 }
 
+/**
+ * Where the transmittal disagrees with what was issued: numbered in the series for transmittals,
+ * issued by its issuer, each document a revision of its chain, one receipt per recipient and no
+ * other, those acknowledged acknowledged; and the queues that list it, the transmittals' and each
+ * awaiting recipient's own.
+ */
+async function transmittalDisagreements(transmittal, seeded) {
+  const problems = [];
+  const p = transmittal.properties;
+  if (!/^TR-\d+$/.test(p['trm:number'] ?? ''))
+    problems.push(`the transmittal's number is ${p['trm:number']}, not one of series TR`);
+  if (p['trm:issuedBy'] !== TRANSMITTAL.issuer)
+    problems.push(`the transmittal was issued by ${p['trm:issuedBy']}, not ${TRANSMITTAL.issuer}`);
+  // Each as issued: its chain's number, at the revision current then, which a later one may
+  // have superseded since.
+  const items = p['trm:items'] ?? [];
+  TRANSMITTAL.chains.forEach((key, index) => {
+    const number = seeded.get(key)[0].properties['docctl:number'];
+    if (items[index]?.number !== number || !items[index]?.document || !items[index]?.revision)
+      problems.push(`the transmittal's document ${index + 1} is not ${number} at a revision`);
+  });
+  const receipts = await receiptsOf(transmittal.uid);
+  const recipients = receipts.map((receipt) => receipt.properties['trr:recipient']).sort();
+  if (JSON.stringify(recipients) !== JSON.stringify([...TRANSMITTAL.recipients].sort()))
+    problems.push(
+      `the transmittal has receipts for ${recipients.join(', ') || 'no one'}, not ` +
+        TRANSMITTAL.recipients.join(', '),
+    );
+  for (const receipt of receipts) {
+    const recipient = receipt.properties['trr:recipient'];
+    const status = receipt.properties['trr:status'];
+    if (TRANSMITTAL.acknowledgedBy.includes(recipient) && status !== 'acknowledged')
+      problems.push(`${recipient}'s receipt is ${status}, not acknowledged`);
+    if (status === 'awaiting') {
+      const awaiting = await results('controlled_documents_awaiting_me', [recipient]);
+      if (!awaiting.includes(receipt.uid))
+        problems.push(`controlled_documents_awaiting_me does not return ${recipient}'s receipt`);
+    }
+  }
+  if (!(await results('controlled_documents_transmittals')).includes(transmittal.uid))
+    problems.push('controlled_documents_transmittals does not return the transmittal');
+  return problems;
+}
+
+/**
+ * Where the review cycle disagrees with what was opened: on a revision of its chain, by its
+ * opener, each reviewer's thread there, those resolved resolved; and the revision's review-cycle
+ * card's page provider listing it.
+ */
+async function reviewDisagreements(cycle, seeded) {
+  const problems = [];
+  const p = cycle.properties;
+  const revisions = seeded.get(REVIEW.chain).map((doc) => doc.uid);
+  if (!revisions.includes(p['rvw:document']))
+    problems.push(`the review cycle reviews ${p['rvw:document']}, not a revision of ${REVIEW.chain}`);
+  if (p['rvw:openedBy'] !== REVIEW.opener)
+    problems.push(`the review cycle was opened by ${p['rvw:openedBy']}, not ${REVIEW.opener}`);
+  const threads = await threadsOf(cycle.uid);
+  for (const thread of REVIEW.threads) {
+    const written = threads.find(
+      (entry) =>
+        entry.properties['comment:author'] === thread.by &&
+        entry.properties['comment:text'] === thread.text,
+    );
+    if (written === undefined) {
+      problems.push(`the review cycle has no thread by ${thread.by} saying what data.mjs says`);
+      continue;
+    }
+    const status = written.properties['rvwc:status'];
+    if (thread.resolution !== undefined && status !== 'resolved')
+      problems.push(`${thread.by}'s thread is ${status}, not resolved`);
+    if (thread.resolution === undefined && p['rvw:status'] === 'open' && status !== 'open')
+      problems.push(`${thread.by}'s thread is ${status}, not open`);
+  }
+  const cycles = await results('controlled_documents_review_cycles', [p['rvw:document']]);
+  if (!cycles.includes(cycle.uid))
+    problems.push('controlled_documents_review_cycles does not return the review cycle');
+  return problems;
+}
+
 /** Every record a page provider returns, by id, page after page. */
 async function results(pageProvider, queryParams = []) {
+  return (await entriesOf(pageProvider, queryParams)).map((entry) => entry.uid);
+}
+
+/** Every record a page provider returns, page after page. */
+async function entriesOf(pageProvider, queryParams = []) {
   const entries = [];
   for (let index = 0; index < MAX_PAGES; index++) {
     const query = new URLSearchParams({ pageSize: `${PAGE_SIZE}`, currentPageIndex: `${index}` });
     for (const parameter of queryParams) query.append('queryParams', parameter);
     const page = await call('GET', `/search/pp/${pageProvider}/execute?${query}`);
     entries.push(...(page?.entries ?? []));
-    if (page?.isNextPageAvailable !== true) return entries.map((entry) => entry.uid);
+    if (page?.isNextPageAvailable !== true) return entries;
   }
   throw new Error(
     `${pageProvider} still reports another page after ${MAX_PAGES} pages, past which the seed does ` +
@@ -331,17 +686,21 @@ async function find(path) {
   }
 }
 
-/** A JSON call: the parsed answer, or `null` for an empty one. */
-async function call(method, path, { json } = {}) {
+/**
+ * A JSON call, as the administrator unless `authorization` signs it as someone else: the parsed
+ * answer, or `null` for an empty one.
+ */
+async function call(method, path, { json, headers = {}, authorization = AUTHORIZATION } = {}) {
   let response;
   let text;
   try {
     response = await fetch(`${API}${path}`, {
       method,
       headers: {
-        Authorization: AUTHORIZATION,
+        Authorization: authorization,
         Accept: 'application/json',
         properties: '*',
+        ...headers,
         ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       body: json === undefined ? undefined : JSON.stringify(json),

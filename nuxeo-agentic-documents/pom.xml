@@ -27,7 +27,7 @@
       nuxeo-agentic-ui, and a kit's package depends on it by this version. The manifest's
       Bundle-Version repeats it, and BundleTest refuses a build where the two differ.
     -->
-    <documents.package.version>0.1.0</documents.package.version>
+    <documents.package.version>0.2.0</documents.package.version>
   </properties>
 
   <!--
@@ -145,6 +145,24 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
+    </dependency>
+    <!--
+      Nuxeo's comment bundle, for the tests only and for its types only: the review cycles'
+      comments are Nuxeo's own Comment documents, and the tests deploy the bundle's
+      comment-schemas-contrib.xml, nothing else of it. Its comment manager, with relations,
+      notifications and the user manager behind it, is not started; the tests write a comment as
+      it does (Comments.java says how). The bundle itself uses nothing of it.
+    -->
+    <dependency>
+      <groupId>org.nuxeo.ecm.platform</groupId>
+      <artifactId>nuxeo-platform-comment</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <!--
       FeaturesRunner orders a test's methods by reading its class with ASM, and 11.5 brings ASM 9.0,
