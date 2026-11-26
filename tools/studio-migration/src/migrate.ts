@@ -45,6 +45,9 @@
  *
  * Exit codes: 0 every step ran and no check failed; 1 a step refused, or a check failed; 2 the
  * command was wrong, which `main` decides.
+ *
+ * `migrateOne` is the same run, telling how it ended as data as well: a run of several packages
+ * (`batch.ts`) gives each package to it, into a folder of its own, and what it prints is the same.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -52,6 +55,7 @@ import type { CliIo } from './cli';
 import { allowListOf } from './convert';
 import { DECISIONS_FILE, unfilled } from './decisions';
 import type { CheckResult, HarnessResult } from './harness';
+import type { MigrationSummary } from './report';
 
 /** A command of the tool, as `main` runs it: `migrate` is given `main` itself. */
 export type Command = (argv: readonly string[], io: CliIo) => number;
@@ -96,6 +100,26 @@ interface Ran {
   readonly err: string;
   /** The harness's result, when the step is `check` and the harness ran. */
   readonly harness?: HarnessResult;
+  /** The report's summary, when the step is `report` and it printed one. */
+  readonly summary?: MigrationSummary;
+}
+
+/**
+ * How a run ended, as data, for a run of several packages (`batch.ts`): what `migrate` returns is
+ * its `code`, and what it prints is the same whoever reads this.
+ */
+export interface MigrateResult {
+  /** 0 every step ran and no check failed; 1 it was refused, a step refused, or a check failed. */
+  readonly code: number;
+  /**
+   * Where it stopped, when it did: the step's number and title, or 0 and `null` when it was
+   * refused before its first step, having written nothing.
+   */
+  readonly stopped?: { readonly number: number; readonly title: string | null };
+  /** The harness's result, once the checks ran. */
+  readonly harness?: HarnessResult;
+  /** The report's summary, once the report was printed. */
+  readonly summary?: MigrationSummary;
 }
 
 /**
@@ -119,6 +143,11 @@ const OTHER_GAPS: Readonly<Record<number, string>> = {
 };
 
 export function migrate(request: MigrateRequest, io: CliIo, run: Command): number {
+  return migrateOne(request, io, run).code;
+}
+
+/** {@link migrate}, telling how the run ended as data as well as in what it prints. */
+export function migrateOne(request: MigrateRequest, io: CliIo, run: Command): MigrateResult {
   const out = resolve(request.out);
   const conversion = join(out, CONVERSION_DIRECTORY);
 
@@ -133,9 +162,9 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
   };
 
   // Before anything is written: where it goes, and what it is given beside the package.
-  const refused = (problem: string, todo: string): number => {
+  const refused = (problem: string, todo: string): MigrateResult => {
     io.err(`migrate: ${problem}. Nothing was written.\n\nWhat to do: ${todo}\n`);
-    return 1;
+    return { code: 1, stopped: { number: 0, title: null } };
   };
   if (request.out.trim() === '')
     return refused('--out names no directory', 'give --out a new directory.');
@@ -225,6 +254,7 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
 
   io.out(`Migrating ${pkg} into ${out}\n\n`);
   let harness: HarnessResult | undefined;
+  let summary: MigrationSummary | undefined;
   for (const [index, name] of order.entries()) {
     const step = steps.find((candidate) => candidate.name === name) as Step;
     const number = index + 1;
@@ -263,9 +293,15 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
           '',
         ].join('\n'),
       );
-      return 1;
+      return {
+        code: 1,
+        stopped: { number, title: step.title },
+        ...(harness ? { harness } : {}),
+        ...(summary ? { summary } : {}),
+      };
     }
     if (step.name === 'checks') harness = ran.harness;
+    if (step.name === 'report') summary = ran.summary;
     io.out(`${number}. ${step.title}: ${done(step.name, ran, file, conversion)}\n`);
     if (step.name === 'conversion' || step.name === 'decisions') io.out(`${indent(ran.out)}`);
   }
@@ -343,7 +379,7 @@ export function migrate(request: MigrateRequest, io: CliIo, run: Command): numbe
   );
   lines.push('', 'What to do next:', ...todo.map((item, index) => `  ${index + 1}. ${item}`), '');
   io.out(lines.join('\n'));
-  return failed.length > 0 ? 1 : 0;
+  return { code: failed.length > 0 ? 1 : 0, harness: result, ...(summary ? { summary } : {}) };
 }
 
 /**
@@ -364,14 +400,16 @@ function runStep(step: Step, run: Command, readFile: (path: string) => Buffer): 
   let out = '';
   let err = '';
   let harness: HarnessResult | undefined;
+  let summary: MigrationSummary | undefined;
   try {
     const code = run(step.argv, {
       out: (text) => (out += text),
       err: (text) => (err += text),
       readFile,
       checked: (result) => (harness = result),
+      reported: (result) => (summary = result),
     });
-    return { code, out, err, ...(harness ? { harness } : {}) };
+    return { code, out, err, ...(harness ? { harness } : {}), ...(summary ? { summary } : {}) };
   } catch (error) {
     // Something no command refuses on purpose: a defect, which stops the run like a refusal.
     return {
@@ -416,7 +454,7 @@ export function nextOut(out: string): string {
 }
 
 /** A path as a shell reads it: as it is when it holds nothing a shell would split or expand. */
-function shell(path: string): string {
+export function shell(path: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`;
 }
 
