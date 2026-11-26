@@ -14,6 +14,8 @@ export interface BuiltOutput {
 
 type Validate = (request: DeploymentFileRequest) => DeploymentFileAnswer;
 
+/** The kits under `root`, `business-apps/packages/` by default, that the corpus is made from. */
+export declare function kitNames(root?: string): string[];
 export declare function buildServerValidator(): Promise<string>;
 export declare function buildParityCorpus(validate: Validate): string;
 export declare function buildOutputs(validate: Validate): Promise<readonly BuiltOutput[]>;

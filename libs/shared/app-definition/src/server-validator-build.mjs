@@ -219,13 +219,25 @@ export const PARITY = join(
 );
 
 const KITS = join(REPO, 'business-apps', 'packages');
-const KIT_NAMES = [
-  'brand-assets-demo',
-  'contracts-demo',
-  'facilities-demo',
-  'moves-demo',
-  'payers-claims-demo',
-];
+
+/**
+ * Every kit the corpus is made from: each folder of `root` that holds an app definition,
+ * `bundle/agentic-ui-config/app.json`, and the content model its cases are held to,
+ * `content-model.json`, in order. Read from the folders, not kept by hand, so a new kit is not left
+ * out in silence: the corpus as committed is then out of date, which the spec says, and
+ * `kit-lists.spec.ts` names the kit it lacks.
+ */
+export function kitNames(root = KITS) {
+  return readdirSync(root, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        existsSync(join(root, entry.name, 'bundle', 'agentic-ui-config', 'app.json')) &&
+        existsSync(join(root, entry.name, 'content-model.json')),
+    )
+    .map((entry) => entry.name)
+    .sort();
+}
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const optionalJson = (path) => (existsSync(path) ? readJson(path) : null);
@@ -354,7 +366,8 @@ function brokenCases(root, layout, queue, add) {
 function parityCases() {
   const kits = {};
   const cases = [];
-  for (const name of KIT_NAMES) {
+  const names = kitNames();
+  for (const name of names) {
     const root = join(KITS, name, 'bundle', 'agentic-ui-config');
     kits[name] = {
       model: readJson(join(KITS, name, 'content-model.json')),
@@ -367,7 +380,7 @@ function parityCases() {
       add(path, { path, content: readJson(join(root, path)) });
     brokenCases(root, layouts[0], queues[0], add);
   }
-  const kit = KIT_NAMES[0];
+  const kit = names[0];
   const empty = { version: 2, cards: [] };
   cases.push(
     { name: 'home.json, a file no layer holds', kit, request: { path: 'home.json', content: {} } },

@@ -275,6 +275,11 @@ npm run app-package -- business-apps/packages/acme-contracts --platform 0.2.0 --
   heads each schema's section with it, else with the name made readable, `acmeproduct` as
   "Acmeproduct". The pipeline does not ask for it; `kit-schema-labels.spec.ts`, in
   `libs/shared/document-layouts`, fails a kit under `business-apps/packages/` without it.
+- **A new kit under `business-apps/packages/` joins two lists outside its folder.** Run
+  `npm run app-definition:server-validator`, which rebuilds the server validator's parity corpus
+  from every kit folder, and give the kit its rows in `docs/business-apps/administrator-guide.md`:
+  section 1's table of packages, the table of the app registry's groups, and a link to its README.
+  `kit-lists.spec.ts`, in `libs/shared/app-definition`, fails a kit missing from either.
 - **The allow-list is the deployment's.** A package with an operation passes only against the
   allow-list it names, `deployment/build-allow-list.json`, which the write tools never write and
   which CI gives the pipeline. A package with none is refused at write time for every operation:
