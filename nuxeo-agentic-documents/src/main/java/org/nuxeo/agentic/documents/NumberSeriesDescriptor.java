@@ -12,6 +12,7 @@ import org.nuxeo.common.xmap.annotation.XObject;
  *
  * <pre>
  * &lt;series id="DWG" digits="5" revisions="letters" /&gt;
+ * &lt;series id="TR" digits="5" for="transmittals" /&gt;
  * </pre>
  *
  * {@link NumberSeries#of} reads it, and refuses what it cannot number safely.
@@ -27,6 +28,10 @@ public class NumberSeriesDescriptor {
 
     @XNode("@revisions")
     protected String revisions;
+
+    /** {@code documents}, the default, or {@code transmittals}: what the series numbers. */
+    @XNode("@for")
+    protected String use;
 
     @XNode("@enabled")
     protected boolean enabled = true;
@@ -52,6 +57,17 @@ public class NumberSeriesDescriptor {
 
     public String getRevisions() {
         return revisions;
+    }
+
+    /** What the series numbers, trimmed, or {@code null} when not given: controlled documents. */
+    public String getFor() {
+        return use == null || use.isBlank() ? null : use.trim();
+    }
+
+    /** For tests: a series that numbers transmittals. */
+    NumberSeriesDescriptor forTransmittals() {
+        this.use = "transmittals";
+        return this;
     }
 
     public boolean isEnabled() {

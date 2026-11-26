@@ -207,19 +207,27 @@ way.
   `ControlledDocument` facet; a kit registers its number series at `org.nuxeo.agentic.documents`;
   a synchronous listener numbers a document on creation from the platform's sequencer, and a new
   revision that names the one it supersedes takes its number and marks it superseded in the same
-  transaction, with no Automation operation, so decision 3 is not touched. Transmittals, review
-  cycles and export-control marks are not built, nor outside users (decision C). What changes if B
-  goes another way:
+  transaction, with no Automation operation, so decision 3 is not touched. **Since its version
+  0.2.0, transmittals and review cycles,** in the same add-on, with the kit's 0.2.0: a transmittal
+  is issued when it is created, to named users inside the server, with a receipt per recipient
+  that only its recipient answers; a review cycle's threads are Nuxeo's own comments, given the
+  add-on's `ReviewComment` facet, and the cycle closes only with none open, the server's check, and
+  is then recorded on the revision. Two more synchronous listeners, not a route model, and still no
+  operation, so decision 3 is not touched ([the add-on's README](../../nuxeo-agentic-documents/README.md#transmittals-and-review-cycles-listeners-not-a-route-model)
+  says why). Export-control marks are not built, nor outside users (decision C): a transmittal to
+  an outside contractor waits on the portal. What changes if B goes another way:
   - **One large add-on:** the module's bundle moves into that add-on's package as it is, and the
     kit's `package.xml` depends on that package in place of `nuxeo-agentic-documents`. The
-    component a kit's series require, `org.nuxeo.agentic.documents`, the facet and the `docctl`
-    schema do not change, so no kit's files do.
+    component a kit's series require, `org.nuxeo.agentic.documents`, the facets and the schemas
+    (`docctl`, `docrev`, `trm`, `trr`, `rvw`, `rvwc`) do not change, so no kit's files do.
   - **Into `nuxeo-agentic-core`:** the same classes and components in that bundle, the dependency
-    dropped from the kit, and every server then gets the facet, the schema and the listener, which
-    numbers nothing until a type carries the facet and a package registers a series.
+    dropped from the kit, and every server then gets the facets, the schemas and the listeners,
+    which number, issue and review nothing until a type carries a facet and a package registers a
+    series. Every comment written on such a server then costs the review listener a look at its
+    ancestors.
   - **Not affected either way:** layout version 2's banner `link`, which the kit's record page
     uses, is the platform's ([layout-v2.md](layout-v2.md), section 2), and links any record a
-    property names.
+    property names; and its comments card, where a cycle's reviewers write, is the platform's too.
 
 - **B, the records module's server add-on (26 November 2026).** Built against the recommendation,
   "one add-on per domain module": the disposition review is

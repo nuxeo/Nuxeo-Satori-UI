@@ -7,6 +7,8 @@ import static org.nuxeo.agentic.documents.ControlledDocuments.CURRENT;
 import static org.nuxeo.agentic.documents.ControlledDocuments.FACET;
 import static org.nuxeo.agentic.documents.ControlledDocuments.NUMBER;
 import static org.nuxeo.agentic.documents.ControlledDocuments.PROPERTIES;
+import static org.nuxeo.agentic.documents.ControlledDocuments.REVIEW_CYCLES;
+import static org.nuxeo.agentic.documents.ControlledDocuments.REVIEW_SCHEMA;
 import static org.nuxeo.agentic.documents.ControlledDocuments.REVISION;
 import static org.nuxeo.agentic.documents.ControlledDocuments.SCHEMA;
 import static org.nuxeo.agentic.documents.ControlledDocuments.SERIES;
@@ -19,6 +21,7 @@ import static org.nuxeo.agentic.documents.ControlledDocuments.isDocumentId;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 
 import org.apache.logging.log4j.LogManager;
@@ -30,7 +33,6 @@ import org.nuxeo.ecm.core.api.DocumentNotFoundException;
 import org.nuxeo.ecm.core.api.DocumentSecurityException;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoException;
-import org.nuxeo.ecm.core.api.RecoverableClientException;
 import org.nuxeo.ecm.core.api.event.CoreEventConstants;
 import org.nuxeo.ecm.core.api.event.DocumentEventTypes;
 import org.nuxeo.ecm.core.api.facet.VersioningDocument;
@@ -39,7 +41,6 @@ import org.nuxeo.ecm.core.event.Event;
 import org.nuxeo.ecm.core.event.EventListener;
 import org.nuxeo.ecm.core.event.impl.DocumentEventContext;
 import org.nuxeo.runtime.api.Framework;
-import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /**
  * Numbers controlled documents, makes a new revision supersede the one before it, and keeps their
@@ -151,6 +152,10 @@ public class ControlledDocumentListener implements EventListener {
         }
         doc.setPropertyValue(STATUS, CURRENT);
         doc.setPropertyValue(SUPERSEDED_BY, null);
+        if (doc.hasSchema(REVIEW_SCHEMA)) {
+            // No review cycle has closed on a revision that does not exist yet.
+            doc.setPropertyValue(REVIEW_CYCLES, null);
+        }
     }
 
     private void documentCreated(DocumentEventContext context, DocumentModel doc) {
@@ -232,6 +237,9 @@ public class ControlledDocumentListener implements EventListener {
                     : ": that is not a series id";
             throw invalid(otherwise + named);
         }
+        if (series.transmittals()) {
+            throw invalid(otherwise + ": series " + series.id() + " numbers transmittals, not documents");
+        }
         return series;
     }
 
@@ -251,11 +259,31 @@ public class ControlledDocumentListener implements EventListener {
                     + "or removed from one");
         }
         List<String> changed = changes(previous, doc);
-        if (changed.isEmpty() || isSupersession(previous, doc, changed)) {
-            return;
+        if (!changed.isEmpty() && !isSupersession(previous, doc, changed)) {
+            throw invalid(String.join(", ", changed) + (changed.size() == 1 ? " is" : " are")
+                    + " given by the server, and not changed");
         }
-        throw invalid(String.join(", ", changed) + (changed.size() == 1 ? " is" : " are")
-                + " given by the server, and not changed");
+        if (!Stored.changes(previous, doc, REVIEW_SCHEMA, List.of(REVIEW_CYCLES)).isEmpty()
+                && !isReviewRecord(previous, doc, changed)) {
+            throw invalid(REVIEW_CYCLES + " is written by the server when a review cycle closes, and not changed");
+        }
+    }
+
+    /**
+     * The add-on's own record of a closed review cycle, and only that: one entry added after the
+     * ones already there, nothing else of the revision's changed.
+     */
+    private static boolean isReviewRecord(DocumentModel previous, DocumentModel doc, List<String> changed) {
+        if (!ServerWrite.REVIEW_RECORD.marks(doc) || !changed.isEmpty()) {
+            return false;
+        }
+        List<?> before = listOf(Stored.value(previous, REVIEW_SCHEMA, REVIEW_CYCLES));
+        List<?> after = listOf(Stored.value(doc, REVIEW_SCHEMA, REVIEW_CYCLES));
+        return after.size() == before.size() + 1 && after.subList(0, before.size()).equals(before);
+    }
+
+    private static List<?> listOf(Object normal) {
+        return normal instanceof List<?> list ? list : List.of();
     }
 
     /** The add-on's own write, and only that: current to superseded, by a document id. */
@@ -266,74 +294,100 @@ public class ControlledDocumentListener implements EventListener {
                 && SUPERSEDED.equals(value(doc, STATUS)) && isDocumentId(value(doc, SUPERSEDED_BY));
     }
 
+    /**
+     * A document of the add-on's, or a folder holding one, is not copied: a copy of a controlled
+     * document would carry its number, and one of a transmittal, a receipt, a review cycle or one
+     * of its comments would carry who issued, answered, opened or resolved it, and when.
+     */
     private void aboutToCopy(DocumentEventContext context, DocumentModel source) {
         if (source.hasFacet(FACET)) {
             throw invalid("A controlled document is not copied, since the copy would carry its number: "
                     + "create a new document, or a new revision of it");
         }
+        for (String facet : ControlledDocuments.FACETS) {
+            if (source.hasFacet(facet)) {
+                throw invalid("A " + facet + " is not copied, since the copy would carry what the server "
+                        + "recorded on it");
+            }
+        }
         if (source.isFolder() && holdsControlled(context.getCoreSession(), source)) {
-            throw invalid("This folder holds controlled documents, and is not copied, since each copy would "
-                    + "carry its number");
+            throw invalid("This folder holds controlled documents, transmittals or review cycles, and is not "
+                    + "copied, since each copy would carry its number or its record");
         }
     }
 
     /**
-     * Whether anything below a folder is a controlled document, read with a privileged session:
-     * a copy takes the whole tree, documents the user may not read included.
+     * Whether anything below a folder is one of the add-on's documents, read with a privileged
+     * session: a copy takes the whole tree, documents the user may not read included.
      */
     private static boolean holdsControlled(CoreSession session, DocumentModel folder) {
         String id = folder.getId();
         if (!isDocumentId(id)) {
             return true;
         }
-        String query = "SELECT ecm:uuid FROM Document WHERE ecm:ancestorId = '" + id + "' AND ecm:mixinType = '"
-                + FACET + "' AND ecm:isProxy = 0";
+        String facets = String.join("', '", ControlledDocuments.FACETS);
+        String query = "SELECT ecm:uuid FROM Document WHERE ecm:ancestorId = '" + id + "' AND ecm:mixinType IN ('"
+                + facets + "') AND ecm:isProxy = 0";
         return CoreInstance.doPrivileged(session, (CoreSession privileged) -> !privileged.queryProjection(query, 1, 0)
                 .isEmpty());
     }
 
+    /**
+     * A version is restored over a document of the add-on's only when every property the add-on
+     * keeps is the live document's already: a superseded revision is never made current again, a
+     * closed cycle's record never dropped, an answered receipt never made to wait again.
+     */
     private void beforeRestore(DocumentEventContext context, DocumentModel live) {
         Serializable versionId = context.getProperty(VersioningDocument.RESTORED_VERSION_UUID_KEY);
         if (versionId == null || !isDocumentId(versionId.toString())) {
-            if (live.hasFacet(FACET)) {
+            if (ControlledDocuments.FACETS.stream().anyMatch(live::hasFacet)) {
                 throw invalid("The version to restore is not named, so it cannot be checked");
             }
             return;
         }
         DocumentModel version = context.getCoreSession().getDocument(new IdRef(versionId.toString()));
-        if (!live.hasFacet(FACET) && !version.hasFacet(FACET)) {
-            return;
+        List<String> changed = new ArrayList<>();
+        for (Guarded guarded : GUARDED) {
+            boolean liveHas = live.hasFacet(guarded.facet());
+            boolean versionHas = version.hasFacet(guarded.facet());
+            if (liveHas != versionHas) {
+                changed.add("the " + guarded.facet() + " facet");
+            } else if (liveHas) {
+                changed.addAll(Stored.changes(live, version, guarded.schema(), guarded.properties()));
+            }
         }
-        List<String> changed = changes(live, version);
-        if (!changed.isEmpty() || live.hasFacet(FACET) != version.hasFacet(FACET)) {
-            throw conflict("Restoring this version would change " + (changed.isEmpty() ? "the " + FACET + " facet"
-                    : String.join(", ", changed)) + ", which the server gives: it is not restored");
+        if (!changed.isEmpty()) {
+            throw conflict("Restoring this version would change " + String.join(", ", changed.stream()
+                    .distinct()
+                    .toList()) + ", which the server gives: it is not restored");
         }
     }
+
+    /** A facet of the add-on's, and one of its schemas' properties the server keeps. */
+    private record Guarded(String facet, String schema, List<String> properties) {
+    }
+
+    private static final List<Guarded> GUARDED = List.of(new Guarded(FACET, SCHEMA, PROPERTIES),
+            new Guarded(FACET, REVIEW_SCHEMA, List.of(REVIEW_CYCLES)),
+            new Guarded(ControlledDocuments.TRANSMITTAL_FACET, ControlledDocuments.TRANSMITTAL_SCHEMA,
+                    ControlledDocuments.TRANSMITTAL_PROPERTIES),
+            new Guarded(ControlledDocuments.RECEIPT_FACET, ControlledDocuments.RECEIPT_SCHEMA,
+                    ControlledDocuments.RECEIPT_PROPERTIES),
+            new Guarded(ControlledDocuments.CYCLE_FACET, ControlledDocuments.CYCLE_SCHEMA,
+                    ControlledDocuments.CYCLE_PROPERTIES),
+            new Guarded(ControlledDocuments.COMMENT_FACET, ControlledDocuments.COMMENT_SCHEMA,
+                    ControlledDocuments.COMMENT_PROPERTIES));
 
     // ------------------------------------------------------------------ helpers
 
-    /**
-     * The properties whose stored value differs from one document to the other, in their order:
-     * compared as stored, not trimmed, so that `" current "` is a change from `"current"`, and a
-     * query for the value would no longer find it. Only an empty text and none count as the same.
-     */
+    /** The six properties whose stored value differs from one document to the other ({@link Stored}). */
     private static List<String> changes(DocumentModel before, DocumentModel after) {
-        return PROPERTIES.stream().filter(p -> !Objects.equals(stored(before, p), stored(after, p))).toList();
-    }
-
-    /** A property of the schema as stored, {@code null} for an empty text or a document without the schema. */
-    private static Serializable stored(DocumentModel doc, String xpath) {
-        if (!doc.hasSchema(SCHEMA)) {
-            return null;
-        }
-        Serializable value = doc.getPropertyValue(xpath);
-        return value instanceof String text && text.isEmpty() ? null : value;
+        return Stored.changes(before, after, SCHEMA, PROPERTIES);
     }
 
     /** A property of the schema, trimmed, {@code null} when empty or when the document lacks the schema. */
     private static String value(DocumentModel doc, String xpath) {
-        return doc.hasSchema(SCHEMA) ? ControlledDocuments.text(doc, xpath) : null;
+        return Stored.text(doc, SCHEMA, xpath);
     }
 
     private static ControlledDocumentService service() {
@@ -345,46 +399,19 @@ public class ControlledDocumentListener implements EventListener {
     }
 
     private static NuxeoException invalid(String message) {
-        return new Refusal(message, 400);
+        return Refusal.invalid(message);
     }
 
     private static NuxeoException conflict(String message) {
-        return new Refusal(message, 409);
+        return Refusal.conflict(message);
     }
 
     private static NuxeoException forbidden(String message) {
-        return new Refusal(message, 403);
+        return Refusal.forbidden(message);
     }
 
-    /**
-     * A refusal the user is told of: the event service logs a {@code RecoverableClientException}
-     * at {@code INFO}, where it logs any other a synchronous listener throws at {@code ERROR}, with
-     * its stack, so a user who may create or write could otherwise fill the server's log. The
-     * status, 400, 403 or 409, is the one the REST API answers with. An unforeseen failure stays a
-     * plain {@link NuxeoException}, logged as the error it is.
-     */
-    static final class Refusal extends RecoverableClientException {
-
-        private static final long serialVersionUID = 1L;
-
-        Refusal(String message, int status) {
-            super(message, message, null);
-            this.statusCode = status;
-        }
-    }
-
-    /**
-     * Mark the transaction for rollback, and have the event service throw the refusal on to the
-     * caller rather than log it: the platform swallows a synchronous listener's exception
-     * otherwise.
-     */
     private static NuxeoException refuse(Event event, DocumentEventContext context, DocumentModel doc,
             NuxeoException refusal) {
-        TransactionHelper.setTransactionRollbackOnly();
-        event.markBubbleException();
-        String user = context.getPrincipal() == null ? "?" : context.getPrincipal().getName();
-        log.info("Controlled documents: {} of {} ({}) by {} refused: {}", event.getName(), doc.getId(),
-                doc.getType(), user, refusal.getMessage());
-        return refusal;
+        return Refusal.refuse(log, "Controlled documents", event, context, doc, refusal);
     }
 }

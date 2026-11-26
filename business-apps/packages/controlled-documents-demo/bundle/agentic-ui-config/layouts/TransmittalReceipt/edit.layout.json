@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "answer",
+      "labelKey": "controlled-documents.card.answer",
+      "fields": [
+        {
+          "field": "trr:status",
+          "labelKey": "controlled-documents.field.answer",
+          "widget": "vocabulary",
+          "parameters": { "directory": "ControlledDocumentsAnswer" },
+          "required": true
+        },
+        {
+          "field": "trr:comment",
+          "labelKey": "controlled-documents.field.comment",
+          "widget": "long-text",
+          "required": {
+            "type": "app.rules.fieldIn",
+            "parameters": [{ "field": "trr:status" }, "returned"]
+          }
+        }
+      ]
+    }
+  ]
+}

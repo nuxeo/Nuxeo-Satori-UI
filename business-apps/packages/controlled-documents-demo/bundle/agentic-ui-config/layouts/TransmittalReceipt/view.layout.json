@@ -1,0 +1,82 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "banners": [
+    {
+      "id": "awaiting",
+      "tone": "info",
+      "labelKey": "controlled-documents.banner.awaiting",
+      "visibleWhen": {
+        "type": "app.rules.fieldIn",
+        "parameters": [{ "field": "trr:status" }, "awaiting"]
+      },
+      "link": { "field": "trr:transmittal" }
+    }
+  ],
+  "cards": [
+    {
+      "id": "receipt",
+      "labelKey": "controlled-documents.card.receipt",
+      "fields": [
+        {
+          "field": "trr:transmittal",
+          "labelKey": "controlled-documents.field.transmittal",
+          "widget": "document-link"
+        },
+        { "field": "trr:number", "labelKey": "controlled-documents.field.transmittalNumber" },
+        {
+          "field": "trr:recipient",
+          "labelKey": "controlled-documents.field.recipient",
+          "widget": "user"
+        },
+        {
+          "field": "trr:purpose",
+          "labelKey": "controlled-documents.field.transmittalPurpose",
+          "widget": "vocabulary",
+          "parameters": { "directory": "ControlledDocumentsPurpose" }
+        },
+        {
+          "field": "trr:dueDate",
+          "labelKey": "controlled-documents.field.dueDate",
+          "widget": "date"
+        },
+        {
+          "field": "trr:issuedBy",
+          "labelKey": "controlled-documents.field.issuedBy",
+          "widget": "user"
+        }
+      ]
+    },
+    {
+      "id": "answer",
+      "labelKey": "controlled-documents.card.answer",
+      "fields": [
+        {
+          "field": "trr:status",
+          "labelKey": "controlled-documents.field.answer",
+          "widget": "status-badge",
+          "parameters": {
+            "tones": { "awaiting": "info", "acknowledged": "positive", "returned": "warning" }
+          }
+        },
+        {
+          "field": "trr:comment",
+          "labelKey": "controlled-documents.field.comment",
+          "widget": "long-text"
+        },
+        {
+          "field": "trr:respondedAt",
+          "labelKey": "controlled-documents.field.respondedAt",
+          "widget": "date"
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "labelKey": "controlled-documents.card.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

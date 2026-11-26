@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- The TransmittalReceipt facet's schema, prefix trr: one recipient's receipt of a transmittal,
+     which the add-on creates when the transmittal is issued. Its recipient writes status and
+     comment, once; the server writes the rest, and refuses any other change. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/transmittal_receipt"
+           targetNamespace="http://www.nuxeo.org/ecm/project/schemas/transmittal_receipt">
+
+  <!-- The transmittal's id, and what it said when issued. -->
+  <xs:element name="transmittal" type="xs:string" />
+  <xs:element name="number" type="xs:string" />
+  <xs:element name="recipient" type="xs:string" />
+  <xs:element name="purpose" type="xs:string" />
+  <xs:element name="dueDate" type="xs:date" />
+  <xs:element name="issuedBy" type="xs:string" />
+  <!-- awaiting, then the recipient's acknowledged or returned. -->
+  <xs:element name="status" type="xs:string" />
+  <!-- The recipient's comment, with their answer; required with a return. -->
+  <xs:element name="comment" type="xs:string" />
+  <!-- When the server took the answer. -->
+  <xs:element name="respondedAt" type="xs:dateTime" />
+
+</xs:schema>

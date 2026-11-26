@@ -3,6 +3,8 @@
   "version": 2,
   "entries": [
     { "id": "home", "labelKey": "controlled-documents.nav.home", "icon": "home", "page": "home" },
-    { "id": "current", "icon": "list", "queue": "current" }
+    { "id": "current", "icon": "list", "queue": "current" },
+    { "id": "awaiting-me", "icon": "inbox", "queue": "awaiting-me" },
+    { "id": "transmittals", "icon": "send", "queue": "transmittals" }
   ]
 }

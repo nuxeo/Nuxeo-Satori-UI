@@ -1,19 +1,24 @@
-# nuxeo-agentic-documents: numbering, revisions and supersession, on the server
+# nuxeo-agentic-documents: numbering, supersession, transmittals and review cycles, on the server
 
 The document control module's server add-on ([development plan](../docs/business-apps/development-plan.md),
-phase 8, "The document control add-on"), version 0.1.0: its first slice, numbering, revisions and
-supersession. A Maven module beside `nuxeo-agentic-core`, with its own Marketplace package,
+phase 8, "The document control add-on"), version 0.2.0: numbering, revisions and supersession, its
+first slice, 0.1.0; and, its second, transmittals, and review cycles with comment resolution. A
+Maven module beside `nuxeo-agentic-core`, with its own Marketplace package,
 `nuxeo-agentic-documents`. The [controlled documents kit](../business-apps/packages/controlled-documents-demo/README.md)
 is built on it.
 
 **Built against an open decision.** Decision B, the packaging of the server tier, is open; this
 follows its recommendation, "`nuxeo-agentic-core` for the runtime essentials; one add-on per domain
 module" ([decisions.md](../docs/business-apps/decisions.md), and its note). Nothing of it went into
-`nuxeo-agentic-core`.
+`nuxeo-agentic-core`. Decision C, outside users, is phase 8's portal and is not built here: a
+transmittal goes to named people inside the server.
 
-**Needs its security review before anyone relies on it** (below, "For the security review"). It
-is not installed anywhere: it was built and tested on a Nuxeo runtime in the build's JVM, and
-compiled against the local server's own jars, read only.
+**Its security review is deferred until the app is finished,** as every security review is
+([security-reviews.md](../docs/business-apps/security-reviews.md)): nothing here is to be relied on
+outside a development or demonstration server until it is done. "For the security review", below,
+is what that review is to check. Version 0.1.0 is installed on the local Docker Nuxeo; 0.2.0 is
+installed nowhere: it was built and tested on a Nuxeo runtime in the build's JVM, and checked
+against the local server's own jars, read only.
 
 ## The short version
 
@@ -35,6 +40,28 @@ compiled against the local server's own jars, read only.
   holding one, is not copied; and a version is not restored over one when that would change them.
 - **It numbers nothing on its own.** A package registers a series and gives a type the facet; the
   controlled documents kit registers `DWG` and `SPEC` for its `EngineeringDocument`.
+- **A transmittal lists controlled documents at their revisions, sent to named people** for review,
+  for construction or for information, by a due day. It is issued when it is created: the issuer
+  names each document by its number or its id, the server writes back the current revision's id,
+  and keeps its number, revision and title as they were; numbers it in the series registered for
+  transmittals, `TR-00012`; and creates, as the issuer, a **receipt** beside it for each recipient,
+  `awaiting`. Nothing of the transmittal changes afterwards.
+- **Each recipient answers their receipt once,** `acknowledged`, or `returned` with a comment, by
+  saving it, and the server writes when. Anyone else's answer is refused, an administrator's
+  included; so is a second one, and any other change to the receipt. The receipt is the server's
+  record of who answered what, and when.
+- **A review cycle reviews one revision, in Nuxeo's own comments.** Its opener, who must be able to
+  write the revision, names the reviewers. Each comment a reviewer, or the opener, writes on the
+  cycle is given the add-on's `ReviewComment` facet, and a thread's first comment is `open`; anyone
+  else's comment is refused. The opener resolves each thread, or opens it again, and the server
+  writes who and when.
+- **A cycle closes only with no thread open,** at its opener's asking. The check is the server's:
+  a close is refused while one thread is open, and a comment and a close cannot cross, through a
+  fence in the key/value store. The closed cycle is added to the revision's `docrev:cycles`, as
+  the opener. Nothing of a closed cycle, or its comments, changes afterwards.
+- **No Automation operation, and no button.** Each is reached by creating or saving a document,
+  through the REST API's document endpoints or Nuxeo's comment endpoint, which every client uses
+  (below, "Transmittals and review cycles: listeners, not a route model").
 
 ## The route: a listener, on creation
 
@@ -160,17 +187,202 @@ series id's form, and an id only once it is checked to be one.
 
 ### Administrators
 
-**Not exempt** from any of the refusals above: no check reads the user's groups, and
-`GuardTest.noSaveChangesAControlledPropertyNotEvenAnAdministrators` saves as one. Where the
-platform makes an exemption unavoidable:
+**Not exempt** from any of the refusals above, nor from those of transmittals and review cycles
+below: no check reads the user's groups but the one for deleting, and
+`GuardTest.noSaveChangesAControlledPropertyNotEvenAnAdministrators`,
+`TransmittalTest.anAcknowledgementBySomeoneNotARecipientIsRefused` and
+`ReviewCycleTest.onlyTheOpenerResolvesAndTheServerWritesWho` act as one. An administrator may
+delete or trash a transmittal, a receipt, a review cycle, or a closed cycle's comment, which no one
+else may, and the add-on logs it at `WARN`; a privileged session that server code opens on a user's
+behalf, as Nuxeo's comment manager opens one to delete its author's comment, is the platform's
+administrator and is not taken for one. Where the platform makes an exemption unavoidable:
 
-- **An administrator controls the server's configuration:** they can disable the listener in the
+- **An administrator controls the server's configuration:** they can disable the listeners in the
   administration screens, install a package that removes a series, reset a sequence, or delete a
-  claim, which no add-on can refuse.
+  claim or a fence, which no add-on can refuse.
 - **`CoreSession.importDocuments`, administrators only,** writes documents as they are given, with
-  no `aboutToCreate`: an import carries its numbers unchecked.
+  no `aboutToCreate`: an import carries its numbers, receipts and resolutions unchecked.
 - **Server code with an unrestricted session** is not held to the user's permissions, so a chain
-  run unrestricted may supersede what its caller could not write.
+  run unrestricted may supersede what its caller could not write. Its answers and resolutions are
+  held to who it acts for, and refused when it acts for no one the receipt or the cycle names.
+
+## Transmittals
+
+A kit's type carries the `Transmittal` facet, schema `transmittal`, prefix `trm`, and another its
+receipts, `TransmittalReceipt`, `transmittal_receipt`, `trr`. Neither need be a folder: the
+controlled documents kit's are not, so each opens as a record page. Exactly one series is
+registered `for="transmittals"`, below, and exactly one type carries the receipt's facet.
+
+**Issued on creation.** A transmittal is a record of what was sent, so it is complete when it is
+created, as a revision is, and is never a draft that changes later:
+
+| Property                       | Written by     | What it is                                                                                                                                                               |
+| ------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dc:title`                     | The issuer     | The subject, 1 to 200 characters                                                                                                                                         |
+| `trm:documents`                | Issuer, server | 1 to 100 documents, each by its number, `DWG-00042`, or its id. The server writes back each one's id: a number names its current revision, an id must be the current one |
+| `trm:items`                    | The server     | Each document as it was when issued: `document`, its id, `number`, `revision` and `title`                                                                                |
+| `trm:recipients`               | The issuer     | 1 to 50 user names, each once                                                                                                                                            |
+| `trm:purpose`                  | The issuer     | `review`, `construction` or `information`                                                                                                                                |
+| `trm:dueDate`                  | The issuer     | A day, today or later; a day before today in UTC is let through, for a zone behind UTC                                                                                   |
+| `trm:number`                   | The server     | The next number of the series for transmittals, taken last, once nothing else can refuse it, so a refused transmittal spends none                                        |
+| `trm:issuedBy`, `trm:issuedAt` | The server     | Who created it, and when                                                                                                                                                 |
+| `dc:description`               | The issuer     | A message, optional                                                                                                                                                      |
+
+- **What the issuer sends is what they may read.** A number is looked up with the issuer's own
+  session: a revision they may not read is not found, 400, the same answer as no revision; an id
+  they may not read is refused, 403, as the platform answers a read of it. A superseded revision, a
+  revision in the trash, and a document that is not a live controlled document are refused.
+- **Whatever the issuer writes in the server's properties is replaced,** as for a revision.
+- **One receipt per recipient, beside it,** created in `documentCreated` as the issuer, held to
+  their permissions as anything they create is, and marked as the add-on's own write
+  (`ServerWrite.RECEIPT`, an object a client cannot put in a document's context data). A receipt
+  a client creates is refused, 403. Its name is the transmittal's number and the recipient's place,
+  `tr-00012-1`, short of Nuxeo's 24-character limit. It carries the transmittal's id, number,
+  purpose, due day and issuer, so that a queue lists it with no lookup, its recipient, and its
+  status, `awaiting`.
+
+**Answered once, by its recipient.** A recipient saves their receipt with `trr:status`
+`acknowledged`, or `returned` and `trr:comment`; the server writes `trr:respondedAt`. Through the
+REST API's `PUT /api/v1/id/{receipt}`, which the kit's Edit form sends.
+
+- **Only the recipient,** by the name the server reads as acting: the user signed in, or the one a
+  privileged session acts for. Anyone else is refused, 403, whatever their permissions, the issuer
+  and an administrator included. The recipient needs `WriteProperties` on the receipt, which the
+  receipt inherits from where it is: one who may not write it is refused by the platform first.
+- **Once.** An answered receipt is not answered again, 409. Two answers at once, from two windows,
+  would each find it awaiting: each **claims** it first, key `receipt.<id>`, in the store the
+  supersession claims are in, with the same release if the transaction does not commit, and only
+  one gets through (`WorkflowConcurrencyTest.oneReceiptAnsweredManyTimesAtOnceTakesOneAnswer`).
+  Writing back the answer already stored, the same status and comment, changes nothing and is no
+  second answer.
+- **Nothing else changes, before or after:** any other `trr:` property, and the title, are the
+  server's, 400; a comment is 4000 characters at most.
+- **Many recipients at once lose nothing.** Each answers their own document, so no answer is
+  written over another's (`manyRecipientsAnsweringAtOnceAreEachKept`, 16 at once). The transmittal
+  itself holds no count of answers, which two answers at once could each write from a stale copy:
+  the receipts, listed by a page provider, are the record.
+
+**Kept.** A transmittal and its receipts are not deleted or trashed but by an administrator, 403,
+nor copied, 400, nor restored from a version that would change them, 409. Nor is a document that
+holds one, or a review cycle or one of its comments, a folder or not, since the repository lets a
+document be created below any other: it deletes and trashes a document's children with no event of
+their own, so a privileged query below any document being deleted or trashed that has children
+finds what it holds, 403 for anyone but an administrator. A proxy or a version may be removed: it
+is not the record.
+
+## Review cycles
+
+A kit's type carries the `ReviewCycle` facet, schema `review_cycle`, prefix `rvw`. Reviewers write
+in **Nuxeo's own comments**, on the cycle: the platform's comment endpoint
+(`POST /api/v1/id/{cycle}/@comment`), its Comments panel, and layout version 2's comments card all
+write them, through Nuxeo's comment manager. The add-on gives each comment written in a cycle its
+`ReviewComment` facet, schema `review_comment`, prefix `rvwc`, on the comment itself: Nuxeo's
+`Comment` type is not changed, and a comment anywhere else is left as Nuxeo writes it.
+
+| Property                                       | Written by     | What it is                                                                                                                         |
+| ---------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `rvw:document`                                 | The opener     | The id of the revision reviewed: a live controlled document, current, that the opener may write                                    |
+| `rvw:reviewers`                                | The opener     | 1 to 50 user names                                                                                                                 |
+| `rvw:dueDate`                                  | The opener     | Optional; today or later                                                                                                           |
+| `rvw:number`, `rvw:revision`                   | The server     | The revision's, when the cycle opened                                                                                              |
+| `rvw:status`                                   | Server, opener | `open`; the opener asks for `closed`                                                                                               |
+| `rvw:openedBy`, `rvw:openedAt`                 | The server     | Who opened it, and when                                                                                                            |
+| `rvw:closedBy`, `rvw:closedAt`, `rvw:comments` | The server     | Who closed it, when, and how many threads it had                                                                                   |
+| `rvwc:cycle`                                   | The server     | On each comment in the cycle, a reply's included: the cycle's id                                                                   |
+| `rvwc:status`                                  | Server, opener | On a thread's first comment, `open`, then `resolved` or `open` again by the opener; empty on a reply                               |
+| `rvwc:resolution`                              | The opener     | A note with a resolution, 2000 characters at most                                                                                  |
+| `rvwc:resolvedBy`, `rvwc:resolvedAt`           | The server     | Who resolved it, and when; empty while it is open                                                                                  |
+| `docrev:cycles`                                | The server     | On the revision, the `ControlledDocument` facet's second schema: each closed cycle, `cycle`, `closedBy`, `closedAt` and `comments` |
+
+- **Opened by someone who may write the revision,** 403 otherwise, since the closed cycle is
+  recorded on it as them. A superseded revision is not reviewed, 409. **One cycle at a time** on a
+  revision: each new one claims it, key `review.<revision id>`, and a cycle open already, found by
+  a privileged query, refuses it, 409. The claim is released when the cycle's close commits, so a
+  revision can be reviewed again.
+- **A comment in a cycle** is a comment written below the cycle: in its `Comments` folder, where
+  Nuxeo's comment manager writes one, or below a comment there, where it writes a reply. Where it
+  is, read with a privileged session from its folders, says so, never what the comment says of
+  itself: a comment written as a plain document, past the comment manager, is held to the same
+  checks, and one elsewhere whose `comment:parentId` or `comment:ancestorIds`, which Nuxeo's
+  comment queries read, names the cycle or one of its comments is refused, 400, when written or
+  when changed. Only the cycle's reviewers and its opener write one, 403 otherwise, an
+  administrator included; and none while the cycle is closed, or closing, 409. The server writes
+  `comment:author`, who acts, and `comment:parentId` and `comment:ancestorIds`, where it is, as the
+  comment manager would; afterwards none of the three changes, 400, and only its author changes what
+  a comment says, 403. A comment on a proxy or a version of a cycle is refused, 400.
+- **Nothing is moved into a cycle,** where it would be a comment never written in it, **nor
+  anything out of one,** a comment or its `Comments` folder, 403, but by an administrator. A rename
+  in place moves nothing, and is let through: the trash renames a document so before it trashes it,
+  and the trash's own rules then apply.
+- **Resolved by the opener alone,** 403 otherwise, by a save of the thread's first comment,
+  `PUT /api/v1/id/{comment}` with `rvwc:status` and `rvwc:resolution`. A reply is not resolved, 400. Any other `rvwc:` property is the server's, 400.
+- **Closed by the opener alone,** 403 otherwise, by a save of the cycle with `rvw:status` `closed`,
+  which the kit's Edit form sends: nothing else of the cycle changes, 400. **Refused, 409, while any
+  thread is open,** counted by a privileged query of the cycle's comments as the repository holds
+  them, so a comment the opener may not read counts too, and one in the trash does not, as the
+  cycle's page does not list it. Closed, the server writes who, when and how
+  many threads, and adds the cycle to the revision's `docrev:cycles`, as the opener, marked as its
+  own write (`ServerWrite.REVIEW_RECORD`); the revision's guard lets that one entry, added after the
+  others, through, and refuses every other change to `docrev:cycles`, an administrator's included.
+- **Nothing of a closed cycle changes:** the cycle, 409; its comments, edited, resolved, opened
+  again or deleted, 409, by anyone but an administrator deleting one.
+- **A thread is resolved, not deleted:** while the cycle is open, only a comment's author deletes
+  or trashes it, 403 for anyone else, the opener included; and not a comment with replies, which
+  would go with it, nor the cycle's `Comments` folder, but by an administrator.
+- **Kept,** as a transmittal is: not deleted or trashed but by an administrator, not copied, not
+  restored from a version that would change it. An administrator deleting an open cycle frees its
+  revision for another once the deletion commits; trashing one does not, since it may come back
+  from the trash open.
+
+### A comment and a close cannot cross
+
+The repository lets two transactions write at once, each from what it read: a close that counts no
+open thread could commit while a reviewer's comment, which found the cycle open, commits after it,
+and leave a closed cycle with an open thread. `WorkflowConcurrencyTest` shows it: with the fence
+below taken out, its first round already ended closed with an open comment, in two runs of two. So
+each cycle has a **fence** in the key/value store, key `cycle.<id>`, changed by compare-and-set
+only:
+
+- **A comment written in the cycle, and any change to one,** enters it, adding one to the count of
+  writers, and leaves it when its transaction ends, whichever way. It cannot enter while the cycle
+  is closing or closed, 409. It enters before it reads the cycle's status, so that it reads it
+  after any close it could cross has committed.
+- **A close takes it only from nothing:** no writer in, no other close, 409 otherwise, "close it
+  again". Taken, no comment is written until the close's transaction ends; committed, the fence
+  says `closed` for the claims' time to live, a day, so that a transaction that read the cycle
+  open before the close committed finds it so; after that, the cycle's own status refuses. Not
+  committed, it is open again at once.
+- **No way out, no way in:** the release is registered before the fence is entered or taken, as
+  for a claim, and a transaction where it cannot be registered is refused, 409.
+- **A server stopped mid-transaction** leaves its count, or its close, until the time to live
+  expires: that cycle cannot close, or take a comment, until then.
+
+## Transmittals and review cycles: listeners, not a route model
+
+A route model, as the Payers kit's claims review is, would fit the shape: a task per recipient, or
+per reviewer, with buttons, which Nuxeo's task service already refuses to anyone not an actor. The
+add-on uses two synchronous listeners instead, `TransmittalListener` and `ReviewCycleListener`, as
+it does for numbering, and as the records add-on does for its disposition review. Why:
+
+- **The record is the document.** Who acknowledged what, and when, is on each receipt; which
+  threads are open, on each comment; a closed cycle, on the revision. A queue of transmittals
+  awaiting a person is a page provider over receipts, `$currentUser` given by the REST API, and a
+  record page shows each one's fields. A route model keeps them in its nodes' task information and
+  in the audit, which no layout reads.
+- **No operation for a button.** A route model's steps run chains, which an app could reach through
+  Nuxeo's Automation endpoint too; the add-on would then add operations to the allow-list, decision
+  3's, or guard each chain. Creating and saving documents need neither: the platform's permissions
+  hold them, and the listeners check the rest, whichever client sends the change.
+- **The checks are the server's, in one transaction.** Each refusal marks the transaction for
+  rollback, as numbering does, so nothing a refused answer, resolution or close wrote stays. The
+  cycle's close check reads every comment as the repository holds it, which a task's completion
+  would not.
+- **Tested in the Nuxeo test framework, here,** with the platform's own transactions, key/value
+  store and permissions, as the rest of the add-on is: a route model's engine is not in the tests'
+  runtime, and would bring the routing, task and Automation services with it.
+- **What a route model would have given, and this does not:** Nuxeo's task notifications by mail,
+  a task's due day escalation, and the app's Tasks page. A receipt's due day is shown, and listed
+  first in the queue, but nothing reminds anyone.
 
 ## The series
 
@@ -180,20 +392,38 @@ Contributed to `org.nuxeo.agentic.documents`, point `series`, by a component tha
 ```xml
 <series id="DWG" digits="5" revisions="letters" />
 <series id="SPEC" digits="4" revisions="numbers" />
+<series id="TR" digits="5" for="transmittals" />
 ```
 
 - `id`: capitals and digits, in parts joined by single hyphens, 32 characters at most.
 - `digits`: 1 to 12, the least a number's value is written with; 5 when not given.
 - `revisions`: `letters` (A, B ... Z, AA, AB ...), the default, or `numbers` (1, 2, 3 ...).
+- `for`: `documents`, the default, or `transmittals`. Exactly one series in force numbers
+  transmittals, or a transmittal is refused, 400; a document is never numbered in it, 400.
 - A series with a mistake is left out, logged as an error, so a document in it is refused. A later
   series with the same id replaces it whole, a broken one leaves none in force, and
   `enabled="false"` removes it (`SeriesRegistryTest`).
 
 ## What it does not cover yet
 
-- **The rest of the document control add-on** the plan lists: transmittals, review cycles with
-  comment resolution, and export-control marks enforced when sharing. And outside users, who will
-  receive transmittals and comment in the portal, wait on decision C.
+- **The rest of the document control add-on** the plan lists: export-control marks enforced when
+  sharing. And outside users, who will receive transmittals and comment in the portal, wait on
+  decision C: here a transmittal goes to named people inside the server.
+- **Whether a recipient or a reviewer exists.** A name is held to a user name's form, and is not
+  `system`; the server does not look it up, so a transmittal to a name no one holds, or to one
+  written in another case than the user directory's, waits on that receipt for ever. Nor does it
+  check that a recipient may read what is sent: who may read the transmittal, its receipts and its
+  documents is the folders' permissions.
+- **Withdrawing a transmittal, or adding a recipient.** It is not changed once issued; a
+  correction is a new transmittal. An administrator may delete one.
+- **Reopening a closed cycle, or handing one over.** Only its opener resolves and closes it: one
+  who leaves leaves the cycle open, which an administrator can only delete.
+- **A Resolve action in the app.** The kit's cycle page lists the threads with their state; a
+  thread is resolved through the comment's document, over the REST API or its own page's Edit form.
+- **Reminders.** Nothing tells a recipient or a reviewer that something waits, or is late.
+- **A folder's deletion by an administrator, or a bulk action's,** takes what it holds with it,
+  unchecked: the guard reads the folder deleted or trashed, and the repository's own bulk paths
+  may reach its contents without an event.
 - **A default series per type.** The creator names the series; a create form must offer it.
 - **Deleting.** A revision deleted for good leaves its neighbours' links naming an id that is gone,
   which the record page shows as "Unavailable". Trashing is allowed, and a trashed revision is not
@@ -231,6 +461,19 @@ written):
 - **The synchronization:** `TransactionHelper.registerSynchronization(jakarta.transaction.Synchronization)`
   is found by the add-on's lookup on those jars, and `jakarta.transaction.Status.STATUS_COMMITTED`
   is 3.
+- **Nuxeo's comment manager,** `TreeCommentManager` in `nuxeo-platform-comment-2025.10.18.jar`, by
+  `javap -c` on 26 November 2026, the same as 11.5.154's: `createComment` checks that the user may
+  read the document commented on, then, in a privileged session opened on the user's behalf
+  (`CoreInstance.doPrivileged`, so `NuxeoPrincipal.getActingUser()` is the user), creates a
+  `Comment` document in the document's `Comments` folder, a `CommentRoot` it creates the first
+  time, or below the comment a reply answers, with `comment:author`, `comment:parentId` and
+  `comment:ancestorIds` set before `createDocument`; then saves the document commented on with the
+  comment's text in its related text, adding `HasRelatedText`. The comment manager sets no
+  permission on a comment, which inherits its folder's; the platform's content template gives a
+  `CommentRoot` `AddChildren` and `RemoveChildren` for `members`
+  (`comment-defaultPermissions-contrib.xml`), so whoever may read a cycle may add a document to its
+  `Comments` folder, past the comment manager: the add-on reads where a comment is, not what it says.
+  `getActingUser()` and `getOriginatingUser()` are on `NuxeoPrincipal` in both versions.
 
 ## Building and testing it
 
@@ -240,9 +483,18 @@ From the repository's root, with JDK 21 and Maven:
 mvn -pl nuxeo-agentic-documents -am verify
 ```
 
-It runs the module's 45 tests and writes the bundle and the Marketplace package,
-`nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.1.0.zip`. `build-marketplace.yml` builds
+It runs the module's 88 tests and writes the bundle and the Marketplace package,
+`nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.2.0.zip`. `build-marketplace.yml` builds
 and tests it on every pull request it runs for, without uploading or publishing it.
+
+**Nuxeo's comments in the tests.** The comment manager needs relations, notifications and the user
+manager, which the tests do not start. So the tests deploy Nuxeo's own `Comment` and `CommentRoot`
+types, from `nuxeo-platform-comment`'s `comment-schemas-contrib.xml`, its one test dependency
+with nothing of its own dependencies, and `Comments.java` writes a comment as the manager does,
+above: in a privileged session on the user's behalf, in the same folder, with the same properties,
+then the related text saved on the document. The steps file
+(`scripts/beta-harness/steps/controlled-documents-transmittals.mjs`) writes them through the
+server's own comment endpoint.
 
 **On the Nuxeo test framework.** The tests are `FeaturesRunner` tests on `CoreFeature`: a Nuxeo
 runtime, a VCS repository on H2, as the local server's, JTA transactions, and the SQL key/value
@@ -255,16 +507,19 @@ builds as `ea`, and the test runtime starts it whether a test uses streams or no
 `log4j-jcl`, takes 11.5's event service's Commons Logging to Log4j 2, where `RefusalLogTest` reads
 it.
 
-| Test                 | What it holds                                                                                                                                                                                                                                                                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NumberingTest`      | A first revision numbered from its series, each series counting alone, the creator's own values replaced, blanks and padding included, no series or an unknown one refused, the facet refused when added                                                                                                                                                                                                                  |
-| `SupersessionTest`   | The number and next revision taken, the old one superseded both ways; refused for a superseded, trashed, other-typed, missing or version predecessor; refused without write, and without read, with nothing written; atomic when the old one's write fails, when a caller catches the refusal, and when the caller's transaction fails later; the claim released each time; no claim in a transaction marked for rollback |
-| `ConcurrencyTest`    | Many threads at once, each creation in its own transaction (below); and 16 revisions of one at once, of which one wins and every other is refused as a conflict                                                                                                                                                                                                                                                           |
-| `GuardTest`          | No save changes a `docctl:` property, an administrator's included, padded with spaces included, nor marks a revision superseded by hand, nor writes through a live proxy; the facet not added; no copy; no restore that would change them                                                                                                                                                                                 |
-| `RefusalLogTest`     | A refusal not logged by the event service as an error; an unforeseen failure still logged as one                                                                                                                                                                                                                                                                                                                          |
-| `NumberSeriesTest`   | Numbers, series ids, digits, revisions, document ids                                                                                                                                                                                                                                                                                                                                                                      |
-| `SeriesRegistryTest` | Series replaced, broken and removed                                                                                                                                                                                                                                                                                                                                                                                       |
-| `BundleTest`         | The manifest's components, the service, the facet and the schema the runtime registers, and the package's version                                                                                                                                                                                                                                                                                                         |
+| Test                      | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NumberingTest`           | A first revision numbered from its series, each series counting alone, the creator's own values replaced, blanks and padding included, no series or an unknown one refused, the facet refused when added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `SupersessionTest`        | The number and next revision taken, the old one superseded both ways; refused for a superseded, trashed, other-typed, missing or version predecessor; refused without write, and without read, with nothing written; atomic when the old one's write fails, when a caller catches the refusal, and when the caller's transaction fails later; the claim released each time; no claim in a transaction marked for rollback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `ConcurrencyTest`         | Many threads at once, each creation in its own transaction (below); and 16 revisions of one at once, of which one wins and every other is refused as a conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `GuardTest`               | No save changes a `docctl:` property, an administrator's included, padded with spaces included, nor marks a revision superseded by hand, nor writes through a live proxy; the facet not added; no copy; no restore that would change them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `RefusalLogTest`          | A refusal not logged by the event service as an error; an unforeseen failure still logged as one                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `NumberSeriesTest`        | Numbers, series ids, digits, revisions, document ids                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `SeriesRegistryTest`      | Series replaced, broken and removed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `BundleTest`              | The manifest's five components, the service, every facet and its schema the runtime registers, the series for transmittals, and the package's version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `TransmittalTest`         | Issued with each document at its current revision, numbered, a receipt per recipient; the issuer's own values replaced; every check of what it says, with nothing written and no number spent when refused; what the issuer may not read refused; a receipt the server's alone; answered once, by its recipient, and the server says when; a return says why; the answer refused to anyone else, the issuer, another user who may write it and an administrator; the platform's refusal to a recipient who may not write; nothing else of a receipt or a transmittal changed; kept, not copied, not restored to awaiting                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `ReviewCycleTest`         | Opened on a current revision its opener may write, one at a time; a reviewer's comment an open thread, a reply part of it, a comment elsewhere left alone; only the reviewers and the opener comment; only the opener resolves, closes, and the server writes who and when; a cycle with an open thread not closed; a closed cycle recorded on the revision; nothing of a closed cycle or its comments changed, not even through a privileged session on a user's behalf; the revision's record the server's, an administrator's write refused; the facet the server's; past the claim's and the fence's time, the cycles' own status still refusing; a comment written as a plain document the cycle's by where it is, its author and parents the server's; a comment's words its author's; a thread deleted by its author alone, not with its replies, nor its folder; nothing moved in or out, its Comments folder included, and a comment trashed by its author through the trash's rename in place; a comment elsewhere never naming a cycle; an open cycle trashed still holding its revision; a caller that catches a refusal unable to commit; `system` no one's name |
+| `WorkflowConcurrencyTest` | 16 recipients answering at once, each kept; one receipt answered 16 times at once, one answer taken and 15 refused as conflicts; 16 cycles opened on one revision at once, one opened; the fence held open on purpose, by a comment's transaction and then by a close's, each refusing the other until it ends; and 8 rounds of 6 reviewers commenting while the opener closes, after which no closed cycle holds an open comment, and every close and comment either went through or was refused as a conflict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 **The concurrency test:** 16 threads, each creating 25 documents in one series, each creation in a
 transaction of its own, started together; every seventh creation rolls its transaction back after
@@ -292,41 +547,72 @@ committed a moment before); the creator's text written back; any text a series i
 its hyphen; the letters miscounted; the manifest's version moved; the listener not told of
 creations; a broken series leaving an earlier one in force.
 
+**And 0.2.0's, the 48 guards of transmittals and review cycles,** each broken one at a time, each
+turned its test red, and the build unbroken was green: a non-recipient's answer let through; a
+receipt answered twice; no claim on an answer; a client's receipt let through; a transmittal changed
+after it is issued; a superseded revision sent; a return with no comment; a receipt deleted by
+anyone; a folder holding what the add-on keeps deleted, or a document that is no folder looked below
+for none; the creator's issuer kept; the number taken before the checks (a refused transmittal spent
+one); a cycle closed with an open comment; a cycle closed by anyone; a comment resolved by anyone;
+a comment by anyone; a comment's cycle read from what it says rather than where it is; a forged
+author kept; a comment elsewhere naming the cycle let through, by its parent or by its ancestors,
+written so or changed so later; a comment's author changed; anyone's words changed; an open thread
+deleted by anyone, or with its replies; something moved into a cycle, a cycle's comment out of it,
+or its Comments folder; a rename in place taken for a move; a trashed open cycle releasing its
+revision; no claim on opening; no query for an open cycle (seen once the claim expires); the claim kept after the close;
+a closed cycle not recorded; a closed cycle's comment changed, a comment written in one, and one
+deleted, each once the fence expires; a superseded revision reviewed; a cycle opened without write;
+the review record written by anyone; a creator's review record kept; a transmittal or a cycle
+copied; a version restored over an answered receipt; a privileged session on a user's behalf taken
+for an administrator; no rollback mark on a refusal (a caller that caught one committed a second
+open cycle); `system` taken for a name; and the fence never taken by a close, or never refusing a
+comment while closing, each caught both by the fence held on purpose and by the race of comments
+and a close.
+
 **What the tests cannot reach:** a server whose key/value store is MongoDB, or PostgreSQL, rather
-than H2; the jakarta half of the synchronization lookup, which only the server has; and REST
-clients: the listener sees `CoreSession`, which every endpoint goes through, but no HTTP request is
-made here.
+than H2; the jakarta half of the synchronization lookup, which only the server has; Nuxeo's comment
+manager itself, whose writes `Comments.java` repeats; and REST clients: the listeners see
+`CoreSession`, which every endpoint goes through, but no HTTP request is made here. The steps file
+makes them, once installed.
 
 ## Installing it on a local Nuxeo
 
 **Not run.** The orchestrator installs. The local Nuxeo is the Docker container `nuxeo`, on port
 8080; `nuxeoctl mp-install` refuses while the server runs, so a one-off script installs it when
 the container next starts, as the assets add-on's README does. Install it with the controlled
-documents kit, which depends on it, in one restart.
+documents kit, which depends on it, in one restart. Over 0.1.0, which the local server has with the
+kit's 0.1.0, the same commands upgrade both: `mp-install` removes the version before. 0.2.0 adds
+schemas, facets, a schema to `ControlledDocument` and two listeners, and removes nothing, so no
+document needs deleting first; the documents numbered under 0.1.0 keep their numbers.
 
 ```bash
 mvn -pl nuxeo-agentic-documents -am package
 npm run app-package -- business-apps/packages/controlled-documents-demo --platform 0.2.0
-docker cp nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.1.0.zip nuxeo:/tmp/
-docker cp business-apps/packages/controlled-documents-demo/dist/controlled-documents-demo-0.1.0.zip nuxeo:/tmp/
+docker cp nuxeo-agentic-documents/target/nuxeo-agentic-documents-0.2.0.zip nuxeo:/tmp/
+docker cp business-apps/packages/controlled-documents-demo/dist/controlled-documents-demo-0.2.0.zip nuxeo:/tmp/
 ```
 
 ```bash
-printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-documents-0.1.0.zip /tmp/controlled-documents-demo-0.1.0.zip --accept=true > /var/log/nuxeo/documents-install.log 2>&1 || echo "documents: install failed, see /var/log/nuxeo/documents-install.log"' 'rm -f "$0"' > /tmp/zz-documents-install.sh && chmod 755 /tmp/zz-documents-install.sh
+printf '%s\n' '#!/bin/bash' 'nuxeoctl mp-install /tmp/nuxeo-agentic-documents-0.2.0.zip /tmp/controlled-documents-demo-0.2.0.zip --accept=true > /var/log/nuxeo/documents-install.log 2>&1 || echo "documents: install failed, see /var/log/nuxeo/documents-install.log"' 'rm -f "$0"' > /tmp/zz-documents-install.sh && chmod 755 /tmp/zz-documents-install.sh
 docker cp /tmp/zz-documents-install.sh nuxeo:/docker-entrypoint-initnuxeo.d/ && docker restart nuxeo
 ```
 
 Then, once `http://localhost:8080/nuxeo/runningstatus` answers 200: the install log lists both
-packages; the server log's `Component Loading Status` names `org.nuxeo.agentic.documents`,
-`org.nuxeo.agentic.documents.schema`, `org.nuxeo.agentic.documents.listener` and
+packages at 0.2.0; the server log's `Component Loading Status` names `org.nuxeo.agentic.documents`,
+`org.nuxeo.agentic.documents.schema`, `org.nuxeo.agentic.documents.listener`,
+`org.nuxeo.agentic.documents.transmittals`, `org.nuxeo.agentic.documents.reviews` and
 `nuxeo.config.controlled-documents-demo.series`, with nothing pending; it has no `Controlled
-documents:` error; and the kit's seed runs (its README). To remove both:
+documents:` error; `GET /nuxeo/api/v1/config/types/Transmittal` answers 200; and the kit's seed
+runs (its README). To remove both:
 `nuxeoctl mp-remove controlled-documents-demo nuxeo-agentic-documents --accept=true`, the kit first.
-Documents of the kit's type must be deleted first: one whose type is gone cannot be read.
+Documents of the kit's types must be deleted first, by an administrator for transmittals, receipts
+and review cycles: one whose type is gone cannot be read.
 
 ## For the security review
 
-The plan requires one before this is relied on. It should check:
+The plan requires one before this is relied on, deferred until the app is finished
+([security-reviews.md](../docs/business-apps/security-reviews.md)). What it is to check, and no
+finding: a review's findings are kept outside this repository. For numbering and supersession:
 
 1. **Every path that writes a document,** listed from the server's bundles: that each goes through
    `CoreSession.createDocument` or `saveDocument`, so the listener sees it, and which do not, as
@@ -348,6 +634,48 @@ The plan requires one before this is relied on. It should check:
    Whether series must be restricted to types or groups.
 7. **Copies and restores:** that refusing every copy of a controlled document, and of a folder
    holding one, is right; the privileged query that looks below a folder, by `ecm:ancestorId`, with
-   the folder's id written into it after a check of its form.
+   the folder's id written into it after a check of its form. Its refusal tells the user that such
+   documents are below the folder, ones they may not read included.
 8. **The cost:** one listener on five events for every document, which reads only a facet for a
    document that is not controlled, and one query per copy of a folder.
+
+For transmittals and review cycles, since 0.2.0:
+
+9. **Who acts.** Each check reads `NuxeoPrincipal.getActingUser()`: the user, or the one a
+   privileged session acts for. That every path that writes a comment, a receipt or a cycle on a
+   user's behalf opens its privileged session with that user as its originating user, as the
+   comment manager does, and none with another's; and that `Refusal.isAdministrator` refuses the
+   platform's administrator status to such a session.
+10. **What a recipient and a reviewer may see.** The server does not grant anyone anything: who may
+    read a transmittal, its receipts, its documents and a review cycle is the folders'
+    permissions. Whether a transmittal should refuse a recipient who may not read what it sends,
+    and whether a receipt, which repeats the transmittal's number, subject, purpose, due day and
+    issuer, says more than its recipient may read.
+11. **Names not checked.** Recipients and reviewers are held to a user name's form and not looked
+    up; a name no user holds, or a group's name, is taken as it is.
+12. **The number lookup.** An entry of `trm:documents` that has a number's form, of a registered
+    series, is written into a query run as the issuer, after the check of its form; any other is
+    looked up as an id.
+13. **The receipt's creation and the review record.** Told apart from a client's by
+    `ServerWrite`'s objects, by identity, in the document's context data, as the supersession is;
+    that nothing a client sends can be one.
+14. **The claims and the fence.** Their keys, `receipt.<id>`, `review.<revision id>` and
+    `cycle.<id>`, in the same store as the supersession claims; their release on every outcome; a
+    stopped server's leftovers, which block an answer, a cycle's opening, a comment or a close
+    until they expire; and whether an administrator needs a way to clear one.
+15. **What is kept.** Deletion and trash of transmittals, receipts, cycles, a closed cycle's
+    comments, and any document holding one of them, are an administrator's alone; an open cycle's
+    comment is its author's to delete, when it has no replies. Copies are refused, and restores
+    that would change them. Whether every path that removes or trashes many documents, a bulk
+    action's among them, fires an event this sees for the topmost.
+16. **The comments.** A comment written directly as a document, past the comment manager, by
+    whoever may add children to a cycle's `Comments` folder: that where it is, read from its
+    folders, makes it the cycle's, held to the same checks, its author and parents written by the
+    server; that nothing reaches a cycle's subtree but by creation there, a move by an
+    administrator, an import, or server code; and that the platform's own paths that list a
+    document's comments, by `ecm:parentId` and by `comment:ancestorIds`, agree with the add-on's.
+17. **The cost:** two more listeners on every document's creation, save, deletion and trash, and
+    on its move. For a document without their facets and without Nuxeo's `comment` schema, each
+    reads facets only, but for a deletion or trash, which asks whether it has children and, if it
+    has, queries below it once, and a move, which reads its folders. A comment anywhere costs a
+    privileged read of its folders and of each document it names, 17 at most.

@@ -10,6 +10,25 @@
       "queue": "current"
     },
     {
+      "id": "awaiting-me",
+      "labelKey": "controlled-documents.home.awaitingMe",
+      "kpi": { "pageProvider": "controlled_documents_awaiting_me", "parameters": ["$currentUser"] },
+      "queue": "awaiting-me"
+    },
+    {
+      "id": "transmittals",
+      "labelKey": "controlled-documents.home.transmittals",
+      "kpi": { "pageProvider": "controlled_documents_transmittals" },
+      "queue": "transmittals",
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["document-controllers"] }
+    },
+    {
+      "id": "returned",
+      "labelKey": "controlled-documents.home.returned",
+      "kpi": { "pageProvider": "controlled_documents_returned" },
+      "visibleWhen": { "type": "app.rules.inGroup", "parameters": ["document-controllers"] }
+    },
+    {
       "id": "superseded",
       "labelKey": "controlled-documents.home.superseded",
       "kpi": { "pageProvider": "controlled_documents_superseded" },

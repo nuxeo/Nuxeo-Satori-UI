@@ -1,0 +1,108 @@
+{
+  "$schema": "../../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "columns": 2,
+  "cards": [
+    {
+      "id": "transmittal",
+      "labelKey": "controlled-documents.card.transmittal",
+      "fields": [
+        { "field": "trm:number", "labelKey": "controlled-documents.field.transmittalNumber" },
+        { "field": "dc:title", "labelKey": "controlled-documents.field.subject" },
+        {
+          "field": "trm:purpose",
+          "labelKey": "controlled-documents.field.transmittalPurpose",
+          "widget": "vocabulary",
+          "parameters": { "directory": "ControlledDocumentsPurpose" }
+        },
+        {
+          "field": "trm:dueDate",
+          "labelKey": "controlled-documents.field.dueDate",
+          "widget": "date"
+        },
+        {
+          "field": "trm:issuedBy",
+          "labelKey": "controlled-documents.field.issuedBy",
+          "widget": "user"
+        },
+        {
+          "field": "trm:issuedAt",
+          "labelKey": "controlled-documents.field.issuedAt",
+          "widget": "date"
+        },
+        {
+          "field": "dc:description",
+          "labelKey": "controlled-documents.field.message",
+          "widget": "long-text"
+        }
+      ]
+    },
+    {
+      "id": "documents",
+      "labelKey": "controlled-documents.card.documents",
+      "fields": [
+        {
+          "field": "trm:items",
+          "labelKey": "controlled-documents.field.asIssued",
+          "widget": "table",
+          "parameters": {
+            "columns": [
+              { "field": "trm:number", "labelKey": "controlled-documents.field.number" },
+              { "field": "trm:revision", "labelKey": "controlled-documents.field.revision" },
+              { "field": "trm:title", "labelKey": "controlled-documents.field.title" }
+            ]
+          }
+        },
+        {
+          "field": "trm:documents",
+          "labelKey": "controlled-documents.field.openRevisions",
+          "widget": "document-link"
+        }
+      ]
+    },
+    {
+      "id": "recipients",
+      "labelKey": "controlled-documents.card.recipients",
+      "span": 2,
+      "related": {
+        "pageProvider": "controlled_documents_transmittal_receipts",
+        "parameters": [{ "field": "ecm:uuid" }],
+        "columns": [
+          {
+            "field": "trr:recipient",
+            "labelKey": "controlled-documents.field.recipient",
+            "widget": "user"
+          },
+          {
+            "field": "trr:status",
+            "labelKey": "controlled-documents.field.answer",
+            "widget": "status-badge",
+            "parameters": {
+              "tones": { "awaiting": "info", "acknowledged": "positive", "returned": "warning" }
+            }
+          },
+          { "field": "trr:comment", "labelKey": "controlled-documents.field.comment" },
+          {
+            "field": "trr:respondedAt",
+            "labelKey": "controlled-documents.field.respondedAt",
+            "widget": "date"
+          }
+        ],
+        "sort": [{ "field": "trr:recipient", "order": "asc" }],
+        "pageSize": 50
+      }
+    },
+    {
+      "id": "comments",
+      "labelKey": "controlled-documents.card.comments",
+      "span": 2,
+      "comments": { "pageSize": 10 }
+    },
+    {
+      "id": "history",
+      "labelKey": "controlled-documents.card.history",
+      "span": 2,
+      "timeline": { "pageSize": 10 }
+    }
+  ]
+}

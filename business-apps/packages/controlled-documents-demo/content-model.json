@@ -3,7 +3,27 @@
     "EngineeringDocument": {
       "parent": "Document",
       "facets": ["ControlledDocument"],
-      "schemas": ["common", "dublincore", "engdoc", "controlled_document"]
+      "schemas": ["common", "dublincore", "engdoc", "controlled_document", "controlled_review"]
+    },
+    "Transmittal": {
+      "parent": "Document",
+      "facets": ["Transmittal"],
+      "schemas": ["common", "dublincore", "transmittal"]
+    },
+    "TransmittalReceipt": {
+      "parent": "Document",
+      "facets": ["TransmittalReceipt"],
+      "schemas": ["common", "dublincore", "transmittal_receipt"]
+    },
+    "ReviewCycle": {
+      "parent": "Document",
+      "facets": ["ReviewCycle"],
+      "schemas": ["common", "dublincore", "review_cycle"]
+    },
+    "TransmittalRegister": {
+      "parent": "Folder",
+      "facets": [],
+      "schemas": ["common", "dublincore"]
     }
   },
   "facets": [
@@ -21,6 +41,111 @@
             "status": "string",
             "supersedes": "string",
             "supersededBy": "string"
+          }
+        },
+        {
+          "name": "controlled_review",
+          "prefix": "docrev",
+          "@prefix": "docrev",
+          "fields": {
+            "cycles": {
+              "type": "complex[]",
+              "fields": {
+                "cycle": "string",
+                "closedBy": "string",
+                "closedAt": "date",
+                "comments": "long"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transmittal",
+      "schemas": [
+        {
+          "name": "transmittal",
+          "prefix": "trm",
+          "@prefix": "trm",
+          "fields": {
+            "number": "string",
+            "documents": "string[]",
+            "items": {
+              "type": "complex[]",
+              "fields": {
+                "document": "string",
+                "number": "string",
+                "revision": "string",
+                "title": "string"
+              }
+            },
+            "recipients": "string[]",
+            "purpose": "string",
+            "dueDate": "date",
+            "issuedBy": "string",
+            "issuedAt": "date"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TransmittalReceipt",
+      "schemas": [
+        {
+          "name": "transmittal_receipt",
+          "prefix": "trr",
+          "@prefix": "trr",
+          "fields": {
+            "transmittal": "string",
+            "number": "string",
+            "recipient": "string",
+            "purpose": "string",
+            "dueDate": "date",
+            "issuedBy": "string",
+            "status": "string",
+            "comment": "string",
+            "respondedAt": "date"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ReviewCycle",
+      "schemas": [
+        {
+          "name": "review_cycle",
+          "prefix": "rvw",
+          "@prefix": "rvw",
+          "fields": {
+            "document": "string",
+            "number": "string",
+            "revision": "string",
+            "reviewers": "string[]",
+            "dueDate": "date",
+            "status": "string",
+            "openedBy": "string",
+            "openedAt": "date",
+            "closedBy": "string",
+            "closedAt": "date",
+            "comments": "long"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ReviewComment",
+      "schemas": [
+        {
+          "name": "review_comment",
+          "prefix": "rvwc",
+          "@prefix": "rvwc",
+          "fields": {
+            "cycle": "string",
+            "status": "string",
+            "resolution": "string",
+            "resolvedBy": "string",
+            "resolvedAt": "date"
           }
         }
       ]
@@ -83,6 +208,91 @@
         "status": "string",
         "supersedes": "string",
         "supersededBy": "string"
+      }
+    },
+    {
+      "name": "controlled_review",
+      "prefix": "docrev",
+      "@prefix": "docrev",
+      "fields": {
+        "cycles": {
+          "type": "complex[]",
+          "fields": {
+            "cycle": "string",
+            "closedBy": "string",
+            "closedAt": "date",
+            "comments": "long"
+          }
+        }
+      }
+    },
+    {
+      "name": "transmittal",
+      "prefix": "trm",
+      "@prefix": "trm",
+      "fields": {
+        "number": "string",
+        "documents": "string[]",
+        "items": {
+          "type": "complex[]",
+          "fields": {
+            "document": "string",
+            "number": "string",
+            "revision": "string",
+            "title": "string"
+          }
+        },
+        "recipients": "string[]",
+        "purpose": "string",
+        "dueDate": "date",
+        "issuedBy": "string",
+        "issuedAt": "date"
+      }
+    },
+    {
+      "name": "transmittal_receipt",
+      "prefix": "trr",
+      "@prefix": "trr",
+      "fields": {
+        "transmittal": "string",
+        "number": "string",
+        "recipient": "string",
+        "purpose": "string",
+        "dueDate": "date",
+        "issuedBy": "string",
+        "status": "string",
+        "comment": "string",
+        "respondedAt": "date"
+      }
+    },
+    {
+      "name": "review_cycle",
+      "prefix": "rvw",
+      "@prefix": "rvw",
+      "fields": {
+        "document": "string",
+        "number": "string",
+        "revision": "string",
+        "reviewers": "string[]",
+        "dueDate": "date",
+        "status": "string",
+        "openedBy": "string",
+        "openedAt": "date",
+        "closedBy": "string",
+        "closedAt": "date",
+        "comments": "long"
+      }
+    },
+    {
+      "name": "review_comment",
+      "prefix": "rvwc",
+      "@prefix": "rvwc",
+      "fields": {
+        "cycle": "string",
+        "status": "string",
+        "resolution": "string",
+        "resolvedBy": "string",
+        "resolvedAt": "date"
       }
     }
   ]
