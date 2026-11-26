@@ -379,7 +379,7 @@ export function runNode(
   });
 }
 
-const FINDING = /^(.*?\.json): (.*?): (.*) \[([\w-]+)\]$/;
+const FINDING = /^(.*?\.(?:json|xml)): (.*?): (.*) \[([\w-]+)\]$/;
 const REFUSED = /^.*: step (\d+) refused it: (.*)$/;
 const BUILT = /^\S+ \S+: checked, built and verified: (.*), sha256 ([0-9a-f]{64})$/;
 

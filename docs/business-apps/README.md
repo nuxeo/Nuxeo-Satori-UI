@@ -62,12 +62,15 @@ Designer, the development plan and its decisions. Start here when you pick this 
     the plan's other acceptance tests, are run by [acceptance-tests.md](acceptance-tests.md): who
     takes part, the server, the task, what is measured, how each passes, and what is recorded.
 12. [studio-migration-guide.md](studio-migration-guide.md): for a customer, migrating their own
-    Studio package with one command, reading its report and filling in its decisions.
-13. [spikes/plugins-decision-5.md](spikes/plugins-decision-5.md): the spike for decision 5,
+    Studio package, or several, with one command, reading its report and filling in its decisions.
+13. [studio-migration-support.md](studio-migration-support.md): the support playbook, for a support
+    engineer helping a customer whose migration reports findings: every finding the tool can print,
+    who acts on it, when to escalate and with what, reproducing a run safely, and lab mode.
+14. [spikes/plugins-decision-5.md](spikes/plugins-decision-5.md): the spike for decision 5,
     customer code built in from the template or loaded at run time, signed and pinned.
-14. [performance-budget.md](performance-budget.md): the brand assets library's budget at 100,000
+15. [performance-budget.md](performance-budget.md): the brand assets library's budget at 100,000
     assets, proposed, and the check that holds it without a server.
-15. [administrator-guide.md](administrator-guide.md): for a Nuxeo administrator, what to install
+16. [administrator-guide.md](administrator-guide.md): for a Nuxeo administrator, what to install
     and in what order, every server setting with its default, upgrading and removing a kit, the
     demo server, the logs, and what is not ready for production.
 

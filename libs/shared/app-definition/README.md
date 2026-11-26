@@ -148,6 +148,12 @@ install and no transpiler, through `src/typescript-hook.mjs`, which the pipeline
   property's own.
 - **`image-source.ts`** holds the rules for a branding image's address. They are version 1's own,
   copied unchanged from `libs/shared/app-config`, which cannot be imported here without Angular.
+- **`page-providers.ts`** is what the package pipeline checks of the page providers a package
+  defines, which only it reads from the components (`scripts/app-package.mjs`, step 2):
+  `listedType`, the one type a page provider's NXQL lists, when it says so plainly;
+  `listedColumnFindings`, a queue's and a related list's columns and sorts held to that type in
+  the content model; and `nxqlProblems`, what in the NXQL Nuxeo's grammar has no place for, by a
+  check of its tokens. Not a parser: it does not validate NXQL.
 - **`platform-routes.ts`** is the one list of the platform's own routes, `PLATFORM_ROUTES`, which
   `validateApp` refuses as an app's written address, in the pipeline and in the shell, which then
   leaves the app out of "Switch app". An id that is one, with no address, is said

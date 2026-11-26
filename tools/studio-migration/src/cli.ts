@@ -15,6 +15,9 @@
  *   migrate   <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
  *                                                             all of them in order, for a customer's own
  *                                                             package (migrate.ts)
+ *   migrate   <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+ *                                                             the same for each of several packages, each
+ *                                                             into its own folder, with a summary (batch.ts)
  *   lab       <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>]
  *             [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
  *                                                             lab mode: the documents in Web UI and the
@@ -31,10 +34,14 @@
  *
  * `migrate` runs `inventory`, `convert`, `check`, `report` and `decisions` on one package, as a
  * person would by hand, keeping what each prints in a file of `--out`, and says what to do next
- * (`migrate.ts`, and docs/business-apps/studio-migration-guide.md for the customer).
+ * (`migrate.ts`, and docs/business-apps/studio-migration-guide.md for the customer). Given several
+ * packages, or a folder, on the command line (`commandLine`), it runs each so into a folder of
+ * `--out` of its own, and writes a summary of them all (`batch.ts`); one package file is run as it
+ * always was. `main` runs one command, and one package.
  *
- * Exit codes: 0 done, and for `check` and `migrate`, no check failed; 1 a check failed, or something
- * could not be read or written, with the reason; 2 the command was wrong. `report` exits 0 once it
+ * Exit codes: 0 done, and for `check` and `migrate`, no check failed (for several packages: in any
+ * of them); 1 a check failed, or something could not be read or written, with the reason (for
+ * several packages: in any of them); 2 the command was wrong. `report` exits 0 once it
  * has printed the report, whatever the report says. Nothing in a package is ever run, and nothing is
  * ever written over: `convert` and `mutate` write only into a new or empty directory, `decisions`
  * only a `decisions.json` the conversion does not hold yet, and `migrate` only into a new or empty
@@ -59,7 +66,8 @@ import {
 import { DECISIONS_FILE, decisionsFor, DecisionsError } from './decisions';
 import { checkResultLines, runHarness, type HarnessResult } from './harness';
 import { inventory, type FileKind, type Inventory } from './inventory';
-import { migrate } from './migrate';
+import { isDirectory, migrateMany } from './batch';
+import { migrate, type Command } from './migrate';
 import {
   DECISION_MUTATIONS,
   MUTATIONS,
@@ -81,6 +89,11 @@ export interface CliIo {
    * result its `check` step printed, and knows the harness ran. Nothing else sets it.
    */
   readonly checked?: (result: HarnessResult) => void;
+  /**
+   * Given the report's summary once `report` has printed it: how a run of several packages reads,
+   * as data, each package's counts of constructs by outcome. Nothing else sets it.
+   */
+  readonly reported?: (summary: MigrationSummary) => void;
 }
 
 const USAGE = `usage:
@@ -92,6 +105,7 @@ const USAGE = `usage:
   studio-migration decisions <package.zip> <conversion-directory> [--from <decisions.json>]
   studio-migration report <package.zip> <conversion-directory> [--json] [--allow-list <file>]
   studio-migration migrate <package.zip> --out <new-directory> [--allow-list <file>] [--from <earlier run>]
+  studio-migration migrate <package.zip or folder>... --out <new-directory> [--allow-list <file>] [--from <earlier run of them>]
   studio-migration lab <document>... --out <new-directory> [--app <url>] [--web-ui <url>] [--nuxeo <url>] [--package <package.zip> --conversion <conversion-directory>] [--control <control>]
 `;
 
@@ -115,13 +129,19 @@ const COMMANDS: Readonly<
   migrate: { args: 1, flags: [], valued: ['--out', '--allow-list', '--from'] },
 };
 
-export function main(argv: readonly string[], io: CliIo): number {
+/** A command line read against {@link COMMANDS}: its arguments, flags and values. */
+interface Parsed {
+  readonly command: string | undefined;
+  readonly spec: (typeof COMMANDS)[string] | undefined;
+  readonly args: readonly string[];
+  readonly flags: readonly string[];
+  readonly values: ReadonlyMap<string, string>;
+  /** A flag the command does not take, or a value missing or given twice. */
+  readonly wrong: boolean;
+}
+
+function parse(argv: readonly string[]): Parsed {
   const [command, ...rest] = argv;
-  if (command === 'mutate' && rest.length === 1 && rest[0] === '--list') {
-    for (const m of [...MUTATIONS, ...DECISION_MUTATIONS])
-      io.out(`${m.name.padEnd(22)} ${catcher(m).padEnd(10)} ${m.description}\n`);
-    return 0;
-  }
   const spec =
     command !== undefined && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
   const flags: string[] = [];
@@ -138,6 +158,52 @@ export function main(argv: readonly string[], io: CliIo): number {
       if (!spec.flags.includes(arg)) wrong = true;
       flags.push(arg);
     } else args.push(arg);
+  }
+  return { command, spec, args, flags, values, wrong };
+}
+
+/**
+ * The command line: `main`, but for `migrate` given several packages, or a folder, which runs
+ * them all (`batch.ts`) and is asynchronous. It lets the event loop turn after each package, so
+ * that what one package's run parsed is freed before the next: jsdom keeps a document it made
+ * until the job that made it ends. Every other command, one package's `migrate` among them, is
+ * `main` itself, run as it always was, and its code is given as `main` gives it.
+ */
+export function commandLine(argv: readonly string[], io: CliIo): number | Promise<number> {
+  const { command, args, values, wrong } = parse(argv);
+  const out = values.get('--out');
+  if (
+    command === 'migrate' &&
+    !wrong &&
+    out !== undefined &&
+    args.length > 0 &&
+    (args.length > 1 || isDirectory(args[0]))
+  ) {
+    const allowList = values.get('--allow-list');
+    const from = values.get('--from');
+    return migrateMany(
+      {
+        packages: args,
+        out,
+        ...(allowList !== undefined ? { allowList } : {}),
+        ...(from !== undefined ? { from } : {}),
+      },
+      io,
+      step,
+    );
+  }
+  return main(argv, io);
+}
+
+/** `main` as a step of `migrate`: one command, whose code is a number. */
+const step: Command = (argv, io) => main(argv, io);
+
+export function main(argv: readonly string[], io: CliIo): number {
+  const { command, spec, args, flags, values, wrong } = parse(argv);
+  if (command === 'mutate' && argv.length === 2 && argv[1] === '--list') {
+    for (const m of [...MUTATIONS, ...DECISION_MUTATIONS])
+      io.out(`${m.name.padEnd(22)} ${catcher(m).padEnd(10)} ${m.description}\n`);
+    return 0;
   }
   if (!spec || wrong || args.length !== spec.args) {
     io.err(USAGE);
@@ -255,6 +321,7 @@ export function main(argv: readonly string[], io: CliIo): number {
           ...(allowList ? { allowList } : {}),
         });
         io.out(json ? `${JSON.stringify(summary, null, 2)}\n` : reportSummary(summary));
+        io.reported?.(summary);
         return 0;
       }
       case 'migrate': {
@@ -618,5 +685,21 @@ if (require.main === module) {
     void import('./lab-cli').then(async ({ lab }) => {
       process.exitCode = await lab(argv.slice(1), io);
     });
-  else process.exitCode = main(argv, io);
+  else {
+    const code = commandLine(argv, io);
+    if (typeof code === 'number') process.exitCode = code;
+    else
+      void code.then(
+        (ended) => {
+          process.exitCode = ended;
+        },
+        (error: unknown) => {
+          // Something no run refuses on purpose, outside every package's run: a defect.
+          process.stderr.write(
+            `${(error as Error).stack ?? String(error)}\nThis is a defect in this tool, not a mistake in your packages: send this message to your Nuxeo contact.\n`,
+          );
+          process.exitCode = 1;
+        },
+      );
+  }
 }
