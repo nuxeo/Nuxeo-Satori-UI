@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Example CRM: Customer 4417</title>
+    <link rel="stylesheet" href="/crm.css" />
+    <!-- The panel: one script, from the Nuxeo server. -->
+    <script type="module" src="{{ NUXEO }}/nuxeo/agentic-ui/embedded/v1/main.js"></script>
+    <script type="module" src="/crm.js"></script>
+  </head>
+  <body>
+    <header class="crm-header">
+      <span class="crm-brand">Example CRM</span>
+      <span class="crm-user">Signed in as a fictional agent</span>
+    </header>
+    <main class="crm-main">
+      <section class="crm-customer">
+        <h1>Customer 4417</h1>
+        <h3 class="crm-heading">Contact</h3>
+        <p>A fictional customer, for the embedded panel's demo.</p>
+        <h3 class="crm-heading">Open claim</h3>
+        <p>CLAIM-000130, filed on 28 September 2026.</p>
+        <button class="crm-button" type="button">Log a call</button>
+      </section>
+      <section class="crm-panel">
+        <h3 class="crm-heading">From Nuxeo</h3>
+        <nuxeo-record-panel
+          host="crm"
+          record-id="{{ CLAIM }}"
+          cards="claim,payment"
+        ></nuxeo-record-panel>
+      </section>
+      <!-- Another origin's frame on the page, as an advertisement or a widget would be. -->
+      <iframe
+        class="crm-frame"
+        title="Another origin's frame"
+        src="{{ OTHER_ORIGIN }}/frame.html"
+      ></iframe>
+    </main>
+  </body>
+</html>

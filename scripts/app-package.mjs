@@ -156,6 +156,12 @@ const MAX_APP_FILES = 256;
 /** The component that holds the server's allow-list of the operations an app's buttons may run. */
 const ALLOW_LIST_COMPONENT = 'org.nuxeo.agentic.ui.operations';
 
+/**
+ * The component that registers the host applications an embedded panel's token is exchanged for
+ * (nuxeo-agentic-embedded): which systems may sign the server's users in is the deployment's.
+ */
+const EMBEDDED_HOSTS_COMPONENT = 'org.nuxeo.agentic.embedded';
+
 /** The one command a configuration package's `install.xml` holds: the bundle, into the bundles. */
 const INSTALL_UPDATE = { file: '${package.root}/install/bundles', todir: '${env.bundles}' };
 
@@ -1545,6 +1551,10 @@ function configurationReach(directory) {
  * name with no type is a service's (`ComponentName`). The server refuses such a contribution too,
  * from anywhere but its configuration directory (`OperationAllowListComponent`).
  *
+ * The same holds for the host applications an embedded panel's token is exchanged for,
+ * `org.nuxeo.agentic.embedded` (decision F): a package that registered one would let another system
+ * sign the server's users in. The server refuses that from a bundle too (`EmbeddedPanelComponent`).
+ *
  * Nor may a package contribute a chain whose id is the platform's, `AgenticUi.` and a name: a chain
  * and an operation share one registry, and a chain with the id of `AgenticUi.RunAction` or
  * `AgenticUi.RequireRunAction` would replace the endpoint, or the guard a button's chain begins
@@ -1586,6 +1596,14 @@ function allowListContributions(directory) {
           "server's allow-list of the operations an app's buttons may run. The allow-list is the " +
           "deployment's, never a package's: name the operation in actions.json, and give the server's " +
           "administrators the contribution that allows it, as the Payers kit's README does."
+        );
+      if (name === EMBEDDED_HOSTS_COMPONENT)
+        return (
+          `${component} contributes to ${EMBEDDED_HOSTS_COMPONENT}${point ? `'s "${point}" point` : ''}, ` +
+          "the host applications that may exchange a token for the server's users. They are the " +
+          "deployment's, never a package's: give the server's administrators the contribution, for " +
+          'nxserver/config/, as nuxeo-agentic-embedded/README.md describes. The server refuses one from ' +
+          'a bundle too.'
         );
     }
   }
