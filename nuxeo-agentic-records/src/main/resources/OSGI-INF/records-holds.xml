@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<component name="org.nuxeo.agentic.records.holds" version="1.0">
+
+  <documentation>
+    A legal hold's guard, beyond the platform's. The platform takes Remove away from a person on a
+    document under a legal hold, so their deletion and trash are refused, and the repository refuses
+    the removal of a held document or of a folder holding one, and of its main file. It lets an
+    administrator put a held document in the trash, which is a property, and anyone put a folder
+    holding one there, and change a held document's attachments. This listener, synchronous, refuses,
+    for a document under a legal hold and whoever asks: putting it, or a folder holding it, in the
+    trash or deleting it; and a change to its main file or its attachments. Each refusal is a 409 with
+    the code "held" and a sentence a person can act on, and nothing of the request is written. Its
+    other properties stay editable, as the platform keeps them. Whom the platform lets delete what it
+    keeps (its record cleaners) pass, as they pass the platform's guard.
+  </documentation>
+
+  <require>org.nuxeo.agentic.records.types</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="agenticRecordsLegalHold" async="false" postCommit="false" priority="40"
+      class="org.nuxeo.agentic.records.HoldListener">
+      <event>aboutToRemove</event>
+      <event>documentTrashed</event>
+      <event>beforeDocumentModification</event>
+    </listener>
+  </extension>
+
+</component>

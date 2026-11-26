@@ -1,12 +1,15 @@
 # Nuxeo Agentic Records
 
-The records module's server add-on, version 0.3.0, its first three slices: a **disposition
+The records module's server add-on, version 0.4.0, its first three slices: a **disposition
 review** on the platform's retention module; the **audit export** and **access logging** a records
 specialist reviews; and **physical records**, with locations, barcodes and chain of custody, for
 phase 9 of the business apps [development plan](../docs/business-apps/development-plan.md) ("A
 disposition run: the records due, approved by two people, with a certificate"; "disposition review;
 physical records with locations, barcodes and chain of custody; audit export; access logging"; "a
-records specialist accepts the disposition audit export"). A Maven module beside `nuxeo-agentic-core`, with
+records specialist accepts the disposition audit export"). Since 0.4.0, for phase 7's "retention
+and holds through Retention Management" and its demo step 5, "A legal hold blocks a deletion, on
+the server": **what a legal hold keeps beyond the platform's own guard**, and **a hold released
+with a reason** ([below](#legal-holds-what-the-add-on-adds-to-the-platforms)). A Maven module beside `nuxeo-agentic-core`, with
 a Marketplace package of its own, on decision B's recommendation, "one add-on per domain module"
 ([decision log](../docs/business-apps/decisions.md)). The decision is still open, and the log's
 note says what changes if it goes another way.
@@ -33,10 +36,17 @@ that review will read.
 - **A certificate is kept:** a document beside the run, made a record so that its file cannot be
   replaced, whose CSV lists each record disposed of with its identifiers, rule and dates, who
   started and who approved, and when.
-- **No Automation operation and no endpoint.** A person files a document, a request, in the
-  repository's disposition runs folder, and a synchronous listener on the repository's own events
-  checks it and does the work, as the retention module reaches its records through document
-  events. Decision 3, operation buttons, is not touched.
+- **No endpoint, and one Automation operation, for legal holds alone.** A person files a document, a
+  request, in the repository's disposition runs folder, and a synchronous listener on the
+  repository's own events checks it and does the work, as the retention module reaches its records
+  through document events: the review, the export and custody have no operation. The one operation,
+  `Records.ReleaseLegalHold`, releases a hold with a reason, for decision 3's operation buttons: the
+  deployment's allow-list names it, never a package, and it runs as the person
+  ([below](#legal-holds-what-the-add-on-adds-to-the-platforms)).
+- **A legal hold keeps more than the platform keeps** ([below](#legal-holds-what-the-add-on-adds-to-the-platforms)):
+  a held record is not put in the trash nor deleted, an administrator's request included, nor a
+  folder holding one, and its files are not changed, each refused with a 409 and a sentence that
+  says why. Its other properties stay editable, as the platform keeps them.
 - **An audit export, for a records specialist:** what the platform's audit holds of the documents
   under a folder over a period, retention rules applied, holds placed and lifted, disposition runs
   with their approvals and certificates, reads, deletions and every other change, as a CSV and a
@@ -119,6 +129,91 @@ version removal policy says.
 itself, which leaves the organisation's custody, shredded or handed to an archive: the run records
 that, and keeps the document, with its barcode and its custody, so that the barcode still says what
 became of it and is never given to another record ([below](#in-a-disposition-run)).
+
+## Legal holds: what the add-on adds to the platform's
+
+A legal hold is the platform's: `CoreSession.setLegalHold`, which the retention module's
+`Document.Hold` calls, on a document it first makes a record. The add-on decides no hold. It keeps
+what the platform's hold leaves open, and lets a hold be released with a reason.
+
+**What the platform keeps of a held document,** read in its code and seen in the tests
+(`LegalHoldGuardTest`), on 11.5's platform:
+
+- **A person's deletion and trash.** Its security policy, `RetentionAndHoldSecurityPolicy`, takes
+  `Remove` away from everyone on a document under retention or a legal hold. A deletion is refused
+  before any event, 403, "Permission denied: cannot remove document ..., Missing permission
+  'Remove' ...", and so is the trash, which asks first whether the person may remove it, 403, "User
+  ... does not have the permission to remove the document ...".
+- **Anyone's deletion of it, or of a folder holding one,** in the repository itself, an
+  administrator's included: "Cannot remove ..., it is under retention / hold", and "subdocument ...
+  is under retention / hold".
+- **The removal of its main file,** `file:content`; its replacement only in a blob provider in
+  record mode.
+- **A version restored on it:** "Version cannot be restored on a record", on any record.
+
+**What it leaves open:**
+
+- **An administrator's trash.** The trash is a property, and asks only whether an administrator may
+  remove the document, which it answers yes. A held record would be in the trash, and readable to
+  whoever reads the trash.
+- **A folder holding one put in the trash,** by anyone who may remove the folder (seen in the
+  tests): the platform then puts its documents in the trash after it, in the background, as the
+  person, and its own policy refuses the held one, which would be left out of the trash in a folder
+  that is in it (read in its code).
+- **Its attachments,** `files:files`, and its main file outside record mode: replaced or removed.
+
+**What the add-on refuses,** for everyone, an administrator included, in a synchronous listener,
+`HoldListener`, each with a 409, the code `held`, and nothing of the request written:
+
+| What                                                            | Its sentence                                                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A held document put in the trash, or deleted                    | This record is under a legal hold: it cannot be put in the trash or deleted until the hold is released.            |
+| A folder holding one, at any depth, put in the trash or deleted | A record in this folder is under a legal hold: the folder cannot be put in the trash or deleted until the hold is released. |
+| A change to its files, its main file or its attachments         | This record is under a legal hold: its files cannot be changed until the hold is released.                         |
+
+A person's deletion and trash are refused by the platform first, with its own 403, so a person sees
+the platform's sentence and an administrator the add-on's. The deletion's refusal is the add-on's
+before it is the repository's, which still refuses it should the add-on's check be gone (seen in the
+tests). A folder is searched with the add-on's session, since a removal or a trash takes the whole
+tree, what its user may not read included.
+
+**Its other properties stay editable,** on purpose, as the platform keeps them: a hold keeps what the
+record holds, its files, and not how it is described, so that a dispute under a hold is still worked
+on. A change of its files is told by the property's dirty flag, as the disposition review's own
+guard tells it, so a save that sends the files again unchanged is refused too.
+
+**Who passes:** the add-on's own writes, so that a disposition run meets the platform's guard as it
+always has; and whom the platform lets delete what it keeps (`BaseSession.canDeleteUndeletable`):
+the members of `NuxeoRecordCleaners` outside compliance mode, and everyone while the server's
+`org.nuxeo.core.allowDeleteUndeletableDocuments` is on, as Nuxeo's test framework turns it on to
+empty the repository. The add-on makes no exception of its own. Versions and proxies are passed
+over: a hold is the live document's, and a proxy of a held record may go.
+
+### Releasing a hold with a reason: `Records.ReleaseLegalHold`
+
+**Why it exists.** Placing a hold stays the retention module's: `Document.Hold` takes a
+`description`, which the platform keeps as the comment of its `afterSetLegalHold` audit entry. Its
+`Document.Unhold` takes nothing, and releases the hold with no comment, so the release's
+`afterRemoveLegalHold` entry would carry no reason, where the audit export reads a hold's
+description and the record page's holds card shows it. So the add-on has one operation, which
+releases it through the same `CoreSession.setLegalHold`, with the reason as that comment:
+
+```
+POST /nuxeo/api/v1/automation/Records.ReleaseLegalHold
+{ "input": "<document id>", "params": { "reason": "The dispute is settled." } }
+```
+
+- **As the person, never as the add-on:** the platform checks their `ManageLegalHold` on the
+  record, and refuses otherwise, 403.
+- **Refused, nothing written:** a reason that is empty or white space alone, longer than 1000
+  characters, or holding a control character but a tab or a line break, 400, code `reason`; a
+  record under no legal hold, 409, code `not-held`. With no `reason` at all, Automation refuses the
+  run before the operation.
+- **For decision 3's buttons:** the deployment's allow-list names it, as it names `Document.Hold`
+  ([app-definition-v2.md](../docs/business-apps/app-definition-v2.md), section 5), never a package;
+  `AgenticUi.RunAction` runs it as the person. It is reachable through Nuxeo's own Automation
+  endpoint too, as `Document.Unhold` is: the person's `ManageLegalHold` is the control, not the
+  button.
 
 ## The audit export
 
@@ -556,6 +651,19 @@ locations, its requests and its audit entries stay.
 
 ## Security notes, for the review
 
+- **A legal hold's guard is the server's,** for everyone, an administrator included: a held record's
+  trash and deletion, a folder's holding one, and a change to its files are refused on the server,
+  whatever the app shows. Hiding a button in the app is not the control. Only whom the platform
+  itself lets delete what it keeps passes, as it passes the platform's own guard.
+- **The release runs as the person.** `Records.ReleaseLegalHold` takes the session Automation gives
+  it, and the platform checks `ManageLegalHold`; it never runs with the add-on's session. Its reason
+  is a text kept in the audit as written, held to 1000 characters with no control character, and
+  never evaluated. An operation button reaches it only through the deployment's allow-list (decision
+  3); Nuxeo's Automation endpoint reaches it as it reaches `Document.Unhold`, with the same
+  permission.
+- **A hold is not hidden by the guard:** its refusals name the hold and nothing of the record, and a
+  folder's names no record in it, so that a person who may not read a held record in a folder learns
+  only that one is there.
 - **Who may do what is the folder's ACL.** `StartDisposition` and `ApproveDisposition` each include
   Read and AddChildren. Nuxeo counts `Everything` as holding both, and administrators as holding
   all: the folder **must block every permission it would inherit**, and the add-on refuses every
@@ -735,8 +843,13 @@ locations, its requests and its audit entries stay.
 - **The specialist's acceptance** of the audit export, phase 9's "Done when": the export is built and
   tested, and no records specialist has seen one ("What a records specialist checks in the export").
 - **Tenancy**, decision G, which the plan says is designed with the platform team.
-- **A button in the app.** Decision 3 is open; a run is started and decided, an export filed, and
-  a record moved, checked out or returned, over the REST API. The app's create dialog asks a file of any type with the `file` schema, and an
+- **Of legal holds:** more than one hold on a record, each with its own matter: the platform's hold is
+  one flag, and its history is the audit's; a hold placed on every record of a folder or a search at
+  once; a hold that keeps a record's other properties, which stay editable as the platform keeps
+  them; and `Document.Unhold`, which releases a hold with no reason, left as the platform's.
+- **A button in the app, for the review.** Decision 3 is open; a run is started and decided, an export filed, and
+  a record moved, checked out or returned, over the REST API. A hold's place and release are the
+  app's buttons through decision 3's allow-list, on the record page's holds card. The app's create dialog asks a file of any type with the `file` schema, and an
   export's CSV is that file, so that the repository keeps it: an export has no create form.
 - **A disposition schedule.** A run is started by a person; nothing starts one on a timer.
 
@@ -757,7 +870,9 @@ alone, and some JDK packages opened.
 | `DispositionClusterTest`    | On a server in a cluster: a run disposed of, a refusal that rolls the person's transaction back whole, and two approvals at once                                                                                                                                                                                                                                                                                                                                                                                       |
 | `CertificateCsvTest`        | The CSV's rows, quoting and formula guard                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `RetentionModelTest`        | What the add-on reads of the module, held to the module's own files; the module's audited events, as the tests register them                                                                                                                                                                                                                                                                                                                                                                                           |
-| `BundleTest`                | The bundle's version is the package's; it contributes no operation and no endpoint; the package depends on the module                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `BundleTest`                | The bundle's version is the package's; it contributes one operation, the hold's release, and no endpoint, and nothing to the allow-list; the package depends on the module                                                                                                                                                                                                                                                                                                                                             |
+| `LegalHoldGuardTest`        | **Demo step 5, a legal hold blocks a deletion, on the server:** a held record's deletion refused to a records manager by the platform, 403, and to an administrator by the add-on, 409; its trash the same; a folder holding one, at two depths, neither deleted nor put in the trash, by either; its main file and attachments neither replaced nor removed, by either; its title and description edited; a version not restored on it, the platform's; a record under no hold the platform's alone; a proxy removed; whom the platform lets delete what it keeps passing |
+| `ReleaseLegalHoldTest`      | `Records.ReleaseLegalHold` run by the Automation service: the hold released, and the audit's `afterRemoveLegalHold` comment the reason, stripped, by its releaser, with the hold's own description kept; an empty, white, too long or control-character reason refused, 400, and none at all by Automation; a record under no hold, 409; someone without `ManageLegalHold` refused, 403, the hold still on and nothing audited                                                                                              |
 | `AuditExportTest`           | Refused without the permission, and what it cannot cover; filed in the runs folder alone; its contents for a seeded period; a period longer than a page; its checksums; kept as written; its filer's alone; the folder by path or id; the server writes the rest                                                                                                                                                                                                                                                       |
 | `AuditExportGenerationTest` | Written once; waits for its period to settle, so that an entry written after the filing is in it; an export whose audit fails, or whose filer is not known, keeps nothing and says so                                                                                                                                                                                                                                                                                                                                  |
 | `AccessLogTest`             | A view of a record under retention or a hold logged with who, when and what, and nothing else's; a record listed is not viewed; the server's own reads, and a read for a person; a read rolled back; a view that cannot be recorded does not refuse the read; a download is the platform's own entry; the registry picks the add-on's writer, which writes the platform's JSON                                                                                                                                         |
@@ -809,6 +924,25 @@ no candidate, and not due; the custody entry, the registration and the destructi
 the export's custody columns; a reason; not moved to where it is; and, after the review, a location with a record filed inside it not deleted, a record not moved into a location, a folder holding a record not put in the trash but by an administrator, and a barcode held already skipped. The folder's trash goes red as the others do: should a trash not be refused, the test removes the folder before it fails, so that the trash's background work, which the add-on refuses record by record, ends rather than holding the test framework's cleanup. The seed's controls were
 seen failing with the desk's grant, and with an older rule's update, taken out.
 
+**A legal hold's checks, seen failing** the same way (27 November 2026), each taken out in turn and
+put back, and the test that holds it went red:
+
+| Taken out                                                        | Red                                                                     | Its failure                                                                                                                            |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| The held record's check, at its trash and its deletion           | `aHeldRecordIsNotPutInTheTrashByAnyone`, `aHeldRecordIsNotDeletedByAnyone` | The administrator's trash "Not refused"; the deletion refused by the repository instead, "Cannot remove ..., it is under retention / hold" |
+| The folder's check, at its deletion and trash                    | `aFolderHoldingAHeldRecordIsNotDeletedNorPutInTheTrash`                 | Refused by the repository instead, "subdocument ... is under retention / hold"                                                         |
+| The folder's check, at its trash alone                           | The same                                                                | "The trash of /held-cases/disputes/2026 was not refused", a records manager's                                                          |
+| The files' check                                                 | `aHeldRecordsFilesAreNotChanged`                                        | "Not refused": the attachments replaced                                                                                               |
+| Whom the platform lets delete what it keeps, passed              | `whomThePlatformLetsDeleteWhatItKeepsPassesTheGuardToo`                 | Refused, "This record is under a legal hold: ..."                                                                                      |
+| The release's reason checked                                     | `aReleaseWithNoReasonIsRefused`                                         | "Not refused"                                                                                                                          |
+| The release's check that the record is held                      | `aRecordUnderNoHoldIsRefused`                                           | "Not refused"                                                                                                                          |
+| The reason given to the platform (`null` in its place, as `Document.Unhold` gives) | `aRecordsManagerReleasesAHoldSayingWhyAndTheAuditKeepsTheReason` | expected "The dispute is settled in the customer's favour." but was ""                                                                  |
+| The release run as the person (the add-on's session in its place) | `someoneWithoutManageLegalHoldIsRefusedAndTheHoldStays`                 | "Not refused"                                                                                                                          |
+
+A failed folder's trash releases the hold before the test fails, so that the trash's background work
+ends rather than holding the test framework's cleanup; every test waits for the work a commit starts
+before it deletes, since a file's text extracted for the search would update the record.
+
 The tests set the sequencer as LTS 2025 does, `KeyValueStoreUIDSequencer` on the SQL key/value
 store, on H2 (`test-sequencer.xml`), as the document control add-on's do.
 
@@ -820,12 +954,14 @@ mvn verify -pl nuxeo-agentic-records -am
 
 | File                                               | What it is                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/java/org/nuxeo/agentic/records/`         | The listener, the requests and the disposal, the records due, the certificate's CSV; the audit export and its files; the add-on's audit entries, their writer, and the JSON writer that logs a view; physical records, their barcodes, their custody requests and their listener (`Physical*`, `Barcodes`, `Custody`) |
+| `src/main/java/org/nuxeo/agentic/records/`         | The listener, the requests and the disposal, the records due, the certificate's CSV; the audit export and its files; the add-on's audit entries, their writer, and the JSON writer that logs a view; physical records, their barcodes, their custody requests and their listener (`Physical*`, `Barcodes`, `Custody`); a legal hold's guard and release (`HoldListener`, `LegalHolds`, `ReleaseLegalHoldOperation`) |
 | `src/main/resources/OSGI-INF/records-types.xml`    | The nine types and their schemas, after the retention module's                                                                                                                                                                                                                                                        |
 | `src/main/resources/OSGI-INF/records-security.xml` | `StartDisposition`, `ApproveDisposition`, `ExportRecordsAudit` and `RecordCustody`                                                                                                                                                                                                                                    |
 | `src/main/resources/OSGI-INF/records-listener.xml` | The two listeners: the disposition review's, and physical records'                                                                                                                                                                                                                                                    |
 | `src/main/resources/OSGI-INF/records-audit.xml`    | The JSON writer for a document, the audit entries' writer, and the export's                                                                                                                                                                                                                                           |
-| `src/main/package/`, `src/main/assemble/`          | The Marketplace package, `nuxeo-agentic-records` 0.3.0, which depends on `nuxeo-retention`                                                                                                                                                                                                                            |
+| `src/main/resources/OSGI-INF/records-holds.xml`    | The legal hold's listener, `HoldListener`, with `LegalHolds`                                                                                                                                                                                                                                                          |
+| `src/main/resources/OSGI-INF/records-operations.xml` | The one operation, `Records.ReleaseLegalHold` (`ReleaseLegalHoldOperation`)                                                                                                                                                                                                                                         |
+| `src/main/package/`, `src/main/assemble/`          | The Marketplace package, `nuxeo-agentic-records` 0.4.0, which depends on `nuxeo-retention`                                                                                                                                                                                                                            |
 | `src/test/`                                        | The tests, the module's types and audited events as the tests register them, the platform's audit as the tests deploy it, the sequencer as LTS 2025 sets it, and test-only listeners and stand-ins                                                                                                                    |
 
 `nuxeo.agentic.records.audit.export.settleSeconds`, in `nuxeo.conf`, sets how long after its period's
