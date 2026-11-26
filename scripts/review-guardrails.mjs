@@ -11774,7 +11774,7 @@ function checkGeneratorsEsmSafe() {
           const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
           fail(
             `${file}:${line + 1} names \`${node.text}\`, which exists only in CommonJS. Nx loads ` +
-              'this source with Node\'s native type stripping, where the module is ESM and it is ' +
+              "this source with Node's native type stripping, where the module is ESM and it is " +
               'not defined, so `npx nx g ./tools/satori-generators:<generator>` throws while the ' +
               'compiled copy in `@nuxeo/satori-platform` works (NXSAT-795). For a template ' +
               'directory use `generatorFilesDir()` from `util/generator-files-dir.ts`; otherwise ' +
@@ -12407,6 +12407,158 @@ function checkAdoptedPatternsNotBypassed() {
           `${path} no longer imports ${gone.map((name) => `\`${name}\``).join(', ')} from ` +
             `\`${specifier}\`, so that much of its \`ADOPTION_BASELINE\` entry is stale. Delete ` +
             'those symbols: the baseline may only shrink.',
+        );
+      }
+    }
+  }
+}
+
+/**
+ * The feature libraries whose buttons and fields are the `nxs-` controls (`nxs-button`,
+ * `nxs-icon-button`, `nxs-text-field`, `nxs-select`), which `checkNxsControlsNotBypassed` holds
+ * there. A library joins once it has moved onto them, and does not leave.
+ *
+ * A list rather than every feature, deliberately. Thirty-odd feature files still use Material's
+ * buttons and fields directly, and many in ways the four controls do not cover yet: a button that
+ * opens a `mat-menu` or carries a `matTooltip`, a link drawn as a button, a `mat-select` choosing
+ * several values, an autocomplete. Holding every feature to the controls would refuse that code
+ * with nothing to replace it, and a baseline of thirty files would say more about the controls'
+ * gaps than about anyone's bypass. A listed library has no such use.
+ */
+const NXS_CONTROL_FEATURES = Object.freeze(['libs/features/layout-designer']);
+
+/** The Material entry points the `nxs-` controls own, and what replaces what each one draws. */
+const NXS_CONTROL_ENTRY_POINTS = new Map([
+  ['@angular/material/button', '`nxs-button` or `nxs-icon-button`'],
+  ['@angular/material/form-field', '`nxs-text-field` or `nxs-select`'],
+  ['@angular/material/input', '`nxs-text-field` or `nxs-select`'],
+  ['@angular/material/select', '`nxs-select`'],
+]);
+
+/** Material's selectors for what those entry points draw: elements, and attributes on a native element. */
+const MATERIAL_CONTROL_ELEMENTS = new Set([
+  'mat-form-field',
+  'mat-label',
+  'mat-hint',
+  'mat-error',
+  'mat-select',
+  'mat-option',
+  'mat-optgroup',
+]);
+const MATERIAL_CONTROL_ATTRIBUTES = new Set(
+  [
+    'mat-button',
+    'mat-flat-button',
+    'mat-stroked-button',
+    'mat-raised-button',
+    'mat-icon-button',
+    'mat-fab',
+    'mat-mini-fab',
+    'matButton',
+    'matIconButton',
+    'matFab',
+    'matMiniFab',
+    'matInput',
+    'matNativeControl',
+  ].map((name) => name.toLowerCase()),
+);
+
+/** What ships nothing: specs, the spec setup and spec-only support. */
+const NXS_CONTROL_SCAN_SKIP = /(\.spec\.ts|\.testing\.ts|test-setup\.ts)$/;
+
+/**
+ * Every opening tag in a template, its element name and the names of its attributes, with the
+ * binding brackets taken off (`[matButton]` is `matButton`) and the line it starts on. Comments
+ * are blanked first, keeping their newlines, so a comment that names `mat-form-field` is not a use
+ * and the lines after it keep their numbers. Quoted values are consumed whole, so a `>` in a bound
+ * expression does not end the tag, and a class or a translation key that spells a selector is a
+ * value, not an attribute.
+ */
+function templateTags(body) {
+  const text = body.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, ' '));
+  const tags = [];
+  for (const match of text.matchAll(/<([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g)) {
+    const attributes = match[2]
+      .replace(/"[^"]*"|'[^']*'/g, '')
+      .split(/[\s=/]+/)
+      .map((name) => name.replace(/^[[(*#]+|[\])]+$/g, ''))
+      .filter(Boolean);
+    tags.push({
+      element: match[1].toLowerCase(),
+      attributes,
+      line: text.slice(0, match.index).split('\n').length,
+    });
+  }
+  return tags;
+}
+
+/**
+ * A feature that has moved onto the `nxs-` controls does not go back to Material's.
+ *
+ * `checkAdoptedPatternsNotBypassed` could not have caught the layout designer drawing its buttons,
+ * fields and selects with Material: it guards the Satori entry points behind adopted primitives,
+ * and Satori has no button or field — it themes Material's — so there was nothing adopted to
+ * bypass, and until `nxs-button`, `nxs-icon-button`, `nxs-text-field` and `nxs-select` existed
+ * there was nothing to use instead. Now there is, and a library listed in `NXS_CONTROL_FEATURES`
+ * is held to them: none of its shipped `.ts` imports one of `NXS_CONTROL_ENTRY_POINTS` (a subpath,
+ * a re-export, a type-only or a dynamic import included), and none of its templates uses
+ * Material's selectors for them — `<mat-form-field>`, `mat-stroked-button`, `[matButton]`,
+ * `matInput`, `matNativeControl` and the rest. Both, because a component can reach Material's
+ * modules through another standalone import, and a template can hold a selector its component no
+ * longer imports.
+ *
+ * ## What this does not claim
+ *
+ * Not every Material import: a listed library may open `MatDialog`, which no control replaces.
+ * Not every feature: see `NXS_CONTROL_FEATURES` for why the others are not held yet. Not specs,
+ * which ship nothing.
+ */
+function checkNxsControlsNotBypassed() {
+  const files = git(['ls-files', '--cached', '--others', '--exclude-standard']).split('\n');
+  for (const library of NXS_CONTROL_FEATURES) {
+    const sources = files.filter(
+      (file) =>
+        file.startsWith(`${library}/src/`) &&
+        (file.endsWith('.ts') || file.endsWith('.html')) &&
+        !NXS_CONTROL_SCAN_SKIP.test(file) &&
+        fileExists(file),
+    );
+    if (!sources.some((file) => file.endsWith('.ts'))) {
+      fail(
+        `${library} is listed in NXS_CONTROL_FEATURES and has no source under ${library}/src/, so ` +
+          'no file of it was checked. Remove the entry if the library is gone, or fix the path.',
+      );
+      continue;
+    }
+
+    for (const file of sources) {
+      const body = read(file);
+      if (file.endsWith('.ts')) {
+        for (const entry of ts.preProcessFile(body, true, true).importedFiles) {
+          const owned = [...NXS_CONTROL_ENTRY_POINTS.keys()].find(
+            (point) => entry.fileName === point || entry.fileName.startsWith(`${point}/`),
+          );
+          if (owned === undefined) continue;
+          const line = body.slice(0, entry.pos).split('\n').length;
+          fail(
+            `${file}:${line} imports \`${entry.fileName}\`. ${library} has moved onto the \`nxs-\` ` +
+              `controls (NXS_CONTROL_FEATURES), and what that entry point draws is ` +
+              `${NXS_CONTROL_ENTRY_POINTS.get(owned)} from \`@nuxeo/satori-platform/components\`.`,
+          );
+        }
+        continue;
+      }
+      for (const { element, attributes, line } of templateTags(body)) {
+        const used = [
+          ...(MATERIAL_CONTROL_ELEMENTS.has(element) ? [`<${element}>`] : []),
+          ...attributes.filter((name) => MATERIAL_CONTROL_ATTRIBUTES.has(name.toLowerCase())),
+        ];
+        if (used.length === 0) continue;
+        fail(
+          `${file}:${line} draws ${used.map((name) => `\`${name}\``).join(', ')}, Angular ` +
+            `Material's own. ${library} has moved onto the \`nxs-\` controls ` +
+            '(NXS_CONTROL_FEATURES): use `nxs-button` or `nxs-icon-button` for a button, ' +
+            '`nxs-text-field` for a text field and `nxs-select` for a select.',
         );
       }
     }
@@ -14340,6 +14492,7 @@ const GUARDRAILS = [
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,
   checkAdoptedPatternsNotBypassed,
+  checkNxsControlsNotBypassed,
   checkWorkflowRefGates,
   checkGateInventory,
   checkPluginSpikeIsolated,
