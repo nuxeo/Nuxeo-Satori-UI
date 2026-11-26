@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../../../../libs/shared/app-definition/src/layout-v2.schema.json",
+  "version": 2,
+  "cards": [
+    {
+      "id": "appeal",
+      "labelKey": "payers.task.appeal",
+      "fields": [
+        "case:number",
+        { "field": "case:received", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "case:due", "widget": "date", "parameters": { "format": "long" } },
+        { "field": "case:summary", "widget": "long-text" }
+      ]
+    },
+    {
+      "id": "decision",
+      "labelKey": "payers.task.appealDecision",
+      "fields": [
+        {
+          "field": "var:decision",
+          "labelKey": "payers.task.decision",
+          "widget": "vocabulary",
+          "parameters": { "directory": "PayersAppealDecision" },
+          "required": true
+        },
+        {
+          "field": "var:rationale",
+          "labelKey": "payers.task.rationale",
+          "widget": "long-text",
+          "parameters": { "rows": 4 },
+          "required": true
+        }
+      ]
+    }
+  ]
+}

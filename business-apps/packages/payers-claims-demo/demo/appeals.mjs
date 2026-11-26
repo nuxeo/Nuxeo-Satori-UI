@@ -7,7 +7,9 @@
  * `appealProblems` refuses data the page would show wrongly or not at all: an appeal not against a
  * denied claim, an entry for an item the card does not list, one listed twice, a done item that
  * does not say both who and when, someone not of `USERS` or a day that is not one, and a checklist
- * on a case that is not an appeal. An entry not done may still say who and when.
+ * on a case that is not an appeal. An entry not done may still say who and when. Since 0.7.0, an
+ * appeal's decision too, `case:decision`, as its review writes it: one of `DECISIONS` on an appeal
+ * decided, none on one open or in review or on a grievance, and either on one closed.
  *
  * `checklistOnType` answers whether a server has the checklist's property, from its answer for the
  * Case type, so the seed and the demo ask the type, not a schema named after the field's prefix.
@@ -125,6 +127,12 @@ export function readOpenAppeals(xml = readFileSync(MODEL_XML, 'utf8')) {
   };
 }
 
+/**
+ * Since 0.7.0, what an appeal's review writes to `case:decision` when it decides it, the case
+ * schema's values. A case not decided holds none.
+ */
+export const DECISIONS = ['upheld', 'overturned'];
+
 /** Whether the queue `open`, from `readOpenAppeals`, holds the case: an appeal in one of its states. */
 export const isOpenAppeal = (kase, open) =>
   kase.category === 'appeal' && open.states.includes(kase.state);
@@ -153,11 +161,23 @@ export function appealProblems({ cases, claims, users }, checklist) {
   const people = new Set(users.map((user) => user.username));
   for (const kase of cases) {
     const entries = kase.checklist ?? [];
+    const decision = kase.decision ?? null;
     if (kase.category !== 'appeal') {
       if (entries.length > 0)
         problems.push(`${kase.number} is a ${kase.category}, and holds a checklist`);
+      if (decision !== null)
+        problems.push(`${kase.number} is a ${kase.category}, and holds a decision`);
       continue;
     }
+    if (kase.state === 'decided' && !DECISIONS.includes(decision))
+      problems.push(
+        `${kase.number} is decided, and its decision is ${decision}, not ${DECISIONS.join(' or ')}`,
+      );
+    // A closed appeal may have been decided first, or not: either is shown as it is.
+    if (['open', 'inReview'].includes(kase.state) && decision !== null)
+      problems.push(`${kase.number} is ${kase.state}, not decided, and holds a decision`);
+    if (kase.state === 'closed' && decision !== null && !DECISIONS.includes(decision))
+      problems.push(`${kase.number}'s decision is ${decision}, not ${DECISIONS.join(' or ')}`);
     const claim = claims.find((each) => each.number === kase.claim);
     if (!claim) problems.push(`${kase.number} is an appeal against no claim`);
     else if (claim.status !== 'denied')

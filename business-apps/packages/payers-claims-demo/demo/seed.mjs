@@ -41,6 +41,8 @@
  * `data.mjs` has it, and every other case's is emptied. Before anything is asked of the server,
  * `data.mjs` is held to the Case page's checklist card (`appeals.mjs`): an appeal against a claim
  * that is not denied, or an entry the card does not list, stops the run with exit 1, naming it.
+ * Since 0.7.0 a decided appeal's decision is written to `case:decision`, and every other case's
+ * emptied; an appeal decided with none, or one open with one, stops the run the same way.
  *
  * **The people.** Each user is created, or put back to `data.mjs`'s values: name, e-mail, groups
  * and password. The seeded workspace and its folders give the demo's groups the permissions
@@ -50,10 +52,10 @@
  *
  * **It checks what it seeded.** Last, as `check` says: each user signs in, in their groups, with
  * the rights `GRANTS` implies on a claim and on a case, and none to change a member; each claim is
- * in the state its status names; each case holds the checklist it was given, entry for entry; then
- * the kit's eight page providers return what it wrote, the four queues' aggregates count it, and
- * each adjuster's claims are what `payers_my_claims` returns to them, asked as they are, through
- * `$currentUser`. So a run that passes has run each of them on the server.
+ * in the state its status names; each case holds the checklist it was given, entry for entry, and
+ * since 0.7.0 its decision; then the kit's eight page providers return what it wrote, the four
+ * queues' aggregates count it, and each adjuster's claims are what `payers_my_claims` returns to
+ * them, asked as they are, through `$currentUser`. So a run that passes has run each of them on the server.
  *
  * Node 24 and nothing else: no install, no dependency. Credentials are sent to NUXEO_URL only, as
  * Basic authentication, and never printed.
@@ -61,7 +63,7 @@
  * Exit codes: 0, seeded and checked; 1, `data.mjs` disagrees with the Case page's checklist, the
  * server refused a write, stopped answering part way, or a check failed; 2, a precondition, found
  * before anything is written: no credentials, no demo password, no server, credentials refused or
- * not an administrator's, the package not installed or older than 0.6.0, no
+ * not an administrator's, the package not installed or older than 0.7.0, no
  * /default-domain/workspaces, or a user or a group of the demo's names that the seed did not
  * create.
  */
@@ -110,6 +112,8 @@ const TYPES = ['Member', 'Claim', 'Case', 'Provider', 'ClaimDocument', 'PayersCl
  * server without it has the platform's default lifecycle on claims.
  */
 const WORKFLOW_MODEL = 'PayersClaimReview';
+/** Version 0.7.0's appeal review, which comes with `case:decision`, an appeal's decision. */
+const APPEAL_MODEL = 'PayersAppealReview';
 const LIFECYCLE = readLifecycle();
 /** The Case page's checklist card, which version 0.4.1's `case:checklist` holds the state of. */
 const CHECKLIST = readAppealChecklist();
@@ -282,6 +286,8 @@ async function seed() {
       'case:assignee': kase.assignee,
       'case:summary': kase.summary,
       'case:checklist': checklistOf(kase),
+      // Since 0.7.0: a decided appeal's decision, and none on any other case.
+      'case:decision': kase.decision ?? null,
     });
     cases.set(kase.number, document.uid);
   }
@@ -344,7 +350,8 @@ function checklistOf(kase) {
 /**
  * The server answers, the credentials are accepted and are an administrator's, the package's
  * types are installed, version 0.3.0's search type among them, version 0.4.0's claims review
- * workflow and version 0.4.1's case:checklist, and no user or group of the demo's names is someone
+ * workflow, version 0.4.1's case:checklist, version 0.6.0's open-appeals queue and version 0.7.0's
+ * appeal review, and no user or group of the demo's names is someone
  * else's.
  */
 async function preflight() {
@@ -369,7 +376,7 @@ async function preflight() {
     throw new Precondition(
       missing.length === 1 && missing[0] === 'PayersClaimSearch'
         ? `${SERVER} has version 0.2.0 or older of the payers-claims-demo package, with no ` +
-            'PayersClaimSearch type for its queues: upgrade it to 0.6.0 ' +
+            'PayersClaimSearch type for its queues: upgrade it to 0.7.0 ' +
             '(business-apps/packages/payers-claims-demo/README.md), then run this again.'
         : `${SERVER} has no ${missing.join(', ')} type: install the payers-claims-demo package ` +
             'first (business-apps/packages/payers-claims-demo/README.md), then run this again.',
@@ -378,14 +385,14 @@ async function preflight() {
     throw new Precondition(
       `${SERVER} has version 0.3.0 or older of the payers-claims-demo package, with no ` +
         `${WORKFLOW_MODEL} workflow and the platform's default lifecycle on claims: upgrade it to ` +
-        '0.6.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
+        '0.7.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   // The Case type's schemas, as the record page reads them: the property is on the type, under
   // the schema whose prefix the field names, whatever that schema is called.
   if (!checklistOnType(await find('/config/types/Case'), CHECKLIST.field))
     throw new Precondition(
       `${SERVER} has version 0.4.0 or older of the payers-claims-demo package, with no ` +
-        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.6.0 ` +
+        `${CHECKLIST.field} for an appeal's checklist: upgrade it to 0.7.0 ` +
         '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   // Version 0.6.0's open-appeals queue: its facets' fields on the queues' search document, as the
@@ -397,8 +404,15 @@ async function preflight() {
   )
     throw new Precondition(
       `${SERVER} has version 0.5.1 or older of the payers-claims-demo package, with no ` +
-        'open-appeals queue: upgrade it to 0.6.0 ' +
+        'open-appeals queue: upgrade it to 0.7.0 ' +
         '(business-apps/packages/payers-claims-demo/README.md), then run this again.',
+    );
+  // Version 0.7.0's appeal review, which comes with the case's decision the seed writes.
+  if ((await find(`/workflowModel/${APPEAL_MODEL}`)) === null)
+    throw new Precondition(
+      `${SERVER} has version 0.6.1 or older of the payers-claims-demo package, with no ` +
+        `${APPEAL_MODEL} workflow and no case:decision for an appeal's decision: upgrade it to ` +
+        '0.7.0 (business-apps/packages/payers-claims-demo/README.md), then run this again.',
     );
   if ((await find(`/path${pathOf(WORKSPACES)}`)) === null)
     throw new Precondition(`${SERVER} has no ${WORKSPACES}, where the records go.`);
@@ -660,7 +674,9 @@ async function check(seeded) {
     throw new Error(`The claims are not in their statuses' states:\n  ${unsettled.join('\n  ')}`);
   const unchecked = await checklists(seeded);
   if (unchecked.length > 0)
-    throw new Error(`The cases' checklists are not as seeded:\n  ${unchecked.join('\n  ')}`);
+    throw new Error(
+      `The cases' checklists or decisions are not as seeded:\n  ${unchecked.join('\n  ')}`,
+    );
   const deadline = Date.now() + INDEX_WAIT_MS;
   for (;;) {
     const problems = await disagreements(seeded);
@@ -757,7 +773,7 @@ async function staff({ members, claims, cases }) {
  * Each seeded case, read again from the repository, holding the checklist it was given, entry for
  * entry and in order: what the Case page reads each item's state from. A day comes back as the
  * server writes a date, so it is compared by its day; a day the server moved, as a zone would, is
- * a difference.
+ * a difference. Since 0.7.0, and the decision it was given, or none.
  */
 async function checklists({ cases }) {
   const problems = [];
@@ -775,6 +791,12 @@ async function checklists({ cases }) {
     if (!Array.isArray(held) || JSON.stringify(read) !== JSON.stringify(wanted))
       problems.push(
         `${kase.number} holds ${JSON.stringify(held ?? null)}, not ${JSON.stringify(wanted)}`,
+      );
+    // Since 0.7.0, the case's decision, which the Case page shows on a decided appeal.
+    const decision = document?.properties?.['case:decision'] ?? null;
+    if (decision !== (kase.decision ?? null))
+      problems.push(
+        `${kase.number}'s decision is ${JSON.stringify(decision)}, not ${JSON.stringify(kase.decision ?? null)}`,
       );
   }
   return problems;

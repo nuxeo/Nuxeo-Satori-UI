@@ -152,6 +152,23 @@
             }
           ]
         },
+        "decision": {
+          "type": "string",
+          "constraints": [
+            {
+              "entity-type": "validation_constraint",
+              "name": "string",
+              "parameters": {}
+            },
+            {
+              "entity-type": "validation_constraint",
+              "name": "EnumConstraint",
+              "parameters": {
+                "Values": "[upheld, overturned]"
+              }
+            }
+          ]
+        },
         "due": {
           "type": "date",
           "constraints": [

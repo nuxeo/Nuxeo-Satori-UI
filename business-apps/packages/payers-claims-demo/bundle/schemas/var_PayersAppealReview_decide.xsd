@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Since 0.7.0, the appeal review's decision step's variables: the task form's var:decision and
+     var:rationale, in the variables facet the step's route node names, as every node with a task
+     must. Named after the workflow as well as the step, since a schema's name is shared by the
+     whole server. -->
+<xs:schema
+  targetNamespace="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersAppealReview_decide"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:nxs="http://www.nuxeo.org/ecm/project/schemas/payers-claims-demo/var_PayersAppealReview_decide">
+
+  <!-- The ids of the vocabulary PayersAppealDecision, which the form picks from. -->
+  <xs:element name="decision">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="uphold" />
+        <xs:enumeration value="overturn" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <!-- Why the denial is upheld or overturned, which either decision needs: written to the case's
+       history, and the overturned claim's. -->
+  <xs:element name="rationale" type="xs:string" />
+</xs:schema>
