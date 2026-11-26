@@ -428,11 +428,15 @@ export async function startDemo({ nuxeoPort = 8093, crmPort = 8094 } = {}) {
         return send(response, 404, 'Not found');
       }
       record('crm', request, 200);
+      // The page's placeholders, `{{ NAME }}`, as the formatter leaves them.
+      const values = {
+        NUXEO: nuxeoOrigin,
+        CLAIM: CLAIM_ID,
+        OTHER_ORIGIN: origin === crmOrigin ? otherOrigin : crmOrigin,
+      };
       const text = file.content
         .toString('utf8')
-        .replaceAll('{{NUXEO}}', nuxeoOrigin)
-        .replaceAll('{{CLAIM}}', CLAIM_ID)
-        .replaceAll('{{OTHER_ORIGIN}}', origin === crmOrigin ? otherOrigin : crmOrigin);
+        .replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (whole, name) => values[name] ?? whole);
       response.writeHead(200, { 'Content-Type': TYPES[extname(file.path)] ?? 'text/plain' });
       return response.end(text);
     } catch (error) {

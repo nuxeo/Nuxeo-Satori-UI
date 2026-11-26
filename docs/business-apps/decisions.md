@@ -305,6 +305,35 @@ way.
     access rules are not applied reader by reader: whoever may read the record sees its connector's
     fields. Token exchange, decision F, is what would change that.
 
+- **F, token exchange for embedded panels (26 November 2026).** Built against the recommendation,
+  "exchange in phase 7": a record page's panel inside another system's page,
+  [embedded-panels.md](embedded-panels.md), and its server's half,
+  [`nuxeo-agentic-embedded`](../../nuxeo-agentic-embedded/README.md). A host the server's
+  administrators register in `nxserver/config/`, never a package, exchanges its signed assertion of
+  a user for a short-lived token of the platform's own JWT service, for the Nuxeo user its
+  configuration maps, never an administrator unless it allows one; an OAuth 2.0 token exchange
+  (RFC 8693), with the host's client secret and key in the server's settings. The platform's own JWT
+  authenticator signs the user in with it, on the REST API only, and the add-on's filter holds it to
+  its host's origins and to reads; each exchange is audited. The panel, `<nuxeo-record-panel>`, is
+  the layout engine's record page in a shadow root, given its token by `postMessage`. An add-on of
+  its own rather than `nuxeo-agentic-core`, so that a server that embeds no panel gets no endpoint;
+  on B's recommendation either way, since it is no runtime essential of every server. Its security
+  review is deferred until the app is finished, as every security review is; it is installed
+  nowhere, and its demo runs against a stand-in. The shell's token-based sign-in, the decision's
+  other half, is not touched: the shell signs in as before. What changes if F goes another way:
+  - **No token exchange:** the add-on and `apps/nuxeo-embedded-panels` go, with the package's
+    `embedded/v1/` files and the frontend module's build of them; nothing else uses either.
+  - **Exchange through Nuxeo's OAuth 2.0 provider,** should the platform gain a token exchange or a
+    JWT bearer grant: the add-on's servlet and `TokenExchange` go, and the host's contribution
+    becomes the provider's client; the filter stays, unless the platform's tokens carry a scope it
+    enforces. The panel does not change.
+  - **A token of the add-on's own, not the platform's JWT:** an authentication plugin of the add-on's
+    in the REST API's chain, in place of the filter's reliance on `JWT_AUTH`; the exchange and the
+    panel do not change.
+  - **Connectors, decision D:** the panel's card from another system still reads through
+    `Connector.Read` with the service credential; passing the user's own identity on to the other
+    system is not built.
+
 - **5, the spike its recommendation asks for (25 November 2026).** Built as the recommendation
   says, "spike in phase 6": a prototype loader in `tools/plugin-spike`, which ships nothing, and
   [its report](spikes/plugins-decision-5.md), which compares the template build with signed,
