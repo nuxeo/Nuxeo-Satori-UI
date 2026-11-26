@@ -12,22 +12,25 @@ wait for a security review, and some are built on open decisions
 
 ## 1. What there is to install
 
-| Package                    | What it is                                                                                                                                  | Depends on                                                  | On staging            | Installed so far                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------- | ------------------------------------------------- |
-| `nuxeo-agentic-ui`         | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                     | 2026.0.2 once stamped | Earlier builds, on the local server only          |
-| `nuxeo-agentic-assets`     | An asset's rights, enforced on the server at the platform's download endpoints, and an asset's share links                                  | Nothing                                                     | 0.2.0                 | Nowhere                                           |
-| `nuxeo-agentic-connectors` | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                  | 2026.0.2-SNAPSHOT     | Nowhere                                           |
-| `payers-claims-demo`       | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                                 | 0.5.1                 | 0.3.0 on the local server; 0.4.0 to 0.5.1 nowhere |
-| `brand-assets-demo`        | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`   | 0.2.2                 | 0.1.0 on the local server; 0.1.1 to 0.2.2 nowhere |
-| `contracts-demo`           | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                 | 0.2.1                 | Nowhere                                           |
-| `facilities-demo`          | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                 | 0.1.1                 | Nowhere                                           |
-| `moves-demo`               | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                 | 0.1.0                 | Nowhere                                           |
-| `nuxeo-agentic-records`    | The disposition review, on the platform's retention module: runs, two approvals other than the starter's, deletion and a certificate        | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package | 0.1.0                 | Nowhere                                           |
-| `records-demo`             | The records kit: runs awaiting approval, a run's page, a certificate's page                                                                 | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.1.0`  | 0.1.0                 | Nowhere                                           |
+| Package                     | What it is                                                                                                                                  | Depends on                                                   | On staging            | Installed so far                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------- | ------------------------------------------------- |
+| `nuxeo-agentic-ui`          | The app: the `nuxeo-agentic-core` bundle and the client, which it copies to `nxserver/nuxeo.war/agentic-ui`, served at `/nuxeo/agentic-ui/` | Nothing                                                      | 2026.0.2 once stamped | Earlier builds, on the local server only          |
+| `nuxeo-agentic-assets`      | An asset's rights, enforced on the server at the platform's download endpoints, and an asset's share links                                  | Nothing                                                      | 0.2.0                 | Nowhere                                           |
+| `nuxeo-agentic-connectors`  | `Connector.Read`, live fields from another system on a record page. **A bundle, with no Marketplace package yet**                           | No package                                                   | 2026.0.2-SNAPSHOT     | Nowhere                                           |
+| `nuxeo-agentic-documents`   | Controlled documents: numbers from the platform's sequencer, unique per series, and a new revision superseding the one before it            | Nothing                                                      | 0.1.0                 | Nowhere                                           |
+| `payers-claims-demo`        | The Payers kit: members, claims, cases, a claims review workflow, appeals and two operation buttons                                         | `nuxeo-agentic-ui:2026.0.2`                                  | 0.5.1                 | 0.3.0 on the local server; 0.4.0 to 0.5.1 nowhere |
+| `brand-assets-demo`         | The brand assets kit: an asset library whose rights the server enforces                                                                     | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-assets:0.2.0`    | 0.2.2                 | 0.1.0 on the local server; 0.1.1 to 0.2.2 nowhere |
+| `contracts-demo`            | The contracts kit: a record page, an edit form, a renewals queue                                                                            | `nuxeo-agentic-ui:2026.0.2`                                  | 0.2.1                 | Nowhere                                           |
+| `facilities-demo`           | The tutorial's work-order app                                                                                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.1                 | Nowhere                                           |
+| `moves-demo`                | The moves kit: moves with their inventories, damage claims with their attachments, two queues                                               | `nuxeo-agentic-ui:2026.0.2`                                  | 0.1.0                 | Nowhere                                           |
+| `controlled-documents-demo` | The controlled documents kit: an engineering register, its record page with the superseded banner, a queue of current documents             | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-documents:0.1.0` | 0.1.0                 | Nowhere                                           |
+| `nuxeo-agentic-records`     | The disposition review, on the platform's retention module: runs, two approvals other than the starter's, deletion and a certificate        | `nuxeo-retention:2025.0.0`, Nuxeo's own Marketplace package  | 0.1.0                 | Nowhere                                           |
+| `records-demo`              | The records kit: runs awaiting approval, a run's page, a certificate's page                                                                 | `nuxeo-agentic-ui:2026.0.2`, `nuxeo-agentic-records:0.1.0`   | 0.1.0                 | Nowhere                                           |
 
 Sources: each package's `package.xml`
 ([`nuxeo-agentic-ui`](../../nuxeo-agentic-ui-package/src/main/resources/package.xml),
-[`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/src/main/package/package.xml), and each kit's
+[`nuxeo-agentic-assets`](../../nuxeo-agentic-assets/src/main/package/package.xml),
+[`nuxeo-agentic-documents`](../../nuxeo-agentic-documents/src/main/package/package.xml), and each kit's
 `package/package.xml`), [`assembly.xml`](../../nuxeo-agentic-ui-package/src/main/assemble/assembly.xml),
 the [assets add-on's README](../../nuxeo-agentic-assets/README.md) ("It is not installed
 anywhere"), the [connectors README](../../nuxeo-agentic-connectors/README.md) ("Nothing here is
@@ -36,10 +39,12 @@ installed on any server yet"), and the kits' READMEs:
 [brand assets](../../business-apps/packages/brand-assets-demo/README.md),
 [contracts](../../business-apps/packages/contracts-demo/README.md),
 [facilities](../../business-apps/packages/facilities-demo/README.md),
-[moves](../../business-apps/packages/moves-demo/README.md) and
-[records](../../business-apps/packages/records-demo/README.md), with the
-[records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed on any
-server").
+[moves](../../business-apps/packages/moves-demo/README.md),
+[controlled documents](../../business-apps/packages/controlled-documents-demo/README.md) and
+[records](../../business-apps/packages/records-demo/README.md); the
+[documents add-on's README](../../nuxeo-agentic-documents/README.md) ("It is not installed anywhere")
+and the [records add-on's README](../../nuxeo-agentic-records/README.md) ("Nothing here is installed
+on any server").
 
 - **Every package targets Nuxeo LTS `[2025.0,2026.0)`** in its `package.xml`. What was checked was
   checked against Nuxeo 2025.10.18.

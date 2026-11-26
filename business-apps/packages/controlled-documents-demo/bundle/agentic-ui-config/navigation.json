@@ -1,0 +1,8 @@
+{
+  "$schema": "../../../../../libs/shared/app-definition/src/navigation.schema.json",
+  "version": 2,
+  "entries": [
+    { "id": "home", "labelKey": "controlled-documents.nav.home", "icon": "home", "page": "home" },
+    { "id": "current", "icon": "list", "queue": "current" }
+  ]
+}

@@ -1,0 +1,17 @@
+<package type="addon" name="nuxeo-agentic-documents" version="@documents.package.version@">
+  <title>Nuxeo Satori document control: numbering, revisions and supersession</title>
+  <description>
+    <p>The document control module's server add-on. A document whose type carries the ControlledDocument facet is numbered from the platform's sequencer, in a number series a package registers: unique in its series, and never reused. A new revision names the one it supersedes: it is given that revision's number and the next revision, and the old one is marked superseded and linked both ways in the same transaction, refused when the user may not write the old one. It numbers nothing until a package registers a series and a type carries the facet.</p>
+  </description>
+  <vendor>Hyland Software</vendor>
+  <installer restart="true" />
+  <uninstaller restart="true" />
+  <require-terms-and-conditions-acceptance>false</require-terms-and-conditions-acceptance>
+  <license>Apache License, Version 2.0</license>
+  <license-url>http://www.apache.org/licenses/LICENSE-2.0</license-url>
+  <target-platform>
+    <name>lts</name>
+    <version>[2025.0,2026.0)</version>
+  </target-platform>
+  <visibility>PRIVATE</visibility>
+</package>

@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- For the atomicity test only: a listener that fails the supersession's second write, after the
+     add-on's own listener (priority 50) has let it through. -->
+<component name="org.nuxeo.agentic.documents.test.failing-write">
+
+  <require>org.nuxeo.agentic.documents.listener</require>
+
+  <extension target="org.nuxeo.ecm.core.event.EventServiceComponent" point="listener">
+    <listener name="failingSupersessionWrite" async="false" postCommit="false" priority="100"
+      class="org.nuxeo.agentic.documents.FailingWrite">
+      <event>beforeDocumentModification</event>
+    </listener>
+  </extension>
+
+</component>

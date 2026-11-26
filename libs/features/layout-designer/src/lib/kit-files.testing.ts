@@ -91,6 +91,8 @@ export function kitFiles(): KitFile[] {
 export const NOT_BYTE_FOR_BYTE: Readonly<Record<string, string>> = {
   'business-apps/packages/contracts-demo/bundle/agentic-ui-config/queues/up-for-renewal.json':
     'its one sort, { "field": "contract:end", "order": "asc" }, is written across four lines',
+  'business-apps/packages/controlled-documents-demo/bundle/agentic-ui-config/queues/current.json':
+    'its one sort, { "field": "docctl:number", "order": "asc" }, is written across four lines',
   'business-apps/packages/facilities-demo/bundle/agentic-ui-config/layouts/WorkOrder/edit.layout.json':
     'four required fields, such as { "field": "dc:title", "required": true }, are each written across four lines',
   'business-apps/packages/facilities-demo/bundle/agentic-ui-config/queues/open-work-orders.json':
