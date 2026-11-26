@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "notes": [
+    {
+      "version": "0.2.0",
+      "item": "property dmgsearch:dmg_moveNumber_agg",
+      "note": "The open claims' Move facet groups by the claim's move, dmg:move, and shows each move by its title, no longer by the copied move number, dmg:moveNumber: the page provider moves_open_claims's aggregate dmg_moveNumber_agg, and the search document's field of that name, are now dmg_move_agg, whose buckets are the moves' ids. A queue, a home figure or a deployment layer of a customer's that names dmg_moveNumber_agg names dmg_move_agg instead, and a facet on it gives \"widget\": \"document-link\" to show the moves' titles rather than their ids. dmg:moveNumber stays on the claim."
+    }
+  ]
+}

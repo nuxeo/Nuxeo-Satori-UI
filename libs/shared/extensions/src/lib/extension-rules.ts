@@ -68,7 +68,8 @@ export interface ExtensionRuleContext {
    */
   readonly flags: Readonly<Record<string, boolean>>;
   /**
-   * Today, for the date rules `app.rules.datePassed` and `app.rules.dateWithin`; absent, the
+   * Today, for the date rules `app.rules.datePassed`, `app.rules.dateWithin` and
+   * `app.rules.dateAfter`'s `"today"`; absent, the
    * browser's clock. The record page and its forms give their own, `RECORD_PAGE_TODAY`, so that a
    * banner reads the day the page's dates and computations read, and a test or a demo that pins
    * the page's day pins its banners too.

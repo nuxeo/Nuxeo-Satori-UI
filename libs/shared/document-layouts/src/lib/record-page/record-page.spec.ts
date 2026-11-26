@@ -22,7 +22,7 @@ import {
 import { Subject, of, type Observable } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
-import type { DocumentTypeDefinition } from '../layout.model';
+import type { DocumentTypeDefinition, LayoutFieldType } from '../layout.model';
 import { ConnectorRecordService } from './connector-record.service';
 import type { LinkedRecord } from './linked-record';
 import { readRecordLayout } from './record-layout';
@@ -253,7 +253,21 @@ describe('RecordPageComponent', () => {
   let rowProperties: () => Observable<ReadonlyMap<string, unknown>>;
   /** The linked records' search: each call is one request, with the ids it was given. */
   let linkedRecords: ReturnType<
-    typeof vi.fn<(ids: readonly string[]) => Observable<ReadonlyMap<string, LinkedRecord> | null>>
+    typeof vi.fn<
+      (
+        ids: readonly string[],
+        schemas?: readonly string[],
+      ) => Observable<ReadonlyMap<string, LinkedRecord> | null>
+    >
+  >;
+  /** What a `show` reads of the types it links to, as the layout service reads their schemas. */
+  let linkedProperty: ReturnType<
+    typeof vi.fn<
+      (
+        types: readonly string[],
+        show: string,
+      ) => Observable<{ schema: string; definition: LayoutFieldType } | null>
+    >
   >;
   /** The zone the page shows an instant in: the process's own, unless a test chooses one. */
   let timeZone: string | undefined;
@@ -312,6 +326,7 @@ describe('RecordPageComponent', () => {
             : null,
       );
     linkedRecords = vi.fn((ids: readonly string[]) => of(linked(ids)));
+    linkedProperty = vi.fn(() => of(null));
     rowProperties = () => of(new Map());
     warnings = [];
     timeZone = undefined;
@@ -336,7 +351,9 @@ describe('RecordPageComponent', () => {
             vocabularyLabel: (directory: string, id: string) => vocabularyLabel(directory, id),
             principalLabel: (kind: string, id: string) => principal(kind, id),
             rowPropertiesOf: () => rowProperties(),
-            linkedRecords: (ids: readonly string[]) => linkedRecords(ids),
+            linkedRecords: (ids: readonly string[], schemas?: readonly string[]) =>
+              schemas === undefined ? linkedRecords(ids) : linkedRecords(ids, schemas),
+            linkedProperty: (types: readonly string[], show: string) => linkedProperty(types, show),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => pageToday },
@@ -603,6 +620,271 @@ describe('RecordPageComponent', () => {
     expect(notes?.querySelector('b')?.textContent).toBe('email');
     expect(notes?.querySelector('script')).toBeNull();
     expect(notes?.innerHTML).not.toContain('alert');
+  });
+
+  describe("a document-link's show", () => {
+    /** The referrer by name, and the referrer's own plan and joining day, as a page shows them. */
+    const SHOW_PAGE = {
+      version: 2,
+      cards: [
+        {
+          id: 'links',
+          fields: [
+            {
+              field: 'member:referrer',
+              widget: 'document-link',
+              parameters: { types: ['Member'] },
+            },
+            {
+              id: 'referrerPlan',
+              field: 'member:referrer',
+              widget: 'document-link',
+              parameters: { types: ['Member'], show: 'plan:name' },
+            },
+            {
+              id: 'referrerJoined',
+              field: 'member:household',
+              widget: 'document-link',
+              label: 'Joined',
+              parameters: { types: ['Member'], show: 'plan:joinedOn' },
+            },
+          ],
+        },
+      ],
+    };
+    const PLANS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+      [WEI]: { 'plan:name': 'Gold', 'plan:joinedOn': '2024-03-01T00:00:00.000Z' },
+      [JOHN]: { 'plan:name': 'Silver', 'plan:joinedOn': null },
+    };
+    const PLAN = {
+      'plan:name': { schema: 'plans', definition: { type: 'string' } },
+      'plan:joinedOn': { schema: 'plans', definition: { type: 'date' } },
+      'audit:checkedOn': { schema: 'audit', definition: { type: 'date' } },
+    } as const;
+
+    beforeEach(() => {
+      linkedProperty = vi.fn((_types: readonly string[], show: string) =>
+        of(PLAN[show as keyof typeof PLAN] ?? null),
+      );
+      // The search returns a record's properties of the schemas asked for, and none otherwise.
+      linkedRecords.mockImplementation((ids, schemas = []) =>
+        of(
+          new Map(
+            [...linked(ids)].map(([id, record]): [string, LinkedRecord] => [
+              id,
+              { ...record, properties: schemas.includes('plans') ? (PLANS[id] ?? {}) : {} },
+            ]),
+          ),
+        ),
+      );
+    });
+
+    const shown = (root: HTMLElement, field: string) =>
+      [...root.querySelectorAll(`[data-field="${field}"] .record-page__value > *`)].map((node) => ({
+        text: node.textContent?.trim(),
+        href: node.getAttribute('href'),
+      }));
+    const labelOf = (root: HTMLElement, field: string) =>
+      root.querySelector(`[data-field="${field}"] .record-page__label`)?.textContent?.trim();
+
+    it("shows the linked record's property, by its schema type, as a link to that record", async () => {
+      const root = await render(
+        member({ 'member:referrer': WEI, 'member:household': [WEI, JOHN] }),
+        SHOW_PAGE,
+      );
+      // The title and the property stand side by side, over one reference.
+      expect(valueOf(root, 'member:referrer')).toBe('Wei Chen');
+      expect(shown(root, 'member:referrer/plan:name')).toEqual([
+        { text: 'Gold', href: `/doc/${WEI}` },
+      ]);
+      // Labelled as the shown property, not as the reference, unless the entry says otherwise.
+      expect(labelOf(root, 'member:referrer/plan:name')).toBe('Name');
+      expect(labelOf(root, 'member:household/plan:joinedOn')).toBe('Joined');
+      // A date, as the date widget shows one; a record without the value is left out of the list.
+      expect(shown(root, 'member:household/plan:joinedOn')).toEqual([
+        { text: 'March 1, 2024', href: `/doc/${WEI}` },
+      ]);
+      expect(linkedProperty).toHaveBeenCalledWith(['Member'], 'plan:name');
+    });
+
+    it('reads each linked record once, with every schema the page shows, after the types are read', async () => {
+      await render(member({ 'member:referrer': WEI, 'member:household': [JOHN, WEI] }), SHOW_PAGE);
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0]).toEqual([[JOHN, WEI].sort(), ['plans']]);
+    });
+
+    it('waits for the linked types before it reads, so a record is not read twice', async () => {
+      const types = new Subject<{ schema: string; definition: { type: string } } | null>();
+      linkedProperty = vi.fn(() => types);
+      const root = await render(member({ 'member:referrer': WEI }), SHOW_PAGE);
+      expect(linkedRecords).not.toHaveBeenCalled();
+      // Meanwhile the property shows nothing, not the stored id.
+      expect(valueOf(root, 'member:referrer/plan:name')).toBe('');
+      types.next(PLAN['plan:name']);
+      types.complete();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(valueOf(root, 'member:referrer/plan:name')).toBe('Gold');
+    });
+
+    it('shows a record the reader may not read as unavailable, never one of its values', async () => {
+      const root = await render(
+        member({ 'member:referrer': GONE, 'member:household': [GONE, 'not-an-id'] }),
+        SHOW_PAGE,
+      );
+      expect(valueOf(root, 'member:referrer/plan:name')).toBe('Unavailable');
+      expect(valueOf(root, 'member:household/plan:joinedOn')).toBe('Unavailable, Unavailable');
+      expect(root.textContent).not.toContain(GONE);
+    });
+
+    it('shows a readable record without the value as empty', async () => {
+      const root = await render(member({ 'member:household': [JOHN] }), SHOW_PAGE);
+      expect(valueOf(root, 'member:household/plan:joinedOn')).toBe('—');
+    });
+
+    it('leaves the field out, and says why, where no linked type has the property or it is a reference', async () => {
+      linkedProperty = vi.fn((_types: readonly string[], show: string) =>
+        of(
+          show === 'plan:name'
+            ? null
+            : { schema: 'plans', definition: { type: 'string', documentReference: true as const } },
+        ),
+      );
+      const root = await render(
+        member({ 'member:referrer': WEI, 'member:household': [WEI] }),
+        SHOW_PAGE,
+      );
+      expect(root.querySelector('[data-field="member:referrer/plan:name"]')).toBeNull();
+      expect(root.querySelector('[data-field="member:household/plan:joinedOn"]')).toBeNull();
+      expect(valueOf(root, 'member:referrer')).toBe('Wei Chen');
+      expect(warnings).toContain(
+        '[agentic-ui-layouts] Member/view layout: cards[0].fields[1] left out: none of the types it links to, Member, has plan:name, or their schemas could not be read',
+      );
+      expect(warnings).toContain(
+        "[agentic-ui-layouts] Member/view layout: cards[0].fields[2] left out: plan:joinedOn is itself a reference, and would show another record's stored id",
+      );
+      // The records the page still shows are read without the schema of a field it left out.
+      expect(linkedRecords.mock.calls.at(-1)).toEqual([[WEI], []]);
+    });
+
+    it("reads with the schemas its related lists' columns show, so a list asks nothing again", async () => {
+      const page = {
+        version: 2,
+        cards: [
+          SHOW_PAGE.cards[0],
+          {
+            id: 'referred',
+            label: 'Referred',
+            related: {
+              pageProvider: 'member_referred',
+              parameters: [{ field: 'member:referrer' }],
+              columns: [
+                {
+                  field: 'member:referrer',
+                  widget: 'document-link',
+                  parameters: { types: ['Member'], show: 'audit:checkedOn' },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      // The list's one row names the record the page's fields name.
+      execute.mockImplementation(() =>
+        of({
+          entries: [{ ...member({ 'member:referrer': WEI }), uid: 'm2' }],
+          totalSize: 1,
+          currentPageSize: 1,
+          currentPageIndex: 0,
+          numberOfPages: 1,
+          isNextPageAvailable: false,
+        }),
+      );
+      rowProperties = () => of(new Map([['member:referrer', { type: 'string' }]]));
+      const root = await render(member({ 'member:referrer': WEI }), page);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const list = fixture.debugElement.query(By.directive(RecordListComponent));
+      expect(list).not.toBeNull();
+      // The list drew its row, and read nothing: the page read the record with the list's schema.
+      expect(root.querySelector('[data-card-id="referred"] tr[data-uid="m2"]')).not.toBeNull();
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      expect(linkedRecords.mock.calls[0]).toEqual([[WEI], ['audit', 'plans']]);
+      expect(linkedProperty).toHaveBeenCalledWith(['Member'], 'audit:checkedOn');
+    });
+
+    it('reads nothing for a file drawn anew until its own shows are known, then each record once', async () => {
+      // The case manager's field holds a record's id, which the first file does not name.
+      await render(member({ 'member:referrer': WEI, 'member:caseManager': MARIA }), SHOW_PAGE);
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      const pending = new Subject<{ schema: string; definition: LayoutFieldType } | null>();
+      linkedProperty = vi.fn(() => pending);
+      // A plain link to a record not read yet, and a show whose types are not read yet.
+      fixture.componentRef.setInput(
+        'layout',
+        layoutOf({
+          version: 2,
+          cards: [
+            {
+              id: 'links',
+              fields: [
+                { field: 'member:caseManager', widget: 'document-link' },
+                {
+                  id: 'checked',
+                  field: 'member:caseManager',
+                  widget: 'document-link',
+                  parameters: { types: ['Member'], show: 'audit:checkedOn' },
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(linkedRecords).toHaveBeenCalledTimes(1);
+      pending.next(PLAN['audit:checkedOn']);
+      pending.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      // Read once, with the new file's schema, not first with the old file's and then again.
+      expect(linkedRecords.mock.calls.slice(1)).toEqual([[[MARIA], ['audit']]]);
+    });
+
+    it("never pairs a file's show with what another file's read, as the page is drawn anew", async () => {
+      const root = await render(member({ 'member:referrer': WEI }), SHOW_PAGE);
+      expect(valueOf(root, 'member:referrer/plan:name')).toBe('Gold');
+      // The same place shows another property; its type is not read yet.
+      const pending = new Subject<{ schema: string; definition: LayoutFieldType } | null>();
+      linkedProperty = vi.fn(() => pending);
+      const fields = SHOW_PAGE.cards[0].fields;
+      fixture.componentRef.setInput(
+        'layout',
+        layoutOf({
+          ...SHOW_PAGE,
+          cards: [
+            {
+              ...SHOW_PAGE.cards[0],
+              fields: [
+                fields[0],
+                { ...fields[1], parameters: { types: ['Member'], show: 'plan:joinedOn' } },
+              ],
+            },
+          ],
+        }),
+      );
+      fixture.detectChanges();
+      // Meanwhile it shows nothing: not the name read for the file before, under the new label.
+      expect(valueOf(root, 'member:referrer/plan:joinedOn')).toBe('');
+      expect(root.textContent).not.toContain('Gold');
+      pending.next(PLAN['plan:joinedOn']);
+      pending.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(valueOf(root, 'member:referrer/plan:joinedOn')).toBe('March 1, 2024');
+    });
   });
 
   describe('rules', () => {

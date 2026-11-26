@@ -180,7 +180,11 @@ demo/                                starter kits only; not checked
 - **`facets`** are filters from the page provider's aggregates, each named as the page provider
   defines it on the server. When the package's own model defines the page provider, the pipeline
   refuses a facet whose aggregate it does not define ([package-pipeline.md](package-pipeline.md),
-  section 2).
+  section 2). A facet on a reference, an aggregate whose buckets are records' ids, may show each
+  bucket by its record's title with `"widget": "document-link"`, as a `document-link` column shows
+  one: `{ "aggregate": "dmg_move_agg", "labelKey": "moves.facet.move", "widget": "document-link" }`.
+  It is the only widget a facet takes: another is a `parameter` finding, and one nobody registered
+  `unknown`.
 - **`rowActions` and `bulkActions`** are the platform's registered actions
   ([extension-reference.md](../extension-reference.md), sections 10a and 5), or the package's own,
   from `actions.json`, that show on rows or in bulk.
@@ -231,6 +235,19 @@ provider, for the development server.
   results have no aggregate for is not drawn, and the console says why: a page provider that
   queries the repository has none. An aggregate named as the search's own parameters are, such as
   `pageSize`, or with a `.` or a `-`, cannot be sent back, and its facet is left out.
+- **A facet with `"widget": "document-link"`** shows each bucket by the title of the record its key
+  names, and still sends the key back when it is chosen. **Added on 26 November 2026** for the
+  moves kit's Move facet ([its README](../../business-apps/packages/moves-demo/README.md), "Phase 8
+  feedback", item 4). The titles are read as a `document-link`'s are
+  ([layout-v2.md](layout-v2.md), section 11): one search for every bucket's id at once, through the
+  REST API as the reader, only keys that are documents' ids sent, each as a query parameter of its
+  own. The queue keeps one lookup for as long as it is drawn, which its list shares, and asks with
+  the schemas its columns' `show` read, as the list does (layout-v2.md, section 12), so a record a
+  cell and a bucket both name is read once. **Where a title cannot be read, the bucket shows its
+  key,** the stored id: a record the reader may not read, one that no longer exists, a key that is
+  not an id, a search that failed, and a record still being read. Unlike a `document-link` cell,
+  which says "Unavailable", a bucket needs a text that tells it from the others to be chosen, and
+  the key is what the server's aggregate already returned to the reader.
 - **Selecting rows** offers the queue's bulk actions in the app's selection bar: those that the
   `bulk-actions` slot resolves and that have a handler on the page, as row actions are offered.
   Choosing a bucket clears the selection. Rows cannot be selected when no bulk action is offered.

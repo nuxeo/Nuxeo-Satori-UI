@@ -16,10 +16,18 @@ export type { ResolvedFormLayout } from './lib/form-layout/resolve-form-layout';
 export { readLayoutIndex } from './lib/layout-file';
 export { RECORD_PAGE_TODAY, RecordPageComponent } from './lib/record-page/record-page';
 export { RecordListComponent } from './lib/record-page/record-list';
+export { isDocumentId } from './lib/record-page/linked-record';
+export {
+  LinkedRecordLookup,
+  type LinkedRecords,
+  NO_RECORDS,
+} from './lib/record-page/record-lookups';
 export { RECORD_VIDEO_ID, RecordVideoComponent } from './lib/record-page/record-video';
 export { TaskFormComponent } from './lib/task-form/task-form';
 export {
+  linkedTypesOf,
   readRecordList,
+  showOf,
   type EntryReading,
   type RecordListEntry,
   type RecordListSort,

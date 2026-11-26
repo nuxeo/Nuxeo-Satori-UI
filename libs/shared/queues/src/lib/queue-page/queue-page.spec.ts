@@ -101,6 +101,24 @@ describe('QueuePageComponent', () => {
   let execute: ReturnType<typeof vi.fn>;
   let pages: Subject<PageProviderResults>[];
   let warnings: string[];
+  /** The linked records' search: each call is one request, with the ids it was given. */
+  let linkedRecords: ReturnType<
+    typeof vi.fn<
+      (
+        ids: readonly string[],
+        schemas?: readonly string[],
+      ) => Observable<ReadonlyMap<string, unknown> | null>
+    >
+  >;
+  /** What a column's `show` reads of the types it links to. */
+  let linkedProperty: ReturnType<
+    typeof vi.fn<
+      (
+        types: readonly string[],
+        show: string,
+      ) => Observable<{ schema: string; definition: { type: string } } | null>
+    >
+  >;
 
   function create(groups: readonly string[] = ['claims-adjusters', 'members']): void {
     TestBed.configureTestingModule({
@@ -133,10 +151,14 @@ describe('QueuePageComponent', () => {
                 new Map([
                   ['claim:number', { type: 'string' }],
                   ['claim:received', { type: 'date' }],
+                  ['claim:move', { type: 'string' }],
                 ]),
               ),
             vocabularyLabel: () => of(null),
             principalLabel: () => of(null),
+            linkedRecords: (ids: readonly string[], schemas?: readonly string[]) =>
+              schemas === undefined ? linkedRecords(ids) : linkedRecords(ids, schemas),
+            linkedProperty: (types: readonly string[], show: string) => linkedProperty(types, show),
           },
         },
         { provide: RECORD_PAGE_TODAY, useValue: () => new Date('2026-11-23T12:00:00Z') },
@@ -209,6 +231,8 @@ describe('QueuePageComponent', () => {
       return next;
     });
     warnings = [];
+    linkedRecords = vi.fn(() => of(new Map()));
+    linkedProperty = vi.fn(() => of(null));
     vi.spyOn(console, 'warn').mockImplementation((message: unknown) =>
       warnings.push(String(message)),
     );
@@ -262,6 +286,142 @@ describe('QueuePageComponent', () => {
         ),
       ),
     ).toHaveLength(1);
+  });
+
+  describe("a facet on a reference, its buckets shown by their records' titles", () => {
+    const FIRST = 'a72723a2-73cf-4d88-8804-5b58a360ab3e';
+    const SECOND = 'f027e437-0795-4ec7-8e6c-4bb1dd4c75cc';
+    /** A move the reader may not read, or that no longer exists: the search does not return it. */
+    const GONE = '0a762678-0e77-4b58-8256-e5d7bce1f55e';
+    const TITLES: Readonly<Record<string, string>> = {
+      [FIRST]: 'Quinlan household',
+      [SECOND]: 'Okafor household',
+    };
+    const BY_MOVE = {
+      ...UNASSIGNED,
+      columns: [...UNASSIGNED.columns, { field: 'claim:move', widget: 'document-link' }],
+      facets: [
+        { aggregate: 'claim_move_agg', label: 'Move', widget: 'document-link' },
+        { aggregate: 'claim_type_agg', label: 'Claim type' },
+      ],
+    };
+    const MOVES = {
+      ...AGGREGATIONS,
+      claim_move_agg: {
+        type: 'terms',
+        buckets: [
+          { key: FIRST, docCount: 2 },
+          { key: SECOND, docCount: 1 },
+          { key: GONE, docCount: 1 },
+          { key: 'not-an-id', docCount: 1 },
+        ],
+      },
+    };
+    const onMove = (n: number, move: string): NuxeoDocument => ({
+      ...claim(n),
+      properties: { ...claim(n).properties, 'claim:move': move },
+    });
+    const found = (ids: readonly string[]) =>
+      new Map(
+        ids
+          .filter((id) => id in TITLES)
+          .map((id) => [id, { title: TITLES[id], url: `/doc/${id}` }] as const),
+      );
+
+    beforeEach(() => {
+      files = { 'claims-by-move': { kind: 'file', content: BY_MOVE } };
+      linkedRecords = vi.fn((ids: readonly string[]) => of(found(ids)));
+    });
+
+    it("shows each bucket by its record's title, the id where it cannot be read, and filters by the id", async () => {
+      create();
+      await open('claims-by-move');
+      await answer([onMove(1, FIRST), onMove(2, FIRST)], MOVES);
+      expect(facets()).toEqual([
+        [
+          'Move',
+          '[ ] Quinlan household (2)',
+          '[ ] Okafor household (1)',
+          `[ ] ${GONE} (1)`,
+          '[ ] not-an-id (1)',
+        ],
+        ['Claim type', '[ ] medical (1,200)', '[ ] dental (34)'],
+      ]);
+      await tick('claim_move_agg', 'Okafor household');
+      expect(lastRequest()[1].aggregates).toEqual({ claim_move_agg: [SECOND] });
+    });
+
+    it("reads each record once, the list's cells and the facet's buckets sharing the queue's lookup", async () => {
+      create();
+      await open('claims-by-move');
+      await answer([onMove(1, FIRST), onMove(2, FIRST)], MOVES);
+      const asked = linkedRecords.mock.calls.flatMap(([ids]) => [...ids]);
+      // The first move is in a cell and a bucket, and read once; a value that is no id never.
+      expect(asked.sort()).toEqual([FIRST, GONE, SECOND].sort());
+      expect(asked).not.toContain('not-an-id');
+    });
+
+    it("reads each record once with the schema a show column reads, the facet's buckets included", async () => {
+      files = {
+        'claims-by-move': {
+          kind: 'file',
+          content: {
+            ...BY_MOVE,
+            columns: [
+              ...BY_MOVE.columns,
+              {
+                field: 'claim:move',
+                widget: 'document-link',
+                label: 'Customer',
+                parameters: { types: ['Move'], show: 'move:customer' },
+              },
+            ],
+          },
+        },
+      };
+      linkedProperty = vi.fn(() => of({ schema: 'move', definition: { type: 'string' } }));
+      create();
+      await open('claims-by-move');
+      await answer([onMove(1, FIRST), onMove(2, SECOND)], MOVES);
+      const asked = linkedRecords.mock.calls.flatMap(([ids]) => [...ids]);
+      expect(asked.sort()).toEqual([FIRST, GONE, SECOND].sort());
+      // Whichever asked first, the facet's or the list's, asked with the show column's schema.
+      for (const [, schemas] of linkedRecords.mock.calls) expect(schemas).toEqual(['move']);
+      expect(facets()[0][1]).toBe('[ ] Quinlan household (2)');
+    });
+
+    it('shows the id while its record is read, and after a search that fails', async () => {
+      const answered = new Subject<ReadonlyMap<string, unknown> | null>();
+      linkedRecords = vi.fn(() => answered);
+      create();
+      await open('claims-by-move');
+      await answer([claim(1)], MOVES);
+      expect(facets()[0]).toEqual([
+        'Move',
+        `[ ] ${FIRST} (2)`,
+        `[ ] ${SECOND} (1)`,
+        `[ ] ${GONE} (1)`,
+        '[ ] not-an-id (1)',
+      ]);
+      answered.next(null);
+      answered.complete();
+      await settle();
+      expect(facets()[0][1]).toBe(`[ ] ${FIRST} (2)`);
+    });
+
+    it("leaves a facet's buckets as their keys without the widget", async () => {
+      files = {
+        'claims-by-move': {
+          kind: 'file',
+          content: { ...BY_MOVE, facets: [{ aggregate: 'claim_move_agg', label: 'Move' }] },
+        },
+      };
+      create();
+      await open('claims-by-move');
+      await answer([claim(1)], MOVES);
+      expect(facets()[0][1]).toBe(`[ ] ${FIRST} (2)`);
+      expect(linkedRecords).not.toHaveBeenCalled();
+    });
   });
 
   it('sends a chosen bucket back to the page provider, from the first page, and clears the selection', async () => {

@@ -17,7 +17,7 @@ no expression language and no code in configuration.
   - named widgets;
   - computed fields;
   - fields and cards shown or hidden by a rule;
-  - related records;
+  - related records, and a property of a linked record (section 12);
   - the record's timeline and its comments;
   - a checklist of the items a record must have done, from configuration;
   - banners above the cards, each shown by a rule, such as a picture's rights ending;
@@ -415,15 +415,16 @@ registered rules. They are written exactly as the manifest writes them today
 - or an ID with parameters: `{ "type": "app.rules.isType", "parameters": ["Claim"] }`;
 - combined with `core.every`, `core.some` and `core.not`.
 
-Version 2 adds five rules to the 29 or so that exist:
+Version 2 adds six rules to the 29 or so that exist:
 
-| Rule                   | Parameters                                | True when                                                                  |
-| ---------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
-| `app.rules.fieldIn`    | A property, then the values               | The property's value is one of the values; for a list, any of its items is |
-| `app.rules.inState`    | The lifecycle states                      | The record's lifecycle state is one of them                                |
-| `app.rules.inGroup`    | The groups                                | The user is in one of the groups                                           |
-| `app.rules.datePassed` | A date                                    | The date is before today                                                   |
-| `app.rules.dateWithin` | A date, then a number of days, 0 to 36500 | The date is today, or no more than that many days after it                 |
+| Rule                   | Parameters                                                                        | True when                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `app.rules.fieldIn`    | A property, then the values                                                       | The property's value is one of the values; for a list, any of its items is |
+| `app.rules.inState`    | The lifecycle states                                                              | The record's lifecycle state is one of them                                |
+| `app.rules.inGroup`    | The groups                                                                        | The user is in one of the groups                                           |
+| `app.rules.datePassed` | A date                                                                            | The date is before today                                                   |
+| `app.rules.dateWithin` | A date, then a number of days, 0 to 36500                                         | The date is today, or no more than that many days after it                 |
+| `app.rules.dateAfter`  | A date or `"today"`, another date or `"today"`, then a number of days, 0 to 36500 | The first date is more than that many days after the second                |
 
 - **What a rule sees.** It is evaluated with the open record, the user and their groups. In a form
   it also sees the values being entered, so a field shown by another field's value appears as soon
@@ -433,7 +434,26 @@ Version 2 adds five rules to the 29 or so that exist:
   not exist included. It is read as the `date` widget reads one (section 11): a stored day as
   written, and an instant on the reader's day. Today is the reader's day, from the page's clock:
   the browser's in the app, and one a test or a demo pins (section 11).
-  A property with no date, or a value that is not one, passes neither date rule.
+  A property with no date, or a value that is not one, passes no date rule.
+- **Two dates, and an offset from today.** `app.rules.dateAfter` compares two dates, either of
+  which may be `"today"`, the reader's day: a claim filed more than 30 days after delivery is
+  `[{ "field": "dmg:filedOn" }, { "field": "dmg:deliveredOn" }, 30]`, and a delivery more than 30
+  days in the past is `["today", { "field": "dmg:deliveredOn" }, 30]`. "More than": a claim filed
+  on the 30th day after delivery does not pass, and one filed on the 31st does; with `0` it passes
+  when the first date is after the second at all. The days each date falls on are counted, as
+  above, never the hours between them. Only the literal `"today"` is today: a property holding that
+  text names no date. **Added on 26 November 2026** for the moves kit's late-filing banner
+  ([its README](../../business-apps/packages/moves-demo/README.md), "Phase 8 feedback", item 2).
+- **A rule reads no computation.** A platform rule's parameter is a property or a literal, never
+  `{ "computed": … }`, and the validator refuses one. Considered on 26 November 2026, for the same
+  banner, and left out, because it does not fit decision 4's shape
+  ([decisions.md](decisions.md), "Settled"): decision 4 gave rules a field's value, the lifecycle
+  state and the user's group to read, and `core.choose` already takes a rule, so a rule taking a
+  computation would make the two sets nest in each other without end, which is an expression
+  language spelled in JSON; and a rule is the platform's, evaluated by every slot of every manifest
+  (`libs/shared/extensions`, in the published package), where no computation is, so a rule written
+  with one would pass on a record page and never elsewhere. The banner it was asked for is
+  `dateAfter`'s.
 - **A rule is never a security control.** A field hidden from a group is still readable through the
   API to anyone the server lets read it. Protecting a field is decision I, a platform decision.
 
@@ -1171,8 +1191,8 @@ becomes. In version 2's terms:
   - **a computed column** of a table is not drawn yet, nor **a table inside a table's column**:
     that column is left out, and the rest of the table shows;
   - **`image` and `file-list`** show the property's own value, a file's name, until each has its
-    lookup. Section 12 proposes how a `document-link` would show another of the linked record's
-    properties than its title;
+    lookup. Section 12 says how a `document-link` shows another of the linked record's properties
+    than its title;
   - **a rule nested more than 32 levels deep** leaves its tab, card, field or row action out: the rule
     registry answers no deeper, and past that it passes any rule not declared security-relevant,
     whatever the rule says;
@@ -1230,25 +1250,25 @@ becomes. In version 2's terms:
 - **Whether `metadata` mode should exist** once `view` does is phase 1's call, made once the
   record page is seen.
 
-## 12. Proposed: a property of a linked record
+## 12. A property of a linked record
 
-**Proposed, 23 November 2026, for review. Not built:** the validator refuses the example below,
-and the app draws none of it.
+**Built on 26 November 2026,** from the proposal of 23 November, for the moves kit's claim page
+([its README](../../business-apps/packages/moves-demo/README.md), "Phase 8 feedback", item 3).
+Each place it departs from the proposal says so, and why.
 
 **Why.** The Web UI Member page that section 9 rebuilds lists each claim's provider and the
 provider's NPI ([the plan's section 3](plan.md#3-the-member-page-side-by-side)); section 9's example
 leaves both columns out. A claim holds only its provider's id, in a reference such as
-`claim:provider` (a `documentResolver` property). Version 2 shows the open or listed record's own
-properties, so no column can show the provider's NPI. The plan names that column; until now,
-nothing here said how to write it.
+`claim:provider` (a `documentResolver` property), and a page shows the open or listed record's own
+properties, so no column could show the provider's NPI.
 
-### The proposal
+### How it is written
 
 `document-link` takes one more parameter, `show`: a property of the linked record,
 `"<prefix>:<name>"`, which the widget shows in place of the record's title. Without `show`, the
 widget shows the linked record's title, through the lookup section 11 describes.
 
-```json proposed document-link.show
+```json
 {
   "id": "claims",
   "labelKey": "payers.member.claims",
@@ -1280,93 +1300,109 @@ widget shows the linked record's title, through the lookup section 11 describes.
 ```
 
 - **One reference, several columns:** the provider's name and its NPI above are two columns over
-  `claim:provider`. A list shows a property once today (section 11), because it keys its columns by
-  property, so a column with `show` is keyed by both, the reference and the shown property, and
-  the two stand side by side.
+  `claim:provider`. A list shows a property once (section 11), because it keys its columns by
+  property; a column with `show` is keyed by both, the reference and the shown property, so the two
+  stand side by side. A card's fields may do the same.
 - **The value is shown by its schema type,** as a field with no widget shows its property, and
-  links to the linked record. It has no widget of its own: an amount on the linked record shows as
-  a number, not in a currency. A widget for the shown value is left for later, if a kit needs one.
+  links to the linked record, as its title would. It has no widget of its own: an amount on the
+  linked record shows as a number, not in a currency, and a date as the `date` widget shows one. A
+  widget for the shown value is left for later, if a kit needs one. **A departure:** a shown value
+  bound to a vocabulary shows its stored id, not its label: the proposal had it looked up as one on
+  the record itself is, and no kit needs it yet.
 - **Its label** is the shown property's, `layout.field.provider:npi`, then its name, unless the
   entry has its own `label` or `labelKey`. Without that, both columns above would read "Provider".
-- **In `view` and `metadata` modes,** wherever a record is shown. In `edit` and `create`, a form's
-  document picker chooses a record by its title, so `show` there is a `parameter` finding: the
-  package is refused when it is built, and the app leaves the field out when it loads the file, as
-  the validator treats every `parameter` finding.
+- **On a page only:** a record page's fields and a list's columns, a related card's or a queue's. In
+  `edit` and `create`, and in a task form, a form's document picker chooses a record by its title,
+  so `show` there is a `parameter` finding: the package is refused when it is built, and the app
+  leaves the field out when it loads the file, as it treats every `parameter` finding.
+- **`types` is required with `show`.** **A departure:** the proposal let `show` go without it, shown
+  as text. The page reads the linked type's schema to ask for the shown property at all: Nuxeo's
+  `properties` header names schemas, not prefixes, so `move:deliveredOn` is asked for as `move`,
+  and a schema's prefix is not always its name (`dc` is `dublincore`'s). Measured on the local
+  Nuxeo 2025 on 26 November 2026: a search sent `properties: dc` returned no property, and
+  `properties: dublincore` the Dublin Core ones. Without `types`, `show` is a `parameter` finding.
 - **One link away only.** `show` names a property of the linked record, never of a record that one
-  links to in turn. A `show` that names a reference would show that reference's stored id, so
-  wherever the content model is known it is refused.
-- **Not in a `table` widget's columns:** a reference inside a complex value is not part of this
-  proposal.
-- **A list of references** (`string[]`) would show one value per linked record. Not measured.
+  links to in turn. A `show` naming a reference would show that reference's stored id: the page
+  leaves such a field out, since the linked type's schema says the property is a document
+  reference (section 11, the Properties panel). The pipeline and the designer cannot refuse it,
+  since the model reader reads no resolver.
+- **Not in a `table` widget's columns:** a reference inside a complex value. `show` there is a
+  `parameter` finding.
+- **A list of references** (`string[]`) shows one value per linked record, in its order, as the
+  titles are shown.
 
 ### How the app reads it
 
-Measured on Nuxeo 2025.10.18 on 23 November 2026, with the Payers kit's stand-in model
-([`business-apps/packages/payers-claims-demo`](../../business-apps/packages/payers-claims-demo/README.md)),
-where `claim:provider` is a document reference:
+**From the `document-link` lookup's search, not `fetch-document`.** **A departure** from the route
+the proposal measured, and one its recommendation left open: the linked records are read by the
+search section 11 describes, `SELECT * FROM Document WHERE ecm:uuid IN (?, …)`, as the reader, with
+`properties` naming the schemas of the shown properties. So:
 
-- **On a page provider's results**, the headers `fetch-document: claim:provider`,
-  `depth: children` and `properties: claim,provider` return each claim with its provider inline,
-  NPI included. `member_claims` for one member returned three claims, each with the six properties
-  of its provider's `provider` schema, in one response of about 6 KB.
-- **On the open record**, `fetch-document: lock,claim:provider,claim:member` with
-  `depth: children` returned both linked records with their properties.
-- **`depth: children` is what brings the properties,** on the open record as on the list. Without
-  it, the linked record comes back with its title and no properties. The record page's read sends
-  no `depth` today, so it would add one.
+- **One read per linked record per page.** The lookup already asks once for every id a page or a
+  list names, 100 at most a search, never one per field or cell. The record page asks with every
+  schema its own fields' `show` needs and its related lists' columns' too, so a list naming a record
+  the page has read asks nothing again. A record read without a schema that something on the page
+  needs later is read again with both: the only second read of a record on one page. A queue's
+  list asks once for each page of rows, with its columns' schemas, and shares its lookup with the
+  queue's facets, which ask with the same schemas (app-definition-v2.md, section 4), so a record a
+  cell and a bucket both name is read once. A read with more schemas that fails keeps the one
+  before it: the title read already still shows.
+- **The types' definitions are waited for 10 seconds at most,** as a layout file is, and every
+  type's read is since 26 November 2026: a type that does not answer counts as one not read, is
+  asked for again by the next page that needs it, its `show` is left out, and the page's other
+  links are read without it. A page drawn anew with another file, as the designer's preview is on
+  every edit, reads nothing more until that file's types are known, and keeps what it has shown.
+- **The schemas come from the types `types` lists:** each type's definition,
+  `/config/types/<type>`, read once per session as the open record's is, and the first of them
+  with a schema of the shown property's prefix gives the schema and the property's type. A `show`
+  none of them has, or that names a reference, leaves its field or column out, and the console says
+  why. The linked records are not asked for until those definitions are read, so that they are
+  asked for once.
+- **A record the reader may not read is not returned,** and nor is one that no longer exists, so one
+  of them never empties a list, as the proposal feared `fetch-document` might.
+- **What a field shows:** while the linked record is read, nothing, never the stored id; a record
+  the reader may not read, one that no longer exists, or a value that is not a document's id,
+  "Unavailable", as section 11's lookup shows one, and never any of its values; a readable record
+  without the property, "—", as an empty field shows. **A departure:** the proposal had nothing
+  shown and "Not available" said to a screen reader for the last; "—" is what every empty value on
+  the page shows.
+- **No enricher of ours:** the search is Nuxeo's own.
 
-So the record page adds the reference of each `show`, and `depth: children`, to its read of the
-open record, and a related list (`RecordListComponent`, through `PageProviderService`, section 11)
-adds them to its page request; `properties` names the schemas of the shown properties as well as
-the record's own. That request also asks for the `permissions` enricher, and whether Nuxeo then
-runs it on each linked record too, and at what cost, is to measure. The linked records come in the same response,
-not one request per row, and Nuxeo's own `fetch-document` does the work: no enricher of ours is
-needed. A shown value that needs a label, such as a vocabulary entry, is looked up as one on the
-record itself is: one request per distinct value.
+### What the validator checks
 
-### What the validator would check
-
-- **Today** it refuses `show`: `the widget "document-link" has no parameter "show" [parameter]`.
-  Its test holds the example above to exactly that refusal, so it fails, and asks for this section
-  to be settled, on the day the parameter is built.
-- **Proposed:** `show` is `"<prefix>:<name>"`, neither `ecm:` nor `var:`, and a `parameter`
-  finding in `edit` and `create` modes. A `sort` entry naming a field that a column shows through
-  `show` is refused, since it would order the records by a stored id. A plain `document-link`
-  column is not affected.
-- **Where the content model is known** (the pipeline in dev mode, the designer and the migration
-  server, through phase 1's model reader): the field must be a document reference, and `show` a
-  property of every type its `types` lists, and not a reference. Without `types` there is no type
-  to check `show` against.
-- **The app, when it loads the page,** checks every field against its type's schemas (section 11),
-  but cannot check this one as fully: the field types it reads say whether a `documentResolver`
-  stores an id, which the Properties panel reads (section 11), and not which types it links to, so
-  it could tell such a reference from a string but not check `show` against the linked type. To
-  show the value by its schema type, it reads the schema of each type `types` lists, as it reads
-  the open record's; without `types`, the value is shown as text.
-- **A linked record that lacks the property** shows no value, and says "Not available" to a screen
-  reader, as an unreadable one would under this proposal. The lookup that is built, section 11's,
-  shows one the reader may not read as "Unavailable".
+- `show` is `"<prefix>:<name>"`, neither `ecm:` nor `var:`, with `types`. In `edit` and `create`
+  modes, in a task form and in a `table`'s column it is a `parameter` finding.
+- **A `sort` entry naming a field that a column shows through `show` is refused,** a `parameter`
+  finding, since it would order the records by a stored id. A plain `document-link` column is not
+  affected. In a related list, as for any finding in its order, the card is left out; in a queue,
+  the app leaves that key of the order out.
+- **Where the content model is known** (the pipeline given a model, or a stand-in package's own,
+  and the designer): `show` is a property of every type `types` lists, on the type or a facet it
+  declares; a type the model does not have is `unknown`. Checked in a card's fields and a related
+  list's columns, and in a queue's columns for a package that defines its own page providers. Not
+  checked: that the field is a reference, or that `show` is not one, which the model reader cannot
+  tell.
 
 ### What the reader may see
 
-**To measure before this is built.** Two things are not checked: that the server fetches the linked
-record as the reader, with the reader's permissions, and what it sends for one the reader may not
-read. There are two possibilities for the second, and the proposal holds only for the first:
-
-- **The reference carries its stored id**, as when nothing is fetched. The widget then shows no
-  value, and says "Not available" to a screen reader, never the id.
-- **The whole request fails.** Then one unreadable provider would empty the member's claims list,
-  and the lists engine could not ask for `fetch-document` on a list.
-
-If the server fetched the linked record with more than the reader's permissions, `show` would show
-what the reader may not read, and the proposal would have to fetch it another way.
+- **The linked record is read with the reader's own permissions.** The search runs through the REST
+  API in the reader's session, and Nuxeo's search returns only what they may read. A record they
+  may not read is absent from the answer, and shows "Unavailable"; the page shows only values the
+  search returned for the id it asked for. Measured on 26 November 2026 as the local server's
+  administrator, who may read every record: an id that names no record was not returned. "May not
+  read" was not seen live, as section 11 says of its lookup.
+- **Not a security control,** any more than a hidden field is: a property shown is one the server
+  returns to the reader through the API anyway.
 
 ### Sorting
 
 A column showing a linked record's property cannot be sorted by it, and its header does not offer
 to: a related list's headers sort on the server (section 11), and a page provider sorts its own
-records' properties. So of the Claims table's columns, which the plan calls sortable, the
-provider's name and NPI are the ones that cannot be.
+records' properties. So of the Claims table's columns, which the plan calls sortable, the NPI is the
+one that cannot be. The provider's name, a plain `document-link` column, still sorts from its
+header as every such column does: by the stored id, not by the title shown. The file's own `sort`
+may not name the reference once a column shows it through `show` (above), though the plain column's
+header still offers to.
 
 ### What the Studio migration would write
 
@@ -1376,19 +1412,13 @@ A Web UI column that shows a property of a referenced document, in a list whose
 
 ### The other options, and why not
 
-| Option                                         | What it would be                                        | Why not                                                                                                                                                                                            |
-| ---------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A path in `field`                              | `{ "field": "claim:provider/provider:npi" }`            | Nuxeo already writes a complex value's subfield with `/` (`member:address/city`), so one path would mean two things. Every reader of a field, its widget, rules, checks and sort, would need paths |
-| A computation over the linked record           | A `core.linked` computation that reads it               | A computation works on the record already loaded and makes no request (section 4), so the linked record would have to be fetched anyway. And its result is not a link to the linked record         |
-| A copy in the model                            | The model keeps `provider:npi` on each claim as well    | No platform change, and a kit may do it today. But the copy goes stale when the provider changes, unless a listener keeps it, which is server code in every kit                                    |
-| An enricher of our own in `nuxeo-agentic-core` | A server call that adds the linked records to each list | Nuxeo's `fetch-document` already does it, in the same request                                                                                                                                      |
+| Option                                         | What it would be                                         | Why not                                                                                                                                                                                            |
+| ---------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch-document` on the page's own reads       | The record page's read and each list's ask for the links | What the server sends for a linked record the reader may not read was not measured, and might fail the whole list; the lookup's search exists, applies the reader's permissions and leaves it out  |
+| A path in `field`                              | `{ "field": "claim:provider/provider:npi" }`             | Nuxeo already writes a complex value's subfield with `/` (`member:address/city`), so one path would mean two things. Every reader of a field, its widget, rules, checks and sort, would need paths |
+| A computation over the linked record           | A `core.linked` computation that reads it                | A computation works on the record already loaded and makes no request (section 4), so the linked record would have to be fetched anyway. And its result is not a link to the linked record         |
+| A copy in the model                            | The model keeps `provider:npi` on each claim as well     | No platform change, and a kit may do it today. But the copy goes stale when the provider changes, unless a listener keeps it, which is server code in every kit                                    |
+| An enricher of our own in `nuxeo-agentic-core` | A server call that adds the linked records to each list  | Nuxeo's search already does it, in one request                                                                                                                                                     |
 
-### Recommendation
-
-Adopt `show` on `document-link`. The `document-link` lookup it builds on is built (section 11), as a
-search of its own, one per page or list, rather than from an inlined record, and a record the reader
-may not read is absent from it. The lookup shows the linked record's title; `show` would show
-another of its properties. Whether `show` reads it from that search, by naming its schema in
-`properties`, or from `fetch-document` as above, is part of this review. Before building it, measure
-what the server sends for a linked record the reader may not read. Its name, `show`, is open to
-review. `show` is not built, and the validator still refuses it.
+A rule cannot read a linked record's property: rules read the open record (section 5). So a kit
+whose banner compares a date with the linked record's keeps a copy of it, as the moves kit does.

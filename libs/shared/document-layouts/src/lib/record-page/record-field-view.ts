@@ -141,6 +141,12 @@ export interface RecordValueContext {
    * cannot be shown, or `null` while it is read. Never the stored id.
    */
   readonly record: (id: string) => RecordLink | null;
+  /**
+   * A property of the record a `document-link` value names, as the page read it with that record,
+   * for a `show` (layout-v2.md, section 12): `undefined` where that record is not read, or was read
+   * without it. Absent where nothing on the page has a `show`.
+   */
+  readonly linkedValue?: (id: string, xpath: string) => unknown;
   /** Another property of the record, for a parameter that names one: `currency`'s code. */
   readonly property: (xpath: string) => unknown;
   /** A label's text, translated: for a table's column headings. */
@@ -517,6 +523,60 @@ export function showValue(
   return view
     ? view(input, context)
     : asVersion1(input.key, input.label, input.definition, input.value, context);
+}
+
+/** What a `document-link`'s `show` shows of the records it links to: the property, and what it is. */
+export interface ShownProperty {
+  /** `<prefix>:<name>`, on the linked record. */
+  readonly xpath: string;
+  /** The property in the linked type's schema, which it is shown by. */
+  readonly definition: LayoutFieldType;
+}
+
+/**
+ * What a `document-link` with `show` shows (layout-v2.md, section 12): for each record the value
+ * names, in its order, the property `show` names, by its schema type, as a field with no widget
+ * shows one, as a link that opens that record. A record still being read is not listed yet, so the
+ * field shows nothing until it is, never the stored id. One the reader may not read, that no longer
+ * exists, or a value that is not a document's id, shows the unavailable text and no value. A record
+ * read without the property is left out, and a field whose every record is read and lacks it is
+ * empty, as an empty property is.
+ */
+export function showLinkedProperty(
+  value: unknown,
+  shown: ShownProperty,
+  context: RecordValueContext,
+): RecordValueView {
+  const ids = (Array.isArray(value) ? value : [value]).filter((id) => !isEmpty(id));
+  if (ids.length === 0) return EMPTY;
+  let reading = false;
+  const records: RecordLink[] = [];
+  for (const id of ids.map(textOf)) {
+    const link = context.record(id);
+    if (link === null) {
+      reading = true;
+      continue;
+    }
+    if (link.url === null) {
+      records.push(link);
+      continue;
+    }
+    const property = context.linkedValue?.(id, shown.xpath);
+    const view = showValue(
+      {
+        key: shown.xpath,
+        label: shown.xpath,
+        value: property,
+        parameters: {},
+        definition: shown.definition,
+      },
+      null,
+      context,
+    );
+    const text = viewText(view, context.flagText);
+    if (view.kind !== 'empty' && text !== '') records.push({ text, url: link.url });
+  }
+  return records.length === 0 && !reading ? EMPTY : { kind: 'records', records };
 }
 
 /**

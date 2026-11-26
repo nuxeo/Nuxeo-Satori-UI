@@ -357,7 +357,7 @@ async function disagreements({ moves, items, claims }) {
     const { uids, aggregations } = await indexed('moves_open_claims');
     open = [
       ...compare('moves_open_claims', uids, EXPECTED.moves_open_claims),
-      ...bucketProblems(aggregations),
+      ...bucketProblems(aggregations, moves),
     ];
     if (open.length === 0 || Date.now() >= deadline) break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -366,8 +366,12 @@ async function disagreements({ moves, items, claims }) {
   return problems;
 }
 
-/** Where the open claims' facets count fewer than the seeded open claims in a bucket. */
-function bucketProblems(aggregations) {
+/**
+ * Where the open claims' facets count fewer than the seeded open claims in a bucket. The Move
+ * facet's buckets are the moves' ids, `dmg:move`, and `OPEN_BUCKETS` names them by number: each
+ * is looked for by the id the seed wrote for its number, `moves`.
+ */
+function bucketProblems(aggregations, moves) {
   const problems = [];
   for (const [aggregate, expected] of Object.entries(OPEN_BUCKETS)) {
     const buckets = aggregations?.[aggregate]?.buckets;
@@ -376,7 +380,8 @@ function bucketProblems(aggregations) {
       continue;
     }
     for (const [key, count] of Object.entries(expected)) {
-      const bucket = buckets.find((b) => String(b?.key) === key);
+      const wanted = aggregate === 'dmg_move_agg' ? moves.get(key) : key;
+      const bucket = buckets.find((b) => String(b?.key) === wanted);
       if (!bucket || !(Number(bucket.docCount) >= count))
         problems.push(
           `moves_open_claims's ${aggregate} counts ${bucket ? bucket.docCount : 'nothing'} in ${key}, not at least ${count}`,

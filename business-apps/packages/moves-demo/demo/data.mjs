@@ -11,9 +11,10 @@
  * Links are written by key, not by id, since the ids are the server's: an item's `move` and a
  * claim's `move` are a move's number, a claim's `items` its items' tags. The seed writes each as
  * the id of the record it names, `moveitem:move`, `dmg:move` and `dmg:items`, and the move's number
- * as `dmg:moveNumber` too, which the open claims queue's Move facet groups by. A claim's
- * `deliveredOn` is its move's, copied: the claim page cannot read its move's properties yet
- * (layout-v2.md, section 12, a proposal).
+ * as `dmg:moveNumber` too, which the claim's Edit form shows. The open claims queue's Move facet
+ * groups by `dmg:move`, and shows each move by its title. A claim's `deliveredOn` is its move's,
+ * copied: the late-filing banner's rule and the days to filing read it, and a rule or a
+ * computation reads the open record only (layout-v2.md, sections 4 and 5).
  *
  * `EXPECTED` says which records each of the kit's page providers returns, worked out from the data
  * as `moves-demo-model.xml` defines the queries. The seed checks each against the server.
@@ -321,7 +322,8 @@ export const EXPECTED = {
 /** The open claims queue's facets: the seeded open claims in each bucket. */
 export const OPEN_BUCKETS = {
   dmg_state_agg: count(CLAIMS.filter((c) => OPEN.includes(c.state)).map((c) => c.state)),
-  dmg_moveNumber_agg: count(CLAIMS.filter((c) => OPEN.includes(c.state)).map((c) => c.move)),
+  // By the move's number here: the server's buckets are the moves' ids, which the seed maps back.
+  dmg_move_agg: count(CLAIMS.filter((c) => OPEN.includes(c.state)).map((c) => c.move)),
 };
 
 function count(keys) {

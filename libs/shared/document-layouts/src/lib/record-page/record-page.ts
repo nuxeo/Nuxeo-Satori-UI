@@ -44,7 +44,7 @@ import {
   canWriteDocument,
   renderTrustedHtml,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { merge, switchMap } from 'rxjs';
+import { type Observable, filter, forkJoin, map, merge, of, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
 import { layoutLabelText } from '../layout-label';
@@ -58,10 +58,12 @@ import {
   WIDGETS_SHOWN_AS_VERSION_1,
   columnWidget,
   computedDefinition,
+  showLinkedProperty,
   showValue,
   subfieldDefinition,
   viewText,
 } from './record-field-view';
+import type { LinkedProperty } from './linked-record';
 import { listParameters } from './list-parameters';
 import {
   type RecordChecklistItemShown,
@@ -82,8 +84,10 @@ import {
   labelLookups,
   namesOf,
   readLabels,
-  recordIdsOf,
   recordLookups,
+  recordReadOf,
+  type RecordRead,
+  sameIds,
   sameLookups,
 } from './record-lookups';
 import { RecordExternalComponent } from './record-external';
@@ -92,8 +96,12 @@ import {
   type RecordCommentsEntry,
   type RecordExternalEntry,
   type RecordListEntry,
+  type RecordPropertyField,
   type RecordTimelineEntry,
+  linkedTypesOf,
   propertiesReadBy,
+  showKey,
+  showOf,
 } from './record-layout';
 import { RecordListComponent } from './record-list';
 import { RecordPictureReviewComponent } from './record-picture-review';
@@ -280,14 +288,46 @@ function fieldsOf(layout: ResolvedRecordLayout): ResolvedRecordField[] {
   return cardsOf(layout).flatMap((card) => card.fields);
 }
 
-/** The first field on the page that shows the property, or `undefined` when none does. */
+/**
+ * The first field on the page that shows the property, or `undefined` when none does. A field
+ * showing a linked record's property through `show` shows another record's, not this one.
+ */
 function fieldShowing(
   layout: ResolvedRecordLayout,
   xpath: string,
 ): ResolvedPropertyField | undefined {
   return fieldsOf(layout).find(
-    (field): field is ResolvedPropertyField => field.kind === 'property' && field.xpath === xpath,
+    (field): field is ResolvedPropertyField =>
+      field.kind === 'property' && field.xpath === xpath && showOf(field) === null,
   );
+}
+
+/**
+ * Every `document-link` with a `show` on the page (layout-v2.md, section 12): its fields', and its
+ * related lists' columns', whose records the page's lookup reads too, so that it reads them once.
+ */
+function showEntries(layout: ResolvedRecordLayout): RecordPropertyField[] {
+  return cardsOf(layout).flatMap((card) => [
+    ...card.fields.filter(
+      (field): field is ResolvedPropertyField =>
+        field.kind === 'property' && showOf(field) !== null,
+    ),
+    ...(card.related?.columns ?? []).filter((column) => showOf(column) !== null),
+  ]);
+}
+
+/**
+ * What each `show` on the page reads, by its entry (`showKey`): `null` where none of its types has
+ * it. An entry not in it is still being read.
+ */
+type Shows = ReadonlyMap<string, LinkedProperty | null>;
+
+/**
+ * Whether a `show` can be drawn: one of its types has the property, and it is not a reference
+ * itself, which would show another record's stored id. One that cannot is left out.
+ */
+function usableShow(linked: LinkedProperty | null | undefined): linked is LinkedProperty {
+  return !!linked && linked.definition.documentReference !== true;
 }
 
 /**
@@ -429,6 +469,10 @@ export class RecordPageComponent {
       const document = this.current();
       const properties = document.properties;
       const collector = new LookupCollector();
+      // Every schema a `show` on the page reads, its lists' included: the page reads each linked
+      // record once, with all of them, and a list naming one it read asks for nothing again.
+      for (const linked of this.shows()?.values() ?? [])
+        if (usableShow(linked)) collector.schema(linked.schema);
       /** What a value shown through `widget` names. */
       const named = collector.value.bind(collector);
       // A computation is worked out here with no labels, so the labels never wait on themselves.
@@ -457,6 +501,8 @@ export class RecordPageComponent {
           continue;
         }
         const value = properties[field.xpath];
+        // A `show` none of its types has is left out: the records it names are not read for it.
+        if (showOf(field) !== null && !usableShow(this.shows()?.get(showKey(field)))) continue;
         if (field.widget !== 'table') {
           named(field.widget, field.parameters, field.definition, value);
           continue;
@@ -501,12 +547,55 @@ export class RecordPageComponent {
   );
 
   /**
-   * The linked records, read once per page in one request for the ids each new set adds. Those
-   * read stay shown while another set is read; one not read yet shows nothing, never its id.
+   * What each `document-link` with a `show` reads of the records it links to, by its place, from
+   * its types' definitions (layout-v2.md, section 12): `null` until they are read, which a page
+   * with none has at once.
    */
+  private readonly shows = toSignal(
+    toObservable(this.layout).pipe(
+      switchMap((layout): Observable<Shows> => {
+        const entries = showEntries(layout);
+        if (entries.length === 0) return of(new Map());
+        return forkJoin(
+          entries.map((entry) =>
+            this.layouts.linkedProperty(linkedTypesOf(entry), showOf(entry) as string),
+          ),
+        ).pipe(
+          map((read) => new Map(entries.map((entry, index) => [showKey(entry), read[index]]))),
+        );
+      }),
+    ),
+    { initialValue: null },
+  );
+
+  /**
+   * The linked records, read once per page in one request for the ids each new set adds, with the
+   * schemas every `show` on the page reads, once those are known: so a record is not read once
+   * without them and again with them. Those read stay shown while another set is read; one not read
+   * yet shows nothing, never its id.
+   */
+  private readonly recordRead = recordReadOf(this.lookups);
+
+  /**
+   * Whether every `show` the page has now is known: its types read for this file, not only for the
+   * one drawn before it, as the designer's preview is drawn anew on every edit.
+   */
+  private readonly showsKnown = computed(() => {
+    const shows = this.shows();
+    return shows !== null && showEntries(this.layout()).every((entry) => shows.has(showKey(entry)));
+  });
+
   private readonly records = toSignal(
-    toObservable(recordIdsOf(this.lookups)).pipe(
-      switchMap((ids) => this.linkedRecords.records(ids)),
+    toObservable(
+      computed(() => (this.showsKnown() ? this.recordRead() : null), {
+        equal: (a, b) =>
+          a === b ||
+          (a !== null && b !== null && sameIds(a.ids, b.ids) && sameIds(a.schemas, b.schemas)),
+      }),
+    ).pipe(
+      // Until they are, the records read so far stay shown, and nothing is asked for.
+      filter((read): read is RecordRead => read !== null),
+      switchMap((read) => this.linkedRecords.records(read.ids, read.schemas)),
     ),
     { initialValue: NO_RECORDS },
   );
@@ -836,6 +925,9 @@ export class RecordPageComponent {
         `${layout.type}/view layout: ${field.place}: the widget "${field.widget}" shows as the property's own value in this build`,
       );
     }
+    if (field.kind === 'property' && showOf(field) !== null) {
+      return this.showLinked(field, layout, document, context, label);
+    }
     if (field.kind === 'property') {
       const value = showValue(
         {
@@ -872,6 +964,46 @@ export class RecordPageComponent {
       context,
     );
     return [this.withExtras({ place: field.place, key: field.id, label, value })];
+  }
+
+  /**
+   * A `document-link` with `show` (layout-v2.md, section 12): the linked records' property, by its
+   * schema type, each a link to its record. Nothing while the linked types are read; left out, and
+   * the console told, where none of the types has the property, or it is itself a reference, which
+   * would show another record's stored id.
+   */
+  private showLinked(
+    field: ResolvedPropertyField,
+    layout: ResolvedRecordLayout,
+    document: NuxeoDocument,
+    context: RecordValueContext,
+    label: string,
+  ): RecordFieldShown[] {
+    const show = showOf(field) as string;
+    const key = `${field.xpath}/${show}`;
+    // While its types are read, it shows nothing, never the stored id.
+    const linked = this.shows()?.get(showKey(field));
+    if (linked === undefined) {
+      return [{ place: field.place, key, label, value: { kind: 'records', records: [] } }];
+    }
+    if (linked === null) {
+      this.tell(
+        `${layout.type}/view layout: ${field.place} left out: none of the types it links to, ${linkedTypesOf(field).join(', ')}, has ${show}, or their schemas could not be read`,
+      );
+      return [];
+    }
+    if (linked.definition.documentReference) {
+      this.tell(
+        `${layout.type}/view layout: ${field.place} left out: ${show} is itself a reference, and would show another record's stored id`,
+      );
+      return [];
+    }
+    const value = showLinkedProperty(
+      document.properties[field.xpath],
+      { xpath: show, definition: linked.definition },
+      context,
+    );
+    return [{ place: field.place, key, label, value }];
   }
 
   /**
