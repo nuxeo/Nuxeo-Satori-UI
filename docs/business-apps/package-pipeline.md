@@ -407,7 +407,9 @@ not there stops the run, exit 2. The library's spec holds each rule's classifica
 judgement. The workflow's step was run on a scratch clone: a pull request that changes nothing
 (built), one that removes a queue at the same version (refused), a tag 0.9.1 whose queue was
 removed in 0.9.1-rc.1, held to 0.9.0 and refused, and a tag 0.10.0, held to 0.9.1, not to
-0.10.0-rc.1. It has not run on GitHub yet.
+0.10.0-rc.1. On GitHub it runs on every pull request that changes a kit or the platform's
+sources: on one on 26 November 2026, each kit's version was held to the staging commit it was
+based on. Its tag path has not run there, since no `app-package/*` tag has been pushed.
 
 **Not yet:** `validate_package`, in the Builder MCP server, takes no previous package, so an agent
 learns that a version must move only from the pipeline.
@@ -675,7 +677,9 @@ at that commit. So a pull request that removes an ID a kit names fails here, and
 on a change to the platform's sources for that reason. The workflow's step, its fetch left out,
 was run on this repository, 25 November 2026, against the staging branch (every kit kept) and
 against payers 0.3.0's commit (payers kept by its note, which the summary carries under
-"Upgrading"; the other kits new); it has not run on GitHub yet.
+"Upgrading"; the other kits new). On GitHub it runs on pull requests too: on one on 26 November
+2026, each kit's upgrade was held to the staging commit it was based on. Its tag path has not run
+there.
 
 **Its controls:** `npm run app-upgrade:selftest` holds 51 negative controls and 12 sound ones. Each
 negative one breaks the demo, or a copy of the platform's files, in one way, and must be refused
