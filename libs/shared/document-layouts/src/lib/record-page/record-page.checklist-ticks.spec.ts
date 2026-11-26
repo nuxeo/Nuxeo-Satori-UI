@@ -623,7 +623,7 @@ describe('RecordPageComponent: ticking a checklist item', () => {
       expect(card.querySelector('ul')?.getAttribute('role')).toBe('list');
     });
 
-    it('is reached by Tab and ticked by Space, and keeps the focus through the write', async () => {
+    it('is in the tab order, ticked by its activation, the click Space gives it, and keeps the focus through the write', async () => {
       await render();
       // In the tab order, each box, in the file's order.
       expect(boxes().map((input) => input.tabIndex)).toEqual([0, 0, 0]);

@@ -291,8 +291,9 @@ function fieldShowing(
  *
  * Its fields are read-only, and so are its checklists unless the file opts one in to ticking
  * (`"tickable": true`), for someone the record's permissions let change it; the comments card, the
- * review and a tickable checklist are where a user writes, and the server decides what it accepts. A hidden field is hidden from this page only: the REST API still returns it to
- * anyone the server lets read it, so nothing here is a security control.
+ * review and a tickable checklist are where a user writes, and the server decides what it accepts.
+ * A hidden field is hidden from this page only: the REST API still returns it to anyone the server
+ * lets read it, so nothing here is a security control.
  */
 @Component({
   selector: 'lib-record-page',
