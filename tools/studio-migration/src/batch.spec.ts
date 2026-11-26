@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -505,6 +506,26 @@ describe('migrate, given several packages', () => {
       }
     });
 
+    // A folder its owner cannot read: not on Windows, whose permissions chmod does not set, nor as
+    // root, who reads it anyway.
+    it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+      'refuses a folder it cannot read, before writing anything, and exits 1',
+      async () => {
+        const locked = folder({ 'claims.zip': SOUND });
+        const out = fresh();
+        chmodSync(locked, 0o000);
+        try {
+          const refused = await run(['migrate', locked, '--out', out]);
+          expect(refused).toMatchObject({ code: 1, out: '' });
+          expect(refused.err).toContain(`the folder ${locked} cannot be read: EACCES`);
+          expect(refused.err).toContain('Nothing was written.');
+          expect(existsSync(out)).toBe(false);
+        } finally {
+          chmodSync(locked, 0o755);
+        }
+      },
+    );
+
     it('exits 2 when the command is wrong: several packages and no --out', async () => {
       const given = folder({ 'a.zip': SOUND });
       for (const argv of [
@@ -741,6 +762,86 @@ describe('migrate, given several packages', () => {
       const refused = await run(['migrate', again, '--out', fresh(), '--from', listless]);
       expect(refused.code).toBe(1);
       expect(refused.err).toContain('lists no packages. Nothing was written.');
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
+    'carries each build its own decisions when the earlier run held one build twice, and none when it cannot tell which',
+    async () => {
+      const rezipped = syntheticPackage({ package: { 'notes.txt': 'kept beside the bundle' } });
+      const again = syntheticPackage({ package: { 'notes.txt': 'kept beside it again' } });
+      const given = folder({ 'claims.zip': SOUND, 'claims-rezipped.zip': rezipped });
+      const first = fresh();
+      expect((await run(['migrate', given, '--out', first])).code).toBe(0);
+      // Each of the two decided by another owner.
+      for (const [name, owner] of [
+        ['claims', 'Owner of claims'],
+        ['claims-rezipped', 'Owner of the copy'],
+      ] as const) {
+        const path = join(first, 'packages', name, 'conversion', 'decisions.json');
+        const file = JSON.parse(readFileSync(path, 'utf8'));
+        for (const item of file.decisions) {
+          item.owner = owner;
+          item.decision = 'Rebuilt by hand';
+        }
+        writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+      }
+      const out = fresh();
+      expect((await run(['migrate', given, '--out', out, '--from', first])).code).toBe(0);
+      const owners = (name: string): string[] => [
+        ...new Set(
+          (
+            JSON.parse(
+              readFileSync(join(out, 'packages', name, 'conversion', 'decisions.json'), 'utf8'),
+            ).decisions as { owner: string }[]
+          ).map((item) => item.owner),
+        ),
+      ];
+      // `claims-rezipped` sorts before `claims.zip`: by bytes, each its own, whatever the order.
+      expect(owners('claims')).toEqual(['Owner of claims']);
+      expect(owners('claims-rezipped')).toEqual(['Owner of the copy']);
+
+      // A third set of bytes of the same build: which of the two is meant cannot be told.
+      const third = folder({ 'claims-third.zip': again });
+      const thirdOut = fresh();
+      const ran = await run([
+        'migrate',
+        third,
+        join(given, 'claims.zip'),
+        '--out',
+        thirdOut,
+        '--from',
+        first,
+      ]);
+      expect(ran.code).toBe(0);
+      expect(summaryOf(thirdOut).packages[0]).toMatchObject({ carriedFrom: null });
+      expect(ran.out).toContain(
+        `\n     Nothing carried: ${first} holds the decisions of 2 packages of this build, packages/claims-rezipped and packages/claims, and none of its bytes: run it on its own with --from the one you mean\n`,
+      );
+      expect(summaryOf(thirdOut).packages[1]).toMatchObject({ carriedFrom: 'packages/claims' });
+    },
+    SEVERAL_RUNS,
+  );
+
+  it(
+    'says nothing was carried when a run stops before its decisions step',
+    async () => {
+      const given = folder({ 'claims.zip': SOUND });
+      const first = fresh();
+      expect((await run(['migrate', given, join(given, 'claims.zip'), '--out', first])).code).toBe(
+        0,
+      );
+      const throwing: typeof migrateOne = () => {
+        throw new Error('a defect before any step');
+      };
+      const out = fresh();
+      const ran = await runWith({ packages: [given], out, from: first }, main, throwing);
+      expect(ran.code).toBe(1);
+      expect(ran.out).toContain(
+        `\n     Not carried: its run stopped before its decisions step, which would have carried those of ${join(first, 'packages', 'claims')}\n`,
+      );
+      expect(ran.out).not.toContain('Carried what still holds');
     },
     SEVERAL_RUNS,
   );

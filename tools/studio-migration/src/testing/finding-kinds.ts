@@ -157,6 +157,8 @@ class FileScan {
   private readonly imported = new Map<string, string>();
   /** The functions of this file whose returned findings another file has had read. */
   private readonly returnsRead = new Set<string>();
+  /** The functions of this file, and the parameter, whose additions to a list given have been read. */
+  private readonly parametersRead = new Set<string>();
 
   constructor(
     private readonly file: string,
@@ -191,6 +193,31 @@ class FileScan {
     if (!declared?.body) return;
     const values = ts.isBlock(declared.body) ? returnsOf(declared.body) : [declared.body];
     for (const value of values) this.add(value, this.list(value));
+  }
+
+  /**
+   * What a function adds to a list it is given, at the parameter `index`, as `addLate(findings)`
+   * adds to `findings`: read once, in the function's own file and section, where it adds.
+   */
+  readParameter(name: string, index: number): void {
+    const key = `${name}#${index}`;
+    if (this.parametersRead.has(key)) return;
+    this.parametersRead.add(key);
+    const declared = this.declaredFunction(name);
+    if (!declared) {
+      const from = this.imported.get(name);
+      if (from !== undefined) this.scans.get(from)?.readParameter(name, index);
+      return;
+    }
+    const parameter = declared.parameters[index];
+    if (!parameter || !ts.isIdentifier(parameter.name) || !declared.body) return;
+    const named = parameter.name.text;
+    const visit = (node: ts.Node): void => {
+      const added = this.added(node, (list) => ts.isIdentifier(list) && list.text === named);
+      if (added !== undefined) this.add(node, added);
+      ts.forEachChild(node, visit);
+    };
+    visit(declared.body);
   }
 
   run(): void {
@@ -249,6 +276,27 @@ class FileScan {
     const added = this.added(node, (list) => this.isList(list));
     if (added !== undefined) {
       this.add(node, added);
+      return;
+    }
+    // `findings = [...findings, '…']`: what it becomes
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      this.lists().has(node.left.text)
+    ) {
+      this.add(node.right, this.list(node.right));
+      return;
+    }
+    // `addLate(findings)`: what the function given the list adds to it
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression))
+      node.arguments.forEach((argument, index) => {
+        if (!ts.isSpreadElement(argument) && this.isList(argument))
+          this.readParameter((node.expression as ts.Identifier).text, index);
+      });
+    // `{ path, message }`: a finding property given in shorthand
+    if (ts.isShorthandPropertyAssignment(node) && PROPERTIES[this.file]?.has(node.name.text)) {
+      this.add(node, this.texts(node.name));
       return;
     }
     // `const findings = …`: what it starts with, and what it is when it is another list
@@ -319,8 +367,10 @@ class FileScan {
   private texts(node: ts.Expression): Found {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return [node.text];
     if (ts.isTemplateExpression(node)) {
+      // A part that is a constant text is that text; any other is filled in as it runs: `…`.
       let text = node.head.text;
-      for (const span of node.templateSpans) text += `…${span.literal.text}`;
+      for (const span of node.templateSpans)
+        text += `${this.constantText(span.expression) ?? '…'}${span.literal.text}`;
       return [text.replace(/…+/g, '…')];
     }
     if (ts.isParenthesizedExpression(node)) return this.texts(node.expression);
@@ -491,6 +541,31 @@ class FileScan {
     };
     visit(this.source);
     return found.length === 0 ? cannot(`a finding ${name} is never given`) : all(found);
+  }
+
+  /**
+   * The text of a template's part when it is a constant: a literal, or a `const` whose value is
+   * one, as `const why = '…'; \`app/${path}: ${why}\`` reads `why`. `undefined` for any other.
+   */
+  private constantText(node: ts.Expression): string | undefined {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+    if (ts.isParenthesizedExpression(node)) return this.constantText(node.expression);
+    if (!ts.isIdentifier(node)) return undefined;
+    for (let scope: ts.Node | undefined = node.parent; scope; scope = scope.parent) {
+      if (
+        isFunctionLike(scope) &&
+        scope.parameters.some((p) => ts.isIdentifier(p.name) && p.name.text === node.text)
+      )
+        return undefined;
+      const declaration = declarationIn(scope, node.text);
+      if (declaration)
+        return declaration.initializer &&
+          (ts.isStringLiteral(declaration.initializer) ||
+            ts.isNoSubstitutionTemplateLiteral(declaration.initializer))
+          ? declaration.initializer.text
+          : undefined;
+    }
+    return undefined;
   }
 
   /** A `const` array literal of that name, in a scope the identifier is in, with that scope. */

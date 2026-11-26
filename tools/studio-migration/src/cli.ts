@@ -689,8 +689,17 @@ if (require.main === module) {
     const code = commandLine(argv, io);
     if (typeof code === 'number') process.exitCode = code;
     else
-      void code.then((ended) => {
-        process.exitCode = ended;
-      });
+      void code.then(
+        (ended) => {
+          process.exitCode = ended;
+        },
+        (error: unknown) => {
+          // Something no run refuses on purpose, outside every package's run: a defect.
+          process.stderr.write(
+            `${(error as Error).stack ?? String(error)}\nThis is a defect in this tool, not a mistake in your packages: send this message to your Nuxeo contact.\n`,
+          );
+          process.exitCode = 1;
+        },
+      );
   }
 }

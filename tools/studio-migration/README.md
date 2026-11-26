@@ -156,9 +156,12 @@ One argument that is a package file runs as above, unchanged; several, or a fold
 - **The event loop turns after each package.** jsdom keeps every document until the job that made
   it ends: a run of the made-up package with M2's corpus holds about 170 MB of them, and a run of
   many packages in one job would add them up until the heap ran out, as the tests did at 4 GB
-  before it turned. Each package's bytes are let go after its run too.
-- **Read once.** Each package's bytes are read once, hashed, and given to its run, as one run
-  gives each step the same bytes; so is the allow-list.
+  before it turned. Its test holds that the loop turns after each package, not what that frees: the
+  heap, measured by hand with `--expose-gc` before each of 48 made-up packages, stayed between 66
+  and 77 MB.
+- **Read once for its run.** Each package's bytes are read once, hashed, and given to its run,
+  as one run gives each step the same bytes, and let go after it; so is the allow-list, read once
+  for every run. A path given twice is read again, and found by its bytes to be the same package.
 - **The summary,** `summary.txt`, is what the command prints: for each package, its result, what
   its `package.xml` declares, its constructs by outcome as its report counts them (`CliIo.reported`
   hands `migrate` the report's own summary, as `checked` hands it the harness's), its report and
@@ -178,9 +181,11 @@ One argument that is a package file runs as above, unchanged; several, or a fold
   leaves beside a file on a drive that cannot hold its attributes, which are passed over. A folder
   with no `.zip` file is refused before anything is written.
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
-  folder, found through its `summary.json`, for the same build, as `decisions.json` names it,
-  which is what `--from` holds one package's decisions to, whatever the package's file is called
-  now. A package that run did not hold, or holds no decisions for, starts
+  folder, found through its `summary.json`: the folder of the same bytes, whatever the package's
+  file is called now, or else the one folder of the same build, as `decisions.json` names it,
+  which is what `--from` holds one package's decisions to. When that run held the build under two
+  sets of bytes and none is the package's, neither is taken, and its line says so; one whose run
+  stopped before its decisions step says "Not carried". A package that run did not hold, or holds no decisions for, starts
   again, and its line says so. A folder name read from that summary is used only when it is one the
   run could have made. `--from` a run of one package, or a summary that lists no packages, is
   refused.
@@ -197,8 +202,10 @@ whose run throws outside every step, before sound ones, likewise; a path that is
 `--out` that holds files, a folder of no `.zip`, an allow-list of the wrong shape, and a `--from`
 that is a run of one package, nothing, or a summary of no packages, each refused with nothing
 written; the same package three times, under two names; three files of one name, two of them
-differing by case alone, and the names Windows cannot hold; a renamed package, and a package
-zipped again, each carried by its build; and the event loop turning after each
+differing by case alone, and the names Windows cannot hold; a folder it cannot read; a renamed
+package, carried by its bytes; a package zipped again, carried by its build; one build held twice
+by the earlier run, each carrying its own, and a third set of its bytes carrying neither; a run
+stopped before its decisions step, which carries nothing; and the event loop turning after each
 package.
 
 **The single-package command is unchanged,** byte for byte:
@@ -1315,18 +1322,21 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   only `inventory.txt` written; and a second run into a filled-in run's `--out`, refused with its
   19 files unchanged.
 
-- **For many packages in one run, 14 guards**, broken one at a time by a script that runs
-  `batch.spec.ts` and restores the file, each seen turning it red: stopping at the first package
-  that stops; exiting with the best result rather than the worst; running the same package again;
-  telling folder names apart by case; keeping a name Windows keeps for a device, and the dots it
-  drops from a name's end; counting a package's constructs from its first kind rather than the
-  report's `all`; carrying decisions by folder name, or by the package's file name, rather than by
-  its build; reading a package again for its run; leaving the allow-list out of each package's
-  run; letting a defect of one package's run end the whole run; and never letting the event loop
-  turn between packages. Two were missed at first and have their tests now: no test gave the batch
-  an allow-list, and the only test of a defect threw inside a step, which the run of one package
-  already catches, so removing the batch's own catch changed nothing; an independent review found
-  the second.
+- **For many packages in one run, 16 guards**, broken one at a time by a script that runs
+  `batch.spec.ts` and restores the file, each seen turning it red: letting an unreadable folder
+  throw; stopping at the first package that stops; exiting with the best result rather than the
+  worst; running the same package again; telling folder names apart by case; keeping a name
+  Windows keeps for a device, and the dots it drops from a name's end; counting a package's
+  constructs from its first kind rather than the report's `all`; carrying by build alone rather
+  than first by bytes, carrying the first folder of a build held twice, and never carrying by
+  build; saying "Carried" whatever step the run stopped at; reading a package again for its run;
+  leaving the allow-list out of each package's run; letting a defect of one package's run end the
+  whole run; and never letting the event loop turn between packages. Two were missed at first and
+  have their tests now: no test gave the batch an allow-list, and the only test of a defect threw
+  inside a step, which the run of one package already catches, so removing the batch's own catch
+  changed nothing; an independent review found the second. Its second round found that matching
+  by build alone let one build held twice carry the first one's decisions into both, and that
+  "Carried" was said of a run that stopped first.
 - **The single-package golden was seen failing:** one space added to `migrate`'s verdict line
   turned seven of its scenarios red, and the refusals, which print no verdict, stayed green. The
   review ran it against the code of `staging/enterprise-grade-app` before the batch, where it
@@ -1341,7 +1351,11 @@ npx nx run-many -t lint,typecheck,test -p @nuxeo-satori/studio-migration
   another file. The review found nine more ways past it: a line pushed to the verdict's `blockers`
   or the inventory's `decisions` after they are built, `unshift`, an index, a list of its own
   spread into one, a helper's list of another name, `x.findings.push`, a `findings` that is another
-  list, and a check in a folder. It reads each now, and its tests hold them.
+  list, and a check in a folder. Its second round found four more: a list given to a helper, a
+  list made again, new words in a constant part of a text, and a problem given in shorthand. It
+  reads each now, and its tests hold them; reading constant parts changed one row, which now names
+  `studio-migration-decisions/1`. Words inside a part that is not a constant, such as one of two
+  chosen as it runs, are still `…`, and the playbook's section 10 says so.
 - **For lab mode, 72 guards**, broken one at a time by a script, kept outside the repository, that
   runs its four specs and restores the file, each seen turning them red:
   - **The rule:** a field under a condition not held, and only what Web UI fetched; a property

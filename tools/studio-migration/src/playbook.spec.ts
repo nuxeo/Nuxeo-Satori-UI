@@ -187,6 +187,39 @@ describe('the scanner of findings, on a made-up source', () => {
     );
   });
 
+  it('reads a list given to a helper, a list made again, a constant part of a text, and a problem given in shorthand', () => {
+    const { kinds, unread } = scanFiles({
+      'check-seen.ts': `
+        function addLate(into: string[]): void {
+          into.push('added by a helper');
+        }
+        export function checkSeen(path: string) {
+          let findings: string[] = [];
+          addLate(findings);
+          findings = [...findings, 'made again'];
+          const why = 'a constant reason';
+          findings.push(\`app/\${path}: \${why}\`);
+          return { findings };
+        }`,
+      'inventory.ts': `
+        export function inventory(path: string) {
+          const problems: { path: string; message: string }[] = [];
+          const message = 'a problem given in shorthand';
+          problems.push({ path, message });
+          return problems;
+        }`,
+    });
+    expect(unread).toEqual([]);
+    expect(kinds.map((kind) => [kind.section, kind.kind]).sort()).toEqual(
+      [
+        ['Check 6', 'added by a helper'],
+        ['Check 6', 'made again'],
+        ['Check 6', 'app/…: a constant reason'],
+        ["The inventory's decisions", 'a problem given in shorthand'],
+      ].sort(),
+    );
+  });
+
   it("reads what is added to the verdict's lines, and the files of a folder", () => {
     const { kinds, unread } = scanFiles({
       'harness.ts': `export function runHarness() {

@@ -132,9 +132,10 @@ export interface PackageEntry {
     (Readonly<Record<Tally, number>> & { readonly total: number; readonly decided: number }) | null;
   /**
    * With `--from`: under the earlier run, `/`-separated, the folder whose decisions it was given to
-   * carry, or `null` when that run held none for it.
+   * carry, or `null` when it was given none, and then why, in `notCarried`.
    */
   readonly carriedFrom?: string | null;
+  readonly notCarried?: string;
 }
 
 export interface BatchSummary {
@@ -168,6 +169,9 @@ interface Given {
   readonly given: string;
   readonly path: string;
 }
+
+/** With `--from`, the decisions step is a run's third: inventory, conversion, decisions. */
+const DECISIONS_STEP_WITH_FROM = 3;
 
 /** A turn of the event loop, which frees what the run before it parsed. */
 const turn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
@@ -214,9 +218,16 @@ export async function migrateMany(
     folders.add(resolve(argument));
     // A name that starts with a dot is the system's, such as `.DS_Store`, or the `._claims.zip` a
     // Mac leaves beside a file on a drive that cannot hold its attributes: passed over.
-    const names = readdirSync(argument)
-      .filter((name) => !name.startsWith('.'))
-      .sort();
+    let listed: string[];
+    try {
+      listed = readdirSync(argument);
+    } catch (error) {
+      return refused(
+        `the folder ${argument} cannot be read: ${(error as Error).message}`,
+        'give migrate a folder you can read, or the packages themselves.',
+      );
+    }
+    const names = listed.filter((name) => !name.startsWith('.')).sort();
     const packages = names.filter(
       (name) => /\.zip$/i.test(name) && !isDirectory(join(argument, name)),
     );
@@ -230,7 +241,9 @@ export async function migrateMany(
     const others = names.filter((name) => !packages.includes(name));
     if (others.length > 0 && !seen) leftOut.push({ folder: argument, entries: others });
   }
-  // Each file is read once, and every run is given those bytes: each package, and the allow-list.
+  // Each package is read once for its run, which is given those bytes, and so is the allow-list. A
+  // package's bytes are let go after its run, so a path given again is read again, and found by its
+  // bytes to be the same package.
   const cache = new Map<string, Buffer>();
   const readFile = (path: string): Buffer => {
     const held = cache.get(path);
@@ -250,7 +263,7 @@ export async function migrateMany(
       );
     }
   }
-  let earlier: ReadonlyMap<string, string> | undefined;
+  let earlier: Earlier | undefined;
   if (request.from !== undefined) {
     try {
       earlier = earlierRuns(request.from);
@@ -317,6 +330,7 @@ export async function migrateMany(
         constructs: null,
       });
       say(`${number}. ${as}: the same package as ${first}, byte for byte, so it was not run again`);
+      cache.delete(as);
       continue;
     }
     if (sha256 !== null) bySha.set(sha256, number);
@@ -324,8 +338,8 @@ export async function migrateMany(
     const name = folderName(path, taken);
     const folder = join(packagesOut, name);
     const printed = join(printedOut, `${name}.txt`);
-    const carried =
-      earlier === undefined || build === null ? undefined : earlier.get(buildKey(build));
+    const carry = earlier === undefined ? undefined : carryFor(earlier, sha256, build);
+    const carried = carry?.folder;
     const from =
       carried !== undefined && request.from !== undefined
         ? join(request.from, PACKAGES_DIRECTORY, carried)
@@ -397,7 +411,10 @@ export async function migrateMany(
       blockers: ended.harness?.blockers ?? [],
       constructs: ended.summary ? constructsOf(ended.summary) : null,
       ...(request.from !== undefined
-        ? { carriedFrom: from === undefined ? null : `${PACKAGES_DIRECTORY}/${carried as string}` }
+        ? {
+            carriedFrom: from === undefined ? null : `${PACKAGES_DIRECTORY}/${carried as string}`,
+            ...(carry?.why !== undefined ? { notCarried: carry.why } : {}),
+          }
         : {}),
     };
     entries.push(entry);
@@ -483,38 +500,63 @@ export function folderName(path: string, taken: Set<string>): string {
   return name;
 }
 
+/** An earlier run's folders that hold decisions, by their package's bytes and by its build. */
+interface Earlier {
+  readonly bySha: ReadonlyMap<string, string>;
+  /** Each build's folders: more than one when the run held one build under two sets of bytes. */
+  readonly byBuild: ReadonlyMap<string, readonly string[]>;
+}
+
 /**
- * The earlier run's folder of each package by its build, as `decisions.json` names it, for those
- * whose run holds decisions to carry: the same bytes are the same build, and a package zipped again
- * is too, as a run of one package carries it. Throws when `from` holds no summary of a run of
- * several.
+ * Which earlier folder a package carries its decisions from: the one of its own bytes; else the
+ * one of its build, as `decisions.json` names it, when only one folder holds that build, as a
+ * package zipped again would; else none, with why.
  */
-function earlierRuns(from: string): ReadonlyMap<string, string> {
+function carryFor(
+  earlier: Earlier,
+  sha256: string | null,
+  build: ReturnType<typeof packageBuildOf> | null,
+): { readonly folder?: string; readonly why?: string } {
+  const own = sha256 === null ? undefined : earlier.bySha.get(sha256);
+  if (own !== undefined) return { folder: own };
+  const folders = build === null ? [] : (earlier.byBuild.get(buildKey(build)) ?? []);
+  if (folders.length === 1) return { folder: folders[0] };
+  if (folders.length > 1)
+    return {
+      why: `holds the decisions of ${folders.length} packages of this build, ${folders.map((folder) => `${PACKAGES_DIRECTORY}/${folder}`).join(' and ')}, and none of its bytes: run it on its own with --from the one you mean`,
+    };
+  return { why: 'holds no decisions for this package as it is now, so they start again' };
+}
+
+/**
+ * The earlier run's folders that hold decisions to carry, by their package's bytes and by its
+ * build. Throws when `from` holds no summary of a run of several.
+ */
+function earlierRuns(from: string): Earlier {
   const file = join(from, SUMMARY_FILES.data);
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<BatchSummary> | null;
   if (raw === null || typeof raw !== 'object' || raw.format !== SUMMARY_FORMAT)
     throw new Error(`${file} is not a ${SUMMARY_FORMAT} summary`);
   if (!Array.isArray(raw.packages)) throw new Error(`${file} lists no packages`);
-  const byBuild = new Map<string, string>();
+  const bySha = new Map<string, string>();
+  const byBuild = new Map<string, string[]>();
   for (const entry of raw.packages) {
     const folder =
       typeof entry?.folder === 'string' && entry.folder.startsWith(`${PACKAGES_DIRECTORY}/`)
         ? entry.folder.slice(PACKAGES_DIRECTORY.length + 1)
         : undefined;
     // A name of the run's own making, never a path that leaves it.
-    const build = entry?.build;
-    if (
-      folder === undefined ||
-      !/^(?!\.{1,2}$)[A-Za-z0-9._-]+$/.test(folder) ||
-      build === null ||
-      typeof build !== 'object'
-    )
-      continue;
+    if (folder === undefined || !/^(?!\.{1,2}$)[A-Za-z0-9._-]+$/.test(folder)) continue;
     if (!existsSync(join(from, PACKAGES_DIRECTORY, folder, CONVERSION_DIRECTORY, DECISIONS_FILE)))
       continue;
-    if (!byBuild.has(buildKey(build))) byBuild.set(buildKey(build), folder);
+    if (typeof entry?.sha256 === 'string') bySha.set(entry.sha256, folder);
+    const build = entry?.build;
+    if (build !== null && typeof build === 'object') {
+      const key = buildKey(build);
+      byBuild.set(key, [...(byBuild.get(key) ?? []), folder]);
+    }
   }
-  return byBuild;
+  return { bySha, byBuild };
 }
 
 /** A path under `<out>`, `/`-separated, as `summary.json` gives it. */
@@ -554,12 +596,15 @@ function packageLines(
   );
   if (from !== undefined) {
     const earlier = entry.carriedFrom ? join(from, ...entry.carriedFrom.split('/')) : null;
+    const stopped = entry.stoppedAt;
     lines.push(
       earlier === null
-        ? `     Nothing carried: ${from} holds no decisions for this package as it is now, so they start again`
-        : entry.stoppedAt?.title === 'The decisions, carried'
+        ? `     Nothing carried: ${from} ${entry.notCarried ?? 'holds no decisions for this package'}`
+        : stopped?.title === 'The decisions, carried'
           ? `     The decisions of ${earlier} could not be carried: what it printed says why`
-          : `     Carried what still holds of the decisions of ${earlier}`,
+          : stopped !== null && stopped.step < DECISIONS_STEP_WITH_FROM
+            ? `     Not carried: its run stopped before its decisions step, which would have carried those of ${earlier}`
+            : `     Carried what still holds of the decisions of ${earlier}`,
     );
   }
   if (entry.constructs) {

@@ -257,10 +257,12 @@ npm run studio-migration -- migrate ~/studio/claims-1.0.0.zip ~/studio/policies-
   that **declare the same name and version** from different bytes, most often two builds of one
   version, both run, and the summary says so: a build's decisions are its own.
 - **`--from` an earlier run of several** carries each package's decisions from the earlier run's
-  folder for the same build, whatever its file is called now: the same name, version, Studio
-  commit, build time and bundle, which is what a run of one package holds its decisions to. A
-  package the earlier run did not hold, or whose run there wrote no decisions, starts again, and
-  its line says "Nothing carried".
+  folder for the same bytes, whatever its file is called now; failing that, from the one folder of
+  the same build: the same name, version, Studio commit, build time and bundle, which is what a run
+  of one package holds its decisions to. When the earlier run held that build under two sets of
+  bytes, neither is taken, and the line says so. A package the earlier run did not hold, or whose
+  run there wrote no decisions, starts again, and its line says "Nothing carried"; one whose run
+  stopped before its decisions step says "Not carried".
   `--from` a run of one package is refused: run that package on its own with `--from`. The other
   way round too: a run of one package given `--from` a run of several finds no decisions there;
   give it `--from <that run>/packages/<name>`.
@@ -271,7 +273,7 @@ npm run studio-migration -- migrate ~/studio/claims-1.0.0.zip ~/studio/policies-
 **For a case,** start from `summary.txt`: each package's line gives its result (section 9, "Many
 packages: each package's result"), its counts, and where its report and what it printed are. Then
 treat each package as a run of its own. Escalate one package with its `packages/<name>/`, its
-`printed/<name>.txt` and `summary.json`.
+`printed/<name>.txt` and its entry in `summary.json`.
 
 ## 7. When a run stops
 
@@ -563,7 +565,7 @@ Check 10 places and validates every file under `conversion/app/` as the package 
 
 | The finding reads                                                                                           | What it means                                                                                                                                                                                                                                                                                   | Who acts                                                                            |
 | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `… is not a … file, so none of it is taken`                                                                 | The file is not a JSON object, or its `format` is not `studio-migration-decisions/1`, so no decision in it counts. With `--from`, the run stops at its decisions step.                                                                                                                          | **Decisions**; keep the top of the file as `migrate` wrote it                       |
+| `… is not a studio-migration-decisions/1 file, so none of it is taken`                                      | The file is not a JSON object, or its `format` is not `studio-migration-decisions/1`, so no decision in it counts. With `--from`, the run stops at its decisions step.                                                                                                                          | **Decisions**; keep the top of the file as `migrate` wrote it                       |
 | `… is for …, and the package given is …, so none of it is taken`                                            | The file's `package` names another build than the package given: its name, version, Studio commit, build time or bundle's SHA-256, of which the first 12 characters are shown. With `--from` an earlier run of another build, the run stops at its decisions step.                              | **Decisions**; with `--from`, leave it out and fill them in again (guide section 6) |
 | `… holds no list of decisions, so none of it is taken`                                                      | The file's `decisions` is missing or is not a list.                                                                                                                                                                                                                                             | **Decisions**                                                                       |
 | `… holds …, which the file does not take`                                                                   | The file has a key at its top other than `format`, `package` and `decisions`, such as an approval. The decisions in it are still read.                                                                                                                                                          | **Decisions**; remove the key                                                       |
@@ -670,10 +672,11 @@ Each package's line in `summary.txt` starts with its result, and `summary.json` 
 `tools/studio-migration/src/playbook.spec.ts` holds section 9 to the tool's source. Its scanner,
 `src/testing/finding-kinds.ts`, reads every source file of the tool, in every folder but the tests'
 helpers, and every line it adds to a list of findings: to `findings` or `problems`, to the
-verdict's `blockers` and to the inventory's `decisions`, by `push`, `unshift`, `splice` or an
-index, as the list starts, or through a list of its own spread into one, a helper's that returns
-one, or another file's function whose list is taken as findings. Each is written as above, with
-what is filled in as it runs as `…`. The test fails:
+verdict's `blockers` and to the inventory's `decisions`, by `push`, `unshift`, `splice`, an index
+or making the list again, as the list starts, in a helper the list is given to, or through a list
+of its own spread into one, a helper's that returns one, or another file's function whose list is
+taken as findings. Each is written as above: a part that is a constant text is that text, and any
+other part, filled in as it runs, `…`. The test fails:
 
 - when the tool can print a line no row here holds, in its section: write the row;
 - when a row holds a line the tool can no longer print: change or remove it;
@@ -681,6 +684,12 @@ what is filled in as it runs as `…`. The test fails:
   section of this playbook: read it, or give it a section, in the scanner's `SOURCES`;
 - when a row names no one to act, or a result of several packages has no row.
 
-A finding added in a way the scanner does not know, and that reaches none of those lists, is the
-one way past it, such as a check that returned its findings under another name than `findings`.
-The scanner's own tests hold each way above, and a reviewer of a new check holds that one.
+What the scanner cannot see, a reviewer of a change to the tool holds:
+
+- new words inside a part that is not a constant, such as one of two words chosen as it runs, or
+  a value worked out first: the row reads `…` there, so a change of those words changes no row;
+- a finding that reaches none of those lists, such as a check that returns its findings under
+  another name than `findings`, or a list given to a method of an object, rather than to a
+  function of the tool, which adds to it.
+
+The scanner's own tests hold each way above that it reads.
